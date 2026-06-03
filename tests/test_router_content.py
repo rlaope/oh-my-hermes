@@ -98,6 +98,44 @@ class RouterContentTests(unittest.TestCase):
             for term in forbidden:
                 self.assertNotIn(term, text, f"{term!r} leaked in {path}")
 
+    def test_public_release_surfaces_are_present(self) -> None:
+        required_paths = [
+            Path("README.md"),
+            Path("docs/INSTALLATION.md"),
+            Path("docs/APPLICATION_CASES.md"),
+            Path("docs/ARCHITECTURE.md"),
+            Path("docs/ROADMAP.md"),
+            Path("install.sh"),
+            Path("CONTRIBUTING.md"),
+            Path("CHANGELOG.md"),
+            Path("CODE_OF_CONDUCT.md"),
+            Path("SECURITY.md"),
+            Path("SUPPORT.md"),
+            Path("LICENSE"),
+            Path(".editorconfig"),
+            Path(".gitignore"),
+            Path(".github/workflows/ci.yml"),
+            Path(".github/dependabot.yml"),
+            Path(".github/pull_request_template.md"),
+            Path(".github/ISSUE_TEMPLATE/bug_report.yml"),
+            Path(".github/ISSUE_TEMPLATE/feature_request.yml"),
+            Path(".github/ISSUE_TEMPLATE/config.yml"),
+        ]
+
+        for path in required_paths:
+            self.assertTrue(path.exists(), f"{path} should be present")
+
+        readme = Path("README.md").read_text(encoding="utf-8")
+        installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
+        ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+        self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
+        self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
+        self.assertIn("[Application Cases](docs/APPLICATION_CASES.md)", readme)
+        self.assertIn("Discord Bot Flow", installation)
+        self.assertIn("python -m unittest discover -s tests", ci)
+        self.assertIn("python -m compileall src", ci)
+
     def test_application_cases_document_representative_flows(self) -> None:
         text = Path("docs/APPLICATION_CASES.md").read_text(encoding="utf-8")
 

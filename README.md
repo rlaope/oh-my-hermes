@@ -9,7 +9,7 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Status" src="https://img.shields.io/badge/status-early%20MVP-orange">
+  <img alt="Status" src="https://img.shields.io/badge/status-quality--gated%20preview-blue">
 </p>
 
 ## What It Is
@@ -35,12 +35,14 @@ The initial pack includes workflow skills for:
 
 ## Status
 
-This repository is intentionally early, but the shape is meant to scale.
+This repository is a quality-gated preview: small enough to inspect, but shaped
+as a real public project instead of a throwaway script.
 
-The current release is a thin local installer plus a generated Hermes skill
-catalog. The next direction is deeper runtime support: richer routing metadata,
-goal ledgers under `.omh/`, stronger diagnostics, release packaging, and
-Hermes-specific workflow tests.
+The current release provides a local installer, generated Hermes skill catalog,
+application cases, runtime diagnostics, CI, and contributor guidance. The next
+direction is deeper runtime support: richer routing metadata, goal ledgers under
+`.omh/`, stronger diagnostics, release packaging, and Hermes-specific workflow
+tests.
 
 ## Quick Start
 
