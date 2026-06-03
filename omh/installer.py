@@ -3,14 +3,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from .core.errors import OmhError
 from .converter import convert_from_dir
 from .manifest import local_modifications, new_manifest, read_manifest, skill_records, write_manifest
 from .paths import OmhPaths
 from .skill_pack import SkillTemplate, builtin_skill_templates
-
-
-class OmhError(RuntimeError):
-    pass
 
 
 def _write_skill(skills_dir: Path, template: SkillTemplate, force: bool = False, managed: bool = False) -> None:

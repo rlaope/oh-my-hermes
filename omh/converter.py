@@ -20,17 +20,16 @@ def extract_name(raw: str, fallback: str) -> str:
 
 def convert_skill(raw: str, fallback_name: str) -> SkillTemplate:
     name = extract_name(raw, fallback_name)
-    description = DESCRIPTIONS.get(name, f"Hermes adaptation of OMX/Codex {name}.")
+    description = DESCRIPTIONS.get(name, f"Hermes workflow skill for {name}.")
     content = raw.rstrip() + f"""
 
 ## Hermes Compatibility Contract
 
-This skill was imported by `omh` from an OMX/Codex skill source.
+This skill was imported by `omh` from a local skill source.
 
 - Keep the upstream workflow intent, but adapt runtime behavior to Hermes Agent.
-- Do not require Codex-only goal tools, native Codex role prompts, tmux overlays, or `omx question`.
+- Do not require runtime features that Hermes Agent does not expose.
 - Use Hermes `skills_list`, `skill_view`, file tools, terminal tools, and Hermes delegation when available.
-- Treat direct `omx` commands as optional bridge behavior only when the user explicitly asks and `omx` is installed.
 """
     return SkillTemplate(name=name, content=content + "\n")
 
@@ -47,4 +46,3 @@ def convert_from_dir(source_dir: Path) -> list[SkillTemplate]:
         raw = skill_file.read_text(encoding="utf-8")
         templates.append(convert_skill(raw, skill_file.parent.name))
     return templates
-

@@ -1,12 +1,50 @@
 # oh-my-hermes-agent
 
-`oh-my-hermes-agent` installs Hermes-compatible adaptations of OMX / oh-my-codex skills.
+<p align="center">
+  <strong>Hermes-native workflow skills, installed with one small command.</strong>
+  <br>
+  <em>Give Hermes Agent a consistent skill pack for routing, planning, durable execution, review, cleanup, and QA.</em>
+</p>
 
-The `omh` command does not patch Hermes Agent by default. It writes an adapted skill pack to `~/.omh/skills` and adds that directory to Hermes' `skills.external_dirs` setting, so Hermes can discover the skills through its existing `/skills`, `skills_list`, and `skill_view` surfaces.
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="Status" src="https://img.shields.io/badge/status-early%20MVP-orange">
+</p>
 
-## Install
+## What It Is
 
-From this repository:
+`oh-my-hermes-agent` is a local installer and skill pack for Hermes Agent.
+
+It writes managed skills to `~/.omh/skills`, registers that directory in Hermes'
+`skills.external_dirs`, and gives Hermes a consistent workflow layer without
+patching Hermes core files.
+
+The initial pack includes workflow skills for:
+
+- routing and skill selection
+- requirement clarification
+- reviewed planning
+- durable goal ledgers
+- persistent execution loops
+- coordinated work lanes
+- adversarial QA
+- code review
+- behavior-preserving cleanup
+- research, project notes, cancellation, skill management, and diagnostics
+
+## Status
+
+This repository is intentionally early, but the shape is meant to scale.
+
+The current release is a thin local installer plus a generated Hermes skill
+catalog. The next direction is deeper runtime support: richer routing metadata,
+goal ledgers under `.omh/`, stronger diagnostics, release packaging, and
+Hermes-specific workflow tests.
+
+## Quick Start
+
+Install from this repository:
 
 ```sh
 python -m pip install -e .
@@ -15,63 +53,123 @@ omh apply
 omh doctor
 ```
 
+Then open Hermes Agent and use the installed skills through Hermes' normal skill
+surfaces.
+
 Useful commands:
 
 ```sh
 omh install --dry-run
-omh install --from-codex ~/.codex/skills
-omh update --from-codex ~/.codex/skills
+omh install --from-skills-dir ./skills
+omh update --from-skills-dir ./skills
 omh apply --dry-run
 omh list
 omh snippet --dry-run
 omh uninstall
 ```
 
-## What Gets Installed
+## Mental Model
 
-The built-in pack includes:
+Hermes remains the agent runtime.
 
-- `oh-my-hermes`
-- `ralph`
-- `ultragoal`
-- `deep-interview`
-- `team`
-- `ultraqa`
-- `plan`
-- `ralplan`
-- `code-review`
-- `ai-slop-cleaner`
-- `best-practice-research`
-- `autoresearch-goal`
-- `performance-goal`
-- utility skills such as `wiki`, `ask`, `cancel`, `skill`, and `doctor`
+`omh` adds three things around it:
 
-Each workflow skill includes a Hermes Compatibility Contract. Codex-only mechanisms such as native Codex goal tools, tmux `omx question`, and Codex role prompts are translated to Hermes-native fallbacks instead of being required unconditionally.
+1. A managed skill directory at `~/.omh/skills`
+2. A manifest at `~/.omh/manifest.json`
+3. A config registration in Hermes' `skills.external_dirs`
 
-## Routing Contract
+That means installation is reversible and inspectable. `omh apply` updates only
+the Hermes skill discovery setting. It does not rewrite workspace instructions
+or modify Hermes internals.
 
-The router skill is best-effort prompt guidance. It does not override Hermes core behavior and it does not guarantee exact OMX runtime parity.
+## Routing Model
 
-Priority:
+The `oh-my-hermes` skill is the top-level router.
+
+It is prompt-level guidance, not a hidden runtime hook. When Hermes exposes
+installed skill descriptions to the model, the router gives Hermes a clear
+registry of workflow names, strong trigger phrases, conservative fallback rules,
+and recovery steps.
+
+Routing priority:
 
 1. Explicit slash skill invocation wins.
-2. Explicit workflow keywords route to the matching adapted skill when installed.
+2. Strong workflow keywords route to the matching installed skill.
 3. Broad planning requests route to `ralplan` or `plan` before implementation.
-4. Persistence or finish-until-done requests route to `ralph` only after scope is concrete.
-5. Unknown or conflicting signals stay in `oh-my-hermes` and ask one concise clarification question.
+4. Finish-until-done requests route to `ralph` only after scope is concrete.
+5. Unknown or conflicting signals stay in `oh-my-hermes` and ask one concise
+   clarification question.
 
-Recovery:
+A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when
+it could mean normal conversation.
 
-- Use `/oh-my-hermes` to load the router skill explicitly.
-- Use `/skills`, `skills_list`, or `skill_view` if Hermes does not automatically load the intended skill.
-- Use `omh snippet --dry-run` to print optional workspace guidance. `omh apply` does not write `AGENTS.md` or other repo-local prompt files by default.
+## Commands
 
-## Local Development
+| Command | Purpose |
+| --- | --- |
+| `omh install` | Install the built-in Hermes skill pack. |
+| `omh update` | Reinstall from the built-in pack or a provided skill directory. |
+| `omh convert --from-skills-dir <dir>` | Import local `SKILL.md` files into the managed pack. |
+| `omh apply` | Register `~/.omh/skills` in Hermes `skills.external_dirs`. |
+| `omh list` | Print the installed manifest. |
+| `omh doctor` | Verify managed files and Hermes config registration. |
+| `omh snippet` | Print optional workspace guidance without applying it. |
+| `omh uninstall` | Remove Hermes config registration, optionally removing files. |
+
+## Package Layout
+
+```text
+omh/
+  cli.py                 command-line entrypoint
+  config_adapter.py      Hermes config registration adapter
+  converter.py           local skill import support
+  doctor.py              installation health checks
+  installer.py           managed skill pack install/update/uninstall
+  manifest.py            installed file manifest and conflict checks
+  paths.py               home/config path resolution
+  snippet.py             optional workspace guidance
+  skill_pack.py          compatibility facade for generated skills
+  core/
+    errors.py            shared user-facing error type
+  skills/
+    catalog.py           workflow definitions and routing triggers
+    render.py            generated Hermes skill content
+```
+
+The important design choice is that routing data lives in `omh/skills/catalog.py`
+and rendered skill text lives in `omh/skills/render.py`. This keeps the workflow
+registry testable as data instead of burying routing behavior in one long string.
+
+## Safety
+
+- Existing managed files are protected by `~/.omh/manifest.json`.
+- Local modifications are not overwritten unless `--force` is supplied.
+- `omh apply --dry-run` shows config changes without writing.
+- `omh uninstall` removes config registration first; file deletion requires
+  `--remove-files`.
+- Tests use temporary homes and do not mutate the real `~/.hermes`.
+
+## Development
+
+Run the test suite:
 
 ```sh
 python -m unittest discover -s tests
-python -m omh.cli --help
+python -m compileall omh
 ```
 
-The tests use temporary homes and do not mutate the real `~/.hermes`.
+Smoke-test the installer without touching real home directories:
+
+```sh
+python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
+```
+
+## Roadmap
+
+- Release packaging for one-command installation
+- A richer generated routing registry
+- File-backed goal ledgers under `.omh/goals/`
+- More Hermes-specific diagnostics in `omh doctor`
+- Command-level tests for uninstall, snippet output, and imported skill edge cases
+- Workflow fixtures that verify generated skill behavior remains conservative
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 import unittest
 
 from omh.skill_pack import builtin_skill_templates
@@ -15,7 +16,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("skill_view", router.content)
         self.assertIn("name collides", router.content)
 
-    def test_core_skill_set_contains_major_omx_workflows(self) -> None:
+    def test_core_skill_set_contains_major_workflows(self) -> None:
         names = {skill.name for skill in builtin_skill_templates()}
 
         for expected in {
@@ -29,6 +30,28 @@ class RouterContentTests(unittest.TestCase):
             "code-review",
         }:
             self.assertIn(expected, names)
+
+    def test_generated_public_content_avoids_external_runtime_branding(self) -> None:
+        forbidden = ("om" + "x", "oh-my-" + "co" + "dex", "co" + "dex")
+        combined = "\n".join(skill.content for skill in builtin_skill_templates()).lower()
+
+        for term in forbidden:
+            self.assertNotIn(term, combined)
+
+    def test_public_project_files_avoid_external_runtime_branding(self) -> None:
+        forbidden = ("om" + "x", "oh-my-" + "co" + "dex", "co" + "dex")
+        paths = [
+            Path("README.md"),
+            Path("pyproject.toml"),
+            Path(".gitignore"),
+            *Path("omh").rglob("*.py"),
+            *Path("tests").rglob("*.py"),
+        ]
+
+        for path in paths:
+            text = path.read_text(encoding="utf-8").lower()
+            for term in forbidden:
+                self.assertNotIn(term, text, f"{term!r} leaked in {path}")
 
 
 if __name__ == "__main__":

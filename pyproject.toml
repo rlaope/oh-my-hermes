@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "oh-my-hermes-agent"
 version = "0.1.0"
-description = "Install Hermes-compatible adaptations of OMX/Codex skills."
+description = "Install a Hermes-native skill workflow pack."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -17,4 +17,3 @@ omh = "omh.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["omh*"]
-

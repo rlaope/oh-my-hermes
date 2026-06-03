@@ -23,7 +23,7 @@ def _print_json(data: object) -> None:
 
 def cmd_install(args: argparse.Namespace) -> int:
     paths = _paths(args)
-    source_dir = Path(args.from_codex or args.source).expanduser().resolve() if (args.from_codex or args.source) else None
+    source_dir = Path(args.from_skills_dir or args.source).expanduser().resolve() if (args.from_skills_dir or args.source) else None
     source = str(source_dir) if source_dir else "builtin"
     result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
     _print_json(result)
@@ -35,7 +35,7 @@ def cmd_update(args: argparse.Namespace) -> int:
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
-    args.source = args.from_codex
+    args.source = args.from_skills_dir
     return cmd_install(args)
 
 
@@ -90,13 +90,13 @@ def cmd_snippet(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="omh", description="Install oh-my-hermes adapted OMX skills for Hermes Agent.")
+    parser = argparse.ArgumentParser(prog="omh", description="Install oh-my-hermes skills for Hermes Agent.")
     parser.add_argument("--omh-home", default=None)
     parser.add_argument("--hermes-home", default=None)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_common_install(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--from-codex", default=None, help="Import skills from a local Codex/OMX skills directory.")
+        p.add_argument("--from-skills-dir", default=None, help="Import skills from a local skill directory.")
         p.add_argument("--source", default=None, help="Mockable local source directory for install/update.")
         p.add_argument("--force", action="store_true")
         p.add_argument("--dry-run", action="store_true")
@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
     update.set_defaults(func=cmd_update)
 
     convert = sub.add_parser("convert")
-    convert.add_argument("--from-codex", required=True)
+    convert.add_argument("--from-skills-dir", required=True)
     convert.add_argument("--force", action="store_true")
     convert.add_argument("--dry-run", action="store_true")
     convert.set_defaults(func=cmd_convert)

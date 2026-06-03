@@ -53,18 +53,18 @@ class CliTests(unittest.TestCase):
             self.assertIn("local modifications detected", stderr)
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "install", "--force"])[0], 0)
 
-    def test_convert_from_local_codex_fixture(self) -> None:
+    def test_convert_from_local_skill_fixture(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "codex-skills" / "ralph"
+            source = root / "local-skills" / "ralph"
             source.mkdir(parents=True)
             source.joinpath("SKILL.md").write_text(
-                "---\nname: ralph\ndescription: Upstream Ralph\n---\n# Ralph\nUse Codex goal tools.\n",
+                "---\nname: ralph\ndescription: Upstream Ralph\n---\n# Ralph\nUse durable goal tools.\n",
                 encoding="utf-8",
             )
             omh_home = root / ".omh"
 
-            self.assertEqual(run_cli(["--omh-home", str(omh_home), "convert", "--from-codex", str(root / "codex-skills")])[0], 0)
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "convert", "--from-skills-dir", str(root / "local-skills")])[0], 0)
             converted = (omh_home / "skills" / "ralph" / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("Hermes Compatibility Contract", converted)
 
