@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from omh.cli import main
 

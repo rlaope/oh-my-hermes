@@ -119,26 +119,28 @@ it could mean normal conversation.
 ## Package Layout
 
 ```text
-omh/
-  cli.py                 command-line entrypoint
-  config_adapter.py      Hermes config registration adapter
-  converter.py           local skill import support
-  doctor.py              installation health checks
-  installer.py           managed skill pack install/update/uninstall
-  manifest.py            installed file manifest and conflict checks
-  paths.py               home/config path resolution
-  snippet.py             optional workspace guidance
-  skill_pack.py          compatibility facade for generated skills
-  core/
-    errors.py            shared user-facing error type
-  skills/
-    catalog.py           workflow definitions and routing triggers
-    render.py            generated Hermes skill content
+src/
+  omh/
+    cli.py                 command-line entrypoint
+    config_adapter.py      Hermes config registration adapter
+    converter.py           local skill import support
+    doctor.py              installation health checks
+    installer.py           managed skill pack install/update/uninstall
+    manifest.py            installed file manifest and conflict checks
+    paths.py               home/config path resolution
+    snippet.py             optional workspace guidance
+    skill_pack.py          compatibility facade for generated skills
+    core/
+      errors.py            shared user-facing error type
+    skills/
+      catalog.py           workflow definitions and routing triggers
+      render.py            generated Hermes skill content
 ```
 
-The important design choice is that routing data lives in `omh/skills/catalog.py`
-and rendered skill text lives in `omh/skills/render.py`. This keeps the workflow
-registry testable as data instead of burying routing behavior in one long string.
+The important design choice is that routing data lives in
+`src/omh/skills/catalog.py` and rendered skill text lives in
+`src/omh/skills/render.py`. This keeps the workflow registry testable as data
+instead of burying routing behavior in one long string.
 
 ## Safety
 
@@ -154,14 +156,14 @@ registry testable as data instead of burying routing behavior in one long string
 Run the test suite:
 
 ```sh
-python -m unittest discover -s tests
-python -m compileall omh
+PYTHONPATH=src python -m unittest discover -s tests
+python -m compileall src/omh
 ```
 
 Smoke-test the installer without touching real home directories:
 
 ```sh
-python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
+PYTHONPATH=src python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
 ```
 
 ## Roadmap
@@ -172,4 +174,3 @@ python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke inst
 - More Hermes-specific diagnostics in `omh doctor`
 - Command-level tests for uninstall, snippet output, and imported skill edge cases
 - Workflow fixtures that verify generated skill behavior remains conservative
-

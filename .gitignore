@@ -1,10 +1,29 @@
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Test and type-check caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
 .venv/
 venv/
+.env
+.env.*
+
+# Build artifacts
 build/
 dist/
 *.egg-info/
+*.whl
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from omh.skill_pack import builtin_skill_templates
 
@@ -44,8 +47,17 @@ class RouterContentTests(unittest.TestCase):
             Path("README.md"),
             Path("pyproject.toml"),
             Path(".gitignore"),
-            *Path("omh").rglob("*.py"),
+            Path("CONTRIBUTING.md"),
+            Path("CHANGELOG.md"),
+            Path("CODE_OF_CONDUCT.md"),
+            Path("SECURITY.md"),
+            Path("SUPPORT.md"),
+            *Path("src/omh").rglob("*.py"),
             *Path("tests").rglob("*.py"),
+            *Path("docs").rglob("*.md"),
+            *Path("examples").rglob("*"),
+            *Path(".github").rglob("*.md"),
+            *Path(".github").rglob("*.yml"),
         ]
 
         for path in paths:
