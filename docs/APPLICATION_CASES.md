@@ -112,12 +112,6 @@ omh list
 Repository maintainers can verify generated content through tests:
 
 ```sh
-python -m unittest tests.test_router_content
-```
-
-If direct module execution cannot resolve local test helpers, use:
-
-```sh
 python -m unittest discover -s tests
 ```
 

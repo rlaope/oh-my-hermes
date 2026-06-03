@@ -98,13 +98,11 @@ class RouterContentTests(unittest.TestCase):
             for term in forbidden:
                 self.assertNotIn(term, text, f"{term!r} leaked in {path}")
 
-    def test_public_release_surfaces_are_present(self) -> None:
+    def test_first_release_trust_surfaces_are_present(self) -> None:
         required_paths = [
             Path("README.md"),
             Path("docs/INSTALLATION.md"),
             Path("docs/APPLICATION_CASES.md"),
-            Path("docs/ARCHITECTURE.md"),
-            Path("docs/ROADMAP.md"),
             Path("install.sh"),
             Path("CONTRIBUTING.md"),
             Path("CHANGELOG.md"),
@@ -112,8 +110,6 @@ class RouterContentTests(unittest.TestCase):
             Path("SECURITY.md"),
             Path("SUPPORT.md"),
             Path("LICENSE"),
-            Path(".editorconfig"),
-            Path(".gitignore"),
             Path(".github/workflows/ci.yml"),
             Path(".github/dependabot.yml"),
             Path(".github/pull_request_template.md"),

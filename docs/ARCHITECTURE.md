@@ -58,6 +58,22 @@ core behavior.
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
 
+## Harness Contract
+
+Representative harnesses are preview metadata for generated prompt guidance.
+They are not separate runtime roles, hidden hooks, or proof that Hermes exposes a
+matching internal role system.
+
+When a harness is added, removed, or renamed, update these surfaces together:
+
+- `src/skills/catalog.py`
+- `src/skills/render.py`
+- `docs/APPLICATION_CASES.md`
+- `tests/test_router_content.py`
+
+This keeps the generated router, public examples, and regression tests aligned
+around one catalog contract.
+
 ## Safety Model
 
 - Managed files are tracked by manifest hashes.
