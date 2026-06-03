@@ -46,15 +46,13 @@ clarification question before editing.
 
 ### Verification
 
-Check that the installed router skill contains the representative harness
-registry:
+After installation, inspect the managed skill list:
 
 ```sh
-omh install --dry-run
 omh list
 ```
 
-For repository development, run:
+For repository development, verify the generated router content through tests:
 
 ```sh
 python -m unittest discover -s tests
