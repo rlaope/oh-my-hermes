@@ -29,6 +29,10 @@ omh list
 `omh doctor` should report a healthy installation. `omh list` should show the
 managed skills available to Hermes.
 
+For concrete examples that show how the installed skills should affect coding,
+planning, and specialist review flows, see
+[Application Cases](APPLICATION_CASES.md).
+
 ## Discord Bot Flow
 
 If Hermes Agent is running behind a Discord bot, install `oh-my-hermes-agent` on

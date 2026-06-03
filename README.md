@@ -56,6 +56,9 @@ surfaces.
 For the full install, Discord bot deployment, update, reapply, and uninstall
 flow, see [Installation](docs/INSTALLATION.md).
 
+For reproducible skill-impact examples, see
+[Application Cases](docs/APPLICATION_CASES.md).
+
 Check or manage the installation with `omh`:
 
 ```sh

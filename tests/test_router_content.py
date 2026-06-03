@@ -98,6 +98,23 @@ class RouterContentTests(unittest.TestCase):
             for term in forbidden:
                 self.assertNotIn(term, text, f"{term!r} leaked in {path}")
 
+    def test_application_cases_document_representative_flows(self) -> None:
+        text = Path("docs/APPLICATION_CASES.md").read_text(encoding="utf-8")
+
+        for heading in (
+            "## Case 1: Coding Request Handling",
+            "## Case 2: Goal, Planning, and Deep Interview Flow",
+            "## Case 3: Specialist Harness Flow",
+            "## Release Review Checklist",
+        ):
+            self.assertIn(heading, text)
+
+        for section in ("### Setup", "### User Prompt Shape", "### Expected Hermes-Facing Behavior", "### Verification", "### Current Limit"):
+            self.assertIn(section, text)
+
+        for harness in ("coding-handling", "goal-execution", "planning", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
+            self.assertIn(harness, text)
+
 
 if __name__ == "__main__":
     unittest.main()
