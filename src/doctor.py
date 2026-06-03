@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .config_adapter import external_dirs, read_config
-from .manifest import read_manifest
+from .manifest import local_modifications, read_manifest
 from .paths import OmhPaths
 from .skill_pack import CORE_SKILLS
 
@@ -19,6 +19,23 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
     checks: list[Check] = []
     manifest = read_manifest(paths.manifest_path)
     checks.append(Check("manifest", manifest is not None, f"{paths.manifest_path}"))
+    if manifest:
+        manifest_skills_dir = manifest.get("skills_dir")
+        checks.append(
+            Check(
+                "manifest_skills_dir",
+                manifest_skills_dir == str(paths.skills_dir),
+                f"manifest skills_dir={manifest_skills_dir!r}; expected {paths.skills_dir}",
+            )
+        )
+        modified = local_modifications(manifest, paths.skills_dir)
+        checks.append(
+            Check(
+                "local_modifications",
+                not modified,
+                "managed files match manifest" if not modified else f"changed managed files: {', '.join(modified)}",
+            )
+        )
     checks.append(Check("skills_dir", paths.skills_dir.exists(), f"{paths.skills_dir}"))
     for skill in CORE_SKILLS:
         path = paths.skills_dir / skill / "SKILL.md"
@@ -26,10 +43,25 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
     config_text = read_config(paths.hermes_config_path)
     dirs = external_dirs(config_text)
     checks.append(Check("hermes_config", paths.hermes_config_path.exists(), f"{paths.hermes_config_path}"))
-    checks.append(Check("external_dir", str(paths.skills_dir) in dirs, f"{paths.skills_dir} in skills.external_dirs"))
+    external_registered = str(paths.skills_dir) in dirs
+    checks.append(Check("external_dir", external_registered, f"{paths.skills_dir} in skills.external_dirs"))
+    checks.append(
+        Check(
+            "runtime_context",
+            external_registered,
+            (
+                f"Hermes config {paths.hermes_config_path} points at {paths.skills_dir}; "
+                "for a bot or hosted runtime, run doctor with the same --hermes-home used by that process"
+            )
+            if external_registered
+            else (
+                f"{paths.skills_dir} is not registered in {paths.hermes_config_path}; "
+                "run `omh apply`, or pass --hermes-home matching the Hermes or bot runtime"
+            ),
+        )
+    )
     return checks
 
 
 def doctor_ok(checks: list[Check]) -> bool:
     return all(check.ok for check in checks)
-

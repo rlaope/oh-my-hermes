@@ -40,6 +40,14 @@ class CliTests(unittest.TestCase):
             self.assertIn("ultragoal", names)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
 
+            _, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
+            doctor = json.loads(doctor_stdout)
+            checks = {check["name"]: check for check in doctor["checks"]}
+            self.assertTrue(checks["runtime_context"]["ok"])
+            self.assertIn("--hermes-home", checks["runtime_context"]["message"])
+            self.assertTrue(checks["manifest_skills_dir"]["ok"])
+            self.assertTrue(checks["local_modifications"]["ok"])
+
     def test_install_is_idempotent_and_detects_local_modifications(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -54,7 +62,30 @@ class CliTests(unittest.TestCase):
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "install"])
             self.assertEqual(status, 2)
             self.assertIn("local modifications detected", stderr)
+
+            doctor_status, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
+            self.assertEqual(doctor_status, 1)
+            checks = {check["name"]: check for check in json.loads(doctor_stdout)["checks"]}
+            self.assertFalse(checks["local_modifications"]["ok"])
+            self.assertIn("ralph/SKILL.md", checks["local_modifications"]["message"])
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "install", "--force"])[0], 0)
+
+    def test_doctor_reports_wrong_runtime_home(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            installed_hermes_home = root / ".hermes-installed"
+            other_hermes_home = root / ".hermes-other"
+
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(installed_hermes_home), "install"])[0], 0)
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(installed_hermes_home), "apply"])[0], 0)
+
+            status, stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(other_hermes_home), "doctor"])
+
+            self.assertEqual(status, 1)
+            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            self.assertFalse(checks["runtime_context"]["ok"])
+            self.assertIn("matching the Hermes or bot runtime", checks["runtime_context"]["message"])
 
     def test_convert_from_local_skill_fixture(self) -> None:
         with TemporaryDirectory() as tmp:
