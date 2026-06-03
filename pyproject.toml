@@ -31,8 +31,9 @@ Issues = "https://github.com/rlaope/oh-my-hermes-agent/issues"
 Repository = "https://github.com/rlaope/oh-my-hermes-agent"
 
 [tool.setuptools]
-package-dir = { "" = "src" }
+packages = ["omh", "omh.core", "omh.skills"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["omh*"]
+[tool.setuptools.package-dir]
+omh = "src"
+"omh.core" = "src/core"
+"omh.skills" = "src/skills"

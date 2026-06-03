@@ -16,7 +16,7 @@ The architecture favors:
 ## Package Layout
 
 ```text
-src/omh/
+src/
   cli.py
   config_adapter.py
   converter.py
@@ -64,4 +64,3 @@ metadata from it.
 - Local modifications block updates unless `--force` is supplied.
 - Config registration is isolated to `skills.external_dirs`.
 - Workspace guidance is printed by `omh snippet`; it is not applied by default.
-

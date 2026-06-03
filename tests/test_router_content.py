@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from _local_package import load_local_package
 
+load_local_package()
 from omh.skill_pack import builtin_skill_templates
 
 
@@ -52,7 +52,8 @@ class RouterContentTests(unittest.TestCase):
             Path("CODE_OF_CONDUCT.md"),
             Path("SECURITY.md"),
             Path("SUPPORT.md"),
-            *Path("src/omh").rglob("*.py"),
+            Path("install.sh"),
+            *Path("src").rglob("*.py"),
             *Path("tests").rglob("*.py"),
             *Path("docs").rglob("*.md"),
             *Path("examples").rglob("*"),

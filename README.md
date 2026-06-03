@@ -44,17 +44,30 @@ Hermes-specific workflow tests.
 
 ## Quick Start
 
-Install from this repository:
+Install and apply the managed Hermes skill pack without cloning the repository:
 
 ```sh
-python -m pip install -e .
-omh install
-omh apply
-omh doctor
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
 ```
 
 Then open Hermes Agent and use the installed skills through Hermes' normal skill
 surfaces.
+
+Check or manage the installation with `omh`:
+
+```sh
+omh doctor
+omh list
+omh update
+```
+
+Installer options:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_AUTO_APPLY=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_RUN_DOCTOR=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PIP_ARGS= sh
+```
 
 Useful commands:
 
@@ -120,26 +133,25 @@ it could mean normal conversation.
 
 ```text
 src/
-  omh/
-    cli.py                 command-line entrypoint
-    config_adapter.py      Hermes config registration adapter
-    converter.py           local skill import support
-    doctor.py              installation health checks
-    installer.py           managed skill pack install/update/uninstall
-    manifest.py            installed file manifest and conflict checks
-    paths.py               home/config path resolution
-    snippet.py             optional workspace guidance
-    skill_pack.py          compatibility facade for generated skills
-    core/
-      errors.py            shared user-facing error type
-    skills/
-      catalog.py           workflow definitions and routing triggers
-      render.py            generated Hermes skill content
+  cli.py                 command-line entrypoint
+  config_adapter.py      Hermes config registration adapter
+  converter.py           local skill import support
+  doctor.py              installation health checks
+  installer.py           managed skill pack install/update/uninstall
+  manifest.py            installed file manifest and conflict checks
+  paths.py               home/config path resolution
+  snippet.py             optional workspace guidance
+  skill_pack.py          compatibility facade for generated skills
+  core/
+    errors.py            shared user-facing error type
+  skills/
+    catalog.py           workflow definitions and routing triggers
+    render.py            generated Hermes skill content
 ```
 
 The important design choice is that routing data lives in
-`src/omh/skills/catalog.py` and rendered skill text lives in
-`src/omh/skills/render.py`. This keeps the workflow registry testable as data
+`src/skills/catalog.py` and rendered skill text lives in
+`src/skills/render.py`. This keeps the workflow registry testable as data
 instead of burying routing behavior in one long string.
 
 ## Safety
@@ -153,22 +165,28 @@ instead of burying routing behavior in one long string.
 
 ## Development
 
+Install the current checkout in editable mode:
+
+```sh
+python -m pip install -e .
+```
+
 Run the test suite:
 
 ```sh
-PYTHONPATH=src python -m unittest discover -s tests
-python -m compileall src/omh
+python -m unittest discover -s tests
+python -m compileall src
 ```
 
 Smoke-test the installer without touching real home directories:
 
 ```sh
-PYTHONPATH=src python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
+python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
 ```
 
 ## Roadmap
 
-- Release packaging for one-command installation
+- Versioned release artifacts for stable installer targets
 - A richer generated routing registry
 - File-backed goal ledgers under `.omh/goals/`
 - More Hermes-specific diagnostics in `omh doctor`
