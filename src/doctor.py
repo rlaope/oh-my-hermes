@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .config_adapter import external_dirs, read_config
+from .hashutil import sha256_file
 from .manifest import local_modifications, read_manifest
 from .paths import OmhPaths
+from .runtime_artifacts import read_state
 from .skill_pack import CORE_SKILLS
 
 
@@ -18,6 +20,7 @@ class Check:
 def run_doctor(paths: OmhPaths) -> list[Check]:
     checks: list[Check] = []
     manifest = read_manifest(paths.manifest_path)
+    state = read_state(paths)
     checks.append(Check("manifest", manifest is not None, f"{paths.manifest_path}"))
     if manifest:
         manifest_skills_dir = manifest.get("skills_dir")
@@ -37,6 +40,23 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
             )
         )
     checks.append(Check("skills_dir", paths.skills_dir.exists(), f"{paths.skills_dir}"))
+    try:
+        paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        probe = paths.runtime_dir / ".doctor-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        runtime_writable = True
+    except OSError:
+        runtime_writable = False
+    checks.append(Check("runtime_artifacts", runtime_writable, f"{paths.runtime_dir} writable"))
+    if manifest and state:
+        checks.append(
+            Check(
+                "runtime_state",
+                state.get("manifest_sha256") in {None, sha256_file(paths.manifest_path)},
+                "runtime state matches manifest hash" if state.get("manifest_sha256") in {None, sha256_file(paths.manifest_path)} else "runtime state manifest hash is stale",
+            )
+        )
     for skill in CORE_SKILLS:
         path = paths.skills_dir / skill / "SKILL.md"
         checks.append(Check(f"skill:{skill}", path.exists(), str(path)))

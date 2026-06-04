@@ -5,11 +5,25 @@ import json
 import sys
 from pathlib import Path
 
+from . import __version__
 from .config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
 from .doctor import doctor_ok, run_doctor
+from .hashutil import sha256_file
 from .installer import OmhError, install_skill_pack, uninstall_skill_pack
 from .manifest import read_manifest
 from .paths import resolve_paths
+from .runtime_artifacts import (
+    DELEGATION_RESULTS,
+    PRIVACY_MODES,
+    RUN_STATUSES,
+    create_run,
+    list_runs,
+    read_state,
+    show_run,
+    update_state,
+    write_delegation,
+)
+from .skill_pack import builtin_harnesses, builtin_definitions
 from .snippet import WORKSPACE_SNIPPET
 
 
@@ -26,6 +40,19 @@ def cmd_install(args: argparse.Namespace) -> int:
     source_dir = Path(args.from_skills_dir or args.source).expanduser().resolve() if (args.from_skills_dir or args.source) else None
     source = str(source_dir) if source_dir else "builtin"
     result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
+    if not args.dry_run:
+        update_state(
+            paths,
+            {
+                "package": "oh-my-hermes-agent",
+                "version": __version__,
+                "manifest_path": str(paths.manifest_path),
+                "manifest_sha256": sha256_file(paths.manifest_path),
+                "source": source,
+                "installed_skills": len(result.get("skills", [])),
+                "skills_dir": str(paths.skills_dir),
+            },
+        )
     _print_json(result)
     return 0
 
@@ -48,6 +75,15 @@ def cmd_apply(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if not args.dry_run and change.changed:
         write_config(paths.hermes_config_path, change.text)
+    if not args.dry_run:
+        update_state(
+            paths,
+            {
+                "hermes_config_path": str(paths.hermes_config_path),
+                "last_applied_skills_dir": str(paths.skills_dir),
+                "external_dir_registered": str(paths.skills_dir) in read_config(paths.hermes_config_path),
+            },
+        )
     _print_json({"changed": change.changed, "message": change.message, "config": str(paths.hermes_config_path), "skills_dir": str(paths.skills_dir), "dry_run": args.dry_run})
     return 0
 
@@ -75,8 +111,103 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     checks = run_doctor(_paths(args))
+    paths = _paths(args)
+    update_state(
+        paths,
+        {
+            "last_doctor": {
+                "ok": doctor_ok(checks),
+                "checks": {check.name: check.ok for check in checks},
+            }
+        },
+    )
     _print_json({"ok": doctor_ok(checks), "checks": [check.__dict__ for check in checks]})
     return 0 if doctor_ok(checks) else 1
+
+
+def _valid_skill_names() -> set[str]:
+    return {definition.name for definition in builtin_definitions()}
+
+
+def _valid_harness_names() -> set[str]:
+    return {harness.name for harness in builtin_harnesses()}
+
+
+def _validate_runtime_names(skill: str, harness: str) -> None:
+    if skill not in _valid_skill_names():
+        raise OmhError(f"unknown skill for runtime record: {skill}")
+    if harness not in _valid_harness_names():
+        raise OmhError(f"unknown harness for runtime record: {harness}")
+
+
+def cmd_runtime_status(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    _print_json(
+        {
+            "schema_version": 1,
+            "runtime_dir": str(paths.runtime_dir),
+            "state_path": str(paths.runtime_state_path),
+            "runs_dir": str(paths.runtime_runs_dir),
+            "state": read_state(paths),
+        }
+    )
+    return 0
+
+
+def cmd_runtime_runs(args: argparse.Namespace) -> int:
+    _print_json({"runs": list_runs(_paths(args))})
+    return 0
+
+
+def cmd_runtime_show(args: argparse.Namespace) -> int:
+    try:
+        _print_json(show_run(_paths(args), args.run_id))
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    return 0
+
+
+def cmd_runtime_record(args: argparse.Namespace) -> int:
+    _validate_runtime_names(args.skill, args.harness)
+    run = create_run(
+        _paths(args),
+        {
+            "skill": args.skill,
+            "harness": args.harness,
+            "status": args.status,
+            "trigger": args.trigger or "",
+            "privacy": args.privacy,
+            "inputs_summary": args.inputs_summary or "",
+            "outputs_summary": args.outputs_summary or "",
+            "verification_summary": args.verification_summary or "",
+        },
+    )
+    _print_json({"run": run})
+    return 0
+
+
+def cmd_runtime_delegate(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    run_dir = paths.runtime_runs_dir / args.run_id
+    if not (run_dir / "run.json").exists():
+        raise OmhError(f"runtime run not found: {args.run_id}")
+    observed = args.observed
+    if args.not_observed:
+        observed = False
+    participants = [item.strip() for item in (args.participants or "").split(",") if item.strip()]
+    delegation = write_delegation(
+        run_dir,
+        {
+            "requested": args.requested,
+            "observed": observed,
+            "participants": participants,
+            "result": args.result,
+            "evidence_refs": args.evidence_ref or [],
+            "message": args.message or "",
+        },
+    )
+    _print_json({"delegation": delegation})
+    return 0
 
 
 def cmd_snippet(args: argparse.Namespace) -> int:
@@ -134,6 +265,41 @@ def build_parser() -> argparse.ArgumentParser:
     snippet.add_argument("--dry-run", action="store_true")
     snippet.add_argument("--output", default=None)
     snippet.set_defaults(func=cmd_snippet)
+
+    runtime = sub.add_parser("runtime")
+    runtime_sub = runtime.add_subparsers(dest="runtime_command", required=True)
+
+    runtime_status = runtime_sub.add_parser("status")
+    runtime_status.set_defaults(func=cmd_runtime_status)
+
+    runtime_runs = runtime_sub.add_parser("runs")
+    runtime_runs.set_defaults(func=cmd_runtime_runs)
+
+    runtime_show = runtime_sub.add_parser("show")
+    runtime_show.add_argument("run_id")
+    runtime_show.set_defaults(func=cmd_runtime_show)
+
+    runtime_record = runtime_sub.add_parser("record")
+    runtime_record.add_argument("--skill", required=True)
+    runtime_record.add_argument("--harness", required=True)
+    runtime_record.add_argument("--status", choices=RUN_STATUSES, default="unknown")
+    runtime_record.add_argument("--trigger", default="")
+    runtime_record.add_argument("--privacy", choices=PRIVACY_MODES, default="metadata_only")
+    runtime_record.add_argument("--inputs-summary", default="")
+    runtime_record.add_argument("--outputs-summary", default="")
+    runtime_record.add_argument("--verification-summary", default="")
+    runtime_record.set_defaults(func=cmd_runtime_record)
+
+    runtime_delegate = runtime_sub.add_parser("delegate")
+    runtime_delegate.add_argument("--run", dest="run_id", required=True)
+    runtime_delegate.add_argument("--requested", action="store_true")
+    runtime_delegate.add_argument("--observed", action="store_true")
+    runtime_delegate.add_argument("--not-observed", action="store_true")
+    runtime_delegate.add_argument("--result", choices=DELEGATION_RESULTS, default="not_observed")
+    runtime_delegate.add_argument("--participants", default="")
+    runtime_delegate.add_argument("--evidence-ref", action="append")
+    runtime_delegate.add_argument("--message", default="")
+    runtime_delegate.set_defaults(func=cmd_runtime_delegate)
     return parser
 
 

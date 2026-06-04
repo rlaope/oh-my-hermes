@@ -19,6 +19,18 @@ class OmhPaths:
         return self.omh_home / "manifest.json"
 
     @property
+    def runtime_dir(self) -> Path:
+        return self.omh_home / "runtime"
+
+    @property
+    def runtime_state_path(self) -> Path:
+        return self.runtime_dir / "state.json"
+
+    @property
+    def runtime_runs_dir(self) -> Path:
+        return self.runtime_dir / "runs"
+
+    @property
     def hermes_config_path(self) -> Path:
         return self.hermes_home / "config.yaml"
 
@@ -43,4 +55,3 @@ def resolve_paths(
         omh_home=expand_path(omh_home) if omh_home else default_omh_home(),
         hermes_home=expand_path(hermes_home) if hermes_home else default_hermes_home(),
     )
-

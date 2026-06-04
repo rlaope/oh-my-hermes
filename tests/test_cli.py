@@ -39,6 +39,9 @@ class CliTests(unittest.TestCase):
             self.assertIn("ralph", names)
             self.assertIn("ultragoal", names)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
+            state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["installed_skills"], len(manifest["skills"]))
+            self.assertEqual(state["last_applied_skills_dir"], str((omh_home / "skills").resolve()))
 
             _, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
             doctor = json.loads(doctor_stdout)
@@ -47,6 +50,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("--hermes-home", checks["runtime_context"]["message"])
             self.assertTrue(checks["manifest_skills_dir"]["ok"])
             self.assertTrue(checks["local_modifications"]["ok"])
+            self.assertTrue(checks["runtime_artifacts"]["ok"])
 
     def test_install_is_idempotent_and_detects_local_modifications(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -124,6 +128,84 @@ class CliTests(unittest.TestCase):
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "update", "--source", str(root / "release-archive")])[0], 0)
             updated = (omh_home / "skills" / "team" / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("Updated.", updated)
+
+    def test_runtime_commands_record_show_and_delegate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "status"])[0], 0)
+            status, stdout, _ = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                    "--status",
+                    "started",
+                    "--trigger",
+                    "coding request",
+                ]
+            )
+            self.assertEqual(status, 0)
+            run = json.loads(stdout)["run"]
+
+            status, stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "runs"])
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["runs"][0]["run_id"], run["run_id"])
+
+            status, _, _ = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
+                    "delegate",
+                    "--run",
+                    run["run_id"],
+                    "--requested",
+                    "--not-observed",
+                    "--result",
+                    "not_observed",
+                    "--evidence-ref",
+                    "run.json",
+                ]
+            )
+            self.assertEqual(status, 0)
+
+            status, stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "show", run["run_id"]])
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["run"]["harness"], "coding-handling")
+            self.assertTrue(shown["delegation"]["requested"])
+            self.assertFalse(shown["delegation"]["observed"])
+
+    def test_runtime_record_rejects_unknown_names(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status, _, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(root / ".omh"),
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "missing",
+                    "--harness",
+                    "coding-handling",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("unknown skill", stderr)
 
 
 if __name__ == "__main__":
