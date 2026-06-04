@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,8 +12,21 @@ from .paths import OmhPaths
 
 SCHEMA_VERSION = 1
 RUN_STATUSES = ("started", "completed", "blocked", "failed", "unknown")
-PRIVACY_MODES = ("metadata_only", "prompt_capture_enabled")
+PRIVACY_MODES = ("metadata_only",)
 DELEGATION_RESULTS = ("completed", "blocked", "failed", "not_available", "not_observed")
+OBSERVED_RESULTS = ("completed", "blocked", "failed")
+UNOBSERVED_RESULTS = ("not_available", "not_observed")
+
+
+def _ensure_private_dir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
+
+
+def _ensure_private_file(path: Path) -> None:
+    if not path.exists():
+        path.touch(mode=0o600)
+    path.chmod(0o600)
 
 
 def utc_now() -> str:
@@ -20,10 +34,12 @@ def utc_now() -> str:
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_dir(path.parent)
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.chmod(0o600)
     tmp.replace(path)
+    path.chmod(0o600)
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -44,11 +60,19 @@ def _stamp(value: datetime | str | None) -> str:
         return value
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return value.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def new_run_id(now: datetime | str | None = None, slug: str = "run") -> str:
     return f"{_stamp(now)}-{_slugify(slug)}"
+
+
+def _unique_run_id(paths: OmhPaths, slug: str) -> str:
+    for _ in range(100):
+        run_id = f"{new_run_id(slug=slug)}-{secrets.token_hex(3)}"
+        if not (paths.runtime_runs_dir / run_id).exists():
+            return run_id
+    raise RuntimeError("could not allocate unique runtime run id")
 
 
 def read_state(paths: OmhPaths) -> dict[str, Any] | None:
@@ -71,7 +95,7 @@ def create_run(paths: OmhPaths, metadata: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"unsupported privacy mode: {privacy}")
     skill = str(metadata.get("skill", "unknown"))
     harness = str(metadata.get("harness", "unknown"))
-    run_id = str(metadata.get("run_id") or new_run_id(slug=f"{skill}-{harness}"))
+    run_id = str(metadata.get("run_id") or _unique_run_id(paths, f"{skill}-{harness}"))
     created_at = str(metadata.get("created_at") or utc_now())
     run = {
         "schema_version": SCHEMA_VERSION,
@@ -89,7 +113,7 @@ def create_run(paths: OmhPaths, metadata: dict[str, Any]) -> dict[str, Any]:
     }
     run_dir = paths.runtime_runs_dir / run_id
     evidence_dir = run_dir / "evidence"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_private_dir(evidence_dir)
     _atomic_write_json(run_dir / "run.json", run)
     append_event(run_dir, {"event": "run_recorded", "level": "info", "message": f"{skill}/{harness} recorded as {status}"})
     update_state(paths, {"last_run_id": run_id})
@@ -106,21 +130,32 @@ def append_event(run_dir: Path, event: dict[str, Any]) -> dict[str, Any]:
     }
     if "data" in event:
         item["data"] = event["data"]
-    run_dir.mkdir(parents=True, exist_ok=True)
-    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as handle:
+    _ensure_private_dir(run_dir)
+    events_path = run_dir / "events.jsonl"
+    _ensure_private_file(events_path)
+    with events_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(item, sort_keys=True) + "\n")
     return item
+
+
+def _validate_delegation(observed: bool, result: str) -> None:
+    if observed and result not in OBSERVED_RESULTS:
+        raise ValueError("observed delegation requires result completed, blocked, or failed")
+    if not observed and result not in UNOBSERVED_RESULTS:
+        raise ValueError("unobserved delegation requires result not_available or not_observed")
 
 
 def write_delegation(run_dir: Path, delegation: dict[str, Any]) -> dict[str, Any]:
     result = delegation.get("result", "not_observed")
     if result not in DELEGATION_RESULTS:
         raise ValueError(f"unsupported delegation result: {result}")
+    observed = bool(delegation.get("observed", False))
+    _validate_delegation(observed, result)
     record = {
         "schema_version": SCHEMA_VERSION,
         "updated_at": utc_now(),
         "requested": bool(delegation.get("requested", False)),
-        "observed": bool(delegation.get("observed", False)),
+        "observed": observed,
         "participants": list(delegation.get("participants", [])),
         "result": result,
         "evidence_refs": list(delegation.get("evidence_refs", [])),

@@ -110,17 +110,18 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    checks = run_doctor(_paths(args))
     paths = _paths(args)
-    update_state(
-        paths,
-        {
-            "last_doctor": {
-                "ok": doctor_ok(checks),
-                "checks": {check.name: check.ok for check in checks},
-            }
-        },
-    )
+    checks = run_doctor(paths)
+    if any(check.name == "runtime_artifacts" and check.ok for check in checks):
+        update_state(
+            paths,
+            {
+                "last_doctor": {
+                    "ok": doctor_ok(checks),
+                    "checks": {check.name: check.ok for check in checks},
+                }
+            },
+        )
     _print_json({"ok": doctor_ok(checks), "checks": [check.__dict__ for check in checks]})
     return 0 if doctor_ok(checks) else 1
 
@@ -192,20 +193,29 @@ def cmd_runtime_delegate(args: argparse.Namespace) -> int:
     if not (run_dir / "run.json").exists():
         raise OmhError(f"runtime run not found: {args.run_id}")
     observed = args.observed
+    result = args.result
     if args.not_observed:
         observed = False
+        result = result or "not_observed"
+    elif observed:
+        result = result or "completed"
+    else:
+        result = result or "not_available"
     participants = [item.strip() for item in (args.participants or "").split(",") if item.strip()]
-    delegation = write_delegation(
-        run_dir,
-        {
-            "requested": args.requested,
-            "observed": observed,
-            "participants": participants,
-            "result": args.result,
-            "evidence_refs": args.evidence_ref or [],
-            "message": args.message or "",
-        },
-    )
+    try:
+        delegation = write_delegation(
+            run_dir,
+            {
+                "requested": args.requested,
+                "observed": observed,
+                "participants": participants,
+                "result": result,
+                "evidence_refs": args.evidence_ref or [],
+                "message": args.message or "",
+            },
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     _print_json({"delegation": delegation})
     return 0
 
@@ -293,9 +303,10 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_delegate = runtime_sub.add_parser("delegate")
     runtime_delegate.add_argument("--run", dest="run_id", required=True)
     runtime_delegate.add_argument("--requested", action="store_true")
-    runtime_delegate.add_argument("--observed", action="store_true")
-    runtime_delegate.add_argument("--not-observed", action="store_true")
-    runtime_delegate.add_argument("--result", choices=DELEGATION_RESULTS, default="not_observed")
+    observation = runtime_delegate.add_mutually_exclusive_group()
+    observation.add_argument("--observed", action="store_true")
+    observation.add_argument("--not-observed", action="store_true")
+    runtime_delegate.add_argument("--result", choices=DELEGATION_RESULTS, default=None)
     runtime_delegate.add_argument("--participants", default="")
     runtime_delegate.add_argument("--evidence-ref", action="append")
     runtime_delegate.add_argument("--message", default="")

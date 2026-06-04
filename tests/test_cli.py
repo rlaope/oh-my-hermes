@@ -207,6 +207,56 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertIn("unknown skill", stderr)
 
+    def test_runtime_delegate_rejects_contradictory_observation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            status, stdout, _ = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                ]
+            )
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            status, _, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "runtime",
+                    "delegate",
+                    "--run",
+                    run_id,
+                    "--observed",
+                    "--result",
+                    "not_observed",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("observed delegation requires", stderr)
+
+    def test_doctor_reports_unwritable_runtime_artifact_path_without_crashing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            omh_home.mkdir()
+            (omh_home / "runtime").write_text("not a directory", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "doctor"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 1)
+            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            self.assertFalse(checks["runtime_artifacts"]["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,5 +26,8 @@ jobs:
         run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
       - name: Runtime artifact smoke
         run: |
-          python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started
+          run_json="$(python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started)"
+          run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+          python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime delegate --run "$run_id" --requested --not-observed --result not_observed
+          python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime show "$run_id"
           python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime runs
