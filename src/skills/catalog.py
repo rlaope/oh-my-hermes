@@ -380,12 +380,37 @@ _HARNESSES = [
 ]
 
 
+_PRIMARY_HARNESSES = {
+    "ralph": "goal-execution",
+    "ultragoal": "goal-execution",
+    "deep-interview": "deep-interview",
+    "team": "goal-execution",
+    "ultraqa": "qa-specialist",
+    "plan": "planning",
+    "ralplan": "planning",
+    "code-review": "critic",
+    "ai-slop-cleaner": "coding-handling",
+    "best-practice-research": "planning",
+    "autoresearch-goal": "goal-execution",
+    "performance-goal": "goal-execution",
+    "wiki": "docs-specialist",
+    "ask": "critic",
+    "cancel": "goal-execution",
+    "skill": "docs-specialist",
+    "doctor": "qa-specialist",
+}
+
+
 def builtin_definitions() -> list[SkillDefinition]:
     return list(_DEFINITIONS)
 
 
 def builtin_harnesses() -> list[HarnessDefinition]:
     return list(_HARNESSES)
+
+
+def primary_harness_for_skill(name: str) -> str:
+    return _PRIMARY_HARNESSES.get(name, "coding-handling")
 
 
 CORE_SKILLS = [definition.name for definition in _DEFINITIONS]

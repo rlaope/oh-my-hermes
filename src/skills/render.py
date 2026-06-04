@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .catalog import DESCRIPTIONS, HarnessDefinition, SkillDefinition, builtin_definitions, builtin_harnesses
+from .catalog import DESCRIPTIONS, HarnessDefinition, SkillDefinition, builtin_definitions, builtin_harnesses, primary_harness_for_skill
 
 
 @dataclass(frozen=True)
@@ -52,29 +52,6 @@ def _harness_summary(harness: HarnessDefinition) -> str:
 
 def _harness_registry(harnesses: list[HarnessDefinition]) -> str:
     return "\n".join(_harness_summary(harness) for harness in harnesses)
-
-
-def _primary_harness_for_skill(name: str) -> str:
-    mapping = {
-        "ralph": "goal-execution",
-        "ultragoal": "goal-execution",
-        "deep-interview": "deep-interview",
-        "team": "goal-execution",
-        "ultraqa": "qa-specialist",
-        "plan": "planning",
-        "ralplan": "planning",
-        "code-review": "critic",
-        "ai-slop-cleaner": "coding-handling",
-        "best-practice-research": "planning",
-        "autoresearch-goal": "goal-execution",
-        "performance-goal": "goal-execution",
-        "wiki": "docs-specialist",
-        "ask": "critic",
-        "cancel": "goal-execution",
-        "skill": "docs-specialist",
-        "doctor": "qa-specialist",
-    }
-    return mapping.get(name, "coding-handling")
 
 
 def _tuple_list(values: tuple[str, ...]) -> str:
@@ -178,7 +155,7 @@ def workflow_skill(name: str) -> SkillTemplate:
     definition = definitions[name]
     title = name.replace("-", " ").title()
     triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers)
-    primary_harness = _primary_harness_for_skill(name)
+    primary_harness = primary_harness_for_skill(name)
     body = f"""# {title}
 
 This is a Hermes-native `{name}` workflow skill.

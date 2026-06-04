@@ -369,27 +369,23 @@ def cmd_probe(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="omh", description="Install oh-my-hermes skills for Hermes Agent.")
-    parser.add_argument("--omh-home", default=None)
-    parser.add_argument("--hermes-home", default=None)
-    sub = parser.add_subparsers(dest="command", required=True)
+def _add_common_install_options(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--from-skills-dir", default=None, help="Import skills from a local skill directory.")
+    p.add_argument("--source", default=None, help="Mockable local source directory for install/update.")
+    p.add_argument("--channel", choices=RELEASE_CHANNELS, default="preview", help="Release channel metadata for this install/update.")
+    p.add_argument("--version", default="", help="Stable release version such as 0.1.0 or v0.1.0.")
+    p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
 
-    def add_common_install(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--from-skills-dir", default=None, help="Import skills from a local skill directory.")
-        p.add_argument("--source", default=None, help="Mockable local source directory for install/update.")
-        p.add_argument("--channel", choices=RELEASE_CHANNELS, default="preview", help="Release channel metadata for this install/update.")
-        p.add_argument("--version", default="", help="Stable release version such as 0.1.0 or v0.1.0.")
-        p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
-        p.add_argument("--force", action="store_true")
-        p.add_argument("--dry-run", action="store_true")
 
+def _add_top_level_commands(sub) -> None:
     install = sub.add_parser("install")
-    add_common_install(install)
+    _add_common_install_options(install)
     install.set_defaults(func=cmd_install)
 
     update = sub.add_parser("update")
-    add_common_install(update)
+    _add_common_install_options(update)
     update.set_defaults(func=cmd_update)
 
     convert = sub.add_parser("convert")
@@ -421,6 +417,8 @@ def build_parser() -> argparse.ArgumentParser:
     probe = sub.add_parser("probe")
     probe.set_defaults(func=cmd_probe)
 
+
+def _add_docs_commands(sub) -> None:
     docs = sub.add_parser("docs")
     docs_sub = docs.add_subparsers(dest="docs_command", required=True)
 
@@ -429,6 +427,8 @@ def build_parser() -> argparse.ArgumentParser:
     docs_workflows.add_argument("--check", action="store_true")
     docs_workflows.set_defaults(func=cmd_docs_workflows)
 
+
+def _add_runtime_commands(sub) -> None:
     runtime = sub.add_parser("runtime")
     runtime_sub = runtime.add_subparsers(dest="runtime_command", required=True)
 
@@ -484,6 +484,8 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_export.add_argument("--no-redact", dest="redacted", action="store_false")
     runtime_export.set_defaults(func=cmd_runtime_export)
 
+
+def _add_state_commands(sub) -> None:
     state = sub.add_parser("state")
     state_sub = state.add_subparsers(dest="state_command", required=True)
 
@@ -505,6 +507,18 @@ def build_parser() -> argparse.ArgumentParser:
     state_clear = state_sub.add_parser("clear")
     state_clear.add_argument("--workflow", required=True)
     state_clear.set_defaults(func=cmd_state_clear)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="omh", description="Install oh-my-hermes skills for Hermes Agent.")
+    parser.add_argument("--omh-home", default=None)
+    parser.add_argument("--hermes-home", default=None)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    _add_top_level_commands(sub)
+    _add_docs_commands(sub)
+    _add_runtime_commands(sub)
+    _add_state_commands(sub)
     return parser
 
 

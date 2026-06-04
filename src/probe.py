@@ -39,11 +39,36 @@ def _wrapper_artifacts(paths: OmhPaths) -> list[Path]:
     return sorted(paths.runtime_runs_dir.glob("*/wrapper.json"))
 
 
+def _has_any_file(paths: list[Path]) -> bool:
+    return any(_has_file(path) for path in paths)
+
+
+def _marker_capability(name: str, markers: list[Path], found_message: str, missing_message: str) -> Capability:
+    found = _has_any_file(markers)
+    return Capability(
+        name,
+        "unverified" if found else "unknown",
+        ", ".join(str(path) for path in markers),
+        found_message if found else missing_message,
+    )
+
+
+def _dir_capability(name: str, path: Path, found_message: str, missing_message: str) -> Capability:
+    found = _has_dir(path)
+    return Capability(
+        name,
+        "unverified" if found else "unknown",
+        str(path),
+        found_message if found else missing_message,
+    )
+
+
 def probe_capabilities(paths: OmhPaths) -> dict:
     config_text = read_config(paths.hermes_config_path)
     configured_dirs = external_dirs(config_text)
     skills_registered = str(paths.skills_dir) in configured_dirs
     capabilities: list[Capability] = []
+    managed_skill_path = paths.skills_dir / "oh-my-hermes" / "SKILL.md"
 
     capabilities.append(
         Capability(
@@ -56,51 +81,43 @@ def probe_capabilities(paths: OmhPaths) -> dict:
     capabilities.append(
         Capability(
             "managed_skills",
-            "available" if _has_file(paths.skills_dir / "oh-my-hermes" / "SKILL.md") else "missing",
+            "available" if _has_file(managed_skill_path) else "missing",
             str(paths.skills_dir),
-            "Managed oh-my-hermes skill is installed" if _has_file(paths.skills_dir / "oh-my-hermes" / "SKILL.md") else "Managed skills are not installed",
+            "Managed oh-my-hermes skill is installed" if _has_file(managed_skill_path) else "Managed skills are not installed",
         )
     )
     hooks_markers = [paths.hermes_home / "hooks.yaml", paths.hermes_home / "hooks.json"]
     capabilities.append(
-        Capability(
+        _marker_capability(
             "native_hooks",
-            "unverified" if any(_has_file(path) for path in hooks_markers) else "unknown",
-            ", ".join(str(path) for path in hooks_markers),
-            "Hook-like files exist, but omh has no stable Hermes hook contract to claim native integration"
-            if any(_has_file(path) for path in hooks_markers)
-            else "No stable Hermes hook surface detected by file probe",
+            hooks_markers,
+            "Hook-like files exist, but omh has no stable Hermes hook contract to claim native integration",
+            "No stable Hermes hook surface detected by file probe",
         )
     )
     capabilities.append(
-        Capability(
+        _dir_capability(
             "plugin_bundles",
-            "unverified" if _has_dir(paths.hermes_home / "plugins") else "unknown",
-            str(paths.hermes_home / "plugins"),
-            "Plugin directory exists, but omh has no stable Hermes plugin bundle contract"
-            if _has_dir(paths.hermes_home / "plugins")
-            else "No Hermes plugin directory detected by file probe",
+            paths.hermes_home / "plugins",
+            "Plugin directory exists, but omh has no stable Hermes plugin bundle contract",
+            "No Hermes plugin directory detected by file probe",
         )
     )
     capabilities.append(
-        Capability(
+        _dir_capability(
             "apps",
-            "unverified" if _has_dir(paths.hermes_home / "apps") else "unknown",
-            str(paths.hermes_home / "apps"),
-            "Apps directory exists, but omh has no stable Hermes app contract"
-            if _has_dir(paths.hermes_home / "apps")
-            else "No Hermes app directory detected by file probe",
+            paths.hermes_home / "apps",
+            "Apps directory exists, but omh has no stable Hermes app contract",
+            "No Hermes app directory detected by file probe",
         )
     )
     mcp_markers = [paths.hermes_home / ".mcp.json", paths.hermes_home / "mcp.json"]
     capabilities.append(
-        Capability(
+        _marker_capability(
             "mcp",
-            "unverified" if any(_has_file(path) for path in mcp_markers) else "unknown",
-            ", ".join(str(path) for path in mcp_markers),
-            "MCP-like config exists, but omh has not verified a Hermes MCP extension contract"
-            if any(_has_file(path) for path in mcp_markers)
-            else "No Hermes MCP config detected by file probe",
+            mcp_markers,
+            "MCP-like config exists, but omh has not verified a Hermes MCP extension contract",
+            "No Hermes MCP config detected by file probe",
         )
     )
     capabilities.append(
