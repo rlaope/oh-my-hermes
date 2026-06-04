@@ -1,7 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-OMH_PACKAGE_URL="${OMH_PACKAGE_URL:-https://github.com/rlaope/oh-my-hermes-agent/archive/refs/heads/main.zip}"
+OMH_REPO_ARCHIVE_ROOT="${OMH_REPO_ARCHIVE_ROOT:-https://github.com/rlaope/oh-my-hermes-agent/archive/refs}"
+OMH_CHANNEL="${OMH_CHANNEL:-preview}"
+OMH_VERSION="${OMH_VERSION:-}"
+OMH_PACKAGE_URL="${OMH_PACKAGE_URL:-}"
 OMH_PYTHON="${OMH_PYTHON:-python3}"
 OMH_PIP_ARGS="${OMH_PIP_ARGS:---user}"
 OMH_AUTO_APPLY="${OMH_AUTO_APPLY:-1}"
@@ -21,7 +24,34 @@ if ! command -v "$OMH_PYTHON" >/dev/null 2>&1; then
   exit 1
 fi
 
-say "Installing oh-my-hermes-agent..."
+if [ -z "$OMH_PACKAGE_URL" ]; then
+  case "$OMH_CHANNEL" in
+    preview)
+      OMH_PACKAGE_URL="$OMH_REPO_ARCHIVE_ROOT/heads/main.zip"
+      ;;
+    stable)
+      if [ -z "$OMH_VERSION" ]; then
+        say "omh installer: OMH_CHANNEL=stable requires OMH_VERSION, for example OMH_VERSION=0.1.0."
+        exit 1
+      fi
+      case "$OMH_VERSION" in
+        v*) OMH_TAG="$OMH_VERSION" ;;
+        *) OMH_TAG="v$OMH_VERSION" ;;
+      esac
+      OMH_PACKAGE_URL="$OMH_REPO_ARCHIVE_ROOT/tags/$OMH_TAG.zip"
+      ;;
+    local)
+      say "omh installer: OMH_CHANNEL=local requires OMH_PACKAGE_URL to point at a local archive or path accepted by pip."
+      exit 1
+      ;;
+    *)
+      say "omh installer: unsupported OMH_CHANNEL '$OMH_CHANNEL' (expected preview, stable, or local)."
+      exit 1
+      ;;
+  esac
+fi
+
+say "Installing oh-my-hermes-agent from $OMH_CHANNEL channel..."
 "$OMH_PYTHON" -m pip install $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
 
 say "Installing managed Hermes skills..."

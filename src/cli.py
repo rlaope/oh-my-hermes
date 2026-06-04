@@ -12,6 +12,7 @@ from .hashutil import sha256_file
 from .installer import OmhError, install_skill_pack, uninstall_skill_pack
 from .manifest import read_manifest
 from .paths import resolve_paths
+from .release import RELEASE_CHANNELS, package_url_for
 from .runtime_artifacts import (
     DELEGATION_RESULTS,
     PRIVACY_MODES,
@@ -50,9 +51,16 @@ def _print_json(data: object) -> None:
 
 def cmd_install(args: argparse.Namespace) -> int:
     paths = _paths(args)
+    try:
+        release = package_url_for(args.channel, args.version or "", args.package_url or "")
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if args.channel == "local" and not (args.from_skills_dir or args.source):
+        raise OmhError("local channel requires --from-skills-dir or --source")
     source_dir = Path(args.from_skills_dir or args.source).expanduser().resolve() if (args.from_skills_dir or args.source) else None
     source = str(source_dir) if source_dir else "builtin"
     result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
+    result.update({"release_channel": release.channel, "release_version": release.version, "release_package_url": release.package_url})
     if not args.dry_run:
         update_state(
             paths,
@@ -62,6 +70,9 @@ def cmd_install(args: argparse.Namespace) -> int:
                 "manifest_path": str(paths.manifest_path),
                 "manifest_sha256": sha256_file(paths.manifest_path),
                 "source": source,
+                "release_channel": release.channel,
+                "release_version": release.version,
+                "release_package_url": release.package_url,
                 "installed_skills": len(result.get("skills", [])),
                 "skills_dir": str(paths.skills_dir),
             },
@@ -76,6 +87,9 @@ def cmd_update(args: argparse.Namespace) -> int:
 
 def cmd_convert(args: argparse.Namespace) -> int:
     args.source = args.from_skills_dir
+    args.channel = "local"
+    args.version = ""
+    args.package_url = ""
     return cmd_install(args)
 
 
@@ -358,6 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common_install(p: argparse.ArgumentParser) -> None:
         p.add_argument("--from-skills-dir", default=None, help="Import skills from a local skill directory.")
         p.add_argument("--source", default=None, help="Mockable local source directory for install/update.")
+        p.add_argument("--channel", choices=RELEASE_CHANNELS, default="preview", help="Release channel metadata for this install/update.")
+        p.add_argument("--version", default="", help="Stable release version such as 0.1.0 or v0.1.0.")
+        p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
         p.add_argument("--force", action="store_true")
         p.add_argument("--dry-run", action="store_true")
 

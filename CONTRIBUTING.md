@@ -28,6 +28,12 @@ PYTHONPATH=src python -m unittest discover -s tests
 - The change is scoped and explained.
 - Tests pass locally.
 - Public docs were updated when behavior changed.
+- Generated docs were refreshed or `python -m omh.cli docs workflows --check`
+  was run when catalog data changed.
+- Release-channel impact was considered for installer, update, or packaging
+  changes.
+- Runtime or native capability claims are backed by artifact evidence, wrapper
+  evidence, or explicit "not observed" language.
 - The PR description includes risk, validation, and known gaps.
 - New public strings avoid coupling the project to another agent runtime.
 
@@ -35,4 +41,3 @@ PYTHONPATH=src python -m unittest discover -s tests
 
 Use concise decision-oriented messages. Mention why the change exists, not just
 what files changed.
-

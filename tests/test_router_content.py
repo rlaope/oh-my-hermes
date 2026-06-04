@@ -140,6 +140,7 @@ class RouterContentTests(unittest.TestCase):
             Path("README.md"),
             Path("docs/INSTALLATION.md"),
             Path("docs/APPLICATION_CASES.md"),
+            Path("docs/RELEASE.md"),
             Path("install.sh"),
             Path("CONTRIBUTING.md"),
             Path("CHANGELOG.md"),
@@ -161,13 +162,18 @@ class RouterContentTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
         installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
         ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+        release = Path("docs/RELEASE.md").read_text(encoding="utf-8")
 
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
         self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
         self.assertIn("[Application Cases](docs/APPLICATION_CASES.md)", readme)
+        self.assertIn("OMH_CHANNEL=stable OMH_VERSION=0.1.0", readme)
         self.assertIn("Discord Bot Flow", installation)
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)
+        self.assertIn("docs workflows --check", ci)
+        self.assertIn("Pinned stable install", release)
+        self.assertIn("Runtime evidence smoke", release)
 
     def test_application_cases_document_representative_flows(self) -> None:
         text = Path("docs/APPLICATION_CASES.md").read_text(encoding="utf-8")
