@@ -17,12 +17,15 @@ from .runtime_artifacts import (
     PRIVACY_MODES,
     RUN_STATUSES,
     create_run,
+    export_runtime,
     list_runs,
     read_state,
     read_state_result,
     show_run,
     update_state,
+    validate_runtime,
     write_delegation,
+    write_wrapper_contract,
 )
 from .skills.render import workflow_reference_markdown
 from .skill_pack import builtin_harnesses, builtin_definitions
@@ -234,6 +237,40 @@ def cmd_runtime_delegate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runtime_wrapper(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    run_dir = paths.runtime_runs_dir / args.run_id
+    if not (run_dir / "run.json").exists():
+        raise OmhError(f"runtime run not found: {args.run_id}")
+    try:
+        wrapper = write_wrapper_contract(
+            run_dir,
+            {
+                "prompt_dispatched": args.prompt_dispatched,
+                "hermes_response_observed": args.response_observed,
+                "verification_observed": args.verification_observed,
+                "completion_status": args.completion_status,
+                "unobserved_gaps": args.gap or [],
+                "message": args.message or "",
+            },
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"wrapper": wrapper})
+    return 0
+
+
+def cmd_runtime_validate(args: argparse.Namespace) -> int:
+    result = validate_runtime(_paths(args), args.run_id)
+    _print_json(result)
+    return 0 if result["ok"] else 1
+
+
+def cmd_runtime_export(args: argparse.Namespace) -> int:
+    _print_json(export_runtime(_paths(args), redacted=args.redacted))
+    return 0
+
+
 def cmd_snippet(args: argparse.Namespace) -> int:
     if args.dry_run or not args.output:
         print(WORKSPACE_SNIPPET.rstrip())
@@ -401,6 +438,25 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_delegate.add_argument("--evidence-ref", action="append")
     runtime_delegate.add_argument("--message", default="")
     runtime_delegate.set_defaults(func=cmd_runtime_delegate)
+
+    runtime_wrapper = runtime_sub.add_parser("wrapper")
+    runtime_wrapper.add_argument("--run", dest="run_id", required=True)
+    runtime_wrapper.add_argument("--prompt-dispatched", action="store_true")
+    runtime_wrapper.add_argument("--response-observed", action="store_true")
+    runtime_wrapper.add_argument("--verification-observed", action="store_true")
+    runtime_wrapper.add_argument("--completion-status", choices=("started", "completed", "blocked", "failed", "unknown"), default="unknown")
+    runtime_wrapper.add_argument("--gap", action="append")
+    runtime_wrapper.add_argument("--message", default="")
+    runtime_wrapper.set_defaults(func=cmd_runtime_wrapper)
+
+    runtime_validate = runtime_sub.add_parser("validate")
+    runtime_validate.add_argument("--run", dest="run_id", default=None)
+    runtime_validate.set_defaults(func=cmd_runtime_validate)
+
+    runtime_export = runtime_sub.add_parser("export")
+    runtime_export.add_argument("--redacted", action="store_true", default=True)
+    runtime_export.add_argument("--no-redact", dest="redacted", action="store_false")
+    runtime_export.set_defaults(func=cmd_runtime_export)
 
     state = sub.add_parser("state")
     state_sub = state.add_subparsers(dest="state_command", required=True)

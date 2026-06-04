@@ -99,12 +99,13 @@ Runtime artifacts are local JSON/JSONL files under `.omh/runtime/`.
         run.json
         events.jsonl
         delegation.json
+        wrapper.json
         evidence/
 ```
 
 `state.json` records install, apply, and doctor summaries. A run directory
 records a workflow envelope, append-only events, delegation observation, and
-optional evidence files.
+wrapper observation plus optional evidence files.
 
 The runtime artifact layer is intentionally small:
 
@@ -114,10 +115,17 @@ The runtime artifact layer is intentionally small:
 - schema-versioned files
 - CLI inspection through `omh runtime status`, `omh runtime runs`, and
   `omh runtime show <run-id>`
+- schema validation through `omh runtime validate`
+- redacted export through `omh runtime export`
 
 Bot wrappers can call `omh runtime record` before invoking Hermes and
 `omh runtime delegate` after the response if delegation metadata is available.
 If not, they should record `not_observed` rather than guessing.
+
+Wrappers can also call `omh runtime wrapper` to record whether a prompt was
+dispatched, whether a Hermes response was observed, whether verification was
+observed, and which gaps remain unobserved. This keeps bot integration evidence
+separate from claims about Hermes internals.
 
 ## Workflow State
 

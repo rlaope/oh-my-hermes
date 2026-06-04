@@ -189,6 +189,40 @@ class CliTests(unittest.TestCase):
             self.assertTrue(shown["delegation"]["requested"])
             self.assertFalse(shown["delegation"]["observed"])
 
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
+                    "wrapper",
+                    "--run",
+                    run["run_id"],
+                    "--prompt-dispatched",
+                    "--response-observed",
+                    "--completion-status",
+                    "completed",
+                    "--gap",
+                    "verification lane not exposed",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["wrapper"]["prompt_dispatched"])
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "validate"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["ok"])
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "export"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            exported = json.loads(stdout)
+            self.assertTrue(exported["redacted"])
+            self.assertEqual(exported["runs"][0]["wrapper"]["completion_status"], "completed")
+
     def test_docs_workflows_command_prints_writes_and_checks_generated_reference(self) -> None:
         status, stdout, stderr = run_cli(["docs", "workflows"])
         self.assertEqual(stderr, "")

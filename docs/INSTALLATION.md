@@ -76,6 +76,8 @@ run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(
 
 # After Hermes responds, record what the bot could actually observe.
 omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
+omh runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed --gap "specialist lane metadata not exposed"
+omh runtime validate --run "$run_id"
 omh runtime show "$run_id"
 ```
 
@@ -83,6 +85,11 @@ For hosted bots, run these commands inside the same container, virtual
 environment, or user account that owns the bot runtime. If the wrapper can
 observe a specialist lane result, record it with `--observed`; otherwise keep
 the result as `not_observed`.
+
+Use `omh runtime export --redacted` when you need a portable support artifact.
+Exports redact prompt, response, token, secret, key, and password-shaped fields by
+default while preserving proof fields such as run status, event names, observed
+delegation flags, and wrapper completion status.
 
 ## Review Checklist
 

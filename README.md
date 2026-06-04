@@ -87,6 +87,8 @@ omh install --from-skills-dir ./skills
 omh update --from-skills-dir ./skills
 omh apply --dry-run
 omh runtime record --skill oh-my-hermes --harness coding-handling --status started
+omh runtime validate
+omh runtime export
 omh runtime runs
 omh docs workflows
 omh list
@@ -117,10 +119,19 @@ or modify Hermes internals.
 - workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
 - append-only run events in `events.jsonl`
 - delegation observation in `delegation.json`
+- wrapper observation in `wrapper.json`
 
 Delegation artifacts separate `requested` from `observed`. If Hermes or a bot
 wrapper cannot prove that a specialist lane actually ran, the result should stay
 `not_observed` or `not_available`.
+
+Bot wrappers can also record what they actually observed:
+
+```sh
+omh runtime wrapper --run <run-id> --prompt-dispatched --response-observed --completion-status completed
+omh runtime validate --run <run-id>
+omh runtime export --redacted
+```
 
 ## Routing Model
 
@@ -156,6 +167,9 @@ it could mean normal conversation.
 | `omh runtime status` | Inspect local runtime artifact state. |
 | `omh runtime record` | Create a metadata-only workflow run artifact. |
 | `omh runtime delegate` | Record observed or unavailable delegation for a run. |
+| `omh runtime wrapper` | Record what a bot or wrapper actually observed for a run. |
+| `omh runtime validate` | Validate runtime run, event, delegation, and wrapper artifacts. |
+| `omh runtime export` | Export runtime evidence, redacted by default. |
 | `omh state status` | Inspect file-backed workflow lifecycle state under `~/.omh/state`. |
 | `omh docs workflows` | Print or verify the generated workflow reference from catalog data. |
 | `omh snippet` | Print optional workspace guidance without applying it. |
