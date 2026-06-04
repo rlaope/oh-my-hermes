@@ -19,6 +19,7 @@ from .runtime_artifacts import (
     create_run,
     list_runs,
     read_state,
+    read_state_result,
     show_run,
     update_state,
     write_delegation,
@@ -145,13 +146,15 @@ def _validate_runtime_names(skill: str, harness: str) -> None:
 
 def cmd_runtime_status(args: argparse.Namespace) -> int:
     paths = _paths(args)
+    state, state_error = read_state_result(paths)
     _print_json(
         {
             "schema_version": 1,
             "runtime_dir": str(paths.runtime_dir),
             "state_path": str(paths.runtime_state_path),
             "runs_dir": str(paths.runtime_runs_dir),
-            "state": read_state(paths),
+            "state": state,
+            "state_error": state_error,
         }
     )
     return 0

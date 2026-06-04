@@ -37,16 +37,24 @@ def utc_now() -> str:
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
     _ensure_private_dir(path.parent)
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.chmod(0o600)
-    tmp.replace(path)
-    path.chmod(0o600)
+    try:
+        tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.chmod(0o600)
+        tmp.replace(path)
+        path.chmod(0o600)
+    except OSError:
+        if tmp.exists():
+            tmp.unlink()
+        raise
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("expected JSON object")
+    return data
 
 
 def _slugify(value: str) -> str:
@@ -80,18 +88,27 @@ def read_state(paths: OmhPaths) -> dict[str, Any] | None:
     return _read_json(paths.runtime_state_path)
 
 
-def read_state_error(paths: OmhPaths) -> str | None:
+def read_state_result(paths: OmhPaths) -> tuple[dict[str, Any] | None, str | None]:
     try:
-        read_state(paths)
-    except (OSError, JSONDecodeError) as exc:
-        return str(exc)
-    return None
+        return read_state(paths), None
+    except (OSError, JSONDecodeError, ValueError) as exc:
+        return None, str(exc)
+
+
+def read_state_error(paths: OmhPaths) -> str | None:
+    return read_state_result(paths)[1]
 
 
 def update_state(paths: OmhPaths, patch: dict[str, Any]) -> dict[str, Any]:
-    current = read_state(paths) or {"schema_version": SCHEMA_VERSION}
+    current, state_error = read_state_result(paths)
+    current = current or {"schema_version": SCHEMA_VERSION}
     merged = {**current, **patch, "schema_version": SCHEMA_VERSION, "updated_at": utc_now()}
-    _atomic_write_json(paths.runtime_state_path, merged)
+    if state_error:
+        merged["previous_state_error"] = state_error
+    try:
+        _atomic_write_json(paths.runtime_state_path, merged)
+    except OSError as exc:
+        merged["state_write_error"] = str(exc)
     return merged
 
 

@@ -274,6 +274,109 @@ class CliTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             omh_home = root / ".omh"
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "install"])[0], 0)
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.write_text('"bad"', encoding="utf-8")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "doctor"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 1)
+            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            self.assertFalse(checks["runtime_state"]["ok"])
+
+    def test_runtime_status_and_record_tolerate_malformed_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text("{not json", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "runtime", "status"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            status_payload = json.loads(stdout)
+            self.assertIsNone(status_payload["state"])
+            self.assertIn("state_error", status_payload)
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+            self.assertTrue((omh_home / "runtime" / "runs" / run_id / "run.json").exists())
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.mkdir(parents=True)
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "runtime", "status"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertIsNone(json.loads(stdout)["state"])
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+            self.assertTrue((omh_home / "runtime" / "runs" / run_id / "run.json").exists())
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text("[]", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "runtime", "status"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertIsNone(json.loads(stdout)["state"])
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
             state_path = omh_home / "runtime" / "state.json"
             state_path.parent.mkdir(parents=True)
             state_path.write_text("{not json", encoding="utf-8")
