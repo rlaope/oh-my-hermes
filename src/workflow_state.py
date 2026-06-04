@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import json
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+from .local_store import atomic_write_json, read_json_object, utc_now
 from .paths import OmhPaths
-from .runtime_artifacts import utc_now
 from .skill_pack import CORE_SKILLS
 
 SCHEMA_VERSION = 1
@@ -23,25 +22,6 @@ class WorkflowStateError(ValueError):
     pass
 
 
-def _ensure_private_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    path.chmod(0o700)
-
-
-def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
-    _ensure_private_dir(path.parent)
-    tmp = path.with_name(f".{path.name}.tmp")
-    try:
-        tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp.chmod(0o600)
-        tmp.replace(path)
-        path.chmod(0o600)
-    except OSError:
-        if tmp.exists():
-            tmp.unlink()
-        raise
-
-
 def validate_workflow_name(workflow: str) -> None:
     if workflow not in CORE_SKILLS:
         raise WorkflowStateError(f"unknown workflow: {workflow}")
@@ -54,11 +34,14 @@ def workflow_state_path(paths: OmhPaths, workflow: str) -> Path:
 
 def read_workflow_state(paths: OmhPaths, workflow: str) -> dict[str, Any] | None:
     path = workflow_state_path(paths, workflow)
-    if not path.exists():
+    try:
+        data = read_json_object(path)
+    except JSONDecodeError:
+        raise
+    except ValueError as exc:
+        raise WorkflowStateError(f"state for {workflow} must be a JSON object") from exc
+    if not data:
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise WorkflowStateError(f"state for {workflow} must be a JSON object")
     if data.get("workflow") not in {None, workflow}:
         raise WorkflowStateError(f"state file {path} belongs to {data.get('workflow')!r}")
     return data
@@ -114,7 +97,7 @@ def _terminal_state(workflow: str, state: dict[str, Any] | None, outcome: str, n
 def finish_workflow_state(paths: OmhPaths, workflow: str, outcome: str = "finished", note: str = "") -> dict[str, Any]:
     state = read_workflow_state(paths, workflow)
     result = _terminal_state(workflow, state, outcome, note)
-    _atomic_write_json(workflow_state_path(paths, workflow), result)
+    atomic_write_json(workflow_state_path(paths, workflow), result, private=True)
     return result
 
 
@@ -135,14 +118,14 @@ def start_workflow_state(paths: OmhPaths, workflow: str, note: str = "") -> dict
             updated = {**current, "schema_version": SCHEMA_VERSION, "active": True, "updated_at": now}
             if note:
                 updated["note"] = note
-            _atomic_write_json(workflow_state_path(paths, workflow), updated)
+            atomic_write_json(workflow_state_path(paths, workflow), updated, private=True)
             return updated
         if not _transition_allowed(source, workflow):
             raise WorkflowStateError(f"cannot start {workflow}; active workflow {source} must finish or be cleared first")
     for current in active:
         source = str(current["workflow"])
         completed = _terminal_state(source, current, "finished", f"auto-completed before starting {workflow}", workflow)
-        _atomic_write_json(workflow_state_path(paths, source), completed)
+        atomic_write_json(workflow_state_path(paths, source), completed, private=True)
     state = {
         "schema_version": SCHEMA_VERSION,
         "workflow": workflow,
@@ -153,7 +136,7 @@ def start_workflow_state(paths: OmhPaths, workflow: str, note: str = "") -> dict
     }
     if note:
         state["note"] = note
-    _atomic_write_json(workflow_state_path(paths, workflow), state)
+    atomic_write_json(workflow_state_path(paths, workflow), state, private=True)
     return state
 
 

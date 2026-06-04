@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from . import __version__
 from .hashutil import sha256_file
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+from .local_store import atomic_write_json, read_json_object, utc_now
 
 
 @dataclass(frozen=True)
@@ -35,14 +30,11 @@ def new_manifest(source: str, skills_dir: Path, records: list[SkillRecord]) -> d
 
 
 def read_manifest(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path)
 
 
 def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(path, manifest)
 
 
 def skill_records(skills_dir: Path, source: str) -> list[SkillRecord]:
@@ -78,4 +70,3 @@ def local_modifications(manifest: dict[str, Any] | None, skills_dir: Path) -> li
         if sha256_file(path) != expected:
             modified.append(str(rel))
     return modified
-

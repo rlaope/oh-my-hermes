@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .core.errors import OmhError
 from .converter import convert_from_dir
+from .local_store import atomic_write_text
 from .manifest import local_modifications, new_manifest, read_manifest, skill_records, write_manifest
 from .paths import OmhPaths
 from .skill_pack import SkillTemplate, builtin_skill_templates
@@ -17,8 +18,7 @@ def _write_skill(skills_dir: Path, template: SkillTemplate, force: bool = False,
         existing = target_file.read_text(encoding="utf-8")
         if existing != template.content:
             raise OmhError(f"local skill differs, refusing to overwrite without --force: {target_file}")
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_file.write_text(template.content, encoding="utf-8")
+    atomic_write_text(target_file, template.content)
 
 
 def install_skill_pack(

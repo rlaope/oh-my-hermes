@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
+from .local_store import atomic_write_text
+
 
 @dataclass(frozen=True)
 class ConfigChange:
@@ -158,5 +160,4 @@ def read_config(path: Path) -> str:
 
 
 def write_config(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text)

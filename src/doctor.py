@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .config_adapter import external_dirs, read_config
 from .hashutil import sha256_file
+from .local_store import can_write_dir
 from .manifest import local_modifications, read_manifest
 from .paths import OmhPaths
 from .runtime_artifacts import read_state, read_state_error
@@ -42,23 +43,9 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
             )
         )
     checks.append(Check("skills_dir", paths.skills_dir.exists(), f"{paths.skills_dir}"))
-    try:
-        paths.runtime_dir.mkdir(parents=True, exist_ok=True)
-        probe = paths.runtime_dir / ".doctor-write-test"
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
-        runtime_writable = True
-    except OSError:
-        runtime_writable = False
+    runtime_writable = can_write_dir(paths.runtime_dir, probe_name=".doctor-write-test")
     checks.append(Check("runtime_artifacts", runtime_writable, f"{paths.runtime_dir} writable"))
-    try:
-        paths.workflow_state_dir.mkdir(parents=True, exist_ok=True)
-        state_probe = paths.workflow_state_dir / ".doctor-write-test"
-        state_probe.write_text("ok", encoding="utf-8")
-        state_probe.unlink()
-        workflow_state_writable = True
-    except OSError:
-        workflow_state_writable = False
+    workflow_state_writable = can_write_dir(paths.workflow_state_dir, probe_name=".doctor-write-test")
     states, state_errors = list_workflow_states(paths)
     checks.append(
         Check(

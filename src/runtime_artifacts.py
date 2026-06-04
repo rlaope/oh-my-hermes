@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, read_json_object_result, utc_now
 from .paths import OmhPaths
 
 
@@ -19,44 +20,6 @@ OBSERVED_RESULTS = ("completed", "blocked", "failed")
 UNOBSERVED_RESULTS = ("not_available", "not_observed")
 EVENT_LEVELS = ("debug", "info", "warning", "error")
 WRAPPER_COMPLETION_STATUSES = ("started", "completed", "blocked", "failed", "unknown")
-
-
-def _ensure_private_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    path.chmod(0o700)
-
-
-def _ensure_private_file(path: Path) -> None:
-    if not path.exists():
-        path.touch(mode=0o600)
-    path.chmod(0o600)
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
-    _ensure_private_dir(path.parent)
-    tmp = path.with_name(f".{path.name}.tmp")
-    try:
-        tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp.chmod(0o600)
-        tmp.replace(path)
-        path.chmod(0o600)
-    except OSError:
-        if tmp.exists():
-            tmp.unlink()
-        raise
-
-
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("expected JSON object")
-    return data
 
 
 def _slugify(value: str) -> str:
@@ -87,14 +50,11 @@ def _unique_run_id(paths: OmhPaths, slug: str) -> str:
 
 
 def read_state(paths: OmhPaths) -> dict[str, Any] | None:
-    return _read_json(paths.runtime_state_path)
+    return read_json_object(paths.runtime_state_path)
 
 
 def read_state_result(paths: OmhPaths) -> tuple[dict[str, Any] | None, str | None]:
-    try:
-        return read_state(paths), None
-    except (OSError, JSONDecodeError, ValueError) as exc:
-        return None, str(exc)
+    return read_json_object_result(paths.runtime_state_path)
 
 
 def read_state_error(paths: OmhPaths) -> str | None:
@@ -108,7 +68,7 @@ def update_state(paths: OmhPaths, patch: dict[str, Any]) -> dict[str, Any]:
     if state_error:
         merged["previous_state_error"] = state_error
     try:
-        _atomic_write_json(paths.runtime_state_path, merged)
+        atomic_write_json(paths.runtime_state_path, merged, private=True)
     except OSError as exc:
         merged["state_write_error"] = str(exc)
     return merged
@@ -141,8 +101,8 @@ def create_run(paths: OmhPaths, metadata: dict[str, Any]) -> dict[str, Any]:
     }
     run_dir = paths.runtime_runs_dir / run_id
     evidence_dir = run_dir / "evidence"
-    _ensure_private_dir(evidence_dir)
-    _atomic_write_json(run_dir / "run.json", run)
+    ensure_dir(evidence_dir, private=True)
+    atomic_write_json(run_dir / "run.json", run, private=True)
     append_event(run_dir, {"event": "run_recorded", "level": "info", "message": f"{skill}/{harness} recorded as {status}"})
     update_state(paths, {"last_run_id": run_id})
     return run
@@ -158,9 +118,9 @@ def append_event(run_dir: Path, event: dict[str, Any]) -> dict[str, Any]:
     }
     if "data" in event:
         item["data"] = event["data"]
-    _ensure_private_dir(run_dir)
+    ensure_dir(run_dir, private=True)
     events_path = run_dir / "events.jsonl"
-    _ensure_private_file(events_path)
+    ensure_file(events_path, private=True)
     with events_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(item, sort_keys=True) + "\n")
     return item
@@ -189,7 +149,7 @@ def write_delegation(run_dir: Path, delegation: dict[str, Any]) -> dict[str, Any
         "evidence_refs": list(delegation.get("evidence_refs", [])),
         "message": delegation.get("message", ""),
     }
-    _atomic_write_json(run_dir / "delegation.json", record)
+    atomic_write_json(run_dir / "delegation.json", record, private=True)
     append_event(
         run_dir,
         {
@@ -216,7 +176,7 @@ def write_wrapper_contract(run_dir: Path, wrapper: dict[str, Any]) -> dict[str, 
         "unobserved_gaps": list(wrapper.get("unobserved_gaps", [])),
         "message": wrapper.get("message", ""),
     }
-    _atomic_write_json(run_dir / "wrapper.json", record)
+    atomic_write_json(run_dir / "wrapper.json", record, private=True)
     append_event(
         run_dir,
         {
@@ -292,7 +252,7 @@ def list_runs(paths: OmhPaths) -> list[dict[str, Any]]:
         return []
     runs: list[dict[str, Any]] = []
     for run_json in sorted(paths.runtime_runs_dir.glob("*/run.json")):
-        run = _read_json(run_json)
+        run = read_json_object(run_json)
         if run:
             runs.append(run)
     return runs
@@ -307,15 +267,15 @@ def read_events(run_dir: Path) -> list[dict[str, Any]]:
 
 def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
     run_dir = paths.runtime_runs_dir / run_id
-    run = _read_json(run_dir / "run.json")
+    run = read_json_object(run_dir / "run.json")
     if not run:
         raise FileNotFoundError(run_id)
     evidence_dir = run_dir / "evidence"
     return {
         "run": run,
         "events": read_events(run_dir),
-        "delegation": _read_json(run_dir / "delegation.json"),
-        "wrapper": _read_json(run_dir / "wrapper.json"),
+        "delegation": read_json_object(run_dir / "delegation.json"),
+        "wrapper": read_json_object(run_dir / "wrapper.json"),
         "evidence": sorted(path.name for path in evidence_dir.iterdir()) if evidence_dir.exists() else [],
     }
 
@@ -324,7 +284,7 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     run_path = run_dir / "run.json"
     try:
-        run = _read_json(run_path)
+        run = read_json_object(run_path)
     except (OSError, JSONDecodeError, ValueError) as exc:
         run = None
         errors.append(f"{run_path}: {exc}")
@@ -352,7 +312,7 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
         if not path.exists():
             continue
         try:
-            record = _read_json(path)
+            record = read_json_object(path)
         except (OSError, JSONDecodeError, ValueError) as exc:
             record = None
             errors.append(f"{path}: {exc}")

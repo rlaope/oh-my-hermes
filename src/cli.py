@@ -10,6 +10,7 @@ from .config_adapter import ensure_external_dir, read_config, remove_external_di
 from .doctor import doctor_ok, run_doctor
 from .hashutil import sha256_file
 from .installer import OmhError, install_skill_pack, uninstall_skill_pack
+from .local_store import atomic_write_text
 from .manifest import read_manifest
 from .paths import resolve_paths
 from .probe import probe_capabilities
@@ -291,7 +292,7 @@ def cmd_snippet(args: argparse.Namespace) -> int:
         print(WORKSPACE_SNIPPET.rstrip())
         return 0
     output = Path(args.output).expanduser().resolve()
-    output.write_text(WORKSPACE_SNIPPET, encoding="utf-8")
+    atomic_write_text(output, WORKSPACE_SNIPPET)
     _print_json({"written": str(output)})
     return 0
 
@@ -309,8 +310,7 @@ def cmd_docs_workflows(args: argparse.Namespace) -> int:
         _print_json({"ok": True, "checked": str(output)})
         return 0
     if args.output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(content, encoding="utf-8")
+        atomic_write_text(output, content)
         _print_json({"written": str(output)})
         return 0
     print(content.rstrip())
