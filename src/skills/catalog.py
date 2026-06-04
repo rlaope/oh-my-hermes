@@ -21,6 +21,9 @@ class HarnessDefinition:
     stop_conditions: tuple[str, ...]
     verification: tuple[str, ...]
     fallback: str
+    artifact_events: tuple[str, ...]
+    delegation_expectation: str
+    privacy_default: str
 
 
 _DEFINITIONS = [
@@ -145,6 +148,9 @@ _HARNESSES = [
         ("requested behavior is implemented", "tests or checks pass", "known gaps are reported"),
         ("run the smallest relevant tests", "inspect generated skill output when routing changed"),
         "If the request is underspecified, ask one concise clarification question before editing.",
+        ("run_started", "files_changed", "verification_recorded"),
+        "Record delegation only when Hermes exposes a separate coding, review, or verification lane.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "goal-execution",
@@ -155,6 +161,9 @@ _HARNESSES = [
         ("current goal is complete or explicitly blocked", "checkpoint evidence is recorded"),
         ("compare artifacts against acceptance criteria", "record fresh evidence before completion"),
         "If Hermes has no goal tool, use a local checklist or file-backed ledger.",
+        ("goal_started", "checkpoint_recorded", "goal_completed_or_blocked"),
+        "Record goal/delegation participants only when the active Hermes runtime exposes them.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "planning",
@@ -165,6 +174,9 @@ _HARNESSES = [
         ("plan has acceptance criteria", "risks and alternatives are explicit"),
         ("review option consistency", "verify testability before execution"),
         "If consensus review is unavailable, do a sequential planner -> reviewer pass.",
+        ("plan_started", "options_reviewed", "handoff_recorded"),
+        "Record planner, architect, or reviewer delegation only when observed in Hermes metadata or wrapper logs.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "deep-interview",
@@ -175,6 +187,9 @@ _HARNESSES = [
         ("ambiguity is low enough", "non-goals and decision boundaries are explicit"),
         ("pressure-test assumptions", "capture transcript or summary"),
         "If structured question UI is unavailable, ask one direct question in the current surface.",
+        ("interview_started", "question_asked", "clarity_recorded"),
+        "Record a delegated interviewer only when Hermes exposes that lane; otherwise record sequential clarification.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "architect",
@@ -185,6 +200,9 @@ _HARNESSES = [
         ("boundary risks are addressed", "chosen approach fits current architecture"),
         ("steelman the strongest antithesis", "check integration claims against evidence"),
         "If delegation is unavailable, run a separate self-review pass before coding.",
+        ("architecture_review_started", "tradeoff_recorded", "verdict_recorded"),
+        "Record architect delegation only when Hermes exposes an architect lane or wrapper-side role result.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "critic",
@@ -195,6 +213,9 @@ _HARNESSES = [
         ("quality criteria are testable", "risks have mitigations", "alternatives are fair"),
         ("check principle-option consistency", "reject vague acceptance criteria"),
         "If no critic role exists, do a bug-first checklist review and cite concrete evidence.",
+        ("critic_review_started", "finding_recorded", "verdict_recorded"),
+        "Record critic delegation only when Hermes exposes a critic lane or wrapper-side role result.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "qa-specialist",
@@ -205,6 +226,9 @@ _HARNESSES = [
         ("critical scenarios pass", "known manual gaps are listed"),
         ("run targeted tests", "cover failure modes and recovery paths"),
         "If runtime automation is unavailable, use fixtures and document manual checks.",
+        ("qa_started", "scenario_recorded", "pass_fail_recorded"),
+        "Record QA delegation only when Hermes exposes a QA lane or wrapper-side QA result.",
+        "metadata_only",
     ),
     HarnessDefinition(
         "docs-specialist",
@@ -215,6 +239,9 @@ _HARNESSES = [
         ("docs match behavior", "claims are conservative", "examples are reproducible"),
         ("run public-content scans", "verify commands and file references"),
         "If behavior is not implemented yet, label it as roadmap instead of current capability.",
+        ("docs_review_started", "claim_checked", "docs_updated"),
+        "Record docs delegation only when Hermes exposes a docs lane or wrapper-side docs result.",
+        "metadata_only",
     ),
 ]
 

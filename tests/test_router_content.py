@@ -58,13 +58,23 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Inputs:", router.content)
         self.assertIn("Outputs:", router.content)
         self.assertIn("Verification:", router.content)
+        self.assertIn("Runtime Evidence:", router.content)
+        self.assertIn("Delegation:", router.content)
         self.assertIn("Fallback:", router.content)
 
     def test_workflow_skills_refer_to_harness_discipline(self) -> None:
         skills = {skill.name: skill for skill in builtin_skill_templates()}
 
         self.assertIn("Harness Discipline", skills["ultragoal"].content)
+        self.assertIn("Runtime Evidence", skills["ultragoal"].content)
+        self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
+
+    def test_harnesses_define_runtime_evidence_contract(self) -> None:
+        for harness in builtin_harnesses():
+            self.assertGreaterEqual(len(harness.artifact_events), 1)
+            self.assertIn(harness.privacy_default, {"metadata_only", "prompt_capture_enabled"})
+            self.assertIn("Record", harness.delegation_expectation)
 
     def test_generated_public_content_avoids_external_runtime_branding(self) -> None:
         forbidden = ("om" + "x", "oh-my-" + "co" + "dex", "co" + "dex")

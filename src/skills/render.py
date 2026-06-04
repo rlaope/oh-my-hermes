@@ -29,18 +29,44 @@ def _harness_summary(harness: HarnessDefinition) -> str:
     inputs = ", ".join(harness.inputs[:3])
     outputs = ", ".join(harness.outputs[:3])
     verification = ", ".join(harness.verification[:2])
+    artifact_events = ", ".join(f"`{event}`" for event in harness.artifact_events[:3])
     return (
         f"- `{harness.name}`: {harness.purpose}\n"
         f"  - Use when: {harness.use_when}\n"
         f"  - Inputs: {inputs}\n"
         f"  - Outputs: {outputs}\n"
         f"  - Verification: {verification}\n"
+        f"  - Runtime Evidence: events {artifact_events}; privacy `{harness.privacy_default}`\n"
+        f"  - Delegation: {harness.delegation_expectation}\n"
         f"  - Fallback: {harness.fallback}"
     )
 
 
 def _harness_registry(harnesses: list[HarnessDefinition]) -> str:
     return "\n".join(_harness_summary(harness) for harness in harnesses)
+
+
+def _primary_harness_for_skill(name: str) -> str:
+    mapping = {
+        "ralph": "goal-execution",
+        "ultragoal": "goal-execution",
+        "deep-interview": "deep-interview",
+        "team": "goal-execution",
+        "ultraqa": "qa-specialist",
+        "plan": "planning",
+        "ralplan": "planning",
+        "code-review": "critic",
+        "ai-slop-cleaner": "coding-handling",
+        "best-practice-research": "planning",
+        "autoresearch-goal": "goal-execution",
+        "performance-goal": "goal-execution",
+        "wiki": "docs-specialist",
+        "ask": "critic",
+        "cancel": "goal-execution",
+        "skill": "docs-specialist",
+        "doctor": "qa-specialist",
+    }
+    return mapping.get(name, "coding-handling")
 
 
 def router_skill() -> SkillTemplate:
@@ -97,6 +123,19 @@ Recovery:
 - Replace unavailable goal tools with file-backed checklists or ledgers.
 - Replace unavailable question renderers with one direct question through the current Hermes surface.
 - Keep shell bridge behavior explicit and opt-in.
+
+## Runtime Evidence
+
+When local shell access or a bot wrapper is available, record observed workflow evidence under `.omh/runtime/` through `omh runtime`.
+
+Examples:
+
+```sh
+omh runtime record --skill oh-my-hermes --harness coding-handling --status started
+omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
+```
+
+Record only what is observed. If Hermes does not expose delegation metadata, use `not_observed` or `not_available` instead of implying a specialist lane ran.
 """
     return SkillTemplate("oh-my-hermes", _frontmatter("oh-my-hermes", DESCRIPTIONS["oh-my-hermes"]) + "\n" + body)
 
@@ -106,6 +145,7 @@ def workflow_skill(name: str) -> SkillTemplate:
     definition = definitions[name]
     title = name.replace("-", " ").title()
     triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers)
+    primary_harness = _primary_harness_for_skill(name)
     body = f"""# {title}
 
 This is a Hermes-native `{name}` workflow skill.
@@ -121,6 +161,19 @@ Strong routing signals: {triggers}
 - Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, planning, goal execution, architecture, critique, QA, or documentation lanes.
 - Prefer richer evidence and clearer stop conditions over adding more workflow names.
 - Use specialist lanes only when they change the quality of the answer or verification.
+
+## Runtime Evidence
+
+Preferred harness for this skill: `{primary_harness}`.
+
+When local shell access or a bot wrapper is available, record metadata-only evidence:
+
+```sh
+omh runtime record --skill {name} --harness {primary_harness} --status started
+omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
+```
+
+Record observed delegation results when Hermes or the wrapper exposes them. If delegation is unavailable, keep the result explicit as `not_available` or `not_observed`.
 
 ## Hermes Compatibility Contract
 
