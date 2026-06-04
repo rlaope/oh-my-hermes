@@ -19,8 +19,10 @@ from omh.runtime_artifacts import (
     new_run_id,
     show_run,
     update_state,
+    validate_delegation_record,
     validate_runtime,
     validate_run_record,
+    validate_wrapper_record,
     write_delegation,
     write_wrapper_contract,
 )
@@ -136,6 +138,31 @@ class RuntimeArtifactTests(unittest.TestCase):
             bad = next(item for item in result["runs"] if item["run_id"] == "bad-run")
             self.assertTrue(any("status is invalid" in error for error in bad["errors"]))
             self.assertTrue(any("event level is invalid" in error for error in bad["errors"]))
+
+    def test_record_validators_remain_available_from_runtime_artifacts(self) -> None:
+        delegation_errors = validate_delegation_record(
+            {
+                "schema_version": 1,
+                "requested": True,
+                "observed": False,
+                "participants": [],
+                "evidence_refs": [],
+                "result": "completed",
+            }
+        )
+        wrapper_errors = validate_wrapper_record(
+            {
+                "schema_version": 1,
+                "prompt_dispatched": True,
+                "hermes_response_observed": False,
+                "verification_observed": False,
+                "completion_status": "missing",
+                "unobserved_gaps": [],
+            }
+        )
+
+        self.assertIn("unobserved delegation requires result not_available or not_observed", delegation_errors)
+        self.assertTrue(any("completion_status is invalid" in error for error in wrapper_errors))
 
     def test_export_runtime_redacts_sensitive_keys(self) -> None:
         with TemporaryDirectory() as tmp:
