@@ -76,7 +76,7 @@ def route_chat_message(
     explicit_skill = explicit_skill_invocation(message, definitions)
     candidate_skill = str(top["skill"])
     candidate_harness = primary_harness_for_skill(candidate_skill)
-    candidate_score = int(top["score"])
+    candidate_score = _int_value(top["score"])
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
 
@@ -222,8 +222,8 @@ def _value_at_path(event: dict[str, Any], path: tuple[str, ...]) -> Any:
 def _is_ambiguous(recommendations: list[dict[str, object]]) -> bool:
     if len(recommendations) < 2:
         return False
-    first = int(recommendations[0]["score"])
-    second = int(recommendations[1]["score"])
+    first = _int_value(recommendations[0]["score"])
+    second = _int_value(recommendations[1]["score"])
     return first > 0 and first == second
 
 
@@ -265,9 +265,30 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
         compact.append(
             {
                 "skill": str(item.get("skill", "")),
-                "score": int(item.get("score", 0)),
+                "score": _int_value(item.get("score", 0)),
                 "confidence": str(item.get("confidence", "low")),
-                "matched": list(item.get("matched", [])),
+                "matched": _string_list(item.get("matched", [])),
             }
         )
     return compact
+
+
+def _int_value(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
