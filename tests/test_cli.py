@@ -9,6 +9,51 @@ from _cli_harness import run_cli
 
 
 class CliTests(unittest.TestCase):
+    def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["query"], "risky refactor")
+        recommendations = payload["recommendations"]
+        self.assertTrue(recommendations)
+        self.assertIn("ai-slop-cleaner", {recommendation["skill"] for recommendation in recommendations[:3]})
+        self.assertTrue(any(recommendation["why"] and recommendation["suggested_prompt"] for recommendation in recommendations))
+
+    def test_recommend_implementation_plan_includes_planning_workflow(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "implementation", "plan", "with", "review"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        top_names = {recommendation["skill"] for recommendation in recommendations[:3]}
+        self.assertTrue({"plan", "ralplan"} & top_names)
+
+    def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        top_names = {recommendation["skill"] for recommendation in json.loads(stdout)["recommendations"][:3]}
+        self.assertIn("doctor", top_names)
+
+    def test_recommend_weak_query_uses_fallback(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "zzzzunknownphrase"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertIn("oh-my-hermes", {recommendation["skill"] for recommendation in recommendations})
+        self.assertEqual(recommendations[0]["confidence"], "low")
+        self.assertIn("No strong catalog metadata match", recommendations[0]["why"])
+
+    def test_recommend_rejects_invalid_limit(self) -> None:
+        status, _, stderr = run_cli(["recommend", "refactor", "--limit", "0"])
+
+        self.assertEqual(status, 2)
+        self.assertIn("recommend --limit must be at least 1", stderr)
+
     def test_install_apply_doctor_and_list(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

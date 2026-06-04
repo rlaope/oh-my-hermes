@@ -14,6 +14,7 @@ from .local_store import atomic_write_text
 from .manifest import read_manifest
 from .paths import resolve_paths
 from .probe import probe_capabilities
+from .recommend import recommend_skills
 from .release import RELEASE_CHANNELS, package_url_for
 from .runtime_artifacts import (
     DELEGATION_RESULTS,
@@ -155,6 +156,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
     _print_json({"ok": doctor_ok(checks), "checks": [check.__dict__ for check in checks]})
     return 0 if doctor_ok(checks) else 1
+
+
+def cmd_recommend(args: argparse.Namespace) -> int:
+    if args.limit < 1:
+        raise OmhError("recommend --limit must be at least 1")
+    query = " ".join(args.task).strip()
+    if not query:
+        raise OmhError("recommend requires a task description")
+    _print_json({"query": query, "recommendations": recommend_skills(query, limit=args.limit)})
+    return 0
 
 
 def _valid_skill_names() -> set[str]:
@@ -408,6 +419,11 @@ def _add_top_level_commands(sub) -> None:
 
     doctor = sub.add_parser("doctor")
     doctor.set_defaults(func=cmd_doctor)
+
+    recommend = sub.add_parser("recommend")
+    recommend.add_argument("task", nargs="+", help="Task description to map to OMHM workflow skills.")
+    recommend.add_argument("--limit", type=int, default=5, help="Maximum recommendations to return.")
+    recommend.set_defaults(func=cmd_recommend)
 
     snippet = sub.add_parser("snippet")
     snippet.add_argument("--dry-run", action="store_true")

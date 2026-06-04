@@ -94,6 +94,7 @@ omh install --dry-run
 omh install --from-skills-dir ./skills
 omh update --from-skills-dir ./skills
 omh apply --dry-run
+omh recommend "risky refactor"
 omh runtime record --skill oh-my-hermes --harness coding-handling --status started
 omh runtime validate
 omh runtime export
@@ -173,6 +174,7 @@ it could mean normal conversation.
 | `omh apply` | Register `~/.omh/skills` in Hermes `skills.external_dirs`. |
 | `omh list` | Print the installed manifest. |
 | `omh doctor` | Verify managed files and Hermes config registration. |
+| `omh recommend <task>` | Deterministically suggest workflow skills from the local OMHM catalog. |
 | `omh runtime status` | Inspect local runtime artifact state. |
 | `omh runtime record` | Create a metadata-only workflow run artifact. |
 | `omh runtime delegate` | Record observed or unavailable delegation for a run. |
@@ -196,6 +198,7 @@ src/
   installer.py           managed skill pack install/update/uninstall
   manifest.py            installed file manifest and conflict checks
   paths.py               home/config path resolution
+  recommend.py           deterministic workflow skill recommender
   snippet.py             optional workspace guidance
   skill_pack.py          compatibility facade for generated skills
   core/
