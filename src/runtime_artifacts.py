@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from json import JSONDecodeError
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,14 @@ def _unique_run_id(paths: OmhPaths, slug: str) -> str:
 
 def read_state(paths: OmhPaths) -> dict[str, Any] | None:
     return _read_json(paths.runtime_state_path)
+
+
+def read_state_error(paths: OmhPaths) -> str | None:
+    try:
+        read_state(paths)
+    except (OSError, JSONDecodeError) as exc:
+        return str(exc)
+    return None
 
 
 def update_state(paths: OmhPaths, patch: dict[str, Any]) -> dict[str, Any]:

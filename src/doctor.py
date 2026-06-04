@@ -6,7 +6,7 @@ from .config_adapter import external_dirs, read_config
 from .hashutil import sha256_file
 from .manifest import local_modifications, read_manifest
 from .paths import OmhPaths
-from .runtime_artifacts import read_state
+from .runtime_artifacts import read_state, read_state_error
 from .skill_pack import CORE_SKILLS
 
 
@@ -20,7 +20,8 @@ class Check:
 def run_doctor(paths: OmhPaths) -> list[Check]:
     checks: list[Check] = []
     manifest = read_manifest(paths.manifest_path)
-    state = read_state(paths)
+    state_error = read_state_error(paths)
+    state = None if state_error else read_state(paths)
     checks.append(Check("manifest", manifest is not None, f"{paths.manifest_path}"))
     if manifest:
         manifest_skills_dir = manifest.get("skills_dir")
@@ -49,6 +50,8 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
     except OSError:
         runtime_writable = False
     checks.append(Check("runtime_artifacts", runtime_writable, f"{paths.runtime_dir} writable"))
+    if state_error:
+        checks.append(Check("runtime_state", False, f"runtime state unreadable: {state_error}"))
     if manifest and state:
         checks.append(
             Check(

@@ -112,7 +112,9 @@ def cmd_list(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     paths = _paths(args)
     checks = run_doctor(paths)
-    if any(check.name == "runtime_artifacts" and check.ok for check in checks):
+    runtime_writable = any(check.name == "runtime_artifacts" and check.ok for check in checks)
+    runtime_state_readable = not any(check.name == "runtime_state" and not check.ok for check in checks)
+    if runtime_writable and runtime_state_readable:
         update_state(
             paths,
             {

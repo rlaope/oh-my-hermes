@@ -73,7 +73,7 @@ class RouterContentTests(unittest.TestCase):
     def test_harnesses_define_runtime_evidence_contract(self) -> None:
         for harness in builtin_harnesses():
             self.assertGreaterEqual(len(harness.artifact_events), 1)
-            self.assertIn(harness.privacy_default, {"metadata_only", "prompt_capture_enabled"})
+            self.assertEqual(harness.privacy_default, "metadata_only")
             self.assertIn("Record", harness.delegation_expectation)
 
     def test_generated_public_content_avoids_external_runtime_branding(self) -> None:

@@ -257,6 +257,34 @@ class CliTests(unittest.TestCase):
             checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
             self.assertFalse(checks["runtime_artifacts"]["ok"])
 
+    def test_doctor_reports_malformed_runtime_state_without_crashing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.mkdir(parents=True)
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "doctor"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 1)
+            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            self.assertFalse(checks["runtime_state"]["ok"])
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text("{not json", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "doctor"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 1)
+            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            self.assertFalse(checks["runtime_state"]["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
