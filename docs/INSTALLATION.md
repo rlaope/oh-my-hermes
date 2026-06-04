@@ -56,20 +56,25 @@ the same machine, container, or runtime image that starts the bot.
 The flow is:
 
 1. The Discord bot receives a user message.
-2. The bot forwards that request to Hermes Agent.
-3. Hermes starts with its normal config and reads `skills.external_dirs`.
-4. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
-5. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
-6. The router skill gives Hermes prompt-level routing guidance for workflow
+2. The bot can run `omh chat route --source discord --record "<message>"` to
+   choose `dispatch`, `clarify`, or `fallback` before forwarding the request.
+3. The bot forwards `route.routing_prompt_template` with `{message}` replaced by
+   the received message, or runs with `--include-message` and forwards
+   `route.routing_prompt` when stdout is not logged.
+4. Hermes starts with its normal config and reads `skills.external_dirs`.
+5. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
+6. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
+7. The router skill gives Hermes prompt-level routing guidance for workflow
    names, trigger phrases, fallback rules, and recovery behavior.
-7. Hermes selects the relevant installed skill and continues the response inside
+8. Hermes selects the relevant installed skill and continues the response inside
    the Discord bot flow.
-8. The bot or operator can record local evidence with `omh runtime record` and
+9. The bot or operator can record local evidence with `omh runtime record` and
    `omh runtime delegate`.
 
 `omh` does not replace the Discord bot, modify Discord commands, or patch Hermes
 internals. It prepares the skill layer that Hermes can load when the bot invokes
-Hermes.
+Hermes, and it can make a local deterministic pre-dispatch routing decision for
+the wrapper.
 
 For a hosted bot, the practical deployment shape is usually:
 
@@ -83,9 +88,12 @@ Then restart the bot process so Hermes reloads its config and skill directory.
 Optional artifact-backed flow:
 
 ```sh
-run_json="$(omh runtime record --skill oh-my-hermes --harness coding-handling --status started)"
-run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+message='risky refactor'
+route_json="$(omh chat route --source discord --record --include-message "$message")"
+run_id="$(printf '%s' "$route_json" | python -c 'import json,sys; print(json.load(sys.stdin)["runtime"]["run"]["run_id"])')"
+route_prompt="$(printf '%s' "$route_json" | python -c 'import json,sys; print(json.load(sys.stdin)["route"]["routing_prompt"])')"
 
+# Forward "$route_prompt" to Hermes.
 # After Hermes responds, record what the bot could actually observe.
 omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
 omh runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed --gap "specialist lane metadata not exposed"
@@ -111,6 +119,8 @@ Before calling the bot integration ready, verify these points:
 - `omh doctor` reports the managed skill directory as installed and registered.
 - The bot process can read the same Hermes home/config that `omh apply` updated.
 - The bot was restarted after installation or update.
+- `omh chat route --source discord --record "<message>"` returns a route action
+  and writes `routing.json` in the same runtime context as the bot.
 - A Discord message that strongly names a workflow reaches Hermes with installed
   skill descriptions available.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read
@@ -120,11 +130,11 @@ Before calling the bot integration ready, verify these points:
 - If skills do not appear, run `omh apply`, then `omh doctor`, then restart the
   bot again.
 
-Current limitation: routing is prompt-level guidance. It depends on Hermes
-loading and exposing installed skills to the model. If the Discord bot runs
-Hermes in a restricted mode that does not load external skill directories, the
-bot adapter or Hermes startup config must be updated to allow that discovery
-path.
+Current limitation: deeper execution still depends on Hermes loading and
+exposing installed skills to the model. `omh chat route` chooses the prompt and
+records metadata before dispatch, but the bot adapter must forward the returned
+prompt template or opt into `--include-message`, and Hermes must still load the
+managed skills.
 
 ## Update
 

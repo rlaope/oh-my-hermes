@@ -44,6 +44,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
         recommendations = json.loads(stdout)["recommendations"]
+        self.assertEqual(recommendations[0]["skill"], "oh-my-hermes")
         self.assertIn("oh-my-hermes", {recommendation["skill"] for recommendation in recommendations})
         self.assertEqual(recommendations[0]["confidence"], "low")
         self.assertIn("No strong catalog metadata match", recommendations[0]["why"])
@@ -53,6 +54,75 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(status, 2)
         self.assertIn("recommend --limit must be at least 1", stderr)
+
+    def test_chat_route_dispatches_plain_chat_message(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertEqual(route["action"], "dispatch")
+        self.assertEqual(route["selected_skill"], "ai-slop-cleaner")
+        self.assertIn("routing_prompt_template", route)
+        self.assertIn("{message}", route["routing_prompt_template"])
+        self.assertNotIn("risky refactor", json.dumps(route))
+
+    def test_chat_route_can_emit_complete_prompt_for_non_logging_wrappers(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "--include-message", "--source", "discord", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertIn("User message:\nrisky refactor", route["routing_prompt"])
+
+    def test_chat_route_reads_platform_event_json(self) -> None:
+        with TemporaryDirectory() as tmp:
+            event = Path(tmp) / "event.json"
+            event.write_text('{"event": {"text": "diagnose installation health"}}', encoding="utf-8")
+
+            status, stdout, stderr = run_cli(["chat", "route", "--source", "slack", "--event-json", str(event)])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertEqual(route["source"], "slack")
+        self.assertEqual(route["selected_skill"], "doctor")
+
+    def test_chat_route_records_runtime_routing_artifact(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(root / ".omh"),
+                    "--hermes-home",
+                    str(root / ".hermes"),
+                    "chat",
+                    "route",
+                    "--source",
+                    "discord",
+                    "--record",
+                    "--source-event-id",
+                    "m1",
+                    "risky",
+                    "refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            run_id = payload["runtime"]["run"]["run_id"]
+            self.assertEqual(payload["runtime"]["routing"]["selected_skill"], "ai-slop-cleaner")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "runtime", "show", run_id])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        shown = json.loads(stdout)
+        self.assertEqual(shown["routing"]["source_event_id"], "m1")
+        self.assertEqual(shown["routing"]["action"], "dispatch")
+        self.assertNotIn("risky refactor", json.dumps(shown["routing"]))
 
     def test_install_apply_doctor_and_list(self) -> None:
         with TemporaryDirectory() as tmp:

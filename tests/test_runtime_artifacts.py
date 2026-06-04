@@ -12,6 +12,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.paths import resolve_paths
+from omh.chat_router import route_chat_message, routing_record_payload
 from omh.runtime_artifacts import (
     create_run,
     export_runtime,
@@ -20,10 +21,12 @@ from omh.runtime_artifacts import (
     show_run,
     update_state,
     validate_delegation_record,
+    validate_routing_record,
     validate_runtime,
     validate_run_record,
     validate_wrapper_record,
     write_delegation,
+    write_routing_decision,
     write_wrapper_contract,
 )
 
@@ -121,6 +124,41 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertEqual(shown["wrapper"]["completion_status"], "blocked")
             self.assertIn("wrapper_contract_recorded", {event["event"] for event in shown["events"]})
 
+    def test_write_routing_decision_records_pre_dispatch_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "ai-slop-cleaner", "harness": "coding-handling", "status": "started"})
+            message = "risky refactor"
+            decision = route_chat_message(message, source="discord")
+
+            routing = write_routing_decision(
+                paths.runtime_runs_dir / run["run_id"],
+                routing_record_payload(decision, message, source_event_id="m1"),
+            )
+
+            self.assertEqual(routing["selected_skill"], "ai-slop-cleaner")
+            self.assertEqual(routing["source_event_id"], "m1")
+            self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
+            shown = show_run(paths, run["run_id"])
+            self.assertEqual(shown["routing"]["action"], "dispatch")
+            self.assertIn("routing_decision_recorded", {event["event"] for event in shown["events"]})
+
+    def test_write_routing_decision_sanitizes_full_route_decision(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "ai-slop-cleaner", "harness": "coding-handling", "status": "started"})
+            secret_message = "risky refactor with private-token-123"
+
+            routing = write_routing_decision(
+                paths.runtime_runs_dir / run["run_id"],
+                route_chat_message(secret_message, source="discord"),
+            )
+
+            serialized = json.dumps(routing)
+            self.assertNotIn(secret_message, serialized)
+            self.assertNotIn("suggested_prompt", serialized)
+            self.assertEqual(set(routing["recommendations"][0]), {"skill", "score", "confidence", "matched"})
+
     def test_validate_runtime_rejects_missing_and_invalid_artifacts(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -160,9 +198,11 @@ class RuntimeArtifactTests(unittest.TestCase):
                 "unobserved_gaps": [],
             }
         )
+        routing_errors = validate_routing_record({"schema_version": 1, "action": "missing", "recommendations": []})
 
         self.assertIn("unobserved delegation requires result not_available or not_observed", delegation_errors)
         self.assertTrue(any("completion_status is invalid" in error for error in wrapper_errors))
+        self.assertTrue(any("routing action is invalid" in error for error in routing_errors))
 
     def test_export_runtime_redacts_sensitive_keys(self) -> None:
         with TemporaryDirectory() as tmp:

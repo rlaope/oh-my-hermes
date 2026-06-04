@@ -16,6 +16,8 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
+        self.assertIn("omh chat route", router.content)
+        self.assertIn("deterministic wrapper-side decision layer", router.content)
         self.assertIn("skills_list", router.content)
         self.assertIn("skill_view", router.content)
         self.assertIn("name collides", router.content)

@@ -56,6 +56,7 @@ def recommend_skills(query: str, *, limit: int = 5) -> list[dict[str, object]]:
     matches = [recommendation for recommendation in scored if recommendation.score > 0]
     if not matches:
         matches = _fallback_recommendations(definitions, query)
+        return [recommendation.to_dict() for recommendation in matches[:limit]]
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
     return [recommendation.to_dict() for recommendation in matches[:limit]]
 

@@ -6,6 +6,14 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .chat_router import (
+    CHAT_SOURCES,
+    CONFIDENCE_LEVELS,
+    extract_message_text,
+    public_route_payload,
+    route_chat_message,
+    routing_record_payload,
+)
 from .config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
 from .doctor import doctor_ok, run_doctor
 from .hashutil import sha256_file
@@ -29,6 +37,7 @@ from .runtime_artifacts import (
     update_state,
     validate_runtime,
     write_delegation,
+    write_routing_decision,
     write_wrapper_contract,
 )
 from .skills.render import workflow_reference_markdown
@@ -166,6 +175,62 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         raise OmhError("recommend requires a task description")
     _print_json({"query": query, "recommendations": recommend_skills(query, limit=args.limit)})
     return 0
+
+
+def cmd_chat_route(args: argparse.Namespace) -> int:
+    message = _chat_message(args)
+    try:
+        decision = route_chat_message(message, source=args.source, limit=args.limit, min_confidence=args.min_confidence)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    payload = {"route": public_route_payload(decision, include_message=args.include_message)}
+    if args.record:
+        paths = _paths(args)
+        selected_skill = str(decision["selected_skill"])
+        selected_harness = str(decision["selected_harness"])
+        _validate_runtime_names(selected_skill, selected_harness)
+        run = create_run(
+            paths,
+            {
+                "skill": selected_skill,
+                "harness": selected_harness,
+                "status": "started",
+                "trigger": f"chat:{args.source}:{decision['action']}",
+                "privacy": "metadata_only",
+                "inputs_summary": f"chat route from {args.source}; {len(message)} characters; prompt body not stored",
+                "outputs_summary": f"routing action {decision['action']} selected {selected_skill}",
+                "verification_summary": "routing decision recorded before Hermes dispatch",
+            },
+        )
+        routing = write_routing_decision(
+            paths.runtime_runs_dir / run["run_id"],
+            routing_record_payload(
+                decision,
+                message,
+                source_event_id=args.source_event_id or "",
+                channel_ref=args.channel_ref or "",
+                user_ref=args.user_ref or "",
+            ),
+        )
+        payload["runtime"] = {"run": run, "routing": routing}
+    _print_json(payload)
+    return 0
+
+
+def _chat_message(args: argparse.Namespace) -> str:
+    try:
+        if args.event_json:
+            raw = (
+                sys.stdin.read()
+                if args.event_json == "-"
+                else Path(args.event_json).expanduser().read_text(encoding="utf-8")
+            )
+            return extract_message_text(json.loads(raw))
+        if args.stdin:
+            return sys.stdin.read().strip()
+        return " ".join(args.message).strip()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
 
 
 def _valid_skill_names() -> set[str]:
@@ -444,6 +509,43 @@ def _add_docs_commands(sub) -> None:
     docs_workflows.set_defaults(func=cmd_docs_workflows)
 
 
+def _add_chat_commands(sub) -> None:
+    chat = sub.add_parser("chat")
+    chat_sub = chat.add_subparsers(dest="chat_command", required=True)
+
+    route = chat_sub.add_parser("route")
+    route.add_argument("message", nargs="*", help="Chat message to route before dispatching to Hermes.")
+    route.add_argument(
+        "--source",
+        choices=CHAT_SOURCES,
+        default="generic",
+        help="Source surface that received the chat message.",
+    )
+    route.add_argument("--limit", type=int, default=3, help="Maximum catalog recommendations to include.")
+    route.add_argument(
+        "--min-confidence",
+        choices=CONFIDENCE_LEVELS,
+        default="high",
+        help="Minimum confidence for automatic workflow dispatch.",
+    )
+    route.add_argument("--stdin", action="store_true", help="Read the raw chat message from stdin.")
+    route.add_argument(
+        "--event-json",
+        default=None,
+        help="Read a Slack/Discord/Hermes-like JSON event from this path, or '-' for stdin.",
+    )
+    route.add_argument("--record", action="store_true", help="Record a metadata-only routing artifact under .omh/runtime.")
+    route.add_argument(
+        "--include-message",
+        action="store_true",
+        help="Include a complete routing_prompt with the raw message in stdout.",
+    )
+    route.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
+    route.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
+    route.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    route.set_defaults(func=cmd_chat_route)
+
+
 def _add_runtime_commands(sub) -> None:
     runtime = sub.add_parser("runtime")
     runtime_sub = runtime.add_subparsers(dest="runtime_command", required=True)
@@ -533,6 +635,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_top_level_commands(sub)
     _add_docs_commands(sub)
+    _add_chat_commands(sub)
     _add_runtime_commands(sub)
     _add_state_commands(sub)
     return parser

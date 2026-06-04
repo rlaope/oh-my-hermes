@@ -98,6 +98,18 @@ Priority:
 4. Persistence or finish-until-done requests route to `ralph` only after scope is concrete.
 5. Unknown or conflicting signals stay in this router and ask one concise clarification question.
 
+## Wrapper-Assisted Chat Routing
+
+Discord, Slack, or hosted Hermes wrappers can run `omh chat route` before dispatching a plain chat message to Hermes:
+
+```sh
+omh chat route --source discord --record "risky refactor"
+```
+
+Use `route.routing_prompt_template` with `{{message}}` replaced by the received chat message as the prompt forwarded to Hermes. If the wrapper does not log stdout and wants a pre-expanded prompt, pass `--include-message` and forward `route.routing_prompt`. A `dispatch` action targets the selected workflow skill; `clarify` and `fallback` target this router so Hermes can ask one concise follow-up instead of guessing.
+
+This is a deterministic wrapper-side decision layer. By default, stdout and runtime artifacts avoid duplicating the raw prompt body. It does not patch Hermes core or require platform network access from `omh`.
+
 ## Automatic Routing Registry
 
 When Hermes exposes installed skill descriptions to the model, use this registry as the routing map:

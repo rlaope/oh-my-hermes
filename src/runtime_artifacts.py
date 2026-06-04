@@ -22,11 +22,13 @@ from .runtime_records import (
     WRAPPER_COMPLETION_STATUSES,
     build_delegation_record,
     build_event_record,
+    build_routing_record,
     build_run_record,
     build_wrapper_record,
     validate_delegation_record,
     validate_delegation_result,
     validate_event_record,
+    validate_routing_record,
     validate_run_record,
     validate_wrapper_record,
 )
@@ -142,6 +144,27 @@ def write_wrapper_contract(run_dir: Path, wrapper: dict[str, Any]) -> dict[str, 
     return record
 
 
+def write_routing_decision(run_dir: Path, routing: dict[str, Any]) -> dict[str, Any]:
+    record = build_routing_record(routing)
+    atomic_write_json(run_dir / "routing.json", record, private=True)
+    append_event(
+        run_dir,
+        {
+            "event": "routing_decision_recorded",
+            "level": "info",
+            "message": f"routing {record['action']} {record['selected_skill']}",
+            "data": {
+                "source": record["source"],
+                "action": record["action"],
+                "selected_skill": record["selected_skill"],
+                "confidence": record["confidence"],
+                "score": record["score"],
+            },
+        },
+    )
+    return record
+
+
 def list_runs(paths: OmhPaths) -> list[dict[str, Any]]:
     if not paths.runtime_runs_dir.exists():
         return []
@@ -169,6 +192,7 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
     return {
         "run": run,
         "events": read_events(run_dir),
+        "routing": read_json_object(run_dir / "routing.json"),
         "delegation": read_json_object(run_dir / "delegation.json"),
         "wrapper": read_json_object(run_dir / "wrapper.json"),
         "evidence": sorted(path.name for path in evidence_dir.iterdir()) if evidence_dir.exists() else [],

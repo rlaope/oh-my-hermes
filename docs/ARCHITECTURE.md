@@ -17,6 +17,7 @@ The architecture favors:
 
 ```text
 src/
+  chat_router.py
   cli.py
   config_adapter.py
   converter.py
@@ -33,6 +34,10 @@ src/
 ## Main Modules
 
 `cli.py` owns command parsing and user-facing JSON output.
+
+`chat_router.py` owns deterministic pre-dispatch routing decisions for chat
+wrappers. It consumes plain messages or platform-shaped event payloads and
+returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
 
 `installer.py` owns managed skill writes, manifest updates, update behavior, and
 uninstall behavior.
@@ -51,9 +56,20 @@ the package grows internally.
 
 ## Routing
 
-Routing is prompt-level guidance. The router skill gives Hermes a structured map
-of workflow names and strong trigger phrases, but it does not override Hermes
-core behavior.
+Routing has two local surfaces:
+
+1. Prompt-level guidance. The router skill gives Hermes a structured map of
+   workflow names and strong trigger phrases, but it does not override Hermes
+   core behavior.
+2. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
+   hosted Hermes wrappers run a deterministic pre-dispatch decision before they
+   forward a plain user message to Hermes.
+
+Both surfaces read from the same catalog metadata. The chat router returns a
+`routing_instruction` and `routing_prompt_template` for the wrapper to forward,
+with raw-message prompt expansion available only through `--include-message`.
+It can record metadata-only `routing.json` evidence. It does not include a
+Discord or Slack SDK, open network connections, or patch Hermes internals.
 
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
@@ -115,29 +131,34 @@ Runtime artifacts are local JSON/JSONL files under `.omh/runtime/`.
       <run-id>/
         run.json
         events.jsonl
+        routing.json
         delegation.json
         wrapper.json
         evidence/
 ```
 
 `state.json` records install, apply, and doctor summaries. A run directory
-records a workflow envelope, append-only events, delegation observation, and
-wrapper observation plus optional evidence files.
+records a workflow envelope, append-only events, routing decisions, delegation
+observation, and wrapper observation plus optional evidence files.
 
 The runtime artifact layer is intentionally small:
 
 - JSON/JSONL only
 - no external service
-- no prompt body capture by default
+- no prompt body capture in runtime artifacts by default
 - schema-versioned files
 - CLI inspection through `omh runtime status`, `omh runtime runs`, and
   `omh runtime show <run-id>`
 - schema validation through `omh runtime validate`
 - redacted export through `omh runtime export`
 
-Bot wrappers can call `omh runtime record` before invoking Hermes and
-`omh runtime delegate` after the response if delegation metadata is available.
-If not, they should record `not_observed` rather than guessing.
+Bot wrappers can call `omh chat route --record` before invoking Hermes. The
+record stores the selected skill, confidence, score, message length, and message
+hash without storing the raw prompt body.
+
+Bot wrappers can still call `omh runtime delegate` after the response if
+delegation metadata is available. If not, they should record `not_observed`
+rather than guessing.
 
 Wrappers can also call `omh runtime wrapper` to record whether a prompt was
 dispatched, whether a Hermes response was observed, whether verification was
