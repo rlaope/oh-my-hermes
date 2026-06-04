@@ -11,6 +11,16 @@ Run the installer:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
 ```
 
+By default this installs the preview channel from the `main` branch archive.
+For pinned stable installs, pass a release version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=0.1.0 sh
+```
+
+For custom release archives or local package sources accepted by `pip`, pass
+`OMH_PACKAGE_URL`.
+
 The installer prepares the `omh` command, installs the managed Hermes skills,
 registers the managed skill directory with Hermes, and checks the result.
 
@@ -117,13 +127,16 @@ path.
 Update the installed skill pack:
 
 ```sh
-omh update
+omh update --channel preview
 omh apply
 omh doctor
 ```
 
+Use `omh update --channel stable --version <version>` to record a pinned stable
+update intent, or `omh update --channel local --from-skills-dir ./skills` for a
+local fixture. Local modifications block updates unless `--force` is supplied.
 Use `omh apply` after an update to make sure Hermes still has the managed skill
-directory registered.
+directory registered, then restart Hermes Agent.
 
 ## Reapply
 

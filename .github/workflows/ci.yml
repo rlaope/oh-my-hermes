@@ -22,12 +22,19 @@ jobs:
         run: python -m unittest discover -s tests
       - name: Compile package
         run: python -m compileall src
+      - name: Generated workflow docs check
+        run: python -m omh.cli docs workflows --check
       - name: Dry-run install smoke
         run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
+      - name: Stable-channel dry-run smoke
+        run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 0.1.0
       - name: Runtime artifact smoke
         run: |
           run_json="$(python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started)"
           run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
           python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime delegate --run "$run_id" --requested --not-observed --result not_observed
+          python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed
+          python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime validate --run "$run_id"
+          python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime export --redacted
           python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime show "$run_id"
           python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime runs

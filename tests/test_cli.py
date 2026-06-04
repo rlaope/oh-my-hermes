@@ -42,6 +42,7 @@ class CliTests(unittest.TestCase):
             state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["installed_skills"], len(manifest["skills"]))
             self.assertEqual(state["last_applied_skills_dir"], str((omh_home / "skills").resolve()))
+            self.assertEqual(state["release_channel"], "preview")
 
             _, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
             doctor = json.loads(doctor_stdout)
@@ -129,6 +130,26 @@ class CliTests(unittest.TestCase):
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "update", "--source", str(root / "release-archive")])[0], 0)
             updated = (omh_home / "skills" / "team" / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("Updated.", updated)
+
+    def test_release_channel_metadata_and_validation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "install", "--dry-run", "--channel", "stable", "--version", "0.1.0"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            dry_run = json.loads(stdout)
+            self.assertEqual(dry_run["release_channel"], "stable")
+            self.assertIn("/tags/v0.1.0.zip", dry_run["release_package_url"])
+
+            status, _, stderr = run_cli(["--omh-home", str(omh_home), "install", "--dry-run", "--channel", "stable"])
+            self.assertEqual(status, 2)
+            self.assertIn("stable channel requires", stderr)
+
+            status, _, stderr = run_cli(["--omh-home", str(omh_home), "update", "--channel", "local"])
+            self.assertEqual(status, 2)
+            self.assertIn("local channel requires", stderr)
 
     def test_runtime_commands_record_show_and_delegate(self) -> None:
         with TemporaryDirectory() as tmp:
