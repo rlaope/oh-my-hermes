@@ -99,6 +99,7 @@ omh runtime validate
 omh runtime export
 omh runtime runs
 omh docs workflows
+omh probe
 omh list
 omh snippet --dry-run
 omh uninstall
@@ -180,6 +181,7 @@ it could mean normal conversation.
 | `omh runtime export` | Export runtime evidence, redacted by default. |
 | `omh state status` | Inspect file-backed workflow lifecycle state under `~/.omh/state`. |
 | `omh docs workflows` | Print or verify the generated workflow reference from catalog data. |
+| `omh probe` | Inspect observable Hermes capability surfaces without mutating internals. |
 | `omh snippet` | Print optional workspace guidance without applying it. |
 | `omh uninstall` | Remove Hermes config registration, optionally removing files. |
 

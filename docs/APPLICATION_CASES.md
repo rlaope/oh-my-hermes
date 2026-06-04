@@ -221,6 +221,8 @@ Before using these cases as public release evidence, verify:
 - The three cases above match actual generated skill behavior.
 - The three cases above can create `.omh/runtime/runs/<run-id>/` artifacts.
 - `delegation.json` separates requested delegation from observed delegation.
+- `omh probe` output is captured before any native hook, plugin, app, MCP, or
+  internal routing claim is made.
 - Public docs avoid comparisons to other projects.
 - Any real Hermes runtime behavior that could not be automated is listed as a
   manual check.

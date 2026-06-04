@@ -58,6 +58,23 @@ core behavior.
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
 
+## Hermes Capability Boundary
+
+`omh probe` is the non-mutating capability inspection surface. It reports
+observable local evidence for:
+
+- external skill directory registration
+- managed skill installation
+- hook-like files
+- plugin, app, and MCP-like paths
+- wrapper observation artifacts
+- native skill metadata readiness
+
+Probe results use `available`, `missing`, `unknown`, or `unverified`. A file or
+directory probe marked `unverified` is not a native integration claim. Deeper
+Hermes integration requires both a stable Hermes extension contract and runtime
+evidence that the extension ran.
+
 ## Harness Contract
 
 Representative harnesses are preview metadata for generated prompt guidance.

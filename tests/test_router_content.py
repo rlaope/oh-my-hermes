@@ -172,8 +172,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)
         self.assertIn("docs workflows --check", ci)
+        self.assertIn("Capability probe smoke", ci)
         self.assertIn("Pinned stable install", release)
         self.assertIn("Runtime evidence smoke", release)
+        self.assertIn("Capability probe status", release)
 
     def test_application_cases_document_representative_flows(self) -> None:
         text = Path("docs/APPLICATION_CASES.md").read_text(encoding="utf-8")
@@ -191,6 +193,7 @@ class RouterContentTests(unittest.TestCase):
 
         for harness in ("coding-handling", "goal-execution", "planning", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
             self.assertIn(harness, text)
+        self.assertIn("omh probe", text)
 
 
 if __name__ == "__main__":

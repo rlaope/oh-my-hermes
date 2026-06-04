@@ -35,12 +35,14 @@ Check the installation:
 omh doctor
 omh list
 omh runtime status
+omh probe
 ```
 
 `omh doctor` should report a healthy installation. `omh list` should show the
 managed skills available to Hermes. `omh runtime status` should show the local
 runtime artifact directory and the latest install/apply/doctor state when those
-commands have run.
+commands have run. `omh probe` reports observable Hermes capability surfaces
+without mutating Hermes internals.
 
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see
@@ -113,6 +115,8 @@ Before calling the bot integration ready, verify these points:
   skill descriptions available.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read
   it from the same runtime context.
+- `omh probe` reports managed skills and external skill directory registration
+  as available before any deeper integration claim is made.
 - If skills do not appear, run `omh apply`, then `omh doctor`, then restart the
   bot again.
 

@@ -12,6 +12,7 @@ from .hashutil import sha256_file
 from .installer import OmhError, install_skill_pack, uninstall_skill_pack
 from .manifest import read_manifest
 from .paths import resolve_paths
+from .probe import probe_capabilities
 from .release import RELEASE_CHANNELS, package_url_for
 from .runtime_artifacts import (
     DELEGATION_RESULTS,
@@ -363,6 +364,11 @@ def cmd_state_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_probe(args: argparse.Namespace) -> int:
+    _print_json(probe_capabilities(_paths(args)))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omh", description="Install oh-my-hermes skills for Hermes Agent.")
     parser.add_argument("--omh-home", default=None)
@@ -411,6 +417,9 @@ def build_parser() -> argparse.ArgumentParser:
     snippet.add_argument("--dry-run", action="store_true")
     snippet.add_argument("--output", default=None)
     snippet.set_defaults(func=cmd_snippet)
+
+    probe = sub.add_parser("probe")
+    probe.set_defaults(func=cmd_probe)
 
     docs = sub.add_parser("docs")
     docs_sub = docs.add_subparsers(dest="docs_command", required=True)

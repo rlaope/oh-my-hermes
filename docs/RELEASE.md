@@ -39,6 +39,7 @@ python3 -m unittest discover -s tests
 python3 -m compileall src
 python3 -m src.cli docs workflows --check
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 0.1.0
+python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 ```
 
 Runtime evidence smoke:
@@ -59,6 +60,7 @@ python3 -m src.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Update path tested.
 - Workflow docs generation status.
 - Runtime validation status.
+- Capability probe status.
 - Known manual Hermes checks that could not be automated.
 - Any public claim that depends on wrapper evidence rather than Hermes-native
   capability evidence.

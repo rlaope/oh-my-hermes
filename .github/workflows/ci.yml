@@ -28,6 +28,8 @@ jobs:
         run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
       - name: Stable-channel dry-run smoke
         run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 0.1.0
+      - name: Capability probe smoke
+        run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
       - name: Runtime artifact smoke
         run: |
           run_json="$(python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started)"
