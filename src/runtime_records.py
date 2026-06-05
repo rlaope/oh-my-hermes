@@ -27,6 +27,26 @@ CODING_DELEGATION_INTENTS = ("coding", "cleanup", "review", "planning", "diagnos
 CODING_DELEGATION_STATUSES = ("prepared_not_observed",)
 CODING_SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp")
 CODING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
+CODING_DELEGATION_RECORD_KEYS = (
+    "schema_version",
+    "record_type",
+    "updated_at",
+    "source",
+    "action",
+    "intent",
+    "recommended_workflow",
+    "recommended_harness",
+    "executor_profile",
+    "review_required",
+    "review_workflow",
+    "message_sha256",
+    "message_length",
+    "source_metadata",
+    "recommendation_evidence",
+    "acceptance_criteria",
+    "verification",
+    "status",
+)
 
 
 def build_run_record(metadata: dict[str, Any], run_id: str) -> dict[str, Any]:
@@ -179,6 +199,8 @@ def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]
         "recommendation_evidence": _compact_coding_recommendations(
             delegation.get("recommendation_evidence", delegation.get("recommendations", []))
         ),
+        "acceptance_criteria": _compact_string_list(nested.get("acceptance_criteria", delegation.get("acceptance_criteria", []))),
+        "verification": _compact_string_list(nested.get("verification", delegation.get("verification", []))),
         "status": str(delegation.get("status", "prepared_not_observed")),
     }
     if not record["message_sha256"] and message_text:
@@ -231,6 +253,12 @@ def _compact_source_metadata(metadata: Any) -> dict[str, str]:
     if not isinstance(metadata, dict):
         return {}
     return {key: str(metadata[key]) for key in CODING_SOURCE_METADATA_KEYS if key in metadata and str(metadata[key])}
+
+
+def _compact_string_list(values: Any) -> list[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    return [str(value) for value in values if str(value)]
 
 
 def _optional_string(value: Any) -> str | None:
@@ -362,6 +390,8 @@ def validate_routing_record(routing: dict[str, Any]) -> list[str]:
 
 def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    extra_keys = sorted(set(delegation) - set(CODING_DELEGATION_RECORD_KEYS))
+    _require(not extra_keys, errors, f"coding_delegation has unsupported keys: {extra_keys}")
     _require(
         delegation.get("schema_version") == CODING_DELEGATION_SCHEMA_VERSION,
         errors,
@@ -390,6 +420,9 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
         "coding_delegation review_workflow must be a string or null",
     )
     _require(isinstance(delegation.get("message_length"), int), errors, "coding_delegation message_length must be an integer")
+    if isinstance(delegation.get("message_length"), int):
+        _require(delegation["message_length"] >= 0, errors, "coding_delegation message_length must be non-negative")
+    _require(_is_sha256(str(delegation.get("message_sha256", ""))), errors, "coding_delegation message_sha256 must be a sha256 hex digest")
     _require(isinstance(delegation.get("source_metadata"), dict), errors, "coding_delegation source_metadata must be an object")
     metadata = delegation.get("source_metadata", {})
     if isinstance(metadata, dict):
@@ -408,7 +441,17 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
         _require(isinstance(recommendation.get("score"), int), errors, f"coding_delegation recommendation_evidence[{index}].score must be an integer")
         _require(isinstance(recommendation.get("confidence"), str), errors, f"coding_delegation recommendation_evidence[{index}].confidence must be a string")
         _require(isinstance(recommendation.get("matched"), list), errors, f"coding_delegation recommendation_evidence[{index}].matched must be a list")
+    for key in ("acceptance_criteria", "verification"):
+        _require(isinstance(delegation.get(key), list), errors, f"coding_delegation {key} must be a list")
+        if not isinstance(delegation.get(key), list):
+            continue
+        for index, value in enumerate(delegation[key]):
+            _require(isinstance(value, str), errors, f"coding_delegation {key}[{index}] must be a string")
     return errors
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value.lower())
 
 
 OPTIONAL_RECORD_VALIDATORS = (

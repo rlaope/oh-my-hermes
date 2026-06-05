@@ -226,6 +226,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(record["status"], "prepared_not_observed")
             self.assertEqual(record["message_length"], len("risky refactor"))
             self.assertEqual(record["source_metadata"]["source_event_id"], "m1")
+            self.assertTrue(record["acceptance_criteria"])
+            self.assertTrue(record["verification"])
             self.assertNotIn("risky refactor", json.dumps(record))
 
             status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "show", run_id])

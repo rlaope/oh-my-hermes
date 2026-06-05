@@ -140,10 +140,11 @@ or modify Hermes internals.
 
 Coding delegation artifacts separate a prepared executor handoff from observed
 execution. `omh coding delegate --record` stores the recommended workflow,
-harness, source references, recommendation evidence, `message_sha256`,
-`message_length`, and status `prepared_not_observed`; it does not store the raw
-prompt body by default. Its companion `run.json` is bookkeeping for that
-prepared handoff and is marked `status: prepared`,
+harness, acceptance criteria, verification expectations, source references,
+recommendation evidence, `message_sha256`, `message_length`, and status
+`prepared_not_observed`; it does not store the raw prompt body by default. Its
+companion `run.json` is bookkeeping for that prepared handoff and is marked
+`status: prepared`,
 `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
 `observation_status: prepared_not_observed`.
 
@@ -194,8 +195,8 @@ metadata. It returns a `coding_delegation/v1` payload with action, intent,
 recommended workflow, harness, acceptance criteria, verification expectations,
 and a `delegation_prompt_template`. With `--record`, it writes
 `coding_delegation.json` evidence and a `prepared_coding_delegation` run
-envelope; the wrapper still needs separate Hermes or bot evidence before
-claiming execution was observed.
+envelope; validation treats those as a required pair. The wrapper still needs
+separate Hermes or bot evidence before claiming execution was observed.
 
 ## Commands
 

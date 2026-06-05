@@ -78,12 +78,15 @@ All three surfaces read from the same catalog metadata. The chat router returns 
 with raw-message prompt expansion available only through `--include-message`.
 Coding delegation returns a `delegation_prompt_template`, recommended workflow,
 harness, acceptance criteria, verification expectations, and optional
-metadata-only `coding_delegation.json` evidence. With `--record`, the companion
-`run.json` is marked as `artifact_kind: prepared_coding_delegation`,
-`phase: prepared`, and `observation_status: prepared_not_observed`; the run
-envelope is implementation bookkeeping, not proof that Hermes executed the
-handoff. Neither surface includes a Discord or Slack SDK, opens network
-connections, or patches Hermes internals.
+metadata-only `coding_delegation.json` evidence. That record stores a compact
+snapshot of the generated acceptance criteria and verification expectations, but
+not the raw prompt body. With `--record`, the companion `run.json` is marked as
+`artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
+`observation_status: prepared_not_observed`; validation treats the run envelope
+and `coding_delegation.json` as a required pair. The run envelope is
+implementation bookkeeping, not proof that Hermes executed the handoff. Neither
+surface includes a Discord or Slack SDK, opens network connections, or patches
+Hermes internals.
 
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
@@ -174,9 +177,9 @@ hash without storing the raw prompt body.
 
 Bot wrappers can call `omh coding delegate --record` for implementation-shaped
 messages. The record stores source metadata, action, intent, recommended
-workflow and harness, recommendation evidence, `message_sha256`,
-`message_length`, and status `prepared_not_observed`. That status means a
-handoff was prepared; the companion run envelope is also marked
+workflow and harness, acceptance criteria, verification expectations,
+recommendation evidence, `message_sha256`, `message_length`, and status
+`prepared_not_observed`. That status means a handoff was prepared; the companion run envelope is also marked
 `prepared_coding_delegation`, not proof that Hermes executed the task.
 
 Bot wrappers can still call `omh runtime delegate` after the response if

@@ -147,6 +147,8 @@ def coding_delegation_record_payload(
         "message_length": len(message),
         "source_metadata": metadata,
         "recommendation_evidence": payload.get("recommendations", []),
+        "acceptance_criteria": delegation.get("acceptance_criteria", []),
+        "verification": delegation.get("verification", []),
         "status": "prepared_not_observed",
     }
 

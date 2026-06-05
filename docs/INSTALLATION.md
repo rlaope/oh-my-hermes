@@ -131,7 +131,8 @@ Before calling the bot integration ready, verify these points:
 - The companion `run.json` for that command is marked
   `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
   `observation_status: prepared_not_observed`; the run envelope is bookkeeping,
-  not observed Hermes execution.
+  not observed Hermes execution. Runtime validation treats that run envelope and
+  `coding_delegation.json` as a required pair.
 - A Discord message that strongly names a workflow reaches Hermes with installed
   skill descriptions available.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read

@@ -201,7 +201,61 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertEqual(coding_delegation["message_length"], len(secret_message))
             self.assertEqual(coding_delegation["source_metadata"], {"source_event_id": "m1"})
             self.assertEqual(set(coding_delegation["recommendation_evidence"][0]), {"skill", "score", "confidence", "matched"})
+            self.assertTrue(coding_delegation["acceptance_criteria"])
+            self.assertTrue(coding_delegation["verification"])
             self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
+
+    def test_validate_coding_delegation_rejects_top_level_raw_prompt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            record = write_coding_delegation(
+                paths.runtime_runs_dir / run["run_id"],
+                build_coding_delegation_payload("risky refactor", source="discord", include_message=True),
+            )
+            record["message"] = "risky refactor"
+
+            errors = validate_coding_delegation_record(record)
+
+            self.assertTrue(any("unsupported keys" in error and "message" in error for error in errors))
+
+    def test_validate_runtime_requires_coding_delegation_for_prepared_runs(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertFalse(result["ok"])
+            self.assertTrue(any("missing coding_delegation.json" in error for error in result["runs"][0]["errors"]))
+
+    def test_validate_runtime_rejects_raw_top_level_coding_delegation_key(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            write_coding_delegation(
+                run_dir,
+                build_coding_delegation_payload("risky refactor", source="discord", include_message=True),
+            )
+            artifact_path = run_dir / "coding_delegation.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact["message"] = "risky refactor"
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertFalse(result["ok"])
+            self.assertTrue(any("unsupported keys" in error and "message" in error for error in result["runs"][0]["errors"]))
 
     def test_validate_runtime_rejects_missing_and_invalid_artifacts(self) -> None:
         with TemporaryDirectory() as tmp:

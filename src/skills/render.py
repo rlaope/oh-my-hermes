@@ -120,7 +120,7 @@ omh coding delegate --source discord --record "risky refactor"
 
 The command returns a `coding_delegation/v1` payload with a recommended workflow, harness, executor profile, acceptance criteria, verification expectations, and a `delegation_prompt_template` that the wrapper can forward with the user message substituted. It is deterministic and uses only local catalog metadata.
 
-With `--record`, `omh` writes `coding_delegation.json` under `.omh/runtime/runs/<run-id>/`. The companion `run.json` is marked with `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, recommendation evidence, source references, `message_sha256`, and `message_length`. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
+With `--record`, `omh` writes `coding_delegation.json` under `.omh/runtime/runs/<run-id>/`. The companion `run.json` is marked with `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. Validation treats the run envelope and `coding_delegation.json` as a required pair. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
 
 ## Automatic Routing Registry
 

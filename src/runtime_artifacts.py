@@ -246,6 +246,9 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
         errors.append(f"{run_path}: missing run.json")
     else:
         errors.extend(f"{run_path}: {error}" for error in validate_run_record(run))
+        coding_delegation_path = run_dir / "coding_delegation.json"
+        if run.get("artifact_kind") == "prepared_coding_delegation" and not coding_delegation_path.exists():
+            errors.append(f"{coding_delegation_path}: missing coding_delegation.json for prepared_coding_delegation run")
     events_path = run_dir / "events.jsonl"
     if events_path.exists():
         try:
