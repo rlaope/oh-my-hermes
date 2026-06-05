@@ -83,62 +83,31 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 Then open Hermes Agent and use the installed skills through Hermes' normal skill
 surfaces.
 
-For the full install, Discord bot deployment, update, reapply, and uninstall
-flow, see [Installation](docs/INSTALLATION.md).
-
-For reproducible skill-impact examples, see
-[Application Cases](docs/APPLICATION_CASES.md).
-
-Check or manage the installation with `omh`:
+Most users should start with one health check:
 
 ```sh
 omh doctor
-omh list
-omh runtime status
-omh state status
+```
+
+Update the installed pack with the same three-step shape:
+
+```sh
 omh update
+omh apply
+omh doctor
 ```
 
-Installer options:
+For wrapper authors, the primary smoke test is one natural-language turn:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_AUTO_APPLY=0 sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_RUN_DOCTOR=0 sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=0.1.0 sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PIP_ARGS= sh
-```
-
-Useful local and wrapper-debug commands:
-
-```sh
-omh install --dry-run
-omh install --from-skills-dir ./skills
-omh update --from-skills-dir ./skills
-omh apply --dry-run
-omh recommend "risky refactor"
 omh chat interact --source discord "risky refactor"
-omh chat interact --source slack --stdin
-omh chat session start --source discord --source-event-id m1 --channel-ref c1 "risky refactor"
-omh chat session accept-plan <session-id>
-omh chat session prepare-handoff <session-id> "risky refactor"
-omh chat session status <session-id>
-omh chat route --source discord --record "risky refactor"
-omh coding delegate --source discord --record "risky refactor"
-omh coding delegate --executor codex --source discord --record "risky refactor"
-omh coding lifecycle start --executor codex --record "risky refactor"
-omh coding lifecycle report --run <run-id>
-omh hermes plan --record "risky refactor with review"
-omh runtime record --skill oh-my-hermes --harness coding-handling --status started
-omh runtime delegation-status --run <run-id>
-omh runtime validate
-omh runtime export
-omh runtime runs
-omh docs workflows
-omh probe
-omh list
-omh snippet --dry-run
-omh uninstall
 ```
+
+Keep the root flow small: install, check health, update, and verify one wrapper
+interaction. Detailed install options, local fixture commands, Discord/Slack
+adapter flows, lifecycle recording, export, and uninstall examples live in
+[Installation](docs/INSTALLATION.md). Reproducible skill-impact examples live in
+[Application Cases](docs/APPLICATION_CASES.md).
 
 ## Mental Model
 
@@ -309,35 +278,26 @@ Actual Discord and Slack transports stay outside this repository. `omh` does
 not open network connections, authenticate bots, post messages, invoke Codex, or
 patch Hermes internals.
 
-## Commands
+## Command Surface
 
-| Command | Purpose |
+Root README intentionally shows the small public surface. Lower-level runtime
+and debug commands remain available, but they are documented in focused guides
+instead of presented as the first path.
+
+| Need | Command |
 | --- | --- |
-| `omh install` | Install the built-in Hermes skill pack. |
-| `omh update` | Reinstall from the built-in pack or a provided skill directory. |
-| `omh convert --from-skills-dir <dir>` | Import local `SKILL.md` files into the managed pack. |
-| `omh apply` | Register `~/.omh/skills` in Hermes `skills.external_dirs`. |
-| `omh list` | Print the installed manifest. |
-| `omh doctor` | Verify managed files and Hermes config registration. |
-| `omh recommend <task>` | Deterministically suggest workflow skills from the local OMHM catalog. |
-| `omh chat interact <message>` | Compose a wrapper-native `chat_interaction/v1` response for Discord, Slack, or hosted Hermes adapters. |
-| `omh chat session <step>` | Persist wrapper chat session decisions and recover status from linked runtime evidence. |
-| `omh chat route <message>` | Route a plain chat message before a Discord, Slack, or Hermes wrapper dispatches it. |
-| `omh coding delegate <task>` | Prepare a deterministic coding handoff payload and optional metadata-only runtime record. |
-| `omh coding lifecycle <step>` | Start, dispatch, observe, verify, and report a Codex handoff lifecycle using local runtime evidence. |
-| `omh hermes plan <task>` | Prepare a deterministic Hermes-facing plan, wrapper handoff contract, and optional `.hermes/plans` artifact. |
-| `omh runtime status` | Inspect local runtime artifact state. |
-| `omh runtime delegation-status --run <run-id>` | Summarize prepared/observed delegated coding status without overclaiming execution. |
-| `omh runtime record` | Create a metadata-only workflow run artifact. |
-| `omh runtime delegate` | Record observed or unavailable delegation for a run. |
-| `omh runtime wrapper` | Record what a bot or wrapper actually observed for a run. |
-| `omh runtime validate` | Validate runtime run, event, delegation, and wrapper artifacts. |
-| `omh runtime export` | Export runtime evidence, redacted by default. |
-| `omh state status` | Inspect file-backed workflow lifecycle state under `~/.omh/state`. |
-| `omh docs workflows` | Print or verify the generated workflow reference from catalog data. |
-| `omh probe` | Inspect observable Hermes capability surfaces without mutating internals. |
-| `omh snippet` | Print optional workspace guidance without applying it. |
-| `omh uninstall` | Remove Hermes config registration, optionally removing files. |
+| Install | `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh \| sh` |
+| Verify | `omh doctor` |
+| Update | `omh update && omh apply && omh doctor` |
+| Inspect installed skills | `omh list` |
+| Pick a workflow locally | `omh recommend <task>` |
+| Drive a chat wrapper turn | `omh chat interact <message>` |
+| Track delegated coding | `omh coding lifecycle <step>` |
+| Summarize observed status | `omh runtime delegation-status --run <run-id>` |
+| Remove OMHM | `omh uninstall` |
+
+See [Installation](docs/INSTALLATION.md) for install flags, local skill
+fixtures, reapply, wrapper lifecycle, redacted export, and uninstall details.
 
 ## Package Layout
 
