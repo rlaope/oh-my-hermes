@@ -1,0 +1,69 @@
+# Documentation
+
+This directory is the public operating map for oh-my-hermes-agent.
+
+Read `docs/DIRECTION.md` first when a change could affect product identity,
+wrapper behavior, planning quality, coding delegation, or public claims. Read
+`AGENTS.md` alongside it when changing code in this repository; it is the
+repo-local contract for Codex agents working here.
+
+## Reading Paths
+
+| Goal | Read |
+| --- | --- |
+| Understand what OMHM is and is not | [Direction](DIRECTION.md) |
+| Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
+| Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
+| Install or operate the preview package | [Installation](INSTALLATION.md) |
+| See realistic user-facing flows | [Application Cases](APPLICATION_CASES.md) |
+| Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
+| Prepare or verify a release | [Release](RELEASE.md) |
+| Track public sequencing | [Roadmap](ROADMAP.md) |
+
+## Direction Summary
+
+OMHM is a Hermes-native wrapper orchestration layer.
+
+The product should make chat surfaces feel capable without hiding who did what.
+Hermes should own intake, clarification, research, planning, status narration,
+and handoff UX. Codex-like executors should own main coding work. OMH should own
+the deterministic local contract between those worlds: generated skill guidance,
+wrapper sessions, prepared handoff payloads, and evidence records.
+
+The most important boundary is prepared versus observed evidence. A prepared
+handoff is useful, but it is not execution, review, CI, merge readiness, or a
+merge.
+
+## Documentation Contracts
+
+- Public docs should describe local deterministic behavior, not hidden runtime
+  magic.
+- Chat users should remain command-agnostic. Wrapper docs should describe
+  buttons, threads, status, and handoff states rather than asking end users to
+  run shell commands.
+- Coding-heavy requests should be described as delegated work unless there is
+  observed evidence that a coding executor actually ran.
+- Generated workflow docs should come from `src/skills/catalog.py`; update the
+  catalog before refreshing generated references.
+- Runtime and wrapper docs should preserve the separation between wrapper
+  session state and run-level evidence.
+
+## Update Checklist
+
+When changing docs, check whether the same claim needs to be updated in:
+
+- [README](../README.md)
+- [Direction](DIRECTION.md)
+- [Architecture](ARCHITECTURE.md)
+- [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md)
+- [Application Cases](APPLICATION_CASES.md)
+- [Workflow Reference](WORKFLOWS.md)
+- [AGENTS](../AGENTS.md)
+
+Run the focused documentation checks before calling the change complete:
+
+```sh
+PYTHONPATH=tests uv run python -m unittest tests/test_router_content.py -v
+uv run python -m src.cli docs workflows --check
+git diff --check
+```

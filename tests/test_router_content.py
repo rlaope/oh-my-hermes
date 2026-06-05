@@ -172,6 +172,7 @@ class RouterContentTests(unittest.TestCase):
         required_paths = [
             Path("README.md"),
             Path("AGENTS.md"),
+            Path("docs/README.md"),
             Path("docs/DIRECTION.md"),
             Path("docs/INSTALLATION.md"),
             Path("docs/APPLICATION_CASES.md"),
@@ -200,6 +201,7 @@ class RouterContentTests(unittest.TestCase):
         release = Path("docs/RELEASE.md").read_text(encoding="utf-8")
 
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
+        self.assertIn("[Documentation](docs/README.md)", readme)
         self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
         self.assertIn("[Application Cases](docs/APPLICATION_CASES.md)", readme)
         self.assertIn("OMH_CHANNEL=stable OMH_VERSION=0.1.0", readme)
@@ -215,15 +217,21 @@ class RouterContentTests(unittest.TestCase):
 
     def test_direction_and_agent_contract_lock_product_boundary(self) -> None:
         direction = Path("docs/DIRECTION.md").read_text(encoding="utf-8")
+        docs_index = Path("docs/README.md").read_text(encoding="utf-8")
         agents = Path("AGENTS.md").read_text(encoding="utf-8")
 
         self.assertIn("OMHM is a Hermes-native wrapper orchestration layer.", direction)
+        self.assertIn("Raise the product's capability level by strengthening contracts", direction)
         self.assertIn("Hermes owns:", direction)
         self.assertIn("OMH owns:", direction)
         self.assertIn("Codex-like executors own:", direction)
         self.assertIn("prepared_not_observed", direction)
         self.assertIn("One user goal should normally produce one PR.", direction)
         self.assertIn("Keep users command-agnostic in chat.", direction)
+        self.assertIn("The goal is parity of seriousness, not parity of implementation shape.", direction)
+        self.assertIn("This directory is the public operating map", docs_index)
+        self.assertIn("prepared versus observed evidence", docs_index)
+        self.assertIn("Chat users should remain command-agnostic.", docs_index)
         self.assertIn("Do not turn OMHM into a hidden Hermes runtime patch", agents)
         self.assertIn("One user goal should normally produce one PR.", agents)
         self.assertIn("review feedback or small follow-up fixes", agents)

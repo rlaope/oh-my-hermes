@@ -10,6 +10,32 @@ runtime. It borrows the discipline of staged workflows, local state, and
 evidence gates, then translates that discipline into Hermes-native chat,
 planning, status, and handoff contracts.
 
+## Design Philosophy
+
+Raise the product's capability level by strengthening contracts, not by hiding
+more behavior behind prompts.
+
+The desirable shape is a wrapper-native system where a user can type natural
+language in Discord, Slack, or a hosted chat surface and receive a clear next
+step: direct answer, clarification, research, plan, status, or coding handoff.
+The user should not need to know command names, skill internals, or executor
+syntax.
+
+OMHM should keep familiar workflow names only when they help users and wrappers
+recognize intent. Those names are compatibility affordances, not permission to
+copy another runtime's internals or imply hidden execution.
+
+Quality should show up as:
+
+- better request classification from local catalog metadata
+- better Hermes-side interview, research, and planning output
+- clearer wrapper response states and actions
+- stronger prepared handoff payloads for coding executors
+- stricter evidence boundaries for dispatch, execution, review, CI, and merge
+- documentation and tests that keep public claims aligned with code
+
+The goal is parity of seriousness, not parity of implementation shape.
+
 ## Project Type
 
 OMHM is:
@@ -133,6 +159,21 @@ Split into separate PRs only when:
    Only after the local contract is stable, consider example shims or adapter
    packages that consume `chat_interaction/v1` without moving platform secrets
    or network behavior into core OMH.
+
+## First-PR Vertical Slice Rule
+
+When a goal is broad, keep the PR coherent rather than artificially tiny. A good
+first slice should carry one user-visible capability from contract to tests:
+
+- document the desired chat or handoff behavior
+- encode the deterministic schema or catalog metadata
+- expose the CLI or wrapper-facing surface
+- record local metadata-only artifacts when needed
+- add focused tests for the public contract
+- update README/docs so the capability is discoverable
+
+Do not split the docs, implementation, review fixes, and CI fixes for that same
+goal into separate PRs unless one of the Delivery Grain split conditions applies.
 
 ## Review Checklist
 
