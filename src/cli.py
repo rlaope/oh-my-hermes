@@ -20,6 +20,14 @@ from .coding_delegation import (
     coding_delegation_record_payload,
     extract_source_metadata,
 )
+from .coding_lifecycle import (
+    CodingLifecycleError,
+    record_codex_dispatch,
+    record_codex_result,
+    record_codex_verification,
+    report_codex_delegation_lifecycle,
+    start_codex_delegation_lifecycle,
+)
 from .config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
 from .doctor import doctor_ok, run_doctor
 from .hashutil import sha256_file
@@ -61,6 +69,7 @@ from .workflow_state import (
     list_workflow_states,
     start_workflow_state,
 )
+from .wrapper_contract import INTERACTION_MODES, build_chat_interaction_payload, build_chat_status_interaction
 
 
 def _paths(args: argparse.Namespace):
@@ -227,6 +236,35 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat_interact(args: argparse.Namespace) -> int:
+    try:
+        if args.run_id:
+            status = summarize_delegated_coding_status(_paths(args), args.run_id)
+            payload = build_chat_status_interaction(
+                status,
+                source=args.source,
+                source_metadata=_explicit_source_metadata(args),
+            )
+        else:
+            event_or_message, source_metadata = _chat_input_and_metadata(args)
+            payload = build_chat_interaction_payload(
+                event_or_message,
+                source=args.source,
+                mode=args.mode,
+                limit=args.limit,
+                min_confidence=args.min_confidence,
+                include_message=args.include_message,
+                executor_target=args.executor,
+                source_metadata=source_metadata,
+            )
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
 def cmd_coding_delegate(args: argparse.Namespace) -> int:
     try:
         source_metadata: dict[str, str] = {}
@@ -280,6 +318,80 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coding_lifecycle_start(args: argparse.Namespace) -> int:
+    if not args.record:
+        raise OmhError("coding lifecycle start requires --record")
+    try:
+        event_or_message, source_metadata = _chat_input_and_metadata(args)
+        message = extract_message_text(event_or_message)
+        payload = start_codex_delegation_lifecycle(
+            _paths(args),
+            message,
+            source=args.source,
+            source_metadata=source_metadata,
+            limit=args.limit,
+            include_message=args.include_message,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_coding_lifecycle_dispatch(args: argparse.Namespace) -> int:
+    try:
+        _print_json(record_codex_dispatch(_paths(args), args.run_id))
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    except CodingLifecycleError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_coding_lifecycle_result(args: argparse.Namespace) -> int:
+    participants = [item.strip() for item in (args.participants or "").split(",") if item.strip()]
+    try:
+        _print_json(
+            record_codex_result(
+                _paths(args),
+                args.run_id,
+                result=args.result,
+                participants=participants or ["codex"],
+                evidence_refs=args.evidence_ref or [],
+            )
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    except CodingLifecycleError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_coding_lifecycle_verify(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            record_codex_verification(
+                _paths(args),
+                args.run_id,
+                completion_status=args.completion_status,
+                gaps=args.gap or [],
+            )
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    except CodingLifecycleError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_coding_lifecycle_report(args: argparse.Namespace) -> int:
+    try:
+        _print_json(report_codex_delegation_lifecycle(_paths(args), args.run_id))
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    return 0
+
+
 def cmd_hermes_plan(args: argparse.Namespace) -> int:
     try:
         source_metadata: dict[str, str] = {}
@@ -323,6 +435,27 @@ def _explicit_source_metadata(args: argparse.Namespace) -> dict[str, str]:
         }.items()
         if value
     }
+
+
+def _chat_input_and_metadata(args: argparse.Namespace) -> tuple[dict[str, object] | str, dict[str, str]]:
+    try:
+        if args.event_json:
+            raw = (
+                sys.stdin.read()
+                if args.event_json == "-"
+                else Path(args.event_json).expanduser().read_text(encoding="utf-8")
+            )
+            event = json.loads(raw)
+            if not isinstance(event, dict):
+                raise ValueError("chat event must be an object")
+            metadata = extract_source_metadata(event)
+            metadata.update(_explicit_source_metadata(args))
+            return event, metadata
+        if args.stdin:
+            return sys.stdin.read().strip(), _explicit_source_metadata(args)
+        return " ".join(args.message).strip(), _explicit_source_metadata(args)
+    except (OSError, json.JSONDecodeError, ValueError):
+        raise
 
 
 def _chat_message(args: argparse.Namespace) -> str:
@@ -661,6 +794,45 @@ def _add_chat_commands(sub) -> None:
     route.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
     route.set_defaults(func=cmd_chat_route)
 
+    interact = chat_sub.add_parser("interact")
+    interact.add_argument("message", nargs="*", help="Chat message to turn into a wrapper-native interaction envelope.")
+    interact.add_argument(
+        "--source",
+        choices=CHAT_SOURCES,
+        default="generic",
+        help="Source surface that received the chat message.",
+    )
+    interact.add_argument("--mode", choices=INTERACTION_MODES, default="auto", help="Interaction mode to compose.")
+    interact.add_argument("--limit", type=int, default=3, help="Maximum catalog recommendations to include.")
+    interact.add_argument(
+        "--min-confidence",
+        choices=CONFIDENCE_LEVELS,
+        default="high",
+        help="Minimum confidence for automatic workflow dispatch.",
+    )
+    interact.add_argument(
+        "--executor",
+        choices=CODING_EXECUTOR_TARGETS,
+        default="codex",
+        help="Executor target for delegate-mode handoff payloads.",
+    )
+    interact.add_argument("--stdin", action="store_true", help="Read the raw chat message from stdin.")
+    interact.add_argument(
+        "--event-json",
+        default=None,
+        help="Read a Slack/Discord/Hermes-like JSON event from this path, or '-' for stdin.",
+    )
+    interact.add_argument(
+        "--include-message",
+        action="store_true",
+        help="Include the raw message in stdout for wrappers that dispatch immediately.",
+    )
+    interact.add_argument("--run", dest="run_id", default=None, help="Render a status interaction for an existing runtime run.")
+    interact.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
+    interact.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
+    interact.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    interact.set_defaults(func=cmd_chat_interact)
+
 
 def _add_coding_commands(sub) -> None:
     coding = sub.add_parser("coding")
@@ -697,6 +869,57 @@ def _add_coding_commands(sub) -> None:
     delegate.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     delegate.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
     delegate.set_defaults(func=cmd_coding_delegate)
+
+    lifecycle = coding_sub.add_parser("lifecycle")
+    lifecycle_sub = lifecycle.add_subparsers(dest="lifecycle_command", required=True)
+
+    lifecycle_start = lifecycle_sub.add_parser("start")
+    lifecycle_start.add_argument("message", nargs="*", help="Coding task description to prepare for Codex lifecycle tracking.")
+    lifecycle_start.add_argument(
+        "--source",
+        choices=CHAT_SOURCES,
+        default="generic",
+        help="Source surface that received the coding request.",
+    )
+    lifecycle_start.add_argument("--limit", type=int, default=3, help="Maximum catalog recommendations to include.")
+    lifecycle_start.add_argument("--executor", choices=("codex",), default="codex", help="Coding executor target.")
+    lifecycle_start.add_argument("--record", action="store_true", help="Record a metadata-only prepared lifecycle run.")
+    lifecycle_start.add_argument("--stdin", action="store_true", help="Read the raw coding task from stdin.")
+    lifecycle_start.add_argument(
+        "--event-json",
+        default=None,
+        help="Read a Slack/Discord/Hermes-like JSON event from this path, or '-' for stdin.",
+    )
+    lifecycle_start.add_argument(
+        "--include-message",
+        action="store_true",
+        help="Include raw message and expanded executor prompt in stdout for immediate wrapper dispatch.",
+    )
+    lifecycle_start.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
+    lifecycle_start.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
+    lifecycle_start.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    lifecycle_start.set_defaults(func=cmd_coding_lifecycle_start)
+
+    lifecycle_dispatch = lifecycle_sub.add_parser("dispatch")
+    lifecycle_dispatch.add_argument("--run", dest="run_id", required=True)
+    lifecycle_dispatch.set_defaults(func=cmd_coding_lifecycle_dispatch)
+
+    lifecycle_result = lifecycle_sub.add_parser("result")
+    lifecycle_result.add_argument("--run", dest="run_id", required=True)
+    lifecycle_result.add_argument("--result", choices=("completed", "blocked", "failed"), required=True)
+    lifecycle_result.add_argument("--participants", default="codex")
+    lifecycle_result.add_argument("--evidence-ref", action="append")
+    lifecycle_result.set_defaults(func=cmd_coding_lifecycle_result)
+
+    lifecycle_verify = lifecycle_sub.add_parser("verify")
+    lifecycle_verify.add_argument("--run", dest="run_id", required=True)
+    lifecycle_verify.add_argument("--completion-status", choices=("completed", "blocked", "failed", "unknown"), default="completed")
+    lifecycle_verify.add_argument("--gap", action="append")
+    lifecycle_verify.set_defaults(func=cmd_coding_lifecycle_verify)
+
+    lifecycle_report = lifecycle_sub.add_parser("report")
+    lifecycle_report.add_argument("--run", dest="run_id", required=True)
+    lifecycle_report.set_defaults(func=cmd_coding_lifecycle_report)
 
 
 def _add_hermes_commands(sub) -> None:

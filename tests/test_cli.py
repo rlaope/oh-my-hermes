@@ -508,6 +508,135 @@ class CliTests(unittest.TestCase):
             self.assertFalse(summary["integrity"]["ok"])
             self.assertTrue(any("missing coding_delegation.json" in warning for warning in summary["integrity"]["warnings"]))
 
+    def test_chat_interact_returns_wrapper_native_plan_without_raw_message(self) -> None:
+        message = "risky refactor with private-token-123"
+
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_interaction/v1")
+        self.assertEqual(payload["mode"], "plan")
+        self.assertEqual(payload["chat_response"]["schema_version"], "chat_response/v1")
+        self.assertEqual(payload["chat_response"]["kind"], "plan")
+        self.assertNotIn(message, stdout)
+        self.assertNotIn("omh ", json.dumps(payload["chat_response"]).lower())
+
+    def test_chat_interact_delegate_mode_gates_send_to_codex(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "interact", "--mode", "delegate", "--source", "discord", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
+        self.assertEqual(payload["next_action"], "send_to_codex")
+        self.assertEqual(payload["delegation"]["executor_handoff"]["executor_target"], "codex")
+        self.assertIn("send_to_codex", actions)
+
+    def test_chat_interact_status_renders_prepared_codex_handoff(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "coding",
+                    "lifecycle",
+                    "start",
+                    "--record",
+                    "--source",
+                    "discord",
+                    "--source-event-id",
+                    "m1",
+                    "--channel-ref",
+                    "c1",
+                    "risky",
+                    "refactor",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            status, stdout, stderr = run_cli(base + ["chat", "interact", "--run", run_id])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
+        self.assertEqual(payload["mode"], "status")
+        self.assertEqual(payload["next_action"], "dispatch_to_executor")
+        self.assertEqual(payload["source"], "discord")
+        self.assertEqual(payload["thread_key"], "discord:c1:m1")
+        self.assertEqual(payload["chat_response"]["state"]["thread_key"], "discord:c1:m1")
+        self.assertIn("send_to_codex", actions)
+
+    def test_coding_lifecycle_cli_rejects_result_before_dispatch(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "diagnose", "installation", "health"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            status, _, stderr = run_cli(base + ["coding", "lifecycle", "result", "--run", run_id, "--result", "completed"])
+
+        self.assertEqual(status, 2)
+        self.assertIn("cannot record Codex result", stderr)
+
+    def test_coding_lifecycle_cli_happy_path_reports_completion_for_non_review_task(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "diagnose", "installation", "health"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "dispatch", "--run", run_id])[0], 0)
+            self.assertEqual(
+                run_cli(base + ["coding", "lifecycle", "result", "--run", run_id, "--result", "completed", "--evidence-ref", "codex-log"])[0],
+                0,
+            )
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "report", "--run", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            before = json.loads(stdout)
+            self.assertEqual(before["next_action"], "record_verification_evidence")
+            self.assertFalse(before["can_report_completion"])
+
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "verify", "--run", run_id])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        after = json.loads(stdout)["status"]
+        self.assertEqual(after["next_action"], "report_completion_with_evidence")
+        self.assertTrue(after["can_report_completion"])
+
+    def test_coding_lifecycle_cli_failed_verification_is_not_reportable(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "diagnose", "installation", "health"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "dispatch", "--run", run_id])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "result", "--run", run_id, "--result", "completed"])[0], 0)
+            status, stdout, stderr = run_cli(
+                base + ["coding", "lifecycle", "verify", "--run", run_id, "--completion-status", "failed", "--gap", "tests failed"]
+            )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["wrapper"]["verification_observed"])
+        self.assertEqual(payload["status"]["next_action"], "record_verification_evidence")
+        self.assertFalse(payload["status"]["can_report_completion"])
+
     def test_hermes_plan_returns_review_gated_scaffold(self) -> None:
         status, stdout, stderr = run_cli(["hermes", "plan", "risky", "refactor", "with", "review"])
 

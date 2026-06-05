@@ -278,6 +278,7 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
         "schema_version": "delegated_coding_status/v1",
         "run_id": run_id,
         "source": coding.get("source", "generic"),
+        "source_metadata": coding.get("source_metadata", {}),
         "prepared": {
             "available": prepared,
             "action": action,
