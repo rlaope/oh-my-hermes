@@ -14,6 +14,11 @@ from .chat_router import (
     route_chat_message,
     routing_record_payload,
 )
+from .coding_delegation import (
+    build_coding_delegation_payload,
+    coding_delegation_record_payload,
+    extract_source_metadata,
+)
 from .config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
 from .doctor import doctor_ok, run_doctor
 from .hashutil import sha256_file
@@ -28,6 +33,7 @@ from .runtime_artifacts import (
     DELEGATION_RESULTS,
     PRIVACY_MODES,
     RUN_STATUSES,
+    create_prepared_coding_delegation_run,
     create_run,
     export_runtime,
     list_runs,
@@ -36,6 +42,7 @@ from .runtime_artifacts import (
     show_run,
     update_state,
     validate_runtime,
+    write_coding_delegation,
     write_delegation,
     write_routing_decision,
     write_wrapper_contract,
@@ -215,6 +222,70 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
         payload["runtime"] = {"run": run, "routing": routing}
     _print_json(payload)
     return 0
+
+
+def cmd_coding_delegate(args: argparse.Namespace) -> int:
+    try:
+        source_metadata: dict[str, str] = {}
+        if args.event_json:
+            raw = (
+                sys.stdin.read()
+                if args.event_json == "-"
+                else Path(args.event_json).expanduser().read_text(encoding="utf-8")
+            )
+            event = json.loads(raw)
+            message = extract_message_text(event)
+            source_metadata = extract_source_metadata(event)
+        elif args.stdin:
+            message = sys.stdin.read().strip()
+        else:
+            message = " ".join(args.message).strip()
+        source_metadata.update(_explicit_source_metadata(args))
+        payload = build_coding_delegation_payload(
+            message,
+            source=args.source,
+            limit=args.limit,
+            include_message=args.include_message,
+            source_metadata=source_metadata,
+        )
+        if args.record:
+            delegation = payload["delegation"]
+            if not isinstance(delegation, dict):
+                raise OmhError("coding delegation payload is missing delegation")
+            paths = _paths(args)
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {
+                    "skill": str(delegation["recommended_workflow"]),
+                    "harness": str(delegation["recommended_harness"]),
+                    "trigger": f"coding:{args.source}:{delegation['action']}",
+                    "privacy": "metadata_only",
+                    "inputs_summary": f"{args.source} coding delegation request; message_length={len(message)}",
+                    "outputs_summary": f"prepared {delegation['action']} for {delegation['recommended_workflow']}",
+                    "verification_summary": "prepared_not_observed; executor work is not observed by omh",
+                },
+            )
+            record = write_coding_delegation(
+                paths.runtime_runs_dir / run["run_id"],
+                coding_delegation_record_payload(payload, message, source_metadata=source_metadata),
+            )
+            payload["runtime"] = {"run": run, "coding_delegation": record}
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def _explicit_source_metadata(args: argparse.Namespace) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in {
+            "source_event_id": args.source_event_id,
+            "channel_ref": args.channel_ref,
+            "user_ref": args.user_ref,
+        }.items()
+        if value
+    }
 
 
 def _chat_message(args: argparse.Namespace) -> str:
@@ -546,6 +617,37 @@ def _add_chat_commands(sub) -> None:
     route.set_defaults(func=cmd_chat_route)
 
 
+def _add_coding_commands(sub) -> None:
+    coding = sub.add_parser("coding")
+    coding_sub = coding.add_subparsers(dest="coding_command", required=True)
+
+    delegate = coding_sub.add_parser("delegate")
+    delegate.add_argument("message", nargs="*", help="Coding task description to prepare for executor delegation.")
+    delegate.add_argument(
+        "--source",
+        choices=CHAT_SOURCES,
+        default="generic",
+        help="Source surface that received the coding request.",
+    )
+    delegate.add_argument("--limit", type=int, default=3, help="Maximum catalog recommendations to include.")
+    delegate.add_argument("--stdin", action="store_true", help="Read the raw coding task from stdin.")
+    delegate.add_argument(
+        "--event-json",
+        default=None,
+        help="Read a Slack/Discord/Hermes-like JSON event from this path, or '-' for stdin.",
+    )
+    delegate.add_argument(
+        "--include-message",
+        action="store_true",
+        help="Include raw message and expanded delegation prompt in stdout for non-logging wrappers.",
+    )
+    delegate.add_argument("--record", action="store_true", help="Record a metadata-only coding delegation artifact under .omh/runtime.")
+    delegate.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
+    delegate.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
+    delegate.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    delegate.set_defaults(func=cmd_coding_delegate)
+
+
 def _add_runtime_commands(sub) -> None:
     runtime = sub.add_parser("runtime")
     runtime_sub = runtime.add_subparsers(dest="runtime_command", required=True)
@@ -636,6 +738,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_top_level_commands(sub)
     _add_docs_commands(sub)
     _add_chat_commands(sub)
+    _add_coding_commands(sub)
     _add_runtime_commands(sub)
     _add_state_commands(sub)
     return parser

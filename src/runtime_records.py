@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from .local_store import utc_now
 
 
 SCHEMA_VERSION = 1
-RUN_STATUSES = ("started", "completed", "blocked", "failed", "unknown")
+RUN_STATUSES = ("started", "prepared", "completed", "blocked", "failed", "unknown")
 PRIVACY_MODES = ("metadata_only",)
+RUN_ARTIFACT_KINDS = ("workflow_run", "prepared_coding_delegation")
+RUN_PHASES = ("runtime", "prepared", "unknown")
+RUN_OBSERVATION_STATUSES = ("unknown", "observed", "not_observed", "prepared_not_observed")
 DELEGATION_RESULTS = ("completed", "blocked", "failed", "not_available", "not_observed")
 OBSERVED_RESULTS = ("completed", "blocked", "failed")
 UNOBSERVED_RESULTS = ("not_available", "not_observed")
@@ -16,6 +20,33 @@ WRAPPER_COMPLETION_STATUSES = ("started", "completed", "blocked", "failed", "unk
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
 ROUTE_CONFIDENCES = ("low", "medium", "high")
 ROUTING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
+CODING_DELEGATION_SCHEMA_VERSION = "coding_delegation/v1"
+CODING_DELEGATION_RECORD_TYPE = "coding_delegation"
+CODING_DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
+CODING_DELEGATION_INTENTS = ("coding", "cleanup", "review", "planning", "diagnostics", "docs", "unknown")
+CODING_DELEGATION_STATUSES = ("prepared_not_observed",)
+CODING_SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp")
+CODING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
+CODING_DELEGATION_RECORD_KEYS = (
+    "schema_version",
+    "record_type",
+    "updated_at",
+    "source",
+    "action",
+    "intent",
+    "recommended_workflow",
+    "recommended_harness",
+    "executor_profile",
+    "review_required",
+    "review_workflow",
+    "message_sha256",
+    "message_length",
+    "source_metadata",
+    "recommendation_evidence",
+    "acceptance_criteria",
+    "verification",
+    "status",
+)
 
 
 def build_run_record(metadata: dict[str, Any], run_id: str) -> dict[str, Any]:
@@ -28,6 +59,15 @@ def build_run_record(metadata: dict[str, Any], run_id: str) -> dict[str, Any]:
     skill = str(metadata.get("skill", "unknown"))
     harness = str(metadata.get("harness", "unknown"))
     created_at = str(metadata.get("created_at") or utc_now())
+    artifact_kind = str(metadata.get("artifact_kind", "workflow_run"))
+    phase = str(metadata.get("phase", "runtime"))
+    observation_status = str(metadata.get("observation_status", "unknown"))
+    if artifact_kind not in RUN_ARTIFACT_KINDS:
+        raise ValueError(f"unsupported run artifact_kind: {artifact_kind}")
+    if phase not in RUN_PHASES:
+        raise ValueError(f"unsupported run phase: {phase}")
+    if observation_status not in RUN_OBSERVATION_STATUSES:
+        raise ValueError(f"unsupported run observation_status: {observation_status}")
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
@@ -37,6 +77,9 @@ def build_run_record(metadata: dict[str, Any], run_id: str) -> dict[str, Any]:
         "harness": harness,
         "trigger": metadata.get("trigger", ""),
         "status": status,
+        "artifact_kind": artifact_kind,
+        "phase": phase,
+        "observation_status": observation_status,
         "privacy": privacy,
         "inputs_summary": metadata.get("inputs_summary", ""),
         "outputs_summary": metadata.get("outputs_summary", ""),
@@ -132,6 +175,42 @@ def build_routing_record(routing: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]:
+    nested = delegation.get("delegation", {})
+    if not isinstance(nested, dict):
+        nested = {}
+    message = delegation.get("message", "")
+    message_text = message if isinstance(message, str) else ""
+    record = {
+        "schema_version": CODING_DELEGATION_SCHEMA_VERSION,
+        "record_type": CODING_DELEGATION_RECORD_TYPE,
+        "updated_at": utc_now(),
+        "source": str(delegation.get("source", "generic")),
+        "action": str(nested.get("action", delegation.get("action", "fallback"))),
+        "intent": str(nested.get("intent", delegation.get("intent", "unknown"))),
+        "recommended_workflow": str(nested.get("recommended_workflow", delegation.get("recommended_workflow", "oh-my-hermes"))),
+        "recommended_harness": str(nested.get("recommended_harness", delegation.get("recommended_harness", "coding-handling"))),
+        "executor_profile": str(nested.get("executor_profile", delegation.get("executor_profile", "router"))),
+        "review_required": bool(nested.get("review_required", delegation.get("review_required", False))),
+        "review_workflow": _optional_string(nested.get("review_workflow", delegation.get("review_workflow"))),
+        "message_sha256": str(delegation.get("message_sha256", "")),
+        "message_length": int(delegation.get("message_length", len(message_text))),
+        "source_metadata": _compact_source_metadata(delegation.get("source_metadata", {})),
+        "recommendation_evidence": _compact_coding_recommendations(
+            delegation.get("recommendation_evidence", delegation.get("recommendations", []))
+        ),
+        "acceptance_criteria": _compact_string_list(nested.get("acceptance_criteria", delegation.get("acceptance_criteria", []))),
+        "verification": _compact_string_list(nested.get("verification", delegation.get("verification", []))),
+        "status": str(delegation.get("status", "prepared_not_observed")),
+    }
+    if not record["message_sha256"] and message_text:
+        record["message_sha256"] = hashlib.sha256(message_text.encode("utf-8")).hexdigest()
+    errors = validate_coding_delegation_record(record)
+    if errors:
+        raise ValueError(errors[0])
+    return record
+
+
 def _compact_routing_recommendations(recommendations: Any) -> list[dict[str, Any]]:
     if not isinstance(recommendations, list):
         return []
@@ -151,6 +230,44 @@ def _compact_routing_recommendations(recommendations: Any) -> list[dict[str, Any
     return compact
 
 
+def _compact_coding_recommendations(recommendations: Any) -> list[dict[str, Any]]:
+    if not isinstance(recommendations, list):
+        return []
+    compact: list[dict[str, Any]] = []
+    for item in recommendations:
+        if not isinstance(item, dict):
+            continue
+        matched = item.get("matched", [])
+        compact.append(
+            {
+                "skill": str(item.get("skill", "")),
+                "score": int(item.get("score", 0)),
+                "confidence": str(item.get("confidence", "low")),
+                "matched": [str(value) for value in matched] if isinstance(matched, list) else [],
+            }
+        )
+    return compact
+
+
+def _compact_source_metadata(metadata: Any) -> dict[str, str]:
+    if not isinstance(metadata, dict):
+        return {}
+    return {key: str(metadata[key]) for key in CODING_SOURCE_METADATA_KEYS if key in metadata and str(metadata[key])}
+
+
+def _compact_string_list(values: Any) -> list[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    return [str(value) for value in values if str(value)]
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
 def _require(condition: bool, errors: list[str], message: str) -> None:
     if not condition:
         errors.append(message)
@@ -163,6 +280,27 @@ def validate_run_record(run: dict[str, Any]) -> list[str]:
         _require(isinstance(run.get(key), str) if key != "schema_version" else True, errors, f"run {key} must be a string")
     _require(run.get("status") in RUN_STATUSES, errors, f"run status is invalid: {run.get('status')!r}")
     _require(run.get("privacy") in PRIVACY_MODES, errors, f"run privacy is invalid: {run.get('privacy')!r}")
+    if "artifact_kind" in run:
+        _require(isinstance(run.get("artifact_kind"), str), errors, "run artifact_kind must be a string")
+        _require(run.get("artifact_kind") in RUN_ARTIFACT_KINDS, errors, f"run artifact_kind is invalid: {run.get('artifact_kind')!r}")
+    if "phase" in run:
+        _require(isinstance(run.get("phase"), str), errors, "run phase must be a string")
+        _require(run.get("phase") in RUN_PHASES, errors, f"run phase is invalid: {run.get('phase')!r}")
+    if "observation_status" in run:
+        _require(isinstance(run.get("observation_status"), str), errors, "run observation_status must be a string")
+        _require(
+            run.get("observation_status") in RUN_OBSERVATION_STATUSES,
+            errors,
+            f"run observation_status is invalid: {run.get('observation_status')!r}",
+        )
+    if run.get("artifact_kind") == "prepared_coding_delegation":
+        _require(run.get("status") == "prepared", errors, "prepared coding delegation run status must be prepared")
+        _require(run.get("phase") == "prepared", errors, "prepared coding delegation run phase must be prepared")
+        _require(
+            run.get("observation_status") == "prepared_not_observed",
+            errors,
+            "prepared coding delegation run observation_status must be prepared_not_observed",
+        )
     for key in ("trigger", "inputs_summary", "outputs_summary", "verification_summary"):
         _require(isinstance(run.get(key, ""), str), errors, f"run {key} must be a string")
     return errors
@@ -250,8 +388,75 @@ def validate_routing_record(routing: dict[str, Any]) -> list[str]:
     return errors
 
 
+def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    extra_keys = sorted(set(delegation) - set(CODING_DELEGATION_RECORD_KEYS))
+    _require(not extra_keys, errors, f"coding_delegation has unsupported keys: {extra_keys}")
+    _require(
+        delegation.get("schema_version") == CODING_DELEGATION_SCHEMA_VERSION,
+        errors,
+        "coding_delegation schema_version is invalid",
+    )
+    _require(delegation.get("record_type") == CODING_DELEGATION_RECORD_TYPE, errors, "coding_delegation record_type is invalid")
+    for key in (
+        "updated_at",
+        "source",
+        "action",
+        "intent",
+        "recommended_workflow",
+        "recommended_harness",
+        "executor_profile",
+        "message_sha256",
+        "status",
+    ):
+        _require(isinstance(delegation.get(key), str), errors, f"coding_delegation {key} must be a string")
+    _require(delegation.get("action") in CODING_DELEGATION_ACTIONS, errors, f"coding_delegation action is invalid: {delegation.get('action')!r}")
+    _require(delegation.get("intent") in CODING_DELEGATION_INTENTS, errors, f"coding_delegation intent is invalid: {delegation.get('intent')!r}")
+    _require(delegation.get("status") in CODING_DELEGATION_STATUSES, errors, f"coding_delegation status is invalid: {delegation.get('status')!r}")
+    _require(isinstance(delegation.get("review_required"), bool), errors, "coding_delegation review_required must be boolean")
+    _require(
+        delegation.get("review_workflow") is None or isinstance(delegation.get("review_workflow"), str),
+        errors,
+        "coding_delegation review_workflow must be a string or null",
+    )
+    _require(isinstance(delegation.get("message_length"), int), errors, "coding_delegation message_length must be an integer")
+    if isinstance(delegation.get("message_length"), int):
+        _require(delegation["message_length"] >= 0, errors, "coding_delegation message_length must be non-negative")
+    _require(_is_sha256(str(delegation.get("message_sha256", ""))), errors, "coding_delegation message_sha256 must be a sha256 hex digest")
+    _require(isinstance(delegation.get("source_metadata"), dict), errors, "coding_delegation source_metadata must be an object")
+    metadata = delegation.get("source_metadata", {})
+    if isinstance(metadata, dict):
+        extra_metadata_keys = sorted(set(metadata) - set(CODING_SOURCE_METADATA_KEYS))
+        _require(not extra_metadata_keys, errors, f"coding_delegation source_metadata has unsupported keys: {extra_metadata_keys}")
+        for key, value in metadata.items():
+            _require(isinstance(value, str), errors, f"coding_delegation source_metadata.{key} must be a string")
+    _require(isinstance(delegation.get("recommendation_evidence"), list), errors, "coding_delegation recommendation_evidence must be a list")
+    for index, recommendation in enumerate(delegation.get("recommendation_evidence", [])):
+        _require(isinstance(recommendation, dict), errors, f"coding_delegation recommendation_evidence[{index}] must be an object")
+        if not isinstance(recommendation, dict):
+            continue
+        extra_keys = sorted(set(recommendation) - set(CODING_RECOMMENDATION_KEYS))
+        _require(not extra_keys, errors, f"coding_delegation recommendation_evidence[{index}] has unsupported keys: {extra_keys}")
+        _require(isinstance(recommendation.get("skill"), str), errors, f"coding_delegation recommendation_evidence[{index}].skill must be a string")
+        _require(isinstance(recommendation.get("score"), int), errors, f"coding_delegation recommendation_evidence[{index}].score must be an integer")
+        _require(isinstance(recommendation.get("confidence"), str), errors, f"coding_delegation recommendation_evidence[{index}].confidence must be a string")
+        _require(isinstance(recommendation.get("matched"), list), errors, f"coding_delegation recommendation_evidence[{index}].matched must be a list")
+    for key in ("acceptance_criteria", "verification"):
+        _require(isinstance(delegation.get(key), list), errors, f"coding_delegation {key} must be a list")
+        if not isinstance(delegation.get(key), list):
+            continue
+        for index, value in enumerate(delegation[key]):
+            _require(isinstance(value, str), errors, f"coding_delegation {key}[{index}] must be a string")
+    return errors
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value.lower())
+
+
 OPTIONAL_RECORD_VALIDATORS = (
     ("routing.json", validate_routing_record),
+    ("coding_delegation.json", validate_coding_delegation_record),
     ("delegation.json", validate_delegation_record),
     ("wrapper.json", validate_wrapper_record),
 )

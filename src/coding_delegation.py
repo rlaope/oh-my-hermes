@@ -1,0 +1,312 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+import hashlib
+from typing import Any
+
+from .chat_router import CHAT_SOURCES, extract_message_text
+from .recommend import recommend_skills
+from .skills.catalog import (
+    CODING_INTENT_PRIORITY,
+    CODING_REVIEW_TERMS,
+    coding_intent_for_skill,
+    coding_skills_for_intent,
+    coding_terms_for_intent,
+    primary_harness_for_skill,
+)
+
+
+SCHEMA_VERSION = "coding_delegation/v1"
+DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
+_SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "source_event_id": (("id",), ("event_id",), ("message", "id"), ("event", "id"), ("event", "client_msg_id")),
+    "channel_ref": (("channel",), ("channel_id",), ("message", "channel"), ("event", "channel"), ("channel", "id")),
+    "user_ref": (("user",), ("user_id",), ("author", "id"), ("message", "author", "id"), ("event", "user")),
+    "timestamp": (("timestamp",), ("created_at",), ("ts",), ("message", "timestamp"), ("event", "ts"), ("event", "event_ts")),
+}
+
+
+@dataclass(frozen=True)
+class CodingDelegation:
+    action: str
+    intent: str
+    recommended_workflow: str
+    recommended_harness: str
+    executor_profile: str
+    acceptance_criteria: tuple[str, ...]
+    verification: tuple[str, ...]
+    review_required: bool
+    review_workflow: str | None
+    delegation_prompt_template: str
+
+    def to_dict(self) -> dict[str, object]:
+        data = asdict(self)
+        data["acceptance_criteria"] = list(self.acceptance_criteria)
+        data["verification"] = list(self.verification)
+        return data
+
+
+def build_coding_delegation_payload(
+    message: str,
+    *,
+    source: str = "generic",
+    limit: int = 3,
+    include_message: bool = False,
+    source_metadata: dict[str, str] | None = None,
+) -> dict[str, object]:
+    message = message.strip()
+    if not message:
+        raise ValueError("coding delegate requires a task description")
+    if source not in CHAT_SOURCES:
+        raise ValueError(f"unsupported coding delegate source: {source}")
+    if limit < 1:
+        raise ValueError("coding delegate --limit must be at least 1")
+
+    full_recommendations = recommend_skills(message, limit=max(limit, 5))
+    recommendations = _compact_recommendations(full_recommendations[:limit])
+    top = full_recommendations[0]
+    workflow = str(top["skill"])
+    score = int(top["score"])
+    intent = _intent_for(message, workflow, score)
+    action = _action_for(intent, score)
+    if action == "fallback":
+        workflow = "oh-my-hermes"
+    elif action == "clarify":
+        workflow = "oh-my-hermes"
+    harness = primary_harness_for_skill(workflow)
+    review_required = _review_required(message, intent, workflow)
+    delegation = CodingDelegation(
+        action=action,
+        intent=intent,
+        recommended_workflow=workflow,
+        recommended_harness=harness,
+        executor_profile=_executor_profile(intent, action),
+        acceptance_criteria=_acceptance_criteria(intent, action),
+        verification=_verification(intent, action),
+        review_required=review_required,
+        review_workflow="code-review" if review_required else None,
+        delegation_prompt_template=_delegation_prompt_template(action, intent, workflow, harness),
+    )
+    payload: dict[str, object] = {
+        "schema_version": SCHEMA_VERSION,
+        "source": source,
+        "delegation": delegation.to_dict(),
+        "recommendations": recommendations,
+    }
+    metadata = {key: value for key, value in (source_metadata or {}).items() if value}
+    if metadata:
+        payload["source_metadata"] = metadata
+    if include_message:
+        payload["message"] = message
+        payload["delegation_prompt"] = str(delegation.delegation_prompt_template).replace("{message}", message)
+    return payload
+
+
+def build_coding_delegation_event_payload(
+    event: dict[str, Any] | str,
+    *,
+    source: str = "generic",
+    limit: int = 3,
+    include_message: bool = False,
+) -> dict[str, object]:
+    message = extract_message_text(event)
+    return build_coding_delegation_payload(
+        message,
+        source=source,
+        limit=limit,
+        include_message=include_message,
+        source_metadata=extract_source_metadata(event),
+    )
+
+
+def coding_delegation_record_payload(
+    payload: dict[str, object],
+    message: str,
+    *,
+    source_metadata: dict[str, str] | None = None,
+) -> dict[str, object]:
+    delegation = payload.get("delegation")
+    if not isinstance(delegation, dict):
+        raise ValueError("coding delegation payload is missing delegation")
+    metadata = dict(source_metadata or {})
+    payload_metadata = payload.get("source_metadata")
+    if isinstance(payload_metadata, dict):
+        metadata.update({str(key): str(value) for key, value in payload_metadata.items() if str(value)})
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "coding_delegation",
+        "source": payload.get("source", "generic"),
+        "action": delegation.get("action", "fallback"),
+        "intent": delegation.get("intent", "unknown"),
+        "recommended_workflow": delegation.get("recommended_workflow", "oh-my-hermes"),
+        "recommended_harness": delegation.get("recommended_harness", "coding-handling"),
+        "executor_profile": delegation.get("executor_profile", "router"),
+        "review_required": bool(delegation.get("review_required", False)),
+        "review_workflow": delegation.get("review_workflow"),
+        "message_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest(),
+        "message_length": len(message),
+        "source_metadata": metadata,
+        "recommendation_evidence": payload.get("recommendations", []),
+        "acceptance_criteria": delegation.get("acceptance_criteria", []),
+        "verification": delegation.get("verification", []),
+        "status": "prepared_not_observed",
+    }
+
+
+def extract_source_metadata(event: dict[str, Any] | str) -> dict[str, str]:
+    if not isinstance(event, dict):
+        return {}
+    metadata: dict[str, str] = {}
+    for output_key, paths in _SOURCE_METADATA_PATHS.items():
+        for path in paths:
+            value = _value_at_path(event, path)
+            if isinstance(value, (str, int, float)) and str(value).strip():
+                metadata[output_key] = str(value).strip()
+                break
+    return metadata
+
+
+def _intent_for(message: str, workflow: str, score: int) -> str:
+    if score == 0:
+        return "unknown"
+    lowered = message.lower()
+    for intent in CODING_INTENT_PRIORITY:
+        if workflow in coding_skills_for_intent(intent) or _has_any(lowered, coding_terms_for_intent(intent)):
+            return intent
+    return coding_intent_for_skill(workflow)
+
+
+def _action_for(intent: str, score: int) -> str:
+    if intent == "unknown":
+        return "fallback"
+    if score < 4:
+        return "clarify"
+    return "delegate"
+
+
+def _review_required(message: str, intent: str, workflow: str) -> bool:
+    lowered = message.lower()
+    if workflow == "code-review" or intent == "review":
+        return True
+    return _has_any(lowered, CODING_REVIEW_TERMS)
+
+
+def _executor_profile(intent: str, action: str) -> str:
+    if action == "fallback":
+        return "router"
+    if action == "clarify":
+        return "planner"
+    return {
+        "planning": "planner",
+        "review": "reviewer",
+        "diagnostics": "qa-verifier",
+        "docs": "docs-writer",
+    }.get(intent, "coding-agent")
+
+
+def _acceptance_criteria(intent: str, action: str) -> tuple[str, ...]:
+    if action == "fallback":
+        return (
+            "Clarify the desired coding outcome before dispatching to an executor.",
+            "Do not claim code was implemented or reviewed.",
+        )
+    if action == "clarify":
+        return (
+            "Ask the smallest blocking clarification before executor dispatch.",
+            "Preserve the original task constraints in the eventual handoff.",
+        )
+    criteria = {
+        "planning": (
+            "Produce an execution-ready plan with goals, non-goals, risks, and acceptance criteria.",
+            "Identify the verification commands or evidence required before implementation starts.",
+        ),
+        "review": (
+            "Review the referenced code or plan with findings first and concrete evidence.",
+            "State clearly when no actionable issue is found.",
+        ),
+        "diagnostics": (
+            "Reproduce or inspect the reported failure before proposing a fix.",
+            "Record the smallest evidence that proves the diagnosis.",
+        ),
+        "docs": (
+            "Update documentation to match implemented behavior and known limitations.",
+            "Keep examples reproducible and conservative.",
+        ),
+    }.get(
+        intent,
+        (
+            "Implement only the requested coding change within the discovered scope.",
+            "Preserve existing behavior outside the requested change.",
+        ),
+    )
+    return criteria
+
+
+def _verification(intent: str, action: str) -> tuple[str, ...]:
+    if action == "fallback":
+        return ("No executor verification until the task is clarified.",)
+    if action == "clarify":
+        return ("Verify the clarified handoff includes scope, constraints, and stop condition.",)
+    checks = {
+        "planning": ("Review the plan for testable acceptance criteria.", "Run implementation checks only after execution starts."),
+        "review": ("Cite file, diff, command, or test evidence for every finding.",),
+        "diagnostics": ("Run the smallest diagnostic or health check that can prove the claim.",),
+        "docs": ("Run docs generation/check commands when docs are generated.",),
+    }.get(
+        intent,
+        ("Run targeted tests for the changed behavior.", "Run static or compile checks when available."),
+    )
+    return checks
+
+
+def _delegation_prompt_template(action: str, intent: str, workflow: str, harness: str) -> str:
+    if action == "fallback":
+        return (
+            "Use the `oh-my-hermes` router before coding delegation.\n\n"
+            "Ask one concise clarification question for this task:\n{message}"
+        )
+    if action == "clarify":
+        return (
+            "Clarify this {intent} request before executor dispatch.\n\n"
+            "Candidate workflow: `{workflow}` / `{harness}`.\n\n"
+            "Task:\n{message}"
+        ).format(intent=intent, workflow=workflow, harness=harness, message="{message}")
+    return (
+        "Delegate this {intent} request to a {workflow} executor lane.\n\n"
+        "Recommended workflow: `{workflow}`\n"
+        "Recommended harness: `{harness}`\n"
+        "Do not claim execution is observed unless wrapper/runtime evidence proves it.\n\n"
+        "Task:\n{message}"
+    ).format(intent=intent, workflow=workflow, harness=harness, message="{message}")
+
+
+def _compact_recommendations(recommendations: object) -> list[dict[str, object]]:
+    if not isinstance(recommendations, list):
+        return []
+    compact: list[dict[str, object]] = []
+    for item in recommendations:
+        if not isinstance(item, dict):
+            continue
+        matched = item.get("matched", [])
+        compact.append(
+            {
+                "skill": str(item.get("skill", "")),
+                "score": int(item.get("score", 0)),
+                "confidence": str(item.get("confidence", "low")),
+                "matched": [str(value) for value in matched] if isinstance(matched, list) else [],
+            }
+        )
+    return compact
+
+
+def _value_at_path(event: dict[str, Any], path: tuple[str, ...]) -> Any:
+    current: Any = event
+    for part in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+    return current
+
+
+def _has_any(value: str, terms: tuple[str, ...]) -> bool:
+    return any(term in value for term in terms)

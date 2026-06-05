@@ -13,18 +13,22 @@ from _local_package import load_local_package
 load_local_package()
 from omh.paths import resolve_paths
 from omh.chat_router import route_chat_message, routing_record_payload
+from omh.coding_delegation import build_coding_delegation_payload
 from omh.runtime_artifacts import (
+    create_prepared_coding_delegation_run,
     create_run,
     export_runtime,
     list_runs,
     new_run_id,
     show_run,
     update_state,
+    validate_coding_delegation_record,
     validate_delegation_record,
     validate_routing_record,
     validate_runtime,
     validate_run_record,
     validate_wrapper_record,
+    write_coding_delegation,
     write_delegation,
     write_routing_decision,
     write_wrapper_contract,
@@ -49,6 +53,21 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertTrue((run_dir / "evidence").is_dir())
             self.assertEqual(json.loads(paths.runtime_state_path.read_text(encoding="utf-8"))["last_run_id"], run["run_id"])
             self.assertEqual(list_runs(paths)[0]["run_id"], run["run_id"])
+            self.assertEqual(validate_run_record(run), [])
+
+    def test_create_prepared_coding_delegation_run_has_explicit_boundary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling", "trigger": "coding:discord:delegate"},
+            )
+
+            self.assertEqual(run["status"], "prepared")
+            self.assertEqual(run["artifact_kind"], "prepared_coding_delegation")
+            self.assertEqual(run["phase"], "prepared")
+            self.assertEqual(run["observation_status"], "prepared_not_observed")
             self.assertEqual(validate_run_record(run), [])
 
     def test_create_run_does_not_collide_for_rapid_same_harness_records(self) -> None:
@@ -159,6 +178,85 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertNotIn("suggested_prompt", serialized)
             self.assertEqual(set(routing["recommendations"][0]), {"skill", "score", "confidence", "matched"})
 
+    def test_write_coding_delegation_sanitizes_full_payload(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "ai-slop-cleaner", "harness": "coding-handling", "status": "started"})
+            secret_message = "risky refactor with private-token-123"
+            payload = build_coding_delegation_payload(
+                secret_message,
+                source="discord",
+                include_message=True,
+                source_metadata={"source_event_id": "m1", "unsupported": "drop-me"},
+            )
+            payload["suggested_prompt"] = "do not store"
+
+            coding_delegation = write_coding_delegation(paths.runtime_runs_dir / run["run_id"], payload)
+
+            serialized = json.dumps(coding_delegation)
+            self.assertNotIn(secret_message, serialized)
+            self.assertNotIn("delegation_prompt", serialized)
+            self.assertNotIn("suggested_prompt", serialized)
+            self.assertNotIn("drop-me", serialized)
+            self.assertEqual(coding_delegation["message_length"], len(secret_message))
+            self.assertEqual(coding_delegation["source_metadata"], {"source_event_id": "m1"})
+            self.assertEqual(set(coding_delegation["recommendation_evidence"][0]), {"skill", "score", "confidence", "matched"})
+            self.assertTrue(coding_delegation["acceptance_criteria"])
+            self.assertTrue(coding_delegation["verification"])
+            self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
+
+    def test_validate_coding_delegation_rejects_top_level_raw_prompt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            record = write_coding_delegation(
+                paths.runtime_runs_dir / run["run_id"],
+                build_coding_delegation_payload("risky refactor", source="discord", include_message=True),
+            )
+            record["message"] = "risky refactor"
+
+            errors = validate_coding_delegation_record(record)
+
+            self.assertTrue(any("unsupported keys" in error and "message" in error for error in errors))
+
+    def test_validate_runtime_requires_coding_delegation_for_prepared_runs(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertFalse(result["ok"])
+            self.assertTrue(any("missing coding_delegation.json" in error for error in result["runs"][0]["errors"]))
+
+    def test_validate_runtime_rejects_raw_top_level_coding_delegation_key(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            write_coding_delegation(
+                run_dir,
+                build_coding_delegation_payload("risky refactor", source="discord", include_message=True),
+            )
+            artifact_path = run_dir / "coding_delegation.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact["message"] = "risky refactor"
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertFalse(result["ok"])
+            self.assertTrue(any("unsupported keys" in error and "message" in error for error in result["runs"][0]["errors"]))
+
     def test_validate_runtime_rejects_missing_and_invalid_artifacts(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -199,10 +297,32 @@ class RuntimeArtifactTests(unittest.TestCase):
             }
         )
         routing_errors = validate_routing_record({"schema_version": 1, "action": "missing", "recommendations": []})
+        coding_errors = validate_coding_delegation_record(
+            {
+                "schema_version": "coding_delegation/v1",
+                "record_type": "coding_delegation",
+                "updated_at": "now",
+                "source": "discord",
+                "action": "missing",
+                "intent": "cleanup",
+                "recommended_workflow": "ai-slop-cleaner",
+                "recommended_harness": "coding-handling",
+                "executor_profile": "coding-agent",
+                "review_required": True,
+                "review_workflow": "code-review",
+                "message_sha256": "",
+                "message_length": 13,
+                "source_metadata": {"raw_message": "nope"},
+                "recommendation_evidence": [],
+                "status": "prepared_not_observed",
+            }
+        )
 
         self.assertIn("unobserved delegation requires result not_available or not_observed", delegation_errors)
         self.assertTrue(any("completion_status is invalid" in error for error in wrapper_errors))
         self.assertTrue(any("routing action is invalid" in error for error in routing_errors))
+        self.assertTrue(any("coding_delegation action is invalid" in error for error in coding_errors))
+        self.assertTrue(any("source_metadata has unsupported keys" in error for error in coding_errors))
 
     def test_export_runtime_redacts_sensitive_keys(self) -> None:
         with TemporaryDirectory() as tmp:

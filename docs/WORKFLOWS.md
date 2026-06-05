@@ -435,9 +435,9 @@ Route implementation requests through scoped context, edit discipline, tests, re
   - inspect generated skill output when routing changed
 - Artifact events:
   - `run_started`
-  - `files_changed`
+  - `coding_delegation_recorded`
   - `verification_recorded`
-- Delegation expectation: Record delegation only when Hermes exposes a separate coding, review, or verification lane.
+- Delegation expectation: Record prepared coding delegation with omh coding delegate; record observed execution only when Hermes exposes a separate coding, review, or verification lane.
 - Privacy default: `metadata_only`
 - Fallback: If the request is underspecified, ask one concise clarification question before editing.
 

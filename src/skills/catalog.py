@@ -35,6 +35,28 @@ class HarnessDefinition:
     privacy_default: str
 
 
+CODING_INTENTS = ("coding", "cleanup", "review", "planning", "diagnostics", "docs", "unknown")
+CODING_INTENT_PRIORITY = ("cleanup", "review", "planning", "diagnostics", "docs", "coding")
+CODING_INTENT_TERMS = {
+    "cleanup": ("cleanup", "clean", "refactor", "deslop"),
+    "review": ("review", "audit", "critic", "critique"),
+    "planning": ("plan", "planning", "strategy", "architecture", "design", "proposal"),
+    "diagnostics": ("diagnose", "doctor", "debug", "health", "broken", "failing"),
+    "docs": ("docs", "documentation", "readme", "guide", "wiki"),
+    "coding": ("code", "implement", "build", "fix", "change", "modify", "add", "write"),
+}
+CODING_REVIEW_TERMS = (*CODING_INTENT_TERMS["review"], "risky", "risk", "migration", "security", "public api")
+_CODING_INTENT_BY_SKILL = {
+    "ai-slop-cleaner": "cleanup",
+    "code-review": "review",
+    "plan": "planning",
+    "ralplan": "planning",
+    "best-practice-research": "planning",
+    "doctor": "diagnostics",
+    "wiki": "docs",
+}
+
+
 _DEFINITIONS = [
     SkillDefinition(
         "oh-my-hermes",
@@ -282,8 +304,8 @@ _HARNESSES = [
         ("requested behavior is implemented", "tests or checks pass", "known gaps are reported"),
         ("run the smallest relevant tests", "inspect generated skill output when routing changed"),
         "If the request is underspecified, ask one concise clarification question before editing.",
-        ("run_started", "files_changed", "verification_recorded"),
-        "Record delegation only when Hermes exposes a separate coding, review, or verification lane.",
+        ("run_started", "coding_delegation_recorded", "verification_recorded"),
+        "Record prepared coding delegation with omh coding delegate; record observed execution only when Hermes exposes a separate coding, review, or verification lane.",
         "metadata_only",
     ),
     HarnessDefinition(
@@ -411,6 +433,18 @@ def builtin_harnesses() -> list[HarnessDefinition]:
 
 def primary_harness_for_skill(name: str) -> str:
     return _PRIMARY_HARNESSES.get(name, "coding-handling")
+
+
+def coding_intent_for_skill(name: str) -> str:
+    return _CODING_INTENT_BY_SKILL.get(name, "coding")
+
+
+def coding_skills_for_intent(intent: str) -> tuple[str, ...]:
+    return tuple(name for name, mapped_intent in _CODING_INTENT_BY_SKILL.items() if mapped_intent == intent)
+
+
+def coding_terms_for_intent(intent: str) -> tuple[str, ...]:
+    return CODING_INTENT_TERMS.get(intent, ())
 
 
 CORE_SKILLS = [definition.name for definition in _DEFINITIONS]

@@ -124,6 +124,127 @@ class CliTests(unittest.TestCase):
         self.assertEqual(shown["routing"]["action"], "dispatch")
         self.assertNotIn("risky refactor", json.dumps(shown["routing"]))
 
+    def test_coding_delegate_returns_public_contract_without_raw_message(self) -> None:
+        status, stdout, stderr = run_cli(["coding", "delegate", "--source", "discord", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        delegation = payload["delegation"]
+        self.assertEqual(payload["schema_version"], "coding_delegation/v1")
+        self.assertEqual(payload["source"], "discord")
+        self.assertEqual(delegation["action"], "delegate")
+        self.assertEqual(delegation["intent"], "cleanup")
+        self.assertEqual(delegation["recommended_workflow"], "ai-slop-cleaner")
+        self.assertEqual(delegation["recommended_harness"], "coding-handling")
+        self.assertEqual(delegation["executor_profile"], "coding-agent")
+        self.assertTrue(delegation["review_required"])
+        self.assertIn("{message}", delegation["delegation_prompt_template"])
+        self.assertNotIn("suggested_prompt", json.dumps(payload))
+        self.assertNotIn("risky refactor", json.dumps(payload))
+
+    def test_coding_delegate_include_message_expands_prompt_for_non_logging_wrappers(self) -> None:
+        status, stdout, stderr = run_cli(["coding", "delegate", "--include-message", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["message"], "risky refactor")
+        self.assertIn("Task:\nrisky refactor", payload["delegation_prompt"])
+
+    def test_coding_delegate_reads_event_json_and_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            event = Path(tmp) / "event.json"
+            event.write_text(
+                '{"event": {"id": "m1", "text": "implementation plan with review", "channel": "c1", "user": "u1", "ts": "123.4"}}',
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(["coding", "delegate", "--source", "slack", "--event-json", str(event), "--limit", "2"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        delegation = payload["delegation"]
+        self.assertEqual(payload["source"], "slack")
+        self.assertEqual(delegation["intent"], "review")
+        self.assertTrue(delegation["review_required"])
+        self.assertEqual(len(payload["recommendations"]), 2)
+        self.assertEqual(payload["source_metadata"]["source_event_id"], "m1")
+        self.assertEqual(payload["source_metadata"]["channel_ref"], "c1")
+        self.assertEqual(payload["source_metadata"]["user_ref"], "u1")
+
+    def test_coding_delegate_weak_query_falls_back(self) -> None:
+        status, stdout, stderr = run_cli(["coding", "delegate", "zzzzunknownphrase"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        delegation = json.loads(stdout)["delegation"]
+        self.assertEqual(delegation["action"], "fallback")
+        self.assertEqual(delegation["intent"], "unknown")
+        self.assertEqual(delegation["recommended_workflow"], "oh-my-hermes")
+
+    def test_coding_delegate_records_metadata_only_artifact(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--source",
+                    "discord",
+                    "--source-event-id",
+                    "m1",
+                    "risky",
+                    "refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            run_id = payload["runtime"]["run"]["run_id"]
+            run = payload["runtime"]["run"]
+            record = payload["runtime"]["coding_delegation"]
+            self.assertEqual(run["status"], "prepared")
+            self.assertEqual(run["artifact_kind"], "prepared_coding_delegation")
+            self.assertEqual(run["phase"], "prepared")
+            self.assertEqual(run["observation_status"], "prepared_not_observed")
+            self.assertEqual(record["schema_version"], "coding_delegation/v1")
+            self.assertEqual(record["record_type"], "coding_delegation")
+            self.assertEqual(record["source"], "discord")
+            self.assertEqual(record["action"], "delegate")
+            self.assertEqual(record["intent"], "cleanup")
+            self.assertEqual(record["status"], "prepared_not_observed")
+            self.assertEqual(record["message_length"], len("risky refactor"))
+            self.assertEqual(record["source_metadata"]["source_event_id"], "m1")
+            self.assertTrue(record["acceptance_criteria"])
+            self.assertTrue(record["verification"])
+            self.assertNotIn("risky refactor", json.dumps(record))
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "show", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["run"]["artifact_kind"], "prepared_coding_delegation")
+            self.assertEqual(shown["run"]["phase"], "prepared")
+            self.assertEqual(shown["run"]["observation_status"], "prepared_not_observed")
+            self.assertEqual(shown["coding_delegation"]["recommended_workflow"], "ai-slop-cleaner")
+            self.assertNotIn("risky refactor", json.dumps(shown["coding_delegation"]))
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "validate", "--run", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["ok"])
+
     def test_install_apply_doctor_and_list(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

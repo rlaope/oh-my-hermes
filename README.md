@@ -100,6 +100,7 @@ omh update --from-skills-dir ./skills
 omh apply --dry-run
 omh recommend "risky refactor"
 omh chat route --source discord --record "risky refactor"
+omh coding delegate --source discord --record "risky refactor"
 omh runtime record --skill oh-my-hermes --harness coding-handling --status started
 omh runtime validate
 omh runtime export
@@ -134,7 +135,18 @@ or modify Hermes internals.
 - workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
 - append-only run events in `events.jsonl`
 - delegation observation in `delegation.json`
+- prepared coding handoffs in `coding_delegation.json`
 - wrapper observation in `wrapper.json`
+
+Coding delegation artifacts separate a prepared executor handoff from observed
+execution. `omh coding delegate --record` stores the recommended workflow,
+harness, acceptance criteria, verification expectations, source references,
+recommendation evidence, `message_sha256`, `message_length`, and status
+`prepared_not_observed`; it does not store the raw prompt body by default. Its
+companion `run.json` is bookkeeping for that prepared handoff and is marked
+`status: prepared`,
+`artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
+`observation_status: prepared_not_observed`.
 
 Delegation artifacts separate `requested` from `observed`. If Hermes or a bot
 wrapper cannot prove that a specialist lane actually ran, the result should stay
@@ -177,6 +189,15 @@ logs can stay metadata-only; use `--include-message` only when the wrapper needs
 `route.routing_prompt` pre-expanded. With `--record`, it writes metadata-only
 `routing.json` evidence under `.omh/runtime/` without storing the raw prompt.
 
+For implementation-shaped chat messages, wrappers can run `omh coding delegate`
+to prepare a deterministic executor handoff from the same local catalog
+metadata. It returns a `coding_delegation/v1` payload with action, intent,
+recommended workflow, harness, acceptance criteria, verification expectations,
+and a `delegation_prompt_template`. With `--record`, it writes
+`coding_delegation.json` evidence and a `prepared_coding_delegation` run
+envelope; validation treats those as a required pair. The wrapper still needs
+separate Hermes or bot evidence before claiming execution was observed.
+
 ## Commands
 
 | Command | Purpose |
@@ -189,6 +210,7 @@ logs can stay metadata-only; use `--include-message` only when the wrapper needs
 | `omh doctor` | Verify managed files and Hermes config registration. |
 | `omh recommend <task>` | Deterministically suggest workflow skills from the local OMHM catalog. |
 | `omh chat route <message>` | Route a plain chat message before a Discord, Slack, or Hermes wrapper dispatches it. |
+| `omh coding delegate <task>` | Prepare a deterministic coding handoff payload and optional metadata-only runtime record. |
 | `omh runtime status` | Inspect local runtime artifact state. |
 | `omh runtime record` | Create a metadata-only workflow run artifact. |
 | `omh runtime delegate` | Record observed or unavailable delegation for a run. |
@@ -207,6 +229,7 @@ logs can stay metadata-only; use `--include-message` only when the wrapper needs
 src/
   chat_router.py          deterministic chat pre-dispatch routing
   cli.py                 command-line entrypoint
+  coding_delegation.py   deterministic coding handoff preparation
   config_adapter.py      Hermes config registration adapter
   converter.py           local skill import support
   doctor.py              installation health checks

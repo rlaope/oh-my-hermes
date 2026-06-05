@@ -39,6 +39,11 @@ src/
 wrappers. It consumes plain messages or platform-shaped event payloads and
 returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
 
+`coding_delegation.py` owns deterministic coding handoff preparation. It maps
+implementation-shaped task text to an action, intent, workflow, harness,
+executor profile, acceptance criteria, and verification expectations without
+LLM, API, or network calls.
+
 `installer.py` owns managed skill writes, manifest updates, update behavior, and
 uninstall behavior.
 
@@ -56,7 +61,7 @@ the package grows internally.
 
 ## Routing
 
-Routing has two local surfaces:
+Routing and delegation have three local surfaces:
 
 1. Prompt-level guidance. The router skill gives Hermes a structured map of
    workflow names and strong trigger phrases, but it does not override Hermes
@@ -64,12 +69,24 @@ Routing has two local surfaces:
 2. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
    hosted Hermes wrappers run a deterministic pre-dispatch decision before they
    forward a plain user message to Hermes.
+3. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
+   implementation-shaped messages into a deterministic `coding_delegation/v1`
+   handoff payload for an executor lane.
 
-Both surfaces read from the same catalog metadata. The chat router returns a
+All three surfaces read from the same catalog metadata. The chat router returns a
 `routing_instruction` and `routing_prompt_template` for the wrapper to forward,
 with raw-message prompt expansion available only through `--include-message`.
-It can record metadata-only `routing.json` evidence. It does not include a
-Discord or Slack SDK, open network connections, or patch Hermes internals.
+Coding delegation returns a `delegation_prompt_template`, recommended workflow,
+harness, acceptance criteria, verification expectations, and optional
+metadata-only `coding_delegation.json` evidence. That record stores a compact
+snapshot of the generated acceptance criteria and verification expectations, but
+not the raw prompt body. With `--record`, the companion `run.json` is marked as
+`artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
+`observation_status: prepared_not_observed`; validation treats the run envelope
+and `coding_delegation.json` as a required pair. The run envelope is
+implementation bookkeeping, not proof that Hermes executed the handoff. Neither
+surface includes a Discord or Slack SDK, opens network connections, or patches
+Hermes internals.
 
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
@@ -132,14 +149,16 @@ Runtime artifacts are local JSON/JSONL files under `.omh/runtime/`.
         run.json
         events.jsonl
         routing.json
+        coding_delegation.json
         delegation.json
         wrapper.json
         evidence/
 ```
 
 `state.json` records install, apply, and doctor summaries. A run directory
-records a workflow envelope, append-only events, routing decisions, delegation
-observation, and wrapper observation plus optional evidence files.
+records a workflow envelope, append-only events, routing decisions, prepared
+coding delegation, delegation observation, and wrapper observation plus optional
+evidence files.
 
 The runtime artifact layer is intentionally small:
 
@@ -155,6 +174,13 @@ The runtime artifact layer is intentionally small:
 Bot wrappers can call `omh chat route --record` before invoking Hermes. The
 record stores the selected skill, confidence, score, message length, and message
 hash without storing the raw prompt body.
+
+Bot wrappers can call `omh coding delegate --record` for implementation-shaped
+messages. The record stores source metadata, action, intent, recommended
+workflow and harness, acceptance criteria, verification expectations,
+recommendation evidence, `message_sha256`, `message_length`, and status
+`prepared_not_observed`. That status means a handoff was prepared; the companion run envelope is also marked
+`prepared_coding_delegation`, not proof that Hermes executed the task.
 
 Bot wrappers can still call `omh runtime delegate` after the response if
 delegation metadata is available. If not, they should record `not_observed`

@@ -21,11 +21,13 @@ from .runtime_records import (
     UNOBSERVED_RESULTS,
     WRAPPER_COMPLETION_STATUSES,
     build_delegation_record,
+    build_coding_delegation_record,
     build_event_record,
     build_routing_record,
     build_run_record,
     build_wrapper_record,
     validate_delegation_record,
+    validate_coding_delegation_record,
     validate_delegation_result,
     validate_event_record,
     validate_routing_record,
@@ -100,6 +102,17 @@ def create_run(paths: OmhPaths, metadata: dict[str, Any]) -> dict[str, Any]:
     return run
 
 
+def create_prepared_coding_delegation_run(paths: OmhPaths, metadata: dict[str, Any]) -> dict[str, Any]:
+    prepared_metadata = {
+        **metadata,
+        "status": "prepared",
+        "artifact_kind": "prepared_coding_delegation",
+        "phase": "prepared",
+        "observation_status": "prepared_not_observed",
+    }
+    return create_run(paths, prepared_metadata)
+
+
 def append_event(run_dir: Path, event: dict[str, Any]) -> dict[str, Any]:
     item = build_event_record(event)
     ensure_dir(run_dir, private=True)
@@ -165,6 +178,27 @@ def write_routing_decision(run_dir: Path, routing: dict[str, Any]) -> dict[str, 
     return record
 
 
+def write_coding_delegation(run_dir: Path, delegation: dict[str, Any]) -> dict[str, Any]:
+    record = build_coding_delegation_record(delegation)
+    atomic_write_json(run_dir / "coding_delegation.json", record, private=True)
+    append_event(
+        run_dir,
+        {
+            "event": "coding_delegation_recorded",
+            "level": "info",
+            "message": f"coding delegation {record['action']} {record['recommended_workflow']}",
+            "data": {
+                "source": record["source"],
+                "action": record["action"],
+                "intent": record["intent"],
+                "recommended_workflow": record["recommended_workflow"],
+                "status": record["status"],
+            },
+        },
+    )
+    return record
+
+
 def list_runs(paths: OmhPaths) -> list[dict[str, Any]]:
     if not paths.runtime_runs_dir.exists():
         return []
@@ -193,6 +227,7 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
         "run": run,
         "events": read_events(run_dir),
         "routing": read_json_object(run_dir / "routing.json"),
+        "coding_delegation": read_json_object(run_dir / "coding_delegation.json"),
         "delegation": read_json_object(run_dir / "delegation.json"),
         "wrapper": read_json_object(run_dir / "wrapper.json"),
         "evidence": sorted(path.name for path in evidence_dir.iterdir()) if evidence_dir.exists() else [],
@@ -211,6 +246,9 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
         errors.append(f"{run_path}: missing run.json")
     else:
         errors.extend(f"{run_path}: {error}" for error in validate_run_record(run))
+        coding_delegation_path = run_dir / "coding_delegation.json"
+        if run.get("artifact_kind") == "prepared_coding_delegation" and not coding_delegation_path.exists():
+            errors.append(f"{coding_delegation_path}: missing coding_delegation.json for prepared_coding_delegation run")
     events_path = run_dir / "events.jsonl"
     if events_path.exists():
         try:

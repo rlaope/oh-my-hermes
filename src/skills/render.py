@@ -110,6 +110,18 @@ Use `route.routing_prompt_template` with `{{message}}` replaced by the received 
 
 This is a deterministic wrapper-side decision layer. By default, stdout and runtime artifacts avoid duplicating the raw prompt body. It does not patch Hermes core or require platform network access from `omh`.
 
+## Wrapper-Assisted Coding Delegation
+
+When a chat message is implementation-shaped and the wrapper wants a concrete executor handoff, run `omh coding delegate` after or instead of generic chat routing:
+
+```sh
+omh coding delegate --source discord --record "risky refactor"
+```
+
+The command returns a `coding_delegation/v1` payload with a recommended workflow, harness, executor profile, acceptance criteria, verification expectations, and a `delegation_prompt_template` that the wrapper can forward with the user message substituted. It is deterministic and uses only local catalog metadata.
+
+With `--record`, `omh` writes `coding_delegation.json` under `.omh/runtime/runs/<run-id>/`. The companion `run.json` is marked with `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. Validation treats the run envelope and `coding_delegation.json` as a required pair. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
+
 ## Automatic Routing Registry
 
 When Hermes exposes installed skill descriptions to the model, use this registry as the routing map:
@@ -148,16 +160,16 @@ Recovery:
 
 ## Runtime Evidence
 
-When local shell access or a bot wrapper is available, record observed workflow evidence under `.omh/runtime/` through `omh runtime`.
+When local shell access or a bot wrapper is available, record prepared handoffs and observed workflow evidence under `.omh/runtime/`.
 
 Examples:
 
 ```sh
-omh runtime record --skill oh-my-hermes --harness coding-handling --status started
+omh coding delegate --source discord --record "risky refactor"
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
-Record only what is observed. If Hermes does not expose delegation metadata, use `not_observed` or `not_available` instead of implying a specialist lane ran.
+Record only what is observed. A `coding_delegation.json` record and its `prepared_coding_delegation` run envelope prove a prepared handoff, not execution. If Hermes does not expose delegation metadata, use `not_observed` or `not_available` instead of implying a specialist lane ran.
 """
     return SkillTemplate("oh-my-hermes", _frontmatter("oh-my-hermes", DESCRIPTIONS["oh-my-hermes"]) + "\n" + body)
 

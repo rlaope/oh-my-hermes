@@ -17,7 +17,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
         self.assertIn("omh chat route", router.content)
+        self.assertIn("omh coding delegate", router.content)
         self.assertIn("deterministic wrapper-side decision layer", router.content)
+        self.assertIn("prepared_not_observed", router.content)
         self.assertIn("skills_list", router.content)
         self.assertIn("skill_view", router.content)
         self.assertIn("name collides", router.content)
@@ -104,6 +106,7 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(f"### {harness.name}", reference)
             for event in harness.artifact_events:
                 self.assertIn(f"`{event}`", reference)
+        self.assertIn("coding_delegation_recorded", reference)
 
     def test_generated_public_content_avoids_external_runtime_branding(self) -> None:
         forbidden = ("om" + "x", "oh-my-" + "co" + "dex", "co" + "dex")

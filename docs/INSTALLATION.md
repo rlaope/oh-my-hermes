@@ -58,17 +58,21 @@ The flow is:
 1. The Discord bot receives a user message.
 2. The bot can run `omh chat route --source discord --record "<message>"` to
    choose `dispatch`, `clarify`, or `fallback` before forwarding the request.
-3. The bot forwards `route.routing_prompt_template` with `{message}` replaced by
+3. For implementation-shaped messages, the bot can run
+   `omh coding delegate --source discord --record "<message>"` to prepare a
+   deterministic executor handoff with metadata-only evidence.
+4. The bot forwards `route.routing_prompt_template` or
+   `delegation.delegation_prompt_template` with `{message}` replaced by
    the received message, or runs with `--include-message` and forwards
-   `route.routing_prompt` when stdout is not logged.
-4. Hermes starts with its normal config and reads `skills.external_dirs`.
-5. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
-6. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
-7. The router skill gives Hermes prompt-level routing guidance for workflow
+   `route.routing_prompt` / `delegation_prompt` when stdout is not logged.
+5. Hermes starts with its normal config and reads `skills.external_dirs`.
+6. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
+7. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
+8. The router skill gives Hermes prompt-level routing guidance for workflow
    names, trigger phrases, fallback rules, and recovery behavior.
-8. Hermes selects the relevant installed skill and continues the response inside
+9. Hermes selects the relevant installed skill and continues the response inside
    the Discord bot flow.
-9. The bot or operator can record local evidence with `omh runtime record` and
+10. The bot or operator can record local evidence with `omh runtime record` and
    `omh runtime delegate`.
 
 `omh` does not replace the Discord bot, modify Discord commands, or patch Hermes
@@ -89,11 +93,11 @@ Optional artifact-backed flow:
 
 ```sh
 message='risky refactor'
-route_json="$(omh chat route --source discord --record --include-message "$message")"
-run_id="$(printf '%s' "$route_json" | python -c 'import json,sys; print(json.load(sys.stdin)["runtime"]["run"]["run_id"])')"
-route_prompt="$(printf '%s' "$route_json" | python -c 'import json,sys; print(json.load(sys.stdin)["route"]["routing_prompt"])')"
+delegate_json="$(omh coding delegate --source discord --record --include-message "$message")"
+run_id="$(printf '%s' "$delegate_json" | python -c 'import json,sys; print(json.load(sys.stdin)["runtime"]["run"]["run_id"])')"
+delegate_prompt="$(printf '%s' "$delegate_json" | python -c 'import json,sys; print(json.load(sys.stdin)["delegation_prompt"])')"
 
-# Forward "$route_prompt" to Hermes.
+# Forward "$delegate_prompt" to Hermes.
 # After Hermes responds, record what the bot could actually observe.
 omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
 omh runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed --gap "specialist lane metadata not exposed"
@@ -121,6 +125,14 @@ Before calling the bot integration ready, verify these points:
 - The bot was restarted after installation or update.
 - `omh chat route --source discord --record "<message>"` returns a route action
   and writes `routing.json` in the same runtime context as the bot.
+- `omh coding delegate --source discord --record "<message>"` returns a
+  `coding_delegation/v1` payload and writes `coding_delegation.json` with
+  status `prepared_not_observed` for implementation-shaped requests.
+- The companion `run.json` for that command is marked
+  `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
+  `observation_status: prepared_not_observed`; the run envelope is bookkeeping,
+  not observed Hermes execution. Runtime validation treats that run envelope and
+  `coding_delegation.json` as a required pair.
 - A Discord message that strongly names a workflow reaches Hermes with installed
   skill descriptions available.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read
@@ -131,10 +143,10 @@ Before calling the bot integration ready, verify these points:
   bot again.
 
 Current limitation: deeper execution still depends on Hermes loading and
-exposing installed skills to the model. `omh chat route` chooses the prompt and
-records metadata before dispatch, but the bot adapter must forward the returned
-prompt template or opt into `--include-message`, and Hermes must still load the
-managed skills.
+exposing installed skills to the model. `omh chat route` and
+`omh coding delegate` choose prompts and record metadata before dispatch, but the
+bot adapter must forward the returned prompt template or opt into
+`--include-message`, and Hermes must still load the managed skills.
 
 ## Update
 
