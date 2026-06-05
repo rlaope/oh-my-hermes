@@ -64,18 +64,23 @@ The flow is:
 4. For planning-shaped messages, the bot can run
    `omh hermes plan --source discord --record "<message>"` to prepare a
    Hermes-facing draft plan under the configured Hermes home.
-5. The bot forwards `route.routing_prompt_template` or
+5. For implementation-shaped draft plans, the bot reads
+   `wrapper_contract.coding_delegate.argv_template` and runs
+   `omh coding delegate --record` with the original message after the plan is
+   accepted. For blocked plans, it asks the clarification named by the plan
+   instead of dispatching code.
+6. The bot forwards `route.routing_prompt_template` or
    `delegation.delegation_prompt_template` with `{message}` replaced by
    the received message, or runs with `--include-message` and forwards
    `route.routing_prompt` / `delegation_prompt` when stdout is not logged.
-6. Hermes starts with its normal config and reads `skills.external_dirs`.
-7. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
-8. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
-9. The router skill gives Hermes prompt-level routing guidance for workflow
+7. Hermes starts with its normal config and reads `skills.external_dirs`.
+8. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
+9. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
+10. The router skill gives Hermes prompt-level routing guidance for workflow
    names, trigger phrases, fallback rules, and recovery behavior.
-10. Hermes selects the relevant installed skill and continues the response inside
+11. Hermes selects the relevant installed skill and continues the response inside
    the Discord bot flow.
-11. The bot or operator can record local evidence with `omh runtime record` and
+12. The bot or operator can record local evidence with `omh runtime record` and
    `omh runtime delegate`.
 
 `omh` does not replace the Discord bot, modify Discord commands, or patch Hermes
@@ -119,6 +124,12 @@ Weak planning requests may also write `.hermes/context/` so Hermes can ask one
 blocking clarification. Review gates remain `not_observed` unless the wrapper can
 prove a separate review happened.
 
+The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
+not the Markdown body, to decide the next local action. If
+`wrapper_contract.coding_delegate.available` is `true`, run the listed
+`argv_template` after plan acceptance to prepare the `coding_delegation/v1`
+payload. If it is `false`, follow `next_action` and do not dispatch coding work.
+
 For hosted bots, run these commands inside the same container, virtual
 environment, or user account that owns the bot runtime. If the wrapper can
 observe a specialist lane result, record it with `--observed`; otherwise keep
@@ -150,6 +161,10 @@ Before calling the bot integration ready, verify these points:
 - If a wrapper needs machine-readable planning fields, use the stdout
   `hermes_plan/v1` JSON payload as the contract and treat the Markdown file as
   presentation.
+- For implementation-shaped draft plans, the stdout
+  `wrapper_contract.coding_delegate.argv_template` is the handoff bridge to
+  `omh coding delegate --record`; run it only after plan acceptance and with the
+  original message preserved.
 - A Discord message that strongly names a workflow reaches Hermes with installed
   skill descriptions available.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read

@@ -22,7 +22,7 @@ from .coding_delegation import (
 from .config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
 from .doctor import doctor_ok, run_doctor
 from .hashutil import sha256_file
-from .hermes_planning import build_hermes_plan_payload, write_hermes_plan
+from .hermes_planning import attach_plan_artifact_to_wrapper_contract, build_hermes_plan_payload, write_hermes_plan
 from .installer import OmhError, install_skill_pack, uninstall_skill_pack
 from .local_store import atomic_write_text
 from .manifest import read_manifest
@@ -301,7 +301,9 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
             source_metadata=source_metadata,
         )
         if args.record:
-            payload["artifact"] = write_hermes_plan(_paths(args), payload)
+            artifact = write_hermes_plan(_paths(args), payload)
+            payload["artifact"] = artifact
+            attach_plan_artifact_to_wrapper_contract(payload, artifact)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json(payload)

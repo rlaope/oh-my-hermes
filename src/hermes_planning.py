@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import re
 import secrets
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from .recommend import recommend_skills
 
 
 SCHEMA_VERSION = "hermes_plan/v1"
+WRAPPER_CONTRACT_VERSION = "hermes_plan_wrapper/v1"
 _REVIEW_TERMS = (
     "architecture",
     "architect",
@@ -90,13 +92,14 @@ def build_hermes_plan_payload(
     recommendations = _compact_recommendations(recommend_skills(task, limit=max(limit, 5))[:limit])
     top = recommendations[0] if recommendations else {"skill": "oh-my-hermes", "score": 0, "confidence": "low"}
     plan = _plan_for(task, top)
+    metadata = {key: value for key, value in (source_metadata or {}).items() if value}
     payload: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "source": source,
         "plan": plan.to_dict(),
+        "wrapper_contract": _wrapper_contract(plan, source=source, source_metadata=metadata),
         "recommendations": recommendations,
     }
-    metadata = {key: value for key, value in (source_metadata or {}).items() if value}
     if metadata:
         payload["source_metadata"] = metadata
     return payload
@@ -135,6 +138,22 @@ def write_hermes_plan(paths: OmhPaths, payload: dict[str, object]) -> dict[str, 
         atomic_write_text(context_path, render_context_markdown(payload, context_path.name), private=True)
         artifact["context_path"] = str(context_path)
     return artifact
+
+
+def attach_plan_artifact_to_wrapper_contract(payload: dict[str, object], artifact: dict[str, object]) -> None:
+    contract = payload.get("wrapper_contract")
+    if not isinstance(contract, dict):
+        return
+    plan_artifact: dict[str, object] = {
+        "recorded": True,
+        "kind": artifact.get("kind", "hermes_plan"),
+        "schema_version": artifact.get("schema_version", SCHEMA_VERSION),
+        "status": artifact.get("status", "draft"),
+        "path": artifact.get("path", ""),
+    }
+    if artifact.get("context_path"):
+        plan_artifact["context_path"] = artifact["context_path"]
+    contract["plan_artifact"] = plan_artifact
 
 
 def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.md") -> str:
@@ -278,7 +297,7 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
     score = _int_value(top.get("score", 0))
     weak = len(task.split()) <= 2 and (score == 0 or any(term in lowered for term in _CLARIFY_TERMS))
     review_shaped = any(term in lowered for term in _REVIEW_TERMS)
-    coding_shaped = any(term in lowered for term in ("code", "coding", "implement", "fix", "debug", "test", "feature", "refactor"))
+    coding_shaped = _is_coding_shaped(task)
 
     if weak:
         return HermesPlan(
@@ -434,6 +453,103 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
             }
         )
     return compact
+
+
+def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[str, str]) -> dict[str, object]:
+    coding_available = plan.status == "draft" and _is_coding_shaped(plan.task_statement)
+    metadata_args = _source_metadata_argv(source_metadata)
+    contract: dict[str, object] = {
+        "schema_version": WRAPPER_CONTRACT_VERSION,
+        "source": source,
+        "current_step": "ask_clarification" if plan.status == "blocked" else "present_plan",
+        "next_action": _wrapper_next_action(plan, coding_available),
+        "message_field": "plan.task_statement",
+        "plan_artifact": {
+            "recorded": False,
+            "kind": "hermes_plan",
+            "schema_version": SCHEMA_VERSION,
+        },
+        "decision_gate": {
+            "required": plan.status == "draft",
+            "condition": "plan.status is draft and the wrapper or a human accepts the plan",
+            "do_not_delegate_when": [
+                "plan.status is blocked",
+                "the wrapper cannot preserve the original task message",
+                "the wrapper would claim review or execution without evidence",
+            ],
+        },
+        "coding_delegate": {
+            "available": coding_available,
+            "requires_plan_acceptance": coding_available,
+            "stdout_schema_version": "coding_delegation/v1",
+            "recording_contract": "prepared_not_observed",
+            "input_policy": "Pass the original task message directly; do not parse the Markdown plan body.",
+        },
+    }
+    coding_delegate = contract["coding_delegate"]
+    if isinstance(coding_delegate, dict):
+        if coding_available:
+            coding_delegate.update(
+                {
+                    "argv_template": [
+                        "omh",
+                        "coding",
+                        "delegate",
+                        "--source",
+                        source,
+                        "--record",
+                        *metadata_args,
+                        "{message}",
+                    ],
+                    "command_template": _coding_delegate_command_template(source, metadata_args),
+                    "prompt_template_field": "delegation.delegation_prompt_template",
+                    "include_message_flag": "--include-message",
+                    "recorded_run_field": "runtime.run.run_id",
+                }
+            )
+        else:
+            coding_delegate["unavailable_reason"] = (
+                "plan is blocked" if plan.status == "blocked" else "task is not implementation-shaped"
+            )
+    return contract
+
+
+def _wrapper_next_action(plan: HermesPlan, coding_available: bool) -> str:
+    if plan.status == "blocked":
+        return "ask_clarification"
+    if coding_available:
+        return "prepare_coding_delegation_after_plan_acceptance"
+    return "forward_plan_to_selected_workflow"
+
+
+def _source_metadata_argv(metadata: dict[str, str]) -> list[str]:
+    flags = {
+        "source_event_id": "--source-event-id",
+        "channel_ref": "--channel-ref",
+        "user_ref": "--user-ref",
+    }
+    args: list[str] = []
+    for key in ("source_event_id", "channel_ref", "user_ref"):
+        value = metadata.get(key)
+        if value:
+            args.extend([flags[key], value])
+    return args
+
+
+def _coding_delegate_command_template(source: str, metadata_args: list[str]) -> str:
+    parts = ["omh", "coding", "delegate", "--source", source, "--record", *metadata_args, "{message}"]
+    return " ".join(_shell_token(part) for part in parts)
+
+
+def _shell_token(value: str) -> str:
+    if value == "{message}":
+        return value
+    return shlex.quote(value)
+
+
+def _is_coding_shaped(task: str) -> bool:
+    lowered = task.lower()
+    return any(term in lowered for term in ("code", "coding", "implement", "fix", "debug", "test", "feature", "refactor"))
 
 
 def _markdown_list(values: object) -> list[str]:

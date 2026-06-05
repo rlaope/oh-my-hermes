@@ -214,6 +214,13 @@ wrapper or human review supplies evidence. Weak requests also write a
 `.hermes/context/` artifact so Hermes can ask one blocking clarification before
 planning.
 
+The same stdout payload includes `wrapper_contract`, a machine-readable bridge
+for Discord, Slack, or hosted Hermes adapters. For implementation-shaped draft
+plans, `wrapper_contract.coding_delegate.argv_template` tells the wrapper how to
+call `omh coding delegate --record` with the original message and source
+metadata after the plan is accepted. Blocked plans set `coding_delegate.available`
+to `false`, so wrappers ask the clarification instead of dispatching code.
+
 ## Commands
 
 | Command | Purpose |
@@ -227,7 +234,7 @@ planning.
 | `omh recommend <task>` | Deterministically suggest workflow skills from the local OMHM catalog. |
 | `omh chat route <message>` | Route a plain chat message before a Discord, Slack, or Hermes wrapper dispatches it. |
 | `omh coding delegate <task>` | Prepare a deterministic coding handoff payload and optional metadata-only runtime record. |
-| `omh hermes plan <task>` | Prepare a deterministic Hermes-facing plan and optionally write it under `.hermes/plans`. |
+| `omh hermes plan <task>` | Prepare a deterministic Hermes-facing plan, wrapper handoff contract, and optional `.hermes/plans` artifact. |
 | `omh runtime status` | Inspect local runtime artifact state. |
 | `omh runtime record` | Create a metadata-only workflow run artifact. |
 | `omh runtime delegate` | Record observed or unavailable delegation for a run. |

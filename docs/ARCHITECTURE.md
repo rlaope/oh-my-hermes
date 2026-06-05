@@ -99,6 +99,15 @@ default to `not_observed` unless wrapper metadata proves a separate review ran.
 Weak requests create a companion `.hermes/context/` artifact and keep the plan
 `blocked` until Hermes asks the smallest blocking clarification.
 
+The machine-readable planning bridge is stdout JSON, not the Markdown file. Each
+`hermes_plan/v1` payload includes `wrapper_contract` with the current wrapper
+step, decision gate, optional recorded plan artifact path, and coding-delegation
+handoff template. For implementation-shaped draft plans,
+`wrapper_contract.coding_delegate.argv_template` is the adapter contract for
+calling `omh coding delegate --record` after plan acceptance. Blocked or
+non-coding plans keep `coding_delegate.available` false so wrappers do not infer
+execution from presentation text.
+
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
 
@@ -220,6 +229,12 @@ surface, and a review gate with `architect` and `critic` statuses. The command i
 deterministic and local-only; it does not run review agents, call services, or
 execute the plan. A `not_observed` review gate means the artifact is a planning
 scaffold, not consensus approval.
+
+The stdout `wrapper_contract.plan_artifact` mirrors the recorded artifact path
+when `--record` is used. Wrappers should preserve the original message for later
+delegation and use `wrapper_contract.message_field` only as the JSON pointer to
+the message text inside the payload; they should not scrape the Markdown plan
+body to recover commands or state.
 
 ## Workflow State
 
