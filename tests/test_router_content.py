@@ -229,6 +229,18 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(harness, text)
         self.assertIn("omh probe", text)
 
+    def test_discord_example_uses_wrapper_native_flow(self) -> None:
+        text = Path("examples/discord-bot-runtime-flow.md").read_text(encoding="utf-8")
+
+        self.assertIn("omh chat interact --source discord --event-json event.json", text)
+        self.assertIn("omh chat session start", text)
+        self.assertIn("omh chat session prepare-handoff", text)
+        self.assertIn("omh coding lifecycle dispatch", text)
+        self.assertIn("omh coding lifecycle report", text)
+        self.assertIn("omh runtime show", text)
+        self.assertIn("A prepared handoff is not execution evidence.", text)
+        self.assertIn("normal Discord or Slack UX", text)
+
 
 if __name__ == "__main__":
     unittest.main()
