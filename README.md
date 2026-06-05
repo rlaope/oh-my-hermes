@@ -1,6 +1,10 @@
 # oh-my-hermes-agent
 
 <p align="center">
+  <img src="assets/hermes-agent-hero.png" alt="Oh My Hermes Agent" width="720">
+</p>
+
+<p align="center">
   <strong>Hermes-native workflow skills, installed with one small command.</strong>
   <br>
   <em>Give Hermes Agent a consistent skill pack for routing, planning, durable execution, review, cleanup, and QA.</em>
