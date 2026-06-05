@@ -43,10 +43,10 @@ This repository is a quality-gated preview: small enough to inspect, but shaped
 as a real public project instead of a throwaway script.
 
 The current release provides a local installer, generated Hermes skill catalog,
-application cases, runtime diagnostics, local runtime artifacts, CI, and
-contributor guidance. The next direction is deeper Hermes-side integration:
-richer routing metadata, stronger wrapper examples, release packaging, and
-Hermes-specific workflow tests.
+application cases, runtime diagnostics, local runtime artifacts, wrapper-native
+chat contracts, CI, and contributor guidance. The next direction is deeper
+adapter integration: example Discord/Slack shims, richer routing metadata,
+release packaging, and Hermes-specific workflow tests.
 
 ## Quick Start
 
@@ -91,7 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PIP_ARGS= sh
 ```
 
-Useful commands:
+Useful local and wrapper-debug commands:
 
 ```sh
 omh install --dry-run
@@ -99,9 +99,13 @@ omh install --from-skills-dir ./skills
 omh update --from-skills-dir ./skills
 omh apply --dry-run
 omh recommend "risky refactor"
+omh chat interact --source discord "risky refactor"
+omh chat interact --source slack --stdin
 omh chat route --source discord --record "risky refactor"
 omh coding delegate --source discord --record "risky refactor"
 omh coding delegate --executor codex --source discord --record "risky refactor"
+omh coding lifecycle start --executor codex --record "risky refactor"
+omh coding lifecycle report --run <run-id>
 omh hermes plan --record "risky refactor with review"
 omh runtime record --skill oh-my-hermes --harness coding-handling --status started
 omh runtime delegation-status --run <run-id>
@@ -119,13 +123,14 @@ omh uninstall
 
 Hermes remains the agent runtime.
 
-`omh` adds five things around it:
+`omh` adds six things around it:
 
 1. A managed skill directory at `~/.omh/skills`
 2. A manifest at `~/.omh/manifest.json`
 3. Local runtime artifacts under `~/.omh/runtime`
 4. A config registration in Hermes' `skills.external_dirs`
 5. Hermes-facing planning artifacts under `~/.hermes/plans`
+6. Platform-neutral chat contracts for Discord, Slack, and hosted wrappers
 
 That means installation is reversible and inspectable. `omh apply` updates only
 the Hermes skill discovery setting. It does not rewrite workspace instructions
@@ -146,6 +151,12 @@ Hermes-facing plans are separate user-facing Markdown artifacts under
 `~/.hermes/plans`. They intentionally include the task statement so Hermes and
 the user can inspect the plan subject. They do not store raw platform event JSON
 or claim review/execution evidence by default.
+
+Wrapper-native chat interactions are stdout contracts. `omh chat interact`
+returns a `chat_interaction/v1` envelope with a renderable
+`chat_response/v1` object, platform-neutral actions, a stable `thread_key`, and
+an `overclaim_guard`. It does not store raw prompt bodies by default and does
+not require the user in Discord or Slack to know any `omh` command names.
 
 Coding delegation artifacts separate a prepared executor handoff from observed
 execution. `omh coding delegate --record` stores the recommended workflow,
@@ -194,6 +205,22 @@ observation, review readiness, a `next_action`, and an `overclaim_guard`.
 Prepared handoff is never treated as implementation, review, CI, or merge
 evidence by itself.
 
+For Codex-oriented coding work, wrappers can use a higher-level lifecycle
+helper instead of stitching together runtime commands by hand:
+
+```sh
+omh coding lifecycle start --executor codex --record "risky refactor"
+omh coding lifecycle dispatch --run <run-id>
+omh coding lifecycle result --run <run-id> --result completed
+omh coding lifecycle verify --run <run-id> --completion-status completed
+omh coding lifecycle report --run <run-id>
+```
+
+The lifecycle helper still writes the same local runtime artifacts. It derives
+status from prepared handoff, dispatch observation, executor result,
+verification, and review readiness; it does not mutate the prepared run envelope
+into proof of execution.
+
 ## Routing Model
 
 The `oh-my-hermes` skill is the top-level router.
@@ -215,41 +242,32 @@ Routing priority:
 A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when
 it could mean normal conversation.
 
-Wrappers for Discord, Slack, or hosted Hermes chats can run `omh chat route`
-before forwarding a plain user message. The command returns a deterministic
-`dispatch`, `clarify`, or `fallback` decision plus a `routing_instruction` and
-`routing_prompt_template`. The default JSON omits the raw prompt body so wrapper
-logs can stay metadata-only; use `--include-message` only when the wrapper needs
-`route.routing_prompt` pre-expanded. With `--record`, it writes metadata-only
-`routing.json` evidence under `.omh/runtime/` without storing the raw prompt.
+The primary wrapper API is `omh chat interact`. A Discord, Slack, or hosted
+Hermes adapter passes either a plain message or a platform event JSON payload and
+receives one `chat_interaction/v1` envelope. The nested `chat_response/v1`
+contains the user-facing headline, body, state, and platform-neutral actions
+such as `accept_plan`, `revise_plan`, `send_to_codex`, `show_status`, or
+`cancel`. Action labels do not expose `omh`, argv arrays, or shell command text.
 
-For implementation-shaped chat messages, wrappers can run `omh coding delegate`
-to prepare a deterministic executor handoff from the same local catalog
-metadata. It returns a `coding_delegation/v1` payload with action, intent,
-recommended workflow, harness, acceptance criteria, verification expectations,
-and a `delegation_prompt_template`. With `--record`, it writes
-`coding_delegation.json` evidence and a `prepared_coding_delegation` run
-envelope; validation treats those as a required pair. The wrapper still needs
-separate Hermes or bot evidence before claiming execution was observed.
-When the intended main coding executor is Codex, add `--executor codex` to
-include a `coding_executor_handoff/v1` instruction payload. `omh` still does not
-launch Codex; the wrapper is responsible for dispatch and later observation.
+`omh chat interact` composes existing deterministic primitives instead of
+replacing them. Route-shaped turns use `omh chat route` semantics. Planning
+turns use `hermes_plan/v1` and the existing `wrapper_contract` bridge.
+Implementation-shaped turns can prepare a `coding_delegation/v1` payload and a
+Codex-only `coding_executor_handoff/v1` when the route is safe to delegate.
+Status turns wrap `delegated_coding_status/v1` into chat copy that separates
+prepared, dispatched, executed, reviewed, verified, CI, and merged evidence.
 
-For planning-shaped requests, wrappers or operators can run `omh hermes plan` to
-create a deterministic `hermes_plan/v1` scaffold. With `--record`, it writes a
-Markdown plan under `.hermes/plans/` with goals, non-goals, options, risks,
-acceptance criteria, verification, execution handoff guidance, and a review
-gate. The review gate is `not_observed` by default; the plan is a draft until a
-wrapper or human review supplies evidence. Weak requests also write a
-`.hermes/context/` artifact so Hermes can ask one blocking clarification before
-planning.
+The lower-level commands remain useful for debugging, tests, and custom
+adapters:
 
-The same stdout payload includes `wrapper_contract`, a machine-readable bridge
-for Discord, Slack, or hosted Hermes adapters. For implementation-shaped draft
-plans, `wrapper_contract.coding_delegate.argv_template` tells the wrapper how to
-call `omh coding delegate --record` with the original message and source
-metadata after the plan is accepted. Blocked plans set `coding_delegate.available`
-to `false`, so wrappers ask the clarification instead of dispatching code.
+- `omh chat route` returns only the deterministic route decision.
+- `omh hermes plan` writes Hermes-facing plan Markdown under `.hermes/plans/`.
+- `omh coding delegate` prepares a coding handoff without tracking lifecycle.
+- `omh coding lifecycle` records and reports the Codex handoff lifecycle.
+
+Actual Discord and Slack transports stay outside this repository. `omh` does
+not open network connections, authenticate bots, post messages, invoke Codex, or
+patch Hermes internals.
 
 ## Commands
 
@@ -262,8 +280,10 @@ to `false`, so wrappers ask the clarification instead of dispatching code.
 | `omh list` | Print the installed manifest. |
 | `omh doctor` | Verify managed files and Hermes config registration. |
 | `omh recommend <task>` | Deterministically suggest workflow skills from the local OMHM catalog. |
+| `omh chat interact <message>` | Compose a wrapper-native `chat_interaction/v1` response for Discord, Slack, or hosted Hermes adapters. |
 | `omh chat route <message>` | Route a plain chat message before a Discord, Slack, or Hermes wrapper dispatches it. |
 | `omh coding delegate <task>` | Prepare a deterministic coding handoff payload and optional metadata-only runtime record. |
+| `omh coding lifecycle <step>` | Start, dispatch, observe, verify, and report a Codex handoff lifecycle using local runtime evidence. |
 | `omh hermes plan <task>` | Prepare a deterministic Hermes-facing plan, wrapper handoff contract, and optional `.hermes/plans` artifact. |
 | `omh runtime status` | Inspect local runtime artifact state. |
 | `omh runtime delegation-status --run <run-id>` | Summarize prepared/observed delegated coding status without overclaiming execution. |
@@ -284,16 +304,21 @@ to `false`, so wrappers ask the clarification instead of dispatching code.
 src/
   chat_router.py          deterministic chat pre-dispatch routing
   cli.py                 command-line entrypoint
+  coding_lifecycle.py    wrapper-level Codex handoff lifecycle helpers
   coding_delegation.py   deterministic coding handoff preparation
   config_adapter.py      Hermes config registration adapter
   converter.py           local skill import support
   doctor.py              installation health checks
+  hermes_planning.py     deterministic Hermes-facing plan artifacts
   installer.py           managed skill pack install/update/uninstall
   manifest.py            installed file manifest and conflict checks
   paths.py               home/config path resolution
   recommend.py           deterministic workflow skill recommender
+  runtime_artifacts.py   runtime evidence read/write and validation helpers
+  runtime_records.py     runtime schema builders and validators
   snippet.py             optional workspace guidance
   skill_pack.py          compatibility facade for generated skills
+  wrapper_contract.py    platform-neutral chat interaction contracts
   core/
     errors.py            shared user-facing error type
   skills/

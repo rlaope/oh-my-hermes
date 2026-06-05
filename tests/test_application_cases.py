@@ -58,7 +58,8 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
 
         self.assertIn("Artifact-backed verification", cases)
         self.assertIn("omh runtime show", cases)
-        self.assertIn("Optional artifact-backed flow", install)
+        self.assertIn("Chat Wrapper Flow", install)
+        self.assertIn("Codex lifecycle calls", install)
         self.assertIn("What Gets Recorded", readme)
 
 

@@ -21,14 +21,21 @@ The architecture favors:
 src/
   chat_router.py
   cli.py
+  coding_delegation.py
+  coding_lifecycle.py
   config_adapter.py
   converter.py
   doctor.py
+  hermes_planning.py
   installer.py
   manifest.py
   paths.py
+  recommend.py
+  runtime_artifacts.py
+  runtime_records.py
   snippet.py
   skill_pack.py
+  wrapper_contract.py
   core/
   skills/
 ```
@@ -45,6 +52,24 @@ returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
 implementation-shaped task text to an action, intent, workflow, harness,
 executor profile, acceptance criteria, and verification expectations without
 LLM, API, or network calls.
+
+`wrapper_contract.py` owns the platform-neutral chat interaction contract. It
+composes routing, planning, delegation, and status primitives into a
+`chat_interaction/v1` envelope with a renderable `chat_response/v1`, safe action
+buttons, a stable thread key, and overclaim guards for Discord, Slack, and
+hosted Hermes adapters.
+
+`coding_lifecycle.py` owns Codex-oriented lifecycle helpers above the existing
+runtime artifact layer. It starts prepared handoffs, records dispatch and
+executor observations, records verification observations, and reports derived
+status without mutating prepared handoff records into execution proof.
+
+`hermes_planning.py` owns deterministic Hermes-facing planning artifacts under
+`.hermes/plans/` and the machine-readable plan wrapper contract used after plan
+acceptance.
+
+`runtime_artifacts.py` and `runtime_records.py` own local JSON/JSONL evidence,
+schema validation, redacted export, and derived delegated coding status.
 
 `installer.py` owns managed skill writes, manifest updates, update behavior, and
 uninstall behavior.
@@ -63,37 +88,50 @@ the package grows internally.
 
 ## Routing
 
-Routing, planning, and delegation have four local surfaces:
+Routing, planning, and delegation have five local surfaces:
 
 1. Prompt-level guidance. The router skill gives Hermes a structured map of
    workflow names and strong trigger phrases, but it does not override Hermes
    core behavior.
-2. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
+2. Wrapper-native chat orchestration. `omh chat interact` lets Discord, Slack,
+   or hosted Hermes wrappers receive one platform-neutral `chat_interaction/v1`
+   envelope with renderable chat copy, state, action buttons, and a thread key.
+3. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
    hosted Hermes wrappers run a deterministic pre-dispatch decision before they
    forward a plain user message to Hermes.
-3. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
+4. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
    implementation-shaped messages into a deterministic `coding_delegation/v1`
    handoff payload for an executor lane.
-4. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
+5. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
    operators create deterministic `hermes_plan/v1` planning scaffolds under
    `.hermes/plans/` without claiming that execution or review already happened.
 
-The routing and delegation surfaces read from the same catalog metadata. The chat router returns a
-`routing_instruction` and `routing_prompt_template` for the wrapper to forward,
-with raw-message prompt expansion available only through `--include-message`.
-Coding delegation returns a `delegation_prompt_template`, recommended workflow,
-harness, acceptance criteria, verification expectations, and optional
-metadata-only `coding_delegation.json` evidence. With `--executor codex`, it also
-returns a `coding_executor_handoff/v1` instruction payload that names Codex as
-the executor target without launching Codex. That record stores a compact
-snapshot of the generated acceptance criteria and verification expectations, but
-not the raw prompt body. With `--record`, the companion `run.json` is marked as
+`omh chat interact` is the primary adapter contract. It composes the lower-level
+surfaces into one response envelope so each transport does not need to invent
+its own orchestration policy. The `chat_response/v1` subobject is safe for the
+adapter to render directly: it names the state, provides concise copy, exposes
+platform-neutral actions, and never asks the end user to run an `omh` command.
+The surrounding envelope preserves source metadata, message hash and length,
+thread key, selected mode, next action, redaction policy, and claim boundary.
+
+The routing and delegation surfaces read from the same catalog metadata. The
+chat router returns a `routing_instruction` and `routing_prompt_template` for
+custom wrappers to forward, with raw-message prompt expansion available only
+through `--include-message`. Coding delegation returns a
+`delegation_prompt_template`, recommended workflow, harness, acceptance
+criteria, verification expectations, and optional metadata-only
+`coding_delegation.json` evidence. With `--executor codex`, it also returns a
+`coding_executor_handoff/v1` instruction payload that names Codex as the
+executor target without launching Codex. That record stores a compact snapshot
+of the generated acceptance criteria and verification expectations, but not the
+raw prompt body. With `--record`, the companion `run.json` is marked as
 `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
 `observation_status: prepared_not_observed`; validation treats the run envelope
 and `coding_delegation.json` as a required pair. The run envelope is
-implementation bookkeeping, not proof that Hermes executed the handoff. Neither
-surface includes a Discord or Slack SDK, opens network connections, or patches
-Hermes internals.
+implementation bookkeeping, not proof that Hermes executed the handoff.
+
+Neither the wrapper contract nor the lower-level surfaces include Discord SDKs,
+Slack SDKs, network calls, Codex process launching, or Hermes core patching.
 
 Hermes planning writes Markdown plans under the configured Hermes home rather
 than runtime JSON under `.omh/runtime/`. The artifact is user-facing: it includes
@@ -225,6 +263,14 @@ a `delegated_coding_status/v1` summary. The summary exposes `safe_summary`,
 `next_action`, review readiness, verification observation, and an
 `overclaim_guard` so chat adapters can report progress without implying Hermes
 implemented the code.
+
+Wrappers that want one higher-level lifecycle surface can call
+`omh coding lifecycle start|dispatch|result|verify|report`. These commands are
+thin wrappers over the same runtime files: `coding_delegation.json`,
+`delegation.json`, `wrapper.json`, and `events.jsonl`. They reject invalid
+transitions such as result-before-dispatch, derive lifecycle status from
+observed evidence, and keep review or verification gaps visible in
+`chat_response/v1` status copy.
 
 ## Hermes Planning Artifacts
 

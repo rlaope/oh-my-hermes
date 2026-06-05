@@ -48,45 +48,40 @@ For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see
 [Application Cases](APPLICATION_CASES.md).
 
-## Discord Bot Flow
+## Chat Wrapper Flow
 
-If Hermes Agent is running behind a Discord bot, install `oh-my-hermes-agent` on
-the same machine, container, or runtime image that starts the bot.
+If Hermes Agent is running behind a Discord bot, Slack app, or hosted chat
+adapter, install `oh-my-hermes-agent` on the same machine, container, or runtime
+image that starts the wrapper.
 
 The flow is:
 
-1. The Discord bot receives a user message.
-2. The bot can run `omh chat route --source discord --record "<message>"` to
-   choose `dispatch`, `clarify`, or `fallback` before forwarding the request.
-3. For implementation-shaped messages, the bot can run
-   `omh coding delegate --source discord --record "<message>"` to prepare a
-   deterministic executor handoff with metadata-only evidence.
-4. For planning-shaped messages, the bot can run
-   `omh hermes plan --source discord --record "<message>"` to prepare a
-   Hermes-facing draft plan under the configured Hermes home.
-5. For implementation-shaped draft plans, the bot reads
-   `wrapper_contract.coding_delegate.argv_template` and runs
-   `omh coding delegate --record` with the original message after the plan is
-   accepted. For blocked plans, it asks the clarification named by the plan
-   instead of dispatching code.
-6. The bot forwards `route.routing_prompt_template` or
-   `delegation.delegation_prompt_template` with `{message}` replaced by
-   the received message, or runs with `--include-message` and forwards
-   `route.routing_prompt` / `delegation_prompt` when stdout is not logged.
-7. Hermes starts with its normal config and reads `skills.external_dirs`.
-8. `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
-9. Hermes sees the managed skills, including the `oh-my-hermes` router skill.
-10. The router skill gives Hermes prompt-level routing guidance for workflow
-   names, trigger phrases, fallback rules, and recovery behavior.
-11. Hermes selects the relevant installed skill and continues the response inside
-   the Discord bot flow.
-12. The bot or operator can record local evidence with `omh runtime record` and
-   `omh runtime delegate`.
+1. The wrapper receives a user message in Discord, Slack, or another chat
+   surface.
+2. The wrapper calls `omh chat interact` with the platform source and either a
+   plain message or event JSON.
+3. `omh` returns one `chat_interaction/v1` envelope with a renderable
+   `chat_response/v1`, a stable `thread_key`, platform-neutral actions, and a
+   conservative `next_action`.
+4. The wrapper renders `chat_response.headline`, `body`, `state`, and `actions`
+   in the original channel or thread. The user does not need to know any `omh`
+   command names.
+5. If the interaction asks for clarification, the wrapper keeps the answer in
+   the same thread and calls `omh chat interact` again with the updated message.
+6. If the interaction presents a plan, the wrapper waits for the user to accept
+   or revise it before preparing any coding handoff.
+7. If the accepted interaction exposes `send_to_codex`, the wrapper starts a
+   Codex lifecycle run, dispatches the handoff to the external Codex-like
+   executor, and records only what it actually observes.
+8. Status updates use `omh coding lifecycle report` or
+   `omh chat interact --run <run-id>` and stay in the same thread.
+9. Hermes still starts with its normal config and reads `skills.external_dirs`;
+   `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
 
-`omh` does not replace the Discord bot, modify Discord commands, or patch Hermes
-internals. It prepares the skill layer that Hermes can load when the bot invokes
-Hermes, and it can make a local deterministic pre-dispatch routing decision for
-the wrapper.
+`omh` does not replace the Discord bot, modify Slack commands, open network
+connections, invoke Codex, or patch Hermes internals. It prepares deterministic
+local contracts that a wrapper can render, dispatch, and later update with
+observed evidence.
 
 For a hosted bot, the practical deployment shape is usually:
 
@@ -97,43 +92,58 @@ omh doctor
 
 Then restart the bot process so Hermes reloads its config and skill directory.
 
-Optional artifact-backed flow:
+Minimal wrapper calls:
 
 ```sh
-message='risky refactor'
-delegate_json="$(omh coding delegate --source discord --record --include-message "$message")"
-run_id="$(printf '%s' "$delegate_json" | python -c 'import json,sys; print(json.load(sys.stdin)["runtime"]["run"]["run_id"])')"
-delegate_prompt="$(printf '%s' "$delegate_json" | python -c 'import json,sys; print(json.load(sys.stdin)["delegation_prompt"])')"
-
-# Forward "$delegate_prompt" to Hermes.
-# After Hermes responds, record what the bot could actually observe.
-omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
-omh runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed --gap "specialist lane metadata not exposed"
-omh runtime validate --run "$run_id"
-omh runtime show "$run_id"
+omh chat interact --source discord --event-json event.json
+omh chat interact --source slack "risky refactor"
+printf '%s' "$SLACK_TEXT" | omh chat interact --source slack --stdin
 ```
 
-Planning artifact smoke:
+Codex lifecycle calls after the wrapper has an accepted coding handoff:
 
 ```sh
+start_json="$(omh coding lifecycle start --executor codex --record "risky refactor")"
+run_id="$(printf '%s' "$start_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+
+# Dispatch to the external Codex-like executor outside OMHM, then record the
+# wrapper-observed transition.
+omh coding lifecycle dispatch --run "$run_id"
+omh coding lifecycle result --run "$run_id" --result completed --evidence-ref codex-log
+omh coding lifecycle verify --run "$run_id" --completion-status completed
+omh coding lifecycle report --run "$run_id"
+```
+
+The lifecycle commands write the same local runtime artifacts as the lower-level
+runtime commands. They reject invalid transitions, keep prepared handoff separate
+from execution evidence, and continue to block final completion copy when review
+or verification evidence is missing.
+
+Lower-level debug surfaces remain available when an adapter needs them:
+
+```sh
+omh chat route --source discord --record "risky refactor"
 omh hermes plan --source discord --record "risky refactor with review"
+omh coding delegate --executor codex --source discord --record "risky refactor"
+omh runtime delegation-status --run <run-id>
 ```
 
-This writes a draft `hermes_plan/v1` Markdown artifact under `.hermes/plans/`.
-Weak planning requests may also write `.hermes/context/` so Hermes can ask one
-blocking clarification. Review gates remain `not_observed` unless the wrapper can
-prove a separate review happened.
+`omh hermes plan --record` writes a draft `hermes_plan/v1` Markdown artifact
+under `.hermes/plans/`. Weak planning requests may also write
+`.hermes/context/` so Hermes can ask one blocking clarification. Review gates
+remain `not_observed` unless the wrapper can prove a separate review happened.
 
 The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
 not the Markdown body, to decide the next local action. If
-`wrapper_contract.coding_delegate.available` is `true`, run the listed
-`argv_template` after plan acceptance to prepare the `coding_delegation/v1`
-payload. If it is `false`, follow `next_action` and do not dispatch coding work.
+`wrapper_contract.coding_delegate.available` is `true`, the listed
+`argv_template` is an adapter contract for preparing a lower-level delegation
+after plan acceptance. If it is `false`, follow `next_action` and do not dispatch
+coding work.
 
 For hosted bots, run these commands inside the same container, virtual
-environment, or user account that owns the bot runtime. If the wrapper can
-observe a specialist lane result, record it with `--observed`; otherwise keep
-the result as `not_observed`.
+environment, or user account that owns the wrapper runtime. If the wrapper can
+observe executor, review, verification, CI, or merge evidence, record it
+explicitly; otherwise keep the status conservative.
 
 Use `omh runtime export --redacted` when you need a portable support artifact.
 Exports redact prompt, response, token, secret, key, and password-shaped fields by
@@ -144,15 +154,32 @@ delegation flags, and wrapper completion status.
 
 Before calling the bot integration ready, verify these points:
 
-- The installer ran in the same runtime context as the Discord bot.
+- The installer ran in the same runtime context as the Discord, Slack, or hosted
+  chat wrapper.
 - `omh doctor` reports the managed skill directory as installed and registered.
 - The bot process can read the same Hermes home/config that `omh apply` updated.
 - The bot was restarted after installation or update.
+- `omh chat interact --source discord "<message>"` or
+  `omh chat interact --source slack "<message>"` returns a
+  `chat_interaction/v1` envelope with a renderable `chat_response/v1`.
+- The rendered `chat_response` does not expose `omh`, argv arrays, or shell
+  command text to the end user.
+- Clarification and fallback interactions do not expose `send_to_codex`.
 - `omh chat route --source discord --record "<message>"` returns a route action
-  and writes `routing.json` in the same runtime context as the bot.
+  and writes `routing.json` in the same runtime context as the wrapper when the
+  lower-level route command is used.
 - `omh coding delegate --source discord --record "<message>"` returns a
   `coding_delegation/v1` payload and writes `coding_delegation.json` with
-  status `prepared_not_observed` for implementation-shaped requests.
+  status `prepared_not_observed` for implementation-shaped requests when the
+  lower-level delegate command is used.
+- `omh coding lifecycle start --executor codex --record "<message>"` creates a
+  prepared Codex handoff lifecycle without storing the raw prompt body by
+  default.
+- `omh coding lifecycle result --run <run-id> --result completed` is rejected
+  until `omh coding lifecycle dispatch --run <run-id>` records dispatch
+  observation.
+- `omh coding lifecycle report --run <run-id>` does not claim final completion
+  while executor, review, or verification evidence is missing.
 - `omh hermes plan --source discord --record "<message>"` writes a
   `hermes_plan/v1` artifact under the same Hermes home that the bot uses.
 - That planning command does not create a runtime `run.json` or
@@ -165,8 +192,8 @@ Before calling the bot integration ready, verify these points:
   `wrapper_contract.coding_delegate.argv_template` is the handoff bridge to
   `omh coding delegate --record`; run it only after plan acceptance and with the
   original message preserved.
-- A Discord message that strongly names a workflow reaches Hermes with installed
-  skill descriptions available.
+- A chat message that strongly names a workflow reaches Hermes with installed
+  skill descriptions available after the wrapper dispatches to Hermes.
 - `omh runtime record` can create a run and `omh runtime show <run-id>` can read
   it from the same runtime context.
 - `omh probe` reports managed skills and external skill directory registration
@@ -174,11 +201,11 @@ Before calling the bot integration ready, verify these points:
 - If skills do not appear, run `omh apply`, then `omh doctor`, then restart the
   bot again.
 
-Current limitation: deeper execution still depends on Hermes loading and
-exposing installed skills to the model. `omh chat route` and
-`omh coding delegate` choose prompts and record metadata before dispatch, but the
-bot adapter must forward the returned prompt template or opt into
-`--include-message`, and Hermes must still load the managed skills.
+Current limitation: actual Discord, Slack, Hermes, Codex, GitHub, CI, and merge
+operations still happen outside OMHM. `omh chat interact`, `omh chat route`,
+`omh coding delegate`, and `omh coding lifecycle` choose contracts and record
+local metadata, but the wrapper adapter must render messages, dispatch to Hermes
+or Codex-like executors, and record only evidence it actually observed.
 
 ## Update
 
