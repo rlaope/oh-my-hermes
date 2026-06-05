@@ -61,7 +61,7 @@ the package grows internally.
 
 ## Routing
 
-Routing and delegation have three local surfaces:
+Routing, planning, and delegation have four local surfaces:
 
 1. Prompt-level guidance. The router skill gives Hermes a structured map of
    workflow names and strong trigger phrases, but it does not override Hermes
@@ -72,8 +72,11 @@ Routing and delegation have three local surfaces:
 3. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
    implementation-shaped messages into a deterministic `coding_delegation/v1`
    handoff payload for an executor lane.
+4. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
+   operators create deterministic `hermes_plan/v1` planning scaffolds under
+   `.hermes/plans/` without claiming that execution or review already happened.
 
-All three surfaces read from the same catalog metadata. The chat router returns a
+The routing and delegation surfaces read from the same catalog metadata. The chat router returns a
 `routing_instruction` and `routing_prompt_template` for the wrapper to forward,
 with raw-message prompt expansion available only through `--include-message`.
 Coding delegation returns a `delegation_prompt_template`, recommended workflow,
@@ -87,6 +90,14 @@ and `coding_delegation.json` as a required pair. The run envelope is
 implementation bookkeeping, not proof that Hermes executed the handoff. Neither
 surface includes a Discord or Slack SDK, opens network connections, or patches
 Hermes internals.
+
+Hermes planning writes Markdown plans under the configured Hermes home rather
+than runtime JSON under `.omh/runtime/`. The artifact is user-facing: it includes
+the task statement, goals, non-goals, options, risks, acceptance criteria,
+verification, execution handoff guidance, and review-gate status. Review gates
+default to `not_observed` unless wrapper metadata proves a separate review ran.
+Weak requests create a companion `.hermes/context/` artifact and keep the plan
+`blocked` until Hermes asks the smallest blocking clarification.
 
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
@@ -190,6 +201,25 @@ Wrappers can also call `omh runtime wrapper` to record whether a prompt was
 dispatched, whether a Hermes response was observed, whether verification was
 observed, and which gaps remain unobserved. This keeps bot integration evidence
 separate from claims about Hermes internals.
+
+## Hermes Planning Artifacts
+
+Hermes-facing plans live under the configured Hermes home:
+
+```text
+.hermes/
+  plans/
+    <timestamp>-<slug>-<token>.md
+  context/
+    <timestamp>-<slug>-context-<token>.md
+```
+
+`omh hermes plan --record` writes Markdown, not runtime JSON. The plan frontmatter
+uses `schema_version: hermes_plan/v1`, `status: draft` or `blocked`, the source
+surface, and a review gate with `architect` and `critic` statuses. The command is
+deterministic and local-only; it does not run review agents, call services, or
+execute the plan. A `not_observed` review gate means the artifact is a planning
+scaffold, not consensus approval.
 
 ## Workflow State
 

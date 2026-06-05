@@ -122,6 +122,16 @@ The command returns a `coding_delegation/v1` payload with a recommended workflow
 
 With `--record`, `omh` writes `coding_delegation.json` under `.omh/runtime/runs/<run-id>/`. The companion `run.json` is marked with `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. Validation treats the run envelope and `coding_delegation.json` as a required pair. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
 
+## Hermes-Facing Planning
+
+For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` planning scaffold:
+
+```sh
+omh hermes plan --source discord --record "risky refactor with review"
+```
+
+With `--record`, `omh` writes a Markdown draft under `.hermes/plans/`. Weak requests also write `.hermes/context/` so Hermes can ask one blocking clarification before a final plan. The plan includes goals, non-goals, options, risks, acceptance criteria, verification, execution handoff guidance, and a review gate. Review gate entries default to `not_observed`; do not call the plan approved unless wrapper or human evidence proves the review happened.
+
 ## Automatic Routing Registry
 
 When Hermes exposes installed skill descriptions to the model, use this registry as the routing map:

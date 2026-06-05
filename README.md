@@ -101,6 +101,7 @@ omh apply --dry-run
 omh recommend "risky refactor"
 omh chat route --source discord --record "risky refactor"
 omh coding delegate --source discord --record "risky refactor"
+omh hermes plan --record "risky refactor with review"
 omh runtime record --skill oh-my-hermes --harness coding-handling --status started
 omh runtime validate
 omh runtime export
@@ -116,12 +117,13 @@ omh uninstall
 
 Hermes remains the agent runtime.
 
-`omh` adds three things around it:
+`omh` adds five things around it:
 
 1. A managed skill directory at `~/.omh/skills`
 2. A manifest at `~/.omh/manifest.json`
 3. Local runtime artifacts under `~/.omh/runtime`
 4. A config registration in Hermes' `skills.external_dirs`
+5. Hermes-facing planning artifacts under `~/.hermes/plans`
 
 That means installation is reversible and inspectable. `omh apply` updates only
 the Hermes skill discovery setting. It does not rewrite workspace instructions
@@ -129,7 +131,7 @@ or modify Hermes internals.
 
 ## What Gets Recorded
 
-`omh` records local metadata only by default:
+`omh` records runtime metadata only by default:
 
 - install/apply/doctor summaries in `~/.omh/runtime/state.json`
 - workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
@@ -137,6 +139,11 @@ or modify Hermes internals.
 - delegation observation in `delegation.json`
 - prepared coding handoffs in `coding_delegation.json`
 - wrapper observation in `wrapper.json`
+
+Hermes-facing plans are separate user-facing Markdown artifacts under
+`~/.hermes/plans`. They intentionally include the task statement so Hermes and
+the user can inspect the plan subject. They do not store raw platform event JSON
+or claim review/execution evidence by default.
 
 Coding delegation artifacts separate a prepared executor handoff from observed
 execution. `omh coding delegate --record` stores the recommended workflow,
@@ -198,6 +205,15 @@ and a `delegation_prompt_template`. With `--record`, it writes
 envelope; validation treats those as a required pair. The wrapper still needs
 separate Hermes or bot evidence before claiming execution was observed.
 
+For planning-shaped requests, wrappers or operators can run `omh hermes plan` to
+create a deterministic `hermes_plan/v1` scaffold. With `--record`, it writes a
+Markdown plan under `.hermes/plans/` with goals, non-goals, options, risks,
+acceptance criteria, verification, execution handoff guidance, and a review
+gate. The review gate is `not_observed` by default; the plan is a draft until a
+wrapper or human review supplies evidence. Weak requests also write a
+`.hermes/context/` artifact so Hermes can ask one blocking clarification before
+planning.
+
 ## Commands
 
 | Command | Purpose |
@@ -211,6 +227,7 @@ separate Hermes or bot evidence before claiming execution was observed.
 | `omh recommend <task>` | Deterministically suggest workflow skills from the local OMHM catalog. |
 | `omh chat route <message>` | Route a plain chat message before a Discord, Slack, or Hermes wrapper dispatches it. |
 | `omh coding delegate <task>` | Prepare a deterministic coding handoff payload and optional metadata-only runtime record. |
+| `omh hermes plan <task>` | Prepare a deterministic Hermes-facing plan and optionally write it under `.hermes/plans`. |
 | `omh runtime status` | Inspect local runtime artifact state. |
 | `omh runtime record` | Create a metadata-only workflow run artifact. |
 | `omh runtime delegate` | Record observed or unavailable delegation for a run. |
