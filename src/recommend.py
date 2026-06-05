@@ -33,6 +33,8 @@ class Recommendation:
     description: str
     category: str
     phase: str
+    hermes_role: str
+    handoff_policy: str
     score: int
     confidence: str
     matched: tuple[str, ...]
@@ -113,6 +115,8 @@ def _score_definition(
         description=definition.description,
         category=definition.category,
         phase=definition.phase,
+        hermes_role=definition.hermes_role,
+        handoff_policy=definition.handoff_policy,
         score=score,
         confidence=_confidence(score),
         matched=matched_tuple,
@@ -134,6 +138,8 @@ def _fallback_recommendations(definitions: list[SkillDefinition], query: str) ->
                 description=definition.description,
                 category=definition.category,
                 phase=definition.phase,
+                hermes_role=definition.hermes_role,
+                handoff_policy=definition.handoff_policy,
                 score=0,
                 confidence="low",
                 matched=(),

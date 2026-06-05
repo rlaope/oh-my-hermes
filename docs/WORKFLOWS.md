@@ -4,6 +4,8 @@ This file is generated from `src/skills/catalog.py`. Update the catalog first, t
 
 The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.
 
+Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly or prepare a Codex handoff for coding-heavy execution.
+
 ## Skills
 
 ### oh-my-hermes
@@ -12,6 +14,8 @@ Router guidance for using oh-my-hermes workflow skills inside Hermes Agent.
 
 - Category: `router`
 - Phase: `routing`
+- Hermes role: `retained-router`
+- Handoff policy: Classify requests into Hermes-retained planning/research/interview lanes or prepared Codex coding handoffs; do not execute code.
 - Use when: Use as the top-level router when a request references oh-my-hermes, installed workflows, or ambiguous workflow routing.
 - Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`
 - Required inputs:
@@ -34,6 +38,8 @@ Hermes Ralph workflow: persistent execution with verification and review.
 
 - Category: `execution`
 - Phase: `completion`
+- Hermes role: `codex-handoff-guidance`
+- Handoff policy: Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track a Codex lifecycle instead of making Hermes the coder.
 - Use when: Use after scope is concrete and the user wants one owner to continue through implementation and verification.
 - Strong routing signals: `ralph`, `$ralph`, `finish until done`, `persistent execution`, `self-referential loop`
 - Required inputs:
@@ -57,6 +63,8 @@ Hermes Ultragoal workflow: file-backed durable goal ledgers.
 
 - Category: `execution`
 - Phase: `durable-goals`
+- Hermes role: `codex-handoff-guidance`
+- Handoff policy: Use Hermes to maintain durable goal/checkpoint state; delegate coding milestones to Codex and report only observed runtime evidence.
 - Use when: Use when work needs durable goal artifacts, checkpointed progress, and final quality gates.
 - Strong routing signals: `ultragoal`, `$ultragoal`, `durable goal`, `multi-goal`, `goal ledger`
 - Required inputs:
@@ -80,6 +88,8 @@ Hermes Deep Interview workflow: one-question-at-a-time clarification.
 
 - Category: `clarification`
 - Phase: `discovery`
+- Hermes role: `retained-cognition`
+- Handoff policy: Run directly in Hermes or the chat wrapper; produce a clarified brief before any Codex handoff is prepared.
 - Use when: Use before planning or execution when requirements are materially ambiguous.
 - Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`
 - Required inputs:
@@ -103,6 +113,8 @@ Hermes Team workflow: coordinated parallel or sequential work lanes.
 
 - Category: `execution`
 - Phase: `coordination`
+- Hermes role: `codex-handoff-guidance`
+- Handoff policy: Use Hermes for lane framing and status; implementation lanes should become Codex handoff tasks unless they are research, interview, planning, or status-only.
 - Use when: Use when multiple independent lanes materially improve throughput or verification.
 - Strong routing signals: `team`, `$team`, `swarm`, `parallel agents`, `coordinated workers`
 - Required inputs:
@@ -120,12 +132,65 @@ Hermes Team workflow: coordinated parallel or sequential work lanes.
   - Keep shared-file edits under one owner.
   - Record unobserved delegation as not_observed.
 
+### ultrawork
+
+Hermes Ultrawork compatibility workflow: bounded parallel delivery guidance.
+
+- Category: `execution`
+- Phase: `parallel-delivery`
+- Hermes role: `codex-handoff-guidance`
+- Handoff policy: Keep the workflow name for compatibility, but convert coding lanes into explicit Codex handoffs with disjoint scope, verification, and review evidence.
+- Use when: Use when an accepted implementation plan can be split into independent, reviewable work lanes.
+- Strong routing signals: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
+- Required inputs:
+  - accepted plan
+  - lane list
+  - disjoint file or responsibility scopes
+  - verification commands
+- Expected outputs:
+  - Codex handoff prompts or lane instructions
+  - status summary
+  - review/CI evidence requirements
+- Artifact expectations:
+  - prepared coding delegation record per implementation lane when wrappers can record them
+- Safety rules:
+  - Do not start parallel coding without disjoint ownership boundaries.
+  - Keep Hermes responsible for orchestration/status, not hidden implementation.
+  - Record unobserved Codex execution as prepared_not_observed or not_observed.
+
+### web-research
+
+Hermes Web Research workflow: source-backed current information gathering.
+
+- Category: `research`
+- Phase: `current-evidence`
+- Hermes role: `retained-cognition`
+- Handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
+- Use when: Use when the user needs current web evidence, links, citations, or source comparison before planning or handoff.
+- Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`
+- Required inputs:
+  - research question
+  - source boundaries
+  - recency or jurisdiction constraints
+- Expected outputs:
+  - source-backed synthesis
+  - links or citations
+  - confidence and residual uncertainty
+- Artifact expectations:
+  - research notes with source URLs when the wrapper captures them
+- Safety rules:
+  - Prefer official or primary sources when they can answer the question.
+  - Separate quoted evidence from inference.
+  - State retrieval limits and dates for unstable facts.
+
 ### ultraqa
 
 Hermes UltraQA workflow: adversarial QA and fix loops.
 
 - Category: `verification`
 - Phase: `qa`
+- Hermes role: `hybrid-verification`
+- Handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become Codex handoffs.
 - Use when: Use when the task needs adversarial test scenarios, verification, and fix loops.
 - Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`
 - Required inputs:
@@ -149,6 +214,8 @@ Hermes Plan workflow: structured planning before execution.
 
 - Category: `planning`
 - Phase: `plan`
+- Hermes role: `retained-cognition`
+- Handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a Codex handoff after acceptance.
 - Use when: Use for structured planning when implementation is not ready to start safely.
 - Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`
 - Required inputs:
@@ -172,6 +239,8 @@ Hermes Ralplan workflow: consensus planning with review gates.
 
 - Category: `planning`
 - Phase: `reviewed-plan`
+- Hermes role: `retained-cognition`
+- Handoff policy: Keep consensus planning and review in Hermes; produce explicit Codex handoff guidance only after the plan is accepted.
 - Use when: Use when requirements are clear enough for planning but architecture, risks, or tests need review.
 - Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`
 - Required inputs:
@@ -196,6 +265,8 @@ Hermes Code Review workflow: bug-first review with evidence.
 
 - Category: `review`
 - Phase: `critique`
+- Hermes role: `hybrid-review`
+- Handoff policy: Hermes may frame and summarize review evidence; fixes or code mutations found during review should be delegated to Codex.
 - Use when: Use for review-shaped requests; findings come first and must cite concrete evidence.
 - Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`
 - Required inputs:
@@ -219,6 +290,8 @@ Hermes AI slop cleaner workflow: behavior-preserving cleanup.
 
 - Category: `maintenance`
 - Phase: `cleanup`
+- Hermes role: `codex-handoff-guidance`
+- Handoff policy: Use Hermes to define cleanup scope and regression checks; delegate behavior-preserving edits to Codex once tests are clear.
 - Use when: Use for behavior-preserving cleanup with tests before and after edits.
 - Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`
 - Required inputs:
@@ -242,6 +315,8 @@ Hermes adaptation for bounded official/upstream best-practice research.
 
 - Category: `research`
 - Phase: `evidence`
+- Hermes role: `retained-cognition`
+- Handoff policy: Run as Hermes-side evidence gathering; hand coding to Codex only after source-backed guidance is summarized.
 - Use when: Use when correctness depends on current official or upstream guidance.
 - Strong routing signals: `best-practice-research`, `best practice`, `official docs`, `upstream guidance`
 - Required inputs:
@@ -264,6 +339,8 @@ Hermes adaptation for durable research-goal execution.
 
 - Category: `research`
 - Phase: `durable-research`
+- Hermes role: `retained-cognition`
+- Handoff policy: Keep durable research in Hermes-managed artifacts; do not convert to Codex unless the research produces an accepted coding task.
 - Use when: Use for validator-gated research that needs durable artifacts.
 - Strong routing signals: `autoresearch-goal`, `research goal`, `durable research`, `critic research`
 - Required inputs:
@@ -286,6 +363,8 @@ Hermes adaptation for measurable performance-goal execution.
 
 - Category: `optimization`
 - Phase: `measurement`
+- Hermes role: `hybrid-measurement`
+- Handoff policy: Hermes can own baselines, benchmark plans, and status; optimization code changes should be Codex handoffs.
 - Use when: Use when the goal is measurable performance improvement with evaluator evidence.
 - Strong routing signals: `performance-goal`, `performance goal`, `latency`, `throughput`, `benchmark`
 - Required inputs:
@@ -309,6 +388,8 @@ Hermes adaptation for maintaining a project-local markdown wiki.
 
 - Category: `knowledge`
 - Phase: `capture`
+- Hermes role: `retained-knowledge`
+- Handoff policy: Run directly in Hermes as knowledge capture unless the note reveals a separate coding task.
 - Use when: Use to capture durable project knowledge in markdown artifacts.
 - Strong routing signals: `wiki`, `project wiki`, `memory`, `notes`
 - Required inputs:
@@ -331,6 +412,8 @@ Hermes adaptation for consulting an external advisor when configured.
 
 - Category: `review`
 - Phase: `external-advice`
+- Hermes role: `hybrid-review`
+- Handoff policy: Use as optional advice gathering; evaluate the advice in Hermes and delegate coding changes separately.
 - Use when: Use only when an external advisor is configured and would materially improve the answer.
 - Strong routing signals: `ask`, `$ask`, `external advisor`, `claude`, `gemini`
 - Required inputs:
@@ -354,6 +437,8 @@ Hermes adaptation for ending active workflow state cleanly.
 
 - Category: `operator`
 - Phase: `state-cleanup`
+- Hermes role: `retained-operator`
+- Handoff policy: Run directly in Hermes/runtime state; never delegate cancellation to Codex.
 - Use when: Use to cleanly end active adapted workflow state.
 - Strong routing signals: `cancel`, `$cancel`, `stop`, `abort`
 - Required inputs:
@@ -374,6 +459,8 @@ Hermes adaptation for managing local skills.
 
 - Category: `operator`
 - Phase: `skill-management`
+- Hermes role: `retained-operator`
+- Handoff policy: Use Hermes for inventory and guidance; delegate only repository code changes to Codex.
 - Use when: Use for local skill listing, search, add, remove, or edit tasks.
 - Strong routing signals: `skill`, `$skill`, `skills`, `manage skills`
 - Required inputs:
@@ -394,6 +481,8 @@ Hermes adaptation for diagnosing oh-my-hermes installation health.
 
 - Category: `operator`
 - Phase: `diagnostics`
+- Hermes role: `retained-operator`
+- Handoff policy: Run directly as local health inspection; propose Codex work only when a repo fix is required.
 - Use when: Use to diagnose OMH installation and Hermes config registration.
 - Strong routing signals: `doctor`, `$doctor`, `diagnose omh`, `installation health`
 - Required inputs:
@@ -496,6 +585,33 @@ Turn clarified requirements into an execution-ready plan with tradeoffs and test
 - Delegation expectation: Record planner, architect, or reviewer delegation only when observed in Hermes metadata or wrapper logs.
 - Privacy default: `metadata_only`
 - Fallback: If consensus review is unavailable, do a sequential planner -> reviewer pass.
+
+### research
+
+Gather current or source-backed evidence before planning or coding handoff.
+
+- Use when: Use when the request needs web/current/official source evidence or source comparison.
+- Inputs:
+  - research question
+  - source boundaries
+  - recency or environment constraints
+- Outputs:
+  - source-backed synthesis
+  - links or citations
+  - confidence and residual uncertainty
+- Stop conditions:
+  - claims are source-backed
+  - retrieval limits and dates are explicit
+- Verification:
+  - prefer official or primary sources
+  - separate evidence from inference
+- Artifact events:
+  - `research_started`
+  - `source_checked`
+  - `synthesis_recorded`
+- Delegation expectation: Record a research lane only when Hermes or the wrapper exposes source/research evidence; otherwise summarize retrieval limits explicitly.
+- Privacy default: `metadata_only`
+- Fallback: If web access is unavailable, state the retrieval gap and fall back to best available local evidence.
 
 ### deep-interview
 

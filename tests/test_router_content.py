@@ -7,6 +7,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_harnesses, builtin_skill_templates
+from omh.skills.catalog import primary_harness_for_skill
 from omh.skills.render import workflow_reference_markdown
 
 
@@ -19,6 +20,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh chat route", router.content)
         self.assertIn("omh coding delegate", router.content)
         self.assertIn("deterministic wrapper-side decision layer", router.content)
+        self.assertIn("Skill Role Classification", router.content)
+        self.assertIn("advisory wrapper guidance", router.content)
+        self.assertIn("This role metadata is advisory", router.content)
+        self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
+        self.assertIn("prepare a Codex handoff", router.content)
         self.assertIn("prepared_not_observed", router.content)
         self.assertIn("skills_list", router.content)
         self.assertIn("skill_view", router.content)
@@ -30,7 +36,9 @@ class RouterContentTests(unittest.TestCase):
         for expected in {
             "ralph",
             "ultragoal",
+            "ultrawork",
             "deep-interview",
+            "web-research",
             "team",
             "ultraqa",
             "plan",
@@ -48,6 +56,7 @@ class RouterContentTests(unittest.TestCase):
                 "coding-handling",
                 "goal-execution",
                 "planning",
+                "research",
                 "deep-interview",
                 "architect",
                 "critic",
@@ -75,6 +84,21 @@ class RouterContentTests(unittest.TestCase):
             self.assertGreaterEqual(len(definition.expected_outputs), 1, definition.name)
             self.assertGreaterEqual(len(definition.artifact_expectations), 1, definition.name)
             self.assertGreaterEqual(len(definition.safety_rules), 1, definition.name)
+            self.assertTrue(definition.hermes_role, definition.name)
+            self.assertTrue(definition.handoff_policy, definition.name)
+
+    def test_catalog_marks_retained_and_codex_handoff_skills(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+
+        self.assertEqual(definitions["deep-interview"].hermes_role, "retained-cognition")
+        self.assertEqual(definitions["web-research"].hermes_role, "retained-cognition")
+        self.assertEqual(definitions["ralplan"].hermes_role, "retained-cognition")
+        self.assertEqual(definitions["ultrawork"].hermes_role, "codex-handoff-guidance")
+        self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "codex-handoff-guidance")
+        self.assertIn("Codex", definitions["ultrawork"].handoff_policy)
+        self.assertEqual(primary_harness_for_skill("web-research"), "research")
+        self.assertEqual(primary_harness_for_skill("best-practice-research"), "research")
+        self.assertEqual(primary_harness_for_skill("autoresearch-goal"), "research")
 
     def test_workflow_skills_refer_to_harness_discipline(self) -> None:
         skills = {skill.name: skill for skill in builtin_skill_templates()}
@@ -83,6 +107,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Catalog Metadata", skills["ultragoal"].content)
         self.assertIn("Category: `execution`", skills["ultragoal"].content)
         self.assertIn("Phase: `durable-goals`", skills["ultragoal"].content)
+        self.assertIn("Hermes role: `codex-handoff-guidance`", skills["ultragoal"].content)
+        self.assertIn("Handoff policy:", skills["ultragoal"].content)
         self.assertIn("Runtime Evidence", skills["ultragoal"].content)
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
@@ -102,6 +128,8 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(f"### {definition.name}", reference)
             self.assertIn(f"- Category: `{definition.category}`", reference)
             self.assertIn(f"- Phase: `{definition.phase}`", reference)
+            self.assertIn(f"- Hermes role: `{definition.hermes_role}`", reference)
+            self.assertIn(f"- Handoff policy: {definition.handoff_policy}", reference)
         for harness in builtin_harnesses():
             self.assertIn(f"### {harness.name}", reference)
             for event in harness.artifact_events:
@@ -197,7 +225,7 @@ class RouterContentTests(unittest.TestCase):
         for section in ("### Setup", "### User Prompt Shape", "### Expected Hermes-Facing Behavior", "### Verification", "### Current Limit"):
             self.assertIn(section, text)
 
-        for harness in ("coding-handling", "goal-execution", "planning", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
+        for harness in ("coding-handling", "goal-execution", "planning", "research", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
             self.assertIn(harness, text)
         self.assertIn("omh probe", text)
 

@@ -278,6 +278,16 @@ adapters:
 - `omh coding delegate` prepares a coding handoff without tracking lifecycle.
 - `omh coding lifecycle` records and reports the Codex handoff lifecycle.
 
+The generated skill catalog also classifies each adapted workflow by role.
+Hermes-retained lanes such as `web-research`, `deep-interview`, `plan`, and
+`ralplan` stay focused on source gathering, clarification, planning, status, and
+evidence narration. Coding-heavy compatibility lanes such as `ultragoal`,
+`ultrawork`, and cleanup workflows remain installed, but their generated
+handoff policy tells wrappers to prepare and track Codex work instead of
+implying Hermes performed hidden implementation. This classification is
+deterministic advisory metadata for generated skills and wrapper UX; it does not
+by itself enforce runtime routing or mutate Hermes core behavior.
+
 Actual Discord and Slack transports stay outside this repository. `omh` does
 not open network connections, authenticate bots, post messages, invoke Codex, or
 patch Hermes internals.

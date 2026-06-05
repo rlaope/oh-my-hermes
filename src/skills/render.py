@@ -19,7 +19,8 @@ def _frontmatter(name: str, description: str) -> str:
     return (
         f"---\nname: {name}\ndescription: {description}\nmetadata:\n"
         f"  hermes:\n    tags: [workflow, oh-my-hermes, {category}]\n"
-        f"    category: {category}\n    phase: {phase}\n---\n"
+        f"    category: {category}\n    phase: {phase}\n"
+        f"    role: {definition.hermes_role if definition else 'hybrid-guidance'}\n---\n"
     )
 
 
@@ -54,6 +55,15 @@ def _harness_registry(harnesses: list[HarnessDefinition]) -> str:
     return "\n".join(_harness_summary(harness) for harness in harnesses)
 
 
+def _role_registry(definitions: list[SkillDefinition]) -> str:
+    lines = []
+    for definition in definitions:
+        lines.append(
+            f"- `{definition.name}`: role `{definition.hermes_role}`; handoff policy: {definition.handoff_policy}"
+        )
+    return "\n".join(lines)
+
+
 def _tuple_list(values: tuple[str, ...]) -> str:
     return "\n".join(f"- {value}" for value in values)
 
@@ -61,6 +71,11 @@ def _tuple_list(values: tuple[str, ...]) -> str:
 def _skill_metadata_block(definition: SkillDefinition) -> str:
     return f"""Category: `{definition.category}`
 Phase: `{definition.phase}`
+Hermes role: `{definition.hermes_role}`
+
+Handoff policy:
+
+{definition.handoff_policy}
 
 Required inputs:
 
@@ -84,7 +99,7 @@ def router_skill() -> SkillTemplate:
     harnesses = builtin_harnesses()
     body = f"""# Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `deep-interview`, `team`, `ultraqa`, `ralplan`, or `code-review`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
 
 ## Routing Contract
 
@@ -97,6 +112,14 @@ Priority:
 3. Broad planning requests route to `ralplan` or `plan` before implementation.
 4. Persistence or finish-until-done requests route to `ralph` only after scope is concrete.
 5. Unknown or conflicting signals stay in this router and ask one concise clarification question.
+
+## Skill Role Classification
+
+Keep compatible workflow names installed, but use this advisory wrapper guidance to decide what Hermes should own:
+
+{_role_registry(definitions)}
+
+General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should prepare a Codex handoff and track the lifecycle instead of implying Hermes coded secretly.
 
 ## Wrapper-Assisted Chat Routing
 
@@ -152,10 +175,11 @@ Harness priority:
 
 1. Coding requests start with `coding-handling`.
 2. Multi-step durable work adds `goal-execution`.
-3. Unclear work uses `deep-interview` before `planning`.
-4. Risky architecture uses `architect`, then `critic`.
-5. User-visible behavior changes add `qa-specialist`.
-6. Public commands, examples, or limitations add `docs-specialist`.
+3. Current-source or best-practice questions use the `research` harness and stay in Hermes-side evidence gathering before any coding handoff.
+4. Unclear work uses `deep-interview` before `planning`.
+5. Risky architecture uses `architect`, then `critic`.
+6. User-visible behavior changes add `qa-specialist`.
+7. Public commands, examples, or limitations add `docs-specialist`.
 
 Recovery:
 
@@ -208,7 +232,7 @@ This is a Hermes-native `{name}` workflow skill.
 
 ## Harness Discipline
 
-- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, planning, goal execution, architecture, critique, QA, or documentation lanes.
+- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, research, planning, goal execution, architecture, critique, QA, or documentation lanes.
 - Prefer richer evidence and clearer stop conditions over adding more workflow names.
 - Use specialist lanes only when they change the quality of the answer or verification.
 
@@ -262,6 +286,8 @@ def workflow_reference_markdown() -> str:
         "",
         "The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.",
         "",
+        "Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly or prepare a Codex handoff for coding-heavy execution.",
+        "",
         "## Skills",
         "",
     ]
@@ -275,6 +301,8 @@ def workflow_reference_markdown() -> str:
                 "",
                 f"- Category: `{definition.category}`",
                 f"- Phase: `{definition.phase}`",
+                f"- Hermes role: `{definition.hermes_role}`",
+                f"- Handoff policy: {definition.handoff_policy}",
                 f"- Use when: {definition.use_when}",
                 f"- Strong routing signals: {triggers}",
                 "- Required inputs:",

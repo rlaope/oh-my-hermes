@@ -172,6 +172,7 @@ Strong signals include:
 
 Hermes should shape the work through the representative specialist harnesses:
 
+- `research` for current, official, or source-backed evidence gathering
 - `architect` for boundaries, integration choices, and maintainability
 - `critic` for consistency, missing checks, and residual risk
 - `qa-specialist` for adversarial scenarios and pass/fail evidence
