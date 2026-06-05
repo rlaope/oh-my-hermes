@@ -115,11 +115,11 @@ Priority:
 
 ## Skill Role Classification
 
-Keep compatible workflow names installed, but classify them by what Hermes should own:
+Keep compatible workflow names installed, but use this advisory wrapper guidance to decide what Hermes should own:
 
 {_role_registry(definitions)}
 
-General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. When the accepted next action mutates code, the wrapper should prepare a Codex handoff and track the lifecycle instead of implying Hermes coded secretly.
+General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should prepare a Codex handoff and track the lifecycle instead of implying Hermes coded secretly.
 
 ## Wrapper-Assisted Chat Routing
 
@@ -175,7 +175,7 @@ Harness priority:
 
 1. Coding requests start with `coding-handling`.
 2. Multi-step durable work adds `goal-execution`.
-3. Current-source or best-practice questions stay in Hermes-side research before any coding handoff.
+3. Current-source or best-practice questions use the `research` harness and stay in Hermes-side evidence gathering before any coding handoff.
 4. Unclear work uses `deep-interview` before `planning`.
 5. Risky architecture uses `architect`, then `critic`.
 6. User-visible behavior changes add `qa-specialist`.
@@ -232,7 +232,7 @@ This is a Hermes-native `{name}` workflow skill.
 
 ## Harness Discipline
 
-- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, planning, goal execution, architecture, critique, QA, or documentation lanes.
+- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, research, planning, goal execution, architecture, critique, QA, or documentation lanes.
 - Prefer richer evidence and clearer stop conditions over adding more workflow names.
 - Use specialist lanes only when they change the quality of the answer or verification.
 
@@ -286,7 +286,7 @@ def workflow_reference_markdown() -> str:
         "",
         "The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.",
         "",
-        "Workflow names are kept for compatibility, but each skill declares whether Hermes should retain the work directly or prepare a Codex handoff for coding-heavy execution.",
+        "Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly or prepare a Codex handoff for coding-heavy execution.",
         "",
         "## Skills",
         "",

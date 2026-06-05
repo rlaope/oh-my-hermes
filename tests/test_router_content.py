@@ -7,6 +7,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_harnesses, builtin_skill_templates
+from omh.skills.catalog import primary_harness_for_skill
 from omh.skills.render import workflow_reference_markdown
 
 
@@ -20,6 +21,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh coding delegate", router.content)
         self.assertIn("deterministic wrapper-side decision layer", router.content)
         self.assertIn("Skill Role Classification", router.content)
+        self.assertIn("advisory wrapper guidance", router.content)
+        self.assertIn("This role metadata is advisory", router.content)
         self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
         self.assertIn("prepare a Codex handoff", router.content)
         self.assertIn("prepared_not_observed", router.content)
@@ -53,6 +56,7 @@ class RouterContentTests(unittest.TestCase):
                 "coding-handling",
                 "goal-execution",
                 "planning",
+                "research",
                 "deep-interview",
                 "architect",
                 "critic",
@@ -92,6 +96,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["ultrawork"].hermes_role, "codex-handoff-guidance")
         self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "codex-handoff-guidance")
         self.assertIn("Codex", definitions["ultrawork"].handoff_policy)
+        self.assertEqual(primary_harness_for_skill("web-research"), "research")
+        self.assertEqual(primary_harness_for_skill("best-practice-research"), "research")
+        self.assertEqual(primary_harness_for_skill("autoresearch-goal"), "research")
 
     def test_workflow_skills_refer_to_harness_discipline(self) -> None:
         skills = {skill.name: skill for skill in builtin_skill_templates()}
@@ -218,7 +225,7 @@ class RouterContentTests(unittest.TestCase):
         for section in ("### Setup", "### User Prompt Shape", "### Expected Hermes-Facing Behavior", "### Verification", "### Current Limit"):
             self.assertIn(section, text)
 
-        for harness in ("coding-handling", "goal-execution", "planning", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
+        for harness in ("coding-handling", "goal-execution", "planning", "research", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
             self.assertIn(harness, text)
         self.assertIn("omh probe", text)
 

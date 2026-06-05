@@ -4,7 +4,7 @@ This file is generated from `src/skills/catalog.py`. Update the catalog first, t
 
 The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.
 
-Workflow names are kept for compatibility, but each skill declares whether Hermes should retain the work directly or prepare a Codex handoff for coding-heavy execution.
+Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly or prepare a Codex handoff for coding-heavy execution.
 
 ## Skills
 
@@ -585,6 +585,33 @@ Turn clarified requirements into an execution-ready plan with tradeoffs and test
 - Delegation expectation: Record planner, architect, or reviewer delegation only when observed in Hermes metadata or wrapper logs.
 - Privacy default: `metadata_only`
 - Fallback: If consensus review is unavailable, do a sequential planner -> reviewer pass.
+
+### research
+
+Gather current or source-backed evidence before planning or coding handoff.
+
+- Use when: Use when the request needs web/current/official source evidence or source comparison.
+- Inputs:
+  - research question
+  - source boundaries
+  - recency or environment constraints
+- Outputs:
+  - source-backed synthesis
+  - links or citations
+  - confidence and residual uncertainty
+- Stop conditions:
+  - claims are source-backed
+  - retrieval limits and dates are explicit
+- Verification:
+  - prefer official or primary sources
+  - separate evidence from inference
+- Artifact events:
+  - `research_started`
+  - `source_checked`
+  - `synthesis_recorded`
+- Delegation expectation: Record a research lane only when Hermes or the wrapper exposes source/research evidence; otherwise summarize retrieval limits explicitly.
+- Privacy default: `metadata_only`
+- Fallback: If web access is unavailable, state the retrieval gap and fall back to best available local evidence.
 
 ### deep-interview
 
