@@ -5,6 +5,7 @@ import hashlib
 from typing import Any
 
 from .chat_router import CHAT_SOURCES, extract_message_text
+from .coding_contracts import CODING_EXECUTOR_TARGETS, EXECUTOR_HANDOFF_SCHEMA_VERSION
 from .recommend import recommend_skills
 from .skills.catalog import (
     CODING_INTENT_PRIORITY,
@@ -53,12 +54,15 @@ def build_coding_delegation_payload(
     limit: int = 3,
     include_message: bool = False,
     source_metadata: dict[str, str] | None = None,
+    executor_target: str = "generic",
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
         raise ValueError("coding delegate requires a task description")
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported coding delegate source: {source}")
+    if executor_target not in CODING_EXECUTOR_TARGETS:
+        raise ValueError(f"unsupported coding delegate executor: {executor_target}")
     if limit < 1:
         raise ValueError("coding delegate --limit must be at least 1")
 
@@ -93,12 +97,17 @@ def build_coding_delegation_payload(
         "delegation": delegation.to_dict(),
         "recommendations": recommendations,
     }
+    if executor_target != "generic" and delegation.action == "delegate":
+        payload["executor_handoff"] = _executor_handoff(executor_target, delegation)
     metadata = {key: value for key, value in (source_metadata or {}).items() if value}
     if metadata:
         payload["source_metadata"] = metadata
     if include_message:
         payload["message"] = message
         payload["delegation_prompt"] = str(delegation.delegation_prompt_template).replace("{message}", message)
+        handoff = payload.get("executor_handoff")
+        if isinstance(handoff, dict) and "prompt_template" in handoff:
+            payload["executor_handoff_prompt"] = str(handoff["prompt_template"]).replace("{message}", message)
     return payload
 
 
@@ -147,6 +156,7 @@ def coding_delegation_record_payload(
         "message_length": len(message),
         "source_metadata": metadata,
         "recommendation_evidence": payload.get("recommendations", []),
+        "executor_handoff": payload.get("executor_handoff"),
         "acceptance_criteria": delegation.get("acceptance_criteria", []),
         "verification": delegation.get("verification", []),
         "status": "prepared_not_observed",
@@ -257,6 +267,59 @@ def _verification(intent: str, action: str) -> tuple[str, ...]:
         ("Run targeted tests for the changed behavior.", "Run static or compile checks when available."),
     )
     return checks
+
+
+def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dict[str, object]:
+    if executor_target != "codex":
+        raise ValueError(f"unsupported coding delegate executor: {executor_target}")
+    return {
+        "schema_version": EXECUTOR_HANDOFF_SCHEMA_VERSION,
+        "executor_target": "codex",
+        "handoff_mode": "instruction_payload",
+        "status": "prepared_not_observed",
+        "recording_contract": "prepared_not_observed",
+        "dispatch_contract": "wrapper_dispatches_to_codex; omh_does_not_execute_codex",
+        "prompt_template": _codex_prompt_template(delegation),
+        "scope": [
+            "Use the original task message as the implementation request.",
+            "Respect the recommended OMHM workflow and harness metadata.",
+            "Keep Hermes-facing status separate from Codex execution evidence.",
+        ],
+        "non_goals": [
+            "Do not claim Hermes implemented the code.",
+            "Do not claim review, CI, or merge status without wrapper evidence.",
+            "Do not call network services from omh while preparing this handoff.",
+        ],
+        "acceptance_criteria": list(delegation.acceptance_criteria),
+        "verification": list(delegation.verification),
+        "review": {
+            "required": delegation.review_required,
+            "workflow": delegation.review_workflow,
+            "evidence_required": "Record separate wrapper/runtime evidence before marking review observed.",
+        },
+    }
+
+
+def _codex_prompt_template(delegation: CodingDelegation) -> str:
+    return (
+        "You are Codex, acting as the coding executor for a Hermes-orchestrated request.\n\n"
+        "Executor target: codex\n"
+        "Recommended OMHM workflow: `{workflow}`\n"
+        "Recommended harness: `{harness}`\n"
+        "Intent: `{intent}`\n"
+        "Prepared status: `prepared_not_observed`\n\n"
+        "Rules:\n"
+        "- Implement only after inspecting the repository and confirming the scope.\n"
+        "- Preserve unrelated behavior and user changes.\n"
+        "- Run targeted verification and report exact evidence.\n"
+        "- Do not say Hermes performed the implementation; Hermes prepared this handoff.\n\n"
+        "Task:\n{message}"
+    ).format(
+        workflow=delegation.recommended_workflow,
+        harness=delegation.recommended_harness,
+        intent=delegation.intent,
+        message="{message}",
+    )
 
 
 def _delegation_prompt_template(action: str, intent: str, workflow: str, harness: str) -> str:

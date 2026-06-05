@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from .coding_contracts import CODING_EXECUTOR_HANDOFF_TARGETS, EXECUTOR_HANDOFF_SCHEMA_VERSION
 from .local_store import utc_now
 
 
@@ -43,9 +44,26 @@ CODING_DELEGATION_RECORD_KEYS = (
     "message_length",
     "source_metadata",
     "recommendation_evidence",
+    "executor_handoff",
     "acceptance_criteria",
     "verification",
     "status",
+)
+CODING_EXECUTOR_HANDOFF_SCHEMA_VERSION = EXECUTOR_HANDOFF_SCHEMA_VERSION
+CODING_EXECUTOR_TARGETS = CODING_EXECUTOR_HANDOFF_TARGETS
+CODING_EXECUTOR_HANDOFF_KEYS = (
+    "schema_version",
+    "executor_target",
+    "handoff_mode",
+    "status",
+    "recording_contract",
+    "dispatch_contract",
+    "prompt_template",
+    "scope",
+    "non_goals",
+    "acceptance_criteria",
+    "verification",
+    "review",
 )
 
 
@@ -203,6 +221,9 @@ def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]
         "verification": _compact_string_list(nested.get("verification", delegation.get("verification", []))),
         "status": str(delegation.get("status", "prepared_not_observed")),
     }
+    executor_handoff = _compact_executor_handoff(delegation.get("executor_handoff"))
+    if executor_handoff:
+        record["executor_handoff"] = executor_handoff
     if not record["message_sha256"] and message_text:
         record["message_sha256"] = hashlib.sha256(message_text.encode("utf-8")).hexdigest()
     errors = validate_coding_delegation_record(record)
@@ -266,6 +287,32 @@ def _optional_string(value: Any) -> str | None:
         return None
     text = str(value)
     return text if text else None
+
+
+def _compact_executor_handoff(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    compact: dict[str, Any] = {
+        "schema_version": str(value.get("schema_version", "")),
+        "executor_target": str(value.get("executor_target", "")),
+        "handoff_mode": str(value.get("handoff_mode", "")),
+        "status": str(value.get("status", "")),
+        "recording_contract": str(value.get("recording_contract", "")),
+        "dispatch_contract": str(value.get("dispatch_contract", "")),
+        "prompt_template": str(value.get("prompt_template", "")),
+        "scope": _compact_string_list(value.get("scope", [])),
+        "non_goals": _compact_string_list(value.get("non_goals", [])),
+        "acceptance_criteria": _compact_string_list(value.get("acceptance_criteria", [])),
+        "verification": _compact_string_list(value.get("verification", [])),
+    }
+    review = value.get("review")
+    if isinstance(review, dict):
+        compact["review"] = {
+            "required": bool(review.get("required", False)),
+            "workflow": _optional_string(review.get("workflow")),
+            "evidence_required": str(review.get("evidence_required", "")),
+        }
+    return compact
 
 
 def _require(condition: bool, errors: list[str], message: str) -> None:
@@ -447,6 +494,59 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
             continue
         for index, value in enumerate(delegation[key]):
             _require(isinstance(value, str), errors, f"coding_delegation {key}[{index}] must be a string")
+    if "executor_handoff" in delegation:
+        errors.extend(validate_coding_executor_handoff(delegation["executor_handoff"]))
+    return errors
+
+
+def validate_coding_executor_handoff(handoff: Any) -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(handoff, dict), errors, "coding_delegation executor_handoff must be an object")
+    if not isinstance(handoff, dict):
+        return errors
+    extra_keys = sorted(set(handoff) - set(CODING_EXECUTOR_HANDOFF_KEYS))
+    _require(not extra_keys, errors, f"coding_delegation executor_handoff has unsupported keys: {extra_keys}")
+    _require(
+        handoff.get("schema_version") == CODING_EXECUTOR_HANDOFF_SCHEMA_VERSION,
+        errors,
+        "coding_delegation executor_handoff schema_version is invalid",
+    )
+    _require(
+        handoff.get("executor_target") in CODING_EXECUTOR_TARGETS,
+        errors,
+        f"coding_delegation executor_handoff executor_target is invalid: {handoff.get('executor_target')!r}",
+    )
+    for key in ("handoff_mode", "status", "recording_contract", "dispatch_contract", "prompt_template"):
+        _require(isinstance(handoff.get(key), str), errors, f"coding_delegation executor_handoff {key} must be a string")
+    _require(
+        handoff.get("status") == "prepared_not_observed",
+        errors,
+        "coding_delegation executor_handoff status must be prepared_not_observed",
+    )
+    _require(
+        "{message}" in str(handoff.get("prompt_template", "")),
+        errors,
+        "coding_delegation executor_handoff prompt_template must keep {message} placeholder",
+    )
+    for key in ("scope", "non_goals", "acceptance_criteria", "verification"):
+        _require(isinstance(handoff.get(key), list), errors, f"coding_delegation executor_handoff {key} must be a list")
+        if isinstance(handoff.get(key), list):
+            for index, value in enumerate(handoff[key]):
+                _require(isinstance(value, str), errors, f"coding_delegation executor_handoff {key}[{index}] must be a string")
+    review = handoff.get("review")
+    _require(isinstance(review, dict), errors, "coding_delegation executor_handoff review must be an object")
+    if isinstance(review, dict):
+        _require(isinstance(review.get("required"), bool), errors, "coding_delegation executor_handoff review.required must be boolean")
+        _require(
+            review.get("workflow") is None or isinstance(review.get("workflow"), str),
+            errors,
+            "coding_delegation executor_handoff review.workflow must be a string or null",
+        )
+        _require(
+            isinstance(review.get("evidence_required"), str),
+            errors,
+            "coding_delegation executor_handoff review.evidence_required must be a string",
+        )
     return errors
 
 

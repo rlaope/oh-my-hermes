@@ -234,6 +234,201 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
     }
 
 
+def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str, Any]:
+    shown = show_run(paths, run_id)
+    run = _object_or_empty(shown.get("run"))
+    coding = _object_or_empty(shown.get("coding_delegation"))
+    delegation = _object_or_empty(shown.get("delegation"))
+    wrapper = _object_or_empty(shown.get("wrapper"))
+    handoff = _object_or_empty(coding.get("executor_handoff"))
+    review = _object_or_empty(handoff.get("review"))
+
+    prepared = run.get("artifact_kind") == "prepared_coding_delegation" and bool(coding)
+    action = str(coding.get("action", "unknown"))
+    handoff_available = bool(handoff)
+    executor_target = str(handoff.get("executor_target") or coding.get("executor_profile") or "generic")
+    execution_observed = bool(delegation.get("observed", False))
+    execution_status = str(delegation.get("result") or ("not_observed" if prepared else "unknown"))
+    prompt_dispatched = bool(wrapper.get("prompt_dispatched", False))
+    response_observed = bool(wrapper.get("hermes_response_observed", False))
+    verification_observed = bool(wrapper.get("verification_observed", False))
+    completion_status = str(wrapper.get("completion_status") or "unknown")
+    review_required = bool(review.get("required", coding.get("review_required", False)))
+    review_workflow = review.get("workflow") if review else coding.get("review_workflow")
+
+    next_action = _delegated_status_next_action(
+        prepared=prepared,
+        action=action,
+        prompt_dispatched=prompt_dispatched,
+        execution_observed=execution_observed,
+        execution_status=execution_status,
+        review_required=review_required,
+        verification_observed=verification_observed,
+    )
+    integrity_warnings = _delegated_status_integrity_warnings(
+        run=run,
+        coding=coding,
+        delegation=delegation,
+        wrapper=wrapper,
+        handoff=handoff,
+        prepared=prepared,
+        action=action,
+    )
+    return {
+        "schema_version": "delegated_coding_status/v1",
+        "run_id": run_id,
+        "source": coding.get("source", "generic"),
+        "prepared": {
+            "available": prepared,
+            "action": action,
+            "status": coding.get("status", run.get("observation_status", "unknown")),
+            "executor_target": executor_target,
+            "workflow": coding.get("recommended_workflow", run.get("skill", "unknown")),
+            "harness": coding.get("recommended_harness", run.get("harness", "unknown")),
+            "handoff_available": handoff_available,
+            "handoff_schema_version": handoff.get("schema_version"),
+        },
+        "execution": {
+            "observed": execution_observed,
+            "status": execution_status,
+            "participants": delegation.get("participants", []),
+            "evidence_refs": delegation.get("evidence_refs", []),
+        },
+        "wrapper": {
+            "prompt_dispatched": prompt_dispatched,
+            "hermes_response_observed": response_observed,
+            "completion_status": completion_status,
+            "unobserved_gaps": wrapper.get("unobserved_gaps", []),
+        },
+        "verification": {
+            "observed": verification_observed,
+            "expected": coding.get("verification", []),
+        },
+        "review": {
+            "required": review_required,
+            "workflow": review_workflow,
+            "status": "not_observed" if review_required else "not_required",
+            "evidence_required": review.get("evidence_required", "Record review evidence separately before claiming review observed."),
+        },
+        "next_action": next_action,
+        "safe_summary": _delegated_status_summary(
+            prepared=prepared,
+            action=action,
+            executor_target=executor_target,
+            prompt_dispatched=prompt_dispatched,
+            execution_observed=execution_observed,
+            execution_status=execution_status,
+            review_required=review_required,
+            verification_observed=verification_observed,
+        ),
+        "integrity": {
+            "ok": not integrity_warnings,
+            "warnings": integrity_warnings,
+        },
+        "overclaim_guard": [
+            "Prepared coding delegation is not execution evidence.",
+            "Hermes should not claim it implemented code from this record.",
+            "Review, verification, CI, and merge status require separate observed evidence.",
+        ],
+    }
+
+
+def _object_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _delegated_status_next_action(
+    *,
+    prepared: bool,
+    action: str,
+    prompt_dispatched: bool,
+    execution_observed: bool,
+    execution_status: str,
+    review_required: bool,
+    verification_observed: bool,
+) -> str:
+    if not prepared:
+        return "prepare_coding_delegation"
+    if action == "clarify":
+        return "clarify_coding_request"
+    if action == "fallback":
+        return "route_coding_request"
+    if action != "delegate":
+        return "prepare_coding_delegation"
+    if not prompt_dispatched:
+        return "dispatch_to_executor"
+    if not execution_observed:
+        return "wait_for_executor_evidence"
+    if execution_status in {"blocked", "failed"}:
+        return "surface_executor_blocker"
+    if review_required:
+        return "record_review_evidence"
+    if not verification_observed:
+        return "record_verification_evidence"
+    return "report_completion_with_evidence"
+
+
+def _delegated_status_summary(
+    *,
+    prepared: bool,
+    action: str,
+    executor_target: str,
+    prompt_dispatched: bool,
+    execution_observed: bool,
+    execution_status: str,
+    review_required: bool,
+    verification_observed: bool,
+) -> str:
+    if not prepared:
+        return "No prepared coding delegation was found for this run."
+    if action == "clarify":
+        return "The coding request needs clarification before executor dispatch."
+    if action == "fallback":
+        return "The coding request fell back to the router; do not dispatch it to an executor yet."
+    if action != "delegate":
+        return "The coding delegation is not dispatchable yet."
+    if not prompt_dispatched:
+        return f"A {executor_target} coding handoff is prepared, but wrapper dispatch is not observed yet."
+    if not execution_observed:
+        return f"A {executor_target} coding handoff was dispatched, but executor completion is not observed yet."
+    if execution_status in {"blocked", "failed"}:
+        return f"The {executor_target} executor reported {execution_status}; do not claim completion."
+    if review_required:
+        return f"The {executor_target} executor is observed as {execution_status}, but review evidence is still required."
+    if not verification_observed:
+        return f"The {executor_target} executor is observed as {execution_status}, but verification evidence is not observed yet."
+    return f"The {executor_target} executor is observed as {execution_status} with wrapper verification evidence."
+
+
+def _delegated_status_integrity_warnings(
+    *,
+    run: dict[str, Any],
+    coding: dict[str, Any],
+    delegation: dict[str, Any],
+    wrapper: dict[str, Any],
+    handoff: dict[str, Any],
+    prepared: bool,
+    action: str,
+) -> list[str]:
+    warnings: list[str] = []
+    artifact_kind = run.get("artifact_kind")
+    if artifact_kind == "prepared_coding_delegation" and not coding:
+        warnings.append("prepared_coding_delegation run is missing coding_delegation.json")
+    if coding and artifact_kind != "prepared_coding_delegation":
+        warnings.append("coding_delegation.json exists but run artifact_kind is not prepared_coding_delegation")
+    if prepared and run.get("observation_status") != "prepared_not_observed":
+        warnings.append("prepared coding delegation run has unexpected observation_status")
+    if action != "delegate" and handoff:
+        warnings.append("non-delegate coding action must not include executor_handoff")
+    if action == "delegate" and handoff and handoff.get("status") != "prepared_not_observed":
+        warnings.append("executor_handoff has unexpected status")
+    if wrapper and wrapper.get("completion_status") == "completed" and not wrapper.get("prompt_dispatched"):
+        warnings.append("wrapper reports completed without prompt_dispatched")
+    if delegation.get("observed") and not wrapper.get("prompt_dispatched", False):
+        warnings.append("delegation is observed but wrapper dispatch is not observed")
+    return warnings
+
+
 def validate_run_dir(run_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     run_path = run_dir / "run.json"

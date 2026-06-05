@@ -12,6 +12,8 @@ The architecture favors:
 - generated skill text from testable catalog data
 - explicit compatibility contracts
 - conservative routing behavior
+- delegation-first coding, where Hermes plans and narrates while Codex-like
+  executors perform main implementation work
 
 ## Package Layout
 
@@ -81,7 +83,9 @@ The routing and delegation surfaces read from the same catalog metadata. The cha
 with raw-message prompt expansion available only through `--include-message`.
 Coding delegation returns a `delegation_prompt_template`, recommended workflow,
 harness, acceptance criteria, verification expectations, and optional
-metadata-only `coding_delegation.json` evidence. That record stores a compact
+metadata-only `coding_delegation.json` evidence. With `--executor codex`, it also
+returns a `coding_executor_handoff/v1` instruction payload that names Codex as
+the executor target without launching Codex. That record stores a compact
 snapshot of the generated acceptance criteria and verification expectations, but
 not the raw prompt body. With `--record`, the companion `run.json` is marked as
 `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
@@ -110,6 +114,10 @@ execution from presentation text.
 
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.
+
+The delegation-first completion model is tracked in
+`docs/DELEGATION_FIRST_COMPLETENESS.md`. It is the product boundary for making
+OMHM feel more complete without turning Hermes into the main coding executor.
 
 ## Hermes Capability Boundary
 
@@ -210,6 +218,13 @@ Wrappers can also call `omh runtime wrapper` to record whether a prompt was
 dispatched, whether a Hermes response was observed, whether verification was
 observed, and which gaps remain unobserved. This keeps bot integration evidence
 separate from claims about Hermes internals.
+
+Wrappers can call `omh runtime delegation-status --run <run-id>` to combine the
+prepared coding delegation, delegation observation, and wrapper observation into
+a `delegated_coding_status/v1` summary. The summary exposes `safe_summary`,
+`next_action`, review readiness, verification observation, and an
+`overclaim_guard` so chat adapters can report progress without implying Hermes
+implemented the code.
 
 ## Hermes Planning Artifacts
 

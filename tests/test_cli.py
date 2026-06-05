@@ -174,6 +174,44 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["source_metadata"]["channel_ref"], "c1")
         self.assertEqual(payload["source_metadata"]["user_ref"], "u1")
 
+    def test_coding_delegate_codex_executor_handoff_is_metadata_safe(self) -> None:
+        hostile = "refactor api; rm -rf / # nope"
+
+        status, stdout, stderr = run_cli(["coding", "delegate", "--executor", "codex", "--source", "discord", hostile])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        handoff = payload["executor_handoff"]
+        self.assertEqual(handoff["schema_version"], "coding_executor_handoff/v1")
+        self.assertEqual(handoff["executor_target"], "codex")
+        self.assertEqual(handoff["handoff_mode"], "instruction_payload")
+        self.assertEqual(handoff["status"], "prepared_not_observed")
+        self.assertEqual(handoff["recording_contract"], "prepared_not_observed")
+        self.assertIn("{message}", handoff["prompt_template"])
+        self.assertNotIn(hostile, json.dumps(handoff))
+        self.assertNotIn(hostile, json.dumps(payload))
+
+    def test_coding_delegate_codex_executor_include_message_expands_stdout_only(self) -> None:
+        status, stdout, stderr = run_cli(["coding", "delegate", "--executor", "codex", "--include-message", "risky", "refactor"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["message"], "risky refactor")
+        self.assertIn("Task:\nrisky refactor", payload["executor_handoff_prompt"])
+
+    def test_coding_delegate_codex_executor_does_not_handoff_fallback_or_clarify(self) -> None:
+        for message, action in (("zzzzunknownphrase", "fallback"), ("fix maybe", "clarify")):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["coding", "delegate", "--executor", "codex", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["delegation"]["action"], action)
+                self.assertNotIn("executor_handoff", payload)
+
     def test_coding_delegate_weak_query_falls_back(self) -> None:
         status, stdout, stderr = run_cli(["coding", "delegate", "zzzzunknownphrase"])
 
@@ -244,6 +282,231 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             self.assertTrue(json.loads(stdout)["ok"])
+
+    def test_coding_delegate_records_codex_executor_handoff_without_raw_message(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            hostile = "refactor api; rm -rf / # nope"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    hostile,
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            run_id = payload["runtime"]["run"]["run_id"]
+            record = payload["runtime"]["coding_delegation"]
+            handoff = record["executor_handoff"]
+            self.assertEqual(handoff["executor_target"], "codex")
+            self.assertIn("{message}", handoff["prompt_template"])
+            self.assertNotIn(hostile, json.dumps(record))
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "show", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["coding_delegation"]["executor_handoff"]["executor_target"], "codex")
+            self.assertNotIn(hostile, json.dumps(shown["coding_delegation"]))
+
+    def test_runtime_delegation_status_summarizes_prepared_codex_handoff(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "risky",
+                    "refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["runtime"]["run"]["run_id"]
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "delegation-status", "--run", run_id]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            summary = json.loads(stdout)
+            self.assertEqual(summary["schema_version"], "delegated_coding_status/v1")
+            self.assertEqual(summary["prepared"]["executor_target"], "codex")
+            self.assertEqual(summary["prepared"]["action"], "delegate")
+            self.assertTrue(summary["prepared"]["handoff_available"])
+            self.assertFalse(summary["execution"]["observed"])
+            self.assertEqual(summary["execution"]["status"], "not_observed")
+            self.assertEqual(summary["next_action"], "dispatch_to_executor")
+            self.assertTrue(summary["integrity"]["ok"])
+            self.assertIn("not execution evidence", " ".join(summary["overclaim_guard"]))
+
+    def test_runtime_delegation_status_does_not_dispatch_fallback_or_clarify(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            for message, next_action in (("zzzzunknownphrase", "route_coding_request"), ("fix maybe", "clarify_coding_request")):
+                with self.subTest(message=message):
+                    status, stdout, stderr = run_cli(base + ["coding", "delegate", "--record", "--executor", "codex", message])
+                    self.assertEqual(stderr, "")
+                    self.assertEqual(status, 0)
+                    payload = json.loads(stdout)
+                    self.assertNotIn("executor_handoff", payload)
+                    run_id = payload["runtime"]["run"]["run_id"]
+
+                    status, stdout, stderr = run_cli(base + ["runtime", "delegation-status", "--run", run_id])
+
+                    self.assertEqual(stderr, "")
+                    self.assertEqual(status, 0)
+                    summary = json.loads(stdout)
+                    self.assertEqual(summary["next_action"], next_action)
+                    self.assertFalse(summary["prepared"]["handoff_available"])
+                    self.assertNotEqual(summary["next_action"], "dispatch_to_executor")
+                    self.assertTrue(summary["integrity"]["ok"])
+
+    def test_runtime_delegation_status_reports_review_followup_after_observed_execution(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            status, stdout, _ = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "risky",
+                    "refactor",
+                ]
+            )
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["runtime"]["run"]["run_id"]
+            self.assertEqual(
+                run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "--hermes-home",
+                        str(hermes_home),
+                        "runtime",
+                        "wrapper",
+                        "--run",
+                        run_id,
+                        "--prompt-dispatched",
+                        "--response-observed",
+                        "--verification-observed",
+                        "--completion-status",
+                        "completed",
+                    ]
+                )[0],
+                0,
+            )
+            self.assertEqual(
+                run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "--hermes-home",
+                        str(hermes_home),
+                        "runtime",
+                        "delegate",
+                        "--run",
+                        run_id,
+                        "--requested",
+                        "--observed",
+                        "--result",
+                        "completed",
+                        "--participants",
+                        "codex",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "delegation-status", "--run", run_id]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            summary = json.loads(stdout)
+            self.assertTrue(summary["execution"]["observed"])
+            self.assertEqual(summary["execution"]["status"], "completed")
+            self.assertTrue(summary["verification"]["observed"])
+            self.assertTrue(summary["review"]["required"])
+            self.assertEqual(summary["next_action"], "record_review_evidence")
+            self.assertIn("review evidence is still required", summary["safe_summary"])
+
+    def test_runtime_delegation_status_warns_on_missing_prepared_artifact(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "risky",
+                    "refactor",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["runtime"]["run"]["run_id"]
+            (omh_home / "runtime" / "runs" / run_id / "coding_delegation.json").unlink()
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "delegation-status", "--run", run_id]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            summary = json.loads(stdout)
+            self.assertFalse(summary["integrity"]["ok"])
+            self.assertTrue(any("missing coding_delegation.json" in warning for warning in summary["integrity"]["warnings"]))
 
     def test_hermes_plan_returns_review_gated_scaffold(self) -> None:
         status, stdout, stderr = run_cli(["hermes", "plan", "risky", "refactor", "with", "review"])

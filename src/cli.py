@@ -15,6 +15,7 @@ from .chat_router import (
     routing_record_payload,
 )
 from .coding_delegation import (
+    CODING_EXECUTOR_TARGETS,
     build_coding_delegation_payload,
     coding_delegation_record_payload,
     extract_source_metadata,
@@ -41,6 +42,7 @@ from .runtime_artifacts import (
     read_state,
     read_state_result,
     show_run,
+    summarize_delegated_coding_status,
     update_state,
     validate_runtime,
     write_coding_delegation,
@@ -248,6 +250,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             limit=args.limit,
             include_message=args.include_message,
             source_metadata=source_metadata,
+            executor_target=args.executor,
         )
         if args.record:
             delegation = payload["delegation"]
@@ -377,6 +380,14 @@ def cmd_runtime_runs(args: argparse.Namespace) -> int:
 def cmd_runtime_show(args: argparse.Namespace) -> int:
     try:
         _print_json(show_run(_paths(args), args.run_id))
+    except FileNotFoundError as exc:
+        raise OmhError(f"runtime run not found: {args.run_id}") from exc
+    return 0
+
+
+def cmd_runtime_delegation_status(args: argparse.Namespace) -> int:
+    try:
+        _print_json(summarize_delegated_coding_status(_paths(args), args.run_id))
     except FileNotFoundError as exc:
         raise OmhError(f"runtime run not found: {args.run_id}") from exc
     return 0
@@ -664,6 +675,12 @@ def _add_coding_commands(sub) -> None:
         help="Source surface that received the coding request.",
     )
     delegate.add_argument("--limit", type=int, default=3, help="Maximum catalog recommendations to include.")
+    delegate.add_argument(
+        "--executor",
+        choices=CODING_EXECUTOR_TARGETS,
+        default="generic",
+        help="Optional coding executor target for wrapper handoff payloads.",
+    )
     delegate.add_argument("--stdin", action="store_true", help="Read the raw coding task from stdin.")
     delegate.add_argument(
         "--event-json",
@@ -721,6 +738,10 @@ def _add_runtime_commands(sub) -> None:
     runtime_show = runtime_sub.add_parser("show")
     runtime_show.add_argument("run_id")
     runtime_show.set_defaults(func=cmd_runtime_show)
+
+    runtime_delegation_status = runtime_sub.add_parser("delegation-status")
+    runtime_delegation_status.add_argument("--run", dest="run_id", required=True)
+    runtime_delegation_status.set_defaults(func=cmd_runtime_delegation_status)
 
     runtime_record = runtime_sub.add_parser("record")
     runtime_record.add_argument("--skill", required=True)

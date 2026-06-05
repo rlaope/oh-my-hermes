@@ -101,8 +101,10 @@ omh apply --dry-run
 omh recommend "risky refactor"
 omh chat route --source discord --record "risky refactor"
 omh coding delegate --source discord --record "risky refactor"
+omh coding delegate --executor codex --source discord --record "risky refactor"
 omh hermes plan --record "risky refactor with review"
 omh runtime record --skill oh-my-hermes --harness coding-handling --status started
+omh runtime delegation-status --run <run-id>
 omh runtime validate
 omh runtime export
 omh runtime runs
@@ -155,6 +157,19 @@ companion `run.json` is bookkeeping for that prepared handoff and is marked
 `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
 `observation_status: prepared_not_observed`.
 
+For delegation-first coding flows, wrappers can request an explicit Codex
+handoff without asking `omh` to execute Codex:
+
+```sh
+omh coding delegate --executor codex --source discord --record "risky refactor"
+```
+
+The stdout and runtime record include a `coding_executor_handoff/v1` instruction
+payload with executor target `codex`, acceptance criteria, verification
+expectations, review expectations, and status `prepared_not_observed`. The raw
+message remains a `{message}` placeholder in templates unless
+`--include-message` is used for stdout-only wrapper dispatch.
+
 Delegation artifacts separate `requested` from `observed`. If Hermes or a bot
 wrapper cannot prove that a specialist lane actually ran, the result should stay
 `not_observed` or `not_available`.
@@ -166,6 +181,18 @@ omh runtime wrapper --run <run-id> --prompt-dispatched --response-observed --com
 omh runtime validate --run <run-id>
 omh runtime export --redacted
 ```
+
+To turn recorded evidence into a safe user-facing status, wrappers can ask for a
+deterministic summary:
+
+```sh
+omh runtime delegation-status --run <run-id>
+```
+
+The summary reports prepared handoff, executor observation, verification
+observation, review readiness, a `next_action`, and an `overclaim_guard`.
+Prepared handoff is never treated as implementation, review, CI, or merge
+evidence by itself.
 
 ## Routing Model
 
@@ -204,6 +231,9 @@ and a `delegation_prompt_template`. With `--record`, it writes
 `coding_delegation.json` evidence and a `prepared_coding_delegation` run
 envelope; validation treats those as a required pair. The wrapper still needs
 separate Hermes or bot evidence before claiming execution was observed.
+When the intended main coding executor is Codex, add `--executor codex` to
+include a `coding_executor_handoff/v1` instruction payload. `omh` still does not
+launch Codex; the wrapper is responsible for dispatch and later observation.
 
 For planning-shaped requests, wrappers or operators can run `omh hermes plan` to
 create a deterministic `hermes_plan/v1` scaffold. With `--record`, it writes a
@@ -236,6 +266,7 @@ to `false`, so wrappers ask the clarification instead of dispatching code.
 | `omh coding delegate <task>` | Prepare a deterministic coding handoff payload and optional metadata-only runtime record. |
 | `omh hermes plan <task>` | Prepare a deterministic Hermes-facing plan, wrapper handoff contract, and optional `.hermes/plans` artifact. |
 | `omh runtime status` | Inspect local runtime artifact state. |
+| `omh runtime delegation-status --run <run-id>` | Summarize prepared/observed delegated coding status without overclaiming execution. |
 | `omh runtime record` | Create a metadata-only workflow run artifact. |
 | `omh runtime delegate` | Record observed or unavailable delegation for a run. |
 | `omh runtime wrapper` | Record what a bot or wrapper actually observed for a run. |

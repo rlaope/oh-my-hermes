@@ -109,14 +109,14 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("coding_delegation_recorded", reference)
 
     def test_generated_public_content_avoids_external_runtime_branding(self) -> None:
-        forbidden = ("om" + "x", "oh-my-" + "co" + "dex", "co" + "dex")
+        forbidden = ("om" + "x", "oh-my-" + "co" + "dex")
         combined = "\n".join(skill.content for skill in builtin_skill_templates()).lower()
 
         for term in forbidden:
             self.assertNotIn(term, combined)
 
     def test_public_project_files_avoid_external_runtime_branding(self) -> None:
-        forbidden = ("om" + "x", "oh-my-" + "co" + "dex", "co" + "dex")
+        forbidden = ("om" + "x", "oh-my-" + "co" + "dex")
         paths = [
             Path("README.md"),
             Path("pyproject.toml"),
