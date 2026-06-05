@@ -324,7 +324,7 @@ class RuntimeArtifactTests(unittest.TestCase):
         self.assertTrue(any("coding_delegation action is invalid" in error for error in coding_errors))
         self.assertTrue(any("source_metadata has unsupported keys" in error for error in coding_errors))
 
-    def test_export_runtime_redacts_sensitive_keys(self) -> None:
+    def test_export_runtime_redacts_sensitive_text_and_preserves_evidence_booleans(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
@@ -332,17 +332,31 @@ class RuntimeArtifactTests(unittest.TestCase):
                 paths.runtime_runs_dir / run["run_id"],
                 {
                     "prompt_dispatched": True,
+                    "hermes_response_observed": True,
+                    "verification_observed": False,
                     "completion_status": "completed",
-                    "message": "safe summary",
+                    "message": "private-token-123 raw prompt",
                     "prompt_body": "do not export",
                 },
             )
+            wrapper_path = paths.runtime_runs_dir / run["run_id"] / "wrapper.json"
+            wrapper_record = json.loads(wrapper_path.read_text(encoding="utf-8"))
+            wrapper_record["prompt_body"] = "do not export"
+            wrapper_path.write_text(json.dumps(wrapper_record), encoding="utf-8")
 
             exported = export_runtime(paths, redacted=True)
 
             self.assertTrue(exported["redacted"])
-            self.assertEqual(exported["runs"][0]["wrapper"]["message"], "safe summary")
-            self.assertNotIn("do not export", json.dumps(exported))
+            wrapper = exported["runs"][0]["wrapper"]
+            self.assertEqual(wrapper["message"], "[redacted]")
+            self.assertEqual(wrapper["prompt_body"], "[redacted]")
+            self.assertTrue(wrapper["prompt_dispatched"])
+            self.assertTrue(wrapper["hermes_response_observed"])
+            self.assertFalse(wrapper["verification_observed"])
+            self.assertEqual(wrapper["completion_status"], "completed")
+            serialized = json.dumps(exported)
+            self.assertNotIn("private-token-123", serialized)
+            self.assertNotIn("do not export", serialized)
 
     def test_update_state_merges_patch(self) -> None:
         with TemporaryDirectory() as tmp:

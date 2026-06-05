@@ -483,14 +483,26 @@ def validate_runtime(paths: OmhPaths, run_id: str | None = None) -> dict[str, An
     return {"ok": all(result["ok"] for result in results), "runs": results}
 
 
-SENSITIVE_KEY_PARTS = ("prompt", "response", "secret", "token", "api_key", "apikey", "password")
+SENSITIVE_KEY_PARTS = ("secret", "token", "api_key", "apikey", "password")
+SENSITIVE_TEXT_KEY_PARTS = ("prompt", "response")
+SENSITIVE_TEXT_KEYS = ("message", "raw_message", "task_statement")
+EVIDENCE_KEYS_TO_PRESERVE = ("prompt_dispatched", "hermes_response_observed", "verification_observed")
+
+
+def _should_redact_key(key: str) -> bool:
+    lowered = key.lower()
+    if lowered in EVIDENCE_KEYS_TO_PRESERVE:
+        return False
+    if lowered in SENSITIVE_TEXT_KEYS:
+        return True
+    return any(part in lowered for part in SENSITIVE_KEY_PARTS + SENSITIVE_TEXT_KEY_PARTS)
 
 
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         redacted: dict[str, Any] = {}
         for key, item in value.items():
-            if any(part in key.lower() for part in SENSITIVE_KEY_PARTS):
+            if _should_redact_key(str(key)):
                 redacted[key] = "[redacted]"
             else:
                 redacted[key] = _redact(item)
