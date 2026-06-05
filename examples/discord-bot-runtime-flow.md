@@ -1,33 +1,104 @@
-# Discord Bot Runtime Flow
+# Discord Bot Wrapper Flow
 
-This example shows how a bot wrapper can leave local OMH artifacts while keeping
-Hermes Agent as the runtime.
+This example shows the recommended shape for a Discord bot or hosted chat
+wrapper. Hermes Agent remains the user-facing runtime. OMH supplies local,
+deterministic contracts that the wrapper can render, persist, and update with
+observed evidence.
 
-## Flow
+The user should not need to know OMH command names. The wrapper translates a
+plain Discord message into a chat response, plan decision, coding handoff, and
+status update.
 
-1. The bot receives a Discord message.
-2. The bot starts a local run artifact:
+## Primary Flow
 
-   ```sh
-   omh runtime record --skill oh-my-hermes --harness coding-handling --status started
-   ```
+1. The bot receives a Discord message and writes the raw platform event to a
+   temporary local file such as `event.json`.
 
-3. The bot sends the user request to Hermes Agent.
-4. Hermes answers with the installed skill pack available through its normal
-   skill discovery.
-5. The bot records what it could observe:
-
-   ```sh
-   omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
-   ```
-
-6. The operator inspects the artifact:
+2. The bot asks OMH for the wrapper-native interaction envelope:
 
    ```sh
-   omh runtime show <run-id>
+   interaction_json="$(omh chat interact --source discord --event-json event.json)"
    ```
 
-## Boundary
+3. The bot renders the safe chat response in the same Discord thread:
 
-Use `--observed` only when the bot or Hermes metadata proves that a separate
-specialist lane ran. Otherwise use `not_observed` or `not_available`.
+   ```sh
+   printf '%s' "$interaction_json" |
+     python -c 'import json,sys; data=json.load(sys.stdin)["chat_response"]; print(data["headline"]); print(data["body"])'
+   ```
+
+   Render `chat_response.actions` as buttons when the platform supports them.
+   Typical action ids include `accept_plan`, `revise_plan`, `send_to_codex`,
+   `show_status`, and `cancel`.
+
+4. If the wrapper needs restart recovery, start or resume a metadata-only chat
+   session keyed to the Discord message/thread:
+
+   ```sh
+   session_json="$(
+     omh chat session start \
+       --source discord \
+       --source-event-id "$DISCORD_MESSAGE_ID" \
+       --channel-ref "$DISCORD_CHANNEL_ID" \
+       "risky refactor"
+   )"
+   session_id="$(printf '%s' "$session_json" | python -c 'import json,sys; print(json.load(sys.stdin)["session"]["session_id"])')"
+   ```
+
+5. If OMH returns a plan, wait for the user to accept or revise it before
+   preparing a coding handoff:
+
+   ```sh
+   omh chat session accept-plan "$session_id"
+   ```
+
+6. For accepted implementation-shaped work, prepare a Codex-oriented lifecycle
+   run and link it to the wrapper session:
+
+   ```sh
+   handoff_json="$(omh chat session prepare-handoff "$session_id" "risky refactor")"
+   run_id="$(printf '%s' "$handoff_json" | python -c 'import json,sys; print(json.load(sys.stdin)["session"]["current_run_id"])')"
+   ```
+
+7. Dispatch the `coding_executor_handoff/v1` payload to the external coding
+   executor outside OMH, then record only transitions the wrapper actually
+   observed:
+
+   ```sh
+   omh coding lifecycle dispatch --run "$run_id"
+   omh coding lifecycle result --run "$run_id" --result completed --evidence-ref codex-log
+   omh coding lifecycle verify --run "$run_id" --completion-status completed
+   ```
+
+8. Render status updates from the local lifecycle report:
+
+   ```sh
+   omh coding lifecycle report --run "$run_id"
+   omh chat session status "$session_id"
+   ```
+
+## Status Boundaries
+
+- A prepared handoff is not execution evidence.
+- Hermes should not claim it implemented code from an OMH record.
+- Review, verification, CI, and merge status require separately observed
+  wrapper or runtime evidence.
+- Use `not_observed` or `not_available` when the bot cannot prove a transition.
+
+## Lower-Level Diagnostics
+
+The lower-level runtime commands are still useful for debugging custom wrappers
+or inspecting local artifacts directly:
+
+```sh
+run_json="$(omh runtime record --skill oh-my-hermes --harness coding-handling --status started)"
+run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+
+omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
+omh runtime show "$run_id"
+omh runtime validate --run "$run_id"
+```
+
+Use these diagnostic commands when you need explicit artifact inspection. For
+normal Discord or Slack UX, prefer `omh chat interact`, `omh chat session`, and
+`omh coding lifecycle`.
