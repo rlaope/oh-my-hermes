@@ -20,6 +20,9 @@ class CliTests(unittest.TestCase):
         self.assertTrue(recommendations)
         self.assertIn("ai-slop-cleaner", {recommendation["skill"] for recommendation in recommendations[:3]})
         self.assertTrue(any(recommendation["why"] and recommendation["suggested_prompt"] for recommendation in recommendations))
+        cleanup = next(recommendation for recommendation in recommendations if recommendation["skill"] == "ai-slop-cleaner")
+        self.assertEqual(cleanup["hermes_role"], "codex-handoff-guidance")
+        self.assertIn("Codex", cleanup["handoff_policy"])
 
     def test_recommend_implementation_plan_includes_planning_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "implementation", "plan", "with", "review"])
@@ -29,6 +32,17 @@ class CliTests(unittest.TestCase):
         recommendations = json.loads(stdout)["recommendations"]
         top_names = {recommendation["skill"] for recommendation in recommendations[:3]}
         self.assertTrue({"plan", "ralplan"} & top_names)
+        self.assertTrue(any(recommendation["hermes_role"] == "retained-cognition" for recommendation in recommendations))
+
+    def test_recommend_web_research_stays_hermes_owned(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "latest", "web", "research", "official", "sources"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertEqual(recommendations[0]["skill"], "web-research")
+        self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
+        self.assertIn("source-backed", recommendations[0]["description"].lower())
 
     def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
