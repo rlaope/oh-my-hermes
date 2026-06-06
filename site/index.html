@@ -14,6 +14,7 @@
     <header class="topbar" aria-label="Primary">
       <div class="brand">OMH</div>
       <nav class="nav" aria-label="Primary navigation">
+        <a href="#architecture">Architecture</a>
         <a href="#flow">Flow</a>
         <a href="#example">Example</a>
         <a href="#contracts">Contracts</a>
@@ -35,6 +36,46 @@
           <div class="actions" aria-label="Primary actions">
             <a class="button button--primary" href="#install">Install</a>
             <a class="button" href="docs/">Read docs</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--light" id="architecture">
+        <div class="section__header">
+          <h2>Architecture at a glance.</h2>
+          <p>
+            OMH sits below the chat surface and above executor lanes: wrappers render UX,
+            Hermes keeps conversation and planning, and runtime artifacts decide what is
+            actually observed.
+          </p>
+        </div>
+        <div class="architecture-map" aria-label="OMH architecture diagram">
+          <div class="arch-node arch-node--source">
+            <span>User message</span>
+            <strong>Discord, Slack, hosted chat</strong>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">-></div>
+          <div class="arch-node">
+            <span>Wrapper adapter</span>
+            <strong>Buttons, threads, edits</strong>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">-></div>
+          <div class="arch-node arch-node--core">
+            <span>OMH local contract layer</span>
+            <strong>Route, plan, handoff, status</strong>
+          </div>
+          <div class="arch-branch" aria-hidden="true"></div>
+          <div class="arch-node arch-node--hermes">
+            <span>Hermes Agent</span>
+            <strong>Clarify, research, plan, narrate</strong>
+          </div>
+          <div class="arch-node arch-node--executor">
+            <span>Codex-like executor</span>
+            <strong>Implementation after dispatch</strong>
+          </div>
+          <div class="arch-node arch-node--runtime">
+            <span>Runtime artifacts</span>
+            <strong>Observed evidence and status cards</strong>
           </div>
         </div>
       </section>

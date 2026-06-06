@@ -372,6 +372,7 @@ class RouterContentTests(unittest.TestCase):
 
     def test_architecture_docs_include_visual_system_view(self) -> None:
         architecture = Path("docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+        site_home = Path("site/index.html").read_text(encoding="utf-8")
         site_docs = Path("site/docs/index.html").read_text(encoding="utf-8")
 
         self.assertIn("## System View", architecture)
@@ -379,6 +380,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("flowchart LR", architecture)
         self.assertIn("OMH local contract layer", architecture)
         self.assertIn("prepared handoff, not execution proof", architecture)
+        self.assertIn('id="architecture"', site_home)
+        self.assertIn("Architecture at a glance.", site_home)
+        self.assertIn("architecture-map", site_home)
+        self.assertLess(site_home.index('id="architecture"'), site_home.index('id="flow"'))
         self.assertIn("Architecture at a glance", site_docs)
         self.assertIn("architecture-map", site_docs)
         self.assertIn("Runtime artifacts", site_docs)
