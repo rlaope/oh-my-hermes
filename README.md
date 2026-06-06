@@ -253,6 +253,7 @@ fixtures, reapply, wrapper lifecycle, redacted export, and uninstall details.
 | Install, update, reapply, uninstall | [Installation](docs/INSTALLATION.md) |
 | Architecture and module ownership | [Architecture](docs/ARCHITECTURE.md) |
 | Delegation lifecycle completeness | [Delegation-First Completeness](docs/DELEGATION_FIRST_COMPLETENESS.md) |
+| Discord-style wrapper examples | [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md) |
 | Harness quality contracts | [Harness Quality Contract](docs/HARNESS_QUALITY.md) |
 | Representative workflows | [Application Cases](docs/APPLICATION_CASES.md) |
 | Generated workflow catalog | [Workflow Reference](docs/WORKFLOWS.md) |

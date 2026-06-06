@@ -28,6 +28,7 @@
         <a href="#install">Install</a>
         <a href="#chat">Chat wrappers</a>
         <a href="#demo">Demo</a>
+        <a href="#discord-example">Chat example</a>
         <a href="#contracts">Contracts</a>
         <a href="#delegation">Delegation</a>
         <a href="#quality">Quality gates</a>
@@ -96,6 +97,60 @@ uv run python examples/slack-adapter-shim.py</code>
           <p>
             The demo and shims are fixture-backed. They do not call bot SDKs, LLM APIs,
             network services, or Hermes internals.
+          </p>
+        </section>
+
+        <section class="docs-section" id="discord-example">
+          <h2>Discord-style response</h2>
+          <p>
+            The fixture-backed Discord shim renders a natural feature request as a Hermes Agent
+            plan response with wrapper-native actions and explicit evidence boundaries.
+          </p>
+          <div class="discord-frame" aria-label="Discord-style Hermes Agent example">
+            <div class="discord-channel"># repo-planning</div>
+            <div class="discord-message">
+              <div class="avatar avatar--user">M</div>
+              <div class="message-body">
+                <div class="message-meta"><strong>maintainer-1</strong></div>
+                <p>I want to safely add a feature to this repo</p>
+              </div>
+            </div>
+            <div class="discord-message">
+              <div class="avatar avatar--bot">H</div>
+              <div class="message-body bot-response">
+                <div class="message-meta"><strong>Hermes Agent</strong> <span>BOT</span></div>
+                <h3>I routed this to <code>plan</code> because it needs a safe plan first.</h3>
+                <p>
+                  Accept or revise the plan first; the handoff button stays disabled until
+                  acceptance. A draft plan is still only planning evidence.
+                </p>
+                <div class="button-row" aria-label="Wrapper actions">
+                  <button type="button">Accept plan</button>
+                  <button type="button">Revise plan</button>
+                  <button type="button" disabled>Prepare handoff</button>
+                </div>
+                <p class="claim-boundary">A draft plan is not execution evidence.</p>
+              </div>
+            </div>
+            <div class="status-preview">
+              <div>
+                <strong>A Codex handoff is ready.</strong>
+                <p>I have prepared the handoff, but executor dispatch is not observed yet.</p>
+              </div>
+              <ol>
+                <li><span class="state state--ready">ready</span> Handoff</li>
+                <li><span class="state">pending</span> Execution</li>
+                <li><span class="state">pending</span> Verification</li>
+                <li><span class="state state--na">n/a</span> Review</li>
+                <li><span class="state">pending</span> CI</li>
+                <li><span class="state">pending</span> Merge Ready</li>
+              </ol>
+              <p class="claim-boundary">Preparation is not execution evidence.</p>
+            </div>
+          </div>
+          <p>
+            This panel is based on the local fixture output from
+            <code>uv run python examples/discord-adapter-shim.py</code>.
           </p>
         </section>
 

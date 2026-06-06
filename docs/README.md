@@ -14,6 +14,7 @@ repo-local contract for Codex agents working here.
 | Understand what OMHM is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
+| See Discord-style wrapper responses | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
 | Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
 | Run deterministic wrapper demos | [`omh demo orchestration`](../README.md#quick-start) and [fixture shims](../examples) |
 | Install or operate the preview package | [Installation](INSTALLATION.md) |
