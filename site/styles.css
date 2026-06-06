@@ -55,6 +55,10 @@ a {
   font-size: 18px;
 }
 
+.brand--link {
+  text-decoration: none;
+}
+
 .nav {
   display: flex;
   flex-wrap: wrap;
@@ -69,6 +73,23 @@ a {
 
 .nav a:hover {
   color: #ffffff;
+}
+
+.topbar--solid {
+  position: sticky;
+  color: var(--ink);
+  background: rgba(250, 248, 243, 0.96);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+
+.topbar--solid .nav {
+  color: var(--muted);
+}
+
+.topbar--solid .nav a:hover,
+.topbar--solid .nav a[aria-current="page"] {
+  color: var(--ink);
 }
 
 .hero {
@@ -278,6 +299,89 @@ h1 {
   font-size: 14px;
 }
 
+.docs-page {
+  background: #ffffff;
+}
+
+.docs-shell {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 880px);
+  gap: 40px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 44px clamp(20px, 5vw, 72px) 84px;
+}
+
+.docs-toc {
+  position: sticky;
+  top: 86px;
+  align-self: start;
+  display: grid;
+  gap: 8px;
+  padding: 14px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.docs-toc a {
+  padding: 7px 0;
+  text-decoration: none;
+}
+
+.docs-toc a:hover {
+  color: var(--ink);
+}
+
+.docs-content {
+  min-width: 0;
+}
+
+.docs-hero {
+  padding-bottom: 34px;
+  border-bottom: 1px solid var(--line);
+}
+
+.docs-hero h1 {
+  max-width: 820px;
+  margin-bottom: 18px;
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 0.98;
+}
+
+.docs-hero p,
+.docs-section p,
+.docs-list {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.docs-section {
+  padding: 44px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.docs-section h2 {
+  margin-bottom: 12px;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.08;
+}
+
+.docs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.docs-list {
+  margin: 16px 0 0;
+  padding-left: 22px;
+}
+
+.docs-list li + li {
+  margin-top: 8px;
+}
+
 @media (max-width: 840px) {
   .topbar {
     position: absolute;
@@ -295,8 +399,28 @@ h1 {
   }
 
   .grid,
-  .band {
+  .band,
+  .docs-shell,
+  .docs-grid {
     grid-template-columns: 1fr;
+  }
+
+  .topbar--solid {
+    position: sticky;
+  }
+
+  .docs-shell {
+    gap: 20px;
+    padding-top: 28px;
+  }
+
+  .docs-toc {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
   }
 }
 
