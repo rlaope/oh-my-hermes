@@ -700,6 +700,8 @@ Turn clarified requirements into an execution-ready plan with tradeoffs and test
 - Quality tier: `acceptance-gated`
 - Quality bar:
   - Make goals, non-goals, decision drivers, options, risks, and test strategy explicit.
+  - Record at least one rejected option and why it lost before presenting the preferred path.
+  - Tie every acceptance criterion to a validation command, artifact, or explicit manual evidence gap.
   - Keep draft plans unapproved until a user or wrapper accepts them.
   - Prepare coding handoff guidance only after acceptance.
 - Inputs:
@@ -720,7 +722,8 @@ Turn clarified requirements into an execution-ready plan with tradeoffs and test
 - Evidence ladder:
   - `request_clarified`
   - `plan_drafted`
-  - `options_reviewed`
+  - `option_tradeoffs_recorded`
+  - `test_strategy_recorded`
   - `acceptance_recorded`
   - `handoff_ready`
 - Wrapper actions:
@@ -746,7 +749,9 @@ Gather current or source-backed evidence before planning or coding handoff.
 - Use when: Use when the request needs web/current/official source evidence or source comparison.
 - Quality tier: `source-gated`
 - Quality bar:
+  - Scope the research question, source boundaries, recency, and jurisdiction or version assumptions before retrieval.
   - Use official or primary sources first when they can answer the question.
+  - Record source quality, conflicting evidence, and retrieval gaps before synthesis.
   - Separate source evidence, inference, confidence, and retrieval limits.
   - Record dates or version boundaries for unstable facts.
 - Inputs:
@@ -765,7 +770,8 @@ Gather current or source-backed evidence before planning or coding handoff.
   - separate evidence from inference
 - Evidence ladder:
   - `research_question_scoped`
-  - `sources_checked`
+  - `primary_sources_checked`
+  - `conflicts_checked`
   - `evidence_synthesized`
   - `uncertainty_recorded`
 - Wrapper actions:
@@ -790,9 +796,10 @@ Clarify intent and boundaries one question at a time before planning or executio
 - Use when: Use when intent, scope, non-goals, or decision authority are unclear.
 - Quality tier: `clarity-gated`
 - Quality bar:
+  - Name the missing decision, why it matters, and the smallest answer that would unblock the next step.
   - Ask one blocking question tied to a missing decision.
   - Use discovered facts before asking the user for information already available locally.
-  - Produce a clarified brief before planning or handoff.
+  - Produce a clarified brief with non-goals, acceptance criteria, and remaining unknowns before planning or handoff.
 - Inputs:
   - initial idea
   - current ambiguity
@@ -810,7 +817,7 @@ Clarify intent and boundaries one question at a time before planning or executio
   - capture transcript or summary
 - Evidence ladder:
   - `ambiguity_identified`
-  - `question_asked`
+  - `blocking_question_asked`
   - `answer_recorded`
   - `clarified_brief_ready`
 - Wrapper actions:

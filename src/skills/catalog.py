@@ -559,10 +559,19 @@ _HARNESSES = [
         quality_tier="acceptance-gated",
         quality_bar=(
             "Make goals, non-goals, decision drivers, options, risks, and test strategy explicit.",
+            "Record at least one rejected option and why it lost before presenting the preferred path.",
+            "Tie every acceptance criterion to a validation command, artifact, or explicit manual evidence gap.",
             "Keep draft plans unapproved until a user or wrapper accepts them.",
             "Prepare coding handoff guidance only after acceptance.",
         ),
-        evidence_ladder=("request_clarified", "plan_drafted", "options_reviewed", "acceptance_recorded", "handoff_ready"),
+        evidence_ladder=(
+            "request_clarified",
+            "plan_drafted",
+            "option_tradeoffs_recorded",
+            "test_strategy_recorded",
+            "acceptance_recorded",
+            "handoff_ready",
+        ),
         wrapper_actions=("accept_plan", "revise_plan", "cancel", "prepare_handoff"),
         overclaim_guards=(
             "A draft plan is not execution or review evidence.",
@@ -583,11 +592,19 @@ _HARNESSES = [
         "metadata_only",
         quality_tier="source-gated",
         quality_bar=(
+            "Scope the research question, source boundaries, recency, and jurisdiction or version assumptions before retrieval.",
             "Use official or primary sources first when they can answer the question.",
+            "Record source quality, conflicting evidence, and retrieval gaps before synthesis.",
             "Separate source evidence, inference, confidence, and retrieval limits.",
             "Record dates or version boundaries for unstable facts.",
         ),
-        evidence_ladder=("research_question_scoped", "sources_checked", "evidence_synthesized", "uncertainty_recorded"),
+        evidence_ladder=(
+            "research_question_scoped",
+            "primary_sources_checked",
+            "conflicts_checked",
+            "evidence_synthesized",
+            "uncertainty_recorded",
+        ),
         wrapper_actions=("show_sources", "ask_followup", "prepare_plan"),
         overclaim_guards=(
             "Research synthesis is not implementation evidence.",
@@ -608,11 +625,12 @@ _HARNESSES = [
         "metadata_only",
         quality_tier="clarity-gated",
         quality_bar=(
+            "Name the missing decision, why it matters, and the smallest answer that would unblock the next step.",
             "Ask one blocking question tied to a missing decision.",
             "Use discovered facts before asking the user for information already available locally.",
-            "Produce a clarified brief before planning or handoff.",
+            "Produce a clarified brief with non-goals, acceptance criteria, and remaining unknowns before planning or handoff.",
         ),
-        evidence_ladder=("ambiguity_identified", "question_asked", "answer_recorded", "clarified_brief_ready"),
+        evidence_ladder=("ambiguity_identified", "blocking_question_asked", "answer_recorded", "clarified_brief_ready"),
         wrapper_actions=("answer:clarify", "cancel", "rerun_plan"),
         overclaim_guards=(
             "A clarification question is not a plan approval.",

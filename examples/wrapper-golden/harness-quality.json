@@ -31,7 +31,8 @@
         "evidence_ladder": [
           "request_clarified",
           "plan_drafted",
-          "options_reviewed",
+          "option_tradeoffs_recorded",
+          "test_strategy_recorded",
           "acceptance_recorded",
           "handoff_ready"
         ],
@@ -49,7 +50,8 @@
         "quality_tier": "source-gated",
         "evidence_ladder": [
           "research_question_scoped",
-          "sources_checked",
+          "primary_sources_checked",
+          "conflicts_checked",
           "evidence_synthesized",
           "uncertainty_recorded"
         ],
@@ -67,7 +69,7 @@
         "quality_tier": "clarity-gated",
         "evidence_ladder": [
           "ambiguity_identified",
-          "question_asked",
+          "blocking_question_asked",
           "answer_recorded",
           "clarified_brief_ready"
         ],

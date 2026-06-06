@@ -58,6 +58,7 @@ from ..runtime.artifacts import (
     write_wrapper_contract,
 )
 from ..skills.render import workflow_reference_markdown, workflow_reference_payload
+from ..skills.validation import harness_inspection_payload, harness_summary_payload, validate_catalog_contract
 from ..skill_pack import builtin_harnesses, builtin_definitions
 from ..snippet import WORKSPACE_SNIPPET
 from ..workflow_state import (
@@ -829,6 +830,25 @@ def cmd_docs_workflows(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_harness_list(args: argparse.Namespace) -> int:
+    _print_json(harness_summary_payload())
+    return 0
+
+
+def cmd_harness_inspect(args: argparse.Namespace) -> int:
+    try:
+        _print_json(harness_inspection_payload(args.name))
+    except KeyError as exc:
+        raise OmhError(f"unknown harness: {args.name}") from exc
+    return 0
+
+
+def cmd_harness_validate(args: argparse.Namespace) -> int:
+    result = validate_catalog_contract()
+    _print_json(result)
+    return 0 if result["ok"] else 1
+
+
 def cmd_state_status(args: argparse.Namespace) -> int:
     paths = _paths(args)
     states, errors = list_workflow_states(paths)
@@ -944,6 +964,21 @@ def _add_docs_commands(sub) -> None:
     docs_workflows.add_argument("--check", action="store_true")
     docs_workflows.add_argument("--json", action="store_true", help="Print machine-readable workflow and harness catalog metadata.")
     docs_workflows.set_defaults(func=cmd_docs_workflows)
+
+
+def _add_harness_commands(sub) -> None:
+    harness = sub.add_parser("harness")
+    harness_sub = harness.add_subparsers(dest="harness_command", required=True)
+
+    harness_list = harness_sub.add_parser("list")
+    harness_list.set_defaults(func=cmd_harness_list)
+
+    harness_inspect = harness_sub.add_parser("inspect")
+    harness_inspect.add_argument("name")
+    harness_inspect.set_defaults(func=cmd_harness_inspect)
+
+    harness_validate = harness_sub.add_parser("validate")
+    harness_validate.set_defaults(func=cmd_harness_validate)
 
 
 def _add_chat_commands(sub) -> None:
@@ -1309,6 +1344,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_top_level_commands(sub)
     _add_docs_commands(sub)
+    _add_harness_commands(sub)
     _add_chat_commands(sub)
     _add_coding_commands(sub)
     _add_hermes_commands(sub)

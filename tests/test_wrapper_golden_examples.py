@@ -102,7 +102,7 @@ class WrapperGoldenExampleTests(unittest.TestCase):
         self.assertIn("send_to_codex", examples["coding_handoff_quality"]["expected_quality"]["wrapper_actions"])
         self.assertIn("executor_result_observed", examples["coding_handoff_quality"]["expected_quality"]["evidence_ladder"])
         self.assertIn("accept_plan", examples["planning_quality"]["expected_quality"]["wrapper_actions"])
-        self.assertIn("sources_checked", examples["research_quality"]["expected_quality"]["evidence_ladder"])
+        self.assertIn("primary_sources_checked", examples["research_quality"]["expected_quality"]["evidence_ladder"])
         self.assertIn("answer:clarify", examples["clarification_quality"]["expected_quality"]["wrapper_actions"])
 
         workflow_catalog = workflow_reference_payload()
