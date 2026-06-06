@@ -132,9 +132,41 @@ h1 {
 
 .lead {
   max-width: 640px;
-  margin-bottom: 30px;
+  margin-bottom: 22px;
   color: rgba(255, 255, 255, 0.9);
   font-size: clamp(19px, 2vw, 25px);
+}
+
+.hero-command {
+  max-width: min(100%, 720px);
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(8, 15, 24, 0.74);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+}
+
+.hero-command span {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.hero-command code {
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  color: #f5fbff;
+  font-size: 14px;
+  white-space: pre;
 }
 
 .actions {
