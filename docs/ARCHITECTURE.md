@@ -167,7 +167,7 @@ so older imports keep working while the package grows internally.
 
 ## Routing
 
-Routing, planning, and delegation have six local surfaces:
+Routing, planning, and delegation have seven local surfaces:
 
 1. Prompt-level guidance. The router skill gives Hermes a structured map of
    workflow names and strong trigger phrases, but it does not override Hermes

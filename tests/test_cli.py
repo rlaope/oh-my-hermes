@@ -131,6 +131,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(research["delegated_to_executor"], [])
         self.assertIn("source selection", " ".join(research["retained_by_hermes"]))
 
+        for task in ("financial", "legal financial information", "official"):
+            with self.subTest(task=task):
+                status, stdout, stderr = run_cli(["playbook", "recommend", task, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendation_ids = [item["id"] for item in json.loads(stdout)["recommendations"]]
+                self.assertEqual(recommendation_ids[0], "source-backed-research")
+                self.assertNotEqual(recommendation_ids[0], "release-readiness-review")
+
     def test_chat_route_dispatches_plain_chat_message(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "risky", "refactor"])
 
