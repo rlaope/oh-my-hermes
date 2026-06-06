@@ -12,6 +12,7 @@ from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from .local_store import atomic_write_text
 from .paths import OmhPaths
 from .routing.recommend import recommend_skills
+from .skills.catalog import harness_quality_contract
 
 
 SCHEMA_VERSION = "hermes_plan/v1"
@@ -517,6 +518,7 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
             ],
         },
         "quality_gate": plan.quality_gate,
+        "harness_quality": harness_quality_contract(plan.recommended_harness),
         "deep_interview": plan.deep_interview,
         "coding_delegate": {
             "available": coding_available,

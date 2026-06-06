@@ -32,6 +32,16 @@ CODING_DELEGATION_INTENTS = ("coding", "cleanup", "review", "planning", "diagnos
 CODING_DELEGATION_STATUSES = ("prepared_not_observed",)
 CODING_SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp")
 CODING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
+HARNESS_QUALITY_SCHEMA_VERSION = "harness_quality/v1"
+HARNESS_QUALITY_KEYS = (
+    "schema_version",
+    "harness",
+    "quality_tier",
+    "quality_bar",
+    "evidence_ladder",
+    "wrapper_actions",
+    "overclaim_guards",
+)
 CODING_DELEGATION_RECORD_KEYS = (
     "schema_version",
     "record_type",
@@ -48,6 +58,7 @@ CODING_DELEGATION_RECORD_KEYS = (
     "message_length",
     "source_metadata",
     "recommendation_evidence",
+    "harness_quality",
     "executor_handoff",
     "acceptance_criteria",
     "verification",
@@ -68,6 +79,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "acceptance_criteria",
     "verification",
     "review",
+    "harness_quality",
 )
 WRAPPER_SESSION_SCHEMA_VERSION = "wrapper_session/v1"
 WRAPPER_SESSION_RECORD_TYPE = "wrapper_session"
@@ -355,6 +367,9 @@ def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]
         "verification": _compact_string_list(nested.get("verification", delegation.get("verification", []))),
         "status": str(delegation.get("status", "prepared_not_observed")),
     }
+    harness_quality = _compact_harness_quality(delegation.get("harness_quality", {}))
+    if harness_quality:
+        record["harness_quality"] = harness_quality
     executor_handoff = _compact_executor_handoff(delegation.get("executor_handoff"))
     if executor_handoff:
         record["executor_handoff"] = executor_handoff
@@ -518,6 +533,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
         "acceptance_criteria": _compact_string_list(value.get("acceptance_criteria", [])),
         "verification": _compact_string_list(value.get("verification", [])),
     }
+    harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
+    if harness_quality:
+        compact["harness_quality"] = harness_quality
     review = value.get("review")
     if isinstance(review, dict):
         compact["review"] = {
@@ -833,6 +851,8 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
             _require(isinstance(value, str), errors, f"coding_delegation {key}[{index}] must be a string")
     if "executor_handoff" in delegation:
         errors.extend(validate_coding_executor_handoff(delegation["executor_handoff"]))
+    if "harness_quality" in delegation:
+        errors.extend(validate_harness_quality(delegation["harness_quality"], "coding_delegation harness_quality"))
     return errors
 
 
@@ -956,6 +976,43 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
             errors,
             "coding_delegation executor_handoff review.evidence_required must be a string",
         )
+    if "harness_quality" in handoff:
+        errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation executor_handoff harness_quality"))
+    return errors
+
+
+def _compact_harness_quality(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    compact: dict[str, Any] = {}
+    for key in HARNESS_QUALITY_KEYS:
+        if key not in value:
+            continue
+        if key in {"quality_bar", "evidence_ladder", "wrapper_actions", "overclaim_guards"}:
+            compact[key] = _compact_string_list(value.get(key, []))
+        else:
+            compact[key] = str(value.get(key, ""))
+    return compact
+
+
+def validate_harness_quality(value: Any, label: str = "harness_quality") -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(value, dict), errors, f"{label} must be an object")
+    if not isinstance(value, dict):
+        return errors
+    extra_keys = sorted(set(value) - set(HARNESS_QUALITY_KEYS))
+    _require(not extra_keys, errors, f"{label} has unsupported keys: {extra_keys}")
+    _require(value.get("schema_version") == HARNESS_QUALITY_SCHEMA_VERSION, errors, f"{label} schema_version is invalid")
+    for key in ("harness", "quality_tier"):
+        _require(isinstance(value.get(key), str), errors, f"{label} {key} must be a string")
+        _require(bool(str(value.get(key, ""))), errors, f"{label} {key} is required")
+    for key in ("quality_bar", "evidence_ladder", "wrapper_actions", "overclaim_guards"):
+        _require(isinstance(value.get(key), list), errors, f"{label} {key} must be a list")
+        if not isinstance(value.get(key), list):
+            continue
+        _require(len(value[key]) >= 1, errors, f"{label} {key} must not be empty")
+        for index, item in enumerate(value[key]):
+            _require(isinstance(item, str), errors, f"{label} {key}[{index}] must be a string")
     return errors
 
 

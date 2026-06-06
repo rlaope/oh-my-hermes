@@ -751,6 +751,37 @@ def builtin_harnesses() -> list[HarnessDefinition]:
     return list(_HARNESSES)
 
 
+def harness_definition(name: str) -> HarnessDefinition:
+    for harness in _HARNESSES:
+        if harness.name == name:
+            return harness
+    raise KeyError(name)
+
+
+def harness_quality_contract(name: str) -> dict[str, object]:
+    try:
+        harness = harness_definition(name)
+    except KeyError:
+        return {
+            "schema_version": "harness_quality/v1",
+            "harness": name,
+            "quality_tier": "unknown",
+            "quality_bar": [],
+            "evidence_ladder": [],
+            "wrapper_actions": [],
+            "overclaim_guards": ["Unknown harness; do not infer runtime capability."],
+        }
+    return {
+        "schema_version": "harness_quality/v1",
+        "harness": harness.name,
+        "quality_tier": harness.quality_tier,
+        "quality_bar": list(harness.quality_bar),
+        "evidence_ladder": list(harness.evidence_ladder),
+        "wrapper_actions": list(harness.wrapper_actions),
+        "overclaim_guards": list(harness.overclaim_guards),
+    }
+
+
 def primary_harness_for_skill(name: str) -> str:
     return _PRIMARY_HARNESSES.get(name, "coding-handling")
 

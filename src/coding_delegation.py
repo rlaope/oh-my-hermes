@@ -13,6 +13,7 @@ from .skills.catalog import (
     coding_intent_for_skill,
     coding_skills_for_intent,
     coding_terms_for_intent,
+    harness_quality_contract,
     primary_harness_for_skill,
 )
 
@@ -89,6 +90,7 @@ def build_coding_delegation_payload(
         "schema_version": SCHEMA_VERSION,
         "source": source,
         "delegation": delegation.to_dict(),
+        "harness_quality": harness_quality_contract(harness),
         "recommendations": recommendations,
     }
     if executor_target != "generic" and delegation.action == "delegate":
@@ -150,6 +152,7 @@ def coding_delegation_record_payload(
         "message_length": len(message),
         "source_metadata": metadata,
         "recommendation_evidence": payload.get("recommendations", []),
+        "harness_quality": payload.get("harness_quality", {}),
         "executor_handoff": payload.get("executor_handoff"),
         "acceptance_criteria": delegation.get("acceptance_criteria", []),
         "verification": delegation.get("verification", []),
@@ -278,6 +281,7 @@ def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dic
             "workflow": delegation.review_workflow,
             "evidence_required": "Record separate wrapper/runtime evidence before marking review observed.",
         },
+        "harness_quality": harness_quality_contract(delegation.recommended_harness),
     }
 
 
