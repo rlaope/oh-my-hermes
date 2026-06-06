@@ -24,6 +24,7 @@ around it so Discord, Slack, hosted wrappers, and local operators can turn a
 plain user message into a clear next step: answer, clarify, research, plan,
 delegate coding, or report status.
 
+[Website](https://rlaope.github.io/oh-my-hermes-agent/) -
 [Quick Start](#quick-start) - [Command Surface](#command-surface) -
 [Wrapper Flow](#wrapper-flow) - [Documentation](docs/README.md) -
 [Installation](docs/INSTALLATION.md) - [Application Cases](docs/APPLICATION_CASES.md)
@@ -86,11 +87,14 @@ adapter can render without exposing shell commands to the end user.
 ### Stable Install
 
 The default installer target is the preview channel from `main`. For a pinned
-stable install, use a tagged release:
+stable install, use a published release tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
+
+Replace `<version>` with a released version after the matching `v<version>` tag
+exists.
 
 ### Updating
 
@@ -229,26 +233,29 @@ fixtures, reapply, wrapper lifecycle, redacted export, and uninstall details.
 | Harness quality contracts | [Harness Quality Contract](docs/HARNESS_QUALITY.md) |
 | Representative workflows | [Application Cases](docs/APPLICATION_CASES.md) |
 | Generated workflow catalog | [Workflow Reference](docs/WORKFLOWS.md) |
+| Public website source | [GitHub Pages site](site/index.html) |
 
 ## Development
 
 Install the current checkout in editable mode:
 
 ```sh
-python -m pip install -e .
+python3 -m pip install -e .
 ```
 
 Run the test suite:
 
 ```sh
-python -m unittest discover -s tests
-python -m compileall src
+python3 -m unittest discover -s tests
+python3 -m compileall src
+python3 -m omh.cli docs workflows --check
+python3 -m omh.cli harness validate
 ```
 
 Smoke-test the installer without touching real home directories:
 
 ```sh
-python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
 ```
 
 ## Roadmap

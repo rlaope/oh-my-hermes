@@ -12,10 +12,11 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 ```
 
 By default this installs the preview channel from the `main` branch archive.
-For pinned stable installs, pass a release version:
+For pinned stable installs, pass a release version after the matching
+`v<version>` tag exists:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
 
 For custom release archives or local package sources accepted by `pip`, pass
@@ -47,6 +48,11 @@ without mutating Hermes internals.
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see
 [Application Cases](APPLICATION_CASES.md).
+
+The public project site at
+`https://rlaope.github.io/oh-my-hermes-agent/` is a short entry point. Treat
+this `docs/` directory and the root README as the source of truth for operating
+details.
 
 ## Chat Wrapper Flow
 
@@ -104,7 +110,7 @@ Codex lifecycle calls after the wrapper has an accepted coding handoff:
 
 ```sh
 start_json="$(omh coding lifecycle start --executor codex --record "risky refactor")"
-run_id="$(printf '%s' "$start_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+run_id="$(printf '%s' "$start_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
 
 # Dispatch to the external Codex-like executor outside OMHM, then record the
 # wrapper-observed transition.
@@ -199,7 +205,8 @@ Before calling the bot integration ready, verify these points:
   until `omh coding lifecycle dispatch --run <run-id>` records dispatch
   observation.
 - `omh coding lifecycle report --run <run-id>` does not claim final completion
-  while executor, review, or verification evidence is missing.
+  while executor, verification, review, CI, or merge-readiness evidence is
+  missing.
 - `omh hermes plan --source discord --record "<message>"` writes a
   `hermes_plan/v1` artifact under the same Hermes home that the bot uses.
 - That planning command does not create a runtime `run.json` or

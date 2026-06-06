@@ -4,9 +4,10 @@
 
 ## Validation
 
-- [ ] `python -m unittest discover -s tests`
-- [ ] `python -m compileall src`
-- [ ] `python -m omh.cli docs workflows --check`
+- [ ] `python3 -m unittest discover -s tests`
+- [ ] `python3 -m compileall src`
+- [ ] `python3 -m omh.cli docs workflows --check`
+- [ ] `python3 -m omh.cli harness validate`
 - [ ] Relevant dry-run or smoke command:
 
 ## Risk

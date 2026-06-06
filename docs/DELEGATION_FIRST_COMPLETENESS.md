@@ -27,15 +27,15 @@ evidence exists.
 
 | Surface | Current role | Evidence |
 | --- | --- | --- |
-| `omh chat interact` | Composes route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. | `src/wrapper_contract.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
-| `omh chat session` | Persists metadata-only chat session decisions, plan acceptance/revision/cancel state, and links accepted sessions to prepared Codex handoff runs. | `src/wrapper_sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
-| `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/chat_router.py`, `tests/test_cli.py` |
+| `omh chat interact` | Composes route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. | `src/wrapper/contract.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
+| `omh chat session` | Persists metadata-only chat session decisions, plan acceptance/revision/cancel state, and links accepted sessions to prepared Codex handoff runs. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
+| `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
-| `omh coding delegate` | Prepares metadata-only coding handoffs and records `prepared_not_observed` evidence. | `src/coding_delegation.py`, `src/runtime_artifacts.py` |
-| `omh coding lifecycle` | Tracks Codex handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/coding_lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
-| `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime_artifacts.py`, `README.md` |
-| `omh runtime review`, `omh runtime ci`, `omh runtime merge` | Records observed review, CI, merge-readiness, and merge evidence under the run ledger. | `src/runtime_artifacts.py`, `src/runtime_records.py`, `tests/test_cli.py` |
-| `omh runtime validate/export` | Validates and exports local evidence without storing prompt bodies by default. | `src/runtime_artifacts.py`, `tests/test_runtime_artifacts.py` |
+| `omh coding delegate` | Prepares metadata-only coding handoffs and records `prepared_not_observed` evidence. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
+| `omh coding lifecycle` | Tracks Codex handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
+| `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime/artifacts.py`, `README.md` |
+| `omh runtime review`, `omh runtime ci`, `omh runtime merge` | Records observed review, CI, merge-readiness, and merge evidence under the run ledger. | `src/runtime/artifacts.py`, `src/runtime/records.py`, `tests/test_cli.py` |
+| `omh runtime validate/export` | Validates and exports local evidence without storing prompt bodies by default. | `src/runtime/artifacts.py`, `tests/test_runtime_artifacts.py` |
 | `examples/wrapper-golden/` | Provides platform-neutral golden chat responses for wrapper button/thread/status UX. | `examples/wrapper-golden/status-ladder.json`, `tests/test_wrapper_golden_examples.py` |
 
 The strongest existing path is:

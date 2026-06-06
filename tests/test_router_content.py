@@ -209,12 +209,15 @@ class RouterContentTests(unittest.TestCase):
             *Path("tests").rglob("*.py"),
             *Path("docs").rglob("*.md"),
             *Path("examples").rglob("*"),
+            *Path("site").rglob("*"),
             *Path(".github").rglob("*.md"),
             *Path(".github").rglob("*.yml"),
         ]
 
         for path in paths:
             if path.is_dir():
+                continue
+            if path.suffix in {".png", ".jpg", ".jpeg", ".webp"}:
                 continue
             text = path.read_text(encoding="utf-8").lower()
             for term in forbidden:
@@ -238,11 +241,15 @@ class RouterContentTests(unittest.TestCase):
             Path("SUPPORT.md"),
             Path("LICENSE"),
             Path(".github/workflows/ci.yml"),
+            Path(".github/workflows/pages.yml"),
             Path(".github/dependabot.yml"),
             Path(".github/pull_request_template.md"),
             Path(".github/ISSUE_TEMPLATE/bug_report.yml"),
             Path(".github/ISSUE_TEMPLATE/feature_request.yml"),
             Path(".github/ISSUE_TEMPLATE/config.yml"),
+            Path("site/index.html"),
+            Path("site/styles.css"),
+            Path("site/assets/hermes-agent-hero.png"),
         ]
 
         for path in required_paths:
@@ -251,14 +258,20 @@ class RouterContentTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
         installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
         ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+        pages = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
         release = Path("docs/RELEASE.md").read_text(encoding="utf-8")
         harness_quality = Path("docs/HARNESS_QUALITY.md").read_text(encoding="utf-8")
+        site = Path("site/index.html").read_text(encoding="utf-8")
+        site_css = Path("site/styles.css").read_text(encoding="utf-8")
 
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
+        self.assertIn("https://rlaope.github.io/oh-my-hermes-agent/", readme)
         self.assertIn("[Documentation](docs/README.md)", readme)
         self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
         self.assertIn("[Application Cases](docs/APPLICATION_CASES.md)", readme)
-        self.assertIn("OMH_CHANNEL=stable OMH_VERSION=0.1.0", readme)
+        self.assertIn("[GitHub Pages site](site/index.html)", readme)
+        self.assertIn("OMH_CHANNEL=stable OMH_VERSION=<version>", readme)
+        self.assertIn("v<version>", readme)
         self.assertIn("Most users should start with one health check", readme)
         self.assertIn("## Command Surface", readme)
         self.assertIn("omh docs workflows --json", readme)
@@ -277,9 +290,19 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("python -m compileall src", ci)
         self.assertIn("docs workflows --check", ci)
         self.assertIn("Capability probe smoke", ci)
+        self.assertIn("actions/upload-pages-artifact@v4", pages)
+        self.assertIn("actions/deploy-pages@v4", pages)
+        self.assertIn("site/**", pages)
+        self.assertIn("docs workflows --check", pages)
+        self.assertIn("harness validate", pages)
         self.assertIn("Pinned stable install", release)
         self.assertIn("Runtime evidence smoke", release)
+        self.assertIn("Harness catalog validation status", release)
+        self.assertIn("GitHub Pages workflow status", release)
         self.assertIn("Capability probe status", release)
+        self.assertIn("OMH", site)
+        self.assertIn("harness_progress/v1", site)
+        self.assertIn("assets/hermes-agent-hero.png", site_css)
 
     def test_direction_and_agent_contract_lock_product_boundary(self) -> None:
         direction = Path("docs/DIRECTION.md").read_text(encoding="utf-8")

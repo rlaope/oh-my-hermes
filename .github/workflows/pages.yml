@@ -1,0 +1,61 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "assets/hermes-agent-hero.png"
+      - "site/**"
+      - "README.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: python -m pip install -e .
+      - name: Check generated docs
+        run: python -m omh.cli docs workflows --check
+      - name: Validate harness catalog
+        run: python -m omh.cli harness validate
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Prepare static site
+        run: |
+          rm -rf _site
+          mkdir -p _site/assets
+          cp -R site/. _site/
+          cp assets/hermes-agent-hero.png _site/assets/hermes-agent-hero.png
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: "_site"
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

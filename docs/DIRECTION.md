@@ -143,12 +143,13 @@ Split into separate PRs only when:
    and tests aligned around delegation-first wrapper orchestration.
 
 2. Wrapper-native UX depth.
-   Add golden JSON and pseudocode examples for Discord and Slack actions,
-   threads, buttons, and status updates without adding transport dependencies.
+   Expand golden JSON into adapter pseudocode examples for Discord and Slack
+   actions, threads, buttons, and status updates without adding transport
+   dependencies.
 
 3. Evidence completeness.
-   Add first-class review, CI, merge-readiness, and merge observation records at
-   the run level while keeping wrapper sessions as chat continuity only.
+   Keep review, CI, merge-readiness, and merge observation records strict at
+   the run level while wrapper sessions remain chat continuity only.
 
 4. Retained cognition quality.
    Improve Hermes-side research, deep interview, and planning skills so

@@ -20,6 +20,7 @@ repo-local contract for Codex agents working here.
 | Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
 | Prepare or verify a release | [Release](RELEASE.md) |
 | Track public sequencing | [Roadmap](ROADMAP.md) |
+| Review the public website source | [GitHub Pages site](../site/index.html) |
 
 ## Direction Summary
 
@@ -52,6 +53,8 @@ merge.
   harness examples should stay backed by conformance tests.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
+- The GitHub Pages site should stay a short public entry point that links back
+  to this docs set instead of becoming a second source of truth.
 
 ## Update Checklist
 
@@ -64,6 +67,7 @@ When changing docs, check whether the same claim needs to be updated in:
 - [Harness Quality Contract](HARNESS_QUALITY.md)
 - [Application Cases](APPLICATION_CASES.md)
 - [Workflow Reference](WORKFLOWS.md)
+- [GitHub Pages site](../site/index.html)
 - [AGENTS](../AGENTS.md)
 
 Run the focused documentation checks before calling the change complete:

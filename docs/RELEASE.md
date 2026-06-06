@@ -8,14 +8,14 @@ public claims are all checked.
 
 | Channel | Purpose | Install target |
 | --- | --- | --- |
-| `stable` | Pinned user installs and support reproduction | Git tag archive such as `v0.1.0` |
+| `stable` | Pinned user installs and support reproduction | Published Git tag archive such as `v<version>` |
 | `preview` | Latest `main` for early testing | `main` branch archive |
 | `local` | Maintainer smoke tests from local fixtures | Explicit local source or package URL |
 
 Pinned stable install:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
 
 Preview install:
@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 Custom archive:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes-agent/archive/refs/tags/v0.1.0.zip sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes-agent/archive/refs/tags/v<version>.zip sh
 ```
 
 ## Required Checks
@@ -38,6 +38,7 @@ Run before tagging:
 python3 -m unittest discover -s tests
 python3 -m compileall src
 python3 -m src.cli docs workflows --check
+python3 -m src.cli harness validate
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 0.1.0
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 ```
@@ -59,8 +60,10 @@ python3 -m src.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Install target used for smoke testing.
 - Update path tested.
 - Workflow docs generation status.
+- Harness catalog validation status.
 - Runtime validation status.
 - Capability probe status.
+- GitHub Pages workflow status when public site copy changed.
 - Known manual Hermes checks that could not be automated.
 - Any public claim that depends on wrapper evidence rather than Hermes-native
   capability evidence.

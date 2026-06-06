@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OMH - oh-my-hermes-agent</title>
+    <meta
+      name="description"
+      content="OMH gives Hermes Agent deterministic workflow skills, wrapper contracts, and delegation-first coding handoffs."
+    >
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar" aria-label="Primary">
+      <div class="brand">OMH</div>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#flow">Flow</a>
+        <a href="#contracts">Contracts</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/rlaope/oh-my-hermes-agent">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero__content">
+          <p class="eyebrow">Hermes-native workflow orchestration</p>
+          <h1>OMH</h1>
+          <p class="lead">
+            A local contract layer that helps Hermes turn chat messages into
+            clarification, research, planning, status, or Codex-ready coding handoffs.
+          </p>
+          <div class="actions" aria-label="Primary actions">
+            <a class="button button--primary" href="#install">Install</a>
+            <a class="button" href="https://github.com/rlaope/oh-my-hermes-agent/tree/main/docs">Read docs</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--light" id="flow">
+        <div class="section__header">
+          <h2>Natural chat in, evidence-backed next step out.</h2>
+          <p>
+            OMH keeps Hermes as the chat-facing orchestrator while external executors handle
+            main coding work when a request needs code changes.
+          </p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <h3>Chat-native routing</h3>
+            <p>
+              Wrappers can pass Discord, Slack, hosted, or generic messages into one
+              deterministic interaction contract.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Retained cognition</h3>
+            <p>
+              Hermes keeps clarification, source-backed research, planning, and status narration
+              first-class instead of forcing every request into coding.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Delegation-first coding</h3>
+            <p>
+              Coding-heavy requests become prepared Codex-like handoffs with scope,
+              acceptance criteria, verification, and review expectations.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="contracts">
+        <div class="band">
+          <div>
+            <h2>Contracts that wrappers can render without guessing.</h2>
+            <p>
+              OMH exposes machine-readable envelopes for routing, plans, status cards,
+              harness quality, and harness progress. Prepared handoffs never count as
+              observed implementation, review, CI, or merge evidence.
+            </p>
+            <div class="pillrow" aria-label="Contract names">
+              <span class="pill">chat_interaction/v1</span>
+              <span class="pill">chat_response/v1</span>
+              <span class="pill">status_card/v1</span>
+              <span class="pill">harness_quality/v1</span>
+              <span class="pill">harness_progress/v1</span>
+            </div>
+          </div>
+          <div class="steps" aria-label="Wrapper flow">
+            <div class="step">
+              <div class="step__num">1</div>
+              <div>
+                <h3>Receive a message</h3>
+                <p>The wrapper owns platform auth, buttons, threads, and message edits.</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step__num">2</div>
+              <div>
+                <h3>Ask OMH for a contract</h3>
+                <p>Local CLI output tells the wrapper whether to answer, clarify, plan, or hand off.</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step__num">3</div>
+              <div>
+                <h3>Record only observed progress</h3>
+                <p>Status advances from runtime evidence, not optimistic narration.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--light" id="install">
+        <div class="band">
+          <div>
+            <h2>Install the preview channel.</h2>
+            <p>
+              The installer writes managed Hermes skills, registers the skill directory,
+              and leaves runtime artifacts local and inspectable.
+            </p>
+          </div>
+          <div class="command" role="region" aria-label="Install command" tabindex="0">
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+omh doctor
+omh chat interact --source discord "risky refactor"</code>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      OMH is deterministic local contract tooling. It does not patch Hermes core,
+      run platform bots, call LLM APIs, or launch Codex by itself.
+    </footer>
+  </body>
+</html>

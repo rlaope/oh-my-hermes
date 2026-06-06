@@ -55,14 +55,14 @@ omh list
 For repository development, verify the generated router content through tests:
 
 ```sh
-python -m unittest discover -s tests
+python3 -m unittest discover -s tests
 ```
 
 Artifact-backed verification can be recorded without capturing prompt bodies:
 
 ```sh
 run_json="$(omh runtime record --skill oh-my-hermes --harness coding-handling --status started)"
-run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+run_id="$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
 omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
 omh runtime show "$run_id"
 ```
@@ -122,14 +122,14 @@ omh list
 Repository maintainers can verify generated content through tests:
 
 ```sh
-python -m unittest discover -s tests
+python3 -m unittest discover -s tests
 ```
 
 Artifact-backed verification:
 
 ```sh
 run_json="$(omh runtime record --skill ultragoal --harness goal-execution --status started)"
-run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+run_id="$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
 omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed
 omh runtime show "$run_id"
 ```
@@ -190,14 +190,14 @@ overclaim guards, and fallback behavior.
 Repository maintainers can verify this with:
 
 ```sh
-python -m unittest discover -s tests
+python3 -m unittest discover -s tests
 ```
 
 Artifact-backed verification:
 
 ```sh
 run_json="$(omh runtime record --skill code-review --harness critic --status completed)"
-run_id="$(printf '%s' "$run_json" | python -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
+run_id="$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
 omh runtime delegate --run "$run_id" --requested --not-observed --result not_observed --evidence-ref run.json
 omh runtime show "$run_id"
 ```

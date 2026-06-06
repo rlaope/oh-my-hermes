@@ -33,17 +33,21 @@ contract shaped like this:
   "harness": "coding-handling",
   "quality_tier": "handoff-gated",
   "quality_bar": [
-    "Clarify scope before edits when target behavior, files, or verification are missing."
+    "Clarify scope before edits when target behavior, files, or verification are missing.",
+    "Attach acceptance criteria, verification expectations, and review expectations to the prepared handoff.",
+    "Report coding progress from lifecycle evidence, not from the existence of a prepared prompt."
   ],
   "evidence_ladder": [
     "coding_delegation_prepared",
     "executor_dispatch_observed",
     "executor_result_observed",
-    "verification_recorded"
+    "verification_recorded",
+    "review_ci_merge_recorded_when_required"
   ],
-  "wrapper_actions": ["accept_plan", "send_to_codex", "show_status"],
+  "wrapper_actions": ["accept_plan", "send_to_codex", "show_status", "record_result"],
   "overclaim_guards": [
-    "A prepared coding_delegation.json is not implementation evidence."
+    "A prepared coding_delegation.json is not implementation evidence.",
+    "Executor completion is not review, CI, merge-readiness, or merge evidence."
   ]
 }
 ```
