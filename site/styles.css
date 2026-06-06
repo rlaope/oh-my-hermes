@@ -1,14 +1,16 @@
 :root {
   color-scheme: light;
   --ink: #17202a;
-  --muted: #5a6675;
-  --paper: #faf8f3;
+  --muted: #566474;
+  --paper: #f7f7f2;
   --surface: #ffffff;
-  --line: #d9d4ca;
-  --accent: #1f7a68;
-  --accent-strong: #0f5f54;
-  --gold: #b7791f;
-  --blue: #2c5f8f;
+  --line: #d7dcd8;
+  --accent: #197466;
+  --accent-strong: #0d5b50;
+  --gold: #b36b16;
+  --blue: #315d8c;
+  --night: #0f1822;
+  --shadow: 0 18px 46px rgba(16, 28, 40, 0.12);
 }
 
 * {
@@ -46,13 +48,25 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 16px clamp(20px, 4vw, 56px);
+  padding: 18px clamp(20px, 4vw, 58px);
   color: #ffffff;
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-weight: 800;
   font-size: 18px;
+}
+
+.brand::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7ed7c2;
+  box-shadow: 0 0 0 5px rgba(126, 215, 194, 0.14);
 }
 
 .brand--link {
@@ -62,17 +76,27 @@ a {
 .nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  color: rgba(255, 255, 255, 0.86);
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
 }
 
 .nav a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
   text-decoration: none;
 }
 
 .nav a:hover {
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .topbar--solid {
@@ -87,24 +111,31 @@ a {
   color: var(--muted);
 }
 
+.topbar--solid .nav a {
+  border-color: var(--line);
+  background: #ffffff;
+}
+
 .topbar--solid .nav a:hover,
 .topbar--solid .nav a[aria-current="page"] {
+  border-color: #adc5bc;
+  background: #eefaf5;
   color: var(--ink);
 }
 
 .hero {
-  min-height: 92vh;
+  min-height: 88vh;
   display: grid;
   align-items: end;
-  padding: 112px clamp(20px, 5vw, 72px) 8vh;
+  padding: 112px clamp(20px, 5vw, 74px) 7vh;
   color: #ffffff;
   background:
-    linear-gradient(90deg, rgba(14, 25, 37, 0.92), rgba(14, 25, 37, 0.62) 46%, rgba(14, 25, 37, 0.2)),
+    linear-gradient(90deg, rgba(12, 23, 32, 0.94), rgba(13, 31, 38, 0.72) 44%, rgba(18, 32, 38, 0.24)),
     url("assets/hermes-agent-hero.png") center right / cover no-repeat;
 }
 
 .hero__content {
-  max-width: 760px;
+  max-width: 820px;
 }
 
 .eyebrow {
@@ -124,28 +155,29 @@ p {
 }
 
 h1 {
-  margin-bottom: 22px;
-  font-size: clamp(56px, 12vw, 132px);
+  margin-bottom: 20px;
+  font-size: clamp(64px, 12vw, 138px);
   line-height: 0.92;
   letter-spacing: 0;
 }
 
 .lead {
-  max-width: 640px;
-  margin-bottom: 22px;
+  max-width: 680px;
+  margin-bottom: 24px;
   color: rgba(255, 255, 255, 0.9);
   font-size: clamp(19px, 2vw, 25px);
 }
 
 .hero-command {
-  max-width: min(100%, 720px);
-  margin-bottom: 18px;
+  max-width: min(100%, 760px);
+  margin-bottom: 14px;
   overflow-x: auto;
-  padding: 16px;
+  padding: 18px 20px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 8px;
-  background: rgba(8, 15, 24, 0.74);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  background:
+    linear-gradient(180deg, rgba(13, 22, 31, 0.92), rgba(10, 16, 24, 0.86));
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.24);
 }
 
 .hero-command span {
@@ -165,8 +197,25 @@ h1 {
     "Liberation Mono",
     monospace;
   color: #f5fbff;
-  font-size: 14px;
+  font-size: 15px;
   white-space: pre;
+}
+
+.hero-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.hero-proof span {
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .actions {
@@ -187,6 +236,16 @@ h1 {
   color: #ffffff;
   text-decoration: none;
   font-weight: 700;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .button--primary {
@@ -195,12 +254,19 @@ h1 {
   color: #17202a;
 }
 
+.button--primary:hover {
+  border-color: #ffffff;
+  background: #eefaf5;
+  color: #0d342f;
+}
+
 .section {
-  padding: 72px clamp(20px, 5vw, 72px);
+  padding: 78px clamp(20px, 5vw, 74px);
 }
 
 .section--light {
-  background: #ffffff;
+  background:
+    linear-gradient(180deg, #ffffff, #f9fbf8);
 }
 
 .section__header {
@@ -228,10 +294,11 @@ h1 {
 
 .card {
   min-height: 190px;
-  padding: 22px;
+  padding: 24px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .card h3 {
@@ -259,11 +326,12 @@ h1 {
 
 .command {
   overflow-x: auto;
-  padding: 18px;
-  border: 1px solid #222f3d;
+  padding: 20px;
+  border: 1px solid #263442;
   border-radius: 8px;
-  background: #111923;
+  background: var(--night);
   color: #e8f0f7;
+  box-shadow: var(--shadow);
 }
 
 .command code {
@@ -691,9 +759,9 @@ h1 {
 @media (max-width: 840px) {
   .topbar {
     position: absolute;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    flex-direction: row;
+    gap: 16px;
   }
 
   .hero {

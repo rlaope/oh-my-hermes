@@ -309,6 +309,14 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Capability probe status", release)
         self.assertIn("OMH", site)
         self.assertIn('href="docs/">Read docs</a>', site)
+        topbar = site.split('<header class="topbar"', 1)[1].split("</header>", 1)[0]
+        self.assertIn('href="docs/"', topbar)
+        self.assertNotIn('href="#architecture"', topbar)
+        self.assertNotIn('href="#install"', topbar)
+        self.assertNotIn("GitHub", topbar)
+        hero_command = site.split('aria-label="Download OMH command"', 1)[1].split("</code>", 1)[0]
+        self.assertIn("omh setup", hero_command)
+        self.assertNotIn("omh doctor", hero_command)
         self.assertNotIn("github.com/rlaope/oh-my-hermes-agent/tree/main/docs", site)
         self.assertIn("OMH Documentation", site_docs)
         self.assertIn("omh chat interact --source discord", site_docs)
