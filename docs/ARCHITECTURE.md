@@ -294,7 +294,10 @@ thin wrappers over the same runtime files: `coding_delegation.json`,
 `delegation.json`, `wrapper.json`, and `events.jsonl`. They reject invalid
 transitions such as result-before-dispatch, derive lifecycle status from
 observed evidence, and keep review or verification gaps visible in
-`chat_response/v1` status copy.
+`chat_response/v1` status copy. Status interactions also expose
+`status_card/v1`, a platform-neutral progress card with handoff, execution,
+verification, review, CI, merge-ready, and merged steps. Wrappers can render
+that card directly instead of inferring progress from prose.
 
 ## Hermes Planning Artifacts
 
@@ -314,6 +317,12 @@ surface, and a review gate with `architect` and `critic` statuses. The command i
 deterministic and local-only; it does not run review agents, call services, or
 execute the plan. A `not_observed` review gate means the artifact is a planning
 scaffold, not consensus approval.
+
+The plan body and stdout payload include `quality_gate` and `deep_interview`
+blocks. `quality_gate` names readiness, pass conditions, and evidence that must
+be observed before stronger claims are safe. `deep_interview` tells wrappers
+whether to ask exactly one blocking question, which decisions are missing, and
+which action to take after the user answers.
 
 The stdout `wrapper_contract.plan_artifact` mirrors the recorded artifact path
 when `--record` is used. Wrappers should preserve the original message for later

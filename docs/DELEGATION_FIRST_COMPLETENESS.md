@@ -127,6 +127,12 @@ Allowed actions include `answer:*`, `accept_plan`, `revise_plan`,
 remain product-level labels; they do not expose CLI commands, argv arrays, or
 shell text.
 
+Planning payloads include `quality_gate` and `deep_interview` blocks so a
+wrapper can distinguish a draft plan from an approved plan and a blocked request
+from a guessed plan. Status payloads include `status_card/v1` so a wrapper can
+render handoff, execution, verification, review, CI, merge-ready, and merged
+steps without parsing prose.
+
 ## Success Criteria
 
 - The implementation adds a wrapper-native chat interaction contract while

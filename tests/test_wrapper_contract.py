@@ -6,7 +6,7 @@ import unittest
 from _local_package import load_local_package
 
 load_local_package()
-from omh.wrapper_contract import build_chat_interaction_payload, build_chat_response_from_status
+from omh.wrapper_contract import build_chat_interaction_payload, build_chat_response_from_status, build_status_card_from_status
 
 
 class WrapperContractTests(unittest.TestCase):
@@ -93,8 +93,37 @@ class WrapperContractTests(unittest.TestCase):
         text = json.dumps(response).lower()
         self.assertEqual(response["kind"], "status")
         self.assertIn("verification evidence", text)
-        self.assertNotIn("merged", text)
+        self.assertNotIn("this has been merged", text)
         self.assertNotIn("done", text)
+        self.assertEqual(response["status_card"]["schema_version"], "status_card/v1")
+        self.assertEqual(response["status_card"]["steps"][2]["id"], "verification")
+        self.assertEqual(response["status_card"]["steps"][2]["state"], "pending")
+
+    def test_status_card_exposes_platform_neutral_progress_steps(self) -> None:
+        card = build_status_card_from_status(
+            {
+                "run_id": "run-1",
+                "next_action": "record_ci_evidence",
+                "prepared": {"handoff_available": True},
+                "execution": {"observed": True, "status": "completed"},
+                "verification": {"observed": True, "status": "completed"},
+                "review": {"required": True, "status": "passed"},
+                "ci": {"status": "not_observed"},
+                "merge_readiness": {"status": "not_observed"},
+                "merge": {"status": "not_observed"},
+            }
+        )
+
+        steps = {step["id"]: step["state"] for step in card["steps"]}
+        self.assertEqual(card["schema_version"], "status_card/v1")
+        self.assertEqual(card["severity"], "attention")
+        self.assertEqual(card["primary_action"], "show_status")
+        self.assertEqual(steps["handoff"], "complete")
+        self.assertEqual(steps["execution"], "complete")
+        self.assertEqual(steps["verification"], "complete")
+        self.assertEqual(steps["review"], "complete")
+        self.assertEqual(steps["ci"], "pending")
+        self.assertEqual(steps["merge_ready"], "pending")
 
 
 if __name__ == "__main__":

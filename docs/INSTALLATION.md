@@ -61,11 +61,11 @@ The flow is:
 2. The wrapper calls `omh chat interact` with the platform source and either a
    plain message or event JSON.
 3. `omh` returns one `chat_interaction/v1` envelope with a renderable
-   `chat_response/v1`, a stable `thread_key`, platform-neutral actions, and a
-   conservative `next_action`.
-4. The wrapper renders `chat_response.headline`, `body`, `state`, and `actions`
-   in the original channel or thread. The user does not need to know any `omh`
-   command names.
+   `chat_response/v1`, optional `status_card/v1`, a stable `thread_key`,
+   platform-neutral actions, and a conservative `next_action`.
+4. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
+   `status_card` when present in the original channel or thread. The user does
+   not need to know any `omh` command names.
 5. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.
 6. If the interaction presents a plan, the wrapper waits for the user to accept
@@ -132,9 +132,10 @@ omh runtime delegation-status --run <run-id>
 ```
 
 `omh hermes plan --record` writes a draft `hermes_plan/v1` Markdown artifact
-under `.hermes/plans/`. Weak planning requests may also write
-`.hermes/context/` so Hermes can ask one blocking clarification. Review gates
-remain `not_observed` unless the wrapper can prove a separate review happened.
+under `.hermes/plans/`. Each plan includes a deterministic `quality_gate` and
+`deep_interview` block. Weak planning requests may also write `.hermes/context/`
+so Hermes can ask one blocking clarification. Review gates remain
+`not_observed` unless the wrapper can prove a separate review happened.
 
 The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
 not the Markdown body, to decide the next local action. If
@@ -149,9 +150,9 @@ observe executor, review, verification, CI, or merge evidence, record it
 explicitly; otherwise keep the status conservative.
 
 Wrapper-facing golden examples live under `examples/wrapper-golden/`. They show
-the expected `chat_response/v1` copy and platform-neutral action ids for
-clarification, planning, handoff, review, CI, merge-ready, merged, and
-contradictory-evidence states.
+the expected `chat_response/v1` copy, `deep_interview_contract/v1`, optional
+`status_card/v1`, and platform-neutral action ids for clarification, planning,
+handoff, review, CI, merge-ready, merged, and contradictory-evidence states.
 
 Use `omh runtime export --redacted` when you need a portable support artifact.
 Exports redact prompt, response, token, secret, key, and password-shaped fields by

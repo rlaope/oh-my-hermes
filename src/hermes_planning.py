@@ -53,6 +53,8 @@ class HermesPlan:
     verification_plan: tuple[str, ...]
     execution_handoff: str
     review_gate: dict[str, str]
+    quality_gate: dict[str, object]
+    deep_interview: dict[str, object]
     stop_condition: str
 
     def to_dict(self) -> dict[str, object]:
@@ -209,6 +211,14 @@ def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.
             "",
             *_markdown_list(plan.get("decision_drivers", [])),
             "",
+            "## Quality Gate",
+            "",
+            *_quality_gate_lines(plan.get("quality_gate", {})),
+            "",
+            "## Deep Interview",
+            "",
+            *_deep_interview_lines(plan.get("deep_interview", {})),
+            "",
             "## Viable Options",
             "",
             *_option_lines(plan.get("options", [])),
@@ -277,7 +287,15 @@ def render_context_markdown(payload: dict[str, object], artifact_name: str = "co
             "",
             "## Missing Decisions",
             "",
-            "- The desired outcome, constraints, or success criteria are not specific enough for a safe plan.",
+            *_markdown_list(_nested_list(plan.get("deep_interview", {}), "missing_decisions")),
+            "",
+            "## Recommended Question",
+            "",
+            str(_nested_value(plan.get("deep_interview", {}), "question", "What outcome should Hermes plan for?")).strip(),
+            "",
+            "## Answer Shape",
+            "",
+            *_markdown_list(_nested_list(plan.get("deep_interview", {}), "answer_shape")),
             "",
             "## Clarification Log",
             "",
@@ -318,6 +336,17 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
             verification_plan=("Inspect the generated `.hermes/context/` artifact.",),
             execution_handoff="Ask the smallest blocking clarification, then rerun `omh hermes plan` with the clarified task.",
             review_gate={"architect": "not_observed", "critic": "not_observed"},
+            quality_gate=_quality_gate(
+                status="blocked",
+                top=top,
+                coding_shaped=False,
+                review_shaped=False,
+            ),
+            deep_interview=_deep_interview_contract(
+                task,
+                required=True,
+                missing_decisions=_missing_decisions(task),
+            ),
             stop_condition="A clarified task statement is available for planning.",
         )
 
@@ -368,6 +397,17 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
         ),
         execution_handoff=handoff,
         review_gate={"architect": "not_observed", "critic": "not_observed"},
+        quality_gate=_quality_gate(
+            status="draft",
+            top=top,
+            coding_shaped=coding_shaped,
+            review_shaped=review_shaped,
+        ),
+        deep_interview=_deep_interview_contract(
+            task,
+            required=False,
+            missing_decisions=(),
+        ),
         stop_condition="The plan is accepted or a reviewer requests concrete changes.",
     )
 
@@ -477,6 +517,8 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
                 "the wrapper would claim review or execution without evidence",
             ],
         },
+        "quality_gate": plan.quality_gate,
+        "deep_interview": plan.deep_interview,
         "coding_delegate": {
             "available": coding_available,
             "requires_plan_acceptance": coding_available,
@@ -534,6 +576,100 @@ def _source_metadata_argv(metadata: dict[str, str]) -> list[str]:
     return args
 
 
+def _quality_gate(
+    *,
+    status: str,
+    top: dict[str, object],
+    coding_shaped: bool,
+    review_shaped: bool,
+) -> dict[str, object]:
+    readiness = "needs_clarification" if status == "blocked" else "ready_for_acceptance"
+    confidence = str(top.get("confidence", "low"))
+    pass_conditions = [
+        "task statement is specific enough to preserve user intent",
+        "acceptance criteria and verification plan are visible before any handoff",
+        "review gates stay not_observed until wrapper evidence exists",
+    ]
+    if coding_shaped:
+        pass_conditions.append("coding handoff is prepared only after plan acceptance")
+    if status == "blocked":
+        pass_conditions = [
+            "one blocking question is answered",
+            "missing decisions are captured in `.hermes/context/`",
+            "the clarified request can be replanned without guessing",
+        ]
+    return {
+        "schema_version": "hermes_plan_quality/v1",
+        "readiness": readiness,
+        "confidence": confidence,
+        "review_required": review_shaped,
+        "coding_handoff_ready": status == "draft" and coding_shaped,
+        "status_claim": "draft_plan_not_approval" if status == "draft" else "blocked_not_plan",
+        "pass_conditions": pass_conditions,
+        "must_observe_before_claiming": [
+            "plan acceptance",
+            "executor dispatch",
+            "executor result",
+            "verification",
+            "review when required",
+            "CI and merge readiness when reported",
+        ],
+    }
+
+
+def _deep_interview_contract(
+    task: str,
+    *,
+    required: bool,
+    missing_decisions: tuple[str, ...],
+) -> dict[str, object]:
+    if required:
+        return {
+            "schema_version": "deep_interview_contract/v1",
+            "required": True,
+            "question_style": "one_question",
+            "question": _clarification_question(task),
+            "reason": "The request is too underspecified for a safe Hermes plan or coding handoff.",
+            "missing_decisions": list(missing_decisions),
+            "answer_shape": [
+                "target outcome",
+                "important constraints or non-goals",
+                "success signal the wrapper can later report",
+            ],
+            "after_answer_next_action": "rerun_hermes_plan",
+        }
+    return {
+        "schema_version": "deep_interview_contract/v1",
+        "required": False,
+        "question_style": "none",
+        "question": "",
+        "reason": "The task is specific enough for a draft plan; users can still request revisions before acceptance.",
+        "missing_decisions": [],
+        "answer_shape": [],
+        "after_answer_next_action": "accept_or_revise_plan",
+    }
+
+
+def _missing_decisions(task: str) -> tuple[str, ...]:
+    lowered = task.lower()
+    missing = [
+        "target outcome",
+        "success criteria",
+        "scope boundary",
+    ]
+    if any(term in lowered for term in ("fix", "bug", "debug")):
+        missing.append("observable failure or reproduction signal")
+    if any(term in lowered for term in ("plan", "strategy", "architecture")):
+        missing.append("decision authority and tradeoff preference")
+    return tuple(missing)
+
+
+def _clarification_question(task: str) -> str:
+    if any(term in task.lower() for term in ("fix", "bug", "debug")):
+        return "What exact failure should Hermes plan around, and what result would prove it is fixed?"
+    return "What outcome should Hermes plan for, and what would make the result acceptable?"
+
+
 def _is_coding_shaped(task: str) -> bool:
     return bool(
         re.search(
@@ -547,6 +683,59 @@ def _markdown_list(values: object) -> list[str]:
     if not isinstance(values, list):
         return ["- None recorded."]
     return [f"- {str(value)}" for value in values if str(value)] or ["- None recorded."]
+
+
+def _quality_gate_lines(value: object) -> list[str]:
+    if not isinstance(value, dict):
+        return ["- None recorded."]
+    lines = [
+        f"- Readiness: `{value.get('readiness', 'unknown')}`",
+        f"- Confidence: `{value.get('confidence', 'low')}`",
+        f"- Coding handoff ready: `{str(value.get('coding_handoff_ready', False)).lower()}`",
+        f"- Status claim: `{value.get('status_claim', 'unknown')}`",
+        "- Pass conditions:",
+    ]
+    lines.extend(f"  - {item}" for item in value.get("pass_conditions", []) if str(item))
+    lines.append("- Must observe before claiming:")
+    lines.extend(f"  - {item}" for item in value.get("must_observe_before_claiming", []) if str(item))
+    return lines
+
+
+def _deep_interview_lines(value: object) -> list[str]:
+    if not isinstance(value, dict):
+        return ["- None recorded."]
+    if not value.get("required", False):
+        return [
+            "- Required: `false`",
+            f"- Reason: {value.get('reason', 'No blocking interview required.')}",
+            f"- Next action: `{value.get('after_answer_next_action', 'accept_or_revise_plan')}`",
+        ]
+    lines = [
+        "- Required: `true`",
+        f"- Question style: `{value.get('question_style', 'one_question')}`",
+        f"- Question: {value.get('question', '')}",
+        f"- Reason: {value.get('reason', '')}",
+        "- Missing decisions:",
+    ]
+    lines.extend(f"  - {item}" for item in value.get("missing_decisions", []) if str(item))
+    lines.append("- Answer shape:")
+    lines.extend(f"  - {item}" for item in value.get("answer_shape", []) if str(item))
+    lines.append(f"- Next action: `{value.get('after_answer_next_action', 'rerun_hermes_plan')}`")
+    return lines
+
+
+def _nested_list(value: object, key: str) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    nested = value.get(key, [])
+    return [str(item) for item in nested] if isinstance(nested, list) else []
+
+
+def _nested_value(value: object, key: str, default: str) -> str:
+    if not isinstance(value, dict):
+        return default
+    nested = value.get(key, default)
+    return str(nested) if str(nested) else default
 
 
 def _option_lines(values: object) -> list[str]:

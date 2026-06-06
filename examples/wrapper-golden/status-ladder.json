@@ -1,6 +1,6 @@
 {
   "schema_version": "wrapper_golden_examples/v1",
-  "description": "Platform-neutral wrapper examples for chat status rendering. These are deterministic examples, not platform SDK fixtures.",
+  "description": "Platform-neutral wrapper examples for chat status rendering, deep-interview prompts, and status cards. These are deterministic examples, not platform SDK fixtures.",
   "scenarios": [
     {
       "scenario": "clarify_needed",
@@ -27,6 +27,26 @@
         "action_ids": ["accept_plan", "revise_plan"]
       },
       "claim_boundary": "A draft plan is not execution evidence."
+    },
+    {
+      "scenario": "deep_interview_blocked_plan",
+      "source": "discord",
+      "input_kind": "natural_language",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "clarification",
+        "headline": "I need one answer before I can plan this.",
+        "body": "The user sees one blocking question instead of a guessed plan.",
+        "action_ids": ["answer:clarify", "cancel"]
+      },
+      "expected_deep_interview": {
+        "schema_version": "deep_interview_contract/v1",
+        "required": true,
+        "question_style": "one_question",
+        "missing_decisions": ["target outcome", "success criteria", "scope boundary"],
+        "after_answer_next_action": "rerun_hermes_plan"
+      },
+      "claim_boundary": "No plan or execution is approved."
     },
     {
       "scenario": "handoff_prepared",
@@ -66,6 +86,32 @@
         "action_ids": ["show_status"]
       },
       "claim_boundary": "Execution is observed; review is not."
+    },
+    {
+      "scenario": "status_card_review_pending",
+      "source": "discord",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "Executor completion needs review evidence.",
+        "body": "The wrapper can render a platform-neutral progress card without parsing prose.",
+        "action_ids": ["show_status"]
+      },
+      "expected_status_card": {
+        "schema_version": "status_card/v1",
+        "severity": "attention",
+        "steps": [
+          {"id": "handoff", "state": "complete"},
+          {"id": "execution", "state": "complete"},
+          {"id": "verification", "state": "complete"},
+          {"id": "review", "state": "pending"},
+          {"id": "ci", "state": "pending"},
+          {"id": "merge_ready", "state": "pending"},
+          {"id": "merged", "state": "pending"}
+        ]
+      },
+      "claim_boundary": "Execution and verification are not review evidence."
     },
     {
       "scenario": "ci_pending",

@@ -10,6 +10,7 @@ from .hermes_planning import build_hermes_plan_payload
 
 CHAT_INTERACTION_SCHEMA_VERSION = "chat_interaction/v1"
 CHAT_RESPONSE_SCHEMA_VERSION = "chat_response/v1"
+STATUS_CARD_SCHEMA_VERSION = "status_card/v1"
 INTERACTION_MODES = ("auto", "route", "plan", "delegate")
 VISIBLE_ACTIONS = (
     "answer:clarify",
@@ -207,6 +208,7 @@ def build_chat_status_interaction(
         "mode": "status",
         "next_action": status_payload.get("next_action", "show_status"),
         "status": status_payload,
+        "status_card": build_status_card_from_status(status_payload),
         "chat_response": build_chat_response_from_status(status_payload, thread_key=thread_key),
         "redaction_policy": "metadata_only",
         "overclaim_guard": status_payload.get("overclaim_guard", _default_overclaim_guard()),
@@ -361,7 +363,28 @@ def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_ke
             "merge_readiness_status": _nested(status_payload, "merge_readiness").get("status", "not_observed"),
             "merge_status": _nested(status_payload, "merge").get("status", "not_observed"),
         },
+        status_card=build_status_card_from_status(status_payload),
     )
+
+
+def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, object]:
+    next_action = str(status_payload.get("next_action", "show_status"))
+    kind, headline, body, claim_boundary = _STATUS_COPY.get(
+        next_action,
+        ("status", "I have a conservative status update.", str(status_payload.get("safe_summary", "")), "Only observed evidence can support completion claims."),
+    )
+    return {
+        "schema_version": STATUS_CARD_SCHEMA_VERSION,
+        "run_id": str(status_payload.get("run_id", "")),
+        "kind": kind,
+        "severity": _status_card_severity(next_action),
+        "headline": headline,
+        "summary": body,
+        "next_action": next_action,
+        "primary_action": "send_to_codex" if next_action == "dispatch_to_executor" else "show_status",
+        "steps": _status_card_steps(status_payload, next_action),
+        "claim_boundary": claim_boundary,
+    }
 
 
 def _base_interaction(
@@ -433,12 +456,13 @@ def _chat_response(
     actions: list[dict[str, object]],
     claim_boundary: str,
     extra_state: dict[str, object] | None = None,
+    status_card: dict[str, object] | None = None,
 ) -> dict[str, object]:
     state: dict[str, object] = {"phase": phase, "next_action": next_action}
     if thread_key:
         state["thread_key"] = thread_key
     state.update(extra_state or {})
-    return {
+    response: dict[str, object] = {
         "schema_version": CHAT_RESPONSE_SCHEMA_VERSION,
         "kind": kind,
         "visibility": "thread",
@@ -448,6 +472,9 @@ def _chat_response(
         "actions": actions,
         "claim_boundary": claim_boundary,
     }
+    if status_card:
+        response["status_card"] = status_card
+    return response
 
 
 def _action(action_id: str, label: str, style: str, *, enabled: bool = True, payload: dict[str, object] | None = None) -> dict[str, object]:
@@ -473,6 +500,97 @@ def _phase_for_next_action(next_action: str) -> str:
         "report_merge_ready": "merge_ready",
         "report_merged": "merged",
     }.get(next_action, "status")
+
+
+def _status_card_severity(next_action: str) -> str:
+    if next_action.startswith("surface_"):
+        return "blocked"
+    if next_action in {"report_merge_ready", "report_merged", "report_completion_with_evidence"}:
+        return "success"
+    if next_action in {"dispatch_to_executor", "record_review_evidence", "record_ci_evidence", "record_merge_readiness"}:
+        return "attention"
+    return "neutral"
+
+
+def _status_card_steps(status_payload: dict[str, Any], next_action: str) -> list[dict[str, object]]:
+    review = _nested(status_payload, "review")
+    ci = _nested(status_payload, "ci")
+    merge = _nested(status_payload, "merge")
+    merge_readiness = _nested(status_payload, "merge_readiness")
+    steps = [
+        _status_card_step("handoff", "Handoff", _handoff_step_state(status_payload, next_action), "Prepared executor handoff."),
+        _status_card_step("execution", "Execution", _observed_step_state(_nested(status_payload, "execution")), "Observed executor result."),
+        _status_card_step("verification", "Verification", _verification_step_state(_nested(status_payload, "verification")), "Observed verification evidence."),
+        _status_card_step("review", "Review", _gate_step_state(review, required=bool(review.get("required", False))), "Review evidence when required."),
+        _status_card_step("ci", "CI", _gate_step_state(ci, required=bool(ci) or str(review.get("status", "")) == "passed"), "CI evidence before merge readiness."),
+        _status_card_step(
+            "merge_ready",
+            "Merge Ready",
+            _merge_ready_step_state(merge_readiness, next_action),
+            "Explicit merge-readiness evidence.",
+        ),
+        _status_card_step("merged", "Merged", _merged_step_state(merge), "Observed merge evidence."),
+    ]
+    return steps
+
+
+def _status_card_step(step_id: str, label: str, state: str, detail: str) -> dict[str, object]:
+    return {"id": step_id, "label": label, "state": state, "detail": detail}
+
+
+def _handoff_step_state(status_payload: dict[str, Any], next_action: str) -> str:
+    if next_action in {"prepare_coding_delegation", "clarify_coding_request", "route_coding_request"}:
+        return "pending"
+    if next_action == "dispatch_to_executor":
+        return "ready"
+    if _nested(status_payload, "prepared").get("handoff_available", False):
+        return "complete"
+    return "pending"
+
+
+def _observed_step_state(value: dict[str, Any]) -> str:
+    status = str(value.get("status", "not_observed"))
+    if status in {"blocked", "failed"}:
+        return "blocked"
+    if bool(value.get("observed", False)) and status == "completed":
+        return "complete"
+    return "pending"
+
+
+def _verification_step_state(value: dict[str, Any]) -> str:
+    status = str(value.get("status", ""))
+    if status in {"blocked", "failed"}:
+        return "blocked"
+    return "complete" if bool(value.get("observed", False)) else "pending"
+
+
+def _gate_step_state(value: dict[str, Any], *, required: bool) -> str:
+    status = str(value.get("status", "not_observed"))
+    if not required and status in {"not_required", "not_observed"}:
+        return "not_required"
+    if status == "passed":
+        return "complete"
+    if status in {"failed", "blocked"}:
+        return "blocked"
+    return "pending"
+
+
+def _merge_ready_step_state(value: dict[str, Any], next_action: str) -> str:
+    status = str(value.get("status", "not_observed"))
+    if next_action == "report_merge_ready" or status == "ready":
+        return "complete"
+    if status in {"blocked", "failed"}:
+        return "blocked"
+    return "pending"
+
+
+def _merged_step_state(value: dict[str, Any]) -> str:
+    status = str(value.get("status", "not_observed"))
+    if status == "merged":
+        return "complete"
+    if status == "blocked":
+        return "blocked"
+    return "pending"
 
 
 def _default_overclaim_guard() -> list[str]:

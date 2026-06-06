@@ -121,7 +121,8 @@ Wrappers should treat `omh chat interact` as the primary API.
 
 1. Receive a natural-language user message.
 2. Call `omh chat interact` with a platform source and message or event JSON.
-3. Render `chat_response.headline`, `body`, `state`, and `actions`.
+3. Render `chat_response.headline`, `body`, `state`, `actions`, and
+   `status_card` when present.
 4. Wait for clarification, plan acceptance, revision, cancellation, or handoff
    action.
 5. If coding is accepted, dispatch the prepared handoff to an external coding
@@ -151,6 +152,9 @@ evidence by itself. If the wrapper cannot prove that a step happened, status
 should stay `prepared_not_observed`, `not_observed`, or `not_available`.
 Status readers evaluate the full run ledger conservatively: a later merge-ready
 artifact cannot override missing verification, review, or CI evidence.
+Wrapper status responses include a `status_card/v1` progress object so adapters
+can render handoff, execution, verification, review, CI, merge-ready, and merged
+steps without parsing prose.
 
 ## Routing Model
 
@@ -172,6 +176,10 @@ The generated catalog classifies each workflow by role:
 Actual Discord and Slack transports stay outside this repository. `omh` does
 not open network connections, authenticate bots, post messages, invoke Codex, or
 patch Hermes internals.
+
+Hermes plans include a deterministic `quality_gate` and `deep_interview`
+contract. Blocked plans ask one concise question; draft plans remain unapproved
+until the wrapper or user accepts them.
 
 ## Command Surface
 

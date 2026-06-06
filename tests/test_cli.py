@@ -844,6 +844,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["next_action"], "dispatch_to_executor")
         self.assertEqual(payload["source"], "discord")
         self.assertEqual(payload["thread_key"], "discord:c1:m1")
+        self.assertEqual(payload["status_card"]["schema_version"], "status_card/v1")
+        self.assertEqual(payload["status_card"]["primary_action"], "send_to_codex")
+        self.assertIn("status_card", payload["chat_response"])
         self.assertEqual(payload["chat_response"]["state"]["thread_key"], "discord:c1:m1")
         self.assertIn("send_to_codex", actions)
 
@@ -925,6 +928,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(plan["recommended_workflow"], "ralplan")
         self.assertEqual(plan["review_gate"]["architect"], "not_observed")
         self.assertEqual(plan["review_gate"]["critic"], "not_observed")
+        self.assertEqual(plan["quality_gate"]["schema_version"], "hermes_plan_quality/v1")
+        self.assertEqual(plan["quality_gate"]["readiness"], "ready_for_acceptance")
+        self.assertTrue(plan["quality_gate"]["coding_handoff_ready"])
+        self.assertFalse(plan["deep_interview"]["required"])
+        self.assertEqual(plan["deep_interview"]["after_answer_next_action"], "accept_or_revise_plan")
         self.assertTrue(plan["acceptance_criteria"])
         self.assertTrue(plan["verification_plan"])
         self.assertIn("omh coding delegate --record", plan["execution_handoff"])
@@ -935,6 +943,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(contract["message_field"], "plan.task_statement")
         self.assertFalse(contract["plan_artifact"]["recorded"])
         self.assertTrue(contract["decision_gate"]["required"])
+        self.assertEqual(contract["quality_gate"]["readiness"], "ready_for_acceptance")
+        self.assertFalse(contract["deep_interview"]["required"])
         coding_delegate = contract["coding_delegate"]
         self.assertTrue(coding_delegate["available"])
         self.assertTrue(coding_delegate["requires_plan_acceptance"])
@@ -1020,9 +1030,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             self.assertEqual(payload["plan"]["status"], "blocked")
+            self.assertEqual(payload["plan"]["quality_gate"]["readiness"], "needs_clarification")
+            self.assertTrue(payload["plan"]["deep_interview"]["required"])
+            self.assertIn("outcome", payload["plan"]["deep_interview"]["question"].lower())
+            self.assertIn("target outcome", payload["plan"]["deep_interview"]["missing_decisions"])
             contract = payload["wrapper_contract"]
             self.assertEqual(contract["current_step"], "ask_clarification")
             self.assertEqual(contract["next_action"], "ask_clarification")
+            self.assertTrue(contract["deep_interview"]["required"])
             self.assertFalse(contract["coding_delegate"]["available"])
             self.assertEqual(contract["coding_delegate"]["unavailable_reason"], "plan is blocked")
             artifact = payload["artifact"]
@@ -1034,7 +1049,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(context_path.parent.resolve(), (hermes_home / "context").resolve())
             self.assertTrue(plan_path.exists())
             self.assertTrue(context_path.exists())
-            self.assertIn("## Missing Decisions", context_path.read_text(encoding="utf-8"))
+            context_text = context_path.read_text(encoding="utf-8")
+            self.assertIn("## Missing Decisions", context_text)
+            self.assertIn("## Recommended Question", context_text)
+            self.assertIn("## Answer Shape", context_text)
 
     def test_hermes_plan_reads_event_json_and_source_metadata(self) -> None:
         with TemporaryDirectory() as tmp:
