@@ -292,6 +292,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Capability probe smoke", ci)
         self.assertIn("actions/upload-pages-artifact@v4", pages)
         self.assertIn("actions/deploy-pages@v4", pages)
+        self.assertIn("pages: write", pages)
+        self.assertIn("enablement: true", pages)
         self.assertIn("site/**", pages)
         self.assertIn("docs workflows --check", pages)
         self.assertIn("harness validate", pages)
