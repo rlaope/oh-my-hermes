@@ -692,6 +692,9 @@ def cmd_runtime_review(args: argparse.Namespace) -> int:
     preflight = summarize_delegated_coding_status(paths, args.run_id)
     if args.status in {"passed", "not_required"} and preflight.get("next_action") != "record_review_evidence":
         raise OmhError(f"cannot record review {args.status} while next_action is {preflight.get('next_action')}")
+    review_status = preflight.get("review", {})
+    if args.status == "not_required" and isinstance(review_status, dict) and review_status.get("required"):
+        raise OmhError("cannot mark required review as not_required")
     try:
         review = write_review_record(
             run_dir,
@@ -717,6 +720,9 @@ def cmd_runtime_ci(args: argparse.Namespace) -> int:
     preflight = summarize_delegated_coding_status(paths, args.run_id)
     if args.status == "passed" and preflight.get("next_action") != "record_ci_evidence":
         raise OmhError(f"cannot record passed CI while next_action is {preflight.get('next_action')}")
+    ci_status = preflight.get("ci", {})
+    if args.status == "not_required" and isinstance(ci_status, dict) and ci_status.get("required"):
+        raise OmhError("cannot mark required CI as not_required")
     try:
         ci = write_ci_record(
             run_dir,

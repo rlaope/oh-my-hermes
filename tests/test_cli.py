@@ -643,6 +643,64 @@ class CliTests(unittest.TestCase):
             self.assertEqual(shown["ci"]["status"], "passed")
             self.assertEqual(shown["merge"]["merge_commit"], "abc123")
 
+    def test_runtime_review_not_required_rejects_required_handoff(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "risky", "refactor"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "dispatch", "--run", run_id])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "result", "--run", run_id, "--result", "completed"])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "verify", "--run", run_id])[0], 0)
+
+            status, _, stderr = run_cli(base + ["runtime", "review", "--run", run_id, "--status", "not_required"])
+
+            self.assertEqual(status, 2)
+            self.assertIn("cannot mark required review as not_required", stderr)
+
+    def test_runtime_ci_not_required_rejects_required_ladder(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "risky", "refactor"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "dispatch", "--run", run_id])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "result", "--run", run_id, "--result", "completed"])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "verify", "--run", run_id])[0], 0)
+            self.assertEqual(
+                run_cli(
+                    base
+                    + [
+                        "runtime",
+                        "review",
+                        "--run",
+                        run_id,
+                        "--status",
+                        "passed",
+                        "--reviewer",
+                        "code-review",
+                        "--evidence-ref",
+                        "review-comment",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, _, stderr = run_cli(base + ["runtime", "ci", "--run", run_id, "--status", "not_required", "--check", "unit:failed"])
+
+            self.assertEqual(status, 2)
+            self.assertIn("cannot mark required CI as not_required", stderr)
+
     def test_runtime_merge_ready_rejects_missing_upstream_evidence(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

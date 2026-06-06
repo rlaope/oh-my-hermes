@@ -396,6 +396,23 @@ class RuntimeArtifactTests(unittest.TestCase):
             ),
         )
         self.assertIn(
+            "ci not_required status requires checks to be empty or not_required",
+            validate_ci_record(
+                {
+                    "schema_version": 1,
+                    "run_id": "run-1",
+                    "updated_at": "now",
+                    "required": False,
+                    "observed": True,
+                    "status": "not_required",
+                    "provider": "local",
+                    "checks": [{"name": "unit", "status": "failed"}],
+                    "evidence_refs": [],
+                    "summary": "",
+                }
+            ),
+        )
+        self.assertIn(
             "merge merged status requires merge_commit or evidence_refs",
             validate_merge_record(
                 {
@@ -511,6 +528,83 @@ class RuntimeArtifactTests(unittest.TestCase):
 
                 self.assertEqual(summary["next_action"], "record_merge_readiness")
                 self.assertFalse(summary["merge"]["satisfied"])
+
+    def test_status_reader_preserves_required_review_and_ci_gates(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            write_coding_delegation(run_dir, build_coding_delegation_payload("risky refactor", source="discord", include_message=True))
+            write_wrapper_contract(
+                run_dir,
+                {
+                    "prompt_dispatched": True,
+                    "hermes_response_observed": True,
+                    "verification_observed": True,
+                    "completion_status": "completed",
+                },
+            )
+            write_delegation(run_dir, {"requested": True, "observed": True, "result": "completed"})
+            (run_dir / "review.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": run["run_id"],
+                        "updated_at": "now",
+                        "required": False,
+                        "observed": True,
+                        "status": "not_required",
+                        "reviewer": "code-review",
+                        "evidence_refs": [],
+                        "summary": "",
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+            summary = summarize_delegated_coding_status(paths, run["run_id"])
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertTrue(summary["review"]["required"])
+            self.assertFalse(summary["review"]["satisfied"])
+            self.assertEqual(summary["next_action"], "record_review_evidence")
+            self.assertFalse(result["ok"])
+            self.assertIn("review not_required cannot downgrade required review evidence", "\n".join(result["runs"][0]["errors"]))
+
+            write_review_record(run_dir, {"status": "passed", "reviewer": "code-review", "evidence_refs": ["review"]})
+            (run_dir / "ci.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": run["run_id"],
+                        "updated_at": "now",
+                        "required": False,
+                        "observed": True,
+                        "status": "not_required",
+                        "provider": "local",
+                        "checks": [{"name": "unit", "status": "failed"}],
+                        "evidence_refs": [],
+                        "summary": "",
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+            summary = summarize_delegated_coding_status(paths, run["run_id"])
+            result = validate_runtime(paths, run["run_id"])
+            errors = "\n".join(result["runs"][0]["errors"])
+
+            self.assertTrue(summary["ci"]["required"])
+            self.assertFalse(summary["ci"]["satisfied"])
+            self.assertEqual(summary["next_action"], "record_ci_evidence")
+            self.assertFalse(result["ok"])
+            self.assertIn("ci not_required cannot downgrade required CI evidence", errors)
+            self.assertIn("ci not_required status requires checks to be empty or not_required", errors)
 
     def test_export_runtime_redacts_sensitive_text_and_preserves_evidence_booleans(self) -> None:
         with TemporaryDirectory() as tmp:

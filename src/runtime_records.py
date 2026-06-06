@@ -662,6 +662,8 @@ def validate_ci_record(ci: dict[str, Any]) -> list[str]:
     if ci.get("status") == "not_required":
         _require(ci.get("required") is False, errors, "ci not_required status requires required=false")
         _require(ci.get("observed") is True, errors, "ci not_required status must be observed")
+        invalid_checks = [check for check in checks if isinstance(check, dict) and check.get("status") != "not_required"]
+        _require(not invalid_checks, errors, "ci not_required status requires checks to be empty or not_required")
     if ci.get("observed") is False:
         _require(ci.get("status") in {"pending", "not_observed"}, errors, "ci observed=false requires pending or not_observed")
     if ci.get("status") == "passed":

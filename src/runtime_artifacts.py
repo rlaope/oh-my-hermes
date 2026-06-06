@@ -453,12 +453,12 @@ def _review_status_summary(
     if record:
         status = str(record.get("status", "not_observed"))
         observed = bool(record.get("observed", False))
-        required = bool(record.get("required", required))
+        required = required or bool(record.get("required", required))
         return {
             "required": required,
             "observed": observed,
             "status": status,
-            "satisfied": observed and status in {"passed", "not_required"},
+            "satisfied": observed and (status == "passed" or (status == "not_required" and not required)),
             "reviewer": record.get("reviewer", ""),
             "evidence_refs": record.get("evidence_refs", []),
             "summary": record.get("summary", ""),
@@ -481,11 +481,13 @@ def _ci_status_summary(required: bool, record: dict[str, Any]) -> dict[str, Any]
         observed = bool(record.get("observed", False))
         checks = record.get("checks", [])
         checks_passed = bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
+        checks_not_required = all(isinstance(check, dict) and check.get("status") == "not_required" for check in checks)
+        required = required or bool(record.get("required", required))
         return {
-            "required": bool(record.get("required", required)),
+            "required": required,
             "observed": observed,
             "status": status,
-            "satisfied": observed and (status == "not_required" or (status == "passed" and checks_passed)),
+            "satisfied": observed and ((status == "not_required" and not required and checks_not_required) or (status == "passed" and checks_passed)),
             "provider": record.get("provider", ""),
             "checks": checks,
             "evidence_refs": record.get("evidence_refs", []),
@@ -728,7 +730,8 @@ def _validate_run_status_gate_consistency(run_dir: Path) -> list[str]:
     handoff_review = _object_or_empty(handoff.get("review"))
     review_required = bool(handoff_review.get("required", coding.get("review_required", False)))
     review_status = _review_status_summary(review_required, handoff_review.get("workflow"), handoff_review, review_record)
-    ci_required = bool(ci_record) or review_status["status"] == "passed"
+    ci_required_by_ladder = review_status["status"] == "passed"
+    ci_required = bool(ci_record) or ci_required_by_ladder
     ci_status = _ci_status_summary(ci_required, ci_record)
 
     execution_satisfied = bool(delegation.get("observed", False)) and delegation.get("result") == "completed"
@@ -737,6 +740,10 @@ def _validate_run_status_gate_consistency(run_dir: Path) -> list[str]:
     ci_path = run_dir / "ci.json"
     merge_path = run_dir / "merge.json"
 
+    if review_required and review_record.get("status") == "not_required":
+        errors.append(f"{review_path}: review not_required cannot downgrade required review evidence")
+    if ci_required_by_ladder and ci_record.get("status") == "not_required":
+        errors.append(f"{ci_path}: ci not_required cannot downgrade required CI evidence")
     if review_record.get("status") == "passed" and not verification_satisfied:
         errors.append(f"{review_path}: review passed requires verification evidence")
     if ci_record.get("status") == "passed":
