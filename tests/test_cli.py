@@ -1396,6 +1396,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertIn("workflow docs are stale", stderr)
 
+    def test_docs_workflows_json_exposes_machine_readable_quality_contract(self) -> None:
+        status, stdout, stderr = run_cli(["docs", "workflows", "--json"])
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "workflow_catalog/v1")
+        harnesses = {harness["name"]: harness for harness in payload["harnesses"]}
+        self.assertEqual(harnesses["coding-handling"]["quality_tier"], "handoff-gated")
+        self.assertIn("coding_delegation_prepared", harnesses["coding-handling"]["evidence_ladder"])
+        self.assertIn("send_to_codex", harnesses["coding-handling"]["wrapper_actions"])
+
+        status, _, stderr = run_cli(["docs", "workflows", "--json", "--check"])
+        self.assertEqual(status, 2)
+        self.assertIn("cannot be combined", stderr)
+
     def test_runtime_record_rejects_unknown_names(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

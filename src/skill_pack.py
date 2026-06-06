@@ -10,6 +10,7 @@ from .skills import (
     builtin_harnesses,
     builtin_skill_templates,
     router_skill,
+    workflow_reference_payload,
     workflow_skill,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "builtin_harnesses",
     "builtin_skill_templates",
     "router_skill",
+    "workflow_reference_payload",
     "workflow_skill",
 ]

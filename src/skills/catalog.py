@@ -20,6 +20,11 @@ class SkillDefinition:
         "Do not imply hidden Hermes runtime behavior.",
         "Use the smallest verification that can prove the claim.",
     )
+    quality_tier: str = "evidence-gated"
+    quality_bar: tuple[str, ...] = (
+        "Name the workflow target, constraints, validation evidence, and stop condition.",
+        "Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.",
+    )
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,21 @@ class HarnessDefinition:
     artifact_events: tuple[str, ...]
     delegation_expectation: str
     privacy_default: str
+    quality_tier: str = "evidence-gated"
+    quality_bar: tuple[str, ...] = (
+        "State the lane objective, required inputs, expected outputs, and stop condition before claiming completion.",
+        "Record only metadata-safe evidence and leave unavailable delegation explicit.",
+    )
+    evidence_ladder: tuple[str, ...] = (
+        "request_received",
+        "lane_started",
+        "evidence_recorded",
+        "result_reported",
+    )
+    wrapper_actions: tuple[str, ...] = ("show_status",)
+    overclaim_guards: tuple[str, ...] = (
+        "Do not upgrade requested or prepared work into observed completion without runtime or wrapper evidence.",
+    )
 
 
 CODING_INTENTS = ("coding", "cleanup", "review", "planning", "diagnostics", "docs", "unknown")
@@ -78,6 +98,12 @@ _DEFINITIONS = [
             "Ask one concise question when routing signals conflict.",
             "Do not claim to override Hermes core routing.",
         ),
+        quality_tier="routing-gated",
+        quality_bar=(
+            "Route only from explicit invocation, strong catalog evidence, or a clear workflow-shaped request.",
+            "Return a clarification or fallback path instead of forcing low-confidence messages into a workflow.",
+            "Keep users command-agnostic by naming the next UX step rather than shell commands.",
+        ),
     ),
     SkillDefinition(
         "ralph",
@@ -91,6 +117,12 @@ _DEFINITIONS = [
         required_inputs=("concrete scope", "acceptance criteria", "verification commands"),
         expected_outputs=("completed work summary", "verification evidence", "remaining risks"),
         artifact_expectations=("goal-execution run record", "checkpoint or final evidence when available"),
+        quality_tier="handoff-gated",
+        quality_bar=(
+            "Do not enter a finish-until-done loop until scope, acceptance criteria, and verification commands are concrete.",
+            "For coding edits, prepare and track Codex-like executor evidence instead of implying Hermes implemented the changes.",
+            "Report completion only from observed execution and verification evidence.",
+        ),
     ),
     SkillDefinition(
         "ultragoal",
@@ -104,6 +136,12 @@ _DEFINITIONS = [
         required_inputs=("goal statement", "acceptance criteria", "current checkpoint"),
         expected_outputs=("goal ledger updates", "checkpoint evidence", "completion or blocker summary"),
         artifact_expectations=("goal ledger or checklist", "runtime run record for each major checkpoint"),
+        quality_tier="checkpoint-gated",
+        quality_bar=(
+            "Keep goal state durable, inspectable, and separate from chat narration.",
+            "Checkpoint every success, blocker, and final quality gate with fresh evidence.",
+            "For coding milestones, use prepared handoffs and observed executor evidence rather than hidden Hermes execution.",
+        ),
     ),
     SkillDefinition(
         "deep-interview",
@@ -121,6 +159,12 @@ _DEFINITIONS = [
             "Ask one question at a time.",
             "Gather discoverable repo facts before asking the user.",
             "Stop interviewing once ambiguity is low enough to plan.",
+        ),
+        quality_tier="clarity-gated",
+        quality_bar=(
+            "Ask exactly one blocking question per turn unless the wrapper explicitly supports a structured batch.",
+            "Tie each question to a missing decision that changes the plan, handoff, or stop condition.",
+            "Emit a clarified brief with non-goals and acceptance criteria before planning or delegation.",
         ),
     ),
     SkillDefinition(
@@ -140,6 +184,12 @@ _DEFINITIONS = [
             "Keep shared-file edits under one owner.",
             "Record unobserved delegation as not_observed.",
         ),
+        quality_tier="coordination-gated",
+        quality_bar=(
+            "Split only independent lanes with explicit ownership and verification boundaries.",
+            "Keep Hermes as coordinator and status narrator while coding lanes become executor handoffs.",
+            "Integrate lane evidence before reporting combined progress.",
+        ),
     ),
     SkillDefinition(
         "ultrawork",
@@ -157,6 +207,12 @@ _DEFINITIONS = [
             "Do not start parallel coding without disjoint ownership boundaries.",
             "Keep Hermes responsible for orchestration/status, not hidden implementation.",
             "Record unobserved Codex execution as prepared_not_observed or not_observed.",
+        ),
+        quality_tier="handoff-gated",
+        quality_bar=(
+            "Require disjoint lane ownership before preparing multiple coding handoffs.",
+            "Attach acceptance criteria, verification commands, and review expectations to each lane.",
+            "Keep dispatch, execution, review, CI, and merge status evidence separate.",
         ),
     ),
     SkillDefinition(
@@ -176,6 +232,12 @@ _DEFINITIONS = [
             "Separate quoted evidence from inference.",
             "State retrieval limits and dates for unstable facts.",
         ),
+        quality_tier="source-gated",
+        quality_bar=(
+            "Use official or primary sources first when current or external facts matter.",
+            "Separate direct evidence, inference, confidence, and residual uncertainty.",
+            "Summarize research before any coding handoff; research is not implementation evidence.",
+        ),
     ),
     SkillDefinition(
         "ultraqa",
@@ -189,6 +251,12 @@ _DEFINITIONS = [
         required_inputs=("changed behavior", "acceptance criteria", "known risk areas"),
         expected_outputs=("adversarial scenarios", "pass/fail evidence", "fix recommendations"),
         artifact_expectations=("QA scenario evidence", "runtime verification summary"),
+        quality_tier="scenario-gated",
+        quality_bar=(
+            "Generate hostile scenarios from changed behavior and known risk areas.",
+            "Report pass/fail evidence separately from proposed fixes.",
+            "Delegate code mutations discovered by QA to Codex-like executors.",
+        ),
     ),
     SkillDefinition(
         "plan",
@@ -202,6 +270,12 @@ _DEFINITIONS = [
         required_inputs=("requirements", "constraints", "known facts", "non-goals"),
         expected_outputs=("plan", "acceptance criteria", "verification strategy"),
         artifact_expectations=("plan artifact when durable execution will follow",),
+        quality_tier="acceptance-gated",
+        quality_bar=(
+            "Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.",
+            "Keep draft plans unapproved until a user or wrapper accepts them.",
+            "Only prepare coding handoff guidance after the plan is accepted.",
+        ),
     ),
     SkillDefinition(
         "ralplan",
@@ -219,6 +293,12 @@ _DEFINITIONS = [
             "Do not implement directly from the planning lane.",
             "Make acceptance criteria testable.",
             "Record unresolved tradeoffs explicitly.",
+        ),
+        quality_tier="reviewed-plan-gated",
+        quality_bar=(
+            "Include a planner view, risk review, and testability check before handoff.",
+            "Record unresolved tradeoffs and rejected options instead of flattening uncertainty.",
+            "Do not implement directly from consensus planning.",
         ),
     ),
     SkillDefinition(
@@ -238,6 +318,12 @@ _DEFINITIONS = [
             "Cite concrete evidence for every finding.",
             "Say clearly when no issue is found.",
         ),
+        quality_tier="finding-evidence-gated",
+        quality_bar=(
+            "Lead with ranked findings grounded in file, diff, command, or artifact evidence.",
+            "Separate review findings from fix implementation; fixes become executor work.",
+            "Say clearly when no actionable issue is found and name remaining test gaps.",
+        ),
     ),
     SkillDefinition(
         "ai-slop-cleaner",
@@ -256,6 +342,12 @@ _DEFINITIONS = [
             "Prefer deletion and existing utilities over new layers.",
             "Do not add dependencies for cleanup unless explicitly requested.",
         ),
+        quality_tier="regression-gated",
+        quality_bar=(
+            "Lock current behavior with regression checks before non-trivial cleanup.",
+            "Prefer deletion, reuse, and boundary repair over new abstractions.",
+            "Rerun verification after cleanup before claiming behavior is preserved.",
+        ),
     ),
     SkillDefinition(
         "best-practice-research",
@@ -269,6 +361,12 @@ _DEFINITIONS = [
         required_inputs=("chosen technology", "question", "version or environment constraints"),
         expected_outputs=("source-backed guidance", "applicability notes", "residual uncertainty"),
         artifact_expectations=("research notes or citations when the wrapper captures them",),
+        quality_tier="source-gated",
+        quality_bar=(
+            "Use official or upstream sources first and name the version/environment assumptions.",
+            "Map applicability to the user's local context before recommending action.",
+            "Preserve residual uncertainty instead of overstating best practice.",
+        ),
     ),
     SkillDefinition(
         "autoresearch-goal",
@@ -282,6 +380,12 @@ _DEFINITIONS = [
         required_inputs=("research objective", "validator criteria", "source boundaries"),
         expected_outputs=("research artifact", "validator result", "next questions"),
         artifact_expectations=("durable research ledger or checklist",),
+        quality_tier="validator-gated",
+        quality_bar=(
+            "Define validator criteria before gathering evidence.",
+            "Keep durable research artifacts separate from coding execution evidence.",
+            "Stop with next questions or a source-backed synthesis when validation is incomplete.",
+        ),
     ),
     SkillDefinition(
         "performance-goal",
@@ -295,6 +399,12 @@ _DEFINITIONS = [
         required_inputs=("metric", "baseline", "budget", "benchmark command"),
         expected_outputs=("measurement delta", "implementation summary", "benchmark evidence"),
         artifact_expectations=("baseline and final benchmark evidence",),
+        quality_tier="measurement-gated",
+        quality_bar=(
+            "Name the metric, baseline, budget, and benchmark command before optimizing.",
+            "Treat code-level optimization as executor work when edits are required.",
+            "Report deltas only from observed benchmark evidence.",
+        ),
     ),
     SkillDefinition(
         "wiki",
@@ -308,6 +418,12 @@ _DEFINITIONS = [
         required_inputs=("project fact", "source evidence", "target topic"),
         expected_outputs=("markdown note", "retrieval hint", "staleness warning when needed"),
         artifact_expectations=("repo-local markdown knowledge artifact",),
+        quality_tier="knowledge-gated",
+        quality_bar=(
+            "Capture durable facts with source evidence and retrieval hints.",
+            "Mark stale or uncertain knowledge instead of presenting it as permanent truth.",
+            "Extract separate coding tasks instead of burying them in notes.",
+        ),
     ),
     SkillDefinition(
         "ask",
@@ -382,6 +498,24 @@ _HARNESSES = [
         ("run_started", "coding_delegation_recorded", "verification_recorded"),
         "Record prepared coding delegation with omh coding delegate; record observed execution only when Hermes exposes a separate coding, review, or verification lane.",
         "metadata_only",
+        quality_tier="handoff-gated",
+        quality_bar=(
+            "Clarify scope before edits when target behavior, files, or verification are missing.",
+            "Attach acceptance criteria, verification expectations, and review expectations to the prepared handoff.",
+            "Report coding progress from lifecycle evidence, not from the existence of a prepared prompt.",
+        ),
+        evidence_ladder=(
+            "coding_delegation_prepared",
+            "executor_dispatch_observed",
+            "executor_result_observed",
+            "verification_recorded",
+            "review_ci_merge_recorded_when_required",
+        ),
+        wrapper_actions=("accept_plan", "send_to_codex", "show_status", "record_result"),
+        overclaim_guards=(
+            "A prepared coding_delegation.json is not implementation evidence.",
+            "Executor completion is not review, CI, merge-readiness, or merge evidence.",
+        ),
     ),
     HarnessDefinition(
         "goal-execution",
@@ -395,6 +529,18 @@ _HARNESSES = [
         ("goal_started", "checkpoint_recorded", "goal_completed_or_blocked"),
         "Record goal/delegation participants only when the active Hermes runtime exposes them.",
         "metadata_only",
+        quality_tier="checkpoint-gated",
+        quality_bar=(
+            "Create or reference a durable goal artifact before long-running progress claims.",
+            "Checkpoint complete, blocked, and failed states with evidence.",
+            "Run final verification and review gates before reporting a goal complete.",
+        ),
+        evidence_ladder=("goal_created", "story_started", "checkpoint_recorded", "quality_gate_recorded", "goal_closed"),
+        wrapper_actions=("show_status", "record_checkpoint", "record_blocker", "record_completion"),
+        overclaim_guards=(
+            "A goal ledger entry is not proof that executor work ran.",
+            "Intermediate checkpoints cannot replace final verification and review evidence.",
+        ),
     ),
     HarnessDefinition(
         "planning",
@@ -408,6 +554,18 @@ _HARNESSES = [
         ("plan_started", "options_reviewed", "handoff_recorded"),
         "Record planner, architect, or reviewer delegation only when observed in Hermes metadata or wrapper logs.",
         "metadata_only",
+        quality_tier="acceptance-gated",
+        quality_bar=(
+            "Make goals, non-goals, decision drivers, options, risks, and test strategy explicit.",
+            "Keep draft plans unapproved until a user or wrapper accepts them.",
+            "Prepare coding handoff guidance only after acceptance.",
+        ),
+        evidence_ladder=("request_clarified", "plan_drafted", "options_reviewed", "acceptance_recorded", "handoff_ready"),
+        wrapper_actions=("accept_plan", "revise_plan", "cancel", "prepare_handoff"),
+        overclaim_guards=(
+            "A draft plan is not execution or review evidence.",
+            "Unobserved architect or critic review stays not_observed.",
+        ),
     ),
     HarnessDefinition(
         "research",
@@ -421,6 +579,18 @@ _HARNESSES = [
         ("research_started", "source_checked", "synthesis_recorded"),
         "Record a research lane only when Hermes or the wrapper exposes source/research evidence; otherwise summarize retrieval limits explicitly.",
         "metadata_only",
+        quality_tier="source-gated",
+        quality_bar=(
+            "Use official or primary sources first when they can answer the question.",
+            "Separate source evidence, inference, confidence, and retrieval limits.",
+            "Record dates or version boundaries for unstable facts.",
+        ),
+        evidence_ladder=("research_question_scoped", "sources_checked", "evidence_synthesized", "uncertainty_recorded"),
+        wrapper_actions=("show_sources", "ask_followup", "prepare_plan"),
+        overclaim_guards=(
+            "Research synthesis is not implementation evidence.",
+            "Unavailable web access must be reported as a retrieval gap.",
+        ),
     ),
     HarnessDefinition(
         "deep-interview",
@@ -434,6 +604,18 @@ _HARNESSES = [
         ("interview_started", "question_asked", "clarity_recorded"),
         "Record a delegated interviewer only when Hermes exposes that lane; otherwise record sequential clarification.",
         "metadata_only",
+        quality_tier="clarity-gated",
+        quality_bar=(
+            "Ask one blocking question tied to a missing decision.",
+            "Use discovered facts before asking the user for information already available locally.",
+            "Produce a clarified brief before planning or handoff.",
+        ),
+        evidence_ladder=("ambiguity_identified", "question_asked", "answer_recorded", "clarified_brief_ready"),
+        wrapper_actions=("answer:clarify", "cancel", "rerun_plan"),
+        overclaim_guards=(
+            "A clarification question is not a plan approval.",
+            "Do not start a handoff while the blocking decision is unanswered.",
+        ),
     ),
     HarnessDefinition(
         "architect",
@@ -447,6 +629,18 @@ _HARNESSES = [
         ("architecture_review_started", "tradeoff_recorded", "verdict_recorded"),
         "Record architect delegation only when Hermes exposes an architect lane or wrapper-side role result.",
         "metadata_only",
+        quality_tier="boundary-gated",
+        quality_bar=(
+            "Check the proposed change against documented product and module boundaries.",
+            "Name rejected alternatives and long-term maintenance tradeoffs.",
+            "Require clear approval or concrete requested changes before implementation.",
+        ),
+        evidence_ladder=("architecture_context_loaded", "tradeoffs_recorded", "boundary_verdict_recorded"),
+        wrapper_actions=("show_review", "revise_plan", "approve_plan"),
+        overclaim_guards=(
+            "Sequential self-review is not observed architect delegation.",
+            "Architecture approval does not imply implementation or test success.",
+        ),
     ),
     HarnessDefinition(
         "critic",
@@ -460,6 +654,18 @@ _HARNESSES = [
         ("critic_review_started", "finding_recorded", "verdict_recorded"),
         "Record critic delegation only when Hermes exposes a critic lane or wrapper-side role result.",
         "metadata_only",
+        quality_tier="finding-gated",
+        quality_bar=(
+            "Challenge plan consistency, missing verification, and weak acceptance criteria.",
+            "Rank concrete findings before summaries.",
+            "Approve only when residual risks and test gaps are explicit.",
+        ),
+        evidence_ladder=("review_scope_loaded", "findings_recorded", "verdict_recorded", "residual_risk_recorded"),
+        wrapper_actions=("show_findings", "request_changes", "approve_plan"),
+        overclaim_guards=(
+            "A critic verdict is not code-review evidence unless tied to actual diff/files.",
+            "Approval cannot erase missing downstream verification.",
+        ),
     ),
     HarnessDefinition(
         "qa-specialist",
@@ -473,6 +679,18 @@ _HARNESSES = [
         ("qa_started", "scenario_recorded", "pass_fail_recorded"),
         "Record QA delegation only when Hermes exposes a QA lane or wrapper-side QA result.",
         "metadata_only",
+        quality_tier="scenario-gated",
+        quality_bar=(
+            "Derive adversarial scenarios from user-visible behavior and changed surfaces.",
+            "Record pass/fail evidence for critical scenarios.",
+            "Turn discovered code fixes into executor handoffs.",
+        ),
+        evidence_ladder=("scenario_matrix_defined", "checks_run", "pass_fail_recorded", "fix_followup_recorded_if_needed"),
+        wrapper_actions=("show_status", "record_check", "record_blocker"),
+        overclaim_guards=(
+            "A scenario list is not pass evidence.",
+            "Failed QA cannot be summarized as complete without a blocker or fix record.",
+        ),
     ),
     HarnessDefinition(
         "docs-specialist",
@@ -486,6 +704,18 @@ _HARNESSES = [
         ("docs_review_started", "claim_checked", "docs_updated"),
         "Record docs delegation only when Hermes exposes a docs lane or wrapper-side docs result.",
         "metadata_only",
+        quality_tier="claim-gated",
+        quality_bar=(
+            "Check public claims against implemented behavior and known limitations.",
+            "Keep examples reproducible and avoid presenting roadmap as current capability.",
+            "Regenerate generated references from catalog data instead of hand-editing them.",
+        ),
+        evidence_ladder=("claims_scoped", "docs_updated", "generated_docs_checked", "public_claims_verified"),
+        wrapper_actions=("show_docs", "record_claim_check", "show_status"),
+        overclaim_guards=(
+            "Documentation of a future adapter is not proof that a transport exists.",
+            "Generated docs must match catalog data before release claims are made.",
+        ),
     ),
 ]
 

@@ -57,7 +57,7 @@ from ..runtime.artifacts import (
     write_routing_decision,
     write_wrapper_contract,
 )
-from ..skills.render import workflow_reference_markdown
+from ..skills.render import workflow_reference_markdown, workflow_reference_payload
 from ..skill_pack import builtin_harnesses, builtin_definitions
 from ..snippet import WORKSPACE_SNIPPET
 from ..workflow_state import (
@@ -803,6 +803,13 @@ def cmd_snippet(args: argparse.Namespace) -> int:
 
 
 def cmd_docs_workflows(args: argparse.Namespace) -> int:
+    if args.json:
+        if args.check:
+            raise OmhError("docs workflows --json cannot be combined with --check")
+        if args.output:
+            raise OmhError("docs workflows --json cannot be combined with --output")
+        _print_json(workflow_reference_payload())
+        return 0
     content = workflow_reference_markdown()
     output = Path(args.output).expanduser().resolve() if args.output else Path("docs/WORKFLOWS.md").resolve()
     if args.check:
@@ -935,6 +942,7 @@ def _add_docs_commands(sub) -> None:
     docs_workflows = docs_sub.add_parser("workflows")
     docs_workflows.add_argument("--output", default=None)
     docs_workflows.add_argument("--check", action="store_true")
+    docs_workflows.add_argument("--json", action="store_true", help="Print machine-readable workflow and harness catalog metadata.")
     docs_workflows.set_defaults(func=cmd_docs_workflows)
 
 
