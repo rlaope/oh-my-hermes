@@ -248,6 +248,7 @@ class RouterContentTests(unittest.TestCase):
             Path(".github/ISSUE_TEMPLATE/feature_request.yml"),
             Path(".github/ISSUE_TEMPLATE/config.yml"),
             Path("site/index.html"),
+            Path("site/docs/index.html"),
             Path("site/styles.css"),
             Path("site/assets/hermes-agent-hero.png"),
         ]
@@ -262,6 +263,7 @@ class RouterContentTests(unittest.TestCase):
         release = Path("docs/RELEASE.md").read_text(encoding="utf-8")
         harness_quality = Path("docs/HARNESS_QUALITY.md").read_text(encoding="utf-8")
         site = Path("site/index.html").read_text(encoding="utf-8")
+        site_docs = Path("site/docs/index.html").read_text(encoding="utf-8")
         site_css = Path("site/styles.css").read_text(encoding="utf-8")
 
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
@@ -303,6 +305,13 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("GitHub Pages workflow status", release)
         self.assertIn("Capability probe status", release)
         self.assertIn("OMH", site)
+        self.assertIn('href="docs/">Read docs</a>', site)
+        self.assertNotIn("github.com/rlaope/oh-my-hermes-agent/tree/main/docs", site)
+        self.assertIn("OMH Documentation", site_docs)
+        self.assertIn("omh chat interact --source discord", site_docs)
+        self.assertIn("chat_response/v1", site_docs)
+        self.assertIn("harness_progress/v1", site_docs)
+        self.assertIn("omh harness validate", site_docs)
         self.assertIn("harness_progress/v1", site)
         self.assertIn("assets/hermes-agent-hero.png", site_css)
 
