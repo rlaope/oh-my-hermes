@@ -413,6 +413,102 @@ h1 {
   margin-top: 8px;
 }
 
+.architecture-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1.1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin: 24px 0;
+}
+
+.arch-node {
+  min-height: 118px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.arch-node span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.arch-node strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.22;
+}
+
+.arch-node--source {
+  border-color: #b6c7e3;
+  background: #eef4ff;
+}
+
+.arch-node--core {
+  border-color: #8ac5b8;
+  background: #eefaf5;
+}
+
+.arch-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-weight: 800;
+}
+
+.arch-branch {
+  grid-column: 1 / -1;
+  height: 28px;
+  position: relative;
+}
+
+.arch-branch::before {
+  content: "";
+  position: absolute;
+  inset: 13px 12% auto;
+  height: 1px;
+  background: var(--line);
+}
+
+.arch-branch::after {
+  content: "contract output becomes conversation, handoff, or evidence";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.arch-node--hermes {
+  grid-column: 1 / 2;
+}
+
+.arch-node--executor {
+  grid-column: 3 / 4;
+}
+
+.arch-node--runtime {
+  grid-column: 5 / 6;
+}
+
 .discord-frame {
   margin-top: 22px;
   overflow: hidden;
@@ -604,6 +700,32 @@ h1 {
 
   .status-preview ol {
     grid-template-columns: 1fr;
+  }
+
+  .architecture-map {
+    grid-template-columns: 1fr;
+  }
+
+  .arch-arrow {
+    min-height: 18px;
+  }
+
+  .arch-branch,
+  .arch-node--hermes,
+  .arch-node--executor,
+  .arch-node--runtime {
+    grid-column: auto;
+  }
+
+  .arch-branch::before {
+    left: 18%;
+    right: 18%;
+  }
+
+  .arch-branch::after {
+    max-width: 86%;
+    text-align: center;
+    white-space: normal;
   }
 }
 

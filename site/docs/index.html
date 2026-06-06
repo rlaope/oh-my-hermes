@@ -28,6 +28,7 @@
         <a href="#install">Install</a>
         <a href="#chat">Chat wrappers</a>
         <a href="#demo">Demo</a>
+        <a href="#architecture">Architecture</a>
         <a href="#discord-example">Chat example</a>
         <a href="#contracts">Contracts</a>
         <a href="#delegation">Delegation</a>
@@ -97,6 +98,49 @@ uv run python examples/slack-adapter-shim.py</code>
           <p>
             The demo and shims are fixture-backed. They do not call bot SDKs, LLM APIs,
             network services, or Hermes internals.
+          </p>
+        </section>
+
+        <section class="docs-section" id="architecture">
+          <h2>Architecture at a glance</h2>
+          <p>
+            OMH sits between chat wrappers and executor lanes. It gives wrappers
+            deterministic local contracts while keeping Hermes responsible for
+            conversation, planning, and status narration.
+          </p>
+          <div class="architecture-map" aria-label="OMH architecture diagram">
+            <div class="arch-node arch-node--source">
+              <span>User message</span>
+              <strong>Discord, Slack, hosted chat</strong>
+            </div>
+            <div class="arch-arrow" aria-hidden="true">-></div>
+            <div class="arch-node">
+              <span>Wrapper adapter</span>
+              <strong>Buttons, threads, edits</strong>
+            </div>
+            <div class="arch-arrow" aria-hidden="true">-></div>
+            <div class="arch-node arch-node--core">
+              <span>OMH local contract layer</span>
+              <strong>Route, plan, handoff, status</strong>
+            </div>
+            <div class="arch-branch" aria-hidden="true"></div>
+            <div class="arch-node arch-node--hermes">
+              <span>Hermes Agent</span>
+              <strong>Clarify, research, plan, narrate</strong>
+            </div>
+            <div class="arch-node arch-node--executor">
+              <span>Codex-like executor</span>
+              <strong>Implementation after dispatch</strong>
+            </div>
+            <div class="arch-node arch-node--runtime">
+              <span>Runtime artifacts</span>
+              <strong>Observed evidence and status cards</strong>
+            </div>
+          </div>
+          <p>
+            Prepared handoff is only a ready-to-dispatch state. Execution,
+            verification, review, CI, and merge readiness stay separate until
+            runtime evidence is observed.
           </p>
         </section>
 

@@ -370,6 +370,19 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("A prepared handoff is not execution evidence.", text)
         self.assertIn("normal Discord or Slack UX", text)
 
+    def test_architecture_docs_include_visual_system_view(self) -> None:
+        architecture = Path("docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+        site_docs = Path("site/docs/index.html").read_text(encoding="utf-8")
+
+        self.assertIn("## System View", architecture)
+        self.assertIn("```mermaid", architecture)
+        self.assertIn("flowchart LR", architecture)
+        self.assertIn("OMH local contract layer", architecture)
+        self.assertIn("prepared handoff, not execution proof", architecture)
+        self.assertIn("Architecture at a glance", site_docs)
+        self.assertIn("architecture-map", site_docs)
+        self.assertIn("Runtime artifacts", site_docs)
+
 
 if __name__ == "__main__":
     unittest.main()

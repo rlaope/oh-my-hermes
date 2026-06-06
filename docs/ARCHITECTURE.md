@@ -18,6 +18,44 @@ The architecture favors:
 - delegation-first coding, where Hermes plans and narrates while Codex-like
   executors perform main implementation work
 
+## System View
+
+This is the product architecture, not the package tree. Wrappers render chat
+UX, OMH produces deterministic local contracts, Hermes keeps user-facing
+reasoning, and executor lanes provide observed coding evidence only after a
+separate runtime record exists.
+
+```mermaid
+flowchart LR
+  user["User in Discord, Slack, or hosted chat"]
+  wrapper["Wrapper adapter\nbuttons, threads, edits"]
+  omh["OMH local contract layer\nrouting, plan, handoff, status"]
+  hermes["Hermes Agent\nclarify, research, plan, narrate"]
+  executor["Codex-like executor\nimplementation, verification"]
+  runtime["Local runtime artifacts\nprepared and observed evidence"]
+  site["Docs and status UI\ncards, examples, reports"]
+
+  user --> wrapper
+  wrapper -->|"chat_interaction/v1"| omh
+  omh -->|"answer, clarify, plan, or status"| wrapper
+  wrapper --> hermes
+  hermes -->|"accepted plan"| omh
+  omh -->|"prepared handoff, not execution proof"| executor
+  executor -->|"dispatch, result, verification"| runtime
+  runtime -->|"status_card/v1"| omh
+  omh --> wrapper
+  runtime --> site
+```
+
+```text
+Chat user
+  -> Wrapper owns transport UX
+  -> OMH owns deterministic routing contracts
+  -> Hermes owns conversation, planning, and status narration
+  -> Executor owns main coding work when dispatched
+  -> Runtime artifacts own observed evidence
+```
+
 ## Package Layout
 
 ```text
