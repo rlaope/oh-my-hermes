@@ -40,8 +40,11 @@ from .probe import probe_capabilities
 from .recommend import recommend_skills
 from .release import RELEASE_CHANNELS, package_url_for
 from .runtime_artifacts import (
+    CI_STATUSES,
     DELEGATION_RESULTS,
+    MERGE_STATUSES,
     PRIVACY_MODES,
+    REVIEW_STATUSES,
     RUN_STATUSES,
     create_prepared_coding_delegation_run,
     create_run,
@@ -53,8 +56,11 @@ from .runtime_artifacts import (
     summarize_delegated_coding_status,
     update_state,
     validate_runtime,
+    write_ci_record,
     write_coding_delegation,
     write_delegation,
+    write_merge_record,
+    write_review_record,
     write_routing_decision,
     write_wrapper_contract,
 )
@@ -678,6 +684,110 @@ def cmd_runtime_wrapper(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runtime_review(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    run_dir = paths.runtime_runs_dir / args.run_id
+    if not (run_dir / "run.json").exists():
+        raise OmhError(f"runtime run not found: {args.run_id}")
+    preflight = summarize_delegated_coding_status(paths, args.run_id)
+    if args.status in {"passed", "not_required"} and preflight.get("next_action") != "record_review_evidence":
+        raise OmhError(f"cannot record review {args.status} while next_action is {preflight.get('next_action')}")
+    review_status = preflight.get("review", {})
+    if args.status == "not_required" and isinstance(review_status, dict) and review_status.get("required"):
+        raise OmhError("cannot mark required review as not_required")
+    try:
+        review = write_review_record(
+            run_dir,
+            {
+                "status": args.status,
+                "required": args.status != "not_required",
+                "reviewer": args.reviewer or "",
+                "evidence_refs": args.evidence_ref or [],
+                "summary": args.summary or "",
+            },
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"review": review, "status": summarize_delegated_coding_status(paths, args.run_id)})
+    return 0
+
+
+def cmd_runtime_ci(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    run_dir = paths.runtime_runs_dir / args.run_id
+    if not (run_dir / "run.json").exists():
+        raise OmhError(f"runtime run not found: {args.run_id}")
+    preflight = summarize_delegated_coding_status(paths, args.run_id)
+    if args.status == "passed" and preflight.get("next_action") != "record_ci_evidence":
+        raise OmhError(f"cannot record passed CI while next_action is {preflight.get('next_action')}")
+    ci_status = preflight.get("ci", {})
+    if args.status == "not_required" and isinstance(ci_status, dict) and ci_status.get("required"):
+        raise OmhError("cannot mark required CI as not_required")
+    try:
+        ci = write_ci_record(
+            run_dir,
+            {
+                "status": args.status,
+                "required": args.status != "not_required",
+                "provider": args.provider or "",
+                "checks": args.check or [],
+                "evidence_refs": args.evidence_ref or [],
+                "summary": args.summary or "",
+            },
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"ci": ci, "status": summarize_delegated_coding_status(paths, args.run_id)})
+    return 0
+
+
+def cmd_runtime_merge(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    run_dir = paths.runtime_runs_dir / args.run_id
+    if not (run_dir / "run.json").exists():
+        raise OmhError(f"runtime run not found: {args.run_id}")
+    selected_statuses = [
+        status
+        for status, selected in (
+            ("ready", args.ready),
+            ("merged", args.merged),
+            ("blocked", args.blocked),
+            (args.status, bool(args.status)),
+        )
+        if selected
+    ]
+    if len(selected_statuses) > 1:
+        raise OmhError("runtime merge accepts only one of --ready, --merged, --blocked, or --status")
+    status = selected_statuses[0] if selected_statuses else None
+    if not status:
+        raise OmhError("runtime merge requires --ready, --merged, --blocked, or --status")
+    preflight = summarize_delegated_coding_status(paths, args.run_id)
+    allowed_preflight = {
+        "ready": {"record_merge_readiness", "report_merge_ready"},
+        "merged": {"report_merge_ready"},
+        "blocked": {"record_merge_readiness", "report_merge_ready"},
+        "not_ready": {"record_merge_readiness", "report_merge_ready", "report_completion_with_evidence"},
+        "not_observed": {"record_merge_readiness", "report_merge_ready", "report_completion_with_evidence"},
+    }
+    if status in allowed_preflight and preflight.get("next_action") not in allowed_preflight[status]:
+        raise OmhError(f"cannot record merge {status} while next_action is {preflight.get('next_action')}")
+    try:
+        merge = write_merge_record(
+            run_dir,
+            {
+                "status": status,
+                "target_branch": args.target_branch or "",
+                "merge_commit": args.merge_commit or "",
+                "evidence_refs": args.evidence_ref or [],
+                "summary": args.summary or "",
+            },
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"merge": merge, "status": summarize_delegated_coding_status(paths, args.run_id)})
+    return 0
+
+
 def cmd_runtime_validate(args: argparse.Namespace) -> int:
     result = validate_runtime(_paths(args), args.run_id)
     _print_json(result)
@@ -1125,6 +1235,36 @@ def _add_runtime_commands(sub) -> None:
     runtime_wrapper.add_argument("--gap", action="append")
     runtime_wrapper.add_argument("--message", default="")
     runtime_wrapper.set_defaults(func=cmd_runtime_wrapper)
+
+    runtime_review = runtime_sub.add_parser("review")
+    runtime_review.add_argument("--run", dest="run_id", required=True)
+    runtime_review.add_argument("--status", choices=REVIEW_STATUSES, required=True)
+    runtime_review.add_argument("--reviewer", default="")
+    runtime_review.add_argument("--evidence-ref", action="append")
+    runtime_review.add_argument("--summary", default="")
+    runtime_review.set_defaults(func=cmd_runtime_review)
+
+    runtime_ci = runtime_sub.add_parser("ci")
+    runtime_ci.add_argument("--run", dest="run_id", required=True)
+    runtime_ci.add_argument("--status", choices=CI_STATUSES, required=True)
+    runtime_ci.add_argument("--provider", default="")
+    runtime_ci.add_argument("--check", action="append")
+    runtime_ci.add_argument("--evidence-ref", action="append")
+    runtime_ci.add_argument("--summary", default="")
+    runtime_ci.set_defaults(func=cmd_runtime_ci)
+
+    runtime_merge = runtime_sub.add_parser("merge")
+    runtime_merge.add_argument("--run", dest="run_id", required=True)
+    merge_status = runtime_merge.add_mutually_exclusive_group()
+    merge_status.add_argument("--ready", action="store_true")
+    merge_status.add_argument("--merged", action="store_true")
+    merge_status.add_argument("--blocked", action="store_true")
+    merge_status.add_argument("--status", choices=MERGE_STATUSES, default=None)
+    runtime_merge.add_argument("--target-branch", default="")
+    runtime_merge.add_argument("--merge-commit", default="")
+    runtime_merge.add_argument("--evidence-ref", action="append")
+    runtime_merge.add_argument("--summary", default="")
+    runtime_merge.set_defaults(func=cmd_runtime_merge)
 
     runtime_validate = runtime_sub.add_parser("validate")
     runtime_validate.add_argument("--run", dest="run_id", default=None)

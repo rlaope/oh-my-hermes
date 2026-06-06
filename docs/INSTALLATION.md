@@ -111,13 +111,16 @@ run_id="$(printf '%s' "$start_json" | python -c 'import json,sys; print(json.loa
 omh coding lifecycle dispatch --run "$run_id"
 omh coding lifecycle result --run "$run_id" --result completed --evidence-ref codex-log
 omh coding lifecycle verify --run "$run_id" --completion-status completed
+omh runtime review --run "$run_id" --status passed --reviewer code-review --evidence-ref review-comment
+omh runtime ci --run "$run_id" --status passed --check "unit:passed"
+omh runtime merge --run "$run_id" --ready --target-branch main
 omh coding lifecycle report --run "$run_id"
 ```
 
 The lifecycle commands write the same local runtime artifacts as the lower-level
 runtime commands. They reject invalid transitions, keep prepared handoff separate
 from execution evidence, and continue to block final completion copy when review
-or verification evidence is missing.
+verification, review, CI, or merge-readiness evidence is missing.
 
 Lower-level debug surfaces remain available when an adapter needs them:
 
@@ -144,6 +147,11 @@ For hosted bots, run these commands inside the same container, virtual
 environment, or user account that owns the wrapper runtime. If the wrapper can
 observe executor, review, verification, CI, or merge evidence, record it
 explicitly; otherwise keep the status conservative.
+
+Wrapper-facing golden examples live under `examples/wrapper-golden/`. They show
+the expected `chat_response/v1` copy and platform-neutral action ids for
+clarification, planning, handoff, review, CI, merge-ready, merged, and
+contradictory-evidence states.
 
 Use `omh runtime export --redacted` when you need a portable support artifact.
 Exports redact prompt, response, token, secret, key, and password-shaped fields by

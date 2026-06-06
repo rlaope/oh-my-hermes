@@ -143,10 +143,14 @@ message edits, dispatch, and platform credentials.
 - delegation observation in `delegation.json`
 - prepared coding handoffs in `coding_delegation.json`
 - wrapper observation in `wrapper.json`
+- review, CI, and merge evidence in `review.json`, `ci.json`, and
+  `merge.json`
 
 Prepared handoff is never treated as implementation, review, CI, or merge
 evidence by itself. If the wrapper cannot prove that a step happened, status
 should stay `prepared_not_observed`, `not_observed`, or `not_available`.
+Status readers evaluate the full run ledger conservatively: a later merge-ready
+artifact cannot override missing verification, review, or CI evidence.
 
 ## Routing Model
 

@@ -164,6 +164,8 @@ class RouterContentTests(unittest.TestCase):
         ]
 
         for path in paths:
+            if path.is_dir():
+                continue
             text = path.read_text(encoding="utf-8").lower()
             for term in forbidden:
                 self.assertNotIn(term, text, f"{term!r} leaked in {path}")

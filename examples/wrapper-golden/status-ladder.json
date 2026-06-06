@@ -1,0 +1,136 @@
+{
+  "schema_version": "wrapper_golden_examples/v1",
+  "description": "Platform-neutral wrapper examples for chat status rendering. These are deterministic examples, not platform SDK fixtures.",
+  "scenarios": [
+    {
+      "scenario": "clarify_needed",
+      "source": "discord",
+      "input_kind": "natural_language",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "clarification",
+        "headline": "I need one clarification before routing this.",
+        "body": "The request is not specific enough for a safe workflow handoff.",
+        "action_ids": ["answer:clarify", "cancel"]
+      },
+      "claim_boundary": "No execution has started."
+    },
+    {
+      "scenario": "plan_presented",
+      "source": "slack",
+      "input_kind": "natural_language",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "plan",
+        "headline": "I drafted a plan for this request.",
+        "body": "The user can accept or revise the plan before any handoff is prepared.",
+        "action_ids": ["accept_plan", "revise_plan"]
+      },
+      "claim_boundary": "A draft plan is not execution evidence."
+    },
+    {
+      "scenario": "handoff_prepared",
+      "source": "discord",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "handoff",
+        "headline": "A Codex handoff is ready.",
+        "body": "The handoff is prepared, but executor dispatch is not observed yet.",
+        "action_ids": ["send_to_codex", "show_status"]
+      },
+      "claim_boundary": "Prepared handoff is not execution evidence."
+    },
+    {
+      "scenario": "dispatched_executor_not_observed",
+      "source": "slack",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "The handoff was dispatched.",
+        "body": "Executor completion is not observed yet.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "Dispatch is not completion evidence."
+    },
+    {
+      "scenario": "review_pending",
+      "source": "discord",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "Executor completion needs review evidence.",
+        "body": "Review evidence is required before completion is reported.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "Execution is observed; review is not."
+    },
+    {
+      "scenario": "ci_pending",
+      "source": "slack",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "Review passed; CI evidence is still missing.",
+        "body": "Merge readiness is not reported until CI evidence is observed.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "Review is not CI evidence."
+    },
+    {
+      "scenario": "ci_failed",
+      "source": "discord",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "blocker",
+        "headline": "CI is blocking completion.",
+        "body": "The failing or blocked CI checks are surfaced instead of claiming merge readiness.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "Failed CI is not merge-ready."
+    },
+    {
+      "scenario": "merge_ready",
+      "source": "slack",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "This is ready to merge.",
+        "body": "Execution, verification, review, CI, and merge-readiness evidence are observed.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "Ready to merge is not the same as merged."
+    },
+    {
+      "scenario": "merged",
+      "source": "discord",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "This has been merged.",
+        "body": "Merge evidence is observed in the runtime ledger.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "Merged status is backed by runtime ledger evidence."
+    },
+    {
+      "scenario": "contradictory_merge_ready_without_ci",
+      "source": "slack",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "Review passed; CI evidence is still missing.",
+        "body": "A later merge-ready artifact cannot override the missing CI gate.",
+        "action_ids": ["show_status"]
+      },
+      "claim_boundary": "The upstream CI blocker is shown instead of merge-ready."
+    }
+  ]
+}

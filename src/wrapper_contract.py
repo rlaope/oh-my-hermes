@@ -65,17 +65,59 @@ _STATUS_COPY = {
         "I will not report completion until review evidence is observed.",
         "Execution is observed; review is not.",
     ),
+    "surface_review_blocker": (
+        "blocker",
+        "Review is blocking completion.",
+        "I will surface the review blocker instead of claiming completion.",
+        "Review did not pass.",
+    ),
     "record_verification_evidence": (
         "status",
         "Executor completion needs verification evidence.",
         "I will not report completion until verification evidence is observed.",
         "Execution is observed; verification is not.",
     ),
+    "record_ci_evidence": (
+        "status",
+        "Review passed; CI evidence is still missing.",
+        "I will not report merge readiness until CI evidence is observed.",
+        "Review is not CI evidence.",
+    ),
+    "surface_ci_blocker": (
+        "blocker",
+        "CI is blocking completion.",
+        "I will surface the failing or blocked CI checks instead of claiming merge readiness.",
+        "Failed CI is not merge-ready.",
+    ),
+    "record_merge_readiness": (
+        "status",
+        "Review and CI passed; merge readiness is still missing.",
+        "I will not report merge-ready until merge readiness evidence is observed.",
+        "CI passing is not merge evidence.",
+    ),
+    "surface_merge_blocker": (
+        "blocker",
+        "Merge is blocked.",
+        "I will surface the merge blocker instead of claiming the run is ready.",
+        "Blocked merge is not complete.",
+    ),
     "report_completion_with_evidence": (
         "status",
         "Executor completion is reportable.",
         "Execution and verification evidence are observed.",
         "Completion is backed by observed wrapper evidence.",
+    ),
+    "report_merge_ready": (
+        "status",
+        "This is ready to merge.",
+        "Execution, verification, review, CI, and merge-readiness evidence are observed.",
+        "Ready to merge is not the same as merged.",
+    ),
+    "report_merged": (
+        "status",
+        "This has been merged.",
+        "Execution, verification, review, CI, and merge evidence are observed.",
+        "Merged status is backed by runtime ledger evidence.",
     ),
 }
 
@@ -314,6 +356,10 @@ def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_ke
             "execution_observed": _nested(status_payload, "execution").get("observed", False),
             "verification_observed": _nested(status_payload, "verification").get("observed", False),
             "review_required": _nested(status_payload, "review").get("required", False),
+            "review_status": _nested(status_payload, "review").get("status", "not_observed"),
+            "ci_status": _nested(status_payload, "ci").get("status", "not_observed"),
+            "merge_readiness_status": _nested(status_payload, "merge_readiness").get("status", "not_observed"),
+            "merge_status": _nested(status_payload, "merge").get("status", "not_observed"),
         },
     )
 
@@ -416,9 +462,16 @@ def _phase_for_next_action(next_action: str) -> str:
         "dispatch_to_executor": "handoff_prepared",
         "wait_for_executor_evidence": "dispatched",
         "surface_executor_blocker": "blocked",
+        "surface_review_blocker": "blocked",
+        "surface_ci_blocker": "blocked",
+        "surface_merge_blocker": "blocked",
         "record_review_evidence": "awaiting_review",
+        "record_ci_evidence": "awaiting_ci",
+        "record_merge_readiness": "awaiting_merge_readiness",
         "record_verification_evidence": "awaiting_verification",
         "report_completion_with_evidence": "reportable",
+        "report_merge_ready": "merge_ready",
+        "report_merged": "merged",
     }.get(next_action, "status")
 
 

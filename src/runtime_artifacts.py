@@ -16,6 +16,9 @@ from .runtime_records import (
     OBSERVED_RESULTS,
     OPTIONAL_RECORD_VALIDATORS,
     PRIVACY_MODES,
+    CI_STATUSES,
+    MERGE_STATUSES,
+    REVIEW_STATUSES,
     RUN_STATUSES,
     SCHEMA_VERSION,
     UNOBSERVED_RESULTS,
@@ -23,13 +26,19 @@ from .runtime_records import (
     build_delegation_record,
     build_coding_delegation_record,
     build_event_record,
+    build_ci_record,
     build_routing_record,
+    build_merge_record,
+    build_review_record,
     build_run_record,
     build_wrapper_record,
     validate_delegation_record,
     validate_coding_delegation_record,
+    validate_ci_record,
     validate_delegation_result,
     validate_event_record,
+    validate_merge_record,
+    validate_review_record,
     validate_routing_record,
     validate_run_record,
     validate_wrapper_record,
@@ -200,6 +209,56 @@ def write_coding_delegation(run_dir: Path, delegation: dict[str, Any]) -> dict[s
     return record
 
 
+def _run_id_for_dir(run_dir: Path) -> str:
+    run = read_json_object(run_dir / "run.json") if (run_dir / "run.json").exists() else None
+    return str(run.get("run_id", run_dir.name)) if isinstance(run, dict) else run_dir.name
+
+
+def write_review_record(run_dir: Path, review: dict[str, Any]) -> dict[str, Any]:
+    record = build_review_record({"run_id": _run_id_for_dir(run_dir), **review})
+    atomic_write_json(run_dir / "review.json", record, private=True)
+    append_event(
+        run_dir,
+        {
+            "event": "review_recorded",
+            "level": "info",
+            "message": f"review {record['status']}",
+            "data": {"status": record["status"], "observed": record["observed"], "required": record["required"]},
+        },
+    )
+    return record
+
+
+def write_ci_record(run_dir: Path, ci: dict[str, Any]) -> dict[str, Any]:
+    record = build_ci_record({"run_id": _run_id_for_dir(run_dir), **ci})
+    atomic_write_json(run_dir / "ci.json", record, private=True)
+    append_event(
+        run_dir,
+        {
+            "event": "ci_recorded",
+            "level": "info",
+            "message": f"ci {record['status']}",
+            "data": {"status": record["status"], "observed": record["observed"], "required": record["required"]},
+        },
+    )
+    return record
+
+
+def write_merge_record(run_dir: Path, merge: dict[str, Any]) -> dict[str, Any]:
+    record = build_merge_record({"run_id": _run_id_for_dir(run_dir), **merge})
+    atomic_write_json(run_dir / "merge.json", record, private=True)
+    append_event(
+        run_dir,
+        {
+            "event": "merge_recorded",
+            "level": "info",
+            "message": f"merge {record['status']}",
+            "data": {"status": record["status"], "observed": record["observed"], "ready": record["ready"], "merged": record["merged"]},
+        },
+    )
+    return record
+
+
 def list_runs(paths: OmhPaths) -> list[dict[str, Any]]:
     if not paths.runtime_runs_dir.exists():
         return []
@@ -231,6 +290,9 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
         "coding_delegation": read_json_object(run_dir / "coding_delegation.json"),
         "delegation": read_json_object(run_dir / "delegation.json"),
         "wrapper": read_json_object(run_dir / "wrapper.json"),
+        "review": read_json_object(run_dir / "review.json"),
+        "ci": read_json_object(run_dir / "ci.json"),
+        "merge": read_json_object(run_dir / "merge.json"),
         "evidence": sorted(path.name for path in evidence_dir.iterdir()) if evidence_dir.exists() else [],
     }
 
@@ -263,6 +325,9 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     coding = _object_or_empty(shown.get("coding_delegation"))
     delegation = _object_or_empty(shown.get("delegation"))
     wrapper = _object_or_empty(shown.get("wrapper"))
+    review_record = _object_or_empty(shown.get("review"))
+    ci_record = _object_or_empty(shown.get("ci"))
+    merge_record = _object_or_empty(shown.get("merge"))
     handoff = _object_or_empty(coding.get("executor_handoff"))
     review = _object_or_empty(handoff.get("review"))
 
@@ -278,6 +343,11 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     completion_status = str(wrapper.get("completion_status") or "unknown")
     review_required = bool(review.get("required", coding.get("review_required", False)))
     review_workflow = review.get("workflow") if review else coding.get("review_workflow")
+    review_status = _review_status_summary(review_required, review_workflow, review, review_record)
+    ci_required = bool(ci_record) or review_status["status"] == "passed"
+    ci_status = _ci_status_summary(ci_required, ci_record)
+    merge_required = bool(merge_record) or ci_status["status"] == "passed"
+    merge_status = _merge_status_summary(merge_required, merge_record)
 
     next_action = _delegated_status_next_action(
         prepared=prepared,
@@ -285,8 +355,10 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
         prompt_dispatched=prompt_dispatched,
         execution_observed=execution_observed,
         execution_status=execution_status,
-        review_required=review_required,
         verification_observed=verification_observed,
+        review_status=review_status,
+        ci_status=ci_status,
+        merge_status=merge_status,
     )
     integrity_warnings = _delegated_status_integrity_warnings(
         run=run,
@@ -329,11 +401,20 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
             "expected": coding.get("verification", []),
         },
         "review": {
-            "required": review_required,
+            **review_status,
             "workflow": review_workflow,
-            "status": "not_observed" if review_required else "not_required",
             "evidence_required": review.get("evidence_required", "Record review evidence separately before claiming review observed."),
         },
+        "ci": ci_status,
+        "merge_readiness": {
+            "required": merge_status["required"],
+            "status": "ready" if merge_status["status"] in {"ready", "merged"} else merge_status["status"],
+            "observed": merge_status["observed"],
+            "target_branch": merge_status["target_branch"],
+            "evidence_refs": merge_status["evidence_refs"],
+            "summary": merge_status["summary"],
+        },
+        "merge": merge_status,
         "next_action": next_action,
         "safe_summary": _delegated_status_summary(
             prepared=prepared,
@@ -342,8 +423,10 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
             prompt_dispatched=prompt_dispatched,
             execution_observed=execution_observed,
             execution_status=execution_status,
-            review_required=review_required,
             verification_observed=verification_observed,
+            review_status=review_status,
+            ci_status=ci_status,
+            merge_status=merge_status,
         ),
         "integrity": {
             "ok": not integrity_warnings,
@@ -361,6 +444,107 @@ def _object_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _review_status_summary(
+    required: bool,
+    workflow: Any,
+    handoff_review: dict[str, Any],
+    record: dict[str, Any],
+) -> dict[str, Any]:
+    if record:
+        status = str(record.get("status", "not_observed"))
+        observed = bool(record.get("observed", False))
+        required = required or bool(record.get("required", required))
+        return {
+            "required": required,
+            "observed": observed,
+            "status": status,
+            "satisfied": observed and (status == "passed" or (status == "not_required" and not required)),
+            "reviewer": record.get("reviewer", ""),
+            "evidence_refs": record.get("evidence_refs", []),
+            "summary": record.get("summary", ""),
+        }
+    status = "not_observed" if required else "not_required"
+    return {
+        "required": required,
+        "observed": not required,
+        "status": status,
+        "satisfied": not required,
+        "reviewer": "",
+        "evidence_refs": [],
+        "summary": "",
+    }
+
+
+def _ci_status_summary(required: bool, record: dict[str, Any]) -> dict[str, Any]:
+    if record:
+        status = str(record.get("status", "not_observed"))
+        observed = bool(record.get("observed", False))
+        checks = record.get("checks", [])
+        checks_passed = bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
+        checks_not_required = all(isinstance(check, dict) and check.get("status") == "not_required" for check in checks)
+        required = required or bool(record.get("required", required))
+        return {
+            "required": required,
+            "observed": observed,
+            "status": status,
+            "satisfied": observed and ((status == "not_required" and not required and checks_not_required) or (status == "passed" and checks_passed)),
+            "provider": record.get("provider", ""),
+            "checks": checks,
+            "evidence_refs": record.get("evidence_refs", []),
+            "summary": record.get("summary", ""),
+        }
+    status = "not_observed" if required else "not_required"
+    return {
+        "required": required,
+        "observed": not required,
+        "status": status,
+        "satisfied": not required,
+        "provider": "",
+        "checks": [],
+        "evidence_refs": [],
+        "summary": "",
+    }
+
+
+def _merge_status_summary(required: bool, record: dict[str, Any]) -> dict[str, Any]:
+    if record:
+        status = str(record.get("status", "not_observed"))
+        observed = bool(record.get("observed", False))
+        ready = bool(record.get("ready", False))
+        merged = bool(record.get("merged", False))
+        merge_commit = str(record.get("merge_commit", ""))
+        evidence_refs = record.get("evidence_refs", [])
+        has_merge_evidence = bool(merge_commit) or bool(evidence_refs)
+        return {
+            "required": bool(record.get("required", required)),
+            "observed": observed,
+            "ready": ready,
+            "merged": merged,
+            "status": status,
+            "satisfied": observed
+            and (
+                (status == "ready" and ready and not merged)
+                or (status == "merged" and ready and merged and has_merge_evidence)
+            ),
+            "target_branch": record.get("target_branch", ""),
+            "merge_commit": merge_commit,
+            "evidence_refs": evidence_refs,
+            "summary": record.get("summary", ""),
+        }
+    return {
+        "required": required,
+        "observed": not required,
+        "ready": False,
+        "merged": False,
+        "status": "not_observed" if required else "not_required",
+        "satisfied": not required,
+        "target_branch": "",
+        "merge_commit": "",
+        "evidence_refs": [],
+        "summary": "",
+    }
+
+
 def _delegated_status_next_action(
     *,
     prepared: bool,
@@ -368,8 +552,10 @@ def _delegated_status_next_action(
     prompt_dispatched: bool,
     execution_observed: bool,
     execution_status: str,
-    review_required: bool,
     verification_observed: bool,
+    review_status: dict[str, Any],
+    ci_status: dict[str, Any],
+    merge_status: dict[str, Any],
 ) -> str:
     if not prepared:
         return "prepare_coding_delegation"
@@ -385,10 +571,24 @@ def _delegated_status_next_action(
         return "wait_for_executor_evidence"
     if execution_status in {"blocked", "failed"}:
         return "surface_executor_blocker"
-    if review_required:
-        return "record_review_evidence"
     if not verification_observed:
         return "record_verification_evidence"
+    if not review_status["satisfied"]:
+        if review_status["status"] in {"failed", "blocked"}:
+            return "surface_review_blocker"
+        return "record_review_evidence"
+    if not ci_status["satisfied"]:
+        if ci_status["status"] in {"failed", "blocked"}:
+            return "surface_ci_blocker"
+        return "record_ci_evidence"
+    if merge_status["status"] == "blocked":
+        return "surface_merge_blocker"
+    if merge_status["status"] == "merged" and merge_status["satisfied"]:
+        return "report_merged"
+    if merge_status["status"] == "ready" and merge_status["satisfied"]:
+        return "report_merge_ready"
+    if merge_status["required"]:
+        return "record_merge_readiness"
     return "report_completion_with_evidence"
 
 
@@ -400,8 +600,10 @@ def _delegated_status_summary(
     prompt_dispatched: bool,
     execution_observed: bool,
     execution_status: str,
-    review_required: bool,
     verification_observed: bool,
+    review_status: dict[str, Any],
+    ci_status: dict[str, Any],
+    merge_status: dict[str, Any],
 ) -> str:
     if not prepared:
         return "No prepared coding delegation was found for this run."
@@ -417,10 +619,24 @@ def _delegated_status_summary(
         return f"A {executor_target} coding handoff was dispatched, but executor completion is not observed yet."
     if execution_status in {"blocked", "failed"}:
         return f"The {executor_target} executor reported {execution_status}; do not claim completion."
-    if review_required:
-        return f"The {executor_target} executor is observed as {execution_status}, but review evidence is still required."
     if not verification_observed:
         return f"The {executor_target} executor is observed as {execution_status}, but verification evidence is not observed yet."
+    if not review_status["satisfied"]:
+        if review_status["status"] in {"failed", "blocked"}:
+            return f"The {executor_target} executor is observed as {execution_status}, but review is {review_status['status']}."
+        return f"The {executor_target} executor is observed as {execution_status}, but review evidence is still required."
+    if not ci_status["satisfied"]:
+        if ci_status["status"] in {"failed", "blocked"}:
+            return f"The {executor_target} executor is reviewed, but CI is {ci_status['status']}."
+        return f"The {executor_target} executor is reviewed, but CI evidence is still required."
+    if merge_status["status"] == "blocked":
+        return f"The {executor_target} executor is reviewed and CI passed, but merge is blocked."
+    if merge_status["status"] == "merged" and merge_status["satisfied"]:
+        return f"The {executor_target} executor is reviewed, CI passed, and merge evidence is observed."
+    if merge_status["status"] == "ready" and merge_status["satisfied"]:
+        return f"The {executor_target} executor is reviewed, CI passed, and the run is ready to merge."
+    if merge_status["required"]:
+        return f"The {executor_target} executor is reviewed and CI passed, but merge readiness is not observed yet."
     return f"The {executor_target} executor is observed as {execution_status} with wrapper verification evidence."
 
 
@@ -494,7 +710,57 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
             errors.append(f"{path}: {exc}")
         if record:
             errors.extend(f"{path}: {error}" for error in validator(record))
+    errors.extend(_validate_run_status_gate_consistency(run_dir))
     return {"run_id": run_dir.name, "ok": not errors, "errors": errors}
+
+
+def _validate_run_status_gate_consistency(run_dir: Path) -> list[str]:
+    errors: list[str] = []
+    run = _object_or_empty(read_json_object(run_dir / "run.json"))
+    coding = _object_or_empty(read_json_object(run_dir / "coding_delegation.json"))
+    delegation = _object_or_empty(read_json_object(run_dir / "delegation.json"))
+    wrapper = _object_or_empty(read_json_object(run_dir / "wrapper.json"))
+    review_record = _object_or_empty(read_json_object(run_dir / "review.json"))
+    ci_record = _object_or_empty(read_json_object(run_dir / "ci.json"))
+    merge_record = _object_or_empty(read_json_object(run_dir / "merge.json"))
+    if not run:
+        return errors
+
+    handoff = _object_or_empty(coding.get("executor_handoff"))
+    handoff_review = _object_or_empty(handoff.get("review"))
+    review_required = bool(handoff_review.get("required", coding.get("review_required", False)))
+    review_status = _review_status_summary(review_required, handoff_review.get("workflow"), handoff_review, review_record)
+    ci_required_by_ladder = review_status["status"] == "passed"
+    ci_required = bool(ci_record) or ci_required_by_ladder
+    ci_status = _ci_status_summary(ci_required, ci_record)
+
+    execution_satisfied = bool(delegation.get("observed", False)) and delegation.get("result") == "completed"
+    verification_satisfied = bool(wrapper.get("verification_observed", False))
+    review_path = run_dir / "review.json"
+    ci_path = run_dir / "ci.json"
+    merge_path = run_dir / "merge.json"
+
+    if review_required and review_record.get("status") == "not_required":
+        errors.append(f"{review_path}: review not_required cannot downgrade required review evidence")
+    if ci_required_by_ladder and ci_record.get("status") == "not_required":
+        errors.append(f"{ci_path}: ci not_required cannot downgrade required CI evidence")
+    if review_record.get("status") == "passed" and not verification_satisfied:
+        errors.append(f"{review_path}: review passed requires verification evidence")
+    if ci_record.get("status") == "passed":
+        if not verification_satisfied:
+            errors.append(f"{ci_path}: ci passed requires verification evidence")
+        if not review_status["satisfied"]:
+            errors.append(f"{ci_path}: ci passed requires review passed or not_required")
+    if merge_record.get("status") in {"ready", "merged"}:
+        if not execution_satisfied:
+            errors.append(f"{merge_path}: merge {merge_record.get('status')} requires completed executor evidence")
+        if not verification_satisfied:
+            errors.append(f"{merge_path}: merge {merge_record.get('status')} requires verification evidence")
+        if not review_status["satisfied"]:
+            errors.append(f"{merge_path}: merge {merge_record.get('status')} requires review passed or not_required")
+        if not ci_status["satisfied"]:
+            errors.append(f"{merge_path}: merge {merge_record.get('status')} requires CI passed or not_required")
+    return errors
 
 
 def validate_runtime(paths: OmhPaths, run_id: str | None = None) -> dict[str, Any]:
