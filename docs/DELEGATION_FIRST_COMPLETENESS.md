@@ -34,7 +34,9 @@ evidence exists.
 | `omh coding delegate` | Prepares metadata-only coding handoffs and records `prepared_not_observed` evidence. | `src/coding_delegation.py`, `src/runtime_artifacts.py` |
 | `omh coding lifecycle` | Tracks Codex handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/coding_lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
 | `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime_artifacts.py`, `README.md` |
+| `omh runtime review`, `omh runtime ci`, `omh runtime merge` | Records observed review, CI, merge-readiness, and merge evidence under the run ledger. | `src/runtime_artifacts.py`, `src/runtime_records.py`, `tests/test_cli.py` |
 | `omh runtime validate/export` | Validates and exports local evidence without storing prompt bodies by default. | `src/runtime_artifacts.py`, `tests/test_runtime_artifacts.py` |
+| `examples/wrapper-golden/` | Provides platform-neutral golden chat responses for wrapper button/thread/status UX. | `examples/wrapper-golden/status-ladder.json`, `tests/test_wrapper_golden_examples.py` |
 
 The strongest existing path is:
 
@@ -55,8 +57,7 @@ The strongest existing path is:
 | Priority | Gap | Why it matters | Target story |
 | --- | --- | --- | --- |
 | P0 | Actual Discord and Slack adapters are not implemented in this repository. | The core contract is ready, but platform auth, retries, edits, and posting still belong to wrapper projects. | Build example adapter shims only after transport dependencies and packaging are approved. |
-| P0 | Review, CI, and merge evidence need richer first-class run-level records. | Session state now preserves plan decisions, so the next evidence gap is downstream delivery status. | Add explicit run-level review/CI/merge observation records without moving execution claims into sessions. |
-| P1 | Chat response examples are schema-level, not transport-level. | Adapter authors need clear button/thread/status update examples without duplicating policy. | Add Discord/Slack pseudocode fixtures and golden JSON examples. |
+| P1 | Adapter projects still need transport-specific examples. | Golden JSON locks the wrapper contract, but production bots need platform auth, retry, edit, and thread patterns. | Add adapter shims only after transport dependencies are approved. |
 | P2 | Lifecycle reporting is Codex-oriented only. | Future executor targets may need the same state machine without weakening the Codex default. | Generalize only after another executor contract exists. |
 
 ## First Implementation Contract
@@ -105,6 +106,9 @@ Wrappers should be able to express the chain in human terms:
    according to wrapper evidence.
 4. Review, verification, CI, and merge status stay separate from prepared
    delegation until observed.
+5. Status readers evaluate the full run ledger conservatively. A later
+   `merge.json` cannot make a run look merge-ready if verification, review, or
+   CI is missing, failed, blocked, or contradictory.
 
 This avoids the most dangerous failure mode: Hermes sounding like it performed
 coding work that only a prepared handoff requested.

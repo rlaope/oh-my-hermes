@@ -163,13 +163,16 @@ def record_codex_verification(
 def report_codex_delegation_lifecycle(paths: OmhPaths, run_id: str) -> dict[str, object]:
     status = summarize_delegated_coding_status(paths, run_id)
     next_action = str(status.get("next_action", "unknown"))
+    completion_report_actions = {"report_completion_with_evidence"}
+    terminal_report_actions = {"report_completion_with_evidence", "report_merge_ready", "report_merged"}
     report = dict(status)
     report.update(
         {
             "lifecycle_schema_version": LIFECYCLE_SCHEMA_VERSION,
             "lifecycle_status": _lifecycle_status(next_action),
-            "can_report_completion": next_action == "report_completion_with_evidence",
-            "blocking_reason": "" if next_action == "report_completion_with_evidence" else _blocking_reason(next_action),
+            "can_report_completion": next_action in completion_report_actions,
+            "can_report_terminal_status": next_action in terminal_report_actions,
+            "blocking_reason": "" if next_action in terminal_report_actions else _blocking_reason(next_action),
             "artifact_paths": _artifact_paths(paths, run_id),
             "runtime_validation": validate_runtime(paths, run_id),
         }
@@ -192,9 +195,16 @@ def _lifecycle_status(next_action: str) -> str:
         "dispatch_to_executor": "prepared",
         "wait_for_executor_evidence": "dispatched",
         "surface_executor_blocker": "blocked",
+        "surface_review_blocker": "blocked",
+        "surface_ci_blocker": "blocked",
+        "surface_merge_blocker": "blocked",
         "record_review_evidence": "awaiting_review",
+        "record_ci_evidence": "awaiting_ci",
+        "record_merge_readiness": "awaiting_merge_readiness",
         "record_verification_evidence": "awaiting_verification",
         "report_completion_with_evidence": "reportable",
+        "report_merge_ready": "merge_ready",
+        "report_merged": "merged",
     }.get(next_action, "unknown")
 
 
@@ -206,7 +216,12 @@ def _blocking_reason(next_action: str) -> str:
         "dispatch_to_executor": "executor dispatch is not observed",
         "wait_for_executor_evidence": "executor evidence is not observed",
         "surface_executor_blocker": "executor reported blocked or failed",
+        "surface_review_blocker": "review failed or blocked completion",
+        "surface_ci_blocker": "CI failed or blocked completion",
+        "surface_merge_blocker": "merge is blocked",
         "record_review_evidence": "review evidence is required before completion can be reported",
+        "record_ci_evidence": "CI evidence is required before merge readiness can be reported",
+        "record_merge_readiness": "merge readiness evidence is required before merge-ready status can be reported",
         "record_verification_evidence": "verification evidence is required before completion can be reported",
     }.get(next_action, "lifecycle status is not reportable")
 
@@ -219,4 +234,7 @@ def _artifact_paths(paths: OmhPaths, run_id: str) -> dict[str, str]:
         "coding_delegation": str(run_dir / "coding_delegation.json"),
         "delegation": str(run_dir / "delegation.json"),
         "wrapper": str(run_dir / "wrapper.json"),
+        "review": str(run_dir / "review.json"),
+        "ci": str(run_dir / "ci.json"),
+        "merge": str(run_dir / "merge.json"),
     }

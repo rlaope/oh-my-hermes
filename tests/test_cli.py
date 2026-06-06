@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import unittest
+from argparse import Namespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from _cli_harness import run_cli
+from omh.cli import OmhError, cmd_runtime_merge
 
 
 class CliTests(unittest.TestCase):
@@ -558,6 +560,134 @@ class CliTests(unittest.TestCase):
             self.assertTrue(summary["review"]["required"])
             self.assertEqual(summary["next_action"], "record_review_evidence")
             self.assertIn("review evidence is still required", summary["safe_summary"])
+
+    def test_runtime_review_ci_merge_commands_advance_status_ladder(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "risky", "refactor"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "dispatch", "--run", run_id])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "result", "--run", run_id, "--result", "completed"])[0], 0)
+            self.assertEqual(run_cli(base + ["coding", "lifecycle", "verify", "--run", run_id])[0], 0)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "runtime",
+                    "review",
+                    "--run",
+                    run_id,
+                    "--status",
+                    "passed",
+                    "--reviewer",
+                    "code-review",
+                    "--evidence-ref",
+                    "review-comment",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["status"]["next_action"], "record_ci_evidence")
+
+            status, stdout, stderr = run_cli(
+                base + ["runtime", "ci", "--run", run_id, "--status", "passed", "--check", "unit:passed", "--check", "lint:passed"]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["status"]["next_action"], "record_merge_readiness")
+
+            status, stdout, stderr = run_cli(base + ["runtime", "merge", "--run", run_id, "--ready", "--target-branch", "main"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["status"]["next_action"], "report_merge_ready")
+
+            status, stdout, stderr = run_cli(base + ["chat", "interact", "--run", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            chat = json.loads(stdout)
+            self.assertEqual(chat["chat_response"]["state"]["merge_status"], "ready")
+            self.assertEqual(chat["chat_response"]["headline"], "This is ready to merge.")
+            self.assertNotIn("omh ", json.dumps(chat["chat_response"]).lower())
+
+            status, stdout, stderr = run_cli(base + ["runtime", "merge", "--run", run_id, "--merged", "--merge-commit", "abc123"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["status"]["next_action"], "report_merged")
+
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "report", "--run", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            report = json.loads(stdout)
+            self.assertEqual(report["lifecycle_status"], "merged")
+            self.assertFalse(report["can_report_completion"])
+            self.assertTrue(report["can_report_terminal_status"])
+            self.assertEqual(report["merge"]["status"], "merged")
+
+            status, stdout, stderr = run_cli(base + ["runtime", "validate", "--run", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["ok"])
+
+            status, stdout, stderr = run_cli(base + ["runtime", "show", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["review"]["status"], "passed")
+            self.assertEqual(shown["ci"]["status"], "passed")
+            self.assertEqual(shown["merge"]["merge_commit"], "abc123")
+
+    def test_runtime_merge_ready_rejects_missing_upstream_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["coding", "lifecycle", "start", "--record", "risky", "refactor"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            status, _, stderr = run_cli(base + ["runtime", "merge", "--run", run_id, "--ready", "--target-branch", "main"])
+
+            self.assertEqual(status, 2)
+            self.assertIn("cannot record merge ready while next_action is dispatch_to_executor", stderr)
+
+    def test_runtime_merge_rejects_conflicting_status_options(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["runtime", "record", "--skill", "oh-my-hermes", "--harness", "coding-handling"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["run"]["run_id"]
+
+            args = Namespace(
+                omh_home=omh_home,
+                hermes_home=hermes_home,
+                run_id=run_id,
+                ready=True,
+                merged=False,
+                blocked=False,
+                status="blocked",
+                target_branch="main",
+                merge_commit="",
+                evidence_ref=None,
+                summary="",
+            )
+
+            with self.assertRaisesRegex(OmhError, "accepts only one"):
+                cmd_runtime_merge(args)
 
     def test_runtime_delegation_status_warns_on_missing_prepared_artifact(self) -> None:
         with TemporaryDirectory() as tmp:

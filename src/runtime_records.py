@@ -18,6 +18,10 @@ OBSERVED_RESULTS = ("completed", "blocked", "failed")
 UNOBSERVED_RESULTS = ("not_available", "not_observed")
 EVENT_LEVELS = ("debug", "info", "warning", "error")
 WRAPPER_COMPLETION_STATUSES = ("started", "completed", "blocked", "failed", "unknown")
+REVIEW_STATUSES = ("not_required", "pending", "passed", "failed", "blocked", "not_observed")
+CI_STATUSES = ("not_required", "pending", "passed", "failed", "blocked", "not_observed")
+CI_CHECK_STATUSES = ("passed", "failed", "blocked", "pending", "not_required")
+MERGE_STATUSES = ("not_ready", "ready", "merged", "blocked", "not_observed")
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
 ROUTE_CONFIDENCES = ("low", "medium", "high")
 ROUTING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
@@ -218,6 +222,77 @@ def build_wrapper_record(wrapper: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_review_record(review: dict[str, Any]) -> dict[str, Any]:
+    status = str(review.get("status", "not_observed"))
+    if status not in REVIEW_STATUSES:
+        raise ValueError(f"unsupported review status: {status}")
+    required = bool(review.get("required", status != "not_required"))
+    observed = bool(review.get("observed", status not in {"pending", "not_observed"}))
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": str(review.get("run_id", "")),
+        "updated_at": str(review.get("updated_at") or utc_now()),
+        "required": required,
+        "observed": observed,
+        "status": status,
+        "reviewer": str(review.get("reviewer", "")),
+        "evidence_refs": _compact_string_list(review.get("evidence_refs", [])),
+        "summary": str(review.get("summary", "")),
+    }
+    errors = validate_review_record(record)
+    if errors:
+        raise ValueError(errors[0])
+    return record
+
+
+def build_ci_record(ci: dict[str, Any]) -> dict[str, Any]:
+    status = str(ci.get("status", "not_observed"))
+    if status not in CI_STATUSES:
+        raise ValueError(f"unsupported CI status: {status}")
+    required = bool(ci.get("required", status != "not_required"))
+    observed = bool(ci.get("observed", status not in {"pending", "not_observed"}))
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": str(ci.get("run_id", "")),
+        "updated_at": str(ci.get("updated_at") or utc_now()),
+        "required": required,
+        "observed": observed,
+        "status": status,
+        "provider": str(ci.get("provider", "")),
+        "checks": _compact_ci_checks(ci.get("checks", [])),
+        "evidence_refs": _compact_string_list(ci.get("evidence_refs", [])),
+        "summary": str(ci.get("summary", "")),
+    }
+    errors = validate_ci_record(record)
+    if errors:
+        raise ValueError(errors[0])
+    return record
+
+
+def build_merge_record(merge: dict[str, Any]) -> dict[str, Any]:
+    status = str(merge.get("status", "not_observed"))
+    if status not in MERGE_STATUSES:
+        raise ValueError(f"unsupported merge status: {status}")
+    observed = bool(merge.get("observed", status in {"ready", "merged", "blocked"}))
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": str(merge.get("run_id", "")),
+        "updated_at": str(merge.get("updated_at") or utc_now()),
+        "observed": observed,
+        "ready": bool(merge.get("ready", status in {"ready", "merged"})),
+        "merged": bool(merge.get("merged", status == "merged")),
+        "status": status,
+        "target_branch": str(merge.get("target_branch", "")),
+        "merge_commit": str(merge.get("merge_commit", "")),
+        "evidence_refs": _compact_string_list(merge.get("evidence_refs", [])),
+        "summary": str(merge.get("summary", "")),
+    }
+    errors = validate_merge_record(record)
+    if errors:
+        raise ValueError(errors[0])
+    return record
+
+
 def build_routing_record(routing: dict[str, Any]) -> dict[str, Any]:
     action = routing.get("action", "fallback")
     if action not in ROUTE_ACTIONS:
@@ -404,6 +479,22 @@ def _compact_string_list(values: Any) -> list[str]:
     return [str(value) for value in values if str(value)]
 
 
+def _compact_ci_checks(values: Any) -> list[dict[str, str]]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    checks: list[dict[str, str]] = []
+    for value in values:
+        if isinstance(value, dict):
+            name = str(value.get("name", ""))
+            status = str(value.get("status", "pending"))
+        else:
+            text = str(value)
+            name, _, status = text.partition(":")
+            status = status or "pending"
+        checks.append({"name": name, "status": status})
+    return checks
+
+
 def _optional_string(value: Any) -> str | None:
     if value is None:
         return None
@@ -513,6 +604,128 @@ def validate_wrapper_record(wrapper: dict[str, Any]) -> list[str]:
     )
     _require(isinstance(wrapper.get("unobserved_gaps"), list), errors, "wrapper unobserved_gaps must be a list")
     _require(isinstance(wrapper.get("message", ""), str), errors, "wrapper message must be a string")
+    return errors
+
+
+def validate_review_record(review: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    extra_keys = sorted(
+        set(review)
+        - {"schema_version", "run_id", "updated_at", "required", "observed", "status", "reviewer", "evidence_refs", "summary"}
+    )
+    _require(not extra_keys, errors, f"review has unsupported keys: {extra_keys}")
+    _require(review.get("schema_version") == SCHEMA_VERSION, errors, "review schema_version is invalid")
+    for key in ("run_id", "updated_at", "status", "reviewer", "summary"):
+        _require(isinstance(review.get(key), str), errors, f"review {key} must be a string")
+    _require(isinstance(review.get("required"), bool), errors, "review required must be boolean")
+    _require(isinstance(review.get("observed"), bool), errors, "review observed must be boolean")
+    _require(review.get("status") in REVIEW_STATUSES, errors, f"review status is invalid: {review.get('status')!r}")
+    _require(isinstance(review.get("evidence_refs"), list), errors, "review evidence_refs must be a list")
+    for index, value in enumerate(review.get("evidence_refs", []) if isinstance(review.get("evidence_refs"), list) else []):
+        _require(isinstance(value, str), errors, f"review evidence_refs[{index}] must be a string")
+    if review.get("status") == "not_required":
+        _require(review.get("required") is False, errors, "review not_required status requires required=false")
+        _require(review.get("observed") is True, errors, "review not_required status must be observed")
+    if review.get("observed") is False:
+        _require(review.get("status") in {"pending", "not_observed"}, errors, "review observed=false requires pending or not_observed")
+    if review.get("status") == "passed":
+        _require(review.get("observed") is True, errors, "review passed status requires observed=true")
+    return errors
+
+
+def validate_ci_record(ci: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    extra_keys = sorted(
+        set(ci)
+        - {"schema_version", "run_id", "updated_at", "required", "observed", "status", "provider", "checks", "evidence_refs", "summary"}
+    )
+    _require(not extra_keys, errors, f"ci has unsupported keys: {extra_keys}")
+    _require(ci.get("schema_version") == SCHEMA_VERSION, errors, "ci schema_version is invalid")
+    for key in ("run_id", "updated_at", "status", "provider", "summary"):
+        _require(isinstance(ci.get(key), str), errors, f"ci {key} must be a string")
+    _require(isinstance(ci.get("required"), bool), errors, "ci required must be boolean")
+    _require(isinstance(ci.get("observed"), bool), errors, "ci observed must be boolean")
+    _require(ci.get("status") in CI_STATUSES, errors, f"ci status is invalid: {ci.get('status')!r}")
+    _require(isinstance(ci.get("checks"), list), errors, "ci checks must be a list")
+    checks = ci.get("checks", []) if isinstance(ci.get("checks"), list) else []
+    for index, check in enumerate(checks):
+        _require(isinstance(check, dict), errors, f"ci checks[{index}] must be an object")
+        if not isinstance(check, dict):
+            continue
+        _require(set(check) == {"name", "status"}, errors, f"ci checks[{index}] must contain only name and status")
+        _require(isinstance(check.get("name"), str), errors, f"ci checks[{index}].name must be a string")
+        _require(bool(str(check.get("name", "")).strip()), errors, f"ci checks[{index}].name must not be empty")
+        _require(check.get("status") in CI_CHECK_STATUSES, errors, f"ci checks[{index}].status is invalid: {check.get('status')!r}")
+    _require(isinstance(ci.get("evidence_refs"), list), errors, "ci evidence_refs must be a list")
+    for index, value in enumerate(ci.get("evidence_refs", []) if isinstance(ci.get("evidence_refs"), list) else []):
+        _require(isinstance(value, str), errors, f"ci evidence_refs[{index}] must be a string")
+    if ci.get("status") == "not_required":
+        _require(ci.get("required") is False, errors, "ci not_required status requires required=false")
+        _require(ci.get("observed") is True, errors, "ci not_required status must be observed")
+    if ci.get("observed") is False:
+        _require(ci.get("status") in {"pending", "not_observed"}, errors, "ci observed=false requires pending or not_observed")
+    if ci.get("status") == "passed":
+        _require(ci.get("observed") is True, errors, "ci passed status requires observed=true")
+        _require(bool(checks), errors, "ci passed status requires at least one check")
+        failed = [check for check in checks if isinstance(check, dict) and check.get("status") != "passed"]
+        _require(not failed, errors, "ci passed status requires all checks to be passed")
+    return errors
+
+
+def validate_merge_record(merge: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    extra_keys = sorted(
+        set(merge)
+        - {
+            "schema_version",
+            "run_id",
+            "updated_at",
+            "observed",
+            "ready",
+            "merged",
+            "status",
+            "target_branch",
+            "merge_commit",
+            "evidence_refs",
+            "summary",
+        }
+    )
+    _require(not extra_keys, errors, f"merge has unsupported keys: {extra_keys}")
+    _require(merge.get("schema_version") == SCHEMA_VERSION, errors, "merge schema_version is invalid")
+    for key in ("run_id", "updated_at", "status", "target_branch", "merge_commit", "summary"):
+        _require(isinstance(merge.get(key), str), errors, f"merge {key} must be a string")
+    for key in ("observed", "ready", "merged"):
+        _require(isinstance(merge.get(key), bool), errors, f"merge {key} must be boolean")
+    _require(merge.get("status") in MERGE_STATUSES, errors, f"merge status is invalid: {merge.get('status')!r}")
+    _require(isinstance(merge.get("evidence_refs"), list), errors, "merge evidence_refs must be a list")
+    for index, value in enumerate(merge.get("evidence_refs", []) if isinstance(merge.get("evidence_refs"), list) else []):
+        _require(isinstance(value, str), errors, f"merge evidence_refs[{index}] must be a string")
+    if merge.get("status") == "not_observed":
+        _require(merge.get("observed") is False, errors, "merge not_observed status requires observed=false")
+        _require(merge.get("ready") is False, errors, "merge not_observed status requires ready=false")
+        _require(merge.get("merged") is False, errors, "merge not_observed status requires merged=false")
+    if merge.get("status") == "not_ready":
+        _require(merge.get("ready") is False, errors, "merge not_ready status requires ready=false")
+        _require(merge.get("merged") is False, errors, "merge not_ready status requires merged=false")
+    if merge.get("status") == "blocked":
+        _require(merge.get("observed") is True, errors, "merge blocked status requires observed=true")
+        _require(merge.get("ready") is False, errors, "merge blocked status requires ready=false")
+        _require(merge.get("merged") is False, errors, "merge blocked status requires merged=false")
+    if merge.get("observed") is False:
+        _require(merge.get("status") in {"not_ready", "not_observed"}, errors, "merge observed=false requires not_ready or not_observed")
+    if merge.get("status") == "ready":
+        _require(merge.get("observed") is True, errors, "merge ready status requires observed=true")
+        _require(merge.get("ready") is True, errors, "merge ready status requires ready=true")
+        _require(merge.get("merged") is False, errors, "merge ready status requires merged=false")
+    if merge.get("status") == "merged":
+        _require(merge.get("observed") is True, errors, "merge merged status requires observed=true")
+        _require(merge.get("ready") is True, errors, "merge merged status requires ready=true")
+        _require(merge.get("merged") is True, errors, "merge merged status requires merged=true")
+        _require(
+            bool(str(merge.get("merge_commit", ""))) or bool(merge.get("evidence_refs")),
+            errors,
+            "merge merged status requires merge_commit or evidence_refs",
+        )
     return errors
 
 
@@ -753,4 +966,7 @@ OPTIONAL_RECORD_VALIDATORS = (
     ("coding_delegation.json", validate_coding_delegation_record),
     ("delegation.json", validate_delegation_record),
     ("wrapper.json", validate_wrapper_record),
+    ("review.json", validate_review_record),
+    ("ci.json", validate_ci_record),
+    ("merge.json", validate_merge_record),
 )
