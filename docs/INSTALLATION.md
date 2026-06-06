@@ -160,6 +160,9 @@ To inspect the live catalog contract that generated skills and wrappers share:
 
 ```sh
 omh docs workflows --json
+omh harness list
+omh harness inspect planning
+omh harness validate
 ```
 
 Use `omh runtime export --redacted` when you need a portable support artifact.

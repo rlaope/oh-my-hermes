@@ -159,6 +159,16 @@ steps without parsing prose.
 Workflow and handoff payloads can also include `harness_quality/v1`, which lets
 adapters render the lane quality bar, evidence ladder, safe action ids, and
 overclaim guards without guessing from generated skill text.
+Runtime delegation status also includes `harness_progress/v1`, calculated from
+that evidence ladder and observed runtime records.
+
+Inspect and validate the live harness catalog with:
+
+```sh
+omh harness list
+omh harness inspect coding-handling
+omh harness validate
+```
 
 ## Routing Model
 

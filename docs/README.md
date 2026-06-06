@@ -48,6 +48,8 @@ merge.
   catalog before refreshing generated references.
 - Harness quality gates should stay machine-readable through
   `harness_quality/v1` instead of being prose-only wrapper behavior.
+- Harness catalog changes should pass `omh harness validate`, and user-facing
+  harness examples should stay backed by conformance tests.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
 
@@ -68,6 +70,7 @@ Run the focused documentation checks before calling the change complete:
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest tests/test_router_content.py -v
+uv run python -m src.cli harness validate
 uv run python -m src.cli docs workflows --check
 git diff --check
 ```

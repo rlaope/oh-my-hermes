@@ -19,6 +19,8 @@ state:
 
 The wrapper can choose buttons from `wrapper_actions`, show progress from
 `evidence_ladder`, and avoid false claims with `overclaim_guards`.
+Local operators can inspect the same contract with `omh harness list`,
+`omh harness inspect <name>`, and `omh harness validate`.
 
 ## Contract Shape
 
@@ -59,6 +61,9 @@ contract shaped like this:
 - `omh hermes plan` includes `wrapper_contract.harness_quality` so wrappers can
   render accept/revise/cancel and handoff readiness from the plan contract.
 - Runtime records preserve the contract in `coding_delegation.json` when present.
+- `omh runtime delegation-status --run <run-id>` includes
+  `harness_progress/v1`, which marks ladder steps complete only when the
+  corresponding runtime or wrapper evidence is observed.
 
 ## Wrapper Rules
 
@@ -69,6 +74,8 @@ contract shaped like this:
 - Use `quality_bar` as the lane's success checklist.
 - Use `overclaim_guards` before changing status text. If a guard conflicts with
   a later artifact, show the blocker instead of the optimistic state.
+- Treat `harness_progress/v1.next_step` as a wrapper hint, not as proof that the
+  next action has already happened.
 
 ## Golden Examples
 
