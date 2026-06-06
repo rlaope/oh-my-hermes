@@ -32,8 +32,10 @@ def validate_catalog_contract() -> dict[str, object]:
     for definition in definitions:
         errors.extend(_validate_skill_definition(definition, harness_name_set))
     for harness in harnesses:
+        quality = harness_quality_contract(harness.name)
         errors.extend(_validate_harness_definition(harness))
-        errors.extend(_validate_harness_quality_payload(harness_quality_contract(harness.name), f"harness {harness.name} harness_quality"))
+        errors.extend(_validate_harness_quality_payload(quality, f"harness {harness.name} harness_quality"))
+        errors.extend(_validate_harness_quality_matches_definition(quality, harness))
     errors.extend(_validate_named_harness_gates({harness.name: harness for harness in harnesses}))
 
     return {
@@ -71,15 +73,20 @@ def harness_inspection_payload(name: str) -> dict[str, object]:
     for harness in builtin_harnesses():
         if harness.name != name:
             continue
+        quality = harness_quality_contract(name)
+        validation_errors = _validate_harness_definition(harness) + _validate_harness_quality_payload(
+            quality,
+            f"harness {name} harness_quality",
+        )
+        validation_errors.extend(_validate_harness_quality_matches_definition(quality, harness))
         return {
             "schema_version": "harness_inspect/v1",
             "harness": _dataclass_payload(harness),
-            "harness_quality": harness_quality_contract(name),
+            "harness_quality": quality,
             "primary_skills": skills_by_harness.get(name, []),
             "validation": {
-                "ok": True,
-                "errors": _validate_harness_definition(harness)
-                + _validate_harness_quality_payload(harness_quality_contract(name), f"harness {name} harness_quality"),
+                "ok": not validation_errors,
+                "errors": validation_errors,
             },
         }
     raise KeyError(name)
@@ -140,12 +147,41 @@ def _validate_harness_quality_payload(value: dict[str, object], label: str) -> l
     return errors
 
 
+def _validate_harness_quality_matches_definition(value: dict[str, object], harness: HarnessDefinition) -> list[str]:
+    errors: list[str] = []
+    expected = {
+        "harness": harness.name,
+        "quality_tier": harness.quality_tier,
+        "quality_bar": list(harness.quality_bar),
+        "evidence_ladder": list(harness.evidence_ladder),
+        "wrapper_actions": list(harness.wrapper_actions),
+        "overclaim_guards": list(harness.overclaim_guards),
+    }
+    for key, expected_value in expected.items():
+        if value.get(key) != expected_value:
+            errors.append(f"harness {harness.name} harness_quality {key} must match catalog definition")
+    return errors
+
+
 def _validate_named_harness_gates(harnesses: dict[str, HarnessDefinition]) -> list[str]:
     errors: list[str] = []
     required_steps = {
         "deep-interview": ("ambiguity_identified", "blocking_question_asked", "answer_recorded", "clarified_brief_ready"),
-        "planning": ("request_clarified", "option_tradeoffs_recorded", "test_strategy_recorded", "acceptance_recorded", "handoff_ready"),
-        "research": ("research_question_scoped", "primary_sources_checked", "evidence_synthesized", "uncertainty_recorded"),
+        "planning": (
+            "request_clarified",
+            "plan_drafted",
+            "option_tradeoffs_recorded",
+            "test_strategy_recorded",
+            "acceptance_recorded",
+            "handoff_ready",
+        ),
+        "research": (
+            "research_question_scoped",
+            "primary_sources_checked",
+            "conflicts_checked",
+            "evidence_synthesized",
+            "uncertainty_recorded",
+        ),
     }
     for harness_name, steps in required_steps.items():
         harness = harnesses.get(harness_name)
