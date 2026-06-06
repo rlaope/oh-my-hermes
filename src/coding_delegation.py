@@ -4,9 +4,9 @@ from dataclasses import asdict, dataclass
 import hashlib
 from typing import Any
 
-from .chat_router import CHAT_SOURCES, extract_message_text
 from .coding_contracts import CODING_EXECUTOR_TARGETS, EXECUTOR_HANDOFF_SCHEMA_VERSION
-from .recommend import recommend_skills
+from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
+from .routing.recommend import recommend_skills
 from .skills.catalog import (
     CODING_INTENT_PRIORITY,
     CODING_REVIEW_TERMS,
@@ -19,12 +19,6 @@ from .skills.catalog import (
 
 SCHEMA_VERSION = "coding_delegation/v1"
 DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
-_SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
-    "source_event_id": (("id",), ("event_id",), ("message", "id"), ("event", "id"), ("event", "client_msg_id")),
-    "channel_ref": (("channel",), ("channel_id",), ("message", "channel"), ("event", "channel"), ("channel", "id")),
-    "user_ref": (("user",), ("user_id",), ("author", "id"), ("message", "author", "id"), ("event", "user")),
-    "timestamp": (("timestamp",), ("created_at",), ("ts",), ("message", "timestamp"), ("event", "ts"), ("event", "event_ts")),
-}
 
 
 @dataclass(frozen=True)
@@ -161,19 +155,6 @@ def coding_delegation_record_payload(
         "verification": delegation.get("verification", []),
         "status": "prepared_not_observed",
     }
-
-
-def extract_source_metadata(event: dict[str, Any] | str) -> dict[str, str]:
-    if not isinstance(event, dict):
-        return {}
-    metadata: dict[str, str] = {}
-    for output_key, paths in _SOURCE_METADATA_PATHS.items():
-        for path in paths:
-            value = _value_at_path(event, path)
-            if isinstance(value, (str, int, float)) and str(value).strip():
-                metadata[output_key] = str(value).strip()
-                break
-    return metadata
 
 
 def _intent_for(message: str, workflow: str, score: int) -> str:
@@ -360,15 +341,6 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
             }
         )
     return compact
-
-
-def _value_at_path(event: dict[str, Any], path: tuple[str, ...]) -> Any:
-    current: Any = event
-    for part in path:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(part)
-    return current
 
 
 def _has_any(value: str, terms: tuple[str, ...]) -> bool:

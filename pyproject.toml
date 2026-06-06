@@ -31,9 +31,21 @@ Issues = "https://github.com/rlaope/oh-my-hermes-agent/issues"
 Repository = "https://github.com/rlaope/oh-my-hermes-agent"
 
 [tool.setuptools]
-packages = ["omh", "omh.core", "omh.skills"]
+packages = [
+  "omh",
+  "omh.commands",
+  "omh.core",
+  "omh.routing",
+  "omh.runtime",
+  "omh.skills",
+  "omh.wrapper",
+]
 
 [tool.setuptools.package-dir]
 omh = "src"
+"omh.commands" = "src/commands"
 "omh.core" = "src/core"
+"omh.routing" = "src/routing"
+"omh.runtime" = "src/runtime"
 "omh.skills" = "src/skills"
+"omh.wrapper" = "src/wrapper"

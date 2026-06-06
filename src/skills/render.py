@@ -272,8 +272,9 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 
 
 def builtin_skill_templates() -> list[SkillTemplate]:
-    names = [definition.name for definition in builtin_definitions()]
-    return [router_skill(), *[workflow_skill(name) for name in names if name != "oh-my-hermes"]]
+    from .packaging import builtin_skill_templates as packaged_templates
+
+    return packaged_templates()
 
 
 def workflow_reference_markdown() -> str:

@@ -22,10 +22,12 @@ The architecture favors:
 
 ```text
 src/
-  chat_router.py
-  cli.py
+  chat_router.py              # compatibility adapter to routing/chat.py
+  cli.py                     # compatibility adapter to commands/main.py
+  commands/
+    main.py
   coding_delegation.py
-  coding_lifecycle.py
+  coding_lifecycle.py        # compatibility adapter to wrapper/lifecycle.py
   config_adapter.py
   converter.py
   doctor.py
@@ -33,37 +35,59 @@ src/
   installer.py
   manifest.py
   paths.py
-  recommend.py
-  runtime_artifacts.py
-  runtime_records.py
+  ingress.py
+  recommend.py                # compatibility adapter to routing/recommend.py
+  routing/
+    chat.py
+    policy.py
+    recommend.py
+  runtime_artifacts.py        # compatibility adapter to runtime/artifacts.py
+  runtime_records.py          # compatibility adapter to runtime/records.py
+  runtime/
+    artifacts.py
+    records.py
   snippet.py
-  wrapper_sessions.py
+  wrapper_contract.py         # compatibility adapter to wrapper/contract.py
+  wrapper_sessions.py         # compatibility adapter to wrapper/sessions.py
+  wrapper/
+    contract.py
+    lifecycle.py
+    sessions.py
   skill_pack.py
-  wrapper_contract.py
   core/
   skills/
+    catalog.py
+    packaging.py
+    render.py
 ```
 
 ## Main Modules
 
-`cli.py` owns command parsing and user-facing JSON output.
+`cli.py` is a compatibility adapter. `commands/main.py` owns command parsing
+and user-facing JSON output while the package gives future command groups a
+clearer home.
 
-`chat_router.py` owns deterministic pre-dispatch routing decisions for chat
+`ingress.py` owns platform-neutral message text and source metadata extraction
+for Discord, Slack, Hermes, and generic wrapper event shapes.
+
+`routing/chat.py` owns deterministic pre-dispatch routing decisions for chat
 wrappers. It consumes plain messages or platform-shaped event payloads and
 returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
+`routing/policy.py` owns shared confidence and ambiguity policy, and
+`routing/recommend.py` owns local catalog recommendation scoring.
 
 `coding_delegation.py` owns deterministic coding handoff preparation. It maps
 implementation-shaped task text to an action, intent, workflow, harness,
 executor profile, acceptance criteria, and verification expectations without
 LLM, API, or network calls.
 
-`wrapper_contract.py` owns the platform-neutral chat interaction contract. It
+`wrapper/contract.py` owns the platform-neutral chat interaction contract. It
 composes routing, planning, delegation, and status primitives into a
 `chat_interaction/v1` envelope with a renderable `chat_response/v1`, safe action
 buttons, a stable thread key, and overclaim guards for Discord, Slack, and
 hosted Hermes adapters.
 
-`coding_lifecycle.py` owns Codex-oriented lifecycle helpers above the existing
+`wrapper/lifecycle.py` owns Codex-oriented lifecycle helpers above the existing
 runtime artifact layer. It starts prepared handoffs, records dispatch and
 executor observations, records verification observations, and reports derived
 status without mutating prepared handoff records into execution proof.
@@ -72,10 +96,10 @@ status without mutating prepared handoff records into execution proof.
 `.hermes/plans/` and the machine-readable plan wrapper contract used after plan
 acceptance.
 
-`runtime_artifacts.py` and `runtime_records.py` own local JSON/JSONL evidence,
+`runtime/artifacts.py` and `runtime/records.py` own local JSON/JSONL evidence,
 schema validation, redacted export, and derived delegated coding status.
 
-`wrapper_sessions.py` owns metadata-only chat session persistence for wrappers.
+`wrapper/sessions.py` owns metadata-only chat session persistence for wrappers.
 It records chat continuity, plan decisions, and a link to a prepared run id, but
 it does not own execution, review, CI, merge readiness, or merge evidence.
 
@@ -89,10 +113,13 @@ small, heavily tested, and conservative.
 use-when rules as data.
 
 `skills/render.py` owns generated `SKILL.md` content. It should render from the
-catalog rather than becoming a second source of truth.
+catalog rather than becoming a second source of truth. `skills/packaging.py`
+owns assembly of the managed skill bundle from rendered templates.
 
-`skill_pack.py` is a compatibility facade so older imports keep working while
-the package grows internally.
+`chat_router.py`, `recommend.py`, `runtime_artifacts.py`,
+`runtime_records.py`, `wrapper_contract.py`, `wrapper_sessions.py`,
+`coding_lifecycle.py`, `cli.py`, and `skill_pack.py` are compatibility facades
+so older imports keep working while the package grows internally.
 
 ## Routing
 

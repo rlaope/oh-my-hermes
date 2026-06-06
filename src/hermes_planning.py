@@ -8,11 +8,10 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-from .chat_router import CHAT_SOURCES, extract_message_text
-from .coding_delegation import extract_source_metadata
+from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from .local_store import atomic_write_text
 from .paths import OmhPaths
-from .recommend import recommend_skills
+from .routing.recommend import recommend_skills
 
 
 SCHEMA_VERSION = "hermes_plan/v1"
