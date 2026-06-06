@@ -49,6 +49,7 @@ delegate coding, or report status.
 | Managed skills | Generated Hermes skill guidance under `~/.omh/skills`. |
 | Local installer | Reversible install, update, apply, doctor, and uninstall commands. |
 | Skill catalog | Deterministic routing metadata from `src/skills/catalog.py`. |
+| Harness quality | Machine-readable quality bars, evidence ladders, wrapper actions, and overclaim guards. |
 | Wrapper contract | `chat_interaction/v1` responses for Discord, Slack, and hosted adapters. |
 | Planning artifacts | Hermes-facing Markdown plans under `~/.hermes/plans`. |
 | Coding handoffs | Prepared executor payloads with acceptance, review, and verification expectations. |
@@ -155,6 +156,9 @@ artifact cannot override missing verification, review, or CI evidence.
 Wrapper status responses include a `status_card/v1` progress object so adapters
 can render handoff, execution, verification, review, CI, merge-ready, and merged
 steps without parsing prose.
+Workflow and handoff payloads can also include `harness_quality/v1`, which lets
+adapters render the lane quality bar, evidence ladder, safe action ids, and
+overclaim guards without guessing from generated skill text.
 
 ## Routing Model
 
@@ -194,6 +198,7 @@ instead of presented as the first path.
 | Update | `omh update && omh apply && omh doctor` |
 | Inspect installed skills | `omh list` |
 | Pick a workflow locally | `omh recommend <task>` |
+| Inspect workflow quality JSON | `omh docs workflows --json` |
 | Drive a chat wrapper turn | `omh chat interact <message>` |
 | Track delegated coding | `omh coding lifecycle <step>` |
 | Summarize observed status | `omh runtime delegation-status --run <run-id>` |
@@ -211,6 +216,7 @@ fixtures, reapply, wrapper lifecycle, redacted export, and uninstall details.
 | Install, update, reapply, uninstall | [Installation](docs/INSTALLATION.md) |
 | Architecture and module ownership | [Architecture](docs/ARCHITECTURE.md) |
 | Delegation lifecycle completeness | [Delegation-First Completeness](docs/DELEGATION_FIRST_COMPLETENESS.md) |
+| Harness quality contracts | [Harness Quality Contract](docs/HARNESS_QUALITY.md) |
 | Representative workflows | [Application Cases](docs/APPLICATION_CASES.md) |
 | Generated workflow catalog | [Workflow Reference](docs/WORKFLOWS.md) |
 

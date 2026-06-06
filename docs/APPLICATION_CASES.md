@@ -184,7 +184,8 @@ runtime role unless the active Hermes environment exposes that capability.
 ### Verification
 
 The router skill should include each specialist harness name, inputs, outputs,
-verification expectations, and fallback behavior.
+verification expectations, quality tier, evidence ladder, wrapper actions,
+overclaim guards, and fallback behavior.
 
 Repository maintainers can verify this with:
 
@@ -219,6 +220,8 @@ Before using these cases as public release evidence, verify:
 - `omh doctor` reports the managed skill directory and Hermes config
   registration clearly.
 - The generated router includes the representative harness registry.
+- `omh docs workflows --json` exposes `harness_quality/v1` style quality data
+  for wrapper rendering and status decisions.
 - The three cases above match actual generated skill behavior.
 - The three cases above can create `.omh/runtime/runs/<run-id>/` artifacts.
 - `delegation.json` separates requested delegation from observed delegation.

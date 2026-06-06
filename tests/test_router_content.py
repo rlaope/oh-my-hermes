@@ -208,6 +208,7 @@ class RouterContentTests(unittest.TestCase):
             Path("AGENTS.md"),
             Path("docs/README.md"),
             Path("docs/DIRECTION.md"),
+            Path("docs/HARNESS_QUALITY.md"),
             Path("docs/INSTALLATION.md"),
             Path("docs/APPLICATION_CASES.md"),
             Path("docs/RELEASE.md"),
@@ -233,6 +234,7 @@ class RouterContentTests(unittest.TestCase):
         installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
         ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
         release = Path("docs/RELEASE.md").read_text(encoding="utf-8")
+        harness_quality = Path("docs/HARNESS_QUALITY.md").read_text(encoding="utf-8")
 
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
         self.assertIn("[Documentation](docs/README.md)", readme)
@@ -241,10 +243,15 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("OMH_CHANNEL=stable OMH_VERSION=0.1.0", readme)
         self.assertIn("Most users should start with one health check", readme)
         self.assertIn("## Command Surface", readme)
+        self.assertIn("omh docs workflows --json", readme)
         self.assertIn("Root README intentionally shows the small public surface", readme)
         self.assertNotIn("Useful local and wrapper-debug commands", readme)
         self.assertIn("Chat Wrapper Flow", installation)
         self.assertIn("omh chat interact", installation)
+        self.assertIn("harness_quality/v1", installation)
+        self.assertIn("omh docs workflows --json", installation)
+        self.assertIn("wrapper_actions", harness_quality)
+        self.assertIn("overclaim_guards", harness_quality)
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)
         self.assertIn("docs workflows --check", ci)
@@ -270,6 +277,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("This directory is the public operating map", docs_index)
         self.assertIn("prepared versus observed evidence", docs_index)
         self.assertIn("Chat users should remain command-agnostic.", docs_index)
+        self.assertIn("Harness Quality Contract", docs_index)
         self.assertIn("Do not turn OMHM into a hidden Hermes runtime patch", agents)
         self.assertIn("One user goal should normally produce one PR.", agents)
         self.assertIn("review feedback or small follow-up fixes", agents)
@@ -290,6 +298,9 @@ class RouterContentTests(unittest.TestCase):
 
         for harness in ("coding-handling", "goal-execution", "planning", "research", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
             self.assertIn(harness, text)
+        self.assertIn("quality tier", text)
+        self.assertIn("evidence ladder", text)
+        self.assertIn("omh docs workflows --json", text)
         self.assertIn("omh probe", text)
 
     def test_discord_example_uses_wrapper_native_flow(self) -> None:

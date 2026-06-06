@@ -14,6 +14,7 @@ repo-local contract for Codex agents working here.
 | Understand what OMHM is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
+| Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
 | Install or operate the preview package | [Installation](INSTALLATION.md) |
 | See realistic user-facing flows | [Application Cases](APPLICATION_CASES.md) |
 | Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
@@ -45,6 +46,8 @@ merge.
   observed evidence that a coding executor actually ran.
 - Generated workflow docs should come from `src/skills/catalog.py`; update the
   catalog before refreshing generated references.
+- Harness quality gates should stay machine-readable through
+  `harness_quality/v1` instead of being prose-only wrapper behavior.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
 
@@ -56,6 +59,7 @@ When changing docs, check whether the same claim needs to be updated in:
 - [Direction](DIRECTION.md)
 - [Architecture](ARCHITECTURE.md)
 - [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md)
+- [Harness Quality Contract](HARNESS_QUALITY.md)
 - [Application Cases](APPLICATION_CASES.md)
 - [Workflow Reference](WORKFLOWS.md)
 - [AGENTS](../AGENTS.md)

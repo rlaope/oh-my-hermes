@@ -84,6 +84,29 @@ class WrapperGoldenExampleTests(unittest.TestCase):
         self.assertIn("target outcome", interview["missing_decisions"])
         self.assertEqual(interview["after_answer_next_action"], "rerun_hermes_plan")
 
+    def test_harness_quality_examples_cover_wrapper_visible_quality_gates(self) -> None:
+        payload = json.loads(Path("examples/wrapper-golden/harness-quality.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], "harness_quality_examples/v1")
+        examples = {item["scenario"]: item for item in payload["examples"]}
+
+        self.assertEqual(
+            set(examples),
+            {"coding_handoff_quality", "planning_quality", "research_quality", "clarification_quality"},
+        )
+        self.assertEqual(examples["coding_handoff_quality"]["expected_quality"]["schema_version"], "harness_quality/v1")
+        self.assertIn("send_to_codex", examples["coding_handoff_quality"]["expected_quality"]["wrapper_actions"])
+        self.assertIn("executor_result_observed", examples["coding_handoff_quality"]["expected_quality"]["evidence_ladder"])
+        self.assertIn("accept_plan", examples["planning_quality"]["expected_quality"]["wrapper_actions"])
+        self.assertIn("sources_checked", examples["research_quality"]["expected_quality"]["evidence_ladder"])
+        self.assertIn("answer:clarify", examples["clarification_quality"]["expected_quality"]["wrapper_actions"])
+
+        for item in payload["examples"]:
+            serialized = json.dumps(item).lower()
+            self.assertTrue(item["user_visible_upgrade"])
+            self.assertTrue(item["claim_boundary"])
+            self.assertNotIn("token", serialized)
+            self.assertNotIn("omh ", serialized)
+
 
 if __name__ == "__main__":
     unittest.main()

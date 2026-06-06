@@ -1,0 +1,80 @@
+{
+  "schema_version": "harness_quality_examples/v1",
+  "description": "Golden examples for rendering harness_quality/v1 in Discord, Slack, or hosted wrappers. These fixtures are deterministic local contracts, not platform SDK fixtures.",
+  "examples": [
+    {
+      "scenario": "coding_handoff_quality",
+      "harness": "coding-handling",
+      "source_payload": "coding_delegation/v1.harness_quality",
+      "expected_quality": {
+        "schema_version": "harness_quality/v1",
+        "quality_tier": "handoff-gated",
+        "evidence_ladder": [
+          "coding_delegation_prepared",
+          "executor_dispatch_observed",
+          "executor_result_observed",
+          "verification_recorded",
+          "review_ci_merge_recorded_when_required"
+        ],
+        "wrapper_actions": ["accept_plan", "send_to_codex", "show_status", "record_result"]
+      },
+      "user_visible_upgrade": "The wrapper can show that a coding handoff is ready while still saying execution, review, CI, and merge evidence are not observed yet.",
+      "claim_boundary": "Prepared handoff is not implementation evidence."
+    },
+    {
+      "scenario": "planning_quality",
+      "harness": "planning",
+      "source_payload": "hermes_plan/v1.wrapper_contract.harness_quality",
+      "expected_quality": {
+        "schema_version": "harness_quality/v1",
+        "quality_tier": "acceptance-gated",
+        "evidence_ladder": [
+          "request_clarified",
+          "plan_drafted",
+          "options_reviewed",
+          "acceptance_recorded",
+          "handoff_ready"
+        ],
+        "wrapper_actions": ["accept_plan", "revise_plan", "cancel", "prepare_handoff"]
+      },
+      "user_visible_upgrade": "The wrapper can render accept/revise/cancel states from the same plan contract instead of asking the user to know workflow commands.",
+      "claim_boundary": "A draft plan is not execution or review evidence."
+    },
+    {
+      "scenario": "research_quality",
+      "harness": "research",
+      "source_payload": "workflow_catalog/v1.harnesses[].harness_quality",
+      "expected_quality": {
+        "schema_version": "harness_quality/v1",
+        "quality_tier": "source-gated",
+        "evidence_ladder": [
+          "research_question_scoped",
+          "sources_checked",
+          "evidence_synthesized",
+          "uncertainty_recorded"
+        ],
+        "wrapper_actions": ["show_sources", "ask_followup", "prepare_plan"]
+      },
+      "user_visible_upgrade": "The wrapper can keep research as a first-class Hermes lane and avoid turning every source-backed answer into a coding handoff.",
+      "claim_boundary": "Research synthesis is not implementation evidence."
+    },
+    {
+      "scenario": "clarification_quality",
+      "harness": "deep-interview",
+      "source_payload": "workflow_catalog/v1.harnesses[].harness_quality",
+      "expected_quality": {
+        "schema_version": "harness_quality/v1",
+        "quality_tier": "clarity-gated",
+        "evidence_ladder": [
+          "ambiguity_identified",
+          "question_asked",
+          "answer_recorded",
+          "clarified_brief_ready"
+        ],
+        "wrapper_actions": ["answer:clarify", "cancel", "rerun_plan"]
+      },
+      "user_visible_upgrade": "The wrapper can ask one blocking question in-thread, then rerun planning only after the answer is available.",
+      "claim_boundary": "A clarification question is not a plan approval."
+    }
+  ]
+}

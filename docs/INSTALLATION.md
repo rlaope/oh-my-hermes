@@ -153,6 +153,14 @@ Wrapper-facing golden examples live under `examples/wrapper-golden/`. They show
 the expected `chat_response/v1` copy, `deep_interview_contract/v1`, optional
 `status_card/v1`, and platform-neutral action ids for clarification, planning,
 handoff, review, CI, merge-ready, merged, and contradictory-evidence states.
+`examples/wrapper-golden/harness-quality.json` shows how wrappers can map
+`harness_quality/v1` into visible buttons, progress steps, and overclaim guards.
+
+To inspect the live catalog contract that generated skills and wrappers share:
+
+```sh
+omh docs workflows --json
+```
 
 Use `omh runtime export --redacted` when you need a portable support artifact.
 Exports redact prompt, response, token, secret, key, and password-shaped fields by
