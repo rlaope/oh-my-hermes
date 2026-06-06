@@ -18,7 +18,7 @@ This is a Hermes-native `web-research` workflow skill.
 
 Use when the user needs current web evidence, links, citations, or source comparison before planning or handoff.
 
-    Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`
+    Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`, `investigate`, `research plan`, `조사`, `근거`, `출처`, `고객 피드백`
 
 ## Catalog Metadata
 

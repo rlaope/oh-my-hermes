@@ -29,8 +29,17 @@ _REVIEW_TERMS = (
     "refactor",
     "integration",
     "contract",
+    "release gate",
+    "claim",
+    "evidence",
+    "위험",
+    "리뷰",
+    "검토",
+    "릴리즈",
+    "검증",
+    "실제 코드",
 )
-_CLARIFY_TERMS = ("maybe", "something", "stuff", "whatever", "help", "thing")
+_CLARIFY_TERMS = ("maybe", "something", "stuff", "whatever", "help", "thing", "싶어", "부드럽게", "모호")
 
 
 @dataclass(frozen=True)
@@ -662,11 +671,15 @@ def _missing_decisions(task: str) -> tuple[str, ...]:
         missing.append("observable failure or reproduction signal")
     if any(term in lowered for term in ("plan", "strategy", "architecture")):
         missing.append("decision authority and tradeoff preference")
+    if any(term in lowered for term in ("실패", "버그", "장애", "재현")):
+        missing.append("observable failure or reproduction signal")
+    if any(term in lowered for term in ("계획", "전략", "아키텍처", "기획")):
+        missing.append("decision authority and tradeoff preference")
     return tuple(missing)
 
 
 def _clarification_question(task: str) -> str:
-    if any(term in task.lower() for term in ("fix", "bug", "debug")):
+    if any(term in task.lower() for term in ("fix", "bug", "debug", "실패", "버그", "장애", "재현")):
         return "What exact failure should Hermes plan around, and what result would prove it is fixed?"
     return "What outcome should Hermes plan for, and what would make the result acceptable?"
 
@@ -681,6 +694,25 @@ def _is_coding_shaped(task: str) -> bool:
         or re.search(
             r"\b(add|change|modify)\s+(?:a\s+)?(?:new\s+)?(feature|code|test|tests|endpoint|api|command|cli|workflow|harness|module|function)\b",
             lowered,
+        )
+        or any(
+            term in lowered
+            for term in (
+                "구현",
+                "수정",
+                "추가",
+                "변경",
+                "고쳐",
+                "만들",
+                "결제 실패",
+                "버그",
+                "장애",
+                "재현",
+                "리팩터링",
+                "리팩토링",
+                "기능 요청",
+                "구현 handoff",
+            )
         )
     )
 

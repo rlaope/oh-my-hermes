@@ -108,7 +108,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `web-research`: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`
 - `ultraqa`: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`
 - `plan`: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`
-- `ralplan`: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`
+- `ralplan`: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`
 - `code-review`: `code-review`, `$code-review`, `review`, `audit`, `find bugs`
 - `ai-slop-cleaner`: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`
 - `best-practice-research`: `best-practice-research`, `best practice`, `official docs`, `upstream guidance`

@@ -18,7 +18,7 @@ This is a Hermes-native `ralplan` workflow skill.
 
 Use when requirements are clear enough for planning but architecture, risks, or tests need review.
 
-    Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`
+    Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `PR로 만들`, `PR로 만들 수 있게`, `검증 command`, `리뷰 가능한 단위`
 
 ## Catalog Metadata
 

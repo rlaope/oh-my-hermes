@@ -87,6 +87,113 @@ User-facing effect:
 - Execution, verification, CI, merge-readiness, and merge stay separate.
 - The wrapper can keep editing the same thread as evidence arrives.
 
+## Grounded Operator Examples
+
+The following examples were run through `omh chat interact --source discord`.
+They show how different natural-language messages should produce different
+wrapper-native responses instead of forcing every request into coding.
+
+### Startup Product Triage
+
+```text
+# product-feedback
+
+operator
+결제 실패 이슈가 자주 나와
+
+Hermes Agent  BOT
+I routed this to `plan` because it needs a safe plan first.
+
+Accept or revise the plan first; the handoff button stays disabled until
+acceptance. A draft plan is still only planning evidence.
+
+[ Accept plan ] [ Revise plan ] [ Prepare handoff ] disabled
+
+Claim boundary: A draft plan is not execution evidence.
+```
+
+What gets better for the team:
+
+- The message is treated as product/bug triage, not instant implementation.
+- The next step is investigation and reproduction planning before a Codex
+  handoff.
+- The future handoff can carry acceptance criteria and verification checks.
+
+### Real-World QA Check
+
+```text
+# cloudy-qa
+
+operator
+쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?
+
+Hermes Agent  BOT
+I know which workflow should handle this.
+
+I will prepare a safe next step for `ultraqa` before claiming any work happened.
+
+[ Show status ]
+
+Claim boundary: Routing is not execution evidence.
+```
+
+What gets better for the team:
+
+- The request stays in a Hermes-retained QA workflow.
+- `omh coding delegate --executor codex` does not emit a Codex handoff for this
+  scenario until a concrete code change is accepted.
+- QA scenarios, expected behavior, and observed results can be recorded without
+  pretending the product was fixed.
+
+### Product Feature Shaping
+
+```text
+# product
+
+pm
+온보딩을 더 부드럽게 만들고 싶어
+
+Hermes Agent  BOT
+This needs a clarification workflow before planning.
+
+I will ask one blocking question in the same thread before any plan or handoff
+is treated as ready.
+
+[ Answer clarification ] [ Cancel ]
+
+Claim boundary: No plan or execution has started.
+```
+
+What gets better for the team:
+
+- Broad product language becomes deep interview before implementation.
+- Hermes asks for the missing decision instead of sending vague work to Codex.
+- Planning and handoff buttons stay behind the clarification gate.
+
+### Release Evidence Review
+
+```text
+# release
+
+maintainer
+릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘
+
+Hermes Agent  BOT
+I know which workflow should handle this.
+
+I will prepare a safe next step for `code-review` before claiming any work happened.
+
+[ Show status ]
+
+Claim boundary: Routing is not execution evidence.
+```
+
+What gets better for the team:
+
+- Release claims are routed to review instead of implementation theater.
+- Findings, fixes, verification, CI, and merge readiness stay separate.
+- Any later fix still needs executor evidence before completion is reported.
+
 ## JSON-to-UI Mapping
 
 | Rendered UI | Source field |

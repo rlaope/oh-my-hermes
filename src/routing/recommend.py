@@ -6,7 +6,7 @@ import re
 from ..skills.catalog import SkillDefinition, builtin_definitions
 
 
-_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+_TOKEN_RE = re.compile(r"[a-z0-9가-힣][a-z0-9가-힣-]*")
 _STOPWORDS = {
     "the",
     "and",

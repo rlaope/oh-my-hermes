@@ -18,7 +18,7 @@ This is a Hermes-native `code-review` workflow skill.
 
 Use for review-shaped requests; findings come first and must cite concrete evidence.
 
-    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`
+    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`
 
 ## Catalog Metadata
 

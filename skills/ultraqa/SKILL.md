@@ -18,7 +18,7 @@ This is a Hermes-native `ultraqa` workflow skill.
 
 Use when the task needs adversarial test scenarios, verification, and fix loops.
 
-    Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`
+    Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`, `real-world qa`, `qa scenario`, `release qa`, `장애 상황`, `쿠버네티스 장애`, `적절히 진단`, `검증 체크리스트`, `릴리즈 전 gate`
 
 ## Catalog Metadata
 

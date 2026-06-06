@@ -18,7 +18,7 @@ Router guidance for using oh-my-hermes workflow skills inside Hermes Agent.
 - Quality tier: `routing-gated`
 - Handoff policy: Classify requests into Hermes-retained planning/research/interview lanes or prepared Codex coding handoffs; do not execute code.
 - Use when: Use as the top-level router when a request references oh-my-hermes, installed workflows, or ambiguous workflow routing.
-- Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`
+- Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`, `chat routing`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
 - Quality bar:
   - Route only from explicit invocation, strong catalog evidence, or a clear workflow-shaped request.
   - Return a clarification or fallback path instead of forcing low-confidence messages into a workflow.
@@ -107,7 +107,7 @@ Hermes Deep Interview workflow: one-question-at-a-time clarification.
 - Quality tier: `clarity-gated`
 - Handoff policy: Run directly in Hermes or the chat wrapper; produce a clarified brief before any Codex handoff is prepared.
 - Use when: Use before planning or execution when requirements are materially ambiguous.
-- Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`
+- Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `온보딩`, `부드럽게`, `모호한 제품 요청`, `기획자`, `개발자 사이`
 - Quality bar:
   - Ask exactly one blocking question per turn unless the wrapper explicitly supports a structured batch.
   - Tie each question to a missing decision that changes the plan, handoff, or stop condition.
@@ -198,7 +198,7 @@ Hermes Web Research workflow: source-backed current information gathering.
 - Quality tier: `source-gated`
 - Handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
 - Use when: Use when the user needs current web evidence, links, citations, or source comparison before planning or handoff.
-- Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`
+- Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`, `investigate`, `research plan`, `조사`, `근거`, `출처`, `고객 피드백`
 - Quality bar:
   - Use official or primary sources first when current or external facts matter.
   - Separate direct evidence, inference, confidence, and residual uncertainty.
@@ -228,7 +228,7 @@ Hermes UltraQA workflow: adversarial QA and fix loops.
 - Quality tier: `scenario-gated`
 - Handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become Codex handoffs.
 - Use when: Use when the task needs adversarial test scenarios, verification, and fix loops.
-- Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`
+- Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`, `real-world qa`, `qa scenario`, `release qa`, `장애 상황`, `쿠버네티스 장애`, `적절히 진단`, `검증 체크리스트`, `릴리즈 전 gate`
 - Quality bar:
   - Generate hostile scenarios from changed behavior and known risk areas.
   - Report pass/fail evidence separately from proposed fixes.
@@ -258,7 +258,7 @@ Hermes Plan workflow: structured planning before execution.
 - Quality tier: `acceptance-gated`
 - Handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a Codex handoff after acceptance.
 - Use when: Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
-- Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`
+- Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `답할 차례`, `준비할 차례`, `project template`, `결제 실패`, `결제 실패 이슈`, `재현 계획`, `고객 피드백`, `기능 요청`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `github pr workflow`, `상태와 다음 행동`, `프로젝트별 운영`
 - Quality bar:
   - Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.
   - Keep draft plans unapproved until a user or wrapper accepts them.
@@ -288,7 +288,7 @@ Hermes Ralplan workflow: consensus planning with review gates.
 - Quality tier: `reviewed-plan-gated`
 - Handoff policy: Keep consensus planning and review in Hermes; produce explicit Codex handoff guidance only after the plan is accepted.
 - Use when: Use when requirements are clear enough for planning but architecture, risks, or tests need review.
-- Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`
+- Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `PR로 만들`, `PR로 만들 수 있게`, `검증 command`, `리뷰 가능한 단위`
 - Quality bar:
   - Include a planner view, risk review, and testability check before handoff.
   - Record unresolved tradeoffs and rejected options instead of flattening uncertainty.
@@ -319,7 +319,7 @@ Hermes Code Review workflow: bug-first review with evidence.
 - Quality tier: `finding-evidence-gated`
 - Handoff policy: Hermes may frame and summarize review evidence; fixes or code mutations found during review should be delegated to Codex.
 - Use when: Use for review-shaped requests; findings come first and must cite concrete evidence.
-- Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`
+- Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`
 - Quality bar:
   - Lead with ranked findings grounded in file, diff, command, or artifact evidence.
   - Separate review findings from fix implementation; fixes become executor work.
@@ -349,7 +349,7 @@ Hermes AI slop cleaner workflow: behavior-preserving cleanup.
 - Quality tier: `regression-gated`
 - Handoff policy: Use Hermes to define cleanup scope and regression checks; delegate behavior-preserving edits to Codex once tests are clear.
 - Use when: Use for behavior-preserving cleanup with tests before and after edits.
-- Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`
+- Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `safe refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `위험한 리팩터링`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
 - Quality bar:
   - Lock current behavior with regression checks before non-trivial cleanup.
   - Prefer deletion, reuse, and boundary repair over new abstractions.

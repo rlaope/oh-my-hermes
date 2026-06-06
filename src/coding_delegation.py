@@ -21,6 +21,16 @@ from .skills.catalog import (
 
 SCHEMA_VERSION = "coding_delegation/v1"
 DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
+_RETAINED_HERMES_WORKFLOWS = {
+    "deep-interview",
+    "web-research",
+    "best-practice-research",
+    "autoresearch-goal",
+    "ultraqa",
+    "skill",
+    "wiki",
+    "cancel",
+}
 
 
 @dataclass(frozen=True)
@@ -68,7 +78,7 @@ def build_coding_delegation_payload(
     workflow = str(top["skill"])
     score = int(top["score"])
     intent = _intent_for(message, workflow, score)
-    action = _action_for(intent, score)
+    action = _action_for(intent, score, workflow)
     if action == "fallback":
         workflow = "oh-my-hermes"
     elif action == "clarify":
@@ -175,9 +185,11 @@ def _intent_for(message: str, workflow: str, score: int) -> str:
     return coding_intent_for_skill(workflow)
 
 
-def _action_for(intent: str, score: int) -> str:
+def _action_for(intent: str, score: int, workflow: str) -> str:
     if intent == "unknown":
         return "fallback"
+    if workflow in _RETAINED_HERMES_WORKFLOWS:
+        return "clarify"
     if score < 4:
         return "clarify"
     return "delegate"

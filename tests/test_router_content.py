@@ -391,6 +391,7 @@ class RouterContentTests(unittest.TestCase):
             "## Case 2: Goal, Planning, and Deep Interview Flow",
             "## Case 3: Specialist Harness Flow",
             "## Case 4: Situation Playbook Pipeline",
+            "## Grounded UltraQA Scenario Matrix",
             "## Release Review Checklist",
         ):
             self.assertIn(heading, text)
@@ -404,6 +405,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("evidence ladder", text)
         self.assertIn("omh playbook recommend", text)
         self.assertIn("safe-feature-change", text)
+        self.assertIn("결제 실패 이슈가 자주 나와", text)
+        self.assertIn("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", text)
+        self.assertIn("prepared_not_observed", text)
         self.assertIn("omh docs workflows --json", text)
         self.assertIn("omh probe", text)
 
@@ -419,6 +423,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("source-backed-research", playbooks)
         self.assertIn("not execution evidence", playbooks)
         self.assertIn("Situation playbooks", site)
+        self.assertIn("Grounded operator cases", site)
+        self.assertIn("Payment failures keep showing up", site)
 
     def test_discord_example_uses_wrapper_native_flow(self) -> None:
         text = Path("examples/discord-bot-runtime-flow.md").read_text(encoding="utf-8")
@@ -431,6 +437,19 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh runtime show", text)
         self.assertIn("A prepared handoff is not execution evidence.", text)
         self.assertIn("normal Discord or Slack UX", text)
+
+    def test_chat_wrapper_examples_include_grounded_operator_transcripts(self) -> None:
+        text = Path("docs/CHAT_WRAPPER_EXAMPLES.md").read_text(encoding="utf-8")
+        site_docs = Path("site/docs/index.html").read_text(encoding="utf-8")
+
+        self.assertIn("## Grounded Operator Examples", text)
+        self.assertIn("Startup Product Triage", text)
+        self.assertIn("Real-World QA Check", text)
+        self.assertIn("Product Feature Shaping", text)
+        self.assertIn("Release Evidence Review", text)
+        self.assertIn("No plan or execution has started.", text)
+        self.assertIn('id="operator-cases"', site_docs)
+        self.assertIn("Grounded operator cases", site_docs)
 
     def test_architecture_docs_include_visual_system_view(self) -> None:
         architecture = Path("docs/ARCHITECTURE.md").read_text(encoding="utf-8")

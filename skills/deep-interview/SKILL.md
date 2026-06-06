@@ -18,7 +18,7 @@ This is a Hermes-native `deep-interview` workflow skill.
 
 Use before planning or execution when requirements are materially ambiguous.
 
-    Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`
+    Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `온보딩`, `부드럽게`, `모호한 제품 요청`, `기획자`, `개발자 사이`
 
 ## Catalog Metadata
 

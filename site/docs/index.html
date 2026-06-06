@@ -28,6 +28,7 @@
         <a href="#architecture">Architecture</a>
         <a href="#playbooks">Playbooks</a>
         <a href="#discord-example">Chat example</a>
+        <a href="#operator-cases">Operator cases</a>
         <a href="#contracts">Contracts</a>
         <a href="#delegation">Delegation</a>
         <a href="#quality">Quality gates</a>
@@ -250,6 +251,43 @@ omh playbook recommend "research latest official sources"</code>
           <p>
             This panel is based on the local fixture output from
             <code>uv run python examples/discord-adapter-shim.py</code>.
+          </p>
+        </section>
+
+        <section class="docs-section" id="operator-cases">
+          <h2>Grounded operator cases</h2>
+          <p>
+            The application cases include ten natural-language messages that were
+            actually run through <code>omh chat interact</code>,
+            <code>omh playbook recommend</code>, and
+            <code>omh coding delegate</code>. They lock the intended user
+            experience: route, plan, clarify, QA, review, or handoff preparation
+            without overclaiming execution.
+          </p>
+          <div class="case-grid case-grid--docs" aria-label="Grounded operator case summary">
+            <article class="case-card">
+              <span>Plan first</span>
+              <h3>Payment failures and issue-to-PR requests.</h3>
+              <p>Route to <code>plan</code> or <code>ralplan</code> before Codex handoff.</p>
+            </article>
+            <article class="case-card">
+              <span>Do not code yet</span>
+              <h3>Cloudy QA and onboarding shaping.</h3>
+              <p>Route to <code>ultraqa</code> or <code>deep-interview</code> and keep handoff unavailable.</p>
+            </article>
+            <article class="case-card">
+              <span>Evidence gates</span>
+              <h3>Release trust and AI coding safety audits.</h3>
+              <p>Route to <code>code-review</code> and preserve prepared versus observed status.</p>
+            </article>
+            <article class="case-card">
+              <span>Workflow hub</span>
+              <h3>Personal and agency operating templates.</h3>
+              <p>Use <code>local-pipeline-buildout</code> to standardize repeatable wrapper work.</p>
+            </article>
+          </div>
+          <p>
+            Read the full matrix in <code>docs/APPLICATION_CASES.md</code>.
           </p>
         </section>
 

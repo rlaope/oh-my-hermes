@@ -23,6 +23,17 @@ VISIBLE_ACTIONS = (
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
+_CLARIFICATION_SKILLS = {"deep-interview"}
+_DIRECT_WORKFLOW_SKILLS = {
+    "web-research",
+    "ultraqa",
+    "code-review",
+    "best-practice-research",
+    "autoresearch-goal",
+    "doctor",
+    "skill",
+    "wiki",
+}
 _STATUS_COPY = {
     "prepare_coding_delegation": (
         "handoff",
@@ -220,6 +231,18 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
     action = str(decision.get("action", "fallback"))
     if action == "dispatch":
         selected = str(decision.get("selected_skill", "the selected workflow"))
+        if selected in _CLARIFICATION_SKILLS:
+            return _chat_response(
+                kind="clarification",
+                headline="This needs a clarification workflow before planning.",
+                body="I will ask one blocking question in the same thread before any plan or handoff is treated as ready.",
+                phase="clarifying",
+                next_action="answer_clarification",
+                thread_key=thread_key,
+                actions=[_action("answer:clarify", "Answer clarification", "primary"), _action("cancel", "Cancel", "secondary")],
+                claim_boundary="No plan or execution has started.",
+                extra_state={"route_action": action, "confidence": decision.get("confidence", "low"), "selected_workflow": selected},
+            )
         return _chat_response(
             kind="ack",
             headline="I know which workflow should handle this.",
@@ -432,7 +455,15 @@ def _base_interaction(
 def _resolve_mode(mode: str, route: dict[str, object]) -> str:
     if mode != "auto":
         return mode
-    return _ROUTE_TO_MODE.get(str(route.get("action", "fallback")), "clarify")
+    action = str(route.get("action", "fallback"))
+    if action != "dispatch":
+        return _ROUTE_TO_MODE.get(action, "clarify")
+    selected = str(route.get("selected_skill", ""))
+    if selected in _CLARIFICATION_SKILLS:
+        return "clarify"
+    if selected in _DIRECT_WORKFLOW_SKILLS:
+        return "route"
+    return _ROUTE_TO_MODE.get(action, "plan")
 
 
 def _public_plan_payload(plan_payload: dict[str, object], *, include_message: bool) -> dict[str, object]:

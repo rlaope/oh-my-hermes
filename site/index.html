@@ -226,6 +226,53 @@ omh playbook inspect safe-feature-change</code>
         </div>
       </section>
 
+      <section class="section section--light" id="operator-cases">
+        <div class="section__header">
+          <h2>Grounded operator cases from real local runs.</h2>
+          <p>
+            These examples were run through the deterministic chat contract. They show
+            how Hermes can classify natural messages without making users pick a command
+            or pretending coding already happened.
+          </p>
+        </div>
+        <div class="case-grid" aria-label="Grounded OMH operator cases">
+          <article class="case-card">
+            <span>Startup triage</span>
+            <h3>Payment failures keep showing up.</h3>
+            <p><code>plan</code> creates investigation and reproduction planning before handoff.</p>
+          </article>
+          <article class="case-card">
+            <span>Issue to PR</span>
+            <h3>Turn this issue into a reviewable PR plan.</h3>
+            <p><code>ralplan</code> adds acceptance criteria, risk review, and verification shape.</p>
+          </article>
+          <article class="case-card">
+            <span>Agent QA</span>
+            <h3>Will Cloudy diagnose a Kubernetes incident?</h3>
+            <p><code>ultraqa</code> stays Hermes-retained; no Codex handoff is emitted yet.</p>
+          </article>
+          <article class="case-card">
+            <span>Product shaping</span>
+            <h3>Make onboarding feel smoother.</h3>
+            <p><code>deep-interview</code> asks one blocking question before planning.</p>
+          </article>
+          <article class="case-card">
+            <span>Release trust</span>
+            <h3>Check claims, doctor, harness, review, CI.</h3>
+            <p><code>code-review</code> separates findings from fixes and observed evidence.</p>
+          </article>
+          <article class="case-card">
+            <span>Agency operations</span>
+            <h3>Reuse requirements, research, handoff, QA, release reporting.</h3>
+            <p><code>local-pipeline-buildout</code> frames the recurring wrapper workflow.</p>
+          </article>
+        </div>
+        <p class="case-note">
+          Full tested matrix: <a href="docs/">Documentation</a> and
+          <code>docs/APPLICATION_CASES.md</code>.
+        </p>
+      </section>
+
       <section class="section" id="contracts">
         <div class="band">
           <div>

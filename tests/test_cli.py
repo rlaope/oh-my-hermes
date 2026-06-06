@@ -174,6 +174,71 @@ class CliTests(unittest.TestCase):
         self.assertTrue(response["state"]["coding_delegate_available"])
         self.assertNotIn(message, json.dumps(payload))
 
+    def test_chat_interact_routes_grounded_operator_examples(self) -> None:
+        cases = (
+            ("결제 실패 이슈가 자주 나와", "plan", "plan", "present_plan"),
+            ("이 이슈 PR로 만들 수 있게 정리해줘", "ralplan", "plan", "present_plan"),
+            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa", "ack", "dispatch_to_workflow"),
+            ("이거 위험한 리팩터링 같아", "ai-slop-cleaner", "plan", "present_plan"),
+            ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "ack", "dispatch_to_workflow"),
+            ("온보딩을 더 부드럽게 만들고 싶어", "deep-interview", "clarification", "answer_clarification"),
+            ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "ack", "dispatch_to_workflow"),
+            ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
+            ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
+            ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
+        )
+
+        for message, selected_skill, response_kind, next_action in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["route"]["action"], "dispatch")
+                self.assertEqual(payload["route"]["selected_skill"], selected_skill)
+                self.assertEqual(payload["chat_response"]["kind"], response_kind)
+                self.assertEqual(payload["next_action"], next_action)
+                self.assertNotEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+                self.assertNotIn(message, json.dumps(payload))
+
+    def test_grounded_operator_examples_keep_non_coding_handoffs_conservative(self) -> None:
+        cases = (
+            ("온보딩을 더 부드럽게 만들고 싶어", "clarify", "oh-my-hermes"),
+            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "clarify", "oh-my-hermes"),
+        )
+
+        for message, action, workflow in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["coding", "delegate", "--executor", "codex", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["delegation"]["action"], action)
+                self.assertEqual(payload["delegation"]["recommended_workflow"], workflow)
+                self.assertNotIn("executor_handoff", payload)
+                self.assertNotIn(message, json.dumps(payload))
+
+    def test_playbook_recommend_routes_grounded_operator_examples(self) -> None:
+        cases = (
+            ("결제 실패 이슈가 자주 나와", "safe-feature-change"),
+            ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "release-readiness-review"),
+            ("레거시 서비스를 위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트 순서로 리팩터링하고 싶어", "safe-feature-change"),
+            ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "local-pipeline-buildout"),
+            ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "local-pipeline-buildout"),
+        )
+
+        for message, playbook_id in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["playbook", "recommend", message, "--limit", "1"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendation = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(recommendation["id"], playbook_id)
+                self.assertNotEqual(recommendation["confidence"], "low")
+
     def test_chat_route_can_emit_complete_prompt_for_non_logging_wrappers(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--include-message", "--source", "discord", "risky", "refactor"])
 

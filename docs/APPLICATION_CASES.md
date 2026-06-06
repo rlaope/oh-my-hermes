@@ -285,6 +285,46 @@ Playbooks are deterministic local contracts. They do not post messages,
 authenticate transport bots, launch coding executors, or prove that a later
 stage happened. Runtime status must still come from observed evidence records.
 
+## Grounded UltraQA Scenario Matrix
+
+These scenarios were run through the deterministic local contract, not written
+as aspirational examples. The exact command shape used for each natural
+message was:
+
+```sh
+omh chat interact --source discord "<message>"
+omh playbook recommend "<message>" --limit 1
+omh coding delegate --executor codex --source discord "<message>"
+```
+
+The purpose of the matrix is to keep Hermes users command-agnostic while giving
+wrapper operators a concrete contract result to render.
+
+| Scenario | User message tested | Chat route | Playbook | Coding handoff behavior |
+| --- | --- | --- | --- | --- |
+| Startup SaaS product triage | `결제 실패 이슈가 자주 나와` | `plan` / `present_plan` | `safe-feature-change` | Codex handoff can be prepared after plan acceptance. |
+| OSS issue-to-PR preparation | `이 이슈 PR로 만들 수 있게 정리해줘` | `ralplan` / `present_plan` | `safe-feature-change` | Handoff includes reviewed-plan expectations and verification criteria. |
+| AI agent product QA | `쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?` | `ultraqa` / `dispatch_to_workflow` | `release-readiness-review` | No Codex handoff is emitted from `coding delegate`; QA stays Hermes-retained until code work is accepted. |
+| Discord dev-team routing | `이거 위험한 리팩터링 같아` | `ai-slop-cleaner` / `present_plan` | `safe-feature-change` | Codex handoff can be prepared for behavior-preserving cleanup after the safe plan. |
+| AI coding safety audit | `AI가 했다고 했는데 실제로 뭐 했는지 모르겠다` | `code-review` / `dispatch_to_workflow` | `release-readiness-review` | Review/fix handoff is separate from observed execution, verification, CI, and merge evidence. |
+| Product feature shaping | `온보딩을 더 부드럽게 만들고 싶어` | `deep-interview` / `answer_clarification` | `deep-interview-to-plan` | No Codex handoff is emitted; Hermes asks one blocking question before planning. |
+| Release gate review | `릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘` | `code-review` / `dispatch_to_workflow` | `release-readiness-review` | Fixes remain executor work; review and validation evidence must be observed separately. |
+| Repeated refactor workflow | `레거시 서비스를 위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트 순서로 리팩터링하고 싶어` | `ai-slop-cleaner` / `present_plan` | `safe-feature-change` | Prepared cleanup handoff names scope, tests, review, and regression expectations. |
+| Personal multi-agent work hub | `지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘` | `plan` / `present_plan` | `local-pipeline-buildout` | The wrapper can plan the hub contract before any coding executor is needed. |
+| Consulting/agency operating template | `고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해` | `plan` / `present_plan` | `local-pipeline-buildout` | Handoff is available only after the operator accepts the recurring workflow plan. |
+
+User-facing effect:
+
+- The chat user does not need to decide whether the request is a bug,
+  investigation, implementation, release gate, QA scenario, or product shaping
+  task.
+- Hermes can say why the next step is plan, deep interview, QA, review, or
+  handoff preparation without pretending implementation already happened.
+- Wrappers can render buttons and status from `chat_response.actions`,
+  `next_action`, and `claim_boundary`.
+- `prepared_not_observed` remains explicit until dispatch, executor result,
+  verification, review, CI, or merge readiness evidence is actually recorded.
+
 ## Release Review Checklist
 
 Before using these cases as public release evidence, verify:
