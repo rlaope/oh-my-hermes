@@ -54,22 +54,22 @@ fi
 say "Installing oh-my-hermes-agent from $OMH_CHANNEL channel..."
 "$OMH_PYTHON" -m pip install $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
 
-say "Installing managed Hermes skills..."
-run_omh install
+set -- setup --channel "$OMH_CHANNEL" --package-url "$OMH_PACKAGE_URL"
 
 if [ "$OMH_AUTO_APPLY" = "0" ]; then
-  say "Skipped Hermes config registration because OMH_AUTO_APPLY=0."
-else
-  say "Registering managed skill directory with Hermes..."
-  run_omh apply
+  set -- "$@" --skip-apply
 fi
 
 if [ "$OMH_RUN_DOCTOR" = "0" ]; then
-  say "Skipped doctor check because OMH_RUN_DOCTOR=0."
-else
-  say "Verifying installation..."
-  run_omh doctor
+  set -- "$@" --skip-doctor
 fi
+
+if [ -n "$OMH_VERSION" ]; then
+  set -- "$@" --version "$OMH_VERSION"
+fi
+
+say "Setting up managed Hermes skills..."
+run_omh "$@"
 
 say "oh-my-hermes-agent is installed."
 say "Run 'omh list' to inspect installed skills."

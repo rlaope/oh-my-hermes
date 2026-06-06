@@ -92,6 +92,11 @@ def _print_json(data: object) -> None:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
+    _print_json(_install_result(args))
+    return 0
+
+
+def _install_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
     try:
         release = package_url_for(args.channel, args.version or "", args.package_url or "")
@@ -119,8 +124,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 "skills_dir": str(paths.skills_dir),
             },
         )
-    _print_json(result)
-    return 0
+    return result
 
 
 def cmd_update(args: argparse.Namespace) -> int:
@@ -136,6 +140,11 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
+    _print_json(_apply_result(args))
+    return 0
+
+
+def _apply_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
     current = read_config(paths.hermes_config_path)
     try:
@@ -153,8 +162,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 "external_dir_registered": str(paths.skills_dir) in read_config(paths.hermes_config_path),
             },
         )
-    _print_json({"changed": change.changed, "message": change.message, "config": str(paths.hermes_config_path), "skills_dir": str(paths.skills_dir), "dry_run": args.dry_run})
-    return 0
+    return {"changed": change.changed, "message": change.message, "config": str(paths.hermes_config_path), "skills_dir": str(paths.skills_dir), "dry_run": args.dry_run}
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
@@ -179,6 +187,12 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
+    payload = _doctor_result(args)
+    _print_json(payload)
+    return 0 if payload["ok"] else 1
+
+
+def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
     checks = run_doctor(paths)
     runtime_writable = any(check.name == "runtime_artifacts" and check.ok for check in checks)
@@ -193,8 +207,38 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 }
             },
         )
-    _print_json({"ok": doctor_ok(checks), "checks": [check.__dict__ for check in checks]})
-    return 0 if doctor_ok(checks) else 1
+    return {"ok": doctor_ok(checks), "checks": [check.__dict__ for check in checks]}
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    steps: dict[str, object] = {"install": _install_result(args)}
+    if args.skip_apply:
+        steps["apply"] = {"skipped": True, "message": "Skipped Hermes config registration because --skip-apply was set."}
+    else:
+        steps["apply"] = _apply_result(args)
+
+    if args.skip_doctor:
+        doctor_payload: dict[str, object] = {"ok": True, "skipped": True, "message": "Skipped doctor check because --skip-doctor was set."}
+    elif args.dry_run:
+        doctor_payload = {"ok": True, "skipped": True, "message": "Skipped doctor check because setup --dry-run does not write install artifacts."}
+    else:
+        doctor_payload = _doctor_result(args)
+    steps["doctor"] = doctor_payload
+
+    ok = bool(doctor_payload["ok"])
+    if not args.dry_run:
+        update_state(
+            _paths(args),
+            {
+                "last_setup": {
+                    "ok": ok,
+                    "apply_skipped": bool(args.skip_apply),
+                    "doctor_skipped": bool(args.skip_doctor),
+                }
+            },
+        )
+    _print_json({"ok": ok, "steps": steps, "dry_run": args.dry_run})
+    return 0 if ok else 1
 
 
 def cmd_recommend(args: argparse.Namespace) -> int:
@@ -945,6 +989,12 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
 
 
 def _add_top_level_commands(sub) -> None:
+    setup = sub.add_parser("setup")
+    _add_common_install_options(setup)
+    setup.add_argument("--skip-apply", action="store_true", help="Install skills without registering them in Hermes config.")
+    setup.add_argument("--skip-doctor", action="store_true", help="Skip the final doctor check.")
+    setup.set_defaults(func=cmd_setup)
+
     install = sub.add_parser("install")
     _add_common_install_options(install)
     install.set_defaults(func=cmd_install)

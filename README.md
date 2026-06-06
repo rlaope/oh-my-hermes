@@ -48,7 +48,7 @@ delegate coding, or report status.
 | Surface | What it provides |
 | --- | --- |
 | Managed skills | Generated Hermes skill guidance under `~/.omh/skills`. |
-| Local installer | Reversible install, update, apply, doctor, and uninstall commands. |
+| Local installer | Reversible setup, install, update, apply, doctor, and uninstall commands. |
 | Skill catalog | Deterministic routing metadata from `src/skills/catalog.py`. |
 | Playbooks | Situation-level pipelines for research, planning, wrapper UX, and coding handoff flows. |
 | Harness quality | Machine-readable quality bars, evidence ladders, wrapper actions, and overclaim guards. |
@@ -65,12 +65,13 @@ delegate coding, or report status.
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
 ```
 
-**Step 2: Verify**
+**Step 2: Set Up OMH**
 
-Most users should start with one health check:
+The installer runs setup automatically. Re-run it any time you want to reinstall
+managed skills, reapply Hermes config, and verify the result:
 
 ```sh
-omh doctor
+omh setup
 ```
 
 Then open Hermes Agent and use the installed skills through Hermes' normal skill
@@ -121,8 +122,7 @@ exists.
 
 ```sh
 omh update
-omh apply
-omh doctor
+omh setup
 ```
 
 ## Mental Model
@@ -175,7 +175,7 @@ status card data when present.
 
 `omh` records runtime metadata only by default:
 
-- install/apply/doctor summaries in `~/.omh/runtime/state.json`
+- setup/install/apply/doctor summaries in `~/.omh/runtime/state.json`
 - workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
 - append-only run events in `events.jsonl`
 - wrapper chat sessions in `~/.omh/runtime/wrapper_sessions/<session-id>/`
@@ -241,8 +241,9 @@ instead of presented as the first path.
 | Need | Command |
 | --- | --- |
 | Install | `curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh \| sh` |
-| Verify | `omh doctor` |
-| Update | `omh update && omh apply && omh doctor` |
+| Set up or repair | `omh setup` |
+| Verify only | `omh doctor` |
+| Update | `omh update && omh setup` |
 | Inspect installed skills | `omh list` |
 | Pick a workflow locally | `omh recommend <task>` |
 | Pick a situation pipeline | `omh playbook recommend <task>` |
@@ -293,7 +294,7 @@ python3 -m omh.cli harness validate
 Smoke-test the installer without touching real home directories:
 
 ```sh
-python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run
 ```
 
 ## Roadmap
