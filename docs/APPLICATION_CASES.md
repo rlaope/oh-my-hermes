@@ -255,6 +255,11 @@ The playbook layer picks a situation-level path above individual skills:
 
 - `safe-feature-change` for plan-first coding handoff
 - `source-backed-research` for Hermes-owned research
+- `research-to-strategy-brief` for evidence into strategy and meeting topics
+- `meeting-prep-to-record` for agendas, discussion prompts, and record templates
+- `feedback-triage` for customer signals before roadmap or coding work
+- `weekly-ops-review` for status, risks, blockers, priorities, and follow-ups
+- `market-scan-to-strategy` for competitor evidence into strategic options
 - `deep-interview-to-plan` for ambiguity reduction
 - `local-pipeline-buildout` for repeatable wrapper process design
 - `release-readiness-review` for review, QA, CI, and merge-readiness status
@@ -285,6 +290,76 @@ Playbooks are deterministic local contracts. They do not post messages,
 authenticate transport bots, launch coding executors, or prove that a later
 stage happened. Runtime status must still come from observed evidence records.
 
+## Case 5: Company Workflows Without CLI Knowledge
+
+### Setup
+
+Install OMH once through the same Hermes-visible skill path:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+omh setup
+```
+
+Normal users should then talk to Hermes, not manually run `omh recommend` or
+`omh playbook recommend`.
+
+### User Prompt Shape
+
+Use this flow for non-coding company work such as:
+
+- customer feedback triage
+- business or market research
+- strategy memo preparation
+- meeting agenda and record preparation
+- weekly operating review
+
+Example prompts:
+
+```text
+결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘
+prepare weekly ops review from customer feedback and release risks
+we need a competitor market scan and strategy memo for next week's leadership meeting
+```
+
+### Expected Hermes-Facing Behavior
+
+Hermes should use the business workflow skills:
+
+- `research-brief` for source-scoped business research
+- `strategy-brief` for options, tradeoffs, and decision notes
+- `meeting-brief` for agenda, prompts, decisions needed, and record templates
+- `feedback-triage` for customer signal clustering and next-workflow routing
+- `ops-review` for evidence-bound status, risks, blockers, and follow-ups
+
+These skills stay Hermes-retained by default. They should not create Codex
+handoffs, product roadmaps, release claims, or meeting outcomes unless a later
+accepted artifact provides the missing evidence.
+
+### Verification
+
+Wrapper operators can inspect the deterministic backend contract:
+
+```sh
+omh chat interact --source discord "결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘"
+omh coding delegate --executor codex --source discord "prepare weekly ops review from customer feedback and release risks"
+```
+
+Expected behavior:
+
+- chat interaction routes to a business workflow such as `feedback-triage` or
+  `ops-review`
+- coding delegation does not emit `executor_handoff`
+- harness quality uses `customer-insight-triage`, `ops-review`,
+  `strategy-synthesis`, `meeting-facilitation`, or `business-research` rather
+  than `coding-handling`
+
+### Current Limit
+
+OMH does not fetch company data, read private feedback systems, or post to
+Discord/Slack by itself. A wrapper or Hermes environment must supply observed
+source evidence before Hermes can claim data was actually reviewed.
+
 ## Grounded UltraQA Scenario Matrix
 
 These scenarios were run through the deterministic local contract, not written
@@ -302,7 +377,7 @@ wrapper operators a concrete contract result to render.
 
 | Scenario | User message tested | Chat route | Playbook | Coding handoff behavior |
 | --- | --- | --- | --- | --- |
-| Startup SaaS product triage | `결제 실패 이슈가 자주 나와` | `plan` / `present_plan` | `safe-feature-change` | Codex handoff can be prepared after plan acceptance. |
+| Startup SaaS product triage | `결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘` | `feedback-triage` / `dispatch_to_workflow` | `feedback-triage` | No Codex handoff is emitted by default; Hermes classifies feedback and recommends the next workflow. |
 | OSS issue-to-PR preparation | `이 이슈 PR로 만들 수 있게 정리해줘` | `ralplan` / `present_plan` | `safe-feature-change` | Handoff includes reviewed-plan expectations and verification criteria. |
 | AI agent product QA | `쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?` | `ultraqa` / `dispatch_to_workflow` | `release-readiness-review` | No Codex handoff is emitted from `coding delegate`; QA stays Hermes-retained until code work is accepted. |
 | Discord dev-team routing | `이거 위험한 리팩터링 같아` | `ai-slop-cleaner` / `present_plan` | `safe-feature-change` | Codex handoff can be prepared for behavior-preserving cleanup after the safe plan. |
@@ -340,9 +415,9 @@ Before using these cases as public release evidence, verify:
 - `omh docs workflows --json` exposes `harness_quality/v1` style quality data
   for wrapper rendering and status decisions.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
-  source-backed research, deep interview to plan, local pipeline buildout, and
-  release-readiness review.
-- The four cases above match actual generated skill and playbook behavior.
+  source-backed research, research-to-strategy briefs, meeting prep, feedback
+  triage, ops review, local pipeline buildout, and release-readiness review.
+- The grounded cases above match actual generated skill and playbook behavior.
 - Runtime-backed cases above can create `.omh/runtime/runs/<run-id>/`
   artifacts.
 - `delegation.json` separates requested delegation from observed delegation.

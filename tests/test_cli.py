@@ -60,6 +60,38 @@ class CliTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
         self.assertIn("source-backed", recommendations[0]["description"].lower())
 
+    def test_recommend_business_workflows_stay_hermes_owned(self) -> None:
+        cases = (
+            (
+                "Find customer feedback trends and prepare a meeting agenda for product strategy",
+                {"feedback-triage", "meeting-brief", "research-brief", "strategy-brief"},
+                "coding handoff",
+            ),
+            (
+                "prepare weekly ops review from customer feedback and release risks",
+                {"ops-review"},
+                "not implementation",
+            ),
+            (
+                "we need a competitor market scan and strategy memo for next week's leadership meeting",
+                {"strategy-brief", "research-brief"},
+                "not an accepted decision",
+            ),
+        )
+
+        for message, expected_top_names, boundary_fragment in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "5"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertIn(recommendations[0]["skill"], expected_top_names)
+                self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
+                self.assertIn(boundary_fragment, recommendations[0]["evidence_boundary"].lower())
+                self.assertNotEqual(recommendations[0]["skill"], "code-review")
+                self.assertNotEqual(recommendations[0]["skill"], "ai-slop-cleaner")
+
     def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
 
@@ -95,6 +127,11 @@ class CliTests(unittest.TestCase):
         playbooks = {playbook["id"]: playbook for playbook in payload["playbooks"]}
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
+        self.assertIn("research-to-strategy-brief", playbooks)
+        self.assertIn("meeting-prep-to-record", playbooks)
+        self.assertIn("feedback-triage", playbooks)
+        self.assertIn("weekly-ops-review", playbooks)
+        self.assertIn("market-scan-to-strategy", playbooks)
         self.assertIn("local-pipeline-buildout", playbooks)
         self.assertIn("prepare_handoff", playbooks["safe-feature-change"]["pipeline"])
         self.assertIn("status_card", playbooks["safe-feature-change"]["pipeline"])
@@ -141,6 +178,38 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(recommendation_ids[0], "source-backed-research")
                 self.assertNotEqual(recommendation_ids[0], "release-readiness-review")
 
+    def test_playbook_recommend_routes_business_workflows_without_coding_defaults(self) -> None:
+        cases = (
+            (
+                "Find customer feedback trends and prepare a meeting agenda for product strategy",
+                {"research-to-strategy-brief", "feedback-triage", "meeting-prep-to-record"},
+            ),
+            (
+                "결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘",
+                {"feedback-triage"},
+            ),
+            (
+                "prepare weekly ops review from customer feedback and release risks",
+                {"weekly-ops-review"},
+            ),
+            (
+                "we need a competitor market scan and strategy memo for next week's leadership meeting",
+                {"market-scan-to-strategy", "research-to-strategy-brief"},
+            ),
+        )
+
+        for message, expected_ids in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["playbook", "recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertIn(recommendations[0]["id"], expected_ids)
+                self.assertEqual(recommendations[0]["delegated_to_executor"], [])
+                self.assertNotEqual(recommendations[0]["id"], "safe-feature-change")
+                self.assertNotEqual(recommendations[0]["id"], "release-readiness-review")
+
     def test_chat_route_dispatches_plain_chat_message(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "risky", "refactor"])
 
@@ -186,6 +255,9 @@ class CliTests(unittest.TestCase):
             ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
+            ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "ack", "dispatch_to_workflow"),
+            ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ack", "dispatch_to_workflow"),
+            ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "ack", "dispatch_to_workflow"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:
@@ -204,8 +276,13 @@ class CliTests(unittest.TestCase):
 
     def test_grounded_operator_examples_keep_non_coding_handoffs_conservative(self) -> None:
         cases = (
-            ("온보딩을 더 부드럽게 만들고 싶어", "clarify", "oh-my-hermes"),
-            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "clarify", "oh-my-hermes"),
+            ("prepare a source-backed business research brief for market evidence", "clarify", "research-brief"),
+            ("prepare a meeting agenda and record template for leadership sync", "clarify", "meeting-brief"),
+            ("온보딩을 더 부드럽게 만들고 싶어", "clarify", "deep-interview"),
+            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "clarify", "ultraqa"),
+            ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "clarify", "feedback-triage"),
+            ("prepare weekly ops review from customer feedback and release risks", "clarify", "ops-review"),
+            ("we need a competitor market scan and strategy memo for next week's leadership meeting", "clarify", "strategy-brief"),
         )
 
         for message, action, workflow in cases:
@@ -217,7 +294,12 @@ class CliTests(unittest.TestCase):
                 payload = json.loads(stdout)
                 self.assertEqual(payload["delegation"]["action"], action)
                 self.assertEqual(payload["delegation"]["recommended_workflow"], workflow)
+                if workflow in {"research-brief", "meeting-brief", "feedback-triage", "ops-review", "strategy-brief"}:
+                    self.assertEqual(payload["delegation"]["intent"], "planning")
+                self.assertFalse(payload["delegation"]["review_required"])
+                self.assertIsNone(payload["delegation"]["review_workflow"])
                 self.assertNotIn("executor_handoff", payload)
+                self.assertNotEqual(payload["delegation"]["recommended_harness"], "coding-handling")
                 self.assertNotIn(message, json.dumps(payload))
 
     def test_playbook_recommend_routes_grounded_operator_examples(self) -> None:
@@ -1652,8 +1734,8 @@ class CliTests(unittest.TestCase):
             checked = json.loads(stdout)
             self.assertIn("checked", checked)
             self.assertTrue(checked["tap_skills"]["ok"])
-            self.assertEqual(checked["tap_skills"]["expected"], 20)
-            self.assertEqual(checked["tap_skills"]["checked"], 20)
+            self.assertEqual(checked["tap_skills"]["expected"], 25)
+            self.assertEqual(checked["tap_skills"]["checked"], 25)
             self.assertEqual(checked["tap_skills"]["missing"], [])
             self.assertEqual(checked["tap_skills"]["stale"], [])
             self.assertEqual(checked["tap_skills"]["extra"], [])
@@ -1674,6 +1756,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(harnesses["coding-handling"]["quality_tier"], "handoff-gated")
         self.assertIn("coding_delegation_prepared", harnesses["coding-handling"]["evidence_ladder"])
         self.assertIn("send_to_codex", harnesses["coding-handling"]["wrapper_actions"])
+        self.assertEqual(harnesses["customer-insight-triage"]["quality_tier"], "triage-gated")
+        self.assertIn("next_workflow_recommended", harnesses["customer-insight-triage"]["evidence_ladder"])
+        self.assertEqual(harnesses["ops-review"]["quality_tier"], "status-gated")
         quality = harnesses["coding-handling"]["harness_quality"]
         self.assertEqual(quality["schema_version"], "harness_quality/v1")
         self.assertEqual(quality["harness"], "coding-handling")
@@ -1693,8 +1778,14 @@ class CliTests(unittest.TestCase):
         self.assertTrue(listed["validation"]["ok"])
         harnesses = {harness["name"]: harness for harness in listed["harnesses"]}
         self.assertIn("deep-interview", harnesses)
+        self.assertIn("business-research", harnesses)
+        self.assertIn("strategy-synthesis", harnesses)
+        self.assertIn("meeting-facilitation", harnesses)
+        self.assertIn("customer-insight-triage", harnesses)
+        self.assertIn("ops-review", harnesses)
         self.assertIn("blocking_question_asked", harnesses["deep-interview"]["evidence_ladder"])
         self.assertIn("ralplan", harnesses["planning"]["primary_skills"])
+        self.assertIn("feedback-triage", harnesses["customer-insight-triage"]["primary_skills"])
 
         status, stdout, stderr = run_cli(["harness", "inspect", "research"])
         self.assertEqual(stderr, "")

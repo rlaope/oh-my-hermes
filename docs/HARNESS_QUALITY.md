@@ -13,6 +13,12 @@ state:
 
 - "I need one answer before planning" for clarification lanes.
 - "A draft plan is ready to accept or revise" for planning lanes.
+- "Feedback is clustered, but no roadmap or coding handoff exists yet" for
+  customer triage lanes.
+- "A meeting agenda is prepared, but the meeting outcome is not observed yet"
+  for meeting lanes.
+- "An ops review names risks and blockers, but it is not CI or release
+  evidence" for operating review lanes.
 - "A coding handoff is prepared, but execution is not observed yet" for coding
   lanes.
 - "Review or CI is still missing" before merge-ready status is shown.
@@ -85,3 +91,11 @@ contract shaped like this:
 
 See `examples/wrapper-golden/harness-quality.json` for deterministic examples
 covering coding handoff, planning, research, and clarification lanes.
+
+The business workflow pack adds non-coding harnesses such as
+`business-research`, `strategy-synthesis`, `meeting-facilitation`,
+`customer-insight-triage`, and `ops-review`. These give wrappers the same
+evidence discipline for company work: research briefs are not fetched data,
+strategy briefs are not accepted decisions, meeting briefs are not meeting
+minutes, feedback triage is not a roadmap, and ops review is not release or CI
+evidence.

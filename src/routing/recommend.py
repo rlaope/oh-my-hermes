@@ -198,6 +198,14 @@ def _next_action(definition: SkillDefinition) -> str:
         return "ask_clarification"
     if definition.category == "research":
         return "run_hermes_research"
+    if definition.category == "strategy":
+        return "prepare_strategy_brief"
+    if definition.category == "meeting":
+        return "prepare_meeting_brief"
+    if definition.category == "triage":
+        return "triage_feedback"
+    if definition.category == "operations":
+        return "prepare_ops_review"
     if definition.category == "review":
         return "prepare_review_or_followup_handoff"
     if definition.hermes_role == "codex-handoff-guidance":
@@ -216,6 +224,14 @@ def _evidence_boundary(definition: SkillDefinition) -> str:
         return "A clarification question is not routing, planning, or execution evidence."
     if definition.category == "research":
         return "Research guidance is not implementation or verification evidence."
+    if definition.category == "strategy":
+        return "A strategy brief is not an accepted decision or implementation evidence."
+    if definition.category == "meeting":
+        return "A meeting brief is not evidence that a meeting happened or decisions were accepted."
+    if definition.category == "triage":
+        return "Feedback triage is not a roadmap, implementation plan, or coding handoff by default."
+    if definition.category == "operations":
+        return "An ops review is not implementation, release, CI, review, or merge evidence."
     if definition.category == "review":
         return "A review recommendation is not a completed review or fix evidence."
     if definition.hermes_role == "codex-handoff-guidance":
@@ -233,6 +249,14 @@ def _wrapper_guidance(definition: SkillDefinition) -> str:
         return "Ask one blocking question in the same thread before selecting a workflow."
     if next_action == "run_hermes_research":
         return "Keep this in Hermes as source-backed research and summarize evidence before any later handoff."
+    if next_action == "prepare_strategy_brief":
+        return "Prepare options, tradeoffs, and decision notes in Hermes; keep implementation handoff disabled until a decision creates explicit code work."
+    if next_action == "prepare_meeting_brief":
+        return "Prepare agenda, prompts, and a record template in Hermes; do not treat preparation as observed meeting outcomes."
+    if next_action == "triage_feedback":
+        return "Cluster feedback and recommend the next workflow; do not create a coding handoff unless code work is explicit."
+    if next_action == "prepare_ops_review":
+        return "Summarize observed status, risks, blockers, and follow-ups; keep unknowns explicit."
     if next_action == "prepare_review_or_followup_handoff":
         return "Surface findings separately from any code changes; fixes need their own executor evidence."
     if next_action == "prepare_coding_handoff":

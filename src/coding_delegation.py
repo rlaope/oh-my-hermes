@@ -21,9 +21,17 @@ from .skills.catalog import (
 
 SCHEMA_VERSION = "coding_delegation/v1"
 DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
+_BUSINESS_RETAINED_WORKFLOWS = {
+    "research-brief",
+    "strategy-brief",
+    "meeting-brief",
+    "feedback-triage",
+    "ops-review",
+}
 _RETAINED_HERMES_WORKFLOWS = {
     "deep-interview",
     "web-research",
+    *_BUSINESS_RETAINED_WORKFLOWS,
     "best-practice-research",
     "autoresearch-goal",
     "ultraqa",
@@ -81,7 +89,7 @@ def build_coding_delegation_payload(
     action = _action_for(intent, score, workflow)
     if action == "fallback":
         workflow = "oh-my-hermes"
-    elif action == "clarify":
+    elif action == "clarify" and workflow not in _RETAINED_HERMES_WORKFLOWS:
         workflow = "oh-my-hermes"
     harness = primary_harness_for_skill(workflow)
     review_required = _review_required(message, intent, workflow)
@@ -178,6 +186,8 @@ def coding_delegation_record_payload(
 def _intent_for(message: str, workflow: str, score: int) -> str:
     if score == 0:
         return "unknown"
+    if workflow in _BUSINESS_RETAINED_WORKFLOWS:
+        return coding_intent_for_skill(workflow)
     lowered = message.lower()
     for intent in CODING_INTENT_PRIORITY:
         if workflow in coding_skills_for_intent(intent) or _has_any(lowered, coding_terms_for_intent(intent)):
@@ -197,6 +207,8 @@ def _action_for(intent: str, score: int, workflow: str) -> str:
 
 def _review_required(message: str, intent: str, workflow: str) -> bool:
     lowered = message.lower()
+    if workflow in _RETAINED_HERMES_WORKFLOWS:
+        return False
     if workflow == "code-review" or intent == "review":
         return True
     return _has_any(lowered, CODING_REVIEW_TERMS)
@@ -399,6 +411,17 @@ def _delegation_prompt_template(action: str, intent: str, workflow: str, harness
             "Ask one concise clarification question for this task:\n{message}"
         )
     if action == "clarify":
+        if workflow in _RETAINED_HERMES_WORKFLOWS:
+            return (
+                "Keep this {workflow_label} request in Hermes before any executor dispatch.\n\n"
+                "Candidate workflow: `{workflow}` / `{harness}`.\n\n"
+                "Task:\n{message}"
+            ).format(
+                workflow_label=workflow.replace("-", " "),
+                workflow=workflow,
+                harness=harness,
+                message="{message}",
+            )
         return (
             "Clarify this {intent} request before executor dispatch.\n\n"
             "Candidate workflow: `{workflow}` / `{harness}`.\n\n"

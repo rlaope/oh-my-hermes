@@ -43,6 +43,11 @@ class RouterContentTests(unittest.TestCase):
             "ultrawork",
             "deep-interview",
             "web-research",
+            "research-brief",
+            "strategy-brief",
+            "meeting-brief",
+            "feedback-triage",
+            "ops-review",
             "team",
             "ultraqa",
             "plan",
@@ -71,6 +76,11 @@ class RouterContentTests(unittest.TestCase):
                 "goal-execution",
                 "planning",
                 "research",
+                "business-research",
+                "strategy-synthesis",
+                "meeting-facilitation",
+                "customer-insight-triage",
+                "ops-review",
                 "deep-interview",
                 "architect",
                 "critic",
@@ -118,6 +128,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "codex-handoff-guidance")
         self.assertIn("Codex", definitions["ultrawork"].handoff_policy)
         self.assertEqual(primary_harness_for_skill("web-research"), "research")
+        self.assertEqual(primary_harness_for_skill("research-brief"), "business-research")
+        self.assertEqual(primary_harness_for_skill("strategy-brief"), "strategy-synthesis")
+        self.assertEqual(primary_harness_for_skill("meeting-brief"), "meeting-facilitation")
+        self.assertEqual(primary_harness_for_skill("feedback-triage"), "customer-insight-triage")
+        self.assertEqual(primary_harness_for_skill("ops-review"), "ops-review")
         self.assertEqual(primary_harness_for_skill("best-practice-research"), "research")
         self.assertEqual(primary_harness_for_skill("autoresearch-goal"), "research")
 
@@ -391,6 +406,7 @@ class RouterContentTests(unittest.TestCase):
             "## Case 2: Goal, Planning, and Deep Interview Flow",
             "## Case 3: Specialist Harness Flow",
             "## Case 4: Situation Playbook Pipeline",
+            "## Case 5: Company Workflows Without CLI Knowledge",
             "## Grounded UltraQA Scenario Matrix",
             "## Release Review Checklist",
         ):
@@ -399,13 +415,30 @@ class RouterContentTests(unittest.TestCase):
         for section in ("### Setup", "### User Prompt Shape", "### Expected Hermes-Facing Behavior", "### Verification", "### Current Limit"):
             self.assertIn(section, text)
 
-        for harness in ("coding-handling", "goal-execution", "planning", "research", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
+        for harness in (
+            "coding-handling",
+            "goal-execution",
+            "planning",
+            "research",
+            "deep-interview",
+            "architect",
+            "critic",
+            "qa-specialist",
+            "docs-specialist",
+            "customer-insight-triage",
+            "ops-review",
+            "strategy-synthesis",
+            "meeting-facilitation",
+            "business-research",
+        ):
             self.assertIn(harness, text)
         self.assertIn("quality tier", text)
         self.assertIn("evidence ladder", text)
         self.assertIn("omh playbook recommend", text)
         self.assertIn("safe-feature-change", text)
-        self.assertIn("결제 실패 이슈가 자주 나와", text)
+        self.assertIn("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", text)
+        self.assertIn("feedback-triage", text)
+        self.assertIn("prepare weekly ops review from customer feedback and release risks", text)
         self.assertIn("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", text)
         self.assertIn("prepared_not_observed", text)
         self.assertIn("omh docs workflows --json", text)

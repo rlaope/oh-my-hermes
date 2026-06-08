@@ -26,6 +26,11 @@ _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify
 _CLARIFICATION_SKILLS = {"deep-interview"}
 _DIRECT_WORKFLOW_SKILLS = {
     "web-research",
+    "research-brief",
+    "strategy-brief",
+    "meeting-brief",
+    "feedback-triage",
+    "ops-review",
     "ultraqa",
     "code-review",
     "best-practice-research",

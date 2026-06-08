@@ -41,7 +41,8 @@
           <h1>Use OMH as a local contract layer for Hermes.</h1>
           <p>
             OMH gives Hermes installed skill guidance for turning natural language into deterministic
-            routing, clarification, planning, status narration, or Codex-ready coding handoffs.
+            routing, clarification, research briefs, feedback triage, meeting prep,
+            strategy planning, status narration, or Codex-ready coding handoffs.
             Local backend contracts and schema-versioned artifacts support wrappers and operators
             without becoming the normal user UX. Operators can optionally add a thin
             plugin bridge for metadata-only status context.
@@ -88,7 +89,7 @@ hermes skills install oh-my-hermes</code>
             Wrappers own platform-specific work: Discord or Slack auth, incoming events,
             buttons, threads, edits, and notifications. Hermes owns the chat experience;
             OMH owns the deterministic backend response contract when a wrapper needs
-            renderable state.
+            renderable state for business workflows, planning, status, or handoff UX.
           </p>
           <div class="command" role="region" aria-label="Chat interaction command" tabindex="0">
             <code>omh chat interact --source discord "risky refactor"
@@ -96,7 +97,8 @@ omh chat interact --source slack "diagnose installation health"</code>
           </div>
           <p>
             These are adapter backend calls. A response can be an answer, a clarification
-            request, a plan, a status card, or a prepared handoff. The wrapper should render
+            request, a research or strategy brief, a feedback triage result, a meeting
+            prep artifact, a plan, a status card, or a prepared handoff. The wrapper should render
             that response natively instead of
             asking users to memorize CLI commands.
           </p>
@@ -196,13 +198,14 @@ uv run python examples/slack-adapter-shim.py</code>
           <p>
             Playbooks sit above individual skills. Hermes users should not run them directly;
             wrappers and maintainers can inspect situation-level
-            pipelines for source-backed research, deep interview to plan, safe
-            coding handoff, local pipeline buildout, and release-readiness review.
+            pipelines for source-backed research, research-to-strategy briefs,
+            meeting prep, feedback triage, weekly ops review, deep interview to plan,
+            safe coding handoff, local pipeline buildout, and release-readiness review.
           </p>
           <div class="command" role="region" aria-label="Playbook commands" tabindex="0">
             <code>omh playbook list
 omh playbook inspect safe-feature-change
-omh playbook recommend "research latest official sources"</code>
+omh playbook recommend "prepare weekly ops review from customer feedback and release risks"</code>
           </div>
           <p>
             Use playbooks when wrappers need to know which stages stay with
