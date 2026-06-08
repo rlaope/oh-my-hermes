@@ -19,7 +19,7 @@
     </header>
 
     <main>
-      <section class="hero">
+      <section class="hero hero--kinetic">
         <div class="hero__content">
           <p class="eyebrow">Hermes-native workflow orchestration</p>
           <h1>OMH</h1>
@@ -46,6 +46,57 @@ omh setup</code>
           <div class="actions" aria-label="Primary actions">
             <a class="button button--primary" href="docs/">Read docs</a>
             <a class="button" href="https://github.com/rlaope/oh-my-hermes-agent">GitHub</a>
+          </div>
+        </div>
+        <div class="hero-stage" aria-hidden="true">
+          <div class="stage-grid"></div>
+          <div class="workflow-console">
+            <div class="console-top">
+              <span></span>
+              <span></span>
+              <span></span>
+              <strong>Hermes Agent</strong>
+            </div>
+            <div class="console-screen">
+              <div class="scan-line"></div>
+              <div class="console-route console-route--active">
+                <span>natural message</span>
+                <strong>request-to-handoff</strong>
+              </div>
+              <div class="console-route">
+                <span>owner</span>
+                <strong>planning-lead</strong>
+              </div>
+              <div class="console-route">
+                <span>next action</span>
+                <strong>present safe plan</strong>
+              </div>
+              <div class="console-flow">
+                <span>clarify</span>
+                <span>plan</span>
+                <span>handoff</span>
+                <span>status</span>
+              </div>
+            </div>
+            <div class="console-footer">
+              <span>prepared</span>
+              <div class="flow-track"><i></i></div>
+              <span>observed</span>
+            </div>
+          </div>
+          <div class="status-deck">
+            <div>
+              <span>ready</span>
+              <strong>routing</strong>
+            </div>
+            <div>
+              <span>pending</span>
+              <strong>executor</strong>
+            </div>
+            <div>
+              <span>pending</span>
+              <strong>CI evidence</strong>
+            </div>
           </div>
         </div>
       </section>
