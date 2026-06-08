@@ -72,6 +72,30 @@ class WrapperContractTests(unittest.TestCase):
         self.assertTrue(payload["delegation"]["executor_handoff"]["codex_skill"].startswith("$"))
         self.assertIn("send_to_codex", actions)
 
+    def test_route_mode_surfaces_recommendation_policy_actions(self) -> None:
+        payload = build_chat_interaction_payload(
+            "prepare weekly ops review from customer feedback and release risks",
+            source="discord",
+        )
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "prepare_ops_review")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ops-review")
+        self.assertEqual(payload["chat_response"]["state"]["policy_next_action"], "prepare_ops_review")
+        self.assertIn("observed status", payload["chat_response"]["body"])
+        self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
+
+    def test_cancel_routes_to_control_action_without_plan_ui(self) -> None:
+        payload = build_chat_interaction_payload("cancel", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "cancel")
+        self.assertEqual(payload["chat_response"]["kind"], "cancellation")
+        self.assertNotIn("plan", payload)
+        actions = {action["id"] for action in payload["chat_response"]["actions"]}
+        self.assertIn("cancel", actions)
+        self.assertNotIn("accept_plan", actions)
+
     def test_plan_mode_disables_prepare_handoff_before_acceptance(self) -> None:
         payload = build_chat_interaction_payload("risky refactor", source="discord")
 

@@ -168,8 +168,8 @@ def build_chat_interaction_payload(
         return base
 
     if resolved_mode == "route":
-        base["next_action"] = "dispatch_to_workflow"
         base["chat_response"] = build_chat_response_from_route(route, thread_key=str(base["thread_key"]))
+        base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "dispatch_to_workflow"))
         return base
 
     if resolved_mode == "delegate":
@@ -234,6 +234,18 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
     action = str(decision.get("action", "fallback"))
     if action == "dispatch":
         selected = str(decision.get("selected_skill", "the selected workflow"))
+        if selected == "cancel":
+            return _chat_response(
+                kind="cancellation",
+                headline="I will stop this Hermes workflow.",
+                body="This is a wrapper control action; it does not create a plan, handoff, or execution claim.",
+                phase="cancelling",
+                next_action="cancel",
+                thread_key=thread_key,
+                actions=[_action("cancel", "Cancel workflow", "primary"), _action("show_status", "Show status", "secondary")],
+                claim_boundary="Cancellation is observed only after the wrapper records the state change.",
+                extra_state={"route_action": action, "confidence": decision.get("confidence", "low"), "selected_workflow": selected},
+            )
         if selected in _CLARIFICATION_SKILLS:
             return _chat_response(
                 kind="clarification",
@@ -246,16 +258,27 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
                 claim_boundary="No plan or execution has started.",
                 extra_state={"route_action": action, "confidence": decision.get("confidence", "low"), "selected_workflow": selected},
             )
+        policy = _selected_recommendation_policy(decision, selected)
+        policy_next_action = str(policy.get("next_action", ""))
+        next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"
+        wrapper_guidance = str(policy.get("wrapper_guidance", ""))
+        evidence_boundary = str(policy.get("evidence_boundary", "")) or "Routing is not execution evidence."
+        body = wrapper_guidance or f"I will prepare a safe next step for `{selected}` before claiming any work happened."
         return _chat_response(
             kind="ack",
             headline="I know which workflow should handle this.",
-            body=f"I will prepare a safe next step for `{selected}` before claiming any work happened.",
+            body=body,
             phase="routed",
-            next_action="dispatch_to_workflow",
+            next_action=next_action,
             thread_key=thread_key,
             actions=[_action("show_status", "Show status", "secondary")],
-            claim_boundary="Routing is not execution evidence.",
-            extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
+            claim_boundary=evidence_boundary,
+            extra_state={
+                "route_action": action,
+                "confidence": decision.get("confidence", "low"),
+                "selected_workflow": selected,
+                "policy_next_action": policy_next_action,
+            },
         )
     if action == "clarify":
         body = str(decision.get("clarification") or "Please confirm the intended workflow before I continue.")
@@ -479,11 +502,27 @@ def _resolve_mode(mode: str, route: dict[str, object]) -> str:
     if action != "dispatch":
         return _ROUTE_TO_MODE.get(action, "clarify")
     selected = str(route.get("selected_skill", ""))
+    if selected == "cancel":
+        return "route"
     if selected in _CLARIFICATION_SKILLS:
         return "clarify"
     if selected in _DIRECT_WORKFLOW_SKILLS:
         return "route"
     return _ROUTE_TO_MODE.get(action, "plan")
+
+
+def _selected_recommendation_policy(decision: dict[str, object], selected: str) -> dict[str, object]:
+    recommendations = decision.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        return {}
+    for item in recommendations:
+        if isinstance(item, dict) and str(item.get("skill", "")) == selected:
+            return {
+                "next_action": item.get("next_action", ""),
+                "evidence_boundary": item.get("evidence_boundary", ""),
+                "wrapper_guidance": item.get("wrapper_guidance", ""),
+            }
+    return {}
 
 
 def _public_plan_payload(plan_payload: dict[str, object], *, include_message: bool) -> dict[str, object]:

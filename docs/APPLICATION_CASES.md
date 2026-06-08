@@ -377,13 +377,13 @@ wrapper operators a concrete contract result to render.
 
 | Scenario | User message tested | Chat route | Playbook | Coding handoff behavior |
 | --- | --- | --- | --- | --- |
-| Startup SaaS product triage | `결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘` | `feedback-triage` / `dispatch_to_workflow` | `feedback-triage` | No Codex handoff is emitted by default; Hermes classifies feedback and recommends the next workflow. |
+| Startup SaaS product triage | `결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘` | `feedback-triage` / `triage_feedback` | `feedback-triage` | No Codex handoff is emitted by default; Hermes classifies feedback and recommends the next workflow. |
 | OSS issue-to-PR preparation | `이 이슈 PR로 만들 수 있게 정리해줘` | `ralplan` / `present_plan` | `safe-feature-change` | Handoff includes reviewed-plan expectations and verification criteria. |
 | AI agent product QA | `쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?` | `ultraqa` / `dispatch_to_workflow` | `release-readiness-review` | No Codex handoff is emitted from `coding delegate`; QA stays Hermes-retained until code work is accepted. |
 | Discord dev-team routing | `이거 위험한 리팩터링 같아` | `ai-slop-cleaner` / `present_plan` | `safe-feature-change` | Codex handoff can be prepared for behavior-preserving cleanup after the safe plan. |
-| AI coding safety audit | `AI가 했다고 했는데 실제로 뭐 했는지 모르겠다` | `code-review` / `dispatch_to_workflow` | `release-readiness-review` | Review/fix handoff is separate from observed execution, verification, CI, and merge evidence. |
+| AI coding safety audit | `AI가 했다고 했는데 실제로 뭐 했는지 모르겠다` | `code-review` / `prepare_review_or_followup_handoff` | `release-readiness-review` | Review/fix handoff is separate from observed execution, verification, CI, and merge evidence. |
 | Product feature shaping | `온보딩을 더 부드럽게 만들고 싶어` | `deep-interview` / `answer_clarification` | `deep-interview-to-plan` | No Codex handoff is emitted; Hermes asks one blocking question before planning. |
-| Release gate review | `릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘` | `code-review` / `dispatch_to_workflow` | `release-readiness-review` | Fixes remain executor work; review and validation evidence must be observed separately. |
+| Release gate review | `릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘` | `code-review` / `prepare_review_or_followup_handoff` | `release-readiness-review` | Fixes remain executor work; review and validation evidence must be observed separately. |
 | Repeated refactor workflow | `레거시 서비스를 위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트 순서로 리팩터링하고 싶어` | `ai-slop-cleaner` / `present_plan` | `safe-feature-change` | Prepared cleanup handoff names scope, tests, review, and regression expectations. |
 | Personal multi-agent work hub | `지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘` | `plan` / `present_plan` | `local-pipeline-buildout` | The wrapper can plan the hub contract before any coding executor is needed. |
 | Consulting/agency operating template | `고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해` | `plan` / `present_plan` | `local-pipeline-buildout` | Handoff is available only after the operator accepts the recurring workflow plan. |

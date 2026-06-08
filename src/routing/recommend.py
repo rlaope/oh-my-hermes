@@ -39,6 +39,13 @@ _DEFAULT_POLICY = RecommendationPolicy(
     evidence_boundary="Routing guidance is not execution evidence.",
     wrapper_guidance="Route conservatively and show the missing decision before claiming work started.",
 )
+_SKILL_POLICIES = {
+    "cancel": RecommendationPolicy(
+        next_action="cancel",
+        evidence_boundary="Cancellation is observed only after the wrapper records the state change.",
+        wrapper_guidance="Stop the active workflow state in the wrapper; do not create a plan, handoff, or execution claim.",
+    ),
+}
 _CATEGORY_POLICIES = {
     "planning": RecommendationPolicy(
         next_action="present_plan",
@@ -280,7 +287,8 @@ def _suggested_prompt(skill: str, query: str) -> str:
 
 def _policy_for(definition: SkillDefinition) -> RecommendationPolicy:
     return (
-        _CATEGORY_POLICIES.get(definition.category)
+        _SKILL_POLICIES.get(definition.name)
+        or _CATEGORY_POLICIES.get(definition.category)
         or _HERMES_ROLE_POLICIES.get(definition.hermes_role)
         or _DEFAULT_POLICY
     )

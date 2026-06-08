@@ -76,6 +76,8 @@ class RouterContentTests(unittest.TestCase):
             with self.subTest(category=category):
                 self.assertEqual(recommend_module._CATEGORY_POLICIES[category].next_action, next_action)
 
+        self.assertEqual(recommend_module._SKILL_POLICIES["cancel"].next_action, "cancel")
+
         for helper in (
             recommend_module._next_action,
             recommend_module._evidence_boundary,

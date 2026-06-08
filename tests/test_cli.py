@@ -249,15 +249,15 @@ class CliTests(unittest.TestCase):
             ("이 이슈 PR로 만들 수 있게 정리해줘", "ralplan", "plan", "present_plan"),
             ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa", "ack", "dispatch_to_workflow"),
             ("이거 위험한 리팩터링 같아", "ai-slop-cleaner", "plan", "present_plan"),
-            ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "ack", "dispatch_to_workflow"),
+            ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "ack", "prepare_review_or_followup_handoff"),
             ("온보딩을 더 부드럽게 만들고 싶어", "deep-interview", "clarification", "answer_clarification"),
-            ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "ack", "dispatch_to_workflow"),
+            ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
             ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
-            ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "ack", "dispatch_to_workflow"),
-            ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ack", "dispatch_to_workflow"),
-            ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "ack", "dispatch_to_workflow"),
+            ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "ack", "triage_feedback"),
+            ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ack", "prepare_ops_review"),
+            ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "ack", "prepare_strategy_brief"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:
@@ -273,6 +273,42 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertNotEqual(payload["route"]["selected_skill"], "oh-my-hermes")
                 self.assertNotIn(message, json.dumps(payload))
+
+    def test_chat_route_exposes_selected_recommendation_policy(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "prepare weekly ops review from customer feedback and release risks"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        recommendation = payload["route"]["recommendations"][0]
+        self.assertEqual(payload["route"]["selected_skill"], "ops-review")
+        self.assertEqual(recommendation["next_action"], "prepare_ops_review")
+        self.assertIn("not implementation", recommendation["evidence_boundary"])
+        self.assertIn("Summarize observed status", recommendation["wrapper_guidance"])
+
+    def test_chat_interact_cancel_uses_control_action_not_plan(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "cancel"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route_payload = json.loads(stdout)
+        self.assertEqual(route_payload["route"]["action"], "dispatch")
+        self.assertEqual(route_payload["route"]["selected_skill"], "cancel")
+        self.assertEqual(route_payload["route"]["recommendations"][0]["next_action"], "cancel")
+
+        status, stdout, stderr = run_cli(["chat", "interact", "cancel"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "cancel")
+        self.assertEqual(payload["chat_response"]["kind"], "cancellation")
+        self.assertNotIn("plan", payload)
+        action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
+        self.assertIn("cancel", action_ids)
+        self.assertNotIn("accept_plan", action_ids)
+        self.assertNotIn("revise_plan", action_ids)
 
     def test_grounded_operator_examples_keep_non_coding_handoffs_conservative(self) -> None:
         cases = (

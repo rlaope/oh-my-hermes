@@ -466,9 +466,13 @@ def _session_from_interaction(session_id: str, interaction: dict[str, object]) -
 
 def _status_from_interaction(interaction: dict[str, object]) -> str:
     next_action = str(interaction.get("next_action", ""))
+    if next_action == "cancel":
+        return "cancelled"
     if next_action == "answer_clarification":
         return "clarifying"
     if next_action == "dispatch_to_workflow":
+        return "routed"
+    if str(interaction.get("mode", "")) == "route":
         return "routed"
     if next_action == "present_plan":
         return "plan_presented"
