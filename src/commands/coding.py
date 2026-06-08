@@ -8,6 +8,7 @@ from pathlib import Path
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload, coding_delegation_record_payload
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
+from ..memory import read_handoff_context_pack_file
 from ..runtime.artifacts import create_prepared_coding_delegation_run, write_coding_delegation
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
@@ -44,6 +45,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             include_message=args.include_message,
             source_metadata=source_metadata,
             executor_target=_resolved_executor(args, default="generic"),
+            context_pack=_context_pack(args),
         )
         runtime_skip_reason = _coding_delegate_runtime_skip_reason(payload) if args.record else ""
         if runtime_skip_reason:
@@ -93,6 +95,13 @@ def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
     return ""
 
 
+def _context_pack(args: argparse.Namespace) -> dict[str, object] | None:
+    path = getattr(args, "context_pack", None)
+    if not path:
+        return None
+    return read_handoff_context_pack_file(path)
+
+
 def cmd_coding_lifecycle_start(args: argparse.Namespace) -> int:
     if not args.record:
         raise OmhError("coding lifecycle start requires --record")
@@ -108,6 +117,7 @@ def cmd_coding_lifecycle_start(args: argparse.Namespace) -> int:
             source_metadata=source_metadata,
             limit=args.limit,
             include_message=args.include_message,
+            context_pack=_context_pack(args),
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
@@ -200,6 +210,11 @@ def _add_coding_commands(sub) -> None:
         help="Include raw message and expanded delegation prompt in stdout for non-logging wrappers.",
     )
     delegate.add_argument("--record", action="store_true", help="Record a metadata-only coding delegation artifact under .omh/runtime.")
+    delegate.add_argument(
+        "--context-pack",
+        default=None,
+        help="Optional handoff_context_pack/v1 JSON to attach to the prepared executor prompt when conflict-free.",
+    )
     delegate.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     delegate.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     delegate.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
@@ -229,6 +244,11 @@ def _add_coding_commands(sub) -> None:
         "--include-message",
         action="store_true",
         help="Include raw message and expanded executor prompt in stdout for immediate wrapper dispatch.",
+    )
+    lifecycle_start.add_argument(
+        "--context-pack",
+        default=None,
+        help="Optional handoff_context_pack/v1 JSON to attach to the prepared Codex lifecycle handoff when conflict-free.",
     )
     lifecycle_start.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     lifecycle_start.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")

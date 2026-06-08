@@ -176,9 +176,13 @@ The backend flow is:
    multi-to-single target changes as persistent setup state. When target
    identity metadata is present, `thread_key` is scoped by that target so two
    Hermes agents in the same channel do not share wrapper session state.
-9. Status updates use `omh coding lifecycle report` or
+9. If the wrapper has local memory-like context candidates, it can run
+   `omh memory inspect` and attach a conflict-free `handoff_context_pack/v1` to
+   the later handoff. Conflicting or stale assumptions must be shown as memory
+   review, not silently reused.
+10. Status updates use `omh coding lifecycle report` or
    `omh chat interact --run <run-id>` and stay in the same thread.
-10. Hermes still starts with its normal config and reads `skills.external_dirs`;
+11. Hermes still starts with its normal config and reads `skills.external_dirs`;
    `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
 
 `omh` does not replace the Discord bot, modify Slack commands, open network
@@ -230,6 +234,20 @@ omh chat session select-executor "$session_id" codex
 omh chat session select-executor "$session_id" claude-code
 omh chat session select-executor "$session_id" generic
 ```
+
+Review stale local context before a handoff:
+
+```sh
+omh memory inspect --fixture wrapper-memory.json
+omh memory pack --fixture wrapper-memory.json --executor codex --session-id "$session_id" > handoff-context.json
+omh chat session prepare-handoff "$session_id" --context-pack handoff-context.json "risky refactor"
+```
+
+`memory_review_card/v1` is separate from `status_card/v1`. It can drive
+`keep_memory`, `forget_memory`, `update_memory`, `change_memory_scope`,
+`apply_memory_updates`, and `show_memory_status` buttons. Approved changes are
+written only to `.omh/memory/`; OMH does not read or mutate opaque Hermes
+internal memory.
 
 Codex lifecycle calls after the wrapper has an accepted Codex coding handoff:
 
@@ -355,6 +373,10 @@ Before calling the bot integration ready, verify these points:
   `codex_invocation.dispatch_text_template`, for example
   `$ai-slop-cleaner {message}`. The wrapper replaces `{message}` only when it
   dispatches to Codex.
+- `omh memory pack` attaches `context_pack` only when no unresolved memory
+  conflict remains; otherwise the handoff contains `context_pack_blocked`.
+- `omh memory apply --batch <file> --dry-run` previews approved memory updates
+  without writing, and the real apply writes only under `.omh/memory/`.
 - `omh coding lifecycle result --run <run-id> --result completed` is rejected
   until `omh coding lifecycle dispatch --run <run-id>` records dispatch
   observation.

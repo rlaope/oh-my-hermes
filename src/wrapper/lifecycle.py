@@ -31,6 +31,7 @@ def start_codex_delegation_lifecycle(
     source_metadata: dict[str, str] | None = None,
     limit: int = 3,
     include_message: bool = False,
+    context_pack: dict[str, object] | None = None,
 ) -> dict[str, object]:
     payload = build_coding_delegation_payload(
         message,
@@ -39,6 +40,7 @@ def start_codex_delegation_lifecycle(
         include_message=include_message,
         source_metadata=source_metadata,
         executor_target="codex",
+        context_pack=context_pack,
     )
     delegation = payload.get("delegation")
     if not isinstance(delegation, dict):

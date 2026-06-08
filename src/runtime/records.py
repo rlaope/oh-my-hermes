@@ -7,6 +7,7 @@ from ..coding_contracts import CODING_EXECUTOR_HANDOFF_TARGETS, EXECUTOR_HANDOFF
 from ..executors import DISPATCH_POLICIES, EXECUTOR_PROFILES, WORK_OWNER_MODES
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
 from ..local_store import utc_now
+from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack
 
 
 SCHEMA_VERSION = 1
@@ -107,6 +108,8 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "report_contract",
     "evidence_contract",
     "harness_quality",
+    "context_pack",
+    "context_pack_blocked",
 )
 CODING_PROMPT_HANDOFF_KEYS = (
     "schema_version",
@@ -125,6 +128,8 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "review",
     "evidence_contract",
     "harness_quality",
+    "context_pack",
+    "context_pack_blocked",
 )
 CODING_PROMPT_HANDOFF_INVOCATION_KEYS = (
     "mode",
@@ -652,6 +657,12 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
             "workflow": _optional_string(review.get("workflow")),
             "evidence_required": str(review.get("evidence_required", "")),
         }
+    context_pack = _compact_context_pack(value.get("context_pack"))
+    if context_pack:
+        compact["context_pack"] = context_pack
+    context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
+    if context_pack_blocked:
+        compact["context_pack_blocked"] = context_pack_blocked
     return compact
 
 
@@ -684,6 +695,12 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
             "workflow": _optional_string(review.get("workflow")),
             "evidence_required": str(review.get("evidence_required", "")),
         }
+    context_pack = _compact_context_pack(value.get("context_pack"))
+    if context_pack:
+        compact["context_pack"] = context_pack
+    context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
+    if context_pack_blocked:
+        compact["context_pack_blocked"] = context_pack_blocked
     return compact
 
 
@@ -741,6 +758,68 @@ def _compact_evidence_contract(value: Any) -> dict[str, list[str]]:
         "prepared_is_not": _compact_string_list(value.get("prepared_is_not", [])),
         "observed_required_for": _compact_string_list(value.get("observed_required_for", [])),
     }
+
+
+def _compact_context_pack(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "executor_target": str(value.get("executor_target", "")),
+        "session_id": str(value.get("session_id", "")),
+        "scope": _compact_context_scope(value.get("scope", {})),
+        "source_refs": _compact_context_dict_list(value.get("source_refs", [])),
+        "included_context": _compact_context_dict_list(value.get("included_context", [])),
+        "excluded_context": _compact_context_dict_list(value.get("excluded_context", [])),
+        "blocked_by_conflicts": _compact_context_dict_list(value.get("blocked_by_conflicts", [])),
+        "redaction_policy": str(value.get("redaction_policy", "")),
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+
+
+def _compact_context_pack_blocked(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "blocked_by_conflicts": _compact_context_dict_list(value.get("blocked_by_conflicts", [])),
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+
+
+def _compact_context_scope(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {"kind": str(value.get("kind", "")), "ref": str(value.get("ref", ""))}
+
+
+def _compact_context_dict_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    compact: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        compact.append(_stringify_context_dict(item))
+    return compact
+
+
+def _stringify_context_dict(value: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {}
+    for key, item in value.items():
+        if isinstance(item, dict):
+            compact[str(key)] = _stringify_context_dict(item)
+        elif isinstance(item, list):
+            compact[str(key)] = _compact_string_list(item)
+        elif isinstance(item, bool):
+            compact[str(key)] = item
+        elif isinstance(item, int):
+            compact[str(key)] = item
+        elif item is None:
+            compact[str(key)] = ""
+        else:
+            compact[str(key)] = str(item)
+    return compact
 
 
 def _require(condition: bool, errors: list[str], message: str) -> None:
@@ -1246,6 +1325,7 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
                         _require(isinstance(item, str), errors, f"coding_delegation executor_handoff {key}.{nested_key}[{index}] must be a string")
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation executor_handoff harness_quality"))
+    errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation executor_handoff"))
     return errors
 
 
@@ -1326,6 +1406,19 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
                     _require(isinstance(item, str), errors, f"coding_delegation prompt_handoff evidence_contract.{nested_key}[{index}] must be a string")
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation prompt_handoff harness_quality"))
+    errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation prompt_handoff"))
+    return errors
+
+
+def validate_handoff_context_pack_fields(handoff: dict[str, Any], label: str) -> list[str]:
+    errors: list[str] = []
+    has_pack = "context_pack" in handoff
+    has_blocked = "context_pack_blocked" in handoff
+    _require(not (has_pack and has_blocked), errors, f"{label} must not contain both context_pack and context_pack_blocked")
+    if has_pack:
+        errors.extend(validate_handoff_context_pack(handoff.get("context_pack"), require_conflict_free=True, label=f"{label} context_pack"))
+    if has_blocked:
+        errors.extend(validate_handoff_context_blocked(handoff.get("context_pack_blocked"), label=f"{label} context_pack_blocked"))
     return errors
 
 

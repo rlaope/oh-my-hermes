@@ -28,6 +28,12 @@ VISIBLE_ACTIONS = (
     "show_status",
     "show_target_status",
     "apply_target_change",
+    "keep_memory",
+    "forget_memory",
+    "update_memory",
+    "change_memory_scope",
+    "apply_memory_updates",
+    "show_memory_status",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}

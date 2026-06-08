@@ -29,6 +29,103 @@ class CliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["query"], "risky refactor")
 
+    def test_memory_cli_inspects_packs_and_applies_review_updates(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            fixture = root / "memory-snapshot.json"
+            fixture.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "memory_snapshot/v1",
+                        "source": "wrapper_snapshot",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "items": [
+                            {
+                                "item_id": "executor-pref",
+                                "key": "default_executor",
+                                "value": "codex",
+                                "summary": "Use Codex by default",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "memory", "inspect", "--fixture", str(fixture)])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            inspection = json.loads(stdout)
+            self.assertEqual(inspection["schema_version"], "memory_inspection/v1")
+            self.assertEqual(inspection["review_card"]["schema_version"], "memory_review_card/v1")
+
+            batch_path = root / "memory-batch.json"
+            batch_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "memory_update_batch/v1",
+                        "updates": [
+                            {
+                                "op": "update",
+                                "item_id": "executor-pref",
+                                "scope": {"kind": "project", "ref": "default"},
+                                "key": "default_executor",
+                                "value": "codex",
+                                "summary": "Use Codex by default",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "memory", "apply", "--batch", str(batch_path), "--dry-run"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            dry_run = json.loads(stdout)
+            self.assertEqual(dry_run["schema_version"], "memory_update_batch/v1")
+            self.assertFalse(dry_run["applied"])
+            self.assertFalse((omh_home / "memory").exists())
+
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "memory", "apply", "--batch", str(batch_path)])[0], 0)
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "memory", "pack", "--executor", "codex"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            context_pack = json.loads(stdout)
+            self.assertEqual(context_pack["schema_version"], "handoff_context_pack/v1")
+            self.assertEqual(context_pack["blocked_by_conflicts"], [])
+            self.assertTrue(context_pack["included_context"])
+
+            pack_path = root / "handoff-context.json"
+            pack_path.write_text(json.dumps(context_pack), encoding="utf-8")
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "coding",
+                    "delegate",
+                    "--source",
+                    "discord",
+                    "--executor",
+                    "codex",
+                    "--context-pack",
+                    str(pack_path),
+                    "risky",
+                    "refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            delegation = json.loads(stdout)
+            self.assertEqual(delegation["executor_handoff"]["context_pack"]["schema_version"], "handoff_context_pack/v1")
+
     def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
 

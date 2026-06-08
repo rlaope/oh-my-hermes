@@ -6,6 +6,7 @@ import json
 from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..ingress import CHAT_SOURCES
 from ..installer import OmhError
+from ..memory import read_handoff_context_pack_file
 from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_message, routing_record_payload
 from ..runtime.artifacts import create_run, summarize_delegated_coding_status, write_routing_decision
 from ..targets import TARGET_METADATA_KEYS, build_target_change_notice, inspect_target_observation, record_target_observation
@@ -134,6 +135,7 @@ def cmd_chat_session_prepare_handoff(args: argparse.Namespace) -> int:
             include_message=args.include_message,
             source_metadata=source_metadata,
             executor_target=args.executor,
+            context_pack=_context_pack(args),
         )
     except FileNotFoundError as exc:
         raise OmhError(f"wrapper session not found: {args.session_id}") from exc
@@ -158,6 +160,13 @@ def _target_notice(args: argparse.Namespace, source_metadata: dict[str, str]) ->
     else:
         observation = inspect_target_observation(paths, source=f"chat:{args.source}", source_metadata=source_metadata)
     return build_target_change_notice(observation, auto_applied=auto_apply)
+
+
+def _context_pack(args: argparse.Namespace) -> dict[str, object] | None:
+    path = getattr(args, "context_pack", None)
+    if not path:
+        return None
+    return read_handoff_context_pack_file(path)
 
 
 def _has_target_metadata(source_metadata: dict[str, str]) -> bool:
@@ -329,6 +338,11 @@ def _add_chat_commands(sub) -> None:
     session_prepare.add_argument("--channel-ref", default="")
     session_prepare.add_argument("--user-ref", default="")
     session_prepare.add_argument("--executor", choices=tuple(value for value in CODING_EXECUTOR_TARGETS if value != "choose"), default=None)
+    session_prepare.add_argument(
+        "--context-pack",
+        default=None,
+        help="Optional handoff_context_pack/v1 JSON to attach to the prepared executor prompt when conflict-free.",
+    )
     session_prepare.set_defaults(func=cmd_chat_session_prepare_handoff)
 
     session_status = session_sub.add_parser("status")

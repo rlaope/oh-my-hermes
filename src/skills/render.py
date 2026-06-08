@@ -49,6 +49,18 @@ TARGET_TOPOLOGY_REFERENCE_CONTEXT = (
     "current Hermes target/thread, adapt only the steps that benefit from multiple targets, and fall "
     "back to single-target behavior when the active agent count is one."
 )
+MEMORY_REVIEW_SCHEMA = "memory_review_card/v1"
+HANDOFF_CONTEXT_PACK_SCHEMA = "handoff_context_pack/v1"
+MEMORY_CONTEXT_SKILL_CONTRACT = (
+    f"When wrapper metadata includes `{MEMORY_REVIEW_SCHEMA}` or `{HANDOFF_CONTEXT_PACK_SCHEMA}`, "
+    "treat it as reviewed OMH-local or wrapper-supplied context only. Use conflict-free context "
+    "summaries to shape plans and handoffs, but do not claim Hermes internal memory was read or "
+    "changed."
+)
+MEMORY_CONTEXT_REFERENCE_CONTEXT = (
+    f"`{MEMORY_REVIEW_SCHEMA}` is separate from `status_card/v1`; `{HANDOFF_CONTEXT_PACK_SCHEMA}` "
+    "may be attached to executor handoffs only when unresolved conflicts are absent."
+)
 
 
 def _target_topology_router_section() -> str:
@@ -68,6 +80,10 @@ def _target_topology_skill_contract_bullets() -> str:
             f"- {TARGET_TOPOLOGY_SKILL_CHANGE_CONTRACT}",
         ]
     )
+
+
+def _memory_context_skill_contract_bullets() -> str:
+    return f"- {MEMORY_CONTEXT_SKILL_CONTRACT}"
 
 
 def _frontmatter(name: str, description: str) -> str:
@@ -230,6 +246,10 @@ The command returns a `coding_delegation/v1` payload with a recommended workflow
 
 With `--record`, `omh` creates a `.omh/runtime/runs/<run-id>/` prepared runtime run only for a Codex-selected delegate payload that contains a real `executor_handoff`. Executor-choice, prompt-only, retained-Hermes, clarify, and fallback responses return `runtime.recorded=false` and must stay wrapper/session state rather than prepared run evidence. For Codex runs, `coding_delegation.json` is paired with `run.json` marked `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
 
+## Wrapper Backend Memory Context
+
+Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `{MEMORY_REVIEW_SCHEMA}` and `{HANDOFF_CONTEXT_PACK_SCHEMA}` artifacts only; it does not read or mutate opaque Hermes internal memory. A context pack may be attached to an executor handoff only when unresolved conflicts are absent.
+
 ## Hermes-Facing Planning
 
 For planning-shaped requests, wrappers or operators can run `omh hermes plan` to create a deterministic `hermes_plan/v1` planning scaffold. In normal chat, Hermes can express this plan directly through the installed skill guidance:
@@ -340,6 +360,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Use Hermes-native tools, file operations, and subagent/delegation features when available.
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
 {_target_topology_skill_contract_bullets()}
+{_memory_context_skill_contract_bullets()}
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers or explicit checklists,
   - question renderers -> one concise question in the current Hermes interface,
@@ -376,6 +397,7 @@ def workflow_reference_markdown() -> str:
         "Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor, or prepare a coding handoff for coding-heavy execution.",
         "",
         TARGET_TOPOLOGY_REFERENCE_CONTEXT,
+        MEMORY_CONTEXT_REFERENCE_CONTEXT,
         "",
         "## Skills",
         "",

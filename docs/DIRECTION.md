@@ -111,6 +111,11 @@ Selected coding executors own:
    schema-versioned, redacted by default, and local-only unless a wrapper
    outside this repository performs transport work.
 
+   Memory/context review follows the same rule. OMH may inspect OMH-local
+   memory files, wrapper sessions, target topology, setup profiles, and
+   wrapper-supplied snapshots; it must not claim it read or changed opaque
+   Hermes internal memory.
+
 6. Do not widen into platform transports prematurely.
    Transport adapters, auth, retries, message edits, and posting belong outside
    this repository until their dependency and packaging story is explicitly

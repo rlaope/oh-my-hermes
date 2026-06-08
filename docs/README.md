@@ -14,6 +14,7 @@ repo-local contract for Codex agents working here.
 | Understand what OMH is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
+| Review stale local context and executor handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |
 | Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
 | Install from an AI-agent protocol | [Agent Install Protocol](../INSTALL_FOR_AGENTS.md) |
 | Understand responsibility roles | [Role Surface](ROLES.md) |
@@ -86,6 +87,8 @@ merge.
   harness examples should stay backed by conformance tests.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
+- Memory/context docs should state that OMH reviews local or wrapper-supplied
+  context only; it does not read or mutate opaque Hermes internal memory.
 - The GitHub Pages site should stay a short public entry point that links back
   to this docs set instead of becoming a second source of truth.
 
@@ -97,6 +100,7 @@ When changing docs, check whether the same claim needs to be updated in:
 - [Direction](DIRECTION.md)
 - [Architecture](ARCHITECTURE.md)
 - [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md)
+- [Memory Context Review](MEMORY_CONTEXT.md)
 - [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md)
 - [Role Surface](ROLES.md)
 - [Agent Install Protocol](../INSTALL_FOR_AGENTS.md)

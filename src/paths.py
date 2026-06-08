@@ -35,6 +35,14 @@ class OmhPaths:
         return self.runtime_dir / "wrapper_sessions"
 
     @property
+    def memory_dir(self) -> Path:
+        return self.omh_home / "memory"
+
+    @property
+    def memory_index_path(self) -> Path:
+        return self.memory_dir / "index.json"
+
+    @property
     def setup_profile_path(self) -> Path:
         return self.omh_home / "setup-profile.json"
 

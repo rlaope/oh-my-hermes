@@ -7,6 +7,7 @@ The reference describes prompt-level Hermes workflow guidance and local evidence
 Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor, or prepare a coding handoff for coding-heavy execution.
 
 When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow state to the current Hermes target/thread, adapt only the steps that benefit from multiple targets, and fall back to single-target behavior when the active agent count is one.
+`memory_review_card/v1` is separate from `status_card/v1`; `handoff_context_pack/v1` may be attached to executor handoffs only when unresolved conflicts are absent.
 
 ## Skills
 

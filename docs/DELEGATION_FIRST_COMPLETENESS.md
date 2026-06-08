@@ -33,6 +33,7 @@ evidence exists.
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
 | `omh coding delegate` | Prepares metadata-only coding handoffs, executor-choice contracts, and prompt-only payloads without overclaiming execution. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
 | `omh coding lifecycle` | Tracks Codex-selected handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
+| `omh memory inspect/pack/apply` | Reviews OMH-local and wrapper-supplied context, creates `memory_review_card/v1`, and attaches only conflict-free `handoff_context_pack/v1` summaries to executor handoffs. | `src/memory.py`, `tests/test_memory.py` |
 | `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime/artifacts.py`, `README.md` |
 | `omh runtime review`, `omh runtime ci`, `omh runtime merge` | Records observed review, CI, merge-readiness, and merge evidence under the run ledger. | `src/runtime/artifacts.py`, `src/runtime/records.py`, `tests/test_cli.py` |
 | `omh runtime validate/export` | Validates and exports local evidence without storing prompt bodies by default. | `src/runtime/artifacts.py`, `tests/test_runtime_artifacts.py` |
@@ -132,8 +133,12 @@ source, source metadata, message hash and length, `thread_key`, mode,
 visibility, headline, body, state, platform-neutral actions, and claim boundary.
 Allowed actions include `answer:*`, `accept_plan`, `revise_plan`,
 `prepare_handoff`, `choose_executor`, `show_prompt_handoff`,
-`copy_prompt_handoff`, `send_to_executor`, `show_status`, and `cancel`.
-`send_to_codex` remains a compatibility alias only for Codex-selected flows.
+`copy_prompt_handoff`, `send_to_executor`, `show_status`,
+`show_memory_status`, `apply_memory_updates`, and `cancel`. Memory review
+actions such as `keep_memory`, `forget_memory`, `update_memory`, and
+`change_memory_scope` belong to `memory_review_card/v1`, not
+`status_card/v1`. `send_to_codex` remains a compatibility alias only for
+Codex-selected flows.
 Action labels remain product-level labels; they do not expose CLI commands,
 argv arrays, or shell text.
 

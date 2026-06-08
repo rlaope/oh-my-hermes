@@ -13,6 +13,7 @@ from .executors import (
 )
 from .harness_quality import with_wrapper_actions
 from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
+from .memory import validate_handoff_context_blocked, validate_handoff_context_pack
 from .routing.recommend import recommend_skills
 from .skills.catalog import (
     CODING_INTENT_PRIORITY,
@@ -61,6 +62,7 @@ def build_coding_delegation_payload(
     include_message: bool = False,
     source_metadata: dict[str, str] | None = None,
     executor_target: str = "generic",
+    context_pack: dict[str, object] | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -119,8 +121,10 @@ def build_coding_delegation_payload(
     )
     if selection.selected_executor_profile == "codex" and delegation.action == "delegate":
         payload["executor_handoff"] = _executor_handoff(executor_target, delegation)
+        _attach_context_pack(payload["executor_handoff"], context_pack)
     elif selection.work_owner_mode == "prompt_only_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation)
+        _attach_context_pack(payload["prompt_handoff"], context_pack)
     payload["harness_quality"] = _public_harness_quality(
         harness,
         action=delegation.action,
@@ -159,6 +163,28 @@ def build_coding_delegation_event_payload(
         include_message=include_message,
         source_metadata=extract_source_metadata(event),
     )
+
+
+def _attach_context_pack(handoff: object, context_pack: dict[str, object] | None) -> None:
+    if not isinstance(handoff, dict) or not context_pack:
+        return
+    blocked = context_pack.get("blocked_by_conflicts", [])
+    if isinstance(blocked, list) and blocked:
+        blocked_marker = {
+            "schema_version": "handoff_context_blocked/v1",
+            "blocked_by_conflicts": blocked,
+            "claim_boundary": "Unresolved memory conflicts block this context pack from executor handoff attachment.",
+        }
+        errors = validate_handoff_context_pack(context_pack, require_conflict_free=False, label="context_pack")
+        errors.extend(validate_handoff_context_blocked(blocked_marker, label="context_pack_blocked"))
+        if errors:
+            raise ValueError("; ".join(errors))
+        handoff["context_pack_blocked"] = blocked_marker
+        return
+    errors = validate_handoff_context_pack(context_pack, require_conflict_free=True, label="context_pack")
+    if errors:
+        raise ValueError("; ".join(errors))
+    handoff["context_pack"] = context_pack
 
 
 def coding_delegation_record_payload(

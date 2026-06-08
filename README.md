@@ -129,6 +129,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
+| Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Wrapper contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Discord, Slack, or hosted adapters. |
 | Optional plugin bridge | `omh setup --with-plugin` installs `~/.hermes/plugins/omh` with metadata-only `omh_status` support. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |
@@ -191,6 +192,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | Architecture and module ownership | [Architecture](docs/ARCHITECTURE.md) |
 | Situation playbooks | [Playbooks](docs/PLAYBOOKS.md) |
 | Role surfaces and profile packs | [Roles](docs/ROLES.md) |
+| Memory/context review and handoff packs | [Memory Context Review](docs/MEMORY_CONTEXT.md) |
 | Discord-style wrapper examples | [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md) |
 | Harness quality contracts | [Harness Quality Contract](docs/HARNESS_QUALITY.md) |
 | Representative workflows | [Application Cases](docs/APPLICATION_CASES.md) |

@@ -35,6 +35,7 @@ from .docs import (
     cmd_harness_validate,
 )
 from .hermes import _add_hermes_commands, cmd_hermes_plan
+from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
 from .runtime import (
     _add_runtime_commands,
@@ -87,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_chat_commands(sub)
     _add_coding_commands(sub)
     _add_hermes_commands(sub)
+    _add_memory_commands(sub)
     _add_runtime_commands(sub)
     _add_state_commands(sub)
     return parser

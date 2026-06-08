@@ -188,6 +188,7 @@ def prepare_wrapper_session_handoff(
     include_message: bool = False,
     source_metadata: dict[str, str] | None = None,
     executor_target: str | None = None,
+    context_pack: dict[str, object] | None = None,
 ) -> dict[str, object]:
     session = _existing_session(paths, session_id)
     if session["status"] == "cancelled":
@@ -231,6 +232,7 @@ def prepare_wrapper_session_handoff(
             include_message=include_message,
             source_metadata=source_metadata,
             executor_target=selected_executor,
+            context_pack=context_pack,
         )
     message = extract_message_text(event_or_message)
     metadata = _source_metadata(event_or_message)
@@ -256,6 +258,7 @@ def prepare_wrapper_session_handoff(
         source_metadata=metadata,
         limit=limit,
         include_message=include_message,
+        context_pack=context_pack,
     )
     run_id = str(lifecycle["run"]["run_id"])
     linked = _link_prepared_handoff_run(paths, session, run_id, recovered=False)
@@ -273,6 +276,7 @@ def _prepare_prompt_only_session_handoff(
     include_message: bool,
     source_metadata: dict[str, str] | None,
     executor_target: str,
+    context_pack: dict[str, object] | None,
 ) -> dict[str, object]:
     message = extract_message_text(event_or_message)
     metadata = _source_metadata(event_or_message)
@@ -286,6 +290,7 @@ def _prepare_prompt_only_session_handoff(
         include_message=include_message,
         source_metadata=metadata,
         executor_target=executor_target,
+        context_pack=context_pack,
     )
     prompt_handoff = payload.get("prompt_handoff")
     if not isinstance(prompt_handoff, dict):
