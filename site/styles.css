@@ -168,7 +168,8 @@ h1 {
   font-size: clamp(19px, 2vw, 25px);
 }
 
-.hero-command {
+.hero-command,
+.hero-prompt {
   max-width: min(100%, 760px);
   margin-bottom: 14px;
   overflow-x: auto;
@@ -180,7 +181,15 @@ h1 {
   box-shadow: 0 20px 54px rgba(0, 0, 0, 0.24);
 }
 
-.hero-command span {
+.hero-prompt {
+  padding: 14px 18px;
+  border-color: rgba(126, 215, 194, 0.34);
+  background: rgba(13, 49, 47, 0.58);
+  box-shadow: none;
+}
+
+.hero-command span,
+.hero-prompt span {
   display: block;
   margin-bottom: 8px;
   color: rgba(255, 255, 255, 0.72);
@@ -190,7 +199,8 @@ h1 {
   letter-spacing: 0;
 }
 
-.hero-command code {
+.hero-command code,
+.hero-prompt code {
   font-family:
     "SFMono-Regular",
     Consolas,
@@ -199,6 +209,10 @@ h1 {
   color: #f5fbff;
   font-size: 15px;
   white-space: pre;
+}
+
+.hero-prompt code {
+  white-space: normal;
 }
 
 .hero-proof {
@@ -394,6 +408,37 @@ h1 {
   color: #4b5563;
   font-size: 13px;
   font-weight: 700;
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.role-card {
+  min-height: 112px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.role-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.role-card strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .site-example {
@@ -740,6 +785,23 @@ h1 {
   line-height: 1.25;
 }
 
+.route-lens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.route-lens span {
+  padding: 4px 7px;
+  border: 1px solid rgba(126, 215, 194, 0.34);
+  border-radius: 999px;
+  background: rgba(31, 122, 104, 0.18);
+  color: #d9f7ee;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -827,6 +889,7 @@ h1 {
   .band,
   .case-grid,
   .case-grid--docs,
+  .role-grid,
   .site-example,
   .docs-shell,
   .docs-grid {

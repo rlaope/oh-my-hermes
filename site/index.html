@@ -24,19 +24,24 @@
           <p class="eyebrow">Hermes-native workflow orchestration</p>
           <h1>OMH</h1>
           <p class="lead">
-            A skill-first contract layer that helps Hermes turn chat messages into
-            research briefs, feedback triage, meeting prep, strategy, status, or
-            Codex-ready coding handoffs.
+            Install OMH, then talk to Hermes. Plain requests become role-owned
+            next actions for research, feedback triage, meeting prep, strategy,
+            status, or selected-executor coding handoffs with honest evidence
+            boundaries.
           </p>
           <div class="hero-command" role="region" aria-label="OMH quick start commands" tabindex="0">
             <span>Quick start</span>
             <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
 omh setup</code>
           </div>
+          <div class="hero-prompt" role="region" aria-label="First Hermes prompt" tabindex="0">
+            <span>First Hermes prompt</span>
+            <code>Use OMHM request-to-handoff for: I want to safely add a feature to this repo.</code>
+          </div>
           <div class="hero-proof" aria-label="Core OMH contracts">
-            <span>Business workflow skills</span>
-            <span>Plan-first handoff</span>
-            <span>Evidence-backed status</span>
+            <span>Request-to-handoff router</span>
+            <span>Role-owned next action</span>
+            <span>Prepared is not observed</span>
           </div>
           <div class="actions" aria-label="Primary actions">
             <a class="button button--primary" href="docs/">Read docs</a>
@@ -72,7 +77,7 @@ omh setup</code>
           <div class="arch-arrow" aria-hidden="true">-></div>
           <div class="arch-node arch-node--core">
             <span>OMH local contract layer</span>
-            <strong>Playbook, route, plan, handoff, status</strong>
+            <strong>Request-to-handoff, roles, plan, handoff, status</strong>
           </div>
           <div class="arch-branch" aria-hidden="true"></div>
           <div class="arch-node arch-node--hermes">
@@ -84,7 +89,7 @@ omh setup</code>
             <strong>omhm_status, passive context</strong>
           </div>
           <div class="arch-node arch-node--executor">
-            <span>Codex-like executor</span>
+            <span>Selected coding executor</span>
             <strong>Implementation after dispatch</strong>
           </div>
           <div class="arch-node arch-node--runtime">
@@ -131,6 +136,8 @@ omh setup</code>
         </div>
         <div class="command command--inline" role="region" aria-label="Playbook commands" tabindex="0">
           <code># operator/backend inspection
+omh playbook inspect request-to-handoff
+omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
 omh playbook recommend "결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘"</code>
         </div>
@@ -168,6 +175,24 @@ omh playbook recommend "결제 실패 피드백을 모아서 회의 주제와 �
             </p>
           </article>
         </div>
+        <div class="role-grid" aria-label="OMH responsibility roles">
+          <article class="role-card">
+            <span>research-lead</span>
+            <strong>Evidence and sources</strong>
+          </article>
+          <article class="role-card">
+            <span>planning-lead</span>
+            <strong>Clarify, plan, acceptance criteria</strong>
+          </article>
+          <article class="role-card">
+            <span>review-gate</span>
+            <strong>Findings, QA, release readiness</strong>
+          </article>
+          <article class="role-card">
+            <span>coding-handoff</span>
+            <strong>Executor choice and prepared handoff</strong>
+          </article>
+        </div>
       </section>
 
       <section class="section" id="example">
@@ -192,43 +217,50 @@ omh playbook recommend "결제 실패 피드백을 모아서 회의 주제와 �
               <div class="avatar avatar--bot">H</div>
               <div class="message-body bot-response">
                 <div class="message-meta"><strong>Hermes Agent</strong> <span>BOT</span></div>
-                <h3>I routed this to <code>plan</code> because it needs a safe plan first.</h3>
+                <div class="route-lens" aria-label="Routing summary">
+                  <span>playbook: request-to-handoff</span>
+                  <span>role: planning-lead</span>
+                  <span>next: present_plan</span>
+                </div>
+                <h3>I routed this through <code>request-to-handoff</code>; Planning Lead should present the safe plan first.</h3>
                 <p>
-                  Accept or revise the plan first; the handoff button stays disabled until
-                  acceptance. A draft plan is still only planning evidence.
+                  Accept or revise the plan first. Executor choice and handoff preparation
+                  stay unavailable until the plan is accepted.
                 </p>
                 <div class="button-row" aria-label="Wrapper actions">
                   <button type="button">Accept plan</button>
                   <button type="button">Revise plan</button>
                   <button type="button" disabled>Prepare handoff</button>
                 </div>
-                <p class="claim-boundary">A draft plan is not execution evidence.</p>
+                <p class="claim-boundary">Routing is not plan acceptance, dispatch, or execution evidence.</p>
               </div>
             </div>
             <div class="status-preview">
               <div>
-                <strong>A Codex handoff is ready.</strong>
-                <p>I have prepared the handoff, but executor dispatch is not observed yet.</p>
+                <strong>Request classified; no executor has run.</strong>
+                <p>Hermes can show the responsible role and next action before any handoff or implementation claim exists.</p>
               </div>
               <ol>
-                <li><span class="state state--ready">ready</span> Handoff</li>
+                <li><span class="state state--ready">ready</span> Routing</li>
+                <li><span class="state state--ready">ready</span> Role</li>
+                <li><span class="state">pending</span> Plan acceptance</li>
+                <li><span class="state">pending</span> Executor choice</li>
+                <li><span class="state">pending</span> Handoff</li>
                 <li><span class="state">pending</span> Execution</li>
-                <li><span class="state">pending</span> Verification</li>
-                <li><span class="state state--na">n/a</span> Review</li>
                 <li><span class="state">pending</span> CI</li>
-                <li><span class="state">pending</span> Merge Ready</li>
               </ol>
-              <p class="claim-boundary">Preparation is not execution evidence.</p>
+              <p class="claim-boundary">Prepared handoff becomes available only after acceptance and executor selection.</p>
             </div>
           </div>
           <aside class="example-note" aria-label="Example provenance">
             <h3>Fixture-backed, not mocked by hand.</h3>
             <p>
-              This site example mirrors the deterministic output from
-              <code>uv run python examples/discord-adapter-shim.py</code>.
+              This site example combines the deterministic
+              <code>request-to-handoff</code> playbook recommendation with the local
+              Discord shim's plan-first wrapper response.
             </p>
             <p>
-              The wrapper can render the buttons, phase, next action, and evidence
+              The wrapper can render role, phase, buttons, next action, and evidence
               boundary without asking the user to know an OMH command.
             </p>
           </aside>
@@ -347,7 +379,7 @@ omh demo orchestration</code>
 
     <footer class="footer">
       OMH is deterministic local contract tooling. It does not patch Hermes core,
-      run platform bots, call LLM APIs, or launch Codex by itself.
+      run platform bots, call LLM APIs, or launch coding executors by itself.
     </footer>
   </body>
 </html>
