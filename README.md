@@ -29,7 +29,8 @@ status.
 [Website](https://rlaope.github.io/oh-my-hermes-agent/) -
 [Quick Start](#quick-start) - [Two Install Paths](#two-install-paths) -
 [Backend Surface](#backend--operator-surface) - [Documentation](docs/README.md) -
-[Installation](docs/INSTALLATION.md) - [Application Cases](docs/APPLICATION_CASES.md)
+[Installation](docs/INSTALLATION.md) - [Agent Install](INSTALL_FOR_AGENTS.md) -
+[Roles](docs/ROLES.md) - [Application Cases](docs/APPLICATION_CASES.md)
 
 ---
 
@@ -55,7 +56,9 @@ status.
 | Optional Hermes plugin | `omh setup --with-plugin` installs a thin native bridge under `~/.hermes/plugins/omhm`. |
 | Skill catalog | Deterministic routing metadata from `src/skills/catalog.py`. |
 | Business workflow skills | `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, and `ops-review` for non-coding company work inside Hermes. |
+| Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | Playbooks | Situation-level pipelines for research, meetings, strategy, feedback triage, ops review, planning, wrapper UX, and coding handoff flows. |
+| Role surface | `research-lead`, `planning-lead`, `review-gate`, and `coding-handoff` describe responsibility lanes, not hidden runtime agents. |
 | Harness quality | Machine-readable quality bars, evidence ladders, wrapper actions, and overclaim guards. |
 | Wrapper backend contract | `chat_interaction/v1` responses for Discord, Slack, and hosted adapters. |
 | Planning artifacts | Hermes-facing Markdown plans under `~/.hermes/plans`. |
@@ -104,17 +107,17 @@ hermes skills install code-review
 
 **Step 2: Talk to Hermes**
 
-Send a normal message in Hermes Agent, Discord, Slack, or a hosted Hermes
-wrapper:
+Send the flagship first prompt in Hermes Agent, Discord, Slack, or a hosted
+Hermes wrapper:
 
 ```text
-I want to safely add a feature to this repo
+Use OMHM request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
-Hermes should use the installed OMH guidance to decide whether to answer,
-clarify, research, triage feedback, prepare a meeting or strategy brief, plan,
-prepare a coding handoff, or report status. Users should not need to know
-`omh recommend`, `omh chat interact`, or other backend commands.
+Hermes should explain why `request-to-handoff` is the right first workflow,
+name the responsible role, show the next action, and say what is not evidence
+yet. Users should not need to know `omh recommend`, `omh chat interact`, or
+other backend commands.
 
 For non-coding company work, the same install can route prompts such as:
 

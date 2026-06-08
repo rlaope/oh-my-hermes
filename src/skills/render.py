@@ -11,6 +11,7 @@ from .catalog import (
     harness_quality_contract,
     primary_harness_for_skill,
 )
+from ..roles import role_summary_markdown
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,10 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 {_role_registry(definitions)}
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor profile, prepare the matching handoff, and track only evidence it actually observes instead of implying Hermes coded secretly.
+
+## Responsibility Roles
+
+{role_summary_markdown()}
 
 ## Wrapper Backend Chat Routing
 

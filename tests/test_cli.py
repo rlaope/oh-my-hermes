@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import unittest
 from argparse import Namespace
 from pathlib import Path
@@ -11,6 +13,22 @@ from omh.cli import OmhError, cmd_runtime_merge
 
 
 class CliTests(unittest.TestCase):
+    def test_source_checkout_exposes_omh_cli_module(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, "-m", "omh.cli", "recommend", "risky refactor", "--limit", "1"],
+            cwd=repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["query"], "risky refactor")
+
     def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
 
@@ -125,6 +143,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "playbook_catalog/v1")
         playbooks = {playbook["id"]: playbook for playbook in payload["playbooks"]}
+        self.assertIn("request-to-handoff", playbooks)
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
         self.assertIn("research-to-strategy-brief", playbooks)
@@ -133,8 +152,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("weekly-ops-review", playbooks)
         self.assertIn("market-scan-to-strategy", playbooks)
         self.assertIn("local-pipeline-buildout", playbooks)
-        self.assertIn("prepare_handoff", playbooks["safe-feature-change"]["pipeline"])
-        self.assertIn("status_card", playbooks["safe-feature-change"]["pipeline"])
+        self.assertIn("handoff_or_retain", playbooks["request-to-handoff"]["pipeline"])
+        self.assertIn("status_card", playbooks["request-to-handoff"]["pipeline"])
 
     def test_playbook_inspect_shows_owners_and_evidence_boundaries(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "inspect", "safe-feature-change"])
@@ -149,15 +168,31 @@ class CliTests(unittest.TestCase):
         boundaries = " ".join(stage["evidence_boundary"] for stage in playbook["stages"])
         self.assertIn("not executor dispatch", boundaries)
 
+        status, stdout, stderr = run_cli(["playbook", "inspect", "request-to-handoff"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        stages = {stage["id"]: stage for stage in json.loads(stdout)["playbook"]["stages"]}
+        self.assertEqual(
+            stages["plan_or_prepare"]["evidence_required"],
+            ["accepted plan or explicit retained-Hermes outcome"],
+        )
+        self.assertEqual(
+            stages["handoff_or_retain"]["evidence_required"],
+            ["prepared handoff or retained-Hermes result"],
+        )
+
     def test_playbook_recommend_routes_feature_and_research_situations(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo"])
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
         feature = json.loads(stdout)["recommendations"][0]
-        self.assertEqual(feature["id"], "safe-feature-change")
+        self.assertEqual(feature["id"], "request-to-handoff")
         self.assertEqual(feature["confidence"], "high")
         self.assertIn("executor_dispatch", feature["not_evidence_until_observed"])
+        self.assertEqual(feature["next_action"], "route_request")
+        self.assertIn("not plan acceptance", feature["evidence_boundary"])
 
         status, stdout, stderr = run_cli(["playbook", "recommend", "research", "latest", "official", "sources"])
 
@@ -1576,12 +1611,21 @@ class CliTests(unittest.TestCase):
             _, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
             doctor = json.loads(doctor_stdout)
             checks = {check["name"]: check for check in doctor["checks"]}
+            self.assertIn("recommended_next_action", doctor)
+            self.assertIn("request-to-handoff", doctor["recommended_next_action"])
             self.assertTrue(checks["runtime_context"]["ok"])
             self.assertIn("--hermes-home", checks["runtime_context"]["message"])
+            self.assertEqual(checks["runtime_context"]["severity"], "ok")
+            self.assertTrue(checks["runtime_context"]["observed"])
             self.assertTrue(checks["manifest_skills_dir"]["ok"])
             self.assertTrue(checks["local_modifications"]["ok"])
             self.assertTrue(checks["runtime_artifacts"]["ok"])
             self.assertTrue(checks["workflow_state"]["ok"])
+            for check in checks.values():
+                self.assertIn(check["severity"], {"ok", "warning", "blocking"})
+                self.assertIn("remediation", check)
+                self.assertIn("next_action", check)
+                self.assertIn("observed", check)
 
     def test_setup_runs_install_and_apply(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -1685,6 +1729,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(doctor_status, 1)
             checks = {check["name"]: check for check in json.loads(doctor_stdout)["checks"]}
             self.assertFalse(checks["local_modifications"]["ok"])
+            self.assertEqual(checks["local_modifications"]["severity"], "blocking")
+            self.assertIn("omh install --force", checks["local_modifications"]["next_action"])
             self.assertIn("ralph/SKILL.md", checks["local_modifications"]["message"])
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "install", "--force"])[0], 0)
 
@@ -1701,8 +1747,12 @@ class CliTests(unittest.TestCase):
             status, stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(other_hermes_home), "doctor"])
 
             self.assertEqual(status, 1)
-            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            doctor = json.loads(stdout)
+            checks = {check["name"]: check for check in doctor["checks"]}
             self.assertFalse(checks["runtime_context"]["ok"])
+            self.assertEqual(checks["runtime_context"]["severity"], "blocking")
+            self.assertIn("omh setup", checks["runtime_context"]["next_action"])
+            self.assertIn("omh setup", doctor["recommended_next_action"])
             self.assertIn("matching the Hermes or bot runtime", checks["runtime_context"]["message"])
 
     def test_convert_from_local_skill_fixture(self) -> None:
@@ -2021,6 +2071,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 1)
             checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
             self.assertFalse(checks["runtime_artifacts"]["ok"])
+            self.assertEqual(checks["runtime_artifacts"]["severity"], "blocking")
+            self.assertIn("writable --omh-home", checks["runtime_artifacts"]["next_action"])
 
     def test_doctor_reports_malformed_runtime_state_without_crashing(self) -> None:
         with TemporaryDirectory() as tmp:

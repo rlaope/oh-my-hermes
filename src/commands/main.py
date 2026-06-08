@@ -23,7 +23,7 @@ from ..wrapper.lifecycle import (
 )
 from ..config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
 from ..demo import DEFAULT_ORCHESTRATION_MESSAGE, build_orchestration_demo
-from ..doctor import doctor_ok, run_doctor
+from ..doctor import doctor_ok, recommended_next_action, run_doctor
 from ..hashutil import sha256_file
 from ..hermes_planning import attach_plan_artifact_to_wrapper_contract, build_hermes_plan_payload, write_hermes_plan
 from ..installer import OmhError, install_skill_pack, uninstall_skill_pack
@@ -201,16 +201,22 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
     runtime_writable = any(check.name == "runtime_artifacts" and check.ok for check in checks)
     runtime_state_readable = not any(check.name == "runtime_state" and not check.ok for check in checks)
     if runtime_writable and runtime_state_readable:
+        next_action = recommended_next_action(checks)
         update_state(
             paths,
             {
                 "last_doctor": {
                     "ok": doctor_ok(checks),
                     "checks": {check.name: check.ok for check in checks},
+                    "recommended_next_action": next_action,
                 }
             },
         )
-    return {"ok": doctor_ok(checks), "checks": [check.__dict__ for check in checks]}
+    return {
+        "ok": doctor_ok(checks),
+        "checks": [check.__dict__ for check in checks],
+        "recommended_next_action": recommended_next_action(checks),
+    }
 
 
 def cmd_setup(args: argparse.Namespace) -> int:

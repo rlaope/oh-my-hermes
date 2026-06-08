@@ -15,7 +15,7 @@ names.
 
 ```sh
 omh playbook list
-omh playbook inspect safe-feature-change
+omh playbook inspect request-to-handoff
 omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "research latest official sources"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
@@ -29,6 +29,7 @@ files.
 
 | Playbook | Use When | Primary Shape |
 | --- | --- | --- |
+| `request-to-handoff` | A user sends a natural request and needs the first role-owned next action. | Route request -> select role -> plan or prepare -> handoff or retain -> status card. |
 | `safe-feature-change` | A user wants a safe feature, bug fix, or refactor flow. | Recommend -> plan -> accept -> coding handoff -> status card. |
 | `source-backed-research` | A user needs current, official, comparative, or citation-backed evidence. | Clarify scope -> gather sources -> synthesize -> report confidence. |
 | `research-to-strategy-brief` | A user wants business or customer evidence shaped into strategy. | Scope research -> evidence table -> meeting topics -> strategy options -> decision record. |
@@ -79,11 +80,12 @@ contracts, evidence requirements, and acceptance criteria.
 omh playbook recommend "I want to safely add a feature to this repo"
 ```
 
-The top playbook is `safe-feature-change`. A wrapper can show a planning-first
-response, keep handoff disabled until plan acceptance, then show executor
-selection, `Send to executor`, prompt handoff, and `Show status` actions based
-on the configured executor profile. `Send to Codex` is only a compatibility
-alias when the Codex lifecycle profile is selected.
+The top playbook is `request-to-handoff`. A wrapper can show why that flagship
+path was chosen, name the responsible role, keep handoff disabled until plan
+acceptance, then show executor selection, `Send to executor`, prompt handoff,
+and `Show status` actions based on the configured executor profile. `Send to
+Codex` is only a compatibility alias when the Codex lifecycle profile is
+selected.
 
 The user-facing improvement is simple: the user describes the work naturally,
 and the wrapper turns it into the right pipeline without exposing shell

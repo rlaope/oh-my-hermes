@@ -17,12 +17,13 @@ Router guidance for using oh-my-hermes workflow skills inside Hermes Agent.
 - Hermes role: `retained-router`
 - Quality tier: `routing-gated`
 - Handoff policy: Classify requests into Hermes-retained planning/research/interview lanes, executor choice, or prepared coding handoffs; do not execute code.
-- Use when: Use as the top-level router when a request references oh-my-hermes, installed workflows, or ambiguous workflow routing.
-- Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`, `chat routing`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
+- Use when: Use as the top-level router when a request references oh-my-hermes, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.
+- Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`, `chat routing`, `request-to-handoff`, `plain request`, `role-owned next action`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
 - Quality bar:
   - Route only from explicit invocation, strong catalog evidence, or a clear workflow-shaped request.
   - Return a clarification or fallback path instead of forcing low-confidence messages into a workflow.
   - Keep users command-agnostic by naming the next UX step rather than shell commands.
+  - Use request-to-handoff as the first path when a plain request needs role, plan, handoff, or status UX.
 - Required inputs:
   - user request
   - installed skill descriptions
