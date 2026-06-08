@@ -60,7 +60,8 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
         self.assertIn("omh runtime show", cases)
         self.assertIn("Chat Wrapper Backend Flow", install)
         self.assertIn("Codex lifecycle calls", install)
-        self.assertIn("What Gets Recorded", readme)
+        self.assertIn("What Gets Recorded", install)
+        self.assertNotIn("What Gets Recorded", readme)
 
 
 if __name__ == "__main__":

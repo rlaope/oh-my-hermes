@@ -37,6 +37,12 @@ Custom archive:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes-agent/archive/refs/tags/v<version>.zip sh
 ```
 
+Optional plugin/profile bootstrap smoke:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
+```
+
 ## Required Checks
 
 Run before tagging:

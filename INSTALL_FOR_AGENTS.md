@@ -94,6 +94,13 @@ import, and register smoke checks. It does not patch Hermes core, implement
 Discord or Slack transports, start a network service, or prove Hermes loaded
 the plugin. Runtime plugin use must be observed separately.
 
+The one-command installer can include the same optional bridge or profile packs
+when the operator explicitly wants them:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop sh
+```
+
 ## First Hermes Prompt
 
 After install and any required Hermes restart/reload, try:

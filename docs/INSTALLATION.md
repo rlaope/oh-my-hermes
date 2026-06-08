@@ -276,6 +276,23 @@ Exports redact prompt, response, token, secret, key, and password-shaped fields 
 default while preserving proof fields such as run status, event names, observed
 delegation flags, and wrapper completion status.
 
+## What Gets Recorded
+
+`omh` records runtime metadata only by default:
+
+- setup/install/apply/doctor summaries in `~/.omh/runtime/state.json`
+- workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
+- append-only run events in `events.jsonl`
+- wrapper chat sessions in `~/.omh/runtime/wrapper_sessions/<session-id>/`
+- delegation observation in `delegation.json`
+- prepared coding handoffs in `coding_delegation.json`
+- wrapper observation in `wrapper.json`
+- review, CI, and merge evidence in `review.json`, `ci.json`, and `merge.json`
+
+Prepared handoff is never treated as implementation, review, CI, or merge
+evidence by itself. If the wrapper cannot prove that a step happened, status
+should stay `prepared_not_observed`, `not_observed`, or `not_available`.
+
 ## Review Checklist
 
 Before calling the bot integration ready, verify these points:
@@ -376,6 +393,24 @@ Then restart Hermes Agent.
 
 ## Install Options
 
+Install the optional plugin bridge during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 sh
+```
+
+Install one or more optional Hermes agent/profile packs during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
+```
+
+Record setup profile choices during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SETUP_PROFILES=1,3 sh
+```
+
 Skip automatic Hermes config registration:
 
 ```sh
@@ -393,6 +428,16 @@ Use the active environment instead of a user-level install:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PIP_ARGS= sh
 ```
+
+Pass a current `omh setup` flag before `install.sh` has a first-class
+environment variable for it:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SETUP_ARGS="--dry-run" sh
+```
+
+`OMH_SETUP_ARGS` is an advanced escape hatch. Prefer the named variables above
+for stable install recipes.
 
 ## Uninstall
 
