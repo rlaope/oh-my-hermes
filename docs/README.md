@@ -44,9 +44,9 @@ The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a
 merge.
 
-## Flagship Workflow Families
+## Flagship Command Set Families
 
-![OMH flagship workflows poster](../assets/omh-flagship-workflows-poster.png)
+![OMH flagship command sets poster](../assets/omh-flagship-workflows-poster.png)
 
 | Family | What Hermes owns | Plain request |
 | --- | --- | --- |

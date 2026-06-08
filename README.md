@@ -94,6 +94,10 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 
 ## Why OMH
 
+<p align="center">
+  <img src="assets/omh-flagship-workflows-poster.png" alt="OMH flagship command sets poster" width="920">
+</p>
+
 - **Natural-language first** - users in chat do not need to know `omh` commands.
 - **Install-first, not dashboard-first** - get Hermes-visible skills without
   adopting a hosted service, bot SDK, or separate app.
@@ -107,11 +111,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
-## Flagship Workflows
-
-<p align="center">
-  <img src="assets/omh-flagship-workflows-poster.png" alt="OMH flagship workflows poster" width="920">
-</p>
+## Flagship Command Sets
 
 | Representative workflow | Boundary | Plain request |
 | --- | --- | --- |
