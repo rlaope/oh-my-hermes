@@ -5,6 +5,10 @@ skill pack. Normal users should talk to Hermes through Hermes' skill and chat
 surfaces. The `omh` command is bootstrap, repair, verification, and wrapper
 backend infrastructure.
 
+AI agents and operators who need a pasteable protocol should use the root
+[Agent Install Protocol](../INSTALL_FOR_AGENTS.md). That protocol defines what
+to run, what to report, and what is still unobserved after install.
+
 ## Quick Start
 
 Use this when you just want Hermes to see OMH skills and have the local
@@ -56,11 +60,12 @@ repository. After installation, restart or refresh Hermes Agent if the target
 environment requires it, then use Hermes normally:
 
 ```text
-I want to safely add a feature to this repo
+Use OMHM request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
-Hermes should route through the installed skill guidance without asking the
-chat user to run `omh` commands.
+Hermes should route through the installed skill guidance, name the responsible
+role, and show the next action without asking the chat user to run `omh`
+commands.
 
 ## Install Path B: OMH Bootstrap Setup
 

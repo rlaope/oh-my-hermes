@@ -27,6 +27,7 @@
         <a href="#demo">Demo</a>
         <a href="#architecture">Architecture</a>
         <a href="#playbooks">Playbooks</a>
+        <a href="#roles">Roles</a>
         <a href="#discord-example">Chat example</a>
         <a href="#operator-cases">Operator cases</a>
         <a href="#contracts">Contracts</a>
@@ -42,7 +43,10 @@
           <p>
             OMH gives Hermes installed skill guidance for turning natural language into deterministic
             routing, clarification, research briefs, feedback triage, meeting prep,
-            strategy planning, status narration, or Codex-ready coding handoffs.
+            strategy planning, status narration, or selected-executor coding handoffs.
+            The flagship <code>request-to-handoff</code> path turns a plain
+            Hermes request into a responsible role, a next action, and a clear
+            prepared-vs-observed boundary.
             Local backend contracts and schema-versioned artifacts support wrappers and operators
             without becoming the normal user UX. Operators can optionally add a thin
             plugin bridge for metadata-only status context.
@@ -121,6 +125,8 @@ omh chat interact --source slack "diagnose installation health"</code>
             Read the source runbook at
             <code>docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md</code> and validate the matching
             golden fixture at <code>examples/wrapper-golden/hermes-agent-integration.json</code>.
+            Responsibility roles are described in <code>docs/ROLES.md</code>;
+            agent-facing installation is described in <code>INSTALL_FOR_AGENTS.md</code>.
           </p>
         </section>
 
@@ -166,7 +172,7 @@ uv run python examples/slack-adapter-shim.py</code>
             <div class="arch-arrow" aria-hidden="true">-></div>
             <div class="arch-node arch-node--core">
               <span>OMH local contract layer</span>
-              <strong>Playbook, route, plan, handoff, status</strong>
+              <strong>Request-to-handoff, roles, plan, handoff, status</strong>
             </div>
             <div class="arch-branch" aria-hidden="true"></div>
             <div class="arch-node arch-node--hermes">
@@ -178,7 +184,7 @@ uv run python examples/slack-adapter-shim.py</code>
               <strong>omhm_status, passive context</strong>
             </div>
             <div class="arch-node arch-node--executor">
-              <span>Codex-like executor</span>
+              <span>Selected coding executor</span>
               <strong>Implementation after dispatch</strong>
             </div>
             <div class="arch-node arch-node--runtime">
@@ -204,13 +210,45 @@ uv run python examples/slack-adapter-shim.py</code>
           </p>
           <div class="command" role="region" aria-label="Playbook commands" tabindex="0">
             <code>omh playbook list
-omh playbook inspect safe-feature-change
+omh playbook inspect request-to-handoff
+omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"</code>
           </div>
           <p>
             Use playbooks when wrappers need to know which stages stay with
             Hermes, which stages become executor handoffs, and which claims are
             not evidence until runtime observations exist.
+          </p>
+        </section>
+
+        <section class="docs-section" id="roles">
+          <h2>Role surface</h2>
+          <p>
+            Roles are responsibility descriptors for Hermes chat and wrapper UI.
+            They do not claim that a hidden worker ran. In the
+            <code>request-to-handoff</code> path, Hermes can name the role that
+            owns the next action before any execution evidence exists.
+          </p>
+          <div class="docs-grid">
+            <article class="card">
+              <h3>research-lead</h3>
+              <p>Owns source-backed discovery, confidence, inference, and unknowns.</p>
+            </article>
+            <article class="card">
+              <h3>planning-lead</h3>
+              <p>Owns clarification, non-goals, acceptance criteria, and plan acceptance.</p>
+            </article>
+            <article class="card">
+              <h3>review-gate</h3>
+              <p>Owns findings, release-readiness, QA framing, and fix evidence requirements.</p>
+            </article>
+            <article class="card">
+              <h3>coding-handoff</h3>
+              <p>Owns executor choice and prepared handoff payloads while executors own code changes.</p>
+            </article>
+          </div>
+          <p>
+            Read the full responsibility contract in <code>docs/ROLES.md</code>.
           </p>
         </section>
 
@@ -233,37 +271,44 @@ omh playbook recommend "prepare weekly ops review from customer feedback and rel
               <div class="avatar avatar--bot">H</div>
               <div class="message-body bot-response">
                 <div class="message-meta"><strong>Hermes Agent</strong> <span>BOT</span></div>
-                <h3>I routed this to <code>plan</code> because it needs a safe plan first.</h3>
+                <div class="route-lens" aria-label="Routing summary">
+                  <span>playbook: request-to-handoff</span>
+                  <span>role: planning-lead</span>
+                  <span>next: present_plan</span>
+                </div>
+                <h3>I routed this through <code>request-to-handoff</code>; Planning Lead should present the safe plan first.</h3>
                 <p>
-                  Accept or revise the plan first; the handoff button stays disabled until
-                  acceptance. A draft plan is still only planning evidence.
+                  Accept or revise the plan first. Executor choice and handoff preparation
+                  stay unavailable until the plan is accepted.
                 </p>
                 <div class="button-row" aria-label="Wrapper actions">
                   <button type="button">Accept plan</button>
                   <button type="button">Revise plan</button>
                   <button type="button" disabled>Prepare handoff</button>
                 </div>
-                <p class="claim-boundary">A draft plan is not execution evidence.</p>
+                <p class="claim-boundary">Routing is not plan acceptance, dispatch, or execution evidence.</p>
               </div>
             </div>
             <div class="status-preview">
               <div>
-                <strong>A Codex handoff is ready.</strong>
-                <p>I have prepared the handoff, but executor dispatch is not observed yet.</p>
+                <strong>Request classified; no executor has run.</strong>
+                <p>Hermes can show the responsible role and next action before any handoff or implementation claim exists.</p>
               </div>
               <ol>
-                <li><span class="state state--ready">ready</span> Handoff</li>
+                <li><span class="state state--ready">ready</span> Routing</li>
+                <li><span class="state state--ready">ready</span> Role</li>
+                <li><span class="state">pending</span> Plan acceptance</li>
+                <li><span class="state">pending</span> Executor choice</li>
+                <li><span class="state">pending</span> Handoff</li>
                 <li><span class="state">pending</span> Execution</li>
-                <li><span class="state">pending</span> Verification</li>
-                <li><span class="state state--na">n/a</span> Review</li>
                 <li><span class="state">pending</span> CI</li>
-                <li><span class="state">pending</span> Merge Ready</li>
               </ol>
-              <p class="claim-boundary">Preparation is not execution evidence.</p>
+              <p class="claim-boundary">Prepared handoff becomes available only after acceptance and executor selection.</p>
             </div>
           </div>
           <p>
-            This panel is based on the local fixture output from
+            This panel combines the local <code>request-to-handoff</code>
+            recommendation with the fixture output from
             <code>uv run python examples/discord-adapter-shim.py</code>.
           </p>
         </section>
@@ -331,9 +376,9 @@ omh playbook recommend "prepare weekly ops review from customer feedback and rel
           <h2>Delegation-first coding</h2>
           <p>
             OMH does not hide a coding executor inside Hermes. Coding-heavy requests are shaped
-            into prepared handoffs for Codex-like agents with scope, acceptance criteria,
-            verification commands, review expectations, Codex $skill invocation guidance, and
-            merge-readiness evidence.
+            into prepared handoffs for selected executors with scope, acceptance criteria,
+            verification commands, review expectations, prompt-only fallback guidance, Codex
+            $skill invocation guidance when Codex is selected, and merge-readiness evidence.
           </p>
           <ul class="docs-list">
             <li>Prepared handoff means "ready to dispatch", not "work completed".</li>
@@ -361,7 +406,7 @@ omh harness validate</code>
           <p>
             OMH is deterministic local tooling. It does not patch Hermes core, run platform
             bots, call LLM APIs, create network integrations inside core commands, or launch
-            Codex by itself. Those responsibilities stay explicit at the wrapper, executor, or
+            coding executors by itself. Those responsibilities stay explicit at the wrapper, executor, or
             operator layer.
           </p>
           <p>

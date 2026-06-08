@@ -54,6 +54,14 @@ class OmhPaths:
     def hermes_plugin_dir(self) -> Path:
         return self.hermes_plugins_dir / "omhm"
 
+    @property
+    def hermes_agents_dir(self) -> Path:
+        return self.hermes_home / "agents"
+
+    @property
+    def team_profile_manifest_dir(self) -> Path:
+        return self.omh_home / "team-profile-packs"
+
 
 def expand_path(value: str | Path) -> Path:
     return Path(os.path.expandvars(str(value))).expanduser().resolve()

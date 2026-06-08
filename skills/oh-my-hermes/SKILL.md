@@ -65,6 +65,23 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor profile, prepare the matching handoff, and track only evidence it actually observes instead of implying Hermes coded secretly.
 
+## Responsibility Roles
+
+OMHM role names are responsibility descriptors, not runtime agents. They help Hermes and wrappers explain who owns the next step without implying a hidden worker ran.
+
+- `research-lead` (Research Lead): Own source-backed discovery and keep evidence, inference, confidence, and unknowns separate.
+  - Skills: `web-research`, `best-practice-research`, `research-brief`, `autoresearch-goal`
+  - Evidence boundary: A research role can prepare or summarize evidence; it is not implementation, review, CI, or merge evidence.
+- `planning-lead` (Planning Lead): Own clarification, non-goals, acceptance criteria, tradeoffs, and verification strategy.
+  - Skills: `deep-interview`, `plan`, `ralplan`, `strategy-brief`
+  - Evidence boundary: A planning role can make work reviewable; it is not proof that the work was accepted or executed.
+- `review-gate` (Review Gate): Own claim checking, release/readiness review, QA framing, and evidence requirements.
+  - Skills: `code-review`, `ultraqa`, `ops-review`
+  - Evidence boundary: Review findings are not fix evidence; merge-ready is not merged.
+- `coding-handoff` (Coding Handoff): Own executor selection, prepared handoff payloads, and status narration while selected executors own code changes.
+  - Skills: `ultragoal`, `ultrawork`, `ralph`, `ai-slop-cleaner`
+  - Evidence boundary: A prepared coding handoff is not executor dispatch, result, verification, review, CI, merge readiness, or merge evidence.
+
 ## Wrapper Backend Chat Routing
 
 Discord, Slack, or hosted Hermes wrappers can run `omh chat route` before dispatching a plain chat message to Hermes. This is an adapter/backend call, not end-user UX:

@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <strong>Hermes-native workflow skills for chat-first orchestration.</strong>
+  <strong>Install once. Talk to Hermes. Let OMHM shape the work.</strong>
   <br>
-  <em>Give Hermes Agent a consistent skill pack for routing, research briefs, strategy, meetings, ops review, planning, and coding handoffs.</em>
+  <em>Hermes-native skills, optional team profiles, wrapper contracts, evidence status, and executor-ready handoffs.</em>
 </p>
 
 <p align="center">
@@ -16,37 +16,65 @@
   <img alt="Status" src="https://img.shields.io/badge/status-quality--gated%20preview-blue">
 </p>
 
-**oh-my-hermes-agent** installs a Hermes-native workflow layer for routing,
-business research, meeting and strategy briefs, planning, chat-wrapper UX,
-evidence tracking, and coding handoff preparation.
+**oh-my-hermes-agent** makes Hermes Agent feel more capable after install. It
+adds workflow skills, optional team/profile packs, wrapper-facing contracts,
+local evidence records, and coding handoff preparation while keeping normal
+users in Hermes chat.
 
-Hermes stays the chat-facing agent. OMHM adds deterministic local contracts
-around it so Discord, Slack, hosted wrappers, and local operators can turn a
-plain user message into a clear next step: answer, clarify, research, triage
-feedback, prepare a meeting or strategy brief, plan, delegate coding, or report
-status.
+The product is not "more CLI commands." The `omh` command is bootstrap,
+doctor, verifier, and wrapper/backend infrastructure. The main experience is:
+
+```text
+user says a plain request in Hermes
+  -> OMHM routes it to the right skill/playbook/profile
+  -> Hermes explains the next action and evidence boundary
+  -> coding is handed off only when the user or wrapper accepts that path
+```
 
 [Website](https://rlaope.github.io/oh-my-hermes-agent/) -
 [Quick Start](#quick-start) - [Two Install Paths](#two-install-paths) -
+[Role Model](#role-model) -
 [Backend Surface](#backend--operator-surface) - [Documentation](docs/README.md) -
-[Installation](docs/INSTALLATION.md) - [Application Cases](docs/APPLICATION_CASES.md)
+[Installation](docs/INSTALLATION.md) - [Agent Install](INSTALL_FOR_AGENTS.md) -
+[Roles](docs/ROLES.md) - [Application Cases](docs/APPLICATION_CASES.md)
 
 ---
 
 ## Why OMHM
 
 - **Natural-language first** - users in chat do not need to know `omh` commands.
+- **Install-first, not dashboard-first** - get a Hermes-visible skill layer
+  without adopting a hosted service, bot SDK, or separate app.
 - **Hermes-native boundary** - no Hermes core patching, hidden transport bot, or
   network service inside this package.
+- **Optional team profiles** - provide CTO/PM-style or research/strategy
+  operating models when the operator wants them; do not force them by default.
 - **Delegation-first coding** - coding-heavy requests become prepared handoffs
   for the selected executor: Codex lifecycle when supported, or prompt-only
-  handoff for Claude Code, OMH-style runtime users, generic agents, or Hermes.
+  handoff for Claude Code, OMHM-style runtime users, generic agents, or Hermes.
 - **Evidence-aware status** - prepared, dispatched, executed, reviewed,
   verified, CI, and merge-ready states stay separate.
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
-## What You Get
+## How It Feels In Hermes
+
+After setup, the normal surface is still Hermes chat. OMHM gives Hermes a
+stronger operating model for deciding what kind of work a message is asking
+for, which skill should own the next step, and what has actually been observed.
+
+| Plain user message | OMHM-shaped Hermes behavior |
+| --- | --- |
+| "Payment failures keep coming up." | Route to feedback triage or investigation first; prepare reproduction and evidence needs before coding. |
+| "Can this issue become a PR?" | Convert the issue into a plan, acceptance criteria, verification commands, and an executor-neutral handoff. |
+| "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
+| "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a coding-agent handoff only after acceptance. |
+| "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
+
+The CLI exists so operators, wrappers, and CI can install, verify, replay, and
+inspect those contracts. It is not the daily UX for a normal Hermes user.
+
+## What You Get After Install
 
 | Surface | What it provides |
 | --- | --- |
@@ -55,16 +83,72 @@ status.
 | Optional Hermes plugin | `omh setup --with-plugin` installs a thin native bridge under `~/.hermes/plugins/omhm`. |
 | Skill catalog | Deterministic routing metadata from `src/skills/catalog.py`. |
 | Business workflow skills | `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, and `ops-review` for non-coding company work inside Hermes. |
+| Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | Playbooks | Situation-level pipelines for research, meetings, strategy, feedback triage, ops review, planning, wrapper UX, and coding handoff flows. |
+| Role surface | `research-lead`, `planning-lead`, `review-gate`, and `coding-handoff` describe responsibility lanes, not hidden runtime agents. |
+| Optional team profile packs | `startup-delivery`, `engineering-delivery`, `research-strategy`, and `cto-loop` can install Hermes agent role files only when selected. |
 | Harness quality | Machine-readable quality bars, evidence ladders, wrapper actions, and overclaim guards. |
 | Wrapper backend contract | `chat_interaction/v1` responses for Discord, Slack, and hosted adapters. |
 | Planning artifacts | Hermes-facing Markdown plans under `~/.hermes/plans`. |
 | Coding handoffs | Prepared executor payloads with acceptance, review, and verification expectations. |
 | Runtime evidence | Metadata-only run/session records under `~/.omh/runtime`. |
 
+Think of this as three layers:
+
+1. **Hermes-facing skills and profiles** for the user-facing conversation.
+2. **Local contracts and artifacts** so wrappers can render buttons, status,
+   plans, and handoffs without guessing.
+3. **Operator commands** for install, doctor, smoke tests, and evidence checks.
+
+## Role Model
+
+OMHM installs **skills and contracts first**. Team/profile packs are available,
+but they are opt-in.
+
+That is intentional. Hermes users may be solo maintainers, startup founders,
+PMs, researchers, support operators, agencies, or engineering teams. Some want
+a CTO/PM/Dev/QA/Ops style loop; others just want Hermes to turn a plain message
+into the right next workflow without adopting a full organization metaphor.
+
+What exists today:
+
+| Layer | Exists today | Meaning |
+| --- | --- | --- |
+| Responsibility roles | Yes | `research-lead`, `planning-lead`, `review-gate`, and `coding-handoff` explain who owns the next action in chat. |
+| Hermes skills | Yes | Generated `skills/<name>/SKILL.md` files are installable through Hermes tap or `omh setup`. |
+| Optional plugin bridge | Yes | `omh setup --with-plugin` installs a thin metadata/status bridge under `~/.hermes/plugins/omhm`. |
+| Optional team profile packs | Yes, opt-in | `omh setup --profile-pack <id>` writes OMHM-prefixed Hermes agent role files under `~/.hermes/agents`. |
+
+This keeps the default install broad and low-commitment:
+
+```text
+plain request -> request-to-handoff -> responsible role -> next action -> evidence boundary
+```
+
+A CTO/PM-style structure is a good **optional profile pack**, not the default
+product surface. OMHM provides selectable packs:
+
+- `startup-delivery`: Product Lead, Tech Lead, QA Gate, Release Lead
+- `engineering-delivery`: Planning Lead, Coding Handoff, Review Gate, Release Gate
+- `research-strategy`: Research Lead, Strategy Lead, Meeting Lead
+- `cto-loop`: CTO, PM, Dev, QA, Security, Ops
+
+Inspect and install them with:
+
+```sh
+omh profile list
+omh profile inspect cto-loop
+omh setup --profile-pack cto-loop
+```
+
+Installing a pack writes role files such as
+`~/.hermes/agents/omhm-cto-loop-cto.md`. It does not prove Hermes activated the
+profile, spawned an agent, executed code, reviewed a PR, passed CI, or merged
+anything. Those claims still require observed runtime or wrapper evidence.
+
 ## Quick Start
 
-**Step 1: Install OMH and apply the Hermes setup**
+**Step 1: Install OMHM and apply the Hermes setup**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
@@ -90,8 +174,8 @@ hermes skills tap add rlaope/oh-my-hermes-agent
 hermes skills install oh-my-hermes
 ```
 
-Install additional workflow skills when you want them exposed directly in
-Hermes:
+You can skip this next block. It is only for operators who want individual
+workflow shortcuts exposed directly in Hermes:
 
 ```sh
 hermes skills install deep-interview
@@ -104,17 +188,17 @@ hermes skills install code-review
 
 **Step 2: Talk to Hermes**
 
-Send a normal message in Hermes Agent, Discord, Slack, or a hosted Hermes
-wrapper:
+Send the flagship first prompt in Hermes Agent, Discord, Slack, or a hosted
+Hermes wrapper:
 
 ```text
-I want to safely add a feature to this repo
+Use OMHM request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
-Hermes should use the installed OMH guidance to decide whether to answer,
-clarify, research, triage feedback, prepare a meeting or strategy brief, plan,
-prepare a coding handoff, or report status. Users should not need to know
-`omh recommend`, `omh chat interact`, or other backend commands.
+Hermes should explain why `request-to-handoff` is the right first workflow,
+name the responsible role, show the next action, and say what is not evidence
+yet. Users should not need to know `omh recommend`, `omh chat interact`, or
+other backend commands.
 
 For non-coding company work, the same install can route prompts such as:
 
@@ -124,15 +208,31 @@ prepare weekly ops review from customer feedback and release risks
 we need a competitor market scan and strategy memo for next week's leadership meeting
 ```
 
-Those stay Hermes-retained by default. OMH can classify, brief, and record the
+Those stay Hermes-retained by default. OMHM can classify, brief, and record the
 next workflow without pretending data was fetched, a meeting happened, or a
 coding executor implemented anything.
+
+**Step 3: Add a team profile only when you want one**
+
+Most users can skip this. If the operator wants an explicit CTO/PM/QA/Ops or
+research/strategy operating model, inspect the available packs and opt in:
+
+```sh
+omh profile list
+omh setup --profile-pack startup-delivery
+omh setup --profile-pack cto-loop
+```
+
+Profile packs are Hermes role files, not hidden automation. They make the chat
+operating model easier to understand, while OMHM still keeps execution,
+review, CI, and merge claims evidence-gated.
 
 ## Two Install Paths
 
 ### Path A: Hermes-native skill install
 
-Use this when Hermes skill taps are available in the target environment:
+Use this when Hermes skill taps are available in the target environment. It is
+the cleanest user-facing path because Hermes sees OMHM as installed skills:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
@@ -142,7 +242,7 @@ hermes skills install oh-my-hermes
 This installs from the repo's tap-compatible `skills/` directory and keeps the
 main UX inside Hermes.
 
-### Path B: OMH bootstrap setup
+### Path B: OMHM bootstrap setup
 
 Use this when you want a Python installer, repair command, generated managed
 skills, local doctor checks, or wrapper/backend commands:
@@ -155,7 +255,7 @@ omh doctor
 
 `omh setup` installs generated skills under `~/.omh/skills` and registers that
 directory through Hermes' `skills.external_dirs`. The intended final state is
-the same from the user's point of view: Hermes sees OMH skills, and the user
+the same from the user's point of view: Hermes sees OMHM skills, and the user
 talks to Hermes.
 
 **Optional native plugin bridge**
@@ -201,6 +301,18 @@ pipeline for situations such as source-backed research, research-to-strategy
 briefs, meeting prep, feedback triage, weekly ops review, safe feature change,
 release-readiness review, and local pipeline buildout.
 
+**Optional team profile pack**
+
+```sh
+omh profile list
+omh profile inspect cto-loop
+omh setup --profile-pack cto-loop
+```
+
+This creates OMHM-prefixed role files under `~/.hermes/agents`. It is useful
+when the operator wants Hermes to speak in an organization-style structure such
+as CTO, PM, Dev, QA, Security, and Ops. It is not installed by default.
+
 ### Stable Install
 
 The default installer target is the preview channel from `main`. For a pinned
@@ -227,9 +339,9 @@ OMHM is a local contract layer around Hermes, not a replacement runtime.
 
 ```text
 User chat
-  -> Hermes Agent with installed OMH skills
+  -> Hermes Agent with installed OMHM skills
   -> optional Discord, Slack, or hosted wrapper
-  -> optional OMH backend contract for buttons, plans, handoffs, and status
+  -> optional OMHM backend contract for buttons, plans, handoffs, and status
   -> external executor only when coding work is accepted
   -> observed evidence recorded back into local runtime artifacts
 ```
@@ -347,6 +459,8 @@ smoke tests, runtime evidence, and operator debugging.
 | Pick a workflow locally | `omh recommend <task>` |
 | Pick a situation pipeline | `omh playbook recommend <task>` |
 | Inspect a pipeline | `omh playbook inspect <id>` |
+| List optional team profile packs | `omh profile list` |
+| Install a team profile pack | `omh setup --profile-pack cto-loop` |
 | Demo wrapper orchestration | `omh demo orchestration` |
 | Inspect workflow quality JSON | `omh docs workflows --json` |
 | Drive a chat wrapper turn | `omh chat interact <message>` |
@@ -404,6 +518,8 @@ evidence-backed and local.
 
 - Versioned release artifacts for stable installer targets
 - A richer generated routing registry
+- Stronger profile-pack activation probes for Hermes environments that expose
+  agent/profile lifecycle evidence
 - More artifact-backed bot and workflow examples
 - More Hermes-specific diagnostics in `omh doctor`
 - Workflow fixtures that verify generated skill behavior remains conservative

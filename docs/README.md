@@ -15,6 +15,8 @@ repo-local contract for Codex agents working here.
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
+| Install from an AI-agent protocol | [Agent Install Protocol](../INSTALL_FOR_AGENTS.md) |
+| Understand responsibility roles | [Role Surface](ROLES.md) |
 | Choose a situation-level pipeline | [Playbooks](PLAYBOOKS.md) |
 | See Discord-style wrapper responses | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
 | Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
@@ -60,6 +62,9 @@ merge.
 - Playbook docs should describe situation-level pipelines for both company work
   and coding handoffs, plus ownership boundaries, rather than becoming a second
   skill catalog.
+- Role docs should describe responsibility lanes, not runtime agents. A role can
+  explain the next action, but it cannot prove execution without matching
+  observed evidence.
 - Coding-heavy requests should be described as delegated work unless there is
   observed evidence that a coding executor actually ran.
 - Generated workflow docs should come from `src/skills/catalog.py`; update the
@@ -82,6 +87,8 @@ When changing docs, check whether the same claim needs to be updated in:
 - [Architecture](ARCHITECTURE.md)
 - [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md)
 - [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md)
+- [Role Surface](ROLES.md)
+- [Agent Install Protocol](../INSTALL_FOR_AGENTS.md)
 - [Playbooks](PLAYBOOKS.md)
 - [Harness Quality Contract](HARNESS_QUALITY.md)
 - [Application Cases](APPLICATION_CASES.md)

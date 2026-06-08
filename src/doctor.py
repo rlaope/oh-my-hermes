@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from .config_adapter import external_dirs, read_config
 from .hashutil import sha256_file
@@ -18,6 +19,18 @@ class Check:
     name: str
     ok: bool
     message: str
+    severity: str = "auto"
+    remediation: str = ""
+    next_action: str = ""
+    observed: bool = True
+
+    def __post_init__(self) -> None:
+        if self.severity == "auto":
+            object.__setattr__(self, "severity", "ok" if self.ok else "blocking")
+        if not self.ok and not self.remediation:
+            object.__setattr__(self, "remediation", _default_remediation(self.name))
+        if not self.ok and not self.next_action:
+            object.__setattr__(self, "next_action", _default_next_action(self.name))
 
 
 def run_doctor(paths: OmhPaths) -> list[Check]:
@@ -119,11 +132,75 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
                     "plugin_runtime_observed",
                     True,
                     "not required for doctor; Hermes runtime load/use must be observed separately before claiming native runtime readiness",
+                    severity="warning",
+                    next_action="Observe Hermes plugin load/use in the target Hermes runtime before claiming native runtime readiness.",
+                    observed=False,
                 ),
             ]
+        )
+    profile_installs = state.get("last_team_profile_install") if isinstance(state, dict) else None
+    if not profile_installs:
+        checks.append(Check("team_profile_packs", True, f"optional OMHM team profile packs are not installed at {paths.hermes_agents_dir}"))
+    else:
+        expected_files: list[str] = []
+        if isinstance(profile_installs, list):
+            for install in profile_installs:
+                if isinstance(install, dict) and isinstance(install.get("files"), list):
+                    expected_files.extend(str(item) for item in install["files"])
+        missing = [path for path in expected_files if not Path(path).exists()]
+        checks.append(
+            Check(
+                "team_profile_packs",
+                not missing,
+                (
+                    f"{len(expected_files)} optional team profile file(s) installed under {paths.hermes_agents_dir}"
+                    if not missing
+                    else f"missing optional team profile files: {', '.join(missing)}"
+                ),
+            )
         )
     return checks
 
 
 def doctor_ok(checks: list[Check]) -> bool:
     return all(check.ok for check in checks)
+
+
+def recommended_next_action(checks: list[Check]) -> str:
+    for check in checks:
+        if not check.ok and check.severity == "blocking":
+            return check.next_action or check.remediation
+    for check in checks:
+        if check.severity == "warning" and check.next_action:
+            return check.next_action
+    return "Open Hermes Agent and try: Use OMHM request-to-handoff for: I want to safely add a feature to this repo."
+
+
+def _default_remediation(name: str) -> str:
+    if name == "external_dir" or name == "runtime_context":
+        return "Run `omh setup` or `omh apply` with the same --hermes-home used by the Hermes or wrapper runtime."
+    if name.startswith("skill:") or name in {"manifest", "manifest_skills_dir", "skills_dir"}:
+        return "Run `omh setup` to install the managed skill pack, or reinstall with `omh install --force` if managed files drifted."
+    if name == "local_modifications":
+        return "Review local edits under the managed skill directory, then run `omh install --force` only if replacing managed files is intended."
+    if name in {"runtime_artifacts", "workflow_state", "runtime_state"}:
+        return "Repair the local OMH runtime directory or rerun with an --omh-home path that can store metadata-only artifacts."
+    if name.startswith("plugin_"):
+        return "Run `omh setup --with-plugin` to reinstall the optional plugin bundle, or skip plugin checks if the plugin is not part of this setup."
+    if name == "hermes_config":
+        return "Run `omh setup` to create or update the Hermes configuration for managed skill discovery."
+    return "Run `omh doctor` after repairing the reported path or configuration."
+
+
+def _default_next_action(name: str) -> str:
+    if name == "external_dir" or name == "runtime_context":
+        return "Run `omh setup`, then restart or refresh Hermes Agent so it can reload the registered skill directory."
+    if name == "local_modifications":
+        return "Inspect changed managed skill files; use `omh install --force` only when replacing those edits is acceptable."
+    if name.startswith("skill:") or name in {"manifest", "manifest_skills_dir", "skills_dir", "hermes_config"}:
+        return "Run `omh setup`, then `omh doctor` again."
+    if name.startswith("plugin_"):
+        return "Run `omh setup --with-plugin --force`, then `omh doctor` again, or leave the plugin uninstalled if using skills only."
+    if name in {"runtime_artifacts", "workflow_state", "runtime_state"}:
+        return "Fix the OMH runtime path or choose a writable --omh-home, then rerun `omh doctor`."
+    return "Fix the reported check and rerun `omh doctor`."

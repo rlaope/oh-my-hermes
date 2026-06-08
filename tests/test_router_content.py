@@ -8,6 +8,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.routing import recommend as recommend_module
+from omh.roles import role_definitions, role_file_markdown, role_summary_markdown, roles_reference_markdown
 from omh.skill_pack import builtin_definitions, builtin_harnesses, builtin_skill_templates
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
@@ -34,12 +35,31 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Skill Role Classification", router.content)
         self.assertIn("advisory wrapper guidance", router.content)
         self.assertIn("This role metadata is advisory", router.content)
+        self.assertIn("Responsibility Roles", router.content)
+        self.assertIn("responsibility descriptors, not runtime agents", router.content)
+        self.assertIn(role_summary_markdown(), router.content)
         self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
         self.assertIn("selected executor profile", router.content)
         self.assertIn("prepared_not_observed", router.content)
         self.assertIn("skills_list", router.content)
         self.assertIn("skill_view", router.content)
         self.assertIn("name collides", router.content)
+
+    def test_role_surface_docs_match_catalog_and_avoid_runtime_claims(self) -> None:
+        roles_doc = Path("docs/ROLES.md").read_text(encoding="utf-8")
+
+        self.assertEqual(roles_doc, roles_reference_markdown())
+        self.assertIn("request-to-handoff", roles_doc)
+        self.assertIn("roles are responsibility descriptors, not runtime agents", roles_doc.lower())
+        for role in role_definitions():
+            role_file = Path("roles") / f"{role.id}.md"
+            text = role_file.read_text(encoding="utf-8")
+            self.assertEqual(text, role_file_markdown(role))
+            self.assertIn("responsibility descriptor, not a runtime agent", text)
+            self.assertIn(role.evidence_boundary, text)
+            self.assertNotIn("secretly", text.lower())
+            if role.id == "coding-handoff":
+                self.assertIn("not executor dispatch", text)
 
     def test_core_skill_set_contains_major_workflows(self) -> None:
         names = {skill.name for skill in builtin_skill_templates()}
@@ -304,13 +324,19 @@ class RouterContentTests(unittest.TestCase):
         required_paths = [
             Path("README.md"),
             Path("AGENTS.md"),
+            Path("INSTALL_FOR_AGENTS.md"),
             Path("docs/README.md"),
             Path("docs/DIRECTION.md"),
             Path("docs/HARNESS_QUALITY.md"),
             Path("docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md"),
             Path("docs/INSTALLATION.md"),
+            Path("docs/ROLES.md"),
             Path("docs/APPLICATION_CASES.md"),
             Path("docs/PLAYBOOKS.md"),
+            Path("roles/research-lead.md"),
+            Path("roles/planning-lead.md"),
+            Path("roles/review-gate.md"),
+            Path("roles/coding-handoff.md"),
             Path("docs/RELEASE.md"),
             Path("install.sh"),
             Path("CONTRIBUTING.md"),
@@ -337,6 +363,7 @@ class RouterContentTests(unittest.TestCase):
 
         readme = Path("README.md").read_text(encoding="utf-8")
         docs_readme = Path("docs/README.md").read_text(encoding="utf-8")
+        install_for_agents = Path("INSTALL_FOR_AGENTS.md").read_text(encoding="utf-8")
         installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
         ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
         pages = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
@@ -353,8 +380,16 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("https://rlaope.github.io/oh-my-hermes-agent/", readme)
         self.assertIn("[Documentation](docs/README.md)", readme)
         self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
+        self.assertIn("[Agent Install](INSTALL_FOR_AGENTS.md)", readme)
+        self.assertIn("[Roles](docs/ROLES.md)", readme)
         self.assertIn("[Application Cases](docs/APPLICATION_CASES.md)", readme)
         self.assertIn("[GitHub Pages site](site/index.html)", readme)
+        self.assertIn("Optional team profile packs", readme)
+        self.assertIn("omh profile list", readme)
+        self.assertIn("omh profile inspect cto-loop", readme)
+        self.assertIn("omh setup --profile-pack cto-loop", readme)
+        self.assertIn("CTO, PM, Dev, QA, Security, Ops", readme)
+        self.assertIn("It is not installed by default.", readme)
         self.assertIn("OMH_CHANNEL=stable OMH_VERSION=<version>", readme)
         self.assertIn("v<version>", readme)
         self.assertIn("`omh setup` installs generated skills", readme)
@@ -363,6 +398,8 @@ class RouterContentTests(unittest.TestCase):
         quick_start = readme.split("## Quick Start", 1)[1].split("## Two Install Paths", 1)[0]
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", quick_start)
         self.assertIn("omh setup", quick_start)
+        self.assertIn("Use OMHM request-to-handoff for: I want to safely add a feature to this repo.", quick_start)
+        self.assertIn("name the responsible role", quick_start)
         self.assertLess(quick_start.index("curl -fsSL"), quick_start.index("hermes skills tap add"))
         self.assertIn("## Backend / Operator Surface", readme)
         self.assertIn("omh docs workflows --json", readme)
@@ -370,7 +407,19 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("The primary product surface is installed Hermes skills", readme)
         self.assertNotIn("Useful local and wrapper-debug commands", readme)
         self.assertIn("Install Path A: Hermes-Native Skill Tap", installation)
+        self.assertIn("Agent Install Protocol", installation)
         self.assertIn("hermes_native_setup/v1", installation)
+        self.assertIn("Use OMHM request-to-handoff for: I want to safely add a feature to this repo.", installation)
+        self.assertIn("name the responsible", installation)
+        self.assertIn("OMHM Agent Install Protocol", install_for_agents)
+        self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", install_for_agents)
+        self.assertIn("omh setup", install_for_agents)
+        self.assertIn("omh doctor", install_for_agents)
+        self.assertIn("hermes skills tap add rlaope/oh-my-hermes-agent", install_for_agents)
+        self.assertIn("recommended_next_action", install_for_agents)
+        self.assertIn("Use OMHM request-to-handoff for: I want to safely add a feature to this repo.", install_for_agents)
+        self.assertNotIn("GITHUB_TOKEN", install_for_agents)
+        self.assertNotIn("PRODUCTION_URL", install_for_agents)
         self.assertIn("Chat Wrapper Backend Flow", installation)
         self.assertIn("omh chat interact", installation)
         self.assertIn("harness_quality/v1", installation)
@@ -384,6 +433,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Prepared handoff is not execution evidence", runbook)
         self.assertIn("examples/wrapper-golden/hermes-agent-integration.json", runbook)
         self.assertIn("Hermes Agent Integration Runbook", docs_readme)
+        self.assertIn("Role Surface", docs_readme)
+        self.assertIn("Agent Install Protocol", docs_readme)
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)
         self.assertIn("docs workflows --check", ci)
@@ -402,8 +453,20 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Capability probe status", release)
         self.assertIn("OMH", site)
         self.assertIn('href="docs/">Read docs</a>', site)
+        self.assertIn("First Hermes prompt", site)
+        self.assertIn("Use OMHM request-to-handoff for: I want to safely add a feature to this repo.", site)
+        self.assertIn("request-to-handoff", site)
+        self.assertIn("planning-lead", site)
+        self.assertIn("Prepared is not observed", site)
+        self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site)
         self.assertIn("Hermes Agent Integration Runbook", site_docs)
         self.assertIn("examples/wrapper-golden/hermes-agent-integration.json", site_docs)
+        self.assertIn("Role surface", site_docs)
+        self.assertIn("docs/ROLES.md", site_docs)
+        self.assertIn("INSTALL_FOR_AGENTS.md", site_docs)
+        self.assertIn("request-to-handoff", site_docs)
+        self.assertIn("planning-lead", site_docs)
+        self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site_docs)
         topbar = site.split('<header class="topbar"', 1)[1].split("</header>", 1)[0]
         self.assertIn('href="docs/"', topbar)
         self.assertNotIn('href="#architecture"', topbar)
@@ -500,10 +563,12 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertIn("omh playbook recommend", readme)
         self.assertIn("Playbooks", docs_index)
+        self.assertIn("request-to-handoff", playbooks)
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
         self.assertIn("not execution evidence", playbooks)
         self.assertIn("Situation playbooks", site)
+        self.assertIn("request-to-handoff", site)
         self.assertIn("Grounded operator cases", site)
         self.assertIn("Payment failures keep showing up", site)
 
