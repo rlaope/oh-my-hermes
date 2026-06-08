@@ -101,6 +101,7 @@ a {
   min-height: 36px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 7px 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
@@ -120,6 +121,17 @@ a {
   border-color: rgba(255, 255, 255, 0.42);
   background: rgba(255, 255, 255, 0.15);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.nav__icon {
+  width: 38px;
+  padding: 0;
+}
+
+.nav__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 .nav a:active {
@@ -877,10 +889,25 @@ h1 {
 }
 
 .footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 28px;
   padding: 30px clamp(20px, 5vw, 72px);
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 14px;
+}
+
+.footer a {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration-color: rgba(39, 68, 59, 0.28);
+  text-underline-offset: 3px;
+}
+
+.footer a:hover {
+  color: #167b67;
 }
 
 .docs-page {
