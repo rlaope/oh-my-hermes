@@ -107,6 +107,18 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
+## Flagship Workflows
+
+<p align="center">
+  <img src="assets/omh-flagship-workflows-poster.png" alt="OMH flagship workflows poster" width="920">
+</p>
+
+| Representative workflow | Boundary | Plain request |
+| --- | --- | --- |
+| `deep-interview` / `ralplan` / `ultragoal` | Hermes turns ambiguous intent into a concrete goal, plan, and execution-ready path. | "Make onboarding feel smoother." |
+| `feedback-triage` / `research-brief` / `strategy-brief` | Hermes keeps non-coding company and product operations inside brief, evidence, and decision workflows. | "Payment failures keep coming up." |
+| `idea-to-deploy` / coding handoff / executor selection | Hermes prepares work for Codex, Claude Code, or another selected executor instead of hiding coding inside Hermes. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+
 ## What You Get
 
 | Surface | What it provides |

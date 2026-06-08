@@ -44,6 +44,16 @@ The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a
 merge.
 
+## Flagship Workflow Families
+
+![OMH flagship workflows poster](../assets/omh-flagship-workflows-poster.png)
+
+| Family | What Hermes owns | Plain request |
+| --- | --- | --- |
+| `deep-interview` / `ralplan` / `ultragoal` | Turn vague intent into a concrete goal, accepted plan, and execution-ready path. | "Make onboarding feel smoother." |
+| `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
+| `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, or another selected executor while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+
 ## Documentation Contracts
 
 - Public docs should describe local deterministic behavior, not hidden runtime
