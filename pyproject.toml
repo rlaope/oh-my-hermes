@@ -33,12 +33,14 @@ Repository = "https://github.com/rlaope/oh-my-hermes-agent"
 [tool.setuptools]
 packages = [
   "omh",
+  "omh.catalogs",
   "omh.commands",
   "omh.core",
   "omh.plugin_bundle",
   "omh.plugin_bundle.omhm",
   "omh.plugin_bundle.omhm.hooks",
   "omh.plugin_bundle.omhm.tools",
+  "omh.profiles",
   "omh.routing",
   "omh.runtime",
   "omh.skills",
@@ -47,8 +49,10 @@ packages = [
 
 [tool.setuptools.package-dir]
 omh = "src"
+"omh.catalogs" = "src/catalogs"
 "omh.commands" = "src/commands"
 "omh.core" = "src/core"
+"omh.profiles" = "src/profiles"
 "omh.routing" = "src/routing"
 "omh.runtime" = "src/runtime"
 "omh.skills" = "src/skills"

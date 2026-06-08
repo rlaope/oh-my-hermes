@@ -70,7 +70,17 @@ src/
   chat_router.py              # compatibility adapter to routing/chat.py
   cli.py                     # compatibility adapter to commands/main.py
   commands/
-    main.py
+    main.py                  # parser assembly and top-level error handling
+    chat.py
+    coding.py
+    common.py
+    demo.py
+    docs.py
+    hermes.py
+    playbook.py
+    runtime.py
+    setup.py
+    state.py
   coding_delegation.py
   coding_lifecycle.py        # compatibility adapter to wrapper/lifecycle.py
   config_adapter.py
@@ -80,9 +90,13 @@ src/
   installer.py
   manifest.py
   paths.py
-  playbooks.py
+  playbooks.py               # compatibility adapter to catalogs/playbooks.py
+  catalogs/
+    playbooks.py
+    roles.py
   ingress.py
   recommend.py                # compatibility adapter to routing/recommend.py
+  roles.py                   # compatibility adapter to catalogs/roles.py
   routing/
     chat.py
     policy.py
@@ -93,6 +107,11 @@ src/
     artifacts.py
     records.py
   snippet.py
+  setup_profiles.py          # compatibility adapter to profiles/setup.py
+  team_profiles.py           # compatibility adapter to profiles/team.py
+  profiles/
+    setup.py
+    team.py
   wrapper_contract.py         # compatibility adapter to wrapper/contract.py
   wrapper_sessions.py         # compatibility adapter to wrapper/sessions.py
   wrapper/
@@ -128,10 +147,12 @@ only a metadata-only `omhm_status` tool and a passive `pre_llm_call` hook. It
 does not run verification commands, install transports, patch Hermes core, or
 claim execution evidence from prepared handoffs.
 
-`cli.py` is a compatibility adapter. `commands/main.py` owns command parsing
-and support JSON output for bootstrap, repair, verification, wrapper backends,
-and operator debugging while the package gives future command groups a clearer
-home.
+`cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
+top-level error handling, and the public command handler re-export surface.
+Domain command modules under `commands/` own support JSON output for bootstrap,
+repair, verification, wrapper backends, and operator debugging. New command
+handlers should be added to the matching domain module rather than growing
+`commands/main.py`.
 
 `ingress.py` owns platform-neutral message text and source metadata extraction
 for Discord, Slack, Hermes, and generic wrapper event shapes.
@@ -178,10 +199,20 @@ small, heavily tested, and conservative.
 `skills/catalog.py` owns workflow names, descriptions, trigger phrases, and
 use-when rules as data.
 
-`playbooks.py` owns situation-level pipeline data. Playbooks sit above
+`catalogs/playbooks.py` owns situation-level pipeline data. Playbooks sit above
 individual skills: they describe common wrapper-visible paths for research,
 interview, planning, coding handoff, local pipeline buildout, and
-release-readiness review.
+release-readiness review. `playbooks.py` remains only as a compatibility
+adapter.
+
+`catalogs/roles.py` owns the wrapper-visible responsibility-role catalog.
+Roles are descriptors for chat/status clarity, not runtime agent evidence.
+`roles.py` remains only as a compatibility adapter.
+
+`profiles/setup.py` owns setup profile categories and executor defaults.
+`profiles/team.py` owns optional team profile packs such as CTO/PM-style
+operating models. `setup_profiles.py` and `team_profiles.py` remain only as
+compatibility adapters.
 
 `skills/render.py` owns generated `SKILL.md` content. It should render from the
 catalog rather than becoming a second source of truth. `skills/packaging.py`
@@ -189,8 +220,10 @@ owns assembly of the managed skill bundle from rendered templates.
 
 `chat_router.py`, `recommend.py`, `runtime_artifacts.py`,
 `runtime_records.py`, `wrapper_contract.py`, `wrapper_sessions.py`,
-`coding_lifecycle.py`, `cli.py`, and `skill_pack.py` are compatibility facades
-so older imports keep working while the package grows internally.
+`coding_lifecycle.py`, `playbooks.py`, `roles.py`, `setup_profiles.py`,
+`team_profiles.py`, `cli.py`, and `skill_pack.py` are compatibility facades so
+older imports keep working while the package grows internally. Facades should
+stay thin and point at the deeper source-owner modules.
 
 ## Routing
 
