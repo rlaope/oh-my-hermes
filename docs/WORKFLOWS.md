@@ -376,6 +376,107 @@ Hermes Ops Review workflow: status, risks, blockers, priorities, and follow-ups.
   - Separate observed facts, risks, blockers, decisions, and follow-up actions.
   - Do not report review, CI, release, or merge readiness from an ops summary alone.
 
+### idea-to-deploy
+
+Hermes Idea-to-Deploy workflow: shape an app idea into decisions, delivery handoff, verification, release, and monitoring status.
+
+- Category: `delivery`
+- Phase: `app-delivery-loop`
+- Hermes role: `retained-cognition`
+- Quality tier: `delivery-gated`
+- Handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
+- Use when: Use when Hermes should carry a product or app idea through shaping, decision gates, plan acceptance, executor handoff, verification, release readiness, deploy, and monitoring boundaries.
+- Strong routing signals: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`, `ship this idea`, `ship this feature`, `launch this feature`, `product delivery loop`, `app delivery loop`, `complete product loop`, `end-to-end app operation`, `완제품 루프`, `아이디어부터 배포`, `기획부터 배포`, `출시까지`, `앱 운영 루프`
+- Quality bar:
+  - Name the idea, user value, decision owner, non-goals, and success metric before planning delivery.
+  - Expose idea, decision, plan, handoff, verification, release, deploy, and monitor stages as separate status steps.
+  - Prepare coding handoffs only after plan acceptance and selected executor choice.
+  - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
+- Required inputs:
+  - product idea
+  - target user or customer signal
+  - success metric
+  - repo or app context
+- Expected outputs:
+  - stage rail
+  - decision gates
+  - executor handoff criteria
+  - verification and deploy/monitor status boundaries
+- Artifact expectations:
+  - app delivery loop status record when the wrapper captures stage acceptance or observations
+- Safety rules:
+  - Do not claim implementation, deploy, health checks, rollback, or monitoring happened from a prepared loop.
+  - Keep coding, release, and monitoring observations as separate evidence gates.
+  - Ask for missing success metric, release scope, or executor choice before preparing a handoff.
+
+### cto-loop
+
+Hermes CTO Loop workflow: roadmap, PM, technical tradeoffs, risk, delivery, release, and follow-up operating cadence.
+
+- Category: `leadership`
+- Phase: `operating-loop`
+- Hermes role: `retained-cognition`
+- Quality tier: `decision-gated`
+- Handoff policy: Keep CTO/PM-style synthesis, tradeoffs, risk ranking, decision notes, and status in Hermes; convert accepted implementation follow-ups into executor-neutral handoffs.
+- Use when: Use when Hermes should run a leadership-style operating loop that turns signals into roadmap decisions, technical tradeoffs, delivery risk, release readiness, and explicit follow-up handoffs.
+- Strong routing signals: `cto-loop`, `cto loop`, `cto`, `cto pm`, `pm dev qa security ops`, `roadmap technical tradeoffs`, `technical tradeoff`, `delivery risk`, `release readiness`, `technical leadership loop`, `leadership operating loop`, `engineering leadership`, `CTO 구조`, `PM 구조`, `로드맵`, `아키텍처 트레이드오프`, `기술 리더십`, `출시 준비`
+- Quality bar:
+  - Separate product priority, architecture tradeoff, delivery risk, release risk, and follow-up owner.
+  - Tie recommendations to observed signals or mark assumptions.
+  - Record accepted decisions separately from draft recommendations.
+  - Prepare executor handoffs only for accepted implementation follow-ups.
+- Required inputs:
+  - operating signals
+  - roadmap or release scope
+  - known risks
+  - decision owner
+- Expected outputs:
+  - priority frame
+  - architecture tradeoffs
+  - delivery risks
+  - decision note
+  - follow-up handoff candidates
+- Artifact expectations:
+  - leadership loop record or status summary when a wrapper captures decisions and follow-ups
+- Safety rules:
+  - Do not treat a CTO loop recommendation as an accepted roadmap decision.
+  - Do not imply CTO, PM, QA, Security, or Ops runtime agents exist without observed wrapper evidence.
+  - Separate strategy decisions from implementation handoffs and release evidence.
+
+### deploy-and-monitor
+
+Hermes Deploy-and-Monitor workflow: release checklist, deploy decision, health signals, rollback gate, and post-deploy status.
+
+- Category: `monitoring`
+- Phase: `release-ops`
+- Hermes role: `retained-cognition`
+- Quality tier: `release-gated`
+- Handoff policy: Keep release checklist, health criteria, rollback gates, and status narration in Hermes; record deploy, monitor, incident, or rollback evidence only when the wrapper or operator observes it.
+- Use when: Use when Hermes should prepare or narrate a release operation with deploy checklist, health signals, rollback criteria, and post-deploy status without pretending to run infrastructure.
+- Strong routing signals: `deploy-and-monitor`, `deploy and monitor`, `deploy monitor`, `deployment monitoring`, `release monitor`, `post deploy`, `post-deploy`, `rollback`, `rollback gate`, `health check`, `incident watch`, `release health`, `배포 모니터링`, `배포 감시`, `롤백`, `헬스 체크`, `장애 감시`, `릴리즈 모니터링`
+- Quality bar:
+  - Name release scope, target environment, health signals, rollback criteria, and evidence owner.
+  - Show pre-deploy, deploy decision, monitor, rollback, and post-deploy record as distinct stages.
+  - Mark health and rollback status unknown until observed evidence arrives.
+  - Convert fix follow-ups into separate accepted plans or executor handoffs.
+- Required inputs:
+  - release scope
+  - environment
+  - health signals
+  - rollback owner
+- Expected outputs:
+  - pre-deploy checklist
+  - deploy decision gate
+  - monitoring watchlist
+  - rollback criteria
+  - post-deploy status boundary
+- Artifact expectations:
+  - release operation status record when the wrapper captures deploy or monitor observations
+- Safety rules:
+  - Do not claim deployment, health checks, rollback, or incident response happened from a prepared checklist.
+  - Keep release readiness, deploy decision, monitor signals, and rollback as separate evidence steps.
+  - Route code fixes discovered during monitoring as later executor handoffs.
+
 ### ultraqa
 
 Hermes UltraQA workflow: adversarial QA and fix loops.
@@ -1196,6 +1297,62 @@ Summarize observed operating status, risks, blockers, priorities, and follow-up 
   - An ops review is not release, CI, review, merge, or implementation evidence.
   - Missing evidence must stay unknown, not inferred green.
 - Fallback: If evidence is missing, produce a review scaffold and mark unknowns instead of claiming status.
+
+### app-delivery-loop
+
+Run complete app operation loops from idea through decision, handoff, release, deploy, and monitor status.
+
+- Use when: Use when a Hermes wrapper needs a finished-product-feeling path for idea-to-deploy, CTO loops, or deploy-and-monitor work without hidden coding or infrastructure execution.
+- Quality tier: `delivery-gated`
+- Quality bar:
+  - Name the product or release objective, user/customer value, success metric, non-goals, and owner.
+  - Represent idea, decision, plan, handoff, verification, release, deploy, and monitor as separate stages.
+  - Keep coding work executor-neutral until a selected executor is chosen and a handoff is accepted.
+  - Keep deploy, monitoring, rollback, incident, review, CI, and merge claims unavailable until observed evidence exists.
+- Inputs:
+  - idea or release request
+  - success metric
+  - scope constraints
+  - evidence sources
+- Outputs:
+  - stage rail
+  - decision gates
+  - handoff or retained-work plan
+  - deploy/monitor status boundary
+- Stop conditions:
+  - next stage is accepted or blocked
+  - unobserved deploy/monitor claims stay explicit
+  - coding work has selected executor guidance when needed
+- Verification:
+  - check every stage has an owner
+  - separate prepared from observed
+  - record deploy and monitor only from evidence
+- Evidence ladder:
+  - `loop_scope_recorded`
+  - `decision_gate_recorded`
+  - `plan_or_release_gate_accepted`
+  - `handoff_prepared_if_needed`
+  - `verification_release_gate_recorded`
+  - `deploy_monitor_observed_when_available`
+- Wrapper actions:
+  - `show_delivery_loop`
+  - `accept_plan`
+  - `choose_executor`
+  - `prepare_handoff`
+  - `record_deploy`
+  - `record_monitor_signal`
+  - `show_status`
+- Artifact events:
+  - `delivery_loop_scoped`
+  - `decision_gate_recorded`
+  - `handoff_or_release_status_recorded`
+- Delegation expectation: Record app delivery loop evidence only when Hermes, a wrapper, or an operator observes stage acceptance, handoff, deploy, or monitoring events.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A prepared app delivery loop is not implementation, deploy, monitor, rollback, incident, review, CI, merge-readiness, or merge evidence.
+  - A CTO loop recommendation is not an accepted decision unless decision evidence is recorded.
+  - A health watchlist is not observed health evidence.
+- Fallback: If release scope, owner, or evidence is missing, show the loop scaffold and ask for the smallest missing decision before advancing.
 
 ### deep-interview
 

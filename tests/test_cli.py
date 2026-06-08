@@ -110,6 +110,41 @@ class CliTests(unittest.TestCase):
                 self.assertNotEqual(recommendations[0]["skill"], "code-review")
                 self.assertNotEqual(recommendations[0]["skill"], "ai-slop-cleaner")
 
+    def test_recommend_app_operation_loops_feel_end_to_end_without_overclaiming(self) -> None:
+        cases = (
+            (
+                "take this product idea from plan to deploy and monitor safely",
+                "idea-to-deploy",
+                "present_app_delivery_loop",
+                "not implementation, deploy, monitoring",
+            ),
+            (
+                "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness",
+                "cto-loop",
+                "run_cto_loop",
+                "not an accepted decision",
+            ),
+            (
+                "deploy and monitor this release with rollback and health checks",
+                "deploy-and-monitor",
+                "prepare_deploy_monitor_plan",
+                "not deploy, health-check, rollback",
+            ),
+        )
+
+        for message, skill, next_action, boundary_fragment in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], skill)
+                self.assertEqual(top["hermes_role"], "retained-cognition")
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(boundary_fragment, top["evidence_boundary"])
+                self.assertIn("observ", top["wrapper_guidance"].lower())
+
     def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
 
@@ -152,8 +187,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("weekly-ops-review", playbooks)
         self.assertIn("market-scan-to-strategy", playbooks)
         self.assertIn("local-pipeline-buildout", playbooks)
+        self.assertIn("idea-to-deploy", playbooks)
+        self.assertIn("cto-loop", playbooks)
+        self.assertIn("deploy-and-monitor", playbooks)
         self.assertIn("handoff_or_retain", playbooks["request-to-handoff"]["pipeline"])
         self.assertIn("status_card", playbooks["request-to-handoff"]["pipeline"])
+        self.assertIn("deploy_monitor_status", playbooks["idea-to-deploy"]["pipeline"])
+        self.assertIn("status_review", playbooks["cto-loop"]["pipeline"])
+        self.assertIn("postdeploy_record", playbooks["deploy-and-monitor"]["pipeline"])
 
     def test_playbook_inspect_shows_owners_and_evidence_boundaries(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "inspect", "safe-feature-change"])
@@ -245,6 +286,40 @@ class CliTests(unittest.TestCase):
                 self.assertNotEqual(recommendations[0]["id"], "safe-feature-change")
                 self.assertNotEqual(recommendations[0]["id"], "release-readiness-review")
 
+    def test_playbook_recommend_routes_app_operation_loops(self) -> None:
+        cases = (
+            (
+                "take this product idea from plan to deploy and monitor safely",
+                "idea-to-deploy",
+                "shape_idea",
+                "deploy",
+            ),
+            (
+                "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness",
+                "cto-loop",
+                "intake_signals",
+                "decision_acceptance",
+            ),
+            (
+                "deploy and monitor this release with rollback and health checks",
+                "deploy-and-monitor",
+                "release_scope",
+                "health_check",
+            ),
+        )
+
+        for message, playbook_id, next_action, not_evidence in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["playbook", "recommend", message, "--limit", "2"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["id"], playbook_id)
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(not_evidence, top["not_evidence_until_observed"])
+                self.assertNotEqual(top["confidence"], "low")
+
     def test_chat_route_dispatches_plain_chat_message(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "risky", "refactor"])
 
@@ -293,6 +368,9 @@ class CliTests(unittest.TestCase):
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "ack", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ack", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "ack", "prepare_strategy_brief"),
+            ("take this product idea from plan to deploy and monitor safely", "idea-to-deploy", "ack", "present_app_delivery_loop"),
+            ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "ack", "run_cto_loop"),
+            ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:
@@ -354,6 +432,9 @@ class CliTests(unittest.TestCase):
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "clarify", "feedback-triage"),
             ("prepare weekly ops review from customer feedback and release risks", "clarify", "ops-review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "clarify", "strategy-brief"),
+            ("take this product idea from plan to deploy and monitor safely", "clarify", "idea-to-deploy"),
+            ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "clarify", "cto-loop"),
+            ("deploy and monitor this release with rollback and health checks", "clarify", "deploy-and-monitor"),
         )
 
         for message, action, workflow in cases:
@@ -365,7 +446,16 @@ class CliTests(unittest.TestCase):
                 payload = json.loads(stdout)
                 self.assertEqual(payload["delegation"]["action"], action)
                 self.assertEqual(payload["delegation"]["recommended_workflow"], workflow)
-                if workflow in {"research-brief", "meeting-brief", "feedback-triage", "ops-review", "strategy-brief"}:
+                if workflow in {
+                    "research-brief",
+                    "meeting-brief",
+                    "feedback-triage",
+                    "ops-review",
+                    "strategy-brief",
+                    "idea-to-deploy",
+                    "cto-loop",
+                    "deploy-and-monitor",
+                }:
                     self.assertEqual(payload["delegation"]["intent"], "planning")
                 self.assertFalse(payload["delegation"]["review_required"])
                 self.assertIsNone(payload["delegation"]["review_workflow"])
@@ -403,6 +493,9 @@ class CliTests(unittest.TestCase):
             ("레거시 서비스를 위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트 순서로 리팩터링하고 싶어", "safe-feature-change"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "local-pipeline-buildout"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "local-pipeline-buildout"),
+            ("take this product idea from plan to deploy and monitor safely", "idea-to-deploy"),
+            ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop"),
+            ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor"),
         )
 
         for message, playbook_id in cases:
@@ -2006,8 +2099,8 @@ class CliTests(unittest.TestCase):
             checked = json.loads(stdout)
             self.assertIn("checked", checked)
             self.assertTrue(checked["tap_skills"]["ok"])
-            self.assertEqual(checked["tap_skills"]["expected"], 25)
-            self.assertEqual(checked["tap_skills"]["checked"], 25)
+            self.assertEqual(checked["tap_skills"]["expected"], 28)
+            self.assertEqual(checked["tap_skills"]["checked"], 28)
             self.assertEqual(checked["tap_skills"]["missing"], [])
             self.assertEqual(checked["tap_skills"]["stale"], [])
             self.assertEqual(checked["tap_skills"]["extra"], [])
@@ -2031,6 +2124,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(harnesses["customer-insight-triage"]["quality_tier"], "triage-gated")
         self.assertIn("next_workflow_recommended", harnesses["customer-insight-triage"]["evidence_ladder"])
         self.assertEqual(harnesses["ops-review"]["quality_tier"], "status-gated")
+        self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
+        self.assertIn("deploy_monitor_observed_when_available", harnesses["app-delivery-loop"]["evidence_ladder"])
+        self.assertIn("record_deploy", harnesses["app-delivery-loop"]["wrapper_actions"])
         quality = harnesses["coding-handling"]["harness_quality"]
         self.assertEqual(quality["schema_version"], "harness_quality/v1")
         self.assertEqual(quality["harness"], "coding-handling")
@@ -2055,9 +2151,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("meeting-facilitation", harnesses)
         self.assertIn("customer-insight-triage", harnesses)
         self.assertIn("ops-review", harnesses)
+        self.assertIn("app-delivery-loop", harnesses)
         self.assertIn("blocking_question_asked", harnesses["deep-interview"]["evidence_ladder"])
         self.assertIn("ralplan", harnesses["planning"]["primary_skills"])
         self.assertIn("feedback-triage", harnesses["customer-insight-triage"]["primary_skills"])
+        self.assertIn("idea-to-deploy", harnesses["app-delivery-loop"]["primary_skills"])
 
         status, stdout, stderr = run_cli(["harness", "inspect", "research"])
         self.assertEqual(stderr, "")

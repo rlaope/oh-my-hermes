@@ -49,6 +49,9 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 - `meeting-brief`: role `retained-cognition`; handoff policy: Run meeting preparation in Hermes; only create follow-up coding handoff from observed decisions or accepted plans.
 - `feedback-triage`: role `retained-cognition`; handoff policy: Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor handoff only after explicit coding intent or accepted plan evidence.
 - `ops-review`: role `retained-cognition`; handoff policy: Keep operating review and status narration in Hermes; delegate code fixes only from explicit accepted follow-up items.
+- `idea-to-deploy`: role `retained-cognition`; handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
+- `cto-loop`: role `retained-cognition`; handoff policy: Keep CTO/PM-style synthesis, tradeoffs, risk ranking, decision notes, and status in Hermes; convert accepted implementation follow-ups into executor-neutral handoffs.
+- `deploy-and-monitor`: role `retained-cognition`; handoff policy: Keep release checklist, health criteria, rollback gates, and status narration in Hermes; record deploy, monitor, incident, or rollback evidence only when the wrapper or operator observes it.
 - `ultraqa`: role `hybrid-verification`; handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor handoffs.
 - `plan`: role `retained-cognition`; handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor handoff after acceptance.
 - `ralplan`: role `retained-cognition`; handoff policy: Keep consensus planning and review in Hermes; produce explicit selected executor handoff guidance only after the plan is accepted.
@@ -133,6 +136,9 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `meeting-brief`: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`
 - `feedback-triage`: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`
 - `ops-review`: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`
+- `idea-to-deploy`: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`
+- `cto-loop`: `cto-loop`, `cto loop`, `cto`, `cto pm`, `pm dev qa security ops`
+- `deploy-and-monitor`: `deploy-and-monitor`, `deploy and monitor`, `deploy monitor`, `deployment monitoring`, `release monitor`
 - `ultraqa`: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`
 - `plan`: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`
 - `ralplan`: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`
@@ -270,6 +276,19 @@ Use these harnesses to shape the response before adding new skills. They are qua
   - Delegation: Record ops review as Hermes-retained status work; execution evidence requires later observed task records.
   - Overclaim Guards: An ops review is not release, CI, review, merge, or implementation evidence. Missing evidence must stay unknown, not inferred green.
   - Fallback: If evidence is missing, produce a review scaffold and mark unknowns instead of claiming status.
+- `app-delivery-loop`: Run complete app operation loops from idea through decision, handoff, release, deploy, and monitor status.
+  - Use when: Use when a Hermes wrapper needs a finished-product-feeling path for idea-to-deploy, CTO loops, or deploy-and-monitor work without hidden coding or infrastructure execution.
+  - Quality tier: `delivery-gated`
+  - Inputs: idea or release request, success metric, scope constraints
+  - Outputs: stage rail, decision gates, handoff or retained-work plan
+  - Quality Bar: Name the product or release objective, user/customer value, success metric, non-goals, and owner. Represent idea, decision, plan, handoff, verification, release, deploy, and monitor as separate stages. Keep coding work executor-neutral until a selected executor is chosen and a handoff is accepted. Keep deploy, monitoring, rollback, incident, review, CI, and merge claims unavailable until observed evidence exists.
+  - Evidence Ladder: `loop_scope_recorded` -> `decision_gate_recorded` -> `plan_or_release_gate_accepted` -> `handoff_prepared_if_needed` -> `verification_release_gate_recorded` -> `deploy_monitor_observed_when_available`
+  - Wrapper Actions: `show_delivery_loop`, `accept_plan`, `choose_executor`, `prepare_handoff`, `record_deploy`, `record_monitor_signal`, `show_status`
+  - Verification: check every stage has an owner, separate prepared from observed
+  - Runtime Evidence: events `delivery_loop_scoped`, `decision_gate_recorded`, `handoff_or_release_status_recorded`; privacy `metadata_only`
+  - Delegation: Record app delivery loop evidence only when Hermes, a wrapper, or an operator observes stage acceptance, handoff, deploy, or monitoring events.
+  - Overclaim Guards: A prepared app delivery loop is not implementation, deploy, monitor, rollback, incident, review, CI, merge-readiness, or merge evidence. A CTO loop recommendation is not an accepted decision unless decision evidence is recorded. A health watchlist is not observed health evidence.
+  - Fallback: If release scope, owner, or evidence is missing, show the loop scaffold and ask for the smallest missing decision before advancing.
 - `deep-interview`: Clarify intent and boundaries one question at a time before planning or execution.
   - Use when: Use when intent, scope, non-goals, or decision authority are unclear.
   - Quality tier: `clarity-gated`

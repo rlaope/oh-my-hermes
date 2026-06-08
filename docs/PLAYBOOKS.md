@@ -19,6 +19,9 @@ omh playbook inspect request-to-handoff
 omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "research latest official sources"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
+omh playbook recommend "take this product idea from plan to deploy and monitor safely"
+omh playbook recommend "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness"
+omh playbook recommend "deploy and monitor this release with rollback and health checks"
 ```
 
 Each command returns JSON. The output is meant for wrappers, docs, demos, and
@@ -39,6 +42,9 @@ files.
 | `market-scan-to-strategy` | A user wants competitor or market evidence shaped into strategy. | Scope scan -> evidence matrix -> implications -> strategy brief. |
 | `deep-interview-to-plan` | A broad goal lacks scope, non-goals, or acceptance criteria. | One question -> clarified brief -> plan -> decision gate. |
 | `local-pipeline-buildout` | A maintainer wants a repeatable local process for recurring work. | Catalog route -> wrapper contract -> plan gate -> lifecycle status. |
+| `idea-to-deploy` | A user wants a product or app idea to feel like a full delivery loop. | Idea -> decision -> plan -> handoff -> verification/release -> deploy/monitor status. |
+| `cto-loop` | A user wants CTO/PM-style operating cadence and decision quality. | Signals -> risks -> architecture tradeoffs -> decision -> follow-up handoffs -> status. |
+| `deploy-and-monitor` | A user wants release operations and monitoring status without OMH running infrastructure. | Release scope -> checks -> deploy decision -> monitor signals -> rollback gate -> post-deploy record. |
 | `release-readiness-review` | A change needs public-facing quality, QA, CI, or merge-readiness review. | Review -> QA -> CI/status -> merge-readiness report. |
 
 ## Ownership Boundary
@@ -101,3 +107,28 @@ routes to `feedback-triage` instead of a coding handoff. The wrapper can show
 that Hermes will classify feedback, rank severity or opportunity, and recommend
 the next workflow. It should not show executor actions unless the user later
 accepts a plan with explicit code work.
+
+For app operations, a prompt like:
+
+```text
+take this product idea from plan to deploy and monitor safely
+```
+
+routes to `idea-to-deploy`. The wrapper can show one complete stage rail:
+shape idea, record the decision gate, draft the delivery plan, prepare a
+selected executor handoff if code is needed, check verification and release
+readiness, then record deploy and monitor status. This feels like a finished
+product loop to the operator, but deploy, health, rollback, and monitoring stay
+unobserved until the wrapper or operator records evidence.
+
+Leadership and release operation prompts are similarly explicit:
+
+```text
+run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness
+deploy and monitor this release with rollback and health checks
+```
+
+`cto-loop` gives Hermes a CTO/PM-style operating cadence without claiming
+hidden role agents ran. `deploy-and-monitor` gives Hermes a release checklist,
+go/no-go decision, health-signal watchlist, rollback gate, and post-deploy
+status boundary without making OMH an infrastructure executor.

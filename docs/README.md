@@ -34,11 +34,11 @@ OMH is a Hermes-native wrapper orchestration layer.
 
 The product should make chat surfaces feel capable without hiding who did what.
 Hermes should own intake, clarification, research, business briefs, meeting
-prep, feedback triage, planning, status narration, and handoff UX. The selected
-coding executor should own main coding work when work leaves Hermes. OMH should
-own the deterministic local contract between those worlds: generated skill
-guidance, playbooks, wrapper sessions, prepared handoff payloads, and evidence
-records.
+prep, feedback triage, app operation loops, planning, status narration, and
+handoff UX. The selected coding executor should own main coding work when work
+leaves Hermes. OMH should own the deterministic local contract between those
+worlds: generated skill guidance, playbooks, wrapper sessions, prepared handoff
+payloads, and evidence records.
 
 The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a
@@ -59,8 +59,9 @@ merge.
 - Demo and shim examples should stay fixture-backed, deterministic, and
   transport-free unless a scoped integration explicitly opts into a real bot or
   network adapter.
-- Playbook docs should describe situation-level pipelines for both company work
-  and coding handoffs, plus ownership boundaries, rather than becoming a second
+- Playbook docs should describe situation-level pipelines for company work, app
+  operation loops such as idea-to-deploy / CTO loop / deploy-and-monitor, and
+  coding handoffs, plus ownership boundaries, rather than becoming a second
   skill catalog.
 - Role docs should describe responsibility lanes, not runtime agents. A role can
   explain the next action, but it cannot prove execution without matching

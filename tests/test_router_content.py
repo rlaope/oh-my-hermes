@@ -75,6 +75,9 @@ class RouterContentTests(unittest.TestCase):
             "meeting-brief",
             "feedback-triage",
             "ops-review",
+            "idea-to-deploy",
+            "cto-loop",
+            "deploy-and-monitor",
             "team",
             "ultraqa",
             "plan",
@@ -90,6 +93,9 @@ class RouterContentTests(unittest.TestCase):
             "meeting": "prepare_meeting_brief",
             "triage": "triage_feedback",
             "operations": "prepare_ops_review",
+            "delivery": "present_app_delivery_loop",
+            "leadership": "run_cto_loop",
+            "monitoring": "prepare_deploy_monitor_plan",
         }
 
         for category, next_action in expected.items():
@@ -132,6 +138,7 @@ class RouterContentTests(unittest.TestCase):
                 "meeting-facilitation",
                 "customer-insight-triage",
                 "ops-review",
+                "app-delivery-loop",
                 "deep-interview",
                 "architect",
                 "critic",
@@ -187,6 +194,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("meeting-brief"), "meeting-facilitation")
         self.assertEqual(primary_harness_for_skill("feedback-triage"), "customer-insight-triage")
         self.assertEqual(primary_harness_for_skill("ops-review"), "ops-review")
+        self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
+        self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
+        self.assertEqual(primary_harness_for_skill("deploy-and-monitor"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("best-practice-research"), "research")
         self.assertEqual(primary_harness_for_skill("autoresearch-goal"), "research")
         self.assertIn("deep-interview", retained)
@@ -201,6 +211,9 @@ class RouterContentTests(unittest.TestCase):
                 "meeting-brief",
                 "feedback-triage",
                 "ops-review",
+                "idea-to-deploy",
+                "cto-loop",
+                "deploy-and-monitor",
             }.issubset(catalog_intent_retained)
         )
 
@@ -240,6 +253,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(harnesses["coding-handling"]["quality_tier"], "handoff-gated")
         self.assertIn("coding_delegation_prepared", harnesses["coding-handling"]["evidence_ladder"])
         self.assertIn("send_to_codex", harnesses["coding-handling"]["wrapper_actions"])
+        self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
+        self.assertIn("deploy_monitor_observed_when_available", harnesses["app-delivery-loop"]["evidence_ladder"])
+        self.assertIn("record_monitor_signal", harnesses["app-delivery-loop"]["wrapper_actions"])
         self.assertIn("prepared", " ".join(harnesses["coding-handling"]["overclaim_guards"]).lower())
         quality = harnesses["coding-handling"]["harness_quality"]
         self.assertEqual(quality, harness_quality_contract("coding-handling"))

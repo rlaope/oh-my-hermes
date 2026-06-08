@@ -256,7 +256,7 @@ def _acceptance_criteria(intent: str, action: str, workflow: str) -> tuple[str, 
     if action == "clarify":
         if workflow in _RETAINED_HERMES_WORKFLOWS:
             return (
-                "Confirm the retained Hermes workflow scope before starting the brief or triage.",
+                "Confirm the retained Hermes workflow scope before advancing the next visible stage.",
                 "Keep missing evidence explicit and avoid claiming execution or a coding handoff.",
             )
         return (

@@ -91,6 +91,30 @@ _CATEGORY_POLICIES = {
         evidence_boundary="An ops review is not implementation, release, CI, review, or merge evidence.",
         wrapper_guidance="Summarize observed status, risks, blockers, and follow-ups; keep unknowns explicit.",
     ),
+    "delivery": RecommendationPolicy(
+        next_action="present_app_delivery_loop",
+        evidence_boundary="An app delivery loop is not implementation, deploy, monitoring, rollback, or completion evidence.",
+        wrapper_guidance=(
+            "Show the idea, decision, plan, handoff, verification, deploy, and monitoring stages; keep executor "
+            "and deploy actions disabled until the matching acceptance or observation exists."
+        ),
+    ),
+    "leadership": RecommendationPolicy(
+        next_action="run_cto_loop",
+        evidence_boundary="A CTO loop brief is not an accepted decision, implementation, deploy, or monitoring evidence.",
+        wrapper_guidance=(
+            "Keep roadmap, architecture, risk, delivery, and release-readiness decisions in Hermes; convert accepted "
+            "implementation follow-ups into explicit executor-neutral handoffs and record status only from observed evidence."
+        ),
+    ),
+    "monitoring": RecommendationPolicy(
+        next_action="prepare_deploy_monitor_plan",
+        evidence_boundary="A deploy and monitor plan is not deploy, health-check, rollback, or incident evidence.",
+        wrapper_guidance=(
+            "Show deploy checklist, health signals, rollback gates, and post-deploy status; record only observed "
+            "deploy or monitoring evidence."
+        ),
+    ),
     "review": RecommendationPolicy(
         next_action="prepare_review_or_followup_handoff",
         evidence_boundary="A review recommendation is not a completed review or fix evidence.",

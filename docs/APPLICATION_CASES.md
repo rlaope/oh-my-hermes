@@ -262,6 +262,12 @@ The playbook layer picks a situation-level path above individual skills:
 - `market-scan-to-strategy` for competitor evidence into strategic options
 - `deep-interview-to-plan` for ambiguity reduction
 - `local-pipeline-buildout` for repeatable wrapper process design
+- `idea-to-deploy` for app ideas that need decision, handoff, release, deploy,
+  and monitor status in one stage rail
+- `cto-loop` for CTO/PM-style roadmap, architecture, delivery risk, release
+  readiness, and follow-up cadence
+- `deploy-and-monitor` for release checklists, go/no-go, health signals,
+  rollback gates, and post-deploy status
 - `release-readiness-review` for review, QA, CI, and merge-readiness status
 
 The playbook response names which stages stay with Hermes, which stages become
@@ -276,6 +282,9 @@ Inspect the playbook catalog:
 omh playbook list
 omh playbook inspect safe-feature-change
 omh playbook recommend "I want to safely add a feature to this repo"
+omh playbook recommend "take this product idea from plan to deploy and monitor safely"
+omh playbook recommend "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness"
+omh playbook recommend "deploy and monitor this release with rollback and health checks"
 ```
 
 Repository maintainers can verify playbook behavior through tests:
@@ -416,7 +425,8 @@ Before using these cases as public release evidence, verify:
   for wrapper rendering and status decisions.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
-  triage, ops review, local pipeline buildout, and release-readiness review.
+  triage, ops review, app operation loops, local pipeline buildout, and
+  release-readiness review.
 - The grounded cases above match actual generated skill and playbook behavior.
 - Runtime-backed cases above can create `.omh/runtime/runs/<run-id>/`
   artifacts.

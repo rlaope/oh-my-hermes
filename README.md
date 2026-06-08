@@ -107,6 +107,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | Hermes skill tap | Tap-compatible skills under `skills/<name>/SKILL.md`. |
 | Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs`. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
+| App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Wrapper contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Discord, Slack, or hosted adapters. |
@@ -120,12 +121,15 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | "Payment failures keep coming up." | Route to feedback triage or investigation first; prepare reproduction and evidence needs before coding. |
 | "Can this issue become a PR?" | Convert the issue into a plan, acceptance criteria, verification commands, and an executor-neutral handoff. |
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
+| "Take this idea from plan to deploy and monitor it safely." | Shape the idea, record decision gates, prepare an executor handoff only if code is accepted, then track release/deploy/monitor status separately. |
+| "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
+| "Deploy and monitor this release with rollback checks." | Show release scope, go/no-go, health signals, rollback gate, and post-deploy status without claiming infrastructure execution. |
 | "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a coding-agent handoff only after acceptance. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
 
-For non-coding company work, OMH can help Hermes classify, brief, and record the
-next workflow without pretending data was fetched, a meeting happened, or a
-coding executor implemented anything.
+For company and app operation work, OMH can help Hermes classify, brief, decide,
+handoff, and track the next workflow without pretending data was fetched, a
+meeting happened, code was implemented, or a deployment was observed.
 
 ## Optional Profiles And Plugin
 
