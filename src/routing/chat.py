@@ -232,6 +232,9 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
                 "score": _int_value(item.get("score", 0)),
                 "confidence": str(item.get("confidence", "low")),
                 "matched": _string_list(item.get("matched", [])),
+                "next_action": str(item.get("next_action", "")),
+                "evidence_boundary": str(item.get("evidence_boundary", "")),
+                "wrapper_guidance": str(item.get("wrapper_guidance", "")),
             }
         )
     return compact

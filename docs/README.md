@@ -31,10 +31,11 @@ repo-local contract for Codex agents working here.
 OMHM is a Hermes-native wrapper orchestration layer.
 
 The product should make chat surfaces feel capable without hiding who did what.
-Hermes should own intake, clarification, research, planning, status narration,
-and handoff UX. Codex-like executors should own main coding work. OMH should own
-the deterministic local contract between those worlds: generated skill guidance,
-wrapper sessions, prepared handoff payloads, and evidence records.
+Hermes should own intake, clarification, research, business briefs, meeting
+prep, feedback triage, planning, status narration, and handoff UX. Codex-like
+executors should own main coding work. OMH should own the deterministic local
+contract between those worlds: generated skill guidance, playbooks, wrapper
+sessions, prepared handoff payloads, and evidence records.
 
 The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a
@@ -55,8 +56,9 @@ merge.
 - Demo and shim examples should stay fixture-backed, deterministic, and
   transport-free unless a scoped integration explicitly opts into a real bot or
   network adapter.
-- Playbook docs should describe situation-level pipelines and ownership
-  boundaries rather than becoming a second skill catalog.
+- Playbook docs should describe situation-level pipelines for both company work
+  and coding handoffs, plus ownership boundaries, rather than becoming a second
+  skill catalog.
 - Coding-heavy requests should be described as delegated work unless there is
   observed evidence that a coding executor actually ran.
 - Generated workflow docs should come from `src/skills/catalog.py`; update the

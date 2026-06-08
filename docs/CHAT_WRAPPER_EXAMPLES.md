@@ -181,11 +181,11 @@ maintainer
 Hermes Agent  BOT
 I know which workflow should handle this.
 
-I will prepare a safe next step for `code-review` before claiming any work happened.
+Surface findings separately from any code changes; fixes need their own executor evidence.
 
 [ Show status ]
 
-Claim boundary: Routing is not execution evidence.
+Claim boundary: A review recommendation is not a completed review or fix evidence.
 ```
 
 What gets better for the team:

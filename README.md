@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Hermes-native workflow skills for chat-first orchestration.</strong>
   <br>
-  <em>Give Hermes Agent a consistent skill pack for routing, planning, durable execution, review, cleanup, and QA.</em>
+  <em>Give Hermes Agent a consistent skill pack for routing, research briefs, strategy, meetings, ops review, planning, and coding handoffs.</em>
 </p>
 
 <p align="center">
@@ -17,12 +17,14 @@
 </p>
 
 **oh-my-hermes-agent** installs a Hermes-native workflow layer for routing,
-planning, chat-wrapper UX, evidence tracking, and coding handoff preparation.
+business research, meeting and strategy briefs, planning, chat-wrapper UX,
+evidence tracking, and coding handoff preparation.
 
 Hermes stays the chat-facing agent. OMHM adds deterministic local contracts
 around it so Discord, Slack, hosted wrappers, and local operators can turn a
-plain user message into a clear next step: answer, clarify, research, plan,
-delegate coding, or report status.
+plain user message into a clear next step: answer, clarify, research, triage
+feedback, prepare a meeting or strategy brief, plan, delegate coding, or report
+status.
 
 [Website](https://rlaope.github.io/oh-my-hermes-agent/) -
 [Quick Start](#quick-start) - [Two Install Paths](#two-install-paths) -
@@ -52,7 +54,8 @@ delegate coding, or report status.
 | Bootstrap setup | `omh setup` installs the same generated skills under `~/.omh/skills` and registers `skills.external_dirs`. |
 | Optional Hermes plugin | `omh setup --with-plugin` installs a thin native bridge under `~/.hermes/plugins/omhm`. |
 | Skill catalog | Deterministic routing metadata from `src/skills/catalog.py`. |
-| Playbooks | Situation-level pipelines for research, planning, wrapper UX, and coding handoff flows. |
+| Business workflow skills | `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, and `ops-review` for non-coding company work inside Hermes. |
+| Playbooks | Situation-level pipelines for research, meetings, strategy, feedback triage, ops review, planning, wrapper UX, and coding handoff flows. |
 | Harness quality | Machine-readable quality bars, evidence ladders, wrapper actions, and overclaim guards. |
 | Wrapper backend contract | `chat_interaction/v1` responses for Discord, Slack, and hosted adapters. |
 | Planning artifacts | Hermes-facing Markdown plans under `~/.hermes/plans`. |
@@ -94,6 +97,8 @@ Hermes:
 hermes skills install deep-interview
 hermes skills install ralplan
 hermes skills install web-research
+hermes skills install feedback-triage
+hermes skills install ops-review
 hermes skills install code-review
 ```
 
@@ -107,9 +112,21 @@ I want to safely add a feature to this repo
 ```
 
 Hermes should use the installed OMH guidance to decide whether to answer,
-clarify, research, plan, prepare a coding handoff, or report status. Users
-should not need to know `omh recommend`, `omh chat interact`, or other backend
-commands.
+clarify, research, triage feedback, prepare a meeting or strategy brief, plan,
+prepare a coding handoff, or report status. Users should not need to know
+`omh recommend`, `omh chat interact`, or other backend commands.
+
+For non-coding company work, the same install can route prompts such as:
+
+```text
+결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘
+prepare weekly ops review from customer feedback and release risks
+we need a competitor market scan and strategy memo for next week's leadership meeting
+```
+
+Those stay Hermes-retained by default. OMH can classify, brief, and record the
+next workflow without pretending data was fetched, a meeting happened, or Codex
+implemented anything.
 
 ## Two Install Paths
 
@@ -180,8 +197,9 @@ omh playbook recommend "I want to safely add a feature to this repo"
 ```
 
 Playbooks are backend/operator contracts that describe the wrapper-visible
-pipeline for situations such as source-backed research, deep interview to plan,
-safe feature change, release-readiness review, and local pipeline buildout.
+pipeline for situations such as source-backed research, research-to-strategy
+briefs, meeting prep, feedback triage, weekly ops review, safe feature change,
+release-readiness review, and local pipeline buildout.
 
 ### Stable Install
 

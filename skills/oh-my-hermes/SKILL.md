@@ -44,6 +44,11 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 - `team`: role `codex-handoff-guidance`; handoff policy: Use Hermes for lane framing and status; implementation lanes should become Codex handoff tasks unless they are research, interview, planning, or status-only.
 - `ultrawork`: role `codex-handoff-guidance`; handoff policy: Keep the workflow name for compatibility, but convert coding lanes into explicit Codex handoffs with disjoint scope, verification, and review evidence.
 - `web-research`: role `retained-cognition`; handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
+- `research-brief`: role `retained-cognition`; handoff policy: Keep business research in Hermes; prepare Codex handoff only after a later accepted plan requires code changes.
+- `strategy-brief`: role `retained-cognition`; handoff policy: Keep strategy synthesis in Hermes; do not create implementation handoff until a decision is accepted and code work is explicit.
+- `meeting-brief`: role `retained-cognition`; handoff policy: Run meeting preparation in Hermes; only create follow-up coding handoff from observed decisions or accepted plans.
+- `feedback-triage`: role `retained-cognition`; handoff policy: Keep feedback triage in Hermes; recommend the next workflow and prepare Codex handoff only after explicit coding intent or accepted plan evidence.
+- `ops-review`: role `retained-cognition`; handoff policy: Keep operating review and status narration in Hermes; delegate code fixes only from explicit accepted follow-up items.
 - `ultraqa`: role `hybrid-verification`; handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become Codex handoffs.
 - `plan`: role `retained-cognition`; handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a Codex handoff after acceptance.
 - `ralplan`: role `retained-cognition`; handoff policy: Keep consensus planning and review in Hermes; produce explicit Codex handoff guidance only after the plan is accepted.
@@ -106,6 +111,11 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `team`: `team`, `$team`, `swarm`, `parallel agents`, `coordinated workers`
 - `ultrawork`: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
 - `web-research`: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`
+- `research-brief`: `research-brief`, `business-research`, `business research`, `research brief`, `source-backed business research`
+- `strategy-brief`: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`
+- `meeting-brief`: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`
+- `feedback-triage`: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`
+- `ops-review`: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`
 - `ultraqa`: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`
 - `plan`: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`
 - `ralplan`: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`
@@ -178,6 +188,71 @@ Use these harnesses to shape the response before adding new skills. They are qua
   - Delegation: Record a research lane only when Hermes or the wrapper exposes source/research evidence; otherwise summarize retrieval limits explicitly.
   - Overclaim Guards: Research synthesis is not implementation evidence. Unavailable web access must be reported as a retrieval gap.
   - Fallback: If web access is unavailable, state the retrieval gap and fall back to best available local evidence.
+- `business-research`: Prepare source-backed business research briefs with evidence and inference boundaries.
+  - Use when: Use when a business, market, customer, or operational question needs source-scoped research before strategy, meetings, or handoff.
+  - Quality tier: `source-gated`
+  - Inputs: business question, source boundary, recency or market scope
+  - Outputs: evidence table, inference summary, confidence and residual uncertainty
+  - Quality Bar: Scope the business question and source boundary before synthesis. Separate observed sources, inferred trends, confidence, and uncertainty. Feed strategy or meeting work without treating the research brief as execution evidence.
+  - Evidence Ladder: `business_question_scoped` -> `source_boundary_recorded` -> `source_evidence_recorded` -> `business_synthesis_recorded` -> `uncertainty_recorded`
+  - Wrapper Actions: `show_sources`, `ask_followup`, `prepare_strategy_brief`, `show_status`
+  - Verification: check source quality, record missing-source gaps
+  - Runtime Evidence: events `business_research_scoped`, `business_source_checked`, `business_synthesis_recorded`; privacy `metadata_only`
+  - Delegation: Record business research only when Hermes or the wrapper observes sources or captures a research brief.
+  - Overclaim Guards: A research brief is not proof that sources were fetched unless source evidence is observed. Research synthesis is not a decision, implementation, or verification result.
+  - Fallback: If sources are not available, label the result as a research plan or local-context synthesis rather than observed research.
+- `strategy-synthesis`: Turn goals and evidence into strategy options, tradeoffs, and decision-ready notes.
+  - Use when: Use when the request asks for strategy, recommendations, decision notes, or leadership-ready synthesis.
+  - Quality tier: `decision-gated`
+  - Inputs: goal, evidence summary, constraints
+  - Outputs: options, tradeoffs, recommendation
+  - Quality Bar: Name the decision, drivers, options, tradeoffs, recommendation, and assumptions. Keep draft recommendations separate from accepted decisions. Convert implementation follow-ups into explicit later plans or handoffs.
+  - Evidence Ladder: `decision_scope_recorded` -> `options_recorded` -> `tradeoffs_recorded` -> `recommendation_recorded` -> `decision_status_recorded`
+  - Wrapper Actions: `show_brief`, `revise_brief`, `record_decision`, `show_status`
+  - Verification: compare options, tie recommendation to evidence
+  - Runtime Evidence: events `strategy_scope_recorded`, `options_recorded`, `decision_note_recorded`; privacy `metadata_only`
+  - Delegation: Record strategy synthesis as Hermes-retained work; record execution only after a later accepted handoff is observed.
+  - Overclaim Guards: A strategy brief is not an accepted decision. A recommendation is not implementation, review, CI, or merge evidence.
+  - Fallback: If decision authority or evidence is missing, produce assumptions and next questions instead of a final decision.
+- `meeting-facilitation`: Prepare agendas, discussion prompts, decisions, and record templates.
+  - Use when: Use when the request asks Hermes to prepare a meeting, agenda, discussion guide, or follow-up record template.
+  - Quality tier: `facilitation-gated`
+  - Inputs: meeting goal, audience, context
+  - Outputs: agenda, discussion prompts, decisions needed
+  - Quality Bar: Prepare agenda topics, prompts, decisions needed, and a record template from available context. Keep proposed agenda and action items separate from observed meeting outcomes. Ask for missing context that would change participants, decisions, or timing.
+  - Evidence Ladder: `meeting_goal_scoped` -> `agenda_recorded` -> `discussion_prompts_recorded` -> `decisions_needed_recorded` -> `record_template_ready`
+  - Wrapper Actions: `show_agenda`, `revise_brief`, `record_decision`, `show_status`
+  - Verification: check missing context, separate prep from outcomes
+  - Runtime Evidence: events `meeting_context_scoped`, `agenda_recorded`, `record_template_recorded`; privacy `metadata_only`
+  - Delegation: Record meeting prep only as prepared content unless observed meeting notes or decisions are supplied.
+  - Overclaim Guards: A prepared agenda is not evidence that a meeting happened. Draft action items are not observed decisions.
+  - Fallback: If the meeting already happened, ask for observed notes before treating decisions as outcomes.
+- `customer-insight-triage`: Cluster customer feedback and choose the next workflow without defaulting to coding.
+  - Use when: Use when feedback, bugs, feature asks, or customer signals need classification before planning or implementation.
+  - Quality tier: `triage-gated`
+  - Inputs: feedback items or summary, source boundary, product area
+  - Outputs: clusters, severity or opportunity ranking, next workflow recommendation
+  - Quality Bar: Scope the feedback source before clustering. Separate bug signals, feature asks, severity, opportunity, and evidence gaps. Recommend research, strategy, planning, or coding only as a next workflow, not as observed execution.
+  - Evidence Ladder: `feedback_source_scoped` -> `clusters_recorded` -> `severity_opportunity_recorded` -> `next_workflow_recommended`
+  - Wrapper Actions: `show_triage`, `ask_followup`, `prepare_plan`, `show_status`
+  - Verification: separate bug signals from feature asks, rank severity and opportunity
+  - Runtime Evidence: events `feedback_source_scoped`, `feedback_cluster_recorded`, `next_workflow_recorded`; privacy `metadata_only`
+  - Delegation: Record feedback triage as Hermes-retained analysis; record coding handoff only after explicit accepted coding intent.
+  - Overclaim Guards: Feedback triage is not a roadmap, implementation plan, or Codex handoff by default. A bug signal is not proof that a fix was implemented or verified.
+  - Fallback: If feedback items are too vague, ask for source or sample items before ranking severity.
+- `ops-review`: Summarize observed operating status, risks, blockers, priorities, and follow-up actions.
+  - Use when: Use when recurring work needs a weekly/status/operating review with evidence boundaries.
+  - Quality tier: `status-gated`
+  - Inputs: status evidence, scope, time window
+  - Outputs: status summary, risks, blockers
+  - Quality Bar: Tie status claims to observed evidence or mark them as unknown. Separate risks, blockers, priorities, and follow-up actions. Do not infer review, CI, release, or merge readiness from an ops summary alone.
+  - Evidence Ladder: `review_scope_recorded` -> `status_evidence_recorded` -> `risks_blockers_recorded` -> `priorities_recorded` -> `followups_recorded`
+  - Wrapper Actions: `show_status`, `record_blocker`, `record_checkpoint`, `prepare_plan`
+  - Verification: check evidence gaps, separate facts from risks
+  - Runtime Evidence: events `ops_scope_recorded`, `status_recorded`, `followups_recorded`; privacy `metadata_only`
+  - Delegation: Record ops review as Hermes-retained status work; execution evidence requires later observed task records.
+  - Overclaim Guards: An ops review is not release, CI, review, merge, or implementation evidence. Missing evidence must stay unknown, not inferred green.
+  - Fallback: If evidence is missing, produce a review scaffold and mark unknowns instead of claiming status.
 - `deep-interview`: Clarify intent and boundaries one question at a time before planning or execution.
   - Use when: Use when intent, scope, non-goals, or decision authority are unclear.
   - Quality tier: `clarity-gated`

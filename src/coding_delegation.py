@@ -11,26 +11,20 @@ from .routing.recommend import recommend_skills
 from .skills.catalog import (
     CODING_INTENT_PRIORITY,
     CODING_REVIEW_TERMS,
+    catalog_intent_delegation_skill_names,
     coding_intent_for_skill,
     coding_skills_for_intent,
     coding_terms_for_intent,
     harness_quality_contract,
     primary_harness_for_skill,
+    retained_delegation_skill_names,
 )
 
 
 SCHEMA_VERSION = "coding_delegation/v1"
 DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
-_RETAINED_HERMES_WORKFLOWS = {
-    "deep-interview",
-    "web-research",
-    "best-practice-research",
-    "autoresearch-goal",
-    "ultraqa",
-    "skill",
-    "wiki",
-    "cancel",
-}
+_CATALOG_INTENT_RETAINED_WORKFLOWS = set(catalog_intent_delegation_skill_names())
+_RETAINED_HERMES_WORKFLOWS = set(retained_delegation_skill_names())
 
 
 @dataclass(frozen=True)
@@ -81,7 +75,7 @@ def build_coding_delegation_payload(
     action = _action_for(intent, score, workflow)
     if action == "fallback":
         workflow = "oh-my-hermes"
-    elif action == "clarify":
+    elif action == "clarify" and workflow not in _RETAINED_HERMES_WORKFLOWS:
         workflow = "oh-my-hermes"
     harness = primary_harness_for_skill(workflow)
     review_required = _review_required(message, intent, workflow)
@@ -91,8 +85,8 @@ def build_coding_delegation_payload(
         recommended_workflow=workflow,
         recommended_harness=harness,
         executor_profile=_executor_profile(intent, action),
-        acceptance_criteria=_acceptance_criteria(intent, action),
-        verification=_verification(intent, action),
+        acceptance_criteria=_acceptance_criteria(intent, action, workflow),
+        verification=_verification(intent, action, workflow),
         review_required=review_required,
         review_workflow="code-review" if review_required else None,
         delegation_prompt_template=_delegation_prompt_template(action, intent, workflow, harness),
@@ -178,6 +172,8 @@ def coding_delegation_record_payload(
 def _intent_for(message: str, workflow: str, score: int) -> str:
     if score == 0:
         return "unknown"
+    if workflow in _CATALOG_INTENT_RETAINED_WORKFLOWS:
+        return coding_intent_for_skill(workflow)
     lowered = message.lower()
     for intent in CODING_INTENT_PRIORITY:
         if workflow in coding_skills_for_intent(intent) or _has_any(lowered, coding_terms_for_intent(intent)):
@@ -197,6 +193,8 @@ def _action_for(intent: str, score: int, workflow: str) -> str:
 
 def _review_required(message: str, intent: str, workflow: str) -> bool:
     lowered = message.lower()
+    if workflow in _RETAINED_HERMES_WORKFLOWS:
+        return False
     if workflow == "code-review" or intent == "review":
         return True
     return _has_any(lowered, CODING_REVIEW_TERMS)
@@ -215,13 +213,18 @@ def _executor_profile(intent: str, action: str) -> str:
     }.get(intent, "coding-agent")
 
 
-def _acceptance_criteria(intent: str, action: str) -> tuple[str, ...]:
+def _acceptance_criteria(intent: str, action: str, workflow: str) -> tuple[str, ...]:
     if action == "fallback":
         return (
             "Clarify the desired coding outcome before dispatching to an executor.",
             "Do not claim code was implemented or reviewed.",
         )
     if action == "clarify":
+        if workflow in _RETAINED_HERMES_WORKFLOWS:
+            return (
+                "Confirm the retained Hermes workflow scope before starting the brief or triage.",
+                "Keep missing evidence explicit and avoid claiming execution or a coding handoff.",
+            )
         return (
             "Ask the smallest blocking clarification before executor dispatch.",
             "Preserve the original task constraints in the eventual handoff.",
@@ -253,10 +256,12 @@ def _acceptance_criteria(intent: str, action: str) -> tuple[str, ...]:
     return criteria
 
 
-def _verification(intent: str, action: str) -> tuple[str, ...]:
+def _verification(intent: str, action: str, workflow: str) -> tuple[str, ...]:
     if action == "fallback":
         return ("No executor verification until the task is clarified.",)
     if action == "clarify":
+        if workflow in _RETAINED_HERMES_WORKFLOWS:
+            return ("Verify the retained Hermes response names scope, evidence boundary, and next visible action.",)
         return ("Verify the clarified handoff includes scope, constraints, and stop condition.",)
     checks = {
         "planning": ("Review the plan for testable acceptance criteria.", "Run implementation checks only after execution starts."),
@@ -399,6 +404,17 @@ def _delegation_prompt_template(action: str, intent: str, workflow: str, harness
             "Ask one concise clarification question for this task:\n{message}"
         )
     if action == "clarify":
+        if workflow in _RETAINED_HERMES_WORKFLOWS:
+            return (
+                "Keep this {workflow_label} request in Hermes as a retained workflow.\n\n"
+                "Candidate workflow: `{workflow}` / `{harness}`.\n\n"
+                "Task:\n{message}"
+            ).format(
+                workflow_label=workflow.replace("-", " "),
+                workflow=workflow,
+                harness=harness,
+                message="{message}",
+            )
         return (
             "Clarify this {intent} request before executor dispatch.\n\n"
             "Candidate workflow: `{workflow}` / `{harness}`.\n\n"

@@ -28,6 +28,100 @@ _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/pl
 
 
 @dataclass(frozen=True)
+class RecommendationPolicy:
+    next_action: str
+    evidence_boundary: str
+    wrapper_guidance: str
+
+
+_DEFAULT_POLICY = RecommendationPolicy(
+    next_action="show_workflow_guidance",
+    evidence_boundary="Routing guidance is not execution evidence.",
+    wrapper_guidance="Route conservatively and show the missing decision before claiming work started.",
+)
+_SKILL_POLICIES = {
+    "cancel": RecommendationPolicy(
+        next_action="cancel",
+        evidence_boundary="Cancellation is observed only after the wrapper records the state change.",
+        wrapper_guidance="Stop the active workflow state in the wrapper; do not create a plan, handoff, or execution claim.",
+    ),
+}
+_CATEGORY_POLICIES = {
+    "planning": RecommendationPolicy(
+        next_action="present_plan",
+        evidence_boundary="A recommendation or draft plan is not execution evidence.",
+        wrapper_guidance="Show an Accept plan / Revise plan choice; keep Prepare handoff disabled until the plan is accepted.",
+    ),
+    "clarification": RecommendationPolicy(
+        next_action="ask_clarification",
+        evidence_boundary="A clarification question is not routing, planning, or execution evidence.",
+        wrapper_guidance="Ask one blocking question in the same thread before selecting a workflow.",
+    ),
+    "research": RecommendationPolicy(
+        next_action="run_hermes_research",
+        evidence_boundary="Research guidance is not implementation or verification evidence.",
+        wrapper_guidance="Keep this in Hermes as source-backed research and summarize evidence before any later handoff.",
+    ),
+    "strategy": RecommendationPolicy(
+        next_action="prepare_strategy_brief",
+        evidence_boundary="A strategy brief is not an accepted decision or implementation evidence.",
+        wrapper_guidance=(
+            "Prepare options, tradeoffs, and decision notes in Hermes; keep implementation handoff disabled "
+            "until a decision creates explicit code work."
+        ),
+    ),
+    "meeting": RecommendationPolicy(
+        next_action="prepare_meeting_brief",
+        evidence_boundary="A meeting brief is not evidence that a meeting happened or decisions were accepted.",
+        wrapper_guidance=(
+            "Prepare agenda, prompts, and a record template in Hermes; do not treat preparation as observed "
+            "meeting outcomes."
+        ),
+    ),
+    "triage": RecommendationPolicy(
+        next_action="triage_feedback",
+        evidence_boundary="Feedback triage is not a roadmap, implementation plan, or coding handoff by default.",
+        wrapper_guidance=(
+            "Cluster feedback and recommend the next workflow; do not create a coding handoff unless code work "
+            "is explicit."
+        ),
+    ),
+    "operations": RecommendationPolicy(
+        next_action="prepare_ops_review",
+        evidence_boundary="An ops review is not implementation, release, CI, review, or merge evidence.",
+        wrapper_guidance="Summarize observed status, risks, blockers, and follow-ups; keep unknowns explicit.",
+    ),
+    "review": RecommendationPolicy(
+        next_action="prepare_review_or_followup_handoff",
+        evidence_boundary="A review recommendation is not a completed review or fix evidence.",
+        wrapper_guidance="Surface findings separately from any code changes; fixes need their own executor evidence.",
+    ),
+    "operator": RecommendationPolicy(
+        next_action="run_local_operator_check",
+        evidence_boundary="Local operator guidance is not a completed health check until command output is observed.",
+        wrapper_guidance="Run or display the local check result directly; record only observed command evidence.",
+    ),
+    "router": RecommendationPolicy(
+        next_action="clarify_or_route",
+        evidence_boundary="Routing guidance is not execution evidence.",
+        wrapper_guidance="Route conservatively and show the missing decision before claiming work started.",
+    ),
+}
+_HERMES_ROLE_POLICIES = {
+    "codex-handoff-guidance": RecommendationPolicy(
+        next_action="prepare_coding_handoff",
+        evidence_boundary=(
+            "A prepared coding handoff is not execution, review, CI, merge-readiness, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare a Codex-style handoff, expose Send to Codex / Show status actions, and mark it "
+            "prepared_not_observed."
+        ),
+    ),
+}
+
+
+@dataclass(frozen=True)
 class Recommendation:
     skill: str
     description: str
@@ -191,52 +285,22 @@ def _suggested_prompt(skill: str, query: str) -> str:
     return f"Use {skill} for: {query}"
 
 
+def _policy_for(definition: SkillDefinition) -> RecommendationPolicy:
+    return (
+        _SKILL_POLICIES.get(definition.name)
+        or _CATEGORY_POLICIES.get(definition.category)
+        or _HERMES_ROLE_POLICIES.get(definition.hermes_role)
+        or _DEFAULT_POLICY
+    )
+
+
 def _next_action(definition: SkillDefinition) -> str:
-    if definition.category == "planning":
-        return "present_plan"
-    if definition.category == "clarification":
-        return "ask_clarification"
-    if definition.category == "research":
-        return "run_hermes_research"
-    if definition.category == "review":
-        return "prepare_review_or_followup_handoff"
-    if definition.hermes_role == "codex-handoff-guidance":
-        return "prepare_coding_handoff"
-    if definition.category == "operator":
-        return "run_local_operator_check"
-    if definition.category == "router":
-        return "clarify_or_route"
-    return "show_workflow_guidance"
+    return _policy_for(definition).next_action
 
 
 def _evidence_boundary(definition: SkillDefinition) -> str:
-    if definition.category == "planning":
-        return "A recommendation or draft plan is not execution evidence."
-    if definition.category == "clarification":
-        return "A clarification question is not routing, planning, or execution evidence."
-    if definition.category == "research":
-        return "Research guidance is not implementation or verification evidence."
-    if definition.category == "review":
-        return "A review recommendation is not a completed review or fix evidence."
-    if definition.hermes_role == "codex-handoff-guidance":
-        return "A prepared coding handoff is not execution, review, CI, merge-readiness, or merge evidence."
-    if definition.category == "operator":
-        return "Local operator guidance is not a completed health check until command output is observed."
-    return "Routing guidance is not execution evidence."
+    return _policy_for(definition).evidence_boundary
 
 
 def _wrapper_guidance(definition: SkillDefinition) -> str:
-    next_action = _next_action(definition)
-    if next_action == "present_plan":
-        return "Show an Accept plan / Revise plan choice; keep Prepare handoff disabled until the plan is accepted."
-    if next_action == "ask_clarification":
-        return "Ask one blocking question in the same thread before selecting a workflow."
-    if next_action == "run_hermes_research":
-        return "Keep this in Hermes as source-backed research and summarize evidence before any later handoff."
-    if next_action == "prepare_review_or_followup_handoff":
-        return "Surface findings separately from any code changes; fixes need their own executor evidence."
-    if next_action == "prepare_coding_handoff":
-        return "Prepare a Codex-style handoff, expose Send to Codex / Show status actions, and mark it prepared_not_observed."
-    if next_action == "run_local_operator_check":
-        return "Run or display the local check result directly; record only observed command evidence."
-    return "Route conservatively and show the missing decision before claiming work started."
+    return _policy_for(definition).wrapper_guidance

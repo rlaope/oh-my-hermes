@@ -56,6 +56,24 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertNotIn(message, json.dumps(first))
             self.assertEqual(validate_wrapper_session_record(session), [])
 
+    def test_session_start_treats_policy_route_actions_as_routed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "prepare weekly ops review from customer feedback and release risks"
+
+            started = create_or_resume_wrapper_session(
+                paths,
+                message,
+                source="discord",
+                source_metadata={"source_event_id": "m1", "channel_ref": "ops"},
+            )
+
+            session = started["session"]
+            self.assertEqual(session["status"], "routed")
+            self.assertEqual(session["route"]["selected_skill"], "ops-review")
+            self.assertEqual(started["interaction"]["next_action"], "prepare_ops_review")
+            self.assertEqual(validate_wrapper_session_record(session), [])
+
     def test_plan_acceptance_gates_handoff_and_links_run_ledger(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

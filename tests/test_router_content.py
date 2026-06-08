@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 import unittest
 
 from _local_package import load_local_package
 
 load_local_package()
+from omh.routing import recommend as recommend_module
 from omh.skill_pack import builtin_definitions, builtin_harnesses, builtin_skill_templates
 from omh.runtime.records import validate_harness_quality
-from omh.skills.catalog import harness_quality_contract, primary_harness_for_skill
+from omh.skills.catalog import (
+    catalog_intent_delegation_skill_names,
+    harness_quality_contract,
+    primary_harness_for_skill,
+    retained_delegation_skill_names,
+)
 from omh.skills.render import workflow_reference_markdown, workflow_reference_payload
 
 
@@ -43,6 +50,11 @@ class RouterContentTests(unittest.TestCase):
             "ultrawork",
             "deep-interview",
             "web-research",
+            "research-brief",
+            "strategy-brief",
+            "meeting-brief",
+            "feedback-triage",
+            "ops-review",
             "team",
             "ultraqa",
             "plan",
@@ -50,6 +62,30 @@ class RouterContentTests(unittest.TestCase):
             "code-review",
         }:
             self.assertIn(expected, names)
+
+    def test_recommendation_policies_are_data_driven_for_business_categories(self) -> None:
+        expected = {
+            "research": "run_hermes_research",
+            "strategy": "prepare_strategy_brief",
+            "meeting": "prepare_meeting_brief",
+            "triage": "triage_feedback",
+            "operations": "prepare_ops_review",
+        }
+
+        for category, next_action in expected.items():
+            with self.subTest(category=category):
+                self.assertEqual(recommend_module._CATEGORY_POLICIES[category].next_action, next_action)
+
+        self.assertEqual(recommend_module._SKILL_POLICIES["cancel"].next_action, "cancel")
+
+        for helper in (
+            recommend_module._next_action,
+            recommend_module._evidence_boundary,
+            recommend_module._wrapper_guidance,
+        ):
+            source = inspect.getsource(helper)
+            self.assertIn("_policy_for", source)
+            self.assertNotIn("if definition.category", source)
 
     def test_repo_root_tap_skills_match_generated_templates(self) -> None:
         templates = {template.name: template for template in builtin_skill_templates()}
@@ -71,6 +107,11 @@ class RouterContentTests(unittest.TestCase):
                 "goal-execution",
                 "planning",
                 "research",
+                "business-research",
+                "strategy-synthesis",
+                "meeting-facilitation",
+                "customer-insight-triage",
+                "ops-review",
                 "deep-interview",
                 "architect",
                 "critic",
@@ -106,10 +147,13 @@ class RouterContentTests(unittest.TestCase):
             self.assertGreaterEqual(len(definition.artifact_expectations), 1, definition.name)
             self.assertGreaterEqual(len(definition.safety_rules), 1, definition.name)
             self.assertTrue(definition.hermes_role, definition.name)
+            self.assertIn(definition.delegation_boundary, {"default", "retained", "retained-catalog-intent"}, definition.name)
             self.assertTrue(definition.handoff_policy, definition.name)
 
     def test_catalog_marks_retained_and_codex_handoff_skills(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
+        retained = set(retained_delegation_skill_names())
+        catalog_intent_retained = set(catalog_intent_delegation_skill_names())
 
         self.assertEqual(definitions["deep-interview"].hermes_role, "retained-cognition")
         self.assertEqual(definitions["web-research"].hermes_role, "retained-cognition")
@@ -118,8 +162,27 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "codex-handoff-guidance")
         self.assertIn("Codex", definitions["ultrawork"].handoff_policy)
         self.assertEqual(primary_harness_for_skill("web-research"), "research")
+        self.assertEqual(primary_harness_for_skill("research-brief"), "business-research")
+        self.assertEqual(primary_harness_for_skill("strategy-brief"), "strategy-synthesis")
+        self.assertEqual(primary_harness_for_skill("meeting-brief"), "meeting-facilitation")
+        self.assertEqual(primary_harness_for_skill("feedback-triage"), "customer-insight-triage")
+        self.assertEqual(primary_harness_for_skill("ops-review"), "ops-review")
         self.assertEqual(primary_harness_for_skill("best-practice-research"), "research")
         self.assertEqual(primary_harness_for_skill("autoresearch-goal"), "research")
+        self.assertIn("deep-interview", retained)
+        self.assertIn("web-research", retained)
+        self.assertIn("ultraqa", retained)
+        self.assertIn("skill", retained)
+        self.assertIn("wiki", retained)
+        self.assertTrue(
+            {
+                "research-brief",
+                "strategy-brief",
+                "meeting-brief",
+                "feedback-triage",
+                "ops-review",
+            }.issubset(catalog_intent_retained)
+        )
 
     def test_workflow_skills_refer_to_harness_discipline(self) -> None:
         skills = {skill.name: skill for skill in builtin_skill_templates()}
@@ -391,6 +454,7 @@ class RouterContentTests(unittest.TestCase):
             "## Case 2: Goal, Planning, and Deep Interview Flow",
             "## Case 3: Specialist Harness Flow",
             "## Case 4: Situation Playbook Pipeline",
+            "## Case 5: Company Workflows Without CLI Knowledge",
             "## Grounded UltraQA Scenario Matrix",
             "## Release Review Checklist",
         ):
@@ -399,13 +463,30 @@ class RouterContentTests(unittest.TestCase):
         for section in ("### Setup", "### User Prompt Shape", "### Expected Hermes-Facing Behavior", "### Verification", "### Current Limit"):
             self.assertIn(section, text)
 
-        for harness in ("coding-handling", "goal-execution", "planning", "research", "deep-interview", "architect", "critic", "qa-specialist", "docs-specialist"):
+        for harness in (
+            "coding-handling",
+            "goal-execution",
+            "planning",
+            "research",
+            "deep-interview",
+            "architect",
+            "critic",
+            "qa-specialist",
+            "docs-specialist",
+            "customer-insight-triage",
+            "ops-review",
+            "strategy-synthesis",
+            "meeting-facilitation",
+            "business-research",
+        ):
             self.assertIn(harness, text)
         self.assertIn("quality tier", text)
         self.assertIn("evidence ladder", text)
         self.assertIn("omh playbook recommend", text)
         self.assertIn("safe-feature-change", text)
-        self.assertIn("결제 실패 이슈가 자주 나와", text)
+        self.assertIn("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", text)
+        self.assertIn("feedback-triage", text)
+        self.assertIn("prepare weekly ops review from customer feedback and release risks", text)
         self.assertIn("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", text)
         self.assertIn("prepared_not_observed", text)
         self.assertIn("omh docs workflows --json", text)

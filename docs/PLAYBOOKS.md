@@ -18,6 +18,7 @@ omh playbook list
 omh playbook inspect safe-feature-change
 omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "research latest official sources"
+omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
 ```
 
 Each command returns JSON. The output is meant for wrappers, docs, demos, and
@@ -30,6 +31,11 @@ files.
 | --- | --- | --- |
 | `safe-feature-change` | A user wants a safe feature, bug fix, or refactor flow. | Recommend -> plan -> accept -> coding handoff -> status card. |
 | `source-backed-research` | A user needs current, official, comparative, or citation-backed evidence. | Clarify scope -> gather sources -> synthesize -> report confidence. |
+| `research-to-strategy-brief` | A user wants business or customer evidence shaped into strategy. | Scope research -> evidence table -> meeting topics -> strategy options -> decision record. |
+| `meeting-prep-to-record` | A user wants context turned into a meeting agenda and record template. | Context -> agenda -> prompts -> decisions needed -> record template. |
+| `feedback-triage` | A user brings customer feedback, bug signals, or feature asks. | Source boundary -> clusters -> severity/opportunity -> next workflow. |
+| `weekly-ops-review` | A user wants a recurring status, risk, blocker, and priority review. | Scope -> observed status -> risks/blockers -> priorities -> follow-ups. |
+| `market-scan-to-strategy` | A user wants competitor or market evidence shaped into strategy. | Scope scan -> evidence matrix -> implications -> strategy brief. |
 | `deep-interview-to-plan` | A broad goal lacks scope, non-goals, or acceptance criteria. | One question -> clarified brief -> plan -> decision gate. |
 | `local-pipeline-buildout` | A maintainer wants a repeatable local process for recurring work. | Catalog route -> wrapper contract -> plan gate -> lifecycle status. |
 | `release-readiness-review` | A change needs public-facing quality, QA, CI, or merge-readiness review. | Review -> QA -> CI/status -> merge-readiness report. |
@@ -79,3 +85,14 @@ Codex` and `Show status` actions after a prepared handoff exists.
 The user-facing improvement is simple: the user describes the work naturally,
 and the wrapper turns it into the right pipeline without exposing shell
 commands.
+
+For business work, a prompt like:
+
+```text
+결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘
+```
+
+routes to `feedback-triage` instead of a coding handoff. The wrapper can show
+that Hermes will classify feedback, rank severity or opportunity, and recommend
+the next workflow. It should not show `Send to Codex` unless the user later
+accepts a plan with explicit code work.
