@@ -498,7 +498,13 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="docs/"', topbar)
         self.assertNotIn('href="#architecture"', topbar)
         self.assertNotIn('href="#install"', topbar)
-        self.assertNotIn("GitHub", topbar)
+        self.assertIn('class="nav__icon"', topbar)
+        self.assertIn('href="https://github.com/rlaope/oh-my-hermes-agent"', topbar)
+        self.assertNotIn(">GitHub<", topbar)
+        docs_topbar = site_docs.split('<header class="topbar topbar--solid"', 1)[1].split("</header>", 1)[0]
+        self.assertIn('class="nav__icon"', docs_topbar)
+        self.assertIn('href="https://github.com/rlaope/oh-my-hermes-agent"', docs_topbar)
+        self.assertNotIn(">GitHub<", docs_topbar)
         hero_command = site.split('aria-label="OMH quick start commands"', 1)[1].split("</code>", 1)[0]
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", hero_command)
         self.assertIn("omh setup", hero_command)
