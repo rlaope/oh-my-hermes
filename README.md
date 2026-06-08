@@ -39,6 +39,11 @@ user says a plain request in Hermes
 [Application Cases](docs/APPLICATION_CASES.md) -
 [GitHub Pages site](site/index.html)
 
+> [!NOTE]
+> **GitHub Follow**
+> Follow [@rlaope](https://github.com/rlaope) on GitHub for OMH updates and
+> related Hermes-native workflow projects.
+
 ---
 
 ## Quick Start
