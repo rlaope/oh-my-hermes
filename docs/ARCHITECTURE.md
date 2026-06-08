@@ -157,6 +157,11 @@ handlers should be added to the matching domain module rather than growing
 `ingress.py` owns platform-neutral message text and source metadata extraction
 for Discord, Slack, Hermes, and generic wrapper event shapes.
 
+`targets.py` owns the deterministic Hermes target registry. It records which
+Hermes home, wrapper target, or agent reference was observed, derives
+`omh_target_topology/v1`, and keeps single-target versus multi-target behavior
+as setup evidence rather than runtime execution proof.
+
 `routing/chat.py` owns deterministic pre-dispatch routing decisions for chat
 wrappers. It consumes plain messages or platform-shaped event payloads and
 returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
@@ -373,6 +378,7 @@ Runtime artifacts are local JSON/JSONL files under `.omh/runtime/`.
 
 ```text
 .omh/
+  targets.json
   runtime/
     state.json
     runs/
@@ -390,7 +396,9 @@ Runtime artifacts are local JSON/JSONL files under `.omh/runtime/`.
         events.jsonl
 ```
 
-`state.json` records install, apply, and doctor summaries. A run directory
+`targets.json` records observed Hermes target topology for setup drift, including
+single-to-multi and multi-to-single changes. `state.json` records install,
+apply, and doctor summaries. A run directory
 records a workflow envelope, append-only events, routing decisions, prepared
 coding delegation, delegation observation, and wrapper observation plus optional
 evidence files. A wrapper session directory records chat-thread continuity and

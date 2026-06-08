@@ -39,6 +39,10 @@ class OmhPaths:
         return self.omh_home / "setup-profile.json"
 
     @property
+    def target_registry_path(self) -> Path:
+        return self.omh_home / "targets.json"
+
+    @property
     def workflow_state_dir(self) -> Path:
         return self.omh_home / "state"
 

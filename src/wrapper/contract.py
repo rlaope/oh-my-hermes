@@ -26,6 +26,8 @@ VISIBLE_ACTIONS = (
     "send_to_executor",
     "send_to_codex",
     "show_status",
+    "show_target_status",
+    "apply_target_change",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
@@ -152,6 +154,7 @@ def build_chat_interaction_payload(
     include_message: bool = False,
     executor_target: str = "choose",
     source_metadata: dict[str, str] | None = None,
+    target_notice: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported chat interaction source: {source}")
@@ -170,12 +173,12 @@ def build_chat_interaction_payload(
     if resolved_mode == "clarify" or route["action"] != "dispatch":
         base["next_action"] = "answer_clarification"
         base["chat_response"] = build_chat_response_from_route(route, thread_key=str(base["thread_key"]))
-        return base
+        return _finish_interaction(base, target_notice)
 
     if resolved_mode == "route":
         base["chat_response"] = build_chat_response_from_route(route, thread_key=str(base["thread_key"]))
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "dispatch_to_workflow"))
-        return base
+        return _finish_interaction(base, target_notice)
 
     if resolved_mode == "delegate":
         delegation = build_coding_delegation_payload(
@@ -199,7 +202,7 @@ def build_chat_interaction_payload(
         else:
             base["next_action"] = "route_coding_request"
         base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
-        return base
+        return _finish_interaction(base, target_notice)
 
     plan = build_hermes_plan_payload(message, source=source, limit=limit, source_metadata=metadata)
     base["plan"] = _public_plan_payload(plan, include_message=include_message)
@@ -207,7 +210,7 @@ def build_chat_interaction_payload(
     next_action = str(contract.get("next_action", "present_plan"))
     base["next_action"] = "present_plan" if next_action == "prepare_coding_delegation_after_plan_acceptance" else next_action
     base["chat_response"] = build_chat_response_from_plan(plan, thread_key=str(base["thread_key"]))
-    return base
+    return _finish_interaction(base, target_notice)
 
 
 def build_chat_status_interaction(
@@ -561,6 +564,57 @@ def _base_interaction(
     return payload
 
 
+def _finish_interaction(payload: dict[str, object], target_notice: dict[str, object] | None) -> dict[str, object]:
+    if not target_notice:
+        return payload
+    payload["target_notice"] = target_notice
+    topology = target_notice.get("topology")
+    if isinstance(topology, dict):
+        payload["target_topology"] = topology
+    response = payload.get("chat_response")
+    if isinstance(response, dict):
+        payload["chat_response"] = _chat_response_with_target_notice(response, target_notice)
+    return payload
+
+
+def _chat_response_with_target_notice(response: dict[str, object], target_notice: dict[str, object]) -> dict[str, object]:
+    updated = dict(response)
+    state = dict(_nested(updated, "state"))
+    topology = target_notice.get("topology")
+    if isinstance(topology, dict):
+        state["target_topology"] = topology
+    state["target_notice"] = {
+        "action": target_notice.get("action", ""),
+        "persistence": target_notice.get("persistence", ""),
+        "transition": topology.get("transition", "") if isinstance(topology, dict) else "",
+    }
+    updated["state"] = state
+    body = str(updated.get("body", ""))
+    notice_body = str(target_notice.get("body", ""))
+    if notice_body and notice_body not in body:
+        updated["body"] = f"{body} {notice_body}".strip()
+    actions = list(updated.get("actions", []))
+    action_ids = {str(action.get("id", "")) for action in actions if isinstance(action, dict)}
+    if "show_target_status" not in action_ids:
+        actions.append(_action("show_target_status", "Show target status", "secondary"))
+    if target_notice.get("action") == "ask_to_apply_target_change" and "apply_target_change" not in action_ids:
+        action_payload: dict[str, object] = {"target_id": str(target_notice.get("target_id", ""))}
+        apply_payload = target_notice.get("apply_payload")
+        if isinstance(apply_payload, dict):
+            action_payload["target_observation"] = apply_payload
+        actions.append(
+            _action(
+                "apply_target_change",
+                "Apply target setup",
+                "secondary",
+                payload=action_payload,
+            )
+        )
+    updated["actions"] = actions
+    updated["claim_boundary"] = f"{updated.get('claim_boundary', '')} {target_notice.get('claim_boundary', '')}".strip()
+    return updated
+
+
 def _resolve_mode(mode: str, route: dict[str, object]) -> str:
     if mode != "auto":
         return mode
@@ -615,7 +669,23 @@ def _thread_key(source: str, metadata: dict[str, str], *, message: str = "", run
     event = metadata.get("source_event_id") or run_id
     if not event:
         event = hashlib.sha256(message.encode("utf-8")).hexdigest()[:12]
+    target_scope = _target_scope_key(metadata)
+    if target_scope:
+        return f"{source}:{channel}:{target_scope}:{event}"
     return f"{source}:{channel}:{event}"
+
+
+def _target_scope_key(metadata: dict[str, str]) -> str:
+    parts = [
+        metadata.get("hermes_home", ""),
+        metadata.get("agent_ref", ""),
+        metadata.get("target_ref", ""),
+        metadata.get("runtime_ref", ""),
+    ]
+    if not any(parts):
+        return ""
+    basis = "|".join(parts)
+    return f"target-{hashlib.sha256(basis.encode('utf-8')).hexdigest()[:12]}"
 
 
 def _chat_response(

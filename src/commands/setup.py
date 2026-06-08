@@ -17,6 +17,7 @@ from ..routing.recommend import recommend_skills
 from ..runtime.artifacts import update_state
 from ..setup_profiles import build_setup_profile, write_setup_profile
 from ..snippet import WORKSPACE_SNIPPET
+from ..targets import record_target_observation
 from ..team_profiles import TeamProfileError, inspect_team_profile_pack, install_team_profile_pack, list_team_profile_packs
 from .common import _paths, _print_json
 
@@ -158,6 +159,18 @@ def cmd_setup(args: argparse.Namespace) -> int:
     if args.profile_pack:
         steps["team_profiles"] = _team_profile_setup_result(args, paths)
     steps["profile"] = _setup_profile_result(args, paths)
+    steps["targets"] = record_target_observation(
+        paths,
+        source="setup",
+        dry_run=args.dry_run,
+        ensure_config=not args.skip_apply,
+        setup_context={
+            "apply_skipped": bool(args.skip_apply),
+            "with_plugin": bool(args.with_plugin),
+            "profile_packs": list(args.profile_pack),
+            "setup_profiles": list(args.profile),
+        },
+    )
     if args.dry_run:
         bootstrap_final_state = (
             "dry run would install generated skills and register the managed OMH skills directory for Hermes discovery"
@@ -192,6 +205,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "skills_dir": str(paths.skills_dir),
         "hermes_config_path": str(paths.hermes_config_path),
         "hermes_config_key": "skills.external_dirs",
+        "target_topology": steps["targets"]["topology"],
         "wrapper_backend_surface": "omh chat interact and runtime commands are adapter/operator contracts, not the normal chat UX",
     }
 
@@ -205,6 +219,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
                     "hermes_native": hermes_native,
                     "setup_profile": steps["profile"],
                     "team_profiles": steps.get("team_profiles", []),
+                    "target_observation": steps["targets"],
                 }
             },
         )

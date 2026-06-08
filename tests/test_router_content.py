@@ -41,6 +41,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
         self.assertIn("selected executor profile", router.content)
         self.assertIn("prepared_not_observed", router.content)
+        self.assertIn("Multi-Agent Target Awareness", router.content)
+        self.assertIn("omh_target_topology/v1", router.content)
+        self.assertIn("single_to_multi", router.content)
         self.assertIn("skills_list", router.content)
         self.assertIn("skill_view", router.content)
         self.assertIn("name collides", router.content)
@@ -227,6 +230,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Hermes role: `codex-handoff-guidance`", skills["ultragoal"].content)
         self.assertIn("Handoff policy:", skills["ultragoal"].content)
         self.assertIn("Runtime Evidence", skills["ultragoal"].content)
+        self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
+        self.assertIn("active_agent_count", skills["ultragoal"].content)
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
 
@@ -280,6 +285,7 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertEqual(reference, workflow_reference_markdown())
         self.assertIn("This file is generated from `src/skills/catalog.py`", reference)
+        self.assertIn("omh_target_topology/v1", reference)
         for definition in builtin_definitions():
             self.assertIn(f"### {definition.name}", reference)
             self.assertIn(f"- Category: `{definition.category}`", reference)

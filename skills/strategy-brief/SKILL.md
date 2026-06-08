@@ -85,6 +85,8 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Preserve the workflow intent, stop conditions, and verification discipline.
 - Use Hermes-native tools, file operations, and subagent/delegation features when available.
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
+- Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
+- When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers or explicit checklists,
   - question renderers -> one concise question in the current Hermes interface,

@@ -35,7 +35,15 @@ CODING_DELEGATION_STATUSES = ("prepared_not_observed",)
 CODING_WORK_OWNER_MODES = WORK_OWNER_MODES
 CODING_SELECTED_EXECUTOR_PROFILES = EXECUTOR_PROFILES
 CODING_DISPATCH_POLICIES = DISPATCH_POLICIES
-CODING_SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp")
+TARGET_SOURCE_METADATA_KEYS = (
+    "agent_ref",
+    "target_ref",
+    "runtime_ref",
+    "hermes_home",
+    "agent_count",
+    "target_count",
+)
+CODING_SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp", *TARGET_SOURCE_METADATA_KEYS)
 CODING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
 CODING_EXECUTOR_SELECTION_KEYS = ("status", "choice_required", "options")
 CODING_EXECUTOR_SELECTION_STATUSES = (

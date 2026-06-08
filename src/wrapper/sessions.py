@@ -51,6 +51,7 @@ def create_or_resume_wrapper_session(
     min_confidence: str = "high",
     source_metadata: dict[str, str] | None = None,
     executor_target: str = "choose",
+    target_notice: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise WrapperSessionError(f"unsupported wrapper session source: {source}")
@@ -64,6 +65,7 @@ def create_or_resume_wrapper_session(
         include_message=False,
         source_metadata=source_metadata,
         executor_target=executor_target,
+        target_notice=target_notice,
     )
     thread_key = str(interaction["thread_key"])
     session_id = session_id_for_thread_key(thread_key)

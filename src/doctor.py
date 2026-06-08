@@ -11,6 +11,7 @@ from .paths import OmhPaths
 from .plugin_pack import inspect_plugin_bundle
 from .runtime.artifacts import read_state, read_state_error
 from .skill_pack import CORE_SKILLS
+from .targets import read_target_registry_result, summarize_target_registry
 from .workflow_state import list_workflow_states
 
 
@@ -105,6 +106,43 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
             ),
         )
     )
+    target_registry, target_registry_error = read_target_registry_result(paths)
+    target_topology = summarize_target_registry(paths)
+    if target_registry_error:
+        checks.append(Check("target_registry", False, f"target registry unreadable: {target_registry_error}"))
+    else:
+        known_count = int(target_topology.get("known_target_count") or 0)
+        active_count = int(target_topology.get("active_agent_count") or 0)
+        mode = str(target_topology.get("mode", "unknown"))
+        if target_registry:
+            checks.append(
+                Check(
+                    "target_registry",
+                    True,
+                    f"{known_count} known Hermes target(s); active_agent_count={active_count}; mode={mode}",
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "target_registry",
+                    True,
+                    "no target registry yet; `omh setup` or wrapper target metadata will create it when needed",
+                    observed=False,
+                )
+            )
+    checks.append(
+        Check(
+            "target_topology",
+            target_topology.get("status") != "unreadable",
+            (
+                f"mode={target_topology.get('mode')}; transition={target_topology.get('transition')}; "
+                f"skill_scope_awareness={target_topology.get('requires_skill_scope_awareness')}"
+            ),
+            severity="warning" if target_topology.get("requires_skill_scope_awareness") else "auto",
+            observed=target_topology.get("status") == "available",
+        )
+    )
     plugin = inspect_plugin_bundle(paths)
     plugin_expected = bool(plugin["plugin_dir_installed"]) or bool(state and state.get("last_plugin_distribution"))
     if not plugin_expected:
@@ -187,6 +225,8 @@ def _default_remediation(name: str) -> str:
         return "Repair the local OMH runtime directory or rerun with an --omh-home path that can store metadata-only artifacts."
     if name.startswith("plugin_"):
         return "Run `omh setup --with-plugin` to reinstall the optional plugin bundle, or skip plugin checks if the plugin is not part of this setup."
+    if name.startswith("target_"):
+        return "Repair the OMH target registry or rerun `omh setup` with the Hermes home used by the wrapper runtime."
     if name == "hermes_config":
         return "Run `omh setup` to create or update the Hermes configuration for managed skill discovery."
     return "Run `omh doctor` after repairing the reported path or configuration."
@@ -201,6 +241,8 @@ def _default_next_action(name: str) -> str:
         return "Run `omh setup`, then `omh doctor` again."
     if name.startswith("plugin_"):
         return "Run `omh setup --with-plugin --force`, then `omh doctor` again, or leave the plugin uninstalled if using skills only."
+    if name.startswith("target_"):
+        return "Run `omh setup` for the current Hermes target, then rerun `omh doctor`."
     if name in {"runtime_artifacts", "workflow_state", "runtime_state"}:
         return "Fix the OMH runtime path or choose a writable --omh-home, then rerun `omh doctor`."
     return "Fix the reported check and rerun `omh doctor`."

@@ -169,9 +169,16 @@ The backend flow is:
    lifecycle path; Claude Code, OMH-style runtime profiles, generic agents, and
    Hermes-retained work use prompt-only or retained handoff paths in Phase 1.
    The wrapper records only what it actually observes.
-8. Status updates use `omh coding lifecycle report` or
+8. If the wrapper observes Hermes target metadata such as `agent_ref`,
+   `agent_count`, or `hermes_home`, `chat_interaction/v1` may include
+   `target_notice` and `target_topology`. Render the concise notice or
+   `apply_target_change` action before treating single-to-multi or
+   multi-to-single target changes as persistent setup state. When target
+   identity metadata is present, `thread_key` is scoped by that target so two
+   Hermes agents in the same channel do not share wrapper session state.
+9. Status updates use `omh coding lifecycle report` or
    `omh chat interact --run <run-id>` and stay in the same thread.
-9. Hermes still starts with its normal config and reads `skills.external_dirs`;
+10. Hermes still starts with its normal config and reads `skills.external_dirs`;
    `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
 
 `omh` does not replace the Discord bot, modify Slack commands, open network
@@ -196,6 +203,25 @@ omh chat interact --source discord --event-json event.json
 omh chat interact --source slack "risky refactor"
 printf '%s' "$SLACK_TEXT" | omh chat interact --source slack --stdin
 ```
+
+If the wrapper can identify the current Hermes agent target, include that as
+metadata rather than asking the user to choose a command:
+
+```json
+{
+  "message": {"id": "m1", "content": "risky refactor", "channel": "dev"},
+  "agent": {"id": "hermes-dev-1"},
+  "runtime": {"hermes_home": "/srv/hermes/dev", "agent_count": 2}
+}
+```
+
+With `--auto-apply-target-change`, OMH persists the observed target registry
+update and registers the managed skill directory for the reported
+`hermes_home`. Without that flag, the wrapper gets a pending
+`apply_target_change` action and should ask the user before persisting the
+single-to-multi or multi-to-single setup change. The action payload includes
+`target_observation.source_metadata`, which is the sanitized metadata needed to
+apply that exact target update without storing or replaying the raw chat prompt.
 
 Choose an executor profile for an accepted coding handoff:
 

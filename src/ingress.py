@@ -4,7 +4,18 @@ from typing import Any
 
 
 CHAT_SOURCES = ("generic", "discord", "slack", "hermes")
-SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp")
+SOURCE_METADATA_KEYS = (
+    "source_event_id",
+    "channel_ref",
+    "user_ref",
+    "timestamp",
+    "agent_ref",
+    "target_ref",
+    "runtime_ref",
+    "hermes_home",
+    "agent_count",
+    "target_count",
+)
 
 _EVENT_TEXT_PATHS = (
     ("message", "content"),
@@ -25,6 +36,12 @@ _SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "channel_ref": (("channel",), ("channel_id",), ("message", "channel"), ("event", "channel"), ("channel", "id")),
     "user_ref": (("user",), ("user_id",), ("author", "id"), ("message", "author", "id"), ("event", "user")),
     "timestamp": (("timestamp",), ("created_at",), ("ts",), ("message", "timestamp"), ("event", "ts"), ("event", "event_ts")),
+    "agent_ref": (("agent_ref",), ("agent", "id"), ("bot", "id"), ("message", "agent", "id"), ("event", "agent", "id")),
+    "target_ref": (("target_ref",), ("target", "id"), ("workspace", "id"), ("team", "id"), ("guild_id",)),
+    "runtime_ref": (("runtime_ref",), ("runtime", "id"), ("hermes", "runtime_id"), ("hermes_runtime", "id")),
+    "hermes_home": (("hermes_home",), ("runtime", "hermes_home"), ("hermes", "home")),
+    "agent_count": (("agent_count",), ("agents_count",), ("target", "agent_count"), ("runtime", "agent_count"), ("hermes", "agent_count")),
+    "target_count": (("target_count",), ("targets_count",), ("runtime", "target_count"), ("hermes", "target_count")),
 }
 
 

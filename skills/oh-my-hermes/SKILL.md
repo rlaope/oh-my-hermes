@@ -68,6 +68,12 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor profile, prepare the matching handoff, and track only evidence it actually observes instead of implying Hermes coded secretly.
 
+## Multi-Agent Target Awareness
+
+Wrappers may report `omh_target_topology/v1` when a workspace moves between one Hermes agent target and multiple Hermes agent targets. Treat that topology as setup evidence only. If `active_agent_count` is greater than one, bind this workflow to the current target and thread, name the target boundary in status, and do not claim another Hermes agent observed, accepted, or executed the workflow unless target-specific evidence exists.
+
+If a wrapper reports `single_to_multi` or `multi_to_single`, answer with one concise target-change comment. If the wrapper exposes an `apply_target_change` action and the user accepts it, persist the target registry update; otherwise keep the workflow scoped to the current thread target and ask before assuming multi-agent behavior. A skill that does not need multiple agents should continue as a single-target workflow even when multiple targets are known.
+
 ## Responsibility Roles
 
 OMH role names are responsibility descriptors, not runtime agents. They help Hermes and wrappers explain who owns the next step without implying a hidden worker ran.

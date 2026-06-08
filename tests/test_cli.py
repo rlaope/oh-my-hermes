@@ -1758,6 +1758,90 @@ class CliTests(unittest.TestCase):
             self.assertEqual(doctor_status, 0)
             self.assertTrue(json.loads(doctor_stdout)["ok"])
 
+    def test_setup_and_chat_detect_persisted_hermes_target_topology_drift(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_a = root / ".hermes-a"
+            hermes_b = root / ".hermes-b"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_a)]
+
+            status, stdout, stderr = run_cli(base + ["setup"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            setup = json.loads(stdout)
+            self.assertEqual(setup["steps"]["targets"]["topology"]["mode"], "single_agent_target")
+            self.assertEqual(setup["hermes_native"]["target_topology"]["mode"], "single_agent_target")
+
+            event_b = root / "event-b.json"
+            event_b.write_text(
+                json.dumps(
+                    {
+                        "message": {"id": "m1", "content": "risky refactor", "channel": "c1"},
+                        "agent": {"id": "agent-b"},
+                        "runtime": {"hermes_home": str(hermes_b), "agent_count": 2},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(base + ["chat", "interact", "--source", "discord", "--event-json", str(event_b)])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            pending = json.loads(stdout)
+            self.assertEqual(pending["target_notice"]["action"], "ask_to_apply_target_change")
+            self.assertEqual(pending["target_topology"]["transition"], "single_to_multi")
+            self.assertIn("apply_target_change", {action["id"] for action in pending["chat_response"]["actions"]})
+            apply_action = next(action for action in pending["chat_response"]["actions"] if action["id"] == "apply_target_change")
+            self.assertEqual(
+                apply_action["payload"]["target_observation"]["source_metadata"]["hermes_home"],
+                str(hermes_b.resolve()),
+            )
+            self.assertNotIn("message", json.dumps(apply_action["payload"]))
+            registry = json.loads((omh_home / "targets.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(registry["targets"]), 1)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "chat",
+                    "interact",
+                    "--source",
+                    "discord",
+                    "--event-json",
+                    str(event_b),
+                    "--auto-apply-target-change",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            applied = json.loads(stdout)
+            self.assertEqual(applied["target_notice"]["action"], "target_change_applied")
+            self.assertEqual(applied["target_notice"]["persistence"], "persisted")
+            self.assertIn(str(omh_home / "skills"), (hermes_b / "config.yaml").read_text(encoding="utf-8"))
+            registry = json.loads((omh_home / "targets.json").read_text(encoding="utf-8"))
+            self.assertEqual(registry["topology"]["mode"], "multi_agent_targets")
+            self.assertEqual(len(registry["targets"]), 2)
+
+            event_a_single = root / "event-a-single.json"
+            event_a_single.write_text(
+                json.dumps(
+                    {
+                        "message": {"id": "m2", "content": "status", "channel": "c1"},
+                        "agent": {"id": "agent-a"},
+                        "runtime": {"hermes_home": str(hermes_a), "agent_count": 1},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(base + ["chat", "interact", "--source", "discord", "--event-json", str(event_a_single)])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            back_to_one = json.loads(stdout)
+            self.assertEqual(back_to_one["target_topology"]["transition"], "multi_to_single")
+            self.assertEqual(back_to_one["target_topology"]["active_agent_count"], 1)
+
     def test_setup_profile_can_set_prompt_only_runtime_default(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

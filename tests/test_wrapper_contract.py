@@ -54,6 +54,47 @@ class WrapperContractTests(unittest.TestCase):
         self.assertNotIn("raw", payload["source_metadata"])
         self.assertEqual(payload["thread_key"], "slack:c1:m1")
 
+    def test_chat_interaction_surfaces_target_change_notice_without_overclaiming(self) -> None:
+        notice = {
+            "schema_version": "omh_target_change_notice/v1",
+            "action": "ask_to_apply_target_change",
+            "headline": "Hermes target setup changed.",
+            "body": "I now see multiple Hermes agent targets for this workspace. Please confirm before I persist the target registry update.",
+            "target_id": "hermes-123",
+            "topology": {
+                "schema_version": "omh_target_topology/v1",
+                "mode": "multi_agent_targets",
+                "transition": "single_to_multi",
+                "active_agent_count": 2,
+                "requires_skill_scope_awareness": True,
+            },
+            "apply_payload": {
+                "schema_version": "omh_target_apply_payload/v1",
+                "source": "chat:discord",
+                "source_metadata": {
+                    "agent_ref": "agent-b",
+                    "hermes_home": "/tmp/hermes-b",
+                    "agent_count": "2",
+                },
+                "persistence_contract": "Pass this source_metadata back to the OMH wrapper backend with target-change apply enabled; no raw chat prompt is required.",
+            },
+            "persistence": "pending_user_confirmation",
+            "claim_boundary": "Target topology is setup evidence only; it does not prove another Hermes agent executed this workflow.",
+        }
+
+        payload = build_chat_interaction_payload("risky refactor", source="discord", target_notice=notice)
+
+        actions = {action["id"] for action in payload["chat_response"]["actions"]}
+        self.assertEqual(payload["target_notice"]["action"], "ask_to_apply_target_change")
+        self.assertEqual(payload["target_topology"]["transition"], "single_to_multi")
+        self.assertEqual(payload["chat_response"]["state"]["target_topology"]["active_agent_count"], 2)
+        self.assertIn("show_target_status", actions)
+        self.assertIn("apply_target_change", actions)
+        apply_action = next(action for action in payload["chat_response"]["actions"] if action["id"] == "apply_target_change")
+        self.assertEqual(apply_action["payload"]["target_observation"]["source_metadata"]["agent_ref"], "agent-b")
+        self.assertNotIn("message", json.dumps(apply_action["payload"]))
+        self.assertIn("Target topology is setup evidence only", payload["chat_response"]["claim_boundary"])
+
     def test_clarify_mode_has_no_handoff_actions(self) -> None:
         payload = build_chat_interaction_payload("fix maybe", mode="delegate")
 

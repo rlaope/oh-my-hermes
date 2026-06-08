@@ -6,6 +6,7 @@ from pathlib import Path
 from .config_adapter import external_dirs, read_config
 from .paths import OmhPaths
 from .plugin_pack import inspect_plugin_bundle
+from .targets import summarize_target_registry
 
 PROBE_STATUSES = ("available", "missing", "unknown", "unverified")
 
@@ -178,12 +179,34 @@ def probe_capabilities(paths: OmhPaths) -> dict:
             "Wrapper observation artifacts are present" if wrappers else "No wrapper observation artifacts recorded yet",
         )
     )
+    target_topology = summarize_target_registry(paths)
+    capabilities.extend(
+        [
+            Capability(
+                "target_registry",
+                "available" if target_topology["status"] == "available" else ("missing" if target_topology["status"] == "missing" else "unknown"),
+                str(paths.target_registry_path),
+                (
+                    f"{target_topology['known_target_count']} Hermes target(s) known"
+                    if target_topology["status"] == "available"
+                    else "No OMH target registry has been recorded yet"
+                ),
+            ),
+            Capability(
+                "target_topology",
+                "available" if target_topology["mode"] in {"single_agent_target", "multi_agent_targets"} else "unknown",
+                str(paths.target_registry_path),
+                f"mode={target_topology['mode']}; active_agent_count={target_topology['active_agent_count']}; transition={target_topology['transition']}",
+            ),
+        ]
+    )
 
     return {
         "schema_version": 1,
         "omh_home": str(paths.omh_home),
         "hermes_home": str(paths.hermes_home),
         "capabilities": [capability.to_dict() for capability in capabilities],
+        "target_topology": target_topology,
         "plugin_distribution_ready": bool(plugin["plugin_distribution_ready"]),
         "native_integration_claim_ready": False,
         "claim_boundary": "Prompt-level routing is the default unless a future stable Hermes extension surface and runtime evidence prove deeper integration.",

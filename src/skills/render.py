@@ -150,6 +150,12 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor profile, prepare the matching handoff, and track only evidence it actually observes instead of implying Hermes coded secretly.
 
+## Multi-Agent Target Awareness
+
+Wrappers may report `omh_target_topology/v1` when a workspace moves between one Hermes agent target and multiple Hermes agent targets. Treat that topology as setup evidence only. If `active_agent_count` is greater than one, bind this workflow to the current target and thread, name the target boundary in status, and do not claim another Hermes agent observed, accepted, or executed the workflow unless target-specific evidence exists.
+
+If a wrapper reports `single_to_multi` or `multi_to_single`, answer with one concise target-change comment. If the wrapper exposes an `apply_target_change` action and the user accepts it, persist the target registry update; otherwise keep the workflow scoped to the current thread target and ask before assuming multi-agent behavior. A skill that does not need multiple agents should continue as a single-target workflow even when multiple targets are known.
+
 ## Responsibility Roles
 
 {role_summary_markdown()}
@@ -287,6 +293,8 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Preserve the workflow intent, stop conditions, and verification discipline.
 - Use Hermes-native tools, file operations, and subagent/delegation features when available.
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
+- Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
+- When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers or explicit checklists,
   - question renderers -> one concise question in the current Hermes interface,
@@ -321,6 +329,8 @@ def workflow_reference_markdown() -> str:
         "The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.",
         "",
         "Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor, or prepare a coding handoff for coding-heavy execution.",
+        "",
+        "When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow state to the current Hermes target/thread, adapt only the steps that benefit from multiple targets, and fall back to single-target behavior when the active agent count is one.",
         "",
         "## Skills",
         "",

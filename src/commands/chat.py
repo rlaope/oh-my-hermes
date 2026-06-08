@@ -8,6 +8,7 @@ from ..ingress import CHAT_SOURCES
 from ..installer import OmhError
 from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_message, routing_record_payload
 from ..runtime.artifacts import create_run, summarize_delegated_coding_status, write_routing_decision
+from ..targets import TARGET_METADATA_KEYS, build_target_change_notice, inspect_target_observation, record_target_observation
 from ..wrapper.contract import INTERACTION_MODES, build_chat_interaction_payload, build_chat_status_interaction
 from ..wrapper.sessions import (
     WrapperSessionError,
@@ -83,6 +84,7 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
                 include_message=args.include_message,
                 executor_target=_resolved_executor(args, default="choose"),
                 source_metadata=source_metadata,
+                target_notice=_target_notice(args, source_metadata),
             )
     except FileNotFoundError as exc:
         raise OmhError(f"runtime run not found: {args.run_id}") from exc
@@ -103,6 +105,7 @@ def cmd_chat_session_start(args: argparse.Namespace) -> int:
             min_confidence=args.min_confidence,
             source_metadata=source_metadata,
             executor_target=_resolved_executor(args, default="choose"),
+            target_notice=_target_notice(args, source_metadata),
         )
     except (OSError, json.JSONDecodeError, ValueError, WrapperSessionError) as exc:
         raise OmhError(str(exc)) from exc
@@ -138,6 +141,40 @@ def cmd_chat_session_prepare_handoff(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     _print_json(payload)
     return 0
+
+
+def _target_notice(args: argparse.Namespace, source_metadata: dict[str, str]) -> dict[str, object] | None:
+    if not _has_target_metadata(source_metadata):
+        return None
+    paths = _paths(args)
+    auto_apply = bool(getattr(args, "auto_apply_target_change", False))
+    if auto_apply:
+        observation = record_target_observation(
+            paths,
+            source=f"chat:{args.source}",
+            source_metadata=source_metadata,
+            ensure_config=bool(source_metadata.get("hermes_home")),
+        )
+    else:
+        observation = inspect_target_observation(paths, source=f"chat:{args.source}", source_metadata=source_metadata)
+    return build_target_change_notice(observation, auto_applied=auto_apply)
+
+
+def _has_target_metadata(source_metadata: dict[str, str]) -> bool:
+    return any(source_metadata.get(key) for key in TARGET_METADATA_KEYS)
+
+
+def _add_target_metadata_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--agent-ref", default="", help="Optional Hermes agent id/name observed by the wrapper.")
+    parser.add_argument("--target-ref", default="", help="Optional Hermes workspace/target id observed by the wrapper.")
+    parser.add_argument("--runtime-ref", default="", help="Optional Hermes runtime id observed by the wrapper.")
+    parser.add_argument("--agent-count", default="", help="Optional active Hermes agent count observed by the wrapper.")
+    parser.add_argument("--target-count", default="", help="Optional active Hermes target count observed by the wrapper.")
+    parser.add_argument(
+        "--auto-apply-target-change",
+        action="store_true",
+        help="Persist observed Hermes target topology changes and register the managed skill dir when hermes_home metadata is present.",
+    )
 
 
 def cmd_chat_session_select_executor(args: argparse.Namespace) -> int:
@@ -244,6 +281,7 @@ def _add_chat_commands(sub) -> None:
     interact.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     interact.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     interact.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    _add_target_metadata_options(interact)
     interact.set_defaults(func=cmd_chat_interact)
 
     session = chat_sub.add_parser("session")
@@ -260,6 +298,7 @@ def _add_chat_commands(sub) -> None:
     session_start.add_argument("--channel-ref", default="")
     session_start.add_argument("--user-ref", default="")
     session_start.add_argument("--executor", choices=CODING_EXECUTOR_TARGETS, default=None)
+    _add_target_metadata_options(session_start)
     session_start.set_defaults(func=cmd_chat_session_start)
 
     session_accept = session_sub.add_parser("accept-plan")

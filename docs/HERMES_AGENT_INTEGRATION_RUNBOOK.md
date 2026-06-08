@@ -45,6 +45,10 @@ The returned envelope is safe for a wrapper to render without parsing prose:
 - `chat_response`: renderable response text, action ids, state, and claim
   boundary.
 - `overclaim_guard`: invariant status rules the wrapper should preserve.
+- `target_notice`: optional concise notice when the observed Hermes target
+  topology changed from one target to many or many to one.
+- `target_topology`: optional `omh_target_topology/v1` summary with
+  `active_agent_count`, `current_target_id`, and `requires_skill_scope_awareness`.
 - `plan`, `delegation`, or `status`: optional machine-readable payload for the
   selected mode.
 
@@ -57,15 +61,22 @@ runtime run exists and the wrapper needs a compact progress card.
 2. Ask OMH for a platform-neutral interaction envelope.
 3. Render `chat_response.headline`, `chat_response.body`,
    `chat_response.actions`, and `chat_response.claim_boundary`.
-4. If the response is a plan, wait for the user to accept or revise the plan
+4. If `target_notice.action` is `ask_to_apply_target_change`, render a short
+   setup-change comment and an apply action. Until accepted or auto-applied,
+   keep the workflow scoped to the current thread target. The
+   `apply_target_change` action payload carries
+   `target_observation.source_metadata`; pass that sanitized metadata back to
+   the wrapper backend with target-change apply enabled to persist the same
+   target update.
+5. If the response is a plan, wait for the user to accept or revise the plan
    before preparing a handoff.
-5. If a coding handoff is prepared, dispatch the `coding_executor_handoff/v1`
+6. If a coding handoff is prepared, dispatch the `coding_executor_handoff/v1`
    payload to the external executor outside OMH. For Codex targets, use
    `codex_skill` and `codex_invocation.dispatch_text_template`; this is the
    `$skill {message}` surface Codex actually receives.
-6. Record only evidence the wrapper actually observed: dispatch, executor
+7. Record only evidence the wrapper actually observed: dispatch, executor
    result, verification, review, CI, merge readiness, and merge.
-7. Re-render status from OMH after each observed transition.
+8. Re-render status from OMH after each observed transition.
 
 ## State Transition Reference
 
@@ -73,6 +84,7 @@ runtime run exists and the wrapper needs a compact progress card.
 | --- | --- | --- | --- | --- |
 | Clarification needed | `message_received` | `clarifying` | Ask one blocking question. | No plan or execution is approved. |
 | Plan presented | `message_received` | `planning` | Show accept/revise actions. | A draft plan is not execution evidence. |
+| Target topology changed | `single_agent_target` or `multi_agent_targets` | pending target update | Show `apply_target_change` or auto-apply only when the wrapper is configured to do so. | Setup topology is not proof another Hermes agent observed the workflow. |
 | Handoff prepared | `plan_accepted` | `handoff_prepared` | Show send-to-executor action. | Prepared handoff is not execution evidence. |
 | Dispatched, waiting | `handoff_prepared` | `dispatched` | Wait for executor evidence. | Dispatch is not completion evidence. |
 | Review pending | `executor_completed` | `awaiting_review` | Show review-pending status. | Execution is observed; review is not. |

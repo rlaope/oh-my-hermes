@@ -57,6 +57,55 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertNotIn(message, json.dumps(first))
             self.assertEqual(validate_wrapper_session_record(session), [])
 
+    def test_session_start_is_scoped_by_hermes_target_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes-a")
+            message = "risky refactor"
+            shared_event = {"source_event_id": "m1", "channel_ref": "c1"}
+
+            first = create_or_resume_wrapper_session(
+                paths,
+                message,
+                source="discord",
+                source_metadata={
+                    **shared_event,
+                    "agent_ref": "agent-a",
+                    "hermes_home": str(root / ".hermes-a"),
+                },
+            )
+            second = create_or_resume_wrapper_session(
+                paths,
+                message,
+                source="discord",
+                source_metadata={
+                    **shared_event,
+                    "agent_ref": "agent-b",
+                    "hermes_home": str(root / ".hermes-b"),
+                },
+            )
+            third = create_or_resume_wrapper_session(
+                paths,
+                message,
+                source="discord",
+                source_metadata={
+                    **shared_event,
+                    "agent_ref": "agent-b",
+                    "hermes_home": str(root / ".hermes-b"),
+                },
+            )
+
+            self.assertFalse(first["resumed"])
+            self.assertFalse(second["resumed"])
+            self.assertTrue(third["resumed"])
+            self.assertNotEqual(first["session"]["session_id"], second["session"]["session_id"])
+            self.assertEqual(second["session"]["session_id"], third["session"]["session_id"])
+            self.assertIn("target-", first["session"]["thread_key"])
+            self.assertEqual(first["session"]["source_metadata"]["agent_ref"], "agent-a")
+            self.assertEqual(second["session"]["source_metadata"]["agent_ref"], "agent-b")
+            self.assertEqual(validate_wrapper_session_record(first["session"]), [])
+            self.assertEqual(validate_wrapper_session_record(second["session"]), [])
+
     def test_session_start_treats_policy_route_actions_as_routed(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

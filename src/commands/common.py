@@ -9,6 +9,7 @@ from ..ingress import extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..paths import resolve_paths
 from ..setup_profiles import read_setup_profile
+from ..targets import TARGET_METADATA_KEYS
 
 
 def _paths(args: argparse.Namespace):
@@ -20,15 +21,13 @@ def _print_json(data: object) -> None:
 
 
 def _explicit_source_metadata(args: argparse.Namespace) -> dict[str, str]:
-    return {
-        key: value
-        for key, value in {
-            "source_event_id": args.source_event_id,
-            "channel_ref": args.channel_ref,
-            "user_ref": args.user_ref,
-        }.items()
-        if value
+    values = {
+        "source_event_id": getattr(args, "source_event_id", ""),
+        "channel_ref": getattr(args, "channel_ref", ""),
+        "user_ref": getattr(args, "user_ref", ""),
     }
+    values.update({key: getattr(args, key, "") for key in TARGET_METADATA_KEYS if key != "hermes_home"})
+    return {key: str(value) for key, value in values.items() if value}
 
 
 def _resolved_executor(args: argparse.Namespace, *, default: str) -> str:
