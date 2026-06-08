@@ -24,7 +24,7 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 
-Plugin support is optional. Use it when an operator wants OMHM to provide a
+Plugin support is optional. Use it when an operator wants OMH to provide a
 thin Hermes plugin bridge in addition to the skill pack:
 
 ```sh
@@ -32,7 +32,7 @@ omh setup --with-plugin
 omh doctor
 ```
 
-That installs `~/.hermes/plugins/omhm` with metadata-only status support. It
+That installs `~/.hermes/plugins/omh` with metadata-only status support. It
 does not execute code, install Discord or Slack transports, patch Hermes core,
 or prove Hermes has loaded the plugin. If the target Hermes runtime requires a
 separate plugin enable command, follow that runtime's plugin enable/reload step.
@@ -60,7 +60,7 @@ repository. After installation, restart or refresh Hermes Agent if the target
 environment requires it, then use Hermes normally:
 
 ```text
-Use OMHM request-to-handoff for: I want to safely add a feature to this repo.
+Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
 Hermes should route through the installed skill guidance, name the responsible
@@ -211,7 +211,7 @@ Codex lifecycle calls after the wrapper has an accepted Codex coding handoff:
 start_json="$(omh coding lifecycle start --executor codex --record "risky refactor")"
 run_id="$(printf '%s' "$start_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
 
-# Dispatch to the external Codex executor outside OMHM, then record the
+# Dispatch to the external Codex executor outside OMH, then record the
 # wrapper-observed transition.
 omh coding lifecycle dispatch --run "$run_id"
 omh coding lifecycle result --run "$run_id" --result completed --evidence-ref codex-log
@@ -275,6 +275,23 @@ Use `omh runtime export --redacted` when you need a portable support artifact.
 Exports redact prompt, response, token, secret, key, and password-shaped fields by
 default while preserving proof fields such as run status, event names, observed
 delegation flags, and wrapper completion status.
+
+## What Gets Recorded
+
+`omh` records runtime metadata only by default:
+
+- setup/install/apply/doctor summaries in `~/.omh/runtime/state.json`
+- workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
+- append-only run events in `events.jsonl`
+- wrapper chat sessions in `~/.omh/runtime/wrapper_sessions/<session-id>/`
+- delegation observation in `delegation.json`
+- prepared coding handoffs in `coding_delegation.json`
+- wrapper observation in `wrapper.json`
+- review, CI, and merge evidence in `review.json`, `ci.json`, and `merge.json`
+
+Prepared handoff is never treated as implementation, review, CI, or merge
+evidence by itself. If the wrapper cannot prove that a step happened, status
+should stay `prepared_not_observed`, `not_observed`, or `not_available`.
 
 ## Review Checklist
 
@@ -341,7 +358,7 @@ Before calling the bot integration ready, verify these points:
   bot again.
 
 Current limitation: actual Discord, Slack, Hermes, coding executors, GitHub, CI,
-and merge operations still happen outside OMHM. `omh chat interact`,
+and merge operations still happen outside OMH. `omh chat interact`,
 `omh chat route`, `omh coding delegate`, and `omh coding lifecycle` choose
 contracts and record local metadata, but the wrapper adapter must render
 messages, dispatch to Hermes or the selected coding executor, and record only
@@ -376,6 +393,24 @@ Then restart Hermes Agent.
 
 ## Install Options
 
+Install the optional plugin bridge during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 sh
+```
+
+Install one or more optional Hermes agent/profile packs during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
+```
+
+Record setup profile choices during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SETUP_PROFILES=1,3 sh
+```
+
 Skip automatic Hermes config registration:
 
 ```sh
@@ -393,6 +428,16 @@ Use the active environment instead of a user-level install:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PIP_ARGS= sh
 ```
+
+Pass a current `omh setup` flag before `install.sh` has a first-class
+environment variable for it:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SETUP_ARGS="--dry-run" sh
+```
+
+`OMH_SETUP_ARGS` is an advanced escape hatch. Prefer the named variables above
+for stable install recipes.
 
 ## Uninstall
 

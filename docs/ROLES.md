@@ -1,6 +1,6 @@
-# OMHM Role Surface
+# OMH Role Surface
 
-OMHM roles are responsibility descriptors, not runtime agents. They make chat responses, wrapper buttons, and status cards easier to read without claiming that a separate worker exists or ran.
+OMH roles are responsibility descriptors, not runtime agents. They make chat responses, wrapper buttons, and status cards easier to read without claiming that a separate worker exists or ran.
 
 Use roles inside the flagship `request-to-handoff` path:
 

@@ -13,10 +13,10 @@ from .hashutil import sha256_file, sha256_text
 from .local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
 from .paths import OmhPaths
 
-PLUGIN_NAME = "omhm"
+PLUGIN_NAME = "omh"
 PLUGIN_SCHEMA_VERSION = "plugin_distribution/v1"
-PLUGIN_MANAGED_MANIFEST = ".omhm-plugin-manifest.json"
-PLUGIN_ENABLE_HINT = "Hermes may require `hermes plugins enable omhm` after the bundle is installed."
+PLUGIN_MANAGED_MANIFEST = ".omh-plugin-manifest.json"
+PLUGIN_ENABLE_HINT = "Hermes may require `hermes plugins enable omh` after the bundle is installed."
 
 
 class PluginPackError(Exception):
@@ -48,7 +48,7 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
     dirty = plugin_local_modifications(existing_manifest, target)
     unmanaged = target.exists() and existing_manifest is None
     if unmanaged and not force:
-        raise PluginPackError(f"{target} exists without an OMHM plugin manifest; use --force to replace it")
+        raise PluginPackError(f"{target} exists without an OMH plugin manifest; use --force to replace it")
     if dirty and not force:
         raise PluginPackError(f"managed plugin files changed: {', '.join(dirty)}; use --force to replace them")
 
@@ -121,7 +121,7 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
 
 
 def bundled_plugin_records() -> list[dict[str, str]]:
-    root = resources.files("omh.plugin_bundle.omhm")
+    root = resources.files("omh.plugin_bundle.omh")
     records: list[PluginFileRecord] = []
     _collect_resource_records(root, Path("."), records)
     return [record.__dict__ for record in sorted(records, key=lambda item: item.path)]
@@ -163,7 +163,7 @@ def _collect_resource_records(root: Any, rel: Path, records: list[PluginFileReco
 
 
 def _copy_plugin_bundle(target: Path, file_records: list[dict[str, str]]) -> None:
-    root = resources.files("omh.plugin_bundle.omhm")
+    root = resources.files("omh.plugin_bundle.omh")
     parent = target.parent
     tmp = parent / f".{target.name}.installing"
     backup = parent / f".{target.name}.previous"
@@ -246,7 +246,7 @@ def _manifest_valid(manifest: dict[str, Any] | None, target: Path) -> bool:
 
 
 def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
-    module_name = "_omhm_plugin_smoke"
+    module_name = "_omh_plugin_smoke"
     _clear_smoke_modules(module_name)
     try:
         spec = importlib.util.spec_from_file_location(
@@ -266,7 +266,7 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
         register(ctx)
         return {
             "import_smoke": True,
-            "register_smoke": "omhm_status" in ctx.tools and "pre_llm_call" in ctx.hooks,
+            "register_smoke": "omh_status" in ctx.tools and "pre_llm_call" in ctx.hooks,
             "registered_tools": sorted(ctx.tools),
             "registered_hooks": sorted(ctx.hooks),
         }

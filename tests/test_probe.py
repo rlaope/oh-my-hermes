@@ -21,7 +21,7 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(caps["external_skill_dirs"]["status"], "unknown")
             self.assertEqual(caps["managed_skills"]["status"], "missing")
             self.assertEqual(caps["native_hooks"]["status"], "unknown")
-            self.assertEqual(caps["omhm_plugin_bundle"]["status"], "missing")
+            self.assertEqual(caps["omh_plugin_bundle"]["status"], "missing")
             self.assertEqual(caps["plugin_import_smoke"]["status"], "unknown")
             self.assertFalse(payload["plugin_distribution_ready"])
             self.assertFalse(payload["native_integration_claim_ready"])
@@ -58,7 +58,7 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(caps["external_skill_dirs"]["status"], "available")
             self.assertEqual(caps["managed_skills"]["status"], "available")
             self.assertEqual(caps["wrapper_metadata"]["status"], "available")
-            self.assertEqual(caps["omhm_plugin_bundle"]["status"], "missing")
+            self.assertEqual(caps["omh_plugin_bundle"]["status"], "missing")
             self.assertFalse(json.loads(stdout)["plugin_distribution_ready"])
 
     def test_probe_reports_plugin_distribution_without_native_runtime_claim(self) -> None:
@@ -75,7 +75,7 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             caps = {capability["name"]: capability for capability in payload["capabilities"]}
-            self.assertEqual(caps["omhm_plugin_bundle"]["status"], "available")
+            self.assertEqual(caps["omh_plugin_bundle"]["status"], "available")
             self.assertEqual(caps["plugin_import_smoke"]["status"], "available")
             self.assertEqual(caps["plugin_register_smoke"]["status"], "available")
             self.assertEqual(caps["plugin_runtime_observed"]["status"], "unverified")

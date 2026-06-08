@@ -52,7 +52,7 @@ class OmhPaths:
 
     @property
     def hermes_plugin_dir(self) -> Path:
-        return self.hermes_plugins_dir / "omhm"
+        return self.hermes_plugins_dir / "omh"
 
     @property
     def hermes_agents_dir(self) -> Path:

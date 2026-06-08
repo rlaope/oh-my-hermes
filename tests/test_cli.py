@@ -1743,12 +1743,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             setup = json.loads(stdout)
             installed = setup["team_profiles"][0]
-            self.assertEqual(installed["schema_version"], "omhm_team_profile_pack/v1")
+            self.assertEqual(installed["schema_version"], "omh_team_profile_pack/v1")
             self.assertEqual(installed["pack_id"], "cto-loop")
             self.assertTrue(installed["observed"])
             self.assertTrue(installed["requires_hermes_profile_activation"])
-            cto_file = hermes_home / "agents" / "omhm-cto-loop-cto.md"
-            pm_file = hermes_home / "agents" / "omhm-cto-loop-pm.md"
+            cto_file = hermes_home / "agents" / "omh-cto-loop-cto.md"
+            pm_file = hermes_home / "agents" / "omh-cto-loop-pm.md"
             self.assertTrue(cto_file.exists())
             self.assertTrue(pm_file.exists())
             self.assertIn("Chief Technology Officer", cto_file.read_text(encoding="utf-8"))

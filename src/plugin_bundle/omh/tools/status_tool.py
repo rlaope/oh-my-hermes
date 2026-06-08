@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 
-from ..runtime_reader import read_omhm_status
+from ..runtime_reader import read_omh_status
 
-OMHM_STATUS_SCHEMA = {
-    "name": "omhm_status",
+OMH_STATUS_SCHEMA = {
+    "name": "omh_status",
     "description": (
-        "Read OMHM metadata-only runtime status. Prepared handoffs are kept separate "
+        "Read OMH metadata-only runtime status. Prepared handoffs are kept separate "
         "from observed execution, review, CI, and merge evidence."
     ),
     "parameters": {
@@ -26,8 +26,8 @@ OMHM_STATUS_SCHEMA = {
 }
 
 
-def omhm_status_handler(args: dict, **kwargs) -> str:
-    payload = read_omhm_status(
+def omh_status_handler(args: dict, **kwargs) -> str:
+    payload = read_omh_status(
         omh_home=str(args.get("omh_home", "") or "") or None,
         limit=int(args.get("limit") or 5),
     )

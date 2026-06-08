@@ -9,6 +9,10 @@ OMH_PYTHON="${OMH_PYTHON:-python3}"
 OMH_PIP_ARGS="${OMH_PIP_ARGS:---user}"
 OMH_AUTO_APPLY="${OMH_AUTO_APPLY:-1}"
 OMH_RUN_DOCTOR="${OMH_RUN_DOCTOR:-1}"
+OMH_WITH_PLUGIN="${OMH_WITH_PLUGIN:-0}"
+OMH_PROFILE_PACKS="${OMH_PROFILE_PACKS:-}"
+OMH_SETUP_PROFILES="${OMH_SETUP_PROFILES:-}"
+OMH_SETUP_ARGS="${OMH_SETUP_ARGS:-}"
 
 say() {
   printf '%s\n' "$*"
@@ -62,6 +66,30 @@ fi
 
 if [ -n "$OMH_VERSION" ]; then
   set -- "$@" --version "$OMH_VERSION"
+fi
+
+if [ "$OMH_WITH_PLUGIN" = "1" ]; then
+  set -- "$@" --with-plugin
+fi
+
+if [ -n "$OMH_PROFILE_PACKS" ]; then
+  for OMH_PROFILE_PACK in $(printf '%s' "$OMH_PROFILE_PACKS" | tr ',' ' '); do
+    set -- "$@" --profile-pack "$OMH_PROFILE_PACK"
+  done
+fi
+
+if [ -n "$OMH_SETUP_PROFILES" ]; then
+  for OMH_SETUP_PROFILE in $(printf '%s' "$OMH_SETUP_PROFILES" | tr ',' ' '); do
+    set -- "$@" --profile "$OMH_SETUP_PROFILE"
+  done
+fi
+
+if [ -n "$OMH_SETUP_ARGS" ]; then
+  # Intentional shell splitting: this is an advanced escape hatch for operators
+  # who need to pass current omh setup flags before install.sh grows a stable
+  # first-class environment variable for them.
+  # shellcheck disable=SC2086
+  set -- "$@" $OMH_SETUP_ARGS
 fi
 
 say "Setting up managed Hermes skills..."

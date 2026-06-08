@@ -408,7 +408,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 _action("choose_executor", "Change executor", "secondary"),
                 _action("show_status", "Show status", "secondary"),
             ],
-            claim_boundary="Prompt handoff is prepared only; OMHM has not dispatched it to an executor.",
+            claim_boundary="Prompt handoff is prepared only; OMH has not dispatched it to an executor.",
             extra_state={
                 "delegation_action": action,
                 "intent": delegation.get("intent", "unknown"),

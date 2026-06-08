@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-STATUS_SCHEMA_VERSION = "omhm_status/v1"
+STATUS_SCHEMA_VERSION = "omh_status/v1"
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -56,7 +56,7 @@ def _summarize_run(run_dir: Path) -> dict[str, Any]:
     }
 
 
-def read_omhm_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[str, Any]:
+def read_omh_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[str, Any]:
     safe_limit = max(0, min(int(limit), 20))
     home = _expand_path(omh_home) if omh_home else _default_omh_home()
     runtime_dir = home / "runtime"

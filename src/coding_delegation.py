@@ -355,7 +355,7 @@ def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dic
         "scope": [
             "Use the original task message as the implementation request.",
             f"Invoke the Codex-side workflow with `{codex_skill}` unless the executor has stronger local routing evidence.",
-            "Respect the recommended OMHM workflow and harness metadata.",
+            "Respect the recommended OMH workflow and harness metadata.",
             "Keep Hermes-facing status separate from Codex execution evidence.",
         ],
         "non_goals": [
@@ -414,10 +414,10 @@ def _prompt_handoff(profile: str, delegation: CodingDelegation) -> dict[str, obj
         "scope": [
             "Use the original task message as the executor request.",
             f"Give the prompt to {label} only after the user chooses that executor.",
-            "Keep OMHM wrapper/session state separate from executor evidence.",
+            "Keep OMH wrapper/session state separate from executor evidence.",
         ],
         "non_goals": [
-            "Do not claim OMHM or Hermes dispatched the prompt.",
+            "Do not claim OMH or Hermes dispatched the prompt.",
             "Do not create a lifecycle run for this prompt-only handoff.",
             "Do not claim implementation, review, CI, or merge status from a prepared prompt.",
         ],
@@ -474,7 +474,7 @@ def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) ->
         "Executor target: codex\n"
         "Use Codex skill: `{codex_skill}`\n"
         "Codex invocation template: `{codex_skill} {{message}}`\n"
-        "Recommended OMHM workflow: `{workflow}`\n"
+        "Recommended OMH workflow: `{workflow}`\n"
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
@@ -498,12 +498,12 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
     return (
         "You are {label}, receiving a Hermes-orchestrated coding handoff.\n\n"
         "Executor profile: `{profile}`\n"
-        "Recommended OMHM workflow: `{workflow}`\n"
+        "Recommended OMH workflow: `{workflow}`\n"
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
         "Rules:\n"
-        "- Treat this as a prompt prepared by Hermes/OMHM, not as observed execution.\n"
+        "- Treat this as a prompt prepared by Hermes/OMH, not as observed execution.\n"
         "- Inspect the repository or local context before claiming a code change.\n"
         "- Report exact files changed, verification commands, blockers, and evidence refs.\n"
         "- Do not claim Hermes performed implementation, review, CI, or merge work.\n\n"

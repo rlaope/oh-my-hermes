@@ -5,7 +5,7 @@
 The product charter is `docs/DIRECTION.md`. This document expands the
 delegation-first completion slice of that charter.
 
-OMHM should raise Hermes toward a mature workflow-layer experience without
+OMH should raise Hermes toward a mature workflow-layer experience without
 pretending that Hermes is the primary coding executor.
 
 The intended boundary is:
@@ -18,7 +18,7 @@ The intended boundary is:
   handoffs, records metadata-only evidence, and keeps observed execution
   separate from prepared intent.
 
-This direction keeps OMHM useful for Discord, Slack, and hosted Hermes wrappers
+This direction keeps OMH useful for Discord, Slack, and hosted Hermes wrappers
 while preserving the current project constraints: no hidden Hermes core patching,
 no LLM/API/network calls inside `omh`, and no runtime claim unless local wrapper
 evidence exists.
@@ -51,7 +51,7 @@ The strongest existing path is:
    selection. Codex selection prepares a lifecycle handoff and links the session
    to the runtime run id; non-Codex selection prepares a prompt-only handoff
    without a lifecycle run.
-6. Separate wrapper/runtime evidence is required before OMHM can say execution,
+6. Separate wrapper/runtime evidence is required before OMH can say execution,
    review, verification, CI, merge, or merge-readiness was observed.
 
 ## Completeness Gaps
@@ -108,7 +108,7 @@ Non-goals:
 Wrappers should be able to express the chain in human terms:
 
 1. Hermes received and clarified or planned the request.
-2. OMHM either asks the user to choose an executor, prepares a prompt-only
+2. OMH either asks the user to choose an executor, prepares a prompt-only
    handoff, or prepares a Codex lifecycle handoff.
 3. Executor execution is pending, running, blocked, completed, or not observed
    according to wrapper evidence.

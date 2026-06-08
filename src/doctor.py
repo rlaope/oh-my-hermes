@@ -108,7 +108,7 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
     plugin = inspect_plugin_bundle(paths)
     plugin_expected = bool(plugin["plugin_dir_installed"]) or bool(state and state.get("last_plugin_distribution"))
     if not plugin_expected:
-        checks.append(Check("plugin_bundle", True, f"optional OMHM plugin is not installed at {paths.hermes_plugin_dir}"))
+        checks.append(Check("plugin_bundle", True, f"optional OMH plugin is not installed at {paths.hermes_plugin_dir}"))
     else:
         checks.extend(
             [
@@ -140,7 +140,7 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
         )
     profile_installs = state.get("last_team_profile_install") if isinstance(state, dict) else None
     if not profile_installs:
-        checks.append(Check("team_profile_packs", True, f"optional OMHM team profile packs are not installed at {paths.hermes_agents_dir}"))
+        checks.append(Check("team_profile_packs", True, f"optional OMH team profile packs are not installed at {paths.hermes_agents_dir}"))
     else:
         expected_files: list[str] = []
         if isinstance(profile_installs, list):
@@ -173,7 +173,7 @@ def recommended_next_action(checks: list[Check]) -> str:
     for check in checks:
         if check.severity == "warning" and check.next_action:
             return check.next_action
-    return "Open Hermes Agent and try: Use OMHM request-to-handoff for: I want to safely add a feature to this repo."
+    return "Open Hermes Agent and try: Use OMH request-to-handoff for: I want to safely add a feature to this repo."
 
 
 def _default_remediation(name: str) -> str:

@@ -13,7 +13,7 @@
 - Example Discord/Slack adapter shims that consume `chat_interaction/v1`
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
-- Optional `~/.hermes/plugins/omhm` bridge hardening after v1 install smoke
+- Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
 
 ## Mid Term
 

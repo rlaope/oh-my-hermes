@@ -82,8 +82,7 @@ hermes skills install oh-my-hermes</code>
             Stable installs are pinned explicitly with a released tag.
           </p>
           <div class="command" role="region" aria-label="Stable install command" tabindex="0">
-            <code>OMH_CHANNEL=stable OMH_VERSION=&lt;version&gt; \
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/v&lt;version&gt;/install.sh)"</code>
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=&lt;version&gt; sh</code>
           </div>
         </section>
 
@@ -180,8 +179,8 @@ uv run python examples/slack-adapter-shim.py</code>
               <strong>Tap install or omh setup</strong>
             </div>
             <div class="arch-node arch-node--hermes">
-              <span>Optional OMHM plugin</span>
-              <strong>omhm_status, passive context</strong>
+              <span>Optional OMH plugin</span>
+              <strong>omh_status, passive context</strong>
             </div>
             <div class="arch-node arch-node--executor">
               <span>Selected coding executor</span>
