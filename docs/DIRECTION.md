@@ -2,7 +2,7 @@
 
 ## Product Thesis
 
-OMHM is a Hermes-native wrapper orchestration layer.
+OMH is a Hermes-native wrapper orchestration layer.
 
 It should make Hermes feel mature in chat surfaces without pretending Hermes is
 the main coding executor. The product is not a clone of a Codex-side workflow
@@ -21,7 +21,7 @@ step: direct answer, clarification, research, plan, status, or coding handoff.
 The user should not need to know command names, skill internals, or executor
 syntax.
 
-OMHM should keep familiar workflow names only when they help users and wrappers
+OMH should keep familiar workflow names only when they help users and wrappers
 recognize intent. Those names are compatibility affordances, not permission to
 copy another runtime's internals or imply hidden execution.
 
@@ -38,7 +38,7 @@ The goal is parity of seriousness, not parity of implementation shape.
 
 ## Project Type
 
-OMHM is:
+OMH is:
 
 - a Hermes-native skill pack with a tap-compatible `skills/` layout
 - a local bootstrap and maintenance tool for managed Hermes skills
@@ -48,7 +48,7 @@ OMHM is:
 - a metadata-only evidence ledger for prepared and observed handoffs
 - a delegation-first bridge from Hermes requests to selected coding executors
 
-OMHM is not:
+OMH is not:
 
 - a Hermes core patch
 - a Discord or Slack bot implementation

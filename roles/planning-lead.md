@@ -1,6 +1,6 @@
 # Planning Lead
 
-This OMHM role is a responsibility descriptor, not a runtime agent.
+This OMH role is a responsibility descriptor, not a runtime agent.
 
 Own clarification, non-goals, acceptance criteria, tradeoffs, and verification strategy.
 

@@ -31,7 +31,7 @@ separate runtime record exists.
 flowchart LR
   user["User in Hermes, Discord, Slack, or hosted chat"]
   skills["Installed OMH skills\nHermes skill tap or omh setup"]
-  plugin["Optional OMHM plugin\n~/.hermes/plugins/omhm"]
+  plugin["Optional OMH plugin\n~/.hermes/plugins/omh"]
   wrapper["Wrapper adapter\nbuttons, threads, edits"]
   omh["OMH local contract layer\nplaybooks, routing, plan, handoff, status"]
   hermes["Hermes Agent\nclarify, research, plan, narrate"]
@@ -41,7 +41,7 @@ flowchart LR
 
   user --> hermes
   skills --> hermes
-  plugin -->|"omhm_status, pre_llm_call"| hermes
+  plugin -->|"omh_status, pre_llm_call"| hermes
   user --> wrapper
   wrapper -->|"chat_interaction/v1"| omh
   omh -->|"answer, clarify, plan, or status"| wrapper
@@ -125,7 +125,7 @@ src/
     packaging.py
     render.py
   plugin_bundle/
-    omhm/
+    omh/
       plugin.yaml
       config.yaml
       __init__.py
@@ -141,9 +141,9 @@ skills/
 skill templates so `hermes skills tap add rlaope/oh-my-hermes-agent` can expose
 OMH directly when Hermes taps are available.
 
-`plugin_bundle/omhm/` is the optional Hermes plugin payload installed by
-`omh setup --with-plugin` to `~/.hermes/plugins/omhm`. The v1 plugin registers
-only a metadata-only `omhm_status` tool and a passive `pre_llm_call` hook. It
+`plugin_bundle/omh/` is the optional Hermes plugin payload installed by
+`omh setup --with-plugin` to `~/.hermes/plugins/omh`. The v1 plugin registers
+only a metadata-only `omh_status` tool and a passive `pre_llm_call` hook. It
 does not run verification commands, install transports, patch Hermes core, or
 claim execution evidence from prepared handoffs.
 
@@ -320,7 +320,7 @@ metadata from it.
 
 The delegation-first completion model is tracked in
 `docs/DELEGATION_FIRST_COMPLETENESS.md`. It is the product boundary for making
-OMHM feel more complete without turning Hermes into the main coding executor.
+OMH feel more complete without turning Hermes into the main coding executor.
 
 ## Hermes Capability Boundary
 

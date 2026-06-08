@@ -1,4 +1,4 @@
-# OMHM Agent Install Protocol
+# OMH Agent Install Protocol
 
 Canonical install reference for AI agents and operators. Execute top to bottom,
 then report the observed result. Normal users should use Hermes chat and
@@ -17,7 +17,7 @@ If Hermes is not available, continue only when the target environment uses a
 hosted wrapper that manages Hermes separately. Do not claim Hermes-visible
 readiness until the target Hermes runtime or wrapper has been checked.
 
-## Step 1: Install OMHM
+## Step 1: Install OMH
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
@@ -77,7 +77,7 @@ hermes skills install code-review
 ```
 
 The tap path and `omh setup` path should converge on the same user experience:
-Hermes can see OMHM guidance and the user talks to Hermes.
+Hermes can see OMH guidance and the user talks to Hermes.
 
 ## Optional Plugin Bridge
 
@@ -89,7 +89,7 @@ omh setup --with-plugin
 omh doctor
 ```
 
-This installs `~/.hermes/plugins/omhm` and lets doctor verify local manifest,
+This installs `~/.hermes/plugins/omh` and lets doctor verify local manifest,
 import, and register smoke checks. It does not patch Hermes core, implement
 Discord or Slack transports, start a network service, or prove Hermes loaded
 the plugin. Runtime plugin use must be observed separately.
@@ -99,7 +99,7 @@ the plugin. Runtime plugin use must be observed separately.
 After install and any required Hermes restart/reload, try:
 
 ```text
-Use OMHM request-to-handoff for: I want to safely add a feature to this repo.
+Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
 Expected behavior:
@@ -114,7 +114,7 @@ Expected behavior:
 ## Failure Report Template
 
 ```text
-OMHM install result:
+OMH install result:
 - install command:
 - omh setup output summary:
 - omh doctor ok:
@@ -127,4 +127,4 @@ OMHM install result:
 ```
 
 Do not ask the user for Discord, Slack, GitHub, Vercel, Supabase, or deploy
-credentials for the normal OMHM install path.
+credentials for the normal OMH install path.

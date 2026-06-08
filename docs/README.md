@@ -11,7 +11,7 @@ repo-local contract for Codex agents working here.
 
 | Goal | Read |
 | --- | --- |
-| Understand what OMHM is and is not | [Direction](DIRECTION.md) |
+| Understand what OMH is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
@@ -30,7 +30,7 @@ repo-local contract for Codex agents working here.
 
 ## Direction Summary
 
-OMHM is a Hermes-native wrapper orchestration layer.
+OMH is a Hermes-native wrapper orchestration layer.
 
 The product should make chat surfaces feel capable without hiding who did what.
 Hermes should own intake, clarification, research, business briefs, meeting

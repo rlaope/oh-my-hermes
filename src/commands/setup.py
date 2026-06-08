@@ -309,7 +309,7 @@ def _add_top_level_commands(sub) -> None:
     setup.add_argument(
         "--with-plugin",
         action="store_true",
-        help="Also install the optional OMHM Hermes plugin bundle under ~/.hermes/plugins/omhm.",
+        help="Also install the optional OMH Hermes plugin bundle under ~/.hermes/plugins/omh.",
     )
     setup.add_argument(
         "--profile-pack",
@@ -349,7 +349,7 @@ def _add_top_level_commands(sub) -> None:
     doctor.set_defaults(func=cmd_doctor)
 
     recommend = sub.add_parser("recommend")
-    recommend.add_argument("task", nargs="+", help="Task description to map to OMHM workflow skills.")
+    recommend.add_argument("task", nargs="+", help="Task description to map to OMH workflow skills.")
     recommend.add_argument("--limit", type=int, default=5, help="Maximum recommendations to return.")
     recommend.set_defaults(func=cmd_recommend)
 

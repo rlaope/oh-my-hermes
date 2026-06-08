@@ -1,6 +1,6 @@
 # Review Gate
 
-This OMHM role is a responsibility descriptor, not a runtime agent.
+This OMH role is a responsibility descriptor, not a runtime agent.
 
 Own claim checking, release/readiness review, QA framing, and evidence requirements.
 

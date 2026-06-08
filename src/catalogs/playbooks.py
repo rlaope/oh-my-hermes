@@ -103,7 +103,7 @@ _PLAYBOOKS = (
     Playbook(
         id="request-to-handoff",
         title="Request to handoff",
-        summary="Flagship OMHM path: turn a plain Hermes request into a role-owned next action with an explicit evidence boundary.",
+        summary="Flagship OMH path: turn a plain Hermes request into a role-owned next action with an explicit evidence boundary.",
         use_when="A user sends a natural request and needs Hermes to decide whether to clarify, research, plan, review, or prepare a coding handoff.",
         keywords=(
             "request-to-handoff",
@@ -161,7 +161,7 @@ _PLAYBOOKS = (
                 "Name the responsible role",
                 "wrapper",
                 "Expose the responsibility lane so the chat user knows who owns the next step.",
-                "omhm_role_surface/v1",
+                "omh_role_surface/v1",
                 ("show_status", "accept_plan", "revise_plan"),
                 ("role id", "role evidence boundary"),
                 "A role is a responsibility descriptor, not proof that a runtime agent ran.",

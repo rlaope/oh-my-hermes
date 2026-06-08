@@ -141,25 +141,25 @@ def probe_capabilities(paths: OmhPaths) -> dict:
                 "Hermes plugin directory exists" if plugins_dir_exists else "No Hermes plugin directory detected by file probe",
             ),
             Capability(
-                "omhm_plugin_bundle",
+                "omh_plugin_bundle",
                 "available" if plugin["plugin_dir_installed"] else "missing",
                 str(paths.hermes_plugin_dir),
-                "Managed OMHM plugin bundle is installed" if plugin["plugin_dir_installed"] else "Managed OMHM plugin bundle is not installed",
+                "Managed OMH plugin bundle is installed" if plugin["plugin_dir_installed"] else "Managed OMH plugin bundle is not installed",
             ),
             Capability(
                 "plugin_import_smoke",
                 "available" if plugin["plugin_import_smoke"] else ("missing" if plugin["plugin_dir_installed"] else "unknown"),
                 str(paths.hermes_plugin_dir / "__init__.py"),
-                "Installed OMHM plugin imports locally" if plugin["plugin_import_smoke"] else "Installed OMHM plugin has not passed local import smoke",
+                "Installed OMH plugin imports locally" if plugin["plugin_import_smoke"] else "Installed OMH plugin has not passed local import smoke",
             ),
             Capability(
                 "plugin_register_smoke",
                 "available" if plugin["plugin_register_smoke"] else ("missing" if plugin["plugin_dir_installed"] else "unknown"),
                 str(paths.hermes_plugin_dir),
                 (
-                    f"Installed OMHM plugin registers tools={plugin['registered_tools']} hooks={plugin['registered_hooks']}"
+                    f"Installed OMH plugin registers tools={plugin['registered_tools']} hooks={plugin['registered_hooks']}"
                     if plugin["plugin_register_smoke"]
-                    else "Installed OMHM plugin has not passed fake Hermes register smoke"
+                    else "Installed OMH plugin has not passed fake Hermes register smoke"
                 ),
             ),
             Capability(

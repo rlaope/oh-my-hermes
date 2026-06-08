@@ -1,4 +1,4 @@
-# OMHM Agent Contract
+# OMH Agent Contract
 
 This file is the repo-local operating contract for Codex agents working on
 oh-my-hermes-agent.
@@ -8,12 +8,12 @@ oh-my-hermes-agent.
 Read `docs/DIRECTION.md` before changing architecture, workflow behavior,
 wrapper contracts, generated skill guidance, or coding delegation semantics.
 
-OMHM is a Hermes-native wrapper orchestration layer. Keep Hermes responsible for
+OMH is a Hermes-native wrapper orchestration layer. Keep Hermes responsible for
 chat intake, clarification, source-backed research, planning, and status
 narration. Keep main coding work delegated to Codex-like executors through
 explicit prepared handoffs and observed evidence.
 
-Do not turn OMHM into a hidden Hermes runtime patch, transport bot, network
+Do not turn OMH into a hidden Hermes runtime patch, transport bot, network
 service, LLM router, or secret coding executor.
 
 ## Delivery Grain

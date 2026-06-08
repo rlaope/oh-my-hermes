@@ -37,9 +37,9 @@ packages = [
   "omh.commands",
   "omh.core",
   "omh.plugin_bundle",
-  "omh.plugin_bundle.omhm",
-  "omh.plugin_bundle.omhm.hooks",
-  "omh.plugin_bundle.omhm.tools",
+  "omh.plugin_bundle.omh",
+  "omh.plugin_bundle.omh.hooks",
+  "omh.plugin_bundle.omh.tools",
   "omh.profiles",
   "omh.routing",
   "omh.runtime",
@@ -59,4 +59,4 @@ omh = "src"
 "omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
-"omh.plugin_bundle.omhm" = ["plugin.yaml", "config.yaml"]
+"omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]

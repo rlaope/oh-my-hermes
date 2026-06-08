@@ -1,1 +1,1 @@
-"""Catalog source-owner modules for OMHM workflow data."""
+"""Catalog source-owner modules for OMH workflow data."""

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-ROLE_CONTRACT_VERSION = "omhm_role_surface/v1"
+ROLE_CONTRACT_VERSION = "omh_role_surface/v1"
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ def role_surface_payload() -> dict[str, object]:
 
 def role_summary_markdown() -> str:
     lines = [
-        "OMHM role names are responsibility descriptors, not runtime agents. They help Hermes and wrappers explain who owns the next step without implying a hidden worker ran.",
+        "OMH role names are responsibility descriptors, not runtime agents. They help Hermes and wrappers explain who owns the next step without implying a hidden worker ran.",
         "",
     ]
     for role in _ROLES:
@@ -124,7 +124,7 @@ def role_file_markdown(role: RoleDefinition) -> str:
         [
             f"# {role.title}",
             "",
-            "This OMHM role is a responsibility descriptor, not a runtime agent.",
+            "This OMH role is a responsibility descriptor, not a runtime agent.",
             "",
             role.purpose,
             "",
@@ -154,9 +154,9 @@ def role_file_markdown(role: RoleDefinition) -> str:
 
 def roles_reference_markdown() -> str:
     lines = [
-        "# OMHM Role Surface",
+        "# OMH Role Surface",
         "",
-        "OMHM roles are responsibility descriptors, not runtime agents. They make chat responses, wrapper buttons, and status cards easier to read without claiming that a separate worker exists or ran.",
+        "OMH roles are responsibility descriptors, not runtime agents. They make chat responses, wrapper buttons, and status cards easier to read without claiming that a separate worker exists or ran.",
         "",
         "Use roles inside the flagship `request-to-handoff` path:",
         "",

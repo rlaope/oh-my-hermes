@@ -112,7 +112,7 @@ def public_executor_options() -> list[dict[str, object]]:
             "label": "Generic coding agent",
             "work_owner_mode": "prompt_only_handoff",
             "dispatchable": False,
-            "recommended_for": "portable prompt handoff for an executor OMHM does not directly know",
+            "recommended_for": "portable prompt handoff for an executor OMH does not directly know",
         },
         {
             "profile": "hermes",
@@ -151,5 +151,5 @@ def prompt_invocation_for_profile(profile: str) -> dict[str, str]:
         "tool_label": labels[profile],
         "dispatch_text_template": templates[profile],
         "message_placeholder": "{message}",
-        "wrapper_note": "Copy or pass this prompt only when the user chooses that executor; OMHM does not dispatch it.",
+        "wrapper_note": "Copy or pass this prompt only when the user chooses that executor; OMH does not dispatch it.",
     }

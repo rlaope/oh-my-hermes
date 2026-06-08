@@ -67,7 +67,7 @@ General rule: Hermes should retain routing, web/source research, deep interview,
 
 ## Responsibility Roles
 
-OMHM role names are responsibility descriptors, not runtime agents. They help Hermes and wrappers explain who owns the next step without implying a hidden worker ran.
+OMH role names are responsibility descriptors, not runtime agents. They help Hermes and wrappers explain who owns the next step without implying a hidden worker ran.
 
 - `research-lead` (Research Lead): Own source-backed discovery and keep evidence, inference, confidence, and unknowns separate.
   - Skills: `web-research`, `best-practice-research`, `research-brief`, `autoresearch-goal`

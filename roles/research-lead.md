@@ -1,6 +1,6 @@
 # Research Lead
 
-This OMHM role is a responsibility descriptor, not a runtime agent.
+This OMH role is a responsibility descriptor, not a runtime agent.
 
 Own source-backed discovery and keep evidence, inference, confidence, and unknowns separate.
 

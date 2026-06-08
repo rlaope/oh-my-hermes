@@ -8,7 +8,7 @@ from ..local_store import atomic_write_json, atomic_write_text, utc_now
 from ..paths import OmhPaths
 
 
-TEAM_PROFILE_SCHEMA_VERSION = "omhm_team_profile_pack/v1"
+TEAM_PROFILE_SCHEMA_VERSION = "omh_team_profile_pack/v1"
 
 
 class TeamProfileError(ValueError):
@@ -300,12 +300,12 @@ def render_team_role_markdown(pack: TeamProfilePack, role: TeamRole) -> str:
     escalation = "\n".join(f"- {item}" for item in role.escalation)
     return (
         "---\n"
-        f"name: OMHM {role.title}\n"
+        f"name: OMH {role.title}\n"
         f"role: {role.role}\n"
         f"pack: {pack.id}\n"
         f"schema_version: {TEAM_PROFILE_SCHEMA_VERSION}\n"
         "---\n\n"
-        f"# OMHM {role.title}\n\n"
+        f"# OMH {role.title}\n\n"
         "This is an optional Hermes agent/profile role file. It is installed only when an operator selects the "
         f"`{pack.id}` team profile pack.\n\n"
         "It describes responsibility and communication style. It is not proof that Hermes activated this profile, "
@@ -333,7 +333,7 @@ def _pack(pack_id: str) -> TeamProfilePack:
 
 def _pack_files(paths: OmhPaths, pack: TeamProfilePack) -> list[tuple[Path, str]]:
     return [
-        (paths.hermes_agents_dir / f"omhm-{pack.id}-{role.id}.md", render_team_role_markdown(pack, role))
+        (paths.hermes_agents_dir / f"omh-{pack.id}-{role.id}.md", render_team_role_markdown(pack, role))
         for role in pack.roles
     ]
 

@@ -1,6 +1,6 @@
 # Coding Handoff
 
-This OMHM role is a responsibility descriptor, not a runtime agent.
+This OMH role is a responsibility descriptor, not a runtime agent.
 
 Own executor selection, prepared handoff payloads, and status narration while selected executors own code changes.
 

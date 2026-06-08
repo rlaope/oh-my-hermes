@@ -24,7 +24,7 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 
-Plugin support is optional. Use it when an operator wants OMHM to provide a
+Plugin support is optional. Use it when an operator wants OMH to provide a
 thin Hermes plugin bridge in addition to the skill pack:
 
 ```sh
@@ -32,7 +32,7 @@ omh setup --with-plugin
 omh doctor
 ```
 
-That installs `~/.hermes/plugins/omhm` with metadata-only status support. It
+That installs `~/.hermes/plugins/omh` with metadata-only status support. It
 does not execute code, install Discord or Slack transports, patch Hermes core,
 or prove Hermes has loaded the plugin. If the target Hermes runtime requires a
 separate plugin enable command, follow that runtime's plugin enable/reload step.
@@ -60,7 +60,7 @@ repository. After installation, restart or refresh Hermes Agent if the target
 environment requires it, then use Hermes normally:
 
 ```text
-Use OMHM request-to-handoff for: I want to safely add a feature to this repo.
+Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
 Hermes should route through the installed skill guidance, name the responsible
@@ -211,7 +211,7 @@ Codex lifecycle calls after the wrapper has an accepted Codex coding handoff:
 start_json="$(omh coding lifecycle start --executor codex --record "risky refactor")"
 run_id="$(printf '%s' "$start_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
 
-# Dispatch to the external Codex executor outside OMHM, then record the
+# Dispatch to the external Codex executor outside OMH, then record the
 # wrapper-observed transition.
 omh coding lifecycle dispatch --run "$run_id"
 omh coding lifecycle result --run "$run_id" --result completed --evidence-ref codex-log
@@ -341,7 +341,7 @@ Before calling the bot integration ready, verify these points:
   bot again.
 
 Current limitation: actual Discord, Slack, Hermes, coding executors, GitHub, CI,
-and merge operations still happen outside OMHM. `omh chat interact`,
+and merge operations still happen outside OMH. `omh chat interact`,
 `omh chat route`, `omh coding delegate`, and `omh coding lifecycle` choose
 contracts and record local metadata, but the wrapper adapter must render
 messages, dispatch to Hermes or the selected coding executor, and record only
