@@ -50,6 +50,7 @@ delegate coding, or report status.
 | --- | --- |
 | Hermes skill tap | Tap-compatible skills under `skills/<name>/SKILL.md` for Hermes-native install. |
 | Bootstrap setup | `omh setup` installs the same generated skills under `~/.omh/skills` and registers `skills.external_dirs`. |
+| Optional Hermes plugin | `omh setup --with-plugin` installs a thin native bridge under `~/.hermes/plugins/omhm`. |
 | Skill catalog | Deterministic routing metadata from `src/skills/catalog.py`. |
 | Playbooks | Situation-level pipelines for research, planning, wrapper UX, and coding handoff flows. |
 | Harness quality | Machine-readable quality bars, evidence ladders, wrapper actions, and overclaim guards. |
@@ -139,6 +140,19 @@ omh doctor
 directory through Hermes' `skills.external_dirs`. The intended final state is
 the same from the user's point of view: Hermes sees OMH skills, and the user
 talks to Hermes.
+
+**Optional native plugin bridge**
+
+```sh
+omh setup --with-plugin
+omh doctor
+```
+
+This installs a small `~/.hermes/plugins/omhm` bundle that registers an
+`omhm_status` tool and a passive `pre_llm_call` status-context hook. It is
+operator opt-in: skills remain the default user-facing surface, and Hermes may
+still require its own plugin enable/reload step before the bundle is used.
+Local plugin import/register smoke is not proof that Hermes loaded the plugin.
 
 **Optional operator smoke test**
 

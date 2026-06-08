@@ -48,6 +48,7 @@ python3 -m src.cli docs workflows --check
 python3 -m src.cli harness validate
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 0.1.0
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 0.1.0
+python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --with-plugin --dry-run --channel stable --version 0.1.0
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 ```
 
@@ -71,6 +72,7 @@ python3 -m src.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Harness catalog validation status.
 - Runtime validation status.
 - Capability probe status.
+- Optional plugin bundle status when `omh setup --with-plugin` changed.
 - GitHub Pages workflow status when public site copy changed.
 - Known manual Hermes checks that could not be automated.
 - Any public claim that depends on wrapper evidence rather than Hermes-native
@@ -84,5 +86,7 @@ Use explicit proof-boundary language:
 - "Wrapper-observed" when evidence comes from a bot or shell wrapper.
 - "Not observed" when specialist delegation metadata is unavailable.
 
-Do not claim native Hermes hooks, plugins, apps, or internal routing until a
-future capability probe and runtime evidence both support that claim.
+Do not claim native Hermes runtime use from plugin installation alone.
+`plugin_distribution_ready` means the local bundle exists and passed local
+import/register smoke; `native_integration_claim_ready` still requires observed
+Hermes runtime-load or hook/tool-use evidence.

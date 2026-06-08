@@ -1,0 +1,8 @@
+name: omhm
+version: "0.1.0"
+description: "Oh My Hermes Agent native bridge for metadata-only runtime status and evidence-boundary context."
+author: oh-my-hermes maintainers
+provides_tools:
+  - omhm_status
+provides_hooks:
+  - pre_llm_call

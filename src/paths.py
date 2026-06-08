@@ -42,6 +42,14 @@ class OmhPaths:
     def hermes_config_path(self) -> Path:
         return self.hermes_home / "config.yaml"
 
+    @property
+    def hermes_plugins_dir(self) -> Path:
+        return self.hermes_home / "plugins"
+
+    @property
+    def hermes_plugin_dir(self) -> Path:
+        return self.hermes_plugins_dir / "omhm"
+
 
 def expand_path(value: str | Path) -> Path:
     return Path(os.path.expandvars(str(value))).expanduser().resolve()

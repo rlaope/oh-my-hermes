@@ -13,6 +13,7 @@
 - Example Discord/Slack adapter shims that consume `chat_interaction/v1`
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
+- Optional `~/.hermes/plugins/omhm` bridge hardening after v1 install smoke
 
 ## Mid Term
 
@@ -24,9 +25,9 @@
 
 ## Long Term
 
-- Hermes-native runtime hooks if Hermes exposes a stable extension surface
+- Hermes plugin enablement automation when the runtime contract is stable
 - Deeper workflow telemetry that remains local and inspectable
-- Plugin-style distribution if Hermes supports plugin bundles
+- Richer plugin hooks and tools after observed runtime-load evidence exists
 
 ## Recently Landed
 
@@ -44,3 +45,5 @@
 - GitHub Pages source for the public OMH entry point
 - Situation playbooks exposed through `omh playbook list`, `inspect`, and
   `recommend`
+- Optional plugin distribution path through `omh setup --with-plugin`, with
+  local import/register smoke and conservative runtime-claim boundaries

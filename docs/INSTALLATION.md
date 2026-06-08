@@ -20,6 +20,19 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 
+Plugin support is optional. Use it when an operator wants OMHM to provide a
+thin Hermes plugin bridge in addition to the skill pack:
+
+```sh
+omh setup --with-plugin
+omh doctor
+```
+
+That installs `~/.hermes/plugins/omhm` with metadata-only status support. It
+does not execute code, install Discord or Slack transports, patch Hermes core,
+or prove Hermes has loaded the plugin. If the target Hermes runtime requires a
+separate plugin enable command, follow that runtime's plugin enable/reload step.
+
 ## Install Path A: Hermes-Native Skill Tap
 
 Use this path when the target Hermes environment supports skill taps:
@@ -109,6 +122,11 @@ managed skills available to Hermes.
 `omh runtime status` should show the local runtime artifact directory and the
 latest install/apply/doctor state when those commands have run. `omh probe`
 reports observable Hermes capability surfaces without mutating Hermes internals.
+When `omh setup --with-plugin` has run, `omh doctor` also checks the managed
+plugin manifest plus local import/register smoke. `omh probe` reports
+`plugin_distribution_ready` separately from `native_integration_claim_ready` so
+operators do not mistake local install readiness for observed Hermes runtime
+use.
 
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see

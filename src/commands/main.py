@@ -31,6 +31,7 @@ from ..local_store import atomic_write_text
 from ..manifest import read_manifest
 from ..paths import resolve_paths
 from ..playbooks import inspect_playbook, list_playbooks, recommend_playbooks
+from ..plugin_pack import PluginPackError, install_plugin_bundle
 from ..probe import probe_capabilities
 from ..routing.recommend import recommend_skills
 from ..release import RELEASE_CHANNELS, package_url_for
@@ -217,6 +218,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
         steps["apply"] = {"skipped": True, "message": "Skipped Hermes config registration because --skip-apply was set."}
     else:
         steps["apply"] = _apply_result(args)
+    if args.with_plugin:
+        steps["plugin"] = _plugin_setup_result(args, paths)
     if args.dry_run:
         bootstrap_final_state = (
             "dry run would install generated skills and register the managed OMH skills directory for Hermes discovery"
@@ -265,8 +268,21 @@ def cmd_setup(args: argparse.Namespace) -> int:
                 }
             },
         )
-    _print_json({"ok": True, "steps": steps, "dry_run": args.dry_run, "hermes_native": hermes_native})
+    payload: dict[str, object] = {"ok": True, "steps": steps, "dry_run": args.dry_run, "hermes_native": hermes_native}
+    if args.with_plugin:
+        payload["plugin_distribution"] = steps["plugin"]
+    _print_json(payload)
     return 0
+
+
+def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
+    try:
+        result = install_plugin_bundle(paths, force=args.force, dry_run=args.dry_run)
+    except PluginPackError as exc:
+        raise OmhError(str(exc)) from exc
+    if not args.dry_run:
+        update_state(paths, {"last_plugin_distribution": result})
+    return result
 
 
 def cmd_recommend(args: argparse.Namespace) -> int:
@@ -1044,6 +1060,11 @@ def _add_top_level_commands(sub) -> None:
     setup = sub.add_parser("setup")
     _add_common_install_options(setup)
     setup.add_argument("--skip-apply", action="store_true", help="Install skills without registering them in Hermes config.")
+    setup.add_argument(
+        "--with-plugin",
+        action="store_true",
+        help="Also install the optional OMHM Hermes plugin bundle under ~/.hermes/plugins/omhm.",
+    )
     setup.set_defaults(func=cmd_setup)
 
     install = sub.add_parser("install")

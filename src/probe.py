@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .config_adapter import external_dirs, read_config
 from .paths import OmhPaths
+from .plugin_pack import inspect_plugin_bundle
 
 PROBE_STATUSES = ("available", "missing", "unknown", "unverified")
 
@@ -129,6 +130,46 @@ def probe_capabilities(paths: OmhPaths) -> dict:
         )
     )
     wrappers = _wrapper_artifacts(paths)
+    plugin = inspect_plugin_bundle(paths)
+    plugins_dir_exists = _has_dir(paths.hermes_plugins_dir)
+    capabilities.extend(
+        [
+            Capability(
+                "plugin_dir_exists",
+                "available" if plugins_dir_exists else "unknown",
+                str(paths.hermes_plugins_dir),
+                "Hermes plugin directory exists" if plugins_dir_exists else "No Hermes plugin directory detected by file probe",
+            ),
+            Capability(
+                "omhm_plugin_bundle",
+                "available" if plugin["plugin_dir_installed"] else "missing",
+                str(paths.hermes_plugin_dir),
+                "Managed OMHM plugin bundle is installed" if plugin["plugin_dir_installed"] else "Managed OMHM plugin bundle is not installed",
+            ),
+            Capability(
+                "plugin_import_smoke",
+                "available" if plugin["plugin_import_smoke"] else ("missing" if plugin["plugin_dir_installed"] else "unknown"),
+                str(paths.hermes_plugin_dir / "__init__.py"),
+                "Installed OMHM plugin imports locally" if plugin["plugin_import_smoke"] else "Installed OMHM plugin has not passed local import smoke",
+            ),
+            Capability(
+                "plugin_register_smoke",
+                "available" if plugin["plugin_register_smoke"] else ("missing" if plugin["plugin_dir_installed"] else "unknown"),
+                str(paths.hermes_plugin_dir),
+                (
+                    f"Installed OMHM plugin registers tools={plugin['registered_tools']} hooks={plugin['registered_hooks']}"
+                    if plugin["plugin_register_smoke"]
+                    else "Installed OMHM plugin has not passed fake Hermes register smoke"
+                ),
+            ),
+            Capability(
+                "plugin_runtime_observed",
+                "unverified",
+                str(paths.hermes_plugin_dir),
+                "No Hermes runtime load/use observation is recorded; local install smoke is not native runtime evidence",
+            ),
+        ]
+    )
     capabilities.append(
         Capability(
             "wrapper_metadata",
@@ -143,6 +184,7 @@ def probe_capabilities(paths: OmhPaths) -> dict:
         "omh_home": str(paths.omh_home),
         "hermes_home": str(paths.hermes_home),
         "capabilities": [capability.to_dict() for capability in capabilities],
+        "plugin_distribution_ready": bool(plugin["plugin_distribution_ready"]),
         "native_integration_claim_ready": False,
         "claim_boundary": "Prompt-level routing is the default unless a future stable Hermes extension surface and runtime evidence prove deeper integration.",
     }

@@ -48,9 +48,9 @@ omh setup</code>
         <div class="section__header">
           <h2>Architecture at a glance.</h2>
           <p>
-            OMH starts as installed Hermes skills. Optional wrappers render UX,
-            backend contracts shape buttons and status, and runtime artifacts decide
-            what is actually observed.
+            OMH starts as installed Hermes skills. An optional plugin bridge can
+            surface metadata-only status inside Hermes, while runtime artifacts
+            decide what is actually observed.
           </p>
         </div>
         <div class="architecture-map" aria-label="OMH architecture diagram">
@@ -78,6 +78,10 @@ omh setup</code>
             <span>Installed OMH skills</span>
             <strong>Tap install or omh setup</strong>
           </div>
+          <div class="arch-node arch-node--hermes">
+            <span>Optional OMHM plugin</span>
+            <strong>omhm_status, passive context</strong>
+          </div>
           <div class="arch-node arch-node--executor">
             <span>Codex-like executor</span>
             <strong>Implementation after dispatch</strong>
@@ -96,6 +100,8 @@ omh setup</code>
               Hermes sees the installed skills first. Wrapper operators can inspect the
               same local pipeline contracts for research, deep interview, planning,
               safe coding handoff, status, and release-readiness review.
+              Operators can opt into <code>omh setup --with-plugin</code> for a
+              local Hermes plugin bridge that only surfaces metadata-backed status.
           </p>
         </div>
         <div class="grid">

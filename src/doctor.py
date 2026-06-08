@@ -7,6 +7,7 @@ from .hashutil import sha256_file
 from .local_store import can_write_dir
 from .manifest import local_modifications, read_manifest
 from .paths import OmhPaths
+from .plugin_pack import inspect_plugin_bundle
 from .runtime.artifacts import read_state, read_state_error
 from .skill_pack import CORE_SKILLS
 from .workflow_state import list_workflow_states
@@ -91,6 +92,36 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
             ),
         )
     )
+    plugin = inspect_plugin_bundle(paths)
+    plugin_expected = bool(plugin["plugin_dir_installed"]) or bool(state and state.get("last_plugin_distribution"))
+    if not plugin_expected:
+        checks.append(Check("plugin_bundle", True, f"optional OMHM plugin is not installed at {paths.hermes_plugin_dir}"))
+    else:
+        checks.extend(
+            [
+                Check("plugin_bundle", bool(plugin["plugin_dir_installed"]), f"{paths.hermes_plugin_dir}"),
+                Check("plugin_manifest", bool(plugin["plugin_manifest_valid"]), str(plugin["plugin_manifest_path"])),
+                Check(
+                    "plugin_import_smoke",
+                    bool(plugin["plugin_import_smoke"]),
+                    "installed plugin imports without side effects" if plugin["plugin_import_smoke"] else "; ".join(plugin["errors"]),
+                ),
+                Check(
+                    "plugin_register_smoke",
+                    bool(plugin["plugin_register_smoke"]),
+                    (
+                        f"registered tools={plugin['registered_tools']} hooks={plugin['registered_hooks']}"
+                        if plugin["plugin_register_smoke"]
+                        else "; ".join(plugin["errors"])
+                    ),
+                ),
+                Check(
+                    "plugin_runtime_observed",
+                    True,
+                    "not required for doctor; Hermes runtime load/use must be observed separately before claiming native runtime readiness",
+                ),
+            ]
+        )
     return checks
 
 

@@ -43,7 +43,8 @@
             OMH gives Hermes installed skill guidance for turning natural language into deterministic
             routing, clarification, planning, status narration, or Codex-ready coding handoffs.
             Local backend contracts and schema-versioned artifacts support wrappers and operators
-            without becoming the normal user UX.
+            without becoming the normal user UX. Operators can optionally add a thin
+            plugin bridge for metadata-only status context.
           </p>
         </header>
 
@@ -59,6 +60,12 @@
 omh setup
 omh doctor</code>
           </div>
+          <p>
+            Operators who need a plugin payload can run
+            <code>omh setup --with-plugin</code>. Skills remain the default UX;
+            the plugin only adds local status context after Hermes enables and
+            loads it.
+          </p>
           <p>
             When Hermes skill taps are available, the native skill front door is:
           </p>
@@ -163,6 +170,10 @@ uv run python examples/slack-adapter-shim.py</code>
             <div class="arch-node arch-node--hermes">
               <span>Installed OMH skills</span>
               <strong>Tap install or omh setup</strong>
+            </div>
+            <div class="arch-node arch-node--hermes">
+              <span>Optional OMHM plugin</span>
+              <strong>omhm_status, passive context</strong>
             </div>
             <div class="arch-node arch-node--executor">
               <span>Codex-like executor</span>
