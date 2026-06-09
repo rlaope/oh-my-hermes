@@ -56,7 +56,53 @@ python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke ins
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 0.1.0
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --with-plugin --dry-run --channel stable --version 0.1.0
 python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
+python3 -m src.cli release hermes-smoke
 ```
+
+## Hermes CLI Install Smoke
+
+The release gate includes a deterministic smoke plan for the real Hermes CLI
+path. Plan mode is safe for CI because it does not touch the current Hermes
+profile:
+
+```sh
+python3 -m src.cli release hermes-smoke
+```
+
+For release candidates, run exactly one live smoke against the target Hermes
+profile and paste the JSON result into the release note. Use the native tap
+path when Hermes skill taps are available:
+
+```sh
+omh release hermes-smoke --live --install-path tap --target-confirmed
+```
+
+Use the bootstrap path when validating the installer-managed `skills.external_dirs`
+route instead:
+
+```sh
+omh release hermes-smoke --live --install-path setup --target-confirmed
+```
+
+For an isolated smoke profile, bind the target home explicitly instead of
+confirming the ambient default profile:
+
+```sh
+omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --live --install-path setup
+```
+
+The live smoke runs install/setup plus:
+
+```sh
+hermes skills tap list
+hermes skills list --enabled-only
+hermes skills check oh-my-hermes
+hermes skills inspect oh-my-hermes
+```
+
+Passing this smoke means Hermes CLI install/list/check/inspect commands
+succeeded for the target profile. It still does not prove a later Hermes chat
+session selected OMH unless that chat response is observed separately.
 
 Runtime evidence smoke:
 
@@ -78,6 +124,7 @@ python3 -m src.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Harness catalog validation status.
 - Runtime validation status.
 - Capability probe status.
+- Hermes CLI install smoke status, including whether it was plan-only or live.
 - Optional plugin bundle status when `omh setup --with-plugin` changed.
 - GitHub Pages workflow status when public site copy changed.
 - Known manual Hermes checks that could not be automated.

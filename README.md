@@ -31,6 +31,15 @@ user says a plain request in Hermes
   -> coding is handed off only when the user or wrapper accepts that path
 ```
 
+> Have you ever felt that Hermes Agent is powerful, but still has a high
+> barrier to entry? OMH exists for that gap between installation and real use:
+> setup, config checks, verification, workflow choice, and the first useful
+> task. The engine is already strong across Skills, Gateway, Profiles, and
+> Cron; OMH adds a thin practical layer of ready-to-use workflows such as
+> `web-research`, `doctor`, `idea-to-deploy`, and `ultragoal` so Hermes can
+> feel easier to start, easier to trust, and more natural to apply in real
+> work.
+
 [Website](https://rlaope.github.io/oh-my-hermes-agent/) -
 [Documentation](docs/README.md) -
 [Installation](docs/INSTALLATION.md) -
@@ -217,12 +226,20 @@ python3 -m unittest discover -s tests
 python3 -m compileall src
 python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
+python3 -m omh.cli release hermes-smoke
 ```
 
 Smoke-test setup without touching real home directories:
 
 ```sh
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run
+```
+
+Before a release candidate, run the live Hermes profile smoke from the target
+operator profile:
+
+```sh
+omh release hermes-smoke --live --install-path tap --target-confirmed
 ```
 
 OMH is a quality-gated preview. Stable release, richer profile activation

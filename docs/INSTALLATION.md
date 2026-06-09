@@ -67,6 +67,37 @@ Hermes should route through the installed skill guidance, name the responsible
 role, and show the next action without asking the chat user to run `omh`
 commands.
 
+## Hermes CLI Release Smoke
+
+For release candidates, OMH provides a dedicated smoke contract for the real
+Hermes CLI install path. The default command is a plan-only check that can run
+in CI without touching the current Hermes profile:
+
+```sh
+omh release hermes-smoke
+```
+
+When an operator explicitly wants live evidence from the target Hermes profile,
+run one of these:
+
+```sh
+omh release hermes-smoke --live --install-path tap --target-confirmed
+omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --live --install-path setup
+```
+
+The live smoke runs the selected install path and then verifies:
+
+```sh
+hermes skills tap list
+hermes skills list --enabled-only
+hermes skills check oh-my-hermes
+hermes skills inspect oh-my-hermes
+```
+
+This proves Hermes CLI install/list/check/inspect for the target profile. It
+does not prove that a later Hermes chat session selected OMH unless that chat
+response is observed separately.
+
 ## Install Path B: OMH Bootstrap Setup
 
 Use this path when you want a Python installer, generated managed skills,

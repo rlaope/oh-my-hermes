@@ -95,6 +95,45 @@ class CliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["query"], "risky refactor")
 
+    def test_release_hermes_smoke_cli_defaults_to_plan_mode(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "release",
+                    "hermes-smoke",
+                    "--install-path",
+                    "setup",
+                    "--omh-command",
+                    "omh-dev",
+                ]
+            )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "hermes_release_smoke/v1")
+        self.assertEqual(payload["mode"], "plan")
+        self.assertFalse(payload["observed"])
+        self.assertEqual(payload["target_binding"]["hermes_home"], str(hermes_home.resolve()))
+        commands = [step["command"] for step in payload["steps"]]
+        self.assertEqual(commands[0], ["omh-dev", "--omh-home", str(omh_home.resolve()), "--hermes-home", str(hermes_home.resolve()), "setup"])
+        self.assertIn(["hermes", "skills", "list", "--enabled-only"], commands)
+        self.assertIn(["hermes", "skills", "check", "oh-my-hermes"], commands)
+        self.assertIn(["hermes", "skills", "inspect", "oh-my-hermes"], commands)
+
+    def test_release_hermes_smoke_live_requires_target_confirmation(self) -> None:
+        status, _stdout, stderr = run_cli(["release", "hermes-smoke", "--live"])
+
+        self.assertEqual(status, 2)
+        self.assertIn("--target-confirmed", stderr)
+
     def test_memory_cli_inspects_packs_and_applies_review_updates(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

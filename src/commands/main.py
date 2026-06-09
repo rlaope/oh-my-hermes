@@ -46,6 +46,7 @@ from .goal import (
 from .hermes import _add_hermes_commands, cmd_hermes_plan
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
+from .release import _add_release_commands, cmd_release_hermes_smoke
 from .runtime import (
     _add_runtime_commands,
     cmd_runtime_ci,
@@ -93,6 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_docs_commands(sub)
     _add_harness_commands(sub)
     _add_playbook_commands(sub)
+    _add_release_commands(sub)
     _add_demo_commands(sub)
     _add_chat_commands(sub)
     _add_coding_commands(sub)
