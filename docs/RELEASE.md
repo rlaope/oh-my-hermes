@@ -50,13 +50,19 @@ Run before tagging:
 ```sh
 python3 -m unittest discover -s tests
 python3 -m compileall src
-python3 -m src.cli docs workflows --check
-python3 -m src.cli harness validate
-python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 0.1.0
-python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 0.1.0
-python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --with-plugin --dry-run --channel stable --version 0.1.0
-python3 -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
-python3 -m src.cli release hermes-smoke
+python3 -m omh.cli docs workflows --check
+python3 -m omh.cli harness validate
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.0
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --with-plugin --dry-run --channel stable --version 1.0.0
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
+python3 -m omh.cli release hermes-smoke
+uv build
+python3 -m venv /tmp/omh-wheel-smoke
+/tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl
+/tmp/omh-wheel-smoke/bin/omh --help
+/tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.0
+OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl OMH_PIP_ARGS= OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
 ```
 
 ## Hermes CLI Install Smoke
@@ -66,7 +72,7 @@ path. Plan mode is safe for CI because it does not touch the current Hermes
 profile:
 
 ```sh
-python3 -m src.cli release hermes-smoke
+python3 -m omh.cli release hermes-smoke
 ```
 
 For release candidates, run exactly one live smoke against the target Hermes
@@ -107,12 +113,12 @@ session selected OMH unless that chat response is observed separately.
 Runtime evidence smoke:
 
 ```sh
-run_json="$(python3 -m src.cli --omh-home /tmp/omh-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started)"
+run_json="$(python3 -m omh.cli --omh-home /tmp/omh-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started)"
 run_id="$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"]["run_id"])')"
-python3 -m src.cli --omh-home /tmp/omh-smoke runtime delegate --run "$run_id" --requested --not-observed --result not_observed
-python3 -m src.cli --omh-home /tmp/omh-smoke runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed
-python3 -m src.cli --omh-home /tmp/omh-smoke runtime validate --run "$run_id"
-python3 -m src.cli --omh-home /tmp/omh-smoke runtime export --redacted
+python3 -m omh.cli --omh-home /tmp/omh-smoke runtime delegate --run "$run_id" --requested --not-observed --result not_observed
+python3 -m omh.cli --omh-home /tmp/omh-smoke runtime wrapper --run "$run_id" --prompt-dispatched --response-observed --completion-status completed
+python3 -m omh.cli --omh-home /tmp/omh-smoke runtime validate --run "$run_id"
+python3 -m omh.cli --omh-home /tmp/omh-smoke runtime export --redacted
 ```
 
 ## Release Notes Must Include

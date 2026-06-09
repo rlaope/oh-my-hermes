@@ -305,7 +305,7 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--from-skills-dir", default=None, help="Import skills from a local skill directory.")
     p.add_argument("--source", default=None, help="Mockable local source directory for install/update.")
     p.add_argument("--channel", choices=RELEASE_CHANNELS, default="preview", help="Release channel metadata for this install/update.")
-    p.add_argument("--version", default="", help="Stable release version such as 0.1.0 or v0.1.0.")
+    p.add_argument("--version", default="", help="Stable release version such as 1.0.0 or v1.0.0.")
     p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
     p.add_argument("--force", action="store_true")
     p.add_argument("--dry-run", action="store_true")

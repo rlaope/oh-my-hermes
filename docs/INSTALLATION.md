@@ -24,6 +24,11 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 
+The installer also prints the installed `omh` command path. On `pip --user`
+installs, some shells do not include the Python user scripts directory on
+`PATH`; if that happens, add the printed directory to `PATH` or run the printed
+absolute `omh` path directly.
+
 Plugin support is optional. Use it when an operator wants OMH to provide a
 thin Hermes plugin bridge in addition to the skill pack:
 

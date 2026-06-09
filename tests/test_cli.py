@@ -2256,12 +2256,12 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
 
-            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "install", "--dry-run", "--channel", "stable", "--version", "0.1.0"])
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "install", "--dry-run", "--channel", "stable", "--version", "1.0.0"])
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             dry_run = json.loads(stdout)
             self.assertEqual(dry_run["release_channel"], "stable")
-            self.assertIn("/tags/v0.1.0.zip", dry_run["release_package_url"])
+            self.assertIn("/tags/v1.0.0.zip", dry_run["release_package_url"])
 
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "install", "--dry-run", "--channel", "stable"])
             self.assertEqual(status, 2)

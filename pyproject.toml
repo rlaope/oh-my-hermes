@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oh-my-hermes-agent"
-version = "0.1.0"
+version = "1.0.0"
 description = "Install a Hermes-native skill workflow pack."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ authors = [{ name = "oh-my-hermes maintainers" }]
 dependencies = []
 keywords = ["hermes", "agent", "skills", "workflow", "automation"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",

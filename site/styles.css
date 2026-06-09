@@ -63,7 +63,10 @@ a {
 .card,
 .case-card,
 .flagship-item,
+.playbook-row,
+.lifecycle-step,
 .role-card,
+.evidence-row,
 .arch-node,
 .command {
   transform-style: preserve-3d;
@@ -706,7 +709,8 @@ h1 {
     "Liberation Mono",
     monospace;
   font-size: 14px;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .command--inline {
@@ -923,6 +927,13 @@ h1 {
   line-height: 1.25;
 }
 
+.role-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .site-example {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
@@ -954,6 +965,16 @@ h1 {
   color: var(--ink);
 }
 
+.note-list {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.note-list li + li {
+  margin-top: 8px;
+}
+
 .case-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -966,7 +987,7 @@ h1 {
 }
 
 .case-card {
-  min-height: 178px;
+  min-height: 218px;
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1012,6 +1033,170 @@ h1 {
 
 .case-note {
   margin-top: 18px;
+  color: var(--muted);
+}
+
+.playbook-board {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(215, 220, 216, 0.9);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.playbook-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.78fr) minmax(220px, 0.62fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 248, 0.94));
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.playbook-row + .playbook-row {
+  border-top: 1px solid var(--line);
+}
+
+.playbook-row:hover {
+  transform: translateY(-2px);
+  background: #f8fcf9;
+}
+
+.playbook-row--featured {
+  background:
+    linear-gradient(90deg, rgba(238, 250, 245, 0.95), rgba(255, 250, 240, 0.7));
+}
+
+.playbook-row span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.playbook-row strong {
+  display: block;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.playbook-row p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.playbook-row code {
+  color: var(--accent-strong);
+}
+
+.playbook-note {
+  max-width: 760px;
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+
+.lifecycle-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.lifecycle-step {
+  min-height: 214px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 248, 249, 0.86));
+  box-shadow: 0 14px 34px rgba(16, 28, 40, 0.08);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.lifecycle-step:hover {
+  transform: translateY(-3px);
+  border-color: rgba(49, 93, 140, 0.24);
+  box-shadow: 0 22px 52px rgba(16, 28, 40, 0.12);
+}
+
+.lifecycle-step span {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  background: var(--night);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lifecycle-step h3 {
+  margin-bottom: 9px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.lifecycle-step p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.contract-board,
+.install-board {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  gap: 34px;
+  align-items: start;
+}
+
+.contract-copy p,
+.install-board p {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.evidence-board {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.evidence-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 18px;
+}
+
+.evidence-row + .evidence-row {
+  border-top: 1px solid var(--line);
+}
+
+.evidence-row h3 {
+  margin-bottom: 5px;
+  font-size: 18px;
+}
+
+.evidence-row p {
+  margin: 0;
   color: var(--muted);
 }
 
@@ -1469,6 +1654,12 @@ h1 {
   line-height: 1.22;
 }
 
+.arch-node p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
 .arch-node--source {
   border-color: #b6c7e3;
   background: #eef4ff;
@@ -1477,6 +1668,117 @@ h1 {
 .arch-node--core {
   border-color: #8ac5b8;
   background: #eefaf5;
+}
+
+.arch-node--executor {
+  border-color: #dfc398;
+  background: #fff8ea;
+}
+
+.arch-node--runtime {
+  border-color: #bfd2c9;
+  background: #f6fbf8;
+}
+
+.architecture-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.34fr) minmax(300px, 0.66fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.architecture-map--story {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.architecture-map--story .arch-node {
+  position: relative;
+  min-height: 0;
+  padding: 20px 20px 20px 56px;
+}
+
+.architecture-map--story .arch-node::before {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: 26px;
+  bottom: -17px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(25, 116, 102, 0.55), rgba(179, 107, 22, 0.25));
+}
+
+.architecture-map--story .arch-node::after {
+  content: "";
+  position: absolute;
+  left: 21px;
+  top: 26px;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(25, 116, 102, 0.35);
+}
+
+.architecture-map--story .arch-node:last-child::before {
+  display: none;
+}
+
+.architecture-map--story .arch-node--hermes,
+.architecture-map--story .arch-node--executor,
+.architecture-map--story .arch-node--runtime {
+  grid-column: auto;
+}
+
+.architecture-ledger {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid rgba(25, 116, 102, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(238, 250, 245, 0.76));
+  box-shadow: var(--shadow);
+}
+
+.architecture-ledger h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.architecture-ledger ul {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.architecture-ledger li {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(25, 116, 102, 0.14);
+}
+
+.architecture-ledger li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.architecture-ledger strong,
+.architecture-ledger span {
+  display: block;
+}
+
+.architecture-ledger strong {
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+
+.architecture-ledger span {
+  color: var(--muted);
 }
 
 .arch-arrow {
@@ -1832,6 +2134,10 @@ h1 {
 
   .grid,
   .band,
+  .contract-board,
+  .install-board,
+  .architecture-layout,
+  .playbook-row,
   .case-grid,
   .case-grid--docs,
   .flagship-showcase,
