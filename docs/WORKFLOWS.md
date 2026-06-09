@@ -106,6 +106,44 @@ Hermes Ultragoal workflow: file-backed durable goal ledgers.
   - Do not imply hidden Hermes runtime behavior.
   - Use the smallest verification that can prove the claim.
 
+### loop
+
+Hermes Loop workflow: ambitious goal interview, research, planning, handoff, feedback, and resume cycles.
+
+- Category: `goal-loop`
+- Phase: `continuous-goal-loop`
+- Hermes role: `retained-cognition`
+- Quality tier: `loop-gated`
+- Handoff policy: Keep loop orchestration, interviews, research, planning, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor handoffs only when the loop produces concrete coding work and record completion only from linked goal/runtime evidence.
+- Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through research, planning, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+- Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
+- Quality bar:
+  - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
+  - Reframe the north-star goal into implementable internal work without shrinking its ambition.
+  - Separate research, plan, ultragoal/handoff, feedback, waiting, and resume decisions.
+  - Expose a permission profile before executor dispatch, repository mutation, PR, merge, or external publishing.
+  - Keep prepared handoffs, observed executor work, linked goal completion, and external waiting as distinct evidence states.
+- Required inputs:
+  - north-star goal summary
+  - goal reframe
+  - success criteria
+  - permission profile
+  - feedback or wait signal
+- Expected outputs:
+  - loop_cycle/v1 state
+  - loop_status_card/v1 next action
+  - executor-neutral handoff only when permitted
+  - external-wait or checkpoint boundary
+- Artifact expectations:
+  - metadata-only .omh/loops loop_cycle/v1 artifact
+  - loop_status_card/v1 wrapper payload
+  - linked goal_ledger/v1 only when completion evidence is required
+- Safety rules:
+  - Do not treat loop persistence as permission to bypass the selected permission profile.
+  - Do not claim goal completion from loop state; require linked goal_ledger/v1 completion evidence.
+  - When context or token budget runs out, checkpoint or rely on resumable state instead of pretending the loop is complete.
+  - External results such as market response, stars, or adoption are waiting states unless observed evidence is supplied.
+
 ### deep-interview
 
 Hermes Deep Interview workflow: one-question-at-a-time clarification.
@@ -1369,6 +1407,65 @@ Run complete app operation loops from idea through decision, handoff, release, d
   - A CTO loop recommendation is not an accepted decision unless decision evidence is recorded.
   - A health watchlist is not observed health evidence.
 - Fallback: If release scope, owner, or evidence is missing, show the loop scaffold and ask for the smallest missing decision before advancing.
+
+### goal-loop
+
+Run ambitious goal loops through interview, research, planning, handoff, feedback, waiting, and resumable status without hidden execution.
+
+- Use when: Use when a direct loop invocation or explicit long-horizon goal needs repeated cycles until evidence, authority, context, or external waiting stops the next step.
+- Quality tier: `loop-gated`
+- Quality bar:
+  - Confirm the direct loop trigger, north-star goal, reframe, success criteria, and permission profile before cycling.
+  - Separate implementable internal work from external outcomes such as stars, market reaction, adoption, or social distribution.
+  - Continue automatically only inside the selected authority envelope; otherwise surface a permission action.
+  - Treat feedback as a gate: clear internal actionable gaps continue the loop; external waiting records a wait state.
+  - Never report goal completion from loop state unless linked goal_ledger/v1 completion evidence is ready.
+- Inputs:
+  - north-star goal summary
+  - reframed implementable target
+  - success criteria
+  - permission profile
+  - feedback or wait signal
+- Outputs:
+  - loop_cycle/v1 artifact
+  - loop_status_card/v1 next action
+  - permission envelope
+  - linked goal or runtime evidence references when available
+- Stop conditions:
+  - next loop step is clear
+  - permission boundaries are explicit
+  - external waiting and context exhaustion are recorded
+  - goal completion claims are delegated to goal_ledger/v1
+- Verification:
+  - validate loop_cycle/v1
+  - inspect loop_status_card/v1
+  - check linked goal_completion_gate/v1 before completion copy
+- Evidence ladder:
+  - `loop_triggered`
+  - `goal_reframed`
+  - `permission_profile_recorded`
+  - `research_plan_handoff_cycle_recorded`
+  - `feedback_gate_evaluated`
+  - `wait_or_resume_boundary_recorded`
+- Wrapper actions:
+  - `choose_permission_profile`
+  - `start_loop`
+  - `show_loop_status`
+  - `prepare_handoff`
+  - `choose_executor`
+  - `show_status`
+- Artifact events:
+  - `loop_started`
+  - `permission_profile_recorded`
+  - `feedback_gate_recorded`
+  - `loop_status_card_rendered`
+- Delegation expectation: Record loop state as Hermes-retained orchestration; record executor dispatch, implementation, review, CI, merge, and external publication only when observed by a linked runtime or operator artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A loop_cycle/v1 artifact is not proof that coding, review, CI, merge, or external publication happened.
+  - A full-loop permission profile is still bounded by observed evidence and explicit external-production authority.
+  - External outcomes stay waiting_external_observation until evidence is recorded.
+- Fallback: If no wrapper or CLI artifact is available, keep a visible checklist with the same permission profile and evidence boundaries.
 
 ### deep-interview
 

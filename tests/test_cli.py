@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 
 from _cli_harness import run_cli
 from omh.cli import OmhError, cmd_runtime_merge
+from omh.skill_pack import builtin_skill_templates
 
 
 class CliTests(unittest.TestCase):
@@ -348,6 +349,17 @@ class CliTests(unittest.TestCase):
                 self.assertIn(boundary_fragment, top["evidence_boundary"])
                 self.assertIn("observ", top["wrapper_guidance"].lower())
 
+    def test_recommend_direct_loop_routes_to_goal_loop_policy(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "./loop", "build", "a", "10k", "star", "open", "source", "project", "--limit", "2"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        top = json.loads(stdout)["recommendations"][0]
+        self.assertEqual(top["skill"], "loop")
+        self.assertEqual(top["next_action"], "start_goal_loop")
+        self.assertIn("not implementation", top["evidence_boundary"])
+        self.assertIn("permission profile", top["wrapper_guidance"])
+
     def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
 
@@ -574,6 +586,7 @@ class CliTests(unittest.TestCase):
             ("take this product idea from plan to deploy and monitor safely", "idea-to-deploy", "ack", "present_app_delivery_loop"),
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "ack", "run_cto_loop"),
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
+            ("./loop make this project a 10k star OSS", "loop", "loop", "start_goal_loop"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:
@@ -625,6 +638,81 @@ class CliTests(unittest.TestCase):
         self.assertIn("cancel", action_ids)
         self.assertNotIn("accept_plan", action_ids)
         self.assertNotIn("revise_plan", action_ids)
+
+    def test_loop_cli_start_feedback_permit_and_status(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "start",
+                    "--loop-id",
+                    "loop-cli",
+                    "--goal-summary",
+                    "Make OMH release-ready for ambitious teams",
+                    "--goal-reframe",
+                    "Interview, research, plan, handoff, verify, and record release evidence without overclaiming.",
+                    "--criterion",
+                    "Loop state exists",
+                    "--criterion",
+                    "Permission profile is explicit",
+                    "--permission-profile",
+                    "handoff_only",
+                    "--allowed-executor",
+                    "codex",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            started = json.loads(stdout)
+            self.assertEqual(started["loop"]["schema_version"], "loop_cycle/v1")
+            self.assertEqual(started["status_card"]["schema_version"], "loop_status_card/v1")
+            self.assertIn("executor_dispatch", started["loop"]["authority_envelope"]["blocked_actions"])
+            self.assertNotIn("raw_north_star", json.dumps(started))
+
+            status, stdout, stderr = run_cli(home + ["loop", "permit", "--loop", "loop-cli", "--allow-action", "merge"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            permitted = json.loads(stdout)
+            self.assertEqual(permitted["loop"]["authority_envelope"]["permission_profile"], "custom")
+            self.assertIn("merge", permitted["loop"]["authority_envelope"]["allowed_actions"])
+
+            status, stdout, stderr = run_cli(home + ["loop", "feedback", "--loop", "loop-cli", "--external-wait", "Waiting for public launch response"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            feedback = json.loads(stdout)
+            self.assertEqual(feedback["loop"]["wait_reason"], "waiting_external_observation")
+            self.assertEqual(feedback["status_card"]["next_action"], "record_external_wait")
+
+            status, stdout, stderr = run_cli(home + ["loop", "status", "--loop", "loop-cli"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["status_card"]["phase"], "waiting")
+            self.assertFalse(shown["status_card"]["completion_claim_allowed"])
+
+    def test_loop_status_lists_invalid_local_artifacts_without_crashing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            bad_loop = root / ".omh" / "loops" / "bad-loop"
+            bad_loop.mkdir(parents=True)
+            (bad_loop / "cycle.json").write_text(
+                json.dumps({"schema_version": "loop_cycle/v1", "loop_id": "bad-loop"}),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(home + ["loop", "status"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["loops"], [])
+        self.assertEqual(payload["invalid_loops"][0]["loop_id"], "bad-loop")
+        self.assertIn("phase is unsupported", payload["invalid_loops"][0]["errors"])
 
     def test_grounded_operator_examples_keep_non_coding_handoffs_conservative(self) -> None:
         cases = (
@@ -851,7 +939,22 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(message, json.dumps(exported))
 
     def test_coding_delegate_returns_public_contract_without_raw_message(self) -> None:
-        status, stdout, stderr = run_cli(["coding", "delegate", "--source", "discord", "risky", "refactor"])
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(root / ".omh"),
+                    "--hermes-home",
+                    str(root / ".hermes"),
+                    "coding",
+                    "delegate",
+                    "--source",
+                    "discord",
+                    "risky",
+                    "refactor",
+                ]
+            )
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
@@ -2424,8 +2527,8 @@ class CliTests(unittest.TestCase):
             checked = json.loads(stdout)
             self.assertIn("checked", checked)
             self.assertTrue(checked["tap_skills"]["ok"])
-            self.assertEqual(checked["tap_skills"]["expected"], 28)
-            self.assertEqual(checked["tap_skills"]["checked"], 28)
+            self.assertEqual(checked["tap_skills"]["expected"], len(builtin_skill_templates()))
+            self.assertEqual(checked["tap_skills"]["checked"], len(builtin_skill_templates()))
             self.assertEqual(checked["tap_skills"]["missing"], [])
             self.assertEqual(checked["tap_skills"]["stale"], [])
             self.assertEqual(checked["tap_skills"]["extra"], [])

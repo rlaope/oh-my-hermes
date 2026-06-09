@@ -28,6 +28,9 @@ VISIBLE_ACTIONS = (
     "show_status",
     "show_target_status",
     "apply_target_change",
+    "choose_permission_profile",
+    "start_loop",
+    "show_loop_status",
     "keep_memory",
     "forget_memory",
     "update_memory",
@@ -278,6 +281,43 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
             )
         policy = _selected_recommendation_policy(decision, selected)
         policy_next_action = str(policy.get("next_action", ""))
+        if selected == "loop" or policy_next_action == "start_goal_loop":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
+            body = str(policy.get("wrapper_guidance", "")) or (
+                "Start the loop interview, choose a permission profile, and keep every later step inside the recorded authority envelope."
+            )
+            return _chat_response(
+                kind="loop",
+                headline="I can start a goal loop for this.",
+                body=body,
+                phase="loop_setup",
+                next_action="start_goal_loop",
+                thread_key=thread_key,
+                actions=[
+                    _action("choose_permission_profile", "Choose permission profile", "primary"),
+                    _action("start_loop", "Start loop", "primary", enabled=False),
+                    _action("show_loop_status", "Show loop status", "secondary"),
+                    _action("cancel", "Cancel", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "policy_next_action": policy_next_action,
+                    "permission_profile_required": True,
+                    "evidence_not_observed": [
+                        "executor dispatch",
+                        "implementation",
+                        "review",
+                        "CI",
+                        "merge",
+                        "external publication",
+                        "market response",
+                        "goal completion",
+                    ],
+                },
+            )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"
         wrapper_guidance = str(policy.get("wrapper_guidance", ""))
         evidence_boundary = str(policy.get("evidence_boundary", "")) or "Routing is not execution evidence."

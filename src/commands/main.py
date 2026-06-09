@@ -44,6 +44,7 @@ from .goal import (
     cmd_goal_status,
 )
 from .hermes import _add_hermes_commands, cmd_hermes_plan
+from .loop import _add_loop_commands, cmd_loop_feedback, cmd_loop_permit, cmd_loop_start, cmd_loop_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
 from .release import _add_release_commands, cmd_release_hermes_smoke
@@ -99,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_chat_commands(sub)
     _add_coding_commands(sub)
     _add_hermes_commands(sub)
+    _add_loop_commands(sub)
     _add_memory_commands(sub)
     _add_runtime_commands(sub)
     _add_goal_commands(sub)

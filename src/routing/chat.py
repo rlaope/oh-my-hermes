@@ -145,7 +145,7 @@ def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] |
     definitions = definitions or builtin_definitions()
     names = {definition.name for definition in definitions}
     first = message.strip().split(maxsplit=1)[0].strip(":,")
-    for prefix in ("/", "$", "@"):
+    for prefix in ("./", "/", "$", "@"):
         if first.startswith(prefix):
             first = first[len(prefix) :]
             break

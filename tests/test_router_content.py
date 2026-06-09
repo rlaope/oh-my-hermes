@@ -81,6 +81,7 @@ class RouterContentTests(unittest.TestCase):
             "idea-to-deploy",
             "cto-loop",
             "deploy-and-monitor",
+            "loop",
             "team",
             "ultraqa",
             "plan",
@@ -99,6 +100,7 @@ class RouterContentTests(unittest.TestCase):
             "delivery": "present_app_delivery_loop",
             "leadership": "run_cto_loop",
             "monitoring": "prepare_deploy_monitor_plan",
+            "goal-loop": "start_goal_loop",
         }
 
         for category, next_action in expected.items():
@@ -142,6 +144,7 @@ class RouterContentTests(unittest.TestCase):
                 "customer-insight-triage",
                 "ops-review",
                 "app-delivery-loop",
+                "goal-loop",
                 "deep-interview",
                 "architect",
                 "critic",
@@ -195,6 +198,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("deploy-and-monitor"), "app-delivery-loop")
+        self.assertEqual(primary_harness_for_skill("loop"), "goal-loop")
         self.assertEqual(primary_harness_for_skill("best-practice-research"), "research")
         self.assertEqual(primary_harness_for_skill("autoresearch-goal"), "research")
         self.assertIn("deep-interview", retained)
@@ -212,6 +216,7 @@ class RouterContentTests(unittest.TestCase):
                 "idea-to-deploy",
                 "cto-loop",
                 "deploy-and-monitor",
+                "loop",
             }.issubset(catalog_intent_retained)
         )
 
@@ -228,6 +233,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
         self.assertIn("active_agent_count", skills["ultragoal"].content)
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
+        self.assertIn("loop_cycle/v1", skills["loop"].content)
+        self.assertIn("permission profile", skills["loop"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
 
     def test_harnesses_define_runtime_evidence_contract(self) -> None:
@@ -256,6 +263,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
         self.assertIn("deploy_monitor_observed_when_available", harnesses["app-delivery-loop"]["evidence_ladder"])
         self.assertIn("record_monitor_signal", harnesses["app-delivery-loop"]["wrapper_actions"])
+        self.assertEqual(harnesses["goal-loop"]["quality_tier"], "loop-gated")
+        self.assertIn("feedback_gate_evaluated", harnesses["goal-loop"]["evidence_ladder"])
+        self.assertIn("choose_permission_profile", harnesses["goal-loop"]["wrapper_actions"])
         self.assertIn("prepared", " ".join(harnesses["coding-handling"]["overclaim_guards"]).lower())
         quality = harnesses["coding-handling"]["harness_quality"]
         self.assertEqual(quality, harness_quality_contract("coding-handling"))
@@ -404,7 +414,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("[GitHub Pages site](site/index.html)", readme)
         self.assertIn("Have you ever felt that Hermes Agent is powerful", readme)
         self.assertIn("ready-to-use workflows such as", readme)
-        self.assertIn("`web-research`, `doctor`, `idea-to-deploy`, and `ultragoal`", readme)
+        self.assertIn("`web-research`, `doctor`, `idea-to-deploy`, `ultragoal`, and `loop`", readme)
         self.assertIn("Optional team profile packs", readme)
         self.assertIn("omh profile list", readme)
         self.assertIn("omh profile inspect cto-loop", readme)

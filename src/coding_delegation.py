@@ -487,6 +487,8 @@ def _public_harness_quality(
         return with_wrapper_actions(contract, ("send_to_executor", "send_to_codex", "show_status"))
     if action == "delegate" and has_prompt_handoff:
         return with_wrapper_actions(contract, ("show_prompt_handoff", "copy_prompt_handoff", "choose_executor", "show_status"))
+    if action == "delegate" and work_owner_mode == "prompt_only_handoff":
+        return with_wrapper_actions(contract, ("show_prompt_handoff", "copy_prompt_handoff", "choose_executor", "show_status"))
     if action == "delegate" and choice_required:
         return with_wrapper_actions(contract, ("choose_executor", "show_status"))
     if work_owner_mode == "retained_hermes":

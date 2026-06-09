@@ -115,6 +115,17 @@ _CATEGORY_POLICIES = {
             "deploy or monitoring evidence."
         ),
     ),
+    "goal-loop": RecommendationPolicy(
+        next_action="start_goal_loop",
+        evidence_boundary=(
+            "A goal loop is orchestration state only; it is not implementation, review, CI, merge, external "
+            "publication, market response, or goal completion evidence."
+        ),
+        wrapper_guidance=(
+            "Start the loop interview, ask for or apply a permission profile, then cycle research -> plan -> "
+            "handoff -> feedback only inside that authority envelope. Record external outcomes as waiting until observed."
+        ),
+    ),
     "review": RecommendationPolicy(
         next_action="prepare_review_or_followup_handoff",
         evidence_boundary="A review recommendation is not a completed review or fix evidence.",

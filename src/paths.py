@@ -47,6 +47,10 @@ class OmhPaths:
         return self.omh_home / "goals"
 
     @property
+    def loops_dir(self) -> Path:
+        return self.omh_home / "loops"
+
+    @property
     def setup_profile_path(self) -> Path:
         return self.omh_home / "setup-profile.json"
 
