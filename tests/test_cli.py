@@ -694,6 +694,26 @@ class CliTests(unittest.TestCase):
             self.assertEqual(shown["status_card"]["phase"], "waiting")
             self.assertFalse(shown["status_card"]["completion_claim_allowed"])
 
+    def test_loop_status_lists_invalid_local_artifacts_without_crashing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            bad_loop = root / ".omh" / "loops" / "bad-loop"
+            bad_loop.mkdir(parents=True)
+            (bad_loop / "cycle.json").write_text(
+                json.dumps({"schema_version": "loop_cycle/v1", "loop_id": "bad-loop"}),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(home + ["loop", "status"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["loops"], [])
+        self.assertEqual(payload["invalid_loops"][0]["loop_id"], "bad-loop")
+        self.assertIn("phase is unsupported", payload["invalid_loops"][0]["errors"])
+
     def test_grounded_operator_examples_keep_non_coding_handoffs_conservative(self) -> None:
         cases = (
             ("prepare a source-backed business research brief for market evidence", "clarify", "research-brief"),
@@ -919,7 +939,22 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(message, json.dumps(exported))
 
     def test_coding_delegate_returns_public_contract_without_raw_message(self) -> None:
-        status, stdout, stderr = run_cli(["coding", "delegate", "--source", "discord", "risky", "refactor"])
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(root / ".omh"),
+                    "--hermes-home",
+                    str(root / ".hermes"),
+                    "coding",
+                    "delegate",
+                    "--source",
+                    "discord",
+                    "risky",
+                    "refactor",
+                ]
+            )
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)

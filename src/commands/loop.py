@@ -11,6 +11,7 @@ from ..goal_loop import (
     read_loop_cycle,
     record_loop_feedback,
     update_loop_permission,
+    validate_loop_cycle,
 )
 from ..installer import OmhError
 from .common import _paths, _print_json
@@ -50,20 +51,29 @@ def cmd_loop_status(args: argparse.Namespace) -> int:
         loops = list_loop_cycles(_paths(args))
     except (FileNotFoundError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
-    _print_json(
-        {
-            "loops": [
+    valid_loops = []
+    invalid_loops = []
+    for loop in loops:
+        validation = validate_loop_cycle(loop)
+        if not validation["ok"]:
+            invalid_loops.append(
                 {
-                    "loop_id": loop["loop_id"],
-                    "phase": loop["phase"],
-                    "wait_reason": loop["wait_reason"],
-                    "permission_profile": loop["authority_envelope"]["permission_profile"],
-                    "next_action": loop["next_action"],
+                    "loop_id": str(loop.get("loop_id", "unknown")),
+                    "errors": validation["errors"],
                 }
-                for loop in loops
-            ]
-        }
-    )
+            )
+            continue
+        valid_loops.append(
+            {
+                "loop_id": loop["loop_id"],
+                "phase": loop["phase"],
+                "wait_reason": loop["wait_reason"],
+                "permission_profile": loop["authority_envelope"]["permission_profile"],
+                "linked_goal_id": loop.get("linked_goal_id", ""),
+                "next_action": loop["next_action"],
+            }
+        )
+    _print_json({"loops": valid_loops, "invalid_loops": invalid_loops})
     return 0
 
 

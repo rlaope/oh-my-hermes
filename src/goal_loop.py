@@ -139,6 +139,7 @@ def create_loop_cycle(
         "completion_claim_allowed": False,
         "claim_boundary": _claim_boundary(),
     }
+    _normalize_permission_state(cycle)
     validation = validate_loop_cycle(cycle)
     if not validation["ok"]:
         raise ValueError("; ".join(validation["errors"]))
@@ -247,13 +248,7 @@ def update_loop_permission(
         allow_actions=allowed,
         forbid_actions=forbidden,
     )
-    if not cycle["authority_envelope"]["allowed_actions"]:
-        cycle["phase"] = "waiting"
-        cycle["wait_reason"] = "permission_required"
-        cycle["next_action"] = "request_permission"
-    else:
-        cycle["wait_reason"] = "none" if cycle.get("wait_reason") == "permission_required" else cycle.get("wait_reason", "none")
-        cycle["next_action"] = _next_action(cycle)
+    _normalize_permission_state(cycle)
     return _write_loop(paths, cycle)
 
 
@@ -474,6 +469,22 @@ def _feedback_gate(
 def _dict_value(value: dict[str, Any], key: str) -> dict[str, Any]:
     nested = value.get(key)
     return nested if isinstance(nested, dict) else {}
+
+
+def _normalize_permission_state(cycle: dict[str, Any]) -> None:
+    envelope = _dict_value(cycle, "authority_envelope")
+    allowed_actions = envelope.get("allowed_actions", [])
+    if not isinstance(allowed_actions, list) or not allowed_actions:
+        cycle["phase"] = "waiting"
+        cycle["wait_reason"] = "permission_required"
+        cycle["next_action"] = "request_permission"
+        return
+    if cycle.get("wait_reason") == "permission_required":
+        cycle["wait_reason"] = "none"
+        if cycle.get("phase") == "waiting":
+            cycle["phase"] = "feedback" if cycle.get("cycles") else "interview"
+        if cycle.get("next_action") in {"", "request_permission"}:
+            cycle["next_action"] = "continue_loop"
 
 
 def _next_action(cycle: dict[str, Any]) -> str:

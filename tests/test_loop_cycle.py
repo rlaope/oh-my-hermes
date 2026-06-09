@@ -101,6 +101,42 @@ class GoalLoopTests(unittest.TestCase):
         self.assertNotIn("external_posting", updated["authority_envelope"]["allowed_actions"])
         self.assertEqual(updated["authority_envelope"]["external_action_authority"], "prepare_only")
 
+    def test_empty_permission_profile_waits_for_permission_before_continue(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Loop that still needs authority",
+                goal_reframe="Wait until the wrapper records what this loop is allowed to do.",
+                success_criteria=["Permission gate is explicit"],
+                permission_profile="custom",
+            )
+            card = build_loop_status_card(paths, cycle["loop_id"])
+
+        self.assertEqual(cycle["phase"], "waiting")
+        self.assertEqual(cycle["wait_reason"], "permission_required")
+        self.assertEqual(cycle["next_action"], "request_permission")
+        self.assertEqual(card["next_action"], "request_permission")
+
+    def test_permission_grant_clears_stale_request_permission_action(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Loop that needs a later permit",
+                goal_reframe="Resume once the user grants a concrete allowed action.",
+                success_criteria=["Permission can be granted after start"],
+                permission_profile="custom",
+            )
+
+            updated = update_loop_permission(paths, cycle["loop_id"], allow_actions=["research"])
+            card = build_loop_status_card(paths, cycle["loop_id"])
+
+        self.assertEqual(updated["wait_reason"], "none")
+        self.assertEqual(updated["next_action"], "continue_loop")
+        self.assertEqual(card["next_action"], "continue_loop")
+
 
 if __name__ == "__main__":
     unittest.main()
