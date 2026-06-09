@@ -6,31 +6,59 @@ OMH_CHANNEL="${OMH_CHANNEL:-preview}"
 OMH_VERSION="${OMH_VERSION:-}"
 OMH_PACKAGE_URL="${OMH_PACKAGE_URL:-}"
 OMH_PYTHON="${OMH_PYTHON:-python3}"
-OMH_PIP_ARGS="${OMH_PIP_ARGS---user}"
+OMH_PIP_ARGS_WAS_SET="${OMH_PIP_ARGS+x}"
+OMH_PIP_ARGS="${OMH_PIP_ARGS:-}"
+OMH_INSTALL_MODE="${OMH_INSTALL_MODE:-venv}"
+OMH_HOME_DIR="${HOME:-}"
+if [ -z "${OMH_VENV_DIR+x}" ]; then
+  if [ -n "${XDG_DATA_HOME:-}" ]; then
+    OMH_VENV_DIR="$XDG_DATA_HOME/omh/venv"
+  elif [ -n "$OMH_HOME_DIR" ]; then
+    OMH_VENV_DIR="$OMH_HOME_DIR/.local/share/omh/venv"
+  else
+    OMH_VENV_DIR=""
+  fi
+fi
+if [ -z "${OMH_BIN_DIR+x}" ]; then
+  if [ -n "$OMH_HOME_DIR" ]; then
+    OMH_BIN_DIR="$OMH_HOME_DIR/.local/bin"
+  else
+    OMH_BIN_DIR=""
+  fi
+fi
+OMH_LINK_COMMAND="${OMH_LINK_COMMAND:-1}"
+OMH_FORCE_LINK="${OMH_FORCE_LINK:-0}"
 OMH_AUTO_APPLY="${OMH_AUTO_APPLY:-1}"
 OMH_RUN_DOCTOR="${OMH_RUN_DOCTOR:-1}"
 OMH_WITH_PLUGIN="${OMH_WITH_PLUGIN:-0}"
 OMH_PROFILE_PACKS="${OMH_PROFILE_PACKS:-}"
 OMH_SETUP_PROFILES="${OMH_SETUP_PROFILES:-}"
 OMH_SETUP_ARGS="${OMH_SETUP_ARGS:-}"
+OMH_RUNTIME_PYTHON="$OMH_PYTHON"
+OMH_COMMAND_HINT=""
 
 say() {
   printf '%s\n' "$*"
 }
 
 run_omh() {
-  "$OMH_PYTHON" -m omh.cli "$@"
+  "$OMH_RUNTIME_PYTHON" -m omh.cli "$@"
 }
 
 find_omh_command() {
+  if [ -n "$OMH_COMMAND_HINT" ] && [ -e "$OMH_COMMAND_HINT" ]; then
+    printf '%s\n' "$OMH_COMMAND_HINT"
+    return 0
+  fi
   if command -v omh >/dev/null 2>&1; then
     command -v omh
     return 0
   fi
-  "$OMH_PYTHON" - <<'PY'
+  "$OMH_RUNTIME_PYTHON" - "$OMH_BIN_DIR" "$OMH_VENV_DIR/bin" <<'PY'
 import os
 import shutil
 import site
+import sys
 import sysconfig
 
 found = shutil.which("omh")
@@ -43,6 +71,10 @@ schemes = [sysconfig.get_default_scheme()]
 schemes.append("nt_user" if os.name == "nt" else "posix_user")
 
 dirs = []
+for directory in sys.argv[1:]:
+    if directory and directory not in dirs:
+        dirs.append(directory)
+
 for scheme in schemes:
     try:
         path = sysconfig.get_path("scripts", scheme)
@@ -64,6 +96,71 @@ for directory in dirs:
             print(candidate)
             raise SystemExit(0)
 PY
+}
+
+link_omh_command() {
+  if [ "$OMH_LINK_COMMAND" != "1" ]; then
+    return 0
+  fi
+  if [ -z "$OMH_BIN_DIR" ]; then
+    say "omh installer: OMH_BIN_DIR is not set, so no omh command link was created."
+    return 0
+  fi
+  OMH_SOURCE_COMMAND="$OMH_VENV_DIR/bin/omh"
+  if [ ! -e "$OMH_SOURCE_COMMAND" ]; then
+    return 0
+  fi
+  mkdir -p "$OMH_BIN_DIR"
+  OMH_TARGET_COMMAND="$OMH_BIN_DIR/omh"
+  if [ -e "$OMH_TARGET_COMMAND" ] || [ -L "$OMH_TARGET_COMMAND" ]; then
+    OMH_EXISTING_LINK="$(readlink "$OMH_TARGET_COMMAND" 2>/dev/null || true)"
+    if [ "$OMH_EXISTING_LINK" = "$OMH_SOURCE_COMMAND" ]; then
+      OMH_COMMAND_HINT="$OMH_TARGET_COMMAND"
+      return 0
+    fi
+    if [ "$OMH_FORCE_LINK" = "1" ]; then
+      ln -sf "$OMH_SOURCE_COMMAND" "$OMH_TARGET_COMMAND"
+      OMH_COMMAND_HINT="$OMH_TARGET_COMMAND"
+      return 0
+    fi
+    say "omh installer: $OMH_TARGET_COMMAND already exists, so it was not replaced."
+    say "Set OMH_FORCE_LINK=1 to replace it, or use: $OMH_SOURCE_COMMAND"
+    OMH_COMMAND_HINT="$OMH_SOURCE_COMMAND"
+    return 0
+  fi
+  ln -s "$OMH_SOURCE_COMMAND" "$OMH_TARGET_COMMAND"
+  OMH_COMMAND_HINT="$OMH_TARGET_COMMAND"
+}
+
+install_into_venv() {
+  if [ -z "$OMH_VENV_DIR" ]; then
+    say "omh installer: HOME or XDG_DATA_HOME is required for default venv install."
+    say "Set OMH_VENV_DIR to an explicit directory and retry."
+    exit 1
+  fi
+  say "Creating isolated Python environment at $OMH_VENV_DIR..."
+  if ! "$OMH_PYTHON" -m venv "$OMH_VENV_DIR"; then
+    say "omh installer: failed to create a virtual environment with '$OMH_PYTHON -m venv'."
+    say "Install Python venv support or set OMH_INSTALL_MODE=python with explicit OMH_PIP_ARGS."
+    exit 1
+  fi
+  OMH_RUNTIME_PYTHON="$OMH_VENV_DIR/bin/python"
+  # Intentional shell splitting: OMH_PIP_ARGS is an advanced operator escape hatch.
+  # shellcheck disable=SC2086
+  "$OMH_RUNTIME_PYTHON" -m pip install $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+  OMH_COMMAND_HINT="$OMH_VENV_DIR/bin/omh"
+  link_omh_command
+}
+
+install_into_python() {
+  OMH_DIRECT_PIP_ARGS="$OMH_PIP_ARGS"
+  if [ -z "$OMH_PIP_ARGS_WAS_SET" ]; then
+    OMH_DIRECT_PIP_ARGS="--user"
+  fi
+  # Intentional shell splitting: OMH_DIRECT_PIP_ARGS is an advanced operator escape hatch.
+  # shellcheck disable=SC2086
+  "$OMH_PYTHON" -m pip install $OMH_DIRECT_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+  OMH_RUNTIME_PYTHON="$OMH_PYTHON"
 }
 
 if ! command -v "$OMH_PYTHON" >/dev/null 2>&1; then
@@ -100,7 +197,18 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
 fi
 
 say "Installing oh-my-hermes-agent from $OMH_CHANNEL channel..."
-"$OMH_PYTHON" -m pip install $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+case "$OMH_INSTALL_MODE" in
+  venv)
+    install_into_venv
+    ;;
+  python)
+    install_into_python
+    ;;
+  *)
+    say "omh installer: unsupported OMH_INSTALL_MODE '$OMH_INSTALL_MODE' (expected venv or python)."
+    exit 1
+    ;;
+esac
 
 OMH_COMMAND_PATH="$(find_omh_command || true)"
 if [ -n "$OMH_COMMAND_PATH" ]; then
@@ -113,7 +221,7 @@ if [ -n "$OMH_COMMAND_PATH" ]; then
   fi
 else
   say "omh installer: installed the package, but could not locate the omh command."
-  say "Use '$OMH_PYTHON -m omh.cli doctor' as a fallback and check your Python scripts directory."
+  say "Use '$OMH_RUNTIME_PYTHON -m omh.cli doctor' as a fallback and check the selected Python scripts directory."
 fi
 
 set -- setup --channel "$OMH_CHANNEL" --package-url "$OMH_PACKAGE_URL"

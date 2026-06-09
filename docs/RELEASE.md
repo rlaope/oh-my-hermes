@@ -62,7 +62,7 @@ python3 -m venv /tmp/omh-wheel-smoke
 /tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl
 /tmp/omh-wheel-smoke/bin/omh --help
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.0
-OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl OMH_PIP_ARGS= OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
+OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
 ```
 
 ## Hermes CLI Install Smoke

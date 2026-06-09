@@ -76,9 +76,10 @@ Verify the local install:
 omh doctor
 ```
 
-The installer prints the installed `omh` command path. If your Python user
-scripts directory is not on `PATH`, add the printed directory to `PATH` or run
-the printed absolute `omh` path directly.
+The installer creates an isolated OMH virtual environment, links the `omh`
+command into `~/.local/bin` when possible, and prints the installed command
+path. If that directory is not on `PATH`, add the printed directory to `PATH`
+or run the printed absolute `omh` path directly.
 
 Then talk to Hermes:
 

@@ -166,7 +166,9 @@
           <p>
             Start with the OMH bootstrap path when you want the `omh` command,
             generated managed skills, local doctor checks, and wrapper/backend
-            commands in the same runtime.
+            commands in the same runtime. The installer uses an isolated OMH
+            virtual environment by default, then links the command into a user
+            bin directory when possible.
           </p>
           <div class="command" role="region" aria-label="Bootstrap commands" tabindex="0">
             <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
