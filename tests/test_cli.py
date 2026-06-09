@@ -33,10 +33,12 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
+            self.assertIn("[1/", stdout)
+            self.assertIn("Installing managed skills", stdout)
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("Skills:", stdout)
             self.assertIn("Hermes registration:", stdout)
-            self.assertIn("Next: restart or reload Hermes Agent", stdout)
+            self.assertIn("Restart or reload Hermes Agent", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
@@ -56,7 +58,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup preview complete.", stdout)
-            self.assertIn("Next: rerun without `--dry-run`", stdout)
+            self.assertIn("Rerun without `--dry-run`", stdout)
             self.assertNotIn("restart or reload Hermes Agent", stdout)
             self.assertFalse((dry_root / ".omh").exists())
             self.assertFalse((dry_root / ".hermes").exists())
@@ -82,7 +84,7 @@ class CliTests(unittest.TestCase):
             answers = "\n".join(
                 [
                     "y",
-                    "2 3",
+                    "2",
                     "y",
                     "4",
                 ]
@@ -93,13 +95,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup", stdout)
-            self.assertIn("Choose workflow defaults", stdout)
-            self.assertIn("Optional team/profile packs", stdout)
+            self.assertIn("Default for coding-shaped requests", stdout)
+            self.assertIn("All OMH skills are installed either way", stdout)
+            self.assertIn("Activate a visible team persona now", stdout)
+            self.assertIn("These are optional Hermes role files, not missing features", stdout)
             self.assertIn("OMH setup complete.", stdout)
-            self.assertIn("Plugin bundle:", stdout)
+            self.assertIn("Plugin bridge:", stdout)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
-            self.assertEqual(profile["selected_categories"], ["prompt-only-coding", "codex-lifecycle"])
+            self.assertEqual(profile["selected_categories"], ["codex-lifecycle"])
             self.assertEqual(profile["default_executor"], "codex")
             self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
             self.assertTrue((hermes_home / "agents" / "omh-cto-loop-cto.md").exists())
@@ -132,9 +136,10 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
+            self.assertIn("Preparing managed skills", stdout)
             self.assertIn("OMH install complete.", stdout)
             self.assertIn("Skills: 29 managed skill(s)", stdout)
-            self.assertIn("Next: run `omh setup`", stdout)
+            self.assertIn("Run `omh setup`", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
 
@@ -143,7 +148,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH update preview complete.", stdout)
-            self.assertIn("Next: rerun without `--dry-run`", stdout)
+            self.assertIn("Rerun without `--dry-run`", stdout)
 
             status, stdout, stderr = run_cli(base + ["update", "--json"], output_json=False)
 
@@ -2348,6 +2353,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["delegation"]["selected_executor_profile"], "omx-runtime")
             self.assertFalse(payload["delegation"]["dispatchable"])
             self.assertNotIn("executor_handoff", payload["delegation"])
+
+    def test_setup_default_executor_records_human_executor_choice(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["setup", "--default-executor", "claude-code"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            setup = json.loads(stdout)
+            self.assertEqual(setup["steps"]["profile"]["selected_categories"], ["prompt-only-coding"])
+            self.assertEqual(setup["steps"]["profile"]["default_executor"], "claude-code")
+            self.assertEqual(setup["steps"]["profile"]["dispatch_policy"], "prepare_only")
 
     def test_optional_team_profile_packs_are_listed_and_installed_on_request(self) -> None:
         status, stdout, stderr = run_cli(["profile", "list"])

@@ -4,10 +4,19 @@ import argparse
 import os
 from pathlib import Path
 import sys
+import time
+
+try:
+    import termios
+    import tty
+except ImportError:  # pragma: no cover - Windows compatibility guard.
+    termios = None
+    tty = None
 
 from .. import __version__
 from ..config_adapter import ensure_external_dir, external_dirs, read_config, remove_external_dir, write_config
 from ..doctor import doctor_ok, recommended_next_action, run_doctor
+from ..executors import CODING_EXECUTOR_TARGETS
 from ..hashutil import sha256_file
 from ..installer import OmhError, install_skill_pack, uninstall_skill_pack
 from ..local_store import atomic_write_text
@@ -17,7 +26,11 @@ from ..probe import probe_capabilities
 from ..release import RELEASE_CHANNELS, package_url_for
 from ..routing.recommend import recommend_skills
 from ..runtime.artifacts import update_state
-from ..setup_profiles import build_setup_profile, setup_profile_choices, write_setup_profile
+from ..setup_profiles import (
+    build_setup_profile,
+    setup_profile_categories_for_executor,
+    write_setup_profile,
+)
 from ..snippet import WORKSPACE_SNIPPET
 from ..targets import record_target_observation
 from ..team_profiles import TeamProfileError, inspect_team_profile_pack, install_team_profile_pack, list_team_profile_packs
@@ -25,10 +38,18 @@ from .common import _paths, _print_json, _wants_json
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    payload = _install_result(args)
     if _wants_json(args):
+        payload = _install_result(args)
         _print_json(payload)
     else:
+        command = str(getattr(args, "command", "install"))
+        label = "update" if command == "update" else "install"
+        progress = _HumanProgress(enabled=True, use_color=_use_color())
+        progress.header(f"OMH {label}", "Refresh the managed Hermes skill pack.")
+        progress.step(1, 1, "Preparing managed skills")
+        payload = _install_result(args)
+        skills = payload.get("skills", [])
+        progress.done(f"{len(skills) if isinstance(skills, list) else 0} managed skill(s) ready")
         _print_install_summary(payload, command=str(getattr(args, "command", "install")))
     return 0
 
@@ -160,16 +181,49 @@ def cmd_setup(args: argparse.Namespace) -> int:
     paths = _paths(args)
     if _setup_should_interact(args):
         _run_setup_wizard(args, paths)
+
+    progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
+    if not _wants_json(args):
+        progress.header("OMH setup", "Connect the installed OMH workflows to this Hermes profile.")
+    total_steps = 4 + (1 if args.with_plugin else 0) + (1 if args.profile_pack else 0)
+    step_index = 1
+
+    progress.step(step_index, total_steps, "Installing managed skills", detail=str(paths.skills_dir))
     steps: dict[str, object] = {"install": _install_result(args)}
+    install_skills = steps["install"].get("skills", []) if isinstance(steps["install"], dict) else []
+    progress.done(f"{len(install_skills) if isinstance(install_skills, list) else 0} skill(s) installed")
+    step_index += 1
+
+    progress.step(step_index, total_steps, "Registering Hermes skill discovery", detail=str(paths.hermes_config_path))
     if args.skip_apply:
         steps["apply"] = {"skipped": True, "message": "Skipped Hermes config registration because --skip-apply was set."}
+        progress.skip("skipped by --skip-apply")
     else:
         steps["apply"] = _apply_result(args)
+        apply_message = steps["apply"].get("message", "configured") if isinstance(steps["apply"], dict) else "configured"
+        progress.done(str(apply_message))
+    step_index += 1
+
     if args.with_plugin:
+        progress.step(step_index, total_steps, "Installing optional plugin bridge", detail=str(paths.hermes_plugin_dir))
         steps["plugin"] = _plugin_setup_result(args, paths)
+        plugin_status = steps["plugin"].get("status", "installed") if isinstance(steps["plugin"], dict) else "installed"
+        progress.done(str(plugin_status))
+        step_index += 1
+
     if args.profile_pack:
+        progress.step(step_index, total_steps, "Activating visible team role preset", detail=", ".join(args.profile_pack))
         steps["team_profiles"] = _team_profile_setup_result(args, paths)
+        progress.done(f"{len(steps['team_profiles']) if isinstance(steps['team_profiles'], list) else 0} profile pack(s) activated")
+        step_index += 1
+
+    progress.step(step_index, total_steps, "Saving routing preferences")
     steps["profile"] = _setup_profile_result(args, paths)
+    profile_executor = steps["profile"].get("default_executor", "choose") if isinstance(steps["profile"], dict) else "choose"
+    progress.done(f"default executor: {profile_executor}")
+    step_index += 1
+
+    progress.step(step_index, total_steps, "Detecting Hermes target topology")
     steps["targets"] = record_target_observation(
         paths,
         source="setup",
@@ -180,8 +234,14 @@ def cmd_setup(args: argparse.Namespace) -> int:
             "with_plugin": bool(args.with_plugin),
             "profile_packs": list(args.profile_pack),
             "setup_profiles": list(args.profile),
+            "default_executor": str(getattr(args, "default_executor", "") or ""),
         },
     )
+    target_topology = steps["targets"].get("topology", {}) if isinstance(steps["targets"], dict) else {}
+    if isinstance(target_topology, dict):
+        progress.done(f"{target_topology.get('mode', 'unknown')} ({target_topology.get('known_target_count', 0)} target(s))")
+    else:
+        progress.done("target topology recorded")
     if args.dry_run:
         bootstrap_final_state = (
             "dry run would install generated skills and register the managed OMH skills directory for Hermes discovery"
@@ -253,7 +313,7 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
         return False
     if _wants_json(args) or getattr(args, "dry_run", False):
         return False
-    if args.profile or args.profile_pack or args.with_plugin or args.skip_apply:
+    if args.profile or getattr(args, "default_executor", None) or args.profile_pack or args.with_plugin or args.skip_apply:
         return False
     return sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -261,7 +321,7 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
 def _run_setup_wizard(args: argparse.Namespace, paths) -> None:
     use_color = _use_color()
     print(_color("OMH setup", "1;36", use_color))
-    print("This wizard installs managed Hermes skills and records local routing defaults.")
+    print("I will install the OMH skill pack, connect it to Hermes, and only ask for choices that change runtime behavior.")
     print(f"Hermes home: {_color(str(paths.hermes_home), '36', use_color)}")
     if paths.hermes_config_path.exists():
         config_text = read_config(paths.hermes_config_path)
@@ -272,76 +332,280 @@ def _run_setup_wizard(args: argparse.Namespace, paths) -> None:
         print(f"Hermes config: {_color(str(paths.hermes_config_path), '36', use_color)} (will create)")
     print(f"Managed skills: {_color(str(paths.skills_dir), '36', use_color)}")
 
-    args.skip_apply = not _ask_yes_no("Register these skills in Hermes config?", default=True, use_color=use_color)
-    args.profile = _ask_setup_profiles(use_color=use_color)
-    args.with_plugin = _ask_yes_no("Install optional local plugin bridge?", default=False, use_color=use_color)
+    args.skip_apply = not _ask_yes_no(
+        "Register OMH skills in this Hermes profile?",
+        default=True,
+        use_color=use_color,
+        note="This updates skills.external_dirs so Hermes can discover the managed OMH skills.",
+    )
+    args.default_executor = _ask_default_executor(use_color=use_color)
+    args.profile = setup_profile_categories_for_executor(str(args.default_executor))
+    args.with_plugin = _ask_yes_no(
+        "Install the optional plugin bridge?",
+        default=False,
+        use_color=use_color,
+        note="The plugin exposes local status context to Hermes; OMH skills work without it.",
+    )
     args.profile_pack = _ask_team_profile_packs(use_color=use_color)
     print("")
 
 
-def _ask_setup_profiles(*, use_color: bool) -> list[str]:
-    choices = setup_profile_choices()
-    print("")
-    print(_color("Choose workflow defaults", "1;32", use_color))
-    for item in choices:
-        suffix = " (recommended)" if item["id"] == "safety-first" else ""
-        print(f"  {item['choice']}) {item['label']}{suffix}")
-        print(f"     {item['description']}")
-    while True:
-        values = _split_selection(_ask("Select profile number(s)", default="5", use_color=use_color), default=["5"])
-        try:
-            build_setup_profile(values)
-        except ValueError as exc:
-            print(_color(f"Invalid profile selection: {exc}", "31", use_color))
-            continue
-        return values
+def _ask_default_executor(*, use_color: bool) -> str:
+    options = [
+        {
+            "choice": "1",
+            "value": "choose",
+            "label": "Ask me when coding is needed",
+            "description": "Recommended. Hermes prepares the workflow and asks before choosing Codex, Claude Code, or another executor.",
+        },
+        {
+            "choice": "2",
+            "value": "codex",
+            "label": "Codex tracked handoff",
+            "description": "Use Codex as the default for implementation-shaped work and keep dispatch/result/review/CI evidence separate.",
+        },
+        {
+            "choice": "3",
+            "value": "claude-code",
+            "label": "Claude Code prompt handoff",
+            "description": "Prepare copy-ready Claude Code prompts; OMH will not claim Claude Code ran unless a wrapper records evidence.",
+        },
+        {
+            "choice": "4",
+            "value": "generic",
+            "label": "Portable prompt handoff",
+            "description": "Prepare executor-neutral prompts for any coding agent without direct dispatch.",
+        },
+        {
+            "choice": "5",
+            "value": "hermes",
+            "label": "Keep coding-like work in Hermes",
+            "description": "Keep retained planning and small changes with Hermes; larger coding can still be handed off per request.",
+        },
+        {
+            "choice": "6",
+            "value": "omx-runtime",
+            "label": "Plugin/runtime prompt handoff",
+            "description": "Prepare OMX/OMO/OMC-style runtime prompts without assuming those runtimes are active.",
+        },
+    ]
+    value = _ask_single_choice(
+        "Default for coding-shaped requests",
+        [
+            "This is only a default. All OMH skills are installed either way.",
+            "Hermes can still ask or route differently when a request needs it.",
+        ],
+        options,
+        default_choice="1",
+        use_color=use_color,
+    )
+    try:
+        build_setup_profile(default_executor=value)
+    except ValueError as exc:
+        print(_color(f"Invalid default executor: {exc}", "31", use_color))
+        return "choose"
+    return value
 
 
 def _ask_team_profile_packs(*, use_color: bool) -> list[str]:
     catalog = list_team_profile_packs()
     packs = catalog.get("packs", []) if isinstance(catalog, dict) else []
-    print("")
-    print(_color("Optional team/profile packs", "1;32", use_color))
-    print("  0) None (recommended for first install)")
-    id_by_choice: dict[str, str] = {}
-    valid_ids: set[str] = set()
+    options = [
+        {
+            "choice": "0",
+            "value": "",
+            "label": "No extra team persona now",
+            "description": "Recommended for first install. All OMH workflows remain installed and available.",
+        }
+    ]
     for idx, pack in enumerate(packs, start=1):
         pack_id = str(pack["id"])
-        id_by_choice[str(idx)] = pack_id
-        valid_ids.add(pack_id)
-        print(f"  {idx}) {pack['title']} - {pack['summary']}")
+        options.append(
+            {
+                "choice": str(idx),
+                "value": pack_id,
+                "label": str(pack["title"]),
+                "description": str(pack["summary"]),
+            }
+        )
     while True:
-        raw_values = _split_selection(_ask("Select pack number(s)", default="0", use_color=use_color), default=["0"])
-        if raw_values == ["0"]:
+        value = _ask_single_choice(
+            "Activate a visible team persona now?",
+            [
+                "These are optional Hermes role files, not missing features.",
+                "You can add them later with `omh setup --profile-pack <id>`.",
+            ],
+            options,
+            default_choice="0",
+            use_color=use_color,
+        )
+        if not value:
             return []
-        selected: list[str] = []
-        invalid: list[str] = []
-        for raw in raw_values:
-            value = id_by_choice.get(raw, raw)
-            if value == "0":
-                continue
-            if value not in valid_ids:
-                invalid.append(raw)
-                continue
-            if value not in selected:
-                selected.append(value)
-        if invalid:
-            print(_color(f"Invalid profile pack selection: {', '.join(invalid)}", "31", use_color))
-            continue
-        return selected
+        return [value]
 
 
-def _ask_yes_no(prompt: str, *, default: bool, use_color: bool) -> bool:
+def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "") -> bool:
+    if _keyboard_menu_available():
+        value = _ask_single_choice(
+            prompt,
+            [note] if note else [],
+            [
+                {"choice": "1", "value": "yes", "label": "Yes", "description": "Apply this setup step."},
+                {"choice": "2", "value": "no", "label": "No", "description": "Skip this step for now."},
+            ],
+            default_choice="1" if default else "2",
+            use_color=use_color,
+        )
+        return value == "yes"
     suffix = "Y/n" if default else "y/N"
+    if note:
+        print(f"  {note}")
     while True:
         value = _ask(prompt, default=suffix, use_color=use_color).strip().lower()
         if not value or value == suffix.lower():
             return default
-        if value in {"y", "yes"}:
+        if value in {"y", "yes", "1"}:
             return True
-        if value in {"n", "no"}:
+        if value in {"n", "no", "2"}:
             return False
         print(_color("Please answer y or n.", "31", use_color))
+
+
+def _ask_single_choice(
+    title: str,
+    intro_lines: list[str],
+    options: list[dict[str, str]],
+    *,
+    default_choice: str,
+    use_color: bool,
+) -> str:
+    normalized = [_normalize_choice_option(option) for option in options]
+    if _keyboard_menu_available():
+        return _keyboard_single_choice(title, intro_lines, normalized, default_choice=default_choice, use_color=use_color)
+
+    print("")
+    print(_color(title, "1;32", use_color))
+    for line in intro_lines:
+        print(f"  {line}")
+    for option in normalized:
+        suffix = " (recommended)" if option["choice"] == default_choice else ""
+        print(f"  {option['choice']}) {option['label']}{suffix}")
+        if option["description"]:
+            print(f"     {option['description']}")
+    values_by_choice = {option["choice"]: option["value"] for option in normalized}
+    values_by_value = {option["value"]: option["value"] for option in normalized}
+    while True:
+        raw = _ask("Select", default=default_choice, use_color=use_color).strip()
+        value = raw or default_choice
+        if value in values_by_choice:
+            return values_by_choice[value]
+        if value in values_by_value:
+            return values_by_value[value]
+        valid = ", ".join(option["choice"] for option in normalized)
+        print(_color(f"Invalid selection. Choose one of: {valid}.", "31", use_color))
+
+
+def _normalize_choice_option(option: dict[str, str]) -> dict[str, str]:
+    return {
+        "choice": str(option.get("choice", "")).strip(),
+        "value": str(option.get("value", "")).strip(),
+        "label": str(option.get("label", "")).strip(),
+        "description": str(option.get("description", "")).strip(),
+    }
+
+
+def _keyboard_single_choice(
+    title: str,
+    intro_lines: list[str],
+    options: list[dict[str, str]],
+    *,
+    default_choice: str,
+    use_color: bool,
+) -> str:
+    cursor = _default_choice_index(options, default_choice)
+    rendered_lines = 0
+    while True:
+        lines = _choice_menu_lines(title, intro_lines, options, cursor, default_choice=default_choice, use_color=use_color)
+        if rendered_lines:
+            sys.stdout.write(f"\033[{rendered_lines}F\033[J")
+        sys.stdout.write("\n".join(lines) + "\n")
+        sys.stdout.flush()
+        rendered_lines = len(lines)
+        key = _read_tui_key()
+        if key in {"\x03", "\x04"}:
+            raise KeyboardInterrupt
+        if key in {"\x1b[A", "k"}:
+            cursor = (cursor - 1) % len(options)
+            continue
+        if key in {"\x1b[B", "j"}:
+            cursor = (cursor + 1) % len(options)
+            continue
+        if key in {"\r", "\n", " "}:
+            return options[cursor]["value"]
+        for index, option in enumerate(options):
+            if key == option["choice"]:
+                cursor = index
+                return option["value"]
+
+
+def _choice_menu_lines(
+    title: str,
+    intro_lines: list[str],
+    options: list[dict[str, str]],
+    cursor: int,
+    *,
+    default_choice: str,
+    use_color: bool,
+) -> list[str]:
+    lines = ["", _color(title, "1;32", use_color)]
+    for line in intro_lines:
+        lines.append(f"  {line}")
+    lines.append(_color("  Use ↑/↓, Space/Enter, or a number. Colors are not required.", "2", use_color))
+    for index, option in enumerate(options):
+        active = index == cursor
+        pointer = ">" if active else " "
+        marker = "[x]" if active else "[ ]"
+        suffix = " (recommended)" if option["choice"] == default_choice else ""
+        label = f"  {pointer} {marker} {option['choice']}) {option['label']}{suffix}"
+        if active:
+            label = _color(label, "1;36", use_color)
+        lines.append(label)
+        if option["description"]:
+            lines.append(f"      {option['description']}")
+    return lines
+
+
+def _default_choice_index(options: list[dict[str, str]], default_choice: str) -> int:
+    for index, option in enumerate(options):
+        if option["choice"] == default_choice:
+            return index
+    return 0
+
+
+def _keyboard_menu_available() -> bool:
+    return (
+        termios is not None
+        and tty is not None
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+        and os.environ.get("TERM", "") != "dumb"
+        and os.environ.get("OMH_NO_TUI", "") != "1"
+    )
+
+
+def _read_tui_key() -> str:
+    if termios is None or tty is None:
+        return "\n"
+    file_descriptor = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(file_descriptor)
+    try:
+        tty.setraw(file_descriptor)
+        key = sys.stdin.read(1)
+        if key == "\x1b":
+            key += sys.stdin.read(2)
+        return key
+    finally:
+        termios.tcsetattr(file_descriptor, termios.TCSADRAIN, old_settings)
 
 
 def _ask(prompt: str, *, default: str, use_color: bool) -> str:
@@ -350,13 +614,6 @@ def _ask(prompt: str, *, default: str, use_color: bool) -> str:
     except EOFError:
         print("")
         return ""
-
-
-def _split_selection(raw: str, *, default: list[str]) -> list[str]:
-    value = raw.strip()
-    if not value:
-        return default
-    return [item for item in value.replace(",", " ").split() if item]
 
 
 def _use_color() -> bool:
@@ -369,7 +626,47 @@ def _color(text: str, code: str, enabled: bool) -> str:
     return f"\033[{code}m{text}\033[0m"
 
 
+class _HumanProgress:
+    def __init__(self, *, enabled: bool, use_color: bool) -> None:
+        self.enabled = enabled
+        self.use_color = use_color
+
+    def header(self, title: str, subtitle: str) -> None:
+        if not self.enabled:
+            return
+        print(_color(title, "1;36", self.use_color))
+        print(subtitle)
+        print("")
+
+    def step(self, index: int, total: int, label: str, *, detail: str = "") -> None:
+        if not self.enabled:
+            return
+        prefix = _color(f"[{index}/{total}]", "1;36", self.use_color)
+        print(f"{prefix} {label}...", flush=True)
+        if detail:
+            print(f"      {detail}", flush=True)
+        self._brief_tty_pause()
+
+    def done(self, message: str = "done") -> None:
+        if not self.enabled:
+            return
+        print(f"      {_color('[ok]', '1;32', self.use_color)} {message}", flush=True)
+        self._brief_tty_pause()
+
+    def skip(self, message: str) -> None:
+        if not self.enabled:
+            return
+        print(f"      {_color('[skip]', '1;33', self.use_color)} {message}", flush=True)
+        self._brief_tty_pause()
+
+    @staticmethod
+    def _brief_tty_pause() -> None:
+        if sys.stdout.isatty() and os.environ.get("OMH_PROGRESS", "1") != "0":
+            time.sleep(0.04)
+
+
 def _print_setup_summary(payload: dict[str, object]) -> None:
+    use_color = _use_color()
     steps = payload.get("steps", {})
     hermes_native = payload.get("hermes_native", {})
     if not isinstance(steps, dict):
@@ -386,51 +683,62 @@ def _print_setup_summary(payload: dict[str, object]) -> None:
 
     dry_run = bool(payload.get("dry_run", False))
     title = "OMH setup preview complete." if dry_run else "OMH setup complete."
-    print(title)
-    print(f"Skills: {len(skills)} managed skill(s) at {hermes_native.get('skills_dir', '')}")
+    print("")
+    print(_color(title, "1;36", use_color))
+    print(_color("Summary", "1;32", use_color))
+    print(f"  Skills: {len(skills)} managed skill(s) at {hermes_native.get('skills_dir', '')}")
 
     discovery_status = str(hermes_native.get("discovery_status", ""))
     if discovery_status == "config_registered_reload_required":
         print(
-            "Hermes registration: configured in "
+            "  Hermes registration: configured in "
             f"{hermes_native.get('hermes_config_path', '')} "
             "(restart or reload Hermes Agent to observe it)."
         )
     elif discovery_status == "dry_run_not_observed":
-        print("Hermes registration: dry run only; no local registration was observed.")
+        print("  Hermes registration: dry run only; no local registration was observed.")
     elif discovery_status == "not_registered_skip_apply":
-        print("Hermes registration: skipped by --skip-apply.")
+        print("  Hermes registration: skipped by --skip-apply.")
     else:
-        print(f"Hermes registration: {discovery_status or 'unknown'}")
+        print(f"  Hermes registration: {discovery_status or 'unknown'}")
 
     if isinstance(apply, dict) and apply.get("message"):
-        print(f"Apply: {apply.get('message')}")
+        print(f"  Apply: {apply.get('message')}")
 
     if isinstance(profile, dict):
         selected = ", ".join(str(item) for item in profile.get("selected_categories", []) or [])
         executor = str(profile.get("default_executor", ""))
         if selected or executor:
-            print(f"Profile: {selected or 'default'}; default executor: {executor or 'unknown'}")
+            print(f"  Default handoff: {_executor_summary(executor)}")
+            if selected:
+                print(f"  Setup profile: {selected}")
 
     if isinstance(topology, dict):
         print(
-            "Target topology: "
+            "  Target topology: "
             f"{topology.get('mode', 'unknown')} "
             f"({topology.get('known_target_count', 0)} known target(s))."
         )
 
     plugin = payload.get("plugin_distribution")
     if isinstance(plugin, dict):
-        print(f"Plugin bundle: {plugin.get('status', 'installed')}")
+        print(f"  Plugin bridge: {plugin.get('status', 'installed')}")
     elif not dry_run:
-        print("Plugin bundle: optional; install later with `omh setup --with-plugin`.")
+        print("  Plugin bridge: optional; install later with `omh setup --with-plugin`.")
 
+    team_profiles = payload.get("team_profiles")
+    if isinstance(team_profiles, list) and team_profiles:
+        print(f"  Team persona: {len(team_profiles)} profile pack(s) activated.")
+    elif not dry_run:
+        print("  Team persona: none activated; all OMH workflows are still installed.")
+
+    print(_color("Next", "1;32", use_color))
     if dry_run:
-        print("Next: rerun without `--dry-run` to install and register the managed skills.")
+        print("  Rerun without `--dry-run` to install and register the managed skills.")
     else:
-        print("Next: restart or reload Hermes Agent, then try:")
+        print("  Restart or reload Hermes Agent, then try this in Hermes chat:")
         print("  Use OMH request-to-handoff for: I want to safely add a feature to this repo.")
-    print("For machine-readable output, rerun with `--json`.")
+    print("  For machine-readable output, rerun with `--json`.")
 
 
 def _print_doctor_summary(payload: dict[str, object]) -> None:
@@ -456,26 +764,44 @@ def _print_doctor_summary(payload: dict[str, object]) -> None:
 
 
 def _print_install_summary(payload: dict[str, object], *, command: str) -> None:
+    use_color = _use_color()
     skills = payload.get("skills", [])
     if not isinstance(skills, list):
         skills = []
     dry_run = bool(payload.get("dry_run", False))
     label = "update" if command == "update" else "install"
     title = f"OMH {label} preview complete." if dry_run else f"OMH {label} complete."
-    print(title)
-    print(f"Skills: {len(skills)} managed skill(s) at {payload.get('skills_dir', '')}")
-    print(f"Source: {payload.get('source', 'builtin')}")
+    print("")
+    print(_color(title, "1;36", use_color))
+    print(_color("Summary", "1;32", use_color))
+    print(f"  Skills: {len(skills)} managed skill(s) at {payload.get('skills_dir', '')}")
+    print(f"  Source: {payload.get('source', 'builtin')}")
     channel = str(payload.get("release_channel", "")).strip()
     package_url = str(payload.get("release_package_url", "")).strip()
     if channel:
-        print(f"Release channel: {channel}")
+        print(f"  Release channel: {channel}")
     if package_url and package_url != "local":
-        print(f"Package URL: {package_url}")
+        print(f"  Package URL: {package_url}")
+    print(_color("Next", "1;32", use_color))
     if dry_run:
-        print("Next: rerun without `--dry-run` to refresh the managed skills.")
+        print("  Rerun without `--dry-run` to refresh the managed skills.")
     else:
-        print("Next: run `omh setup` to repair Hermes registration, or `omh doctor` to verify health.")
-    print("For machine-readable output, rerun with `--json`.")
+        print("  Run `omh setup` to repair Hermes registration, or `omh doctor` to verify health.")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
+def _executor_summary(executor: str) -> str:
+    labels = {
+        "choose": "ask before choosing executor",
+        "codex": "Codex tracked handoff",
+        "claude-code": "Claude Code prompt handoff",
+        "generic": "portable prompt handoff",
+        "hermes": "Hermes-retained work",
+        "omx-runtime": "plugin/runtime prompt handoff",
+        "omo-runtime": "plugin/runtime prompt handoff",
+        "omc-runtime": "plugin/runtime prompt handoff",
+    }
+    return f"{labels.get(executor, 'unknown')} ({executor or 'unknown'})"
 
 
 def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
@@ -489,10 +815,11 @@ def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
 
 
 def _setup_profile_result(args: argparse.Namespace, paths) -> dict[str, object]:
+    default_executor = str(getattr(args, "default_executor", "") or "") or None
     if args.dry_run:
-        profile = build_setup_profile(args.profile)
+        profile = build_setup_profile(args.profile, default_executor=default_executor)
         return {**profile, "dry_run": True, "written": False, "path": str(paths.setup_profile_path)}
-    profile = write_setup_profile(paths, args.profile)
+    profile = write_setup_profile(paths, args.profile, default_executor=default_executor)
     return {**profile, "dry_run": False, "written": True, "path": str(paths.setup_profile_path)}
 
 
@@ -570,6 +897,12 @@ def _add_top_level_commands(sub) -> None:
         action="append",
         default=[],
         help="Setup profile category to record by number or id. Repeat for multiple categories; choices are listed in setup output.",
+    )
+    setup.add_argument(
+        "--default-executor",
+        choices=CODING_EXECUTOR_TARGETS,
+        default=None,
+        help="Default executor preference for coding-shaped handoffs. Use 'choose' to ask each time.",
     )
     setup.add_argument(
         "--with-plugin",

@@ -33,12 +33,65 @@ OMH_RUN_DOCTOR="${OMH_RUN_DOCTOR:-1}"
 OMH_WITH_PLUGIN="${OMH_WITH_PLUGIN:-0}"
 OMH_PROFILE_PACKS="${OMH_PROFILE_PACKS:-}"
 OMH_SETUP_PROFILES="${OMH_SETUP_PROFILES:-}"
+OMH_DEFAULT_EXECUTOR="${OMH_DEFAULT_EXECUTOR:-}"
 OMH_SETUP_ARGS="${OMH_SETUP_ARGS:-}"
 OMH_RUNTIME_PYTHON="$OMH_PYTHON"
 OMH_COMMAND_HINT=""
 
 say() {
   printf '%s\n' "$*"
+}
+
+use_color() {
+  [ -t 1 ] && [ -z "${NO_COLOR:-}" ]
+}
+
+color() {
+  if use_color; then
+    printf '\033[%sm%s\033[0m' "$1" "$2"
+  else
+    printf '%s' "$2"
+  fi
+}
+
+say_header() {
+  printf '%s\n' "$(color '1;36' "$1")"
+  if [ -n "${2:-}" ]; then
+    printf '%s\n' "$2"
+  fi
+  printf '\n'
+}
+
+say_step() {
+  printf '%s %s\n' "$(color '1;36' "$1")" "$2"
+}
+
+say_ok() {
+  printf '      %s %s\n' "$(color '1;32' '[ok]')" "$1"
+}
+
+say_note() {
+  printf '      %s %s\n' "$(color '1;33' '[note]')" "$1"
+}
+
+say_fail() {
+  printf '      %s %s\n' "$(color '1;31' '[failed]')" "$1"
+}
+
+run_step() {
+  OMH_STEP_PREFIX="$1"
+  OMH_STEP_LABEL="$2"
+  shift 2
+  say_step "$OMH_STEP_PREFIX" "$OMH_STEP_LABEL"
+  if OMH_STEP_OUTPUT="$("$@" 2>&1)"; then
+    say_ok "done"
+    return 0
+  fi
+  say_fail "$OMH_STEP_LABEL"
+  if [ -n "$OMH_STEP_OUTPUT" ]; then
+    printf '%s\n' "$OMH_STEP_OUTPUT" | sed 's/^/      /'
+  fi
+  exit 1
 }
 
 run_omh() {
@@ -138,17 +191,13 @@ install_into_venv() {
     say "Set OMH_VENV_DIR to an explicit directory and retry."
     exit 1
   fi
-  say "Creating isolated Python environment at $OMH_VENV_DIR..."
-  if ! "$OMH_PYTHON" -m venv "$OMH_VENV_DIR"; then
-    say "omh installer: failed to create a virtual environment with '$OMH_PYTHON -m venv'."
-    say "Install Python venv support or set OMH_INSTALL_MODE=python with explicit OMH_PIP_ARGS."
-    exit 1
-  fi
+  run_step "[1/5]" "Create isolated Python environment at $OMH_VENV_DIR" "$OMH_PYTHON" -m venv "$OMH_VENV_DIR"
   OMH_RUNTIME_PYTHON="$OMH_VENV_DIR/bin/python"
-  say "Installing OMH package..."
-  # Intentional shell splitting: OMH_PIP_ARGS is an advanced operator escape hatch.
-  # shellcheck disable=SC2086
-  PIP_DISABLE_PIP_VERSION_CHECK=1 "$OMH_RUNTIME_PYTHON" -m pip install --disable-pip-version-check -q --force-reinstall $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+  run_step "[2/5]" "Install OMH package" sh -c '
+    # Intentional shell splitting: OMH_PIP_ARGS is an advanced operator escape hatch.
+    # shellcheck disable=SC2086
+    PIP_DISABLE_PIP_VERSION_CHECK=1 "$1" -m pip install --disable-pip-version-check -q --force-reinstall $2 --upgrade "$3"
+  ' sh "$OMH_RUNTIME_PYTHON" "$OMH_PIP_ARGS" "$OMH_PACKAGE_URL"
   OMH_COMMAND_HINT="$OMH_VENV_DIR/bin/omh"
   link_omh_command
 }
@@ -158,10 +207,11 @@ install_into_python() {
   if [ -z "$OMH_PIP_ARGS_WAS_SET" ]; then
     OMH_DIRECT_PIP_ARGS="--user"
   fi
-  say "Installing OMH package..."
-  # Intentional shell splitting: OMH_DIRECT_PIP_ARGS is an advanced operator escape hatch.
-  # shellcheck disable=SC2086
-  PIP_DISABLE_PIP_VERSION_CHECK=1 "$OMH_PYTHON" -m pip install --disable-pip-version-check -q --force-reinstall $OMH_DIRECT_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+  run_step "[1/5]" "Install OMH package into selected Python" sh -c '
+    # Intentional shell splitting: OMH_DIRECT_PIP_ARGS is an advanced operator escape hatch.
+    # shellcheck disable=SC2086
+    PIP_DISABLE_PIP_VERSION_CHECK=1 "$1" -m pip install --disable-pip-version-check -q --force-reinstall $2 --upgrade "$3"
+  ' sh "$OMH_PYTHON" "$OMH_DIRECT_PIP_ARGS" "$OMH_PACKAGE_URL"
   OMH_RUNTIME_PYTHON="$OMH_PYTHON"
 }
 
@@ -198,7 +248,9 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
   esac
 fi
 
-say "Installing oh-my-hermes-agent from $OMH_CHANNEL channel..."
+say_header "OMH installer" "Install oh-my-hermes-agent without touching system Python packages."
+say_note "Channel: $OMH_CHANNEL"
+say_note "Mode: $OMH_INSTALL_MODE"
 case "$OMH_INSTALL_MODE" in
   venv)
     install_into_venv
@@ -214,12 +266,13 @@ esac
 
 OMH_COMMAND_PATH="$(find_omh_command || true)"
 if [ -n "$OMH_COMMAND_PATH" ]; then
-  say "Installed omh command: $OMH_COMMAND_PATH"
+  say_step "[3/5]" "Expose the omh command"
+  say_ok "$OMH_COMMAND_PATH"
   if ! command -v omh >/dev/null 2>&1; then
     OMH_COMMAND_DIR="$(dirname "$OMH_COMMAND_PATH")"
-    say "omh installer: '$OMH_COMMAND_DIR' is not on PATH for this shell."
-    say "Add it with: export PATH=\"$OMH_COMMAND_DIR:\$PATH\""
-    say "Until then, use: $OMH_COMMAND_PATH doctor"
+    say_note "'$OMH_COMMAND_DIR' is not on PATH for this shell."
+    say_note "Add it with: export PATH=\"$OMH_COMMAND_DIR:\$PATH\""
+    say_note "Until then, use: $OMH_COMMAND_PATH doctor"
   fi
 else
   say "omh installer: installed the package, but could not locate the omh command."
@@ -256,6 +309,10 @@ if [ -n "$OMH_SETUP_PROFILES" ]; then
   done
 fi
 
+if [ -n "$OMH_DEFAULT_EXECUTOR" ]; then
+  set -- "$@" --default-executor "$OMH_DEFAULT_EXECUTOR"
+fi
+
 if [ -n "$OMH_SETUP_ARGS" ]; then
   # Intentional shell splitting: this is an advanced escape hatch for operators
   # who need to pass current omh setup flags before install.sh grows a stable
@@ -264,17 +321,18 @@ if [ -n "$OMH_SETUP_ARGS" ]; then
   set -- "$@" $OMH_SETUP_ARGS
 fi
 
-say "Setting up managed Hermes skills..."
+say_step "[4/5]" "Set up managed Hermes skills"
 run_omh "$@"
 
 if [ "$OMH_RUN_DOCTOR" = "0" ]; then
-  say "Skipped doctor check because OMH_RUN_DOCTOR=0."
+  say_note "Skipped doctor check because OMH_RUN_DOCTOR=0."
 else
-  say "Verifying installation..."
+  say_step "[5/5]" "Verify installation"
   run_omh doctor
 fi
 
-say "oh-my-hermes-agent is installed."
+printf '\n'
+say "$(color '1;36' 'oh-my-hermes-agent is installed.')"
 if command -v omh >/dev/null 2>&1; then
   say "Open Hermes Agent and use the installed OMH skills. Run 'omh doctor' for health checks or 'omh setup' to reapply Hermes registration."
 elif [ -n "$OMH_COMMAND_PATH" ]; then

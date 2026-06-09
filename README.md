@@ -70,8 +70,9 @@ The installer normally runs setup for you. Keep `omh setup` in the quick start
 because it is the repeatable repair step that installs generated skills under
 `~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
-Hermes registration, executor defaults, the optional plugin bridge, and optional
-team/profile packs. Non-interactive shells use the safe defaults. Add `--json`
+Hermes registration, the default coding executor preference, the optional plugin
+bridge, and optional visible team personas. Non-interactive shells use the safe
+defaults. Add `--json`
 when an operator or wrapper needs the full machine-readable payload.
 
 Verify the local install:

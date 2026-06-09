@@ -24,9 +24,10 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
-detects the Hermes config path, confirms skill registration, asks for workflow
-defaults, and can opt into the plugin bridge or a team/profile pack. In
-non-interactive shells it uses safe defaults and prints a concise summary. Use
+detects the Hermes config path, confirms skill registration, asks for the
+default coding executor preference, and can opt into the plugin bridge or a
+visible team persona. In non-interactive shells it uses safe defaults and prints
+a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
 
@@ -504,17 +505,24 @@ Install the optional plugin bridge during bootstrap:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 sh
 ```
 
-Install one or more optional Hermes agent/profile packs during bootstrap:
+Install one or more optional Hermes agent/profile packs during bootstrap. These
+are visible role/persona files only; all OMH workflows are installed either way:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
 ```
 
-Record setup profile choices during bootstrap:
+Record a default executor preference during bootstrap:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SETUP_PROFILES=1,3 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_DEFAULT_EXECUTOR=claude-code sh
 ```
+
+Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
+`omx-runtime`, `omo-runtime`, and `omc-runtime`. The recommended default is
+`choose`, which asks before dispatch. Legacy `OMH_SETUP_PROFILES=1,3` still maps
+to setup profile categories for automation that already uses it, but new scripts
+should prefer `OMH_DEFAULT_EXECUTOR`.
 
 Skip automatic Hermes config registration:
 
