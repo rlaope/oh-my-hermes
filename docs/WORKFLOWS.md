@@ -8,6 +8,7 @@ Workflow names are kept for compatibility, but each skill declares advisory wrap
 
 When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow state to the current Hermes target/thread, adapt only the steps that benefit from multiple targets, and fall back to single-target behavior when the active agent count is one.
 `memory_review_card/v1` is separate from `status_card/v1`; `handoff_context_pack/v1` may be attached to executor handoffs only when unresolved conflicts are absent.
+`goal_status_card/v1` and `goal_continuation/v1` are goal-execution payloads separate from generic `status_card/v1`; they must name the next action instead of merely summarizing work.
 
 ## Skills
 
@@ -79,24 +80,28 @@ Hermes Ultragoal workflow: file-backed durable goal ledgers.
 - Phase: `durable-goals`
 - Hermes role: `codex-handoff-guidance`
 - Quality tier: `checkpoint-gated`
-- Handoff policy: Use Hermes to maintain durable goal/checkpoint state; delegate coding milestones to the selected coding executor and report only observed runtime evidence.
+- Handoff policy: Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and delegate coding milestones to the selected executor with only observed runtime evidence.
 - Use when: Use when work needs durable goal artifacts, checkpointed progress, and final quality gates.
 - Strong routing signals: `ultragoal`, `$ultragoal`, `durable goal`, `multi-goal`, `goal ledger`
 - Quality bar:
   - Keep goal state durable, inspectable, and separate from chat narration.
   - Checkpoint every success, blocker, and final quality gate with fresh evidence.
+  - Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.
+  - Tell the user the next action through goal_status_card/v1 or goal_continuation/v1 instead of ending with vague follow-up copy.
   - For coding milestones, use prepared handoffs and observed executor evidence rather than hidden Hermes execution.
 - Required inputs:
   - goal statement
   - acceptance criteria
-  - current checkpoint
+  - current checkpoint or missing criteria
 - Expected outputs:
-  - goal ledger updates
+  - goal_ledger/v1 updates
   - checkpoint evidence
+  - goal_completion_gate/v1 result
   - completion or blocker summary
 - Artifact expectations:
-  - goal ledger or checklist
-  - runtime run record for each major checkpoint
+  - metadata-only .omh/goals ledger
+  - goal_status_card/v1 or goal_continuation/v1 wrapper payload
+  - runtime run record only for explicitly linked coding milestones
 - Safety rules:
   - Do not imply hidden Hermes runtime behavior.
   - Use the smallest verification that can prove the claim.
@@ -920,22 +925,28 @@ Keep long-running work tied to explicit goals, checkpoints, and durable evidence
 - Quality bar:
   - Create or reference a durable goal artifact before long-running progress claims.
   - Checkpoint complete, blocked, and failed states with evidence.
+  - Use summary-only rejection when a goal_completion_gate/v1 blocks completion.
+  - Surface continue_goal, show_status, record_checkpoint, record_blocker, or record_completion as the next action.
   - Run final verification and review gates before reporting a goal complete.
 - Inputs:
   - goal statement
   - acceptance criteria
   - current checkpoint
   - blocked or pending stories
+  - linked runtime run ids when coding evidence is explicitly required
 - Outputs:
-  - goal ledger updates
+  - goal_ledger/v1 updates
   - checkpoint evidence
-  - completion or blocker summary
+  - goal_completion_gate/v1 result
+  - goal_status_card/v1 or goal_continuation/v1 next action
 - Stop conditions:
   - current goal is complete or explicitly blocked
   - checkpoint evidence is recorded
+  - completion gate is ready before final completion copy
 - Verification:
   - compare artifacts against acceptance criteria
   - record fresh evidence before completion
+  - inspect explicitly linked runtime runs before treating coding work as observed
 - Evidence ladder:
   - `goal_created`
   - `story_started`
@@ -943,6 +954,7 @@ Keep long-running work tied to explicit goals, checkpoints, and durable evidence
   - `quality_gate_recorded`
   - `goal_closed`
 - Wrapper actions:
+  - `continue_goal`
   - `show_status`
   - `record_checkpoint`
   - `record_blocker`
@@ -955,8 +967,9 @@ Keep long-running work tied to explicit goals, checkpoints, and durable evidence
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A goal ledger entry is not proof that executor work ran.
+  - Prepared or unlinked runtime artifacts cannot satisfy a coding-linked goal unless the goal explicitly references that run.
   - Intermediate checkpoints cannot replace final verification and review evidence.
-- Fallback: If Hermes has no goal tool, use a local checklist or file-backed ledger.
+- Fallback: If Hermes has no goal tool, use a local checklist or file-backed ledger and still name the next action.
 
 ### planning
 

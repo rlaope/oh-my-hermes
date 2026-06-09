@@ -31,28 +31,32 @@ Quality bar:
 
 - Keep goal state durable, inspectable, and separate from chat narration.
 - Checkpoint every success, blocker, and final quality gate with fresh evidence.
+- Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.
+- Tell the user the next action through goal_status_card/v1 or goal_continuation/v1 instead of ending with vague follow-up copy.
 - For coding milestones, use prepared handoffs and observed executor evidence rather than hidden Hermes execution.
 
 Handoff policy:
 
-Use Hermes to maintain durable goal/checkpoint state; delegate coding milestones to the selected coding executor and report only observed runtime evidence.
+Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and delegate coding milestones to the selected executor with only observed runtime evidence.
 
 Required inputs:
 
 - goal statement
 - acceptance criteria
-- current checkpoint
+- current checkpoint or missing criteria
 
 Expected outputs:
 
-- goal ledger updates
+- goal_ledger/v1 updates
 - checkpoint evidence
+- goal_completion_gate/v1 result
 - completion or blocker summary
 
 Artifact expectations:
 
-- goal ledger or checklist
-- runtime run record for each major checkpoint
+- metadata-only .omh/goals ledger
+- goal_status_card/v1 or goal_continuation/v1 wrapper payload
+- runtime run record only for explicitly linked coding milestones
 
 Safety rules:
 
@@ -87,7 +91,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
 - When wrapper metadata includes `memory_review_card/v1` or `handoff_context_pack/v1`, treat it as reviewed OMH-local or wrapper-supplied context only. Use conflict-free context summaries to shape plans and handoffs, but do not claim Hermes internal memory was read or changed.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
-  - goal tools -> `.omh/goals/` ledgers or explicit checklists,
+  - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
   - question renderers -> one concise question in the current Hermes interface,
   - native subagents -> Hermes delegation when available, otherwise sequential lanes,
   - shell bridge commands -> optional bridge mode only.

@@ -43,6 +43,10 @@ class OmhPaths:
         return self.memory_dir / "index.json"
 
     @property
+    def goals_dir(self) -> Path:
+        return self.omh_home / "goals"
+
+    @property
     def setup_profile_path(self) -> Path:
         return self.omh_home / "setup-profile.json"
 

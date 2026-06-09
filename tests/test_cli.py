@@ -13,6 +13,72 @@ from omh.cli import OmhError, cmd_runtime_merge
 
 
 class CliTests(unittest.TestCase):
+    def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "goal",
+                    "create",
+                    "--goal-id",
+                    "goal-cli",
+                    "--objective",
+                    "Finish private goal text SECRET-CLI",
+                    "--criterion",
+                    "Ledger can be completed",
+                ]
+            )
+            self.assertEqual(status, 0, stderr)
+            created = json.loads(stdout)
+            self.assertEqual(created["goal"]["schema_version"], "goal_ledger/v1")
+            self.assertEqual(created["completion_gate"]["schema_version"], "goal_completion_gate/v1")
+            self.assertNotIn("SECRET-CLI", stdout)
+
+            status, stdout, _stderr = run_cli(base + ["goal", "complete", "--goal", "goal-cli"])
+            self.assertEqual(status, 1)
+            rejected = json.loads(stdout)
+            self.assertFalse(rejected["completion_gate"]["ready"])
+            self.assertEqual(rejected["completion_gate"]["next_action"], "record_checkpoint")
+
+            self.assertEqual(
+                run_cli(
+                    base
+                    + [
+                        "goal",
+                        "checkpoint",
+                        "--goal",
+                        "goal-cli",
+                        "--summary",
+                        "Criterion satisfied",
+                        "--criterion",
+                        "AC001",
+                        "--evidence-ref",
+                        "unit",
+                    ]
+                )[0],
+                0,
+            )
+            status, stdout, stderr = run_cli(base + ["goal", "complete", "--goal", "goal-cli", "--evidence-ref", "unit"])
+            self.assertEqual(status, 0, stderr)
+            completed = json.loads(stdout)
+            self.assertTrue(completed["completed"])
+            self.assertEqual(completed["goal"]["status"], "complete")
+
+            status, stdout, stderr = run_cli(base + ["goal", "continue", "--goal", "goal-cli"])
+            self.assertEqual(status, 0, stderr)
+            continuation = json.loads(stdout)["continuation"]
+            self.assertEqual(continuation["schema_version"], "goal_continuation/v1")
+            self.assertIn("record_completion", continuation["actions"])
+
+            status, _stdout, stderr = run_cli(
+                base + ["goal", "create", "--goal-id", "../../outside", "--objective", "Bad", "--criterion", "Bad"]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("goal_id", stderr)
+
     def test_source_checkout_exposes_omh_cli_module(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         result = subprocess.run(
