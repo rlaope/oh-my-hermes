@@ -48,8 +48,12 @@ Use this path when the target Hermes environment supports skill taps:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install oh-my-hermes
+hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
 ```
+
+Use the full identifier for first install. It avoids short-name resolver
+ambiguity in current Hermes CLI releases while installing the same
+`oh-my-hermes` skill.
 
 Install additional workflow skills when you want direct Hermes skill surfaces:
 
@@ -96,12 +100,15 @@ The live smoke runs the selected install path and then verifies:
 hermes skills tap list
 hermes skills list --enabled-only
 hermes skills check oh-my-hermes
-hermes skills inspect oh-my-hermes
+hermes skills inspect rlaope/oh-my-hermes-agent/skills/oh-my-hermes
 ```
 
-This proves Hermes CLI install/list/check/inspect for the target profile. It
-does not prove that a later Hermes chat session selected OMH unless that chat
-response is observed separately.
+The tap path proves Hermes CLI install/list/check/inspect for the target
+profile. The setup path proves `skills.external_dirs` discovery with
+list/check plus `omh doctor`, because current Hermes CLI releases do not
+reliably inspect local external-dir skills by short name. Neither path proves
+that a later Hermes chat session selected OMH unless that chat response is
+observed separately.
 
 ## Install Path B: OMH Bootstrap Setup
 

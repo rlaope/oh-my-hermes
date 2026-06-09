@@ -84,7 +84,20 @@ def hermes_release_smoke_steps(
         raise ValueError("Hermes smoke skill must not be empty")
     if install_path == "tap" and not tap:
         raise ValueError("Hermes smoke tap must not be empty for tap installs")
-    setup_command = _omh_setup_command(omh_command, omh_home=omh_home, hermes_home=hermes_home)
+    skill_name = _skill_name_for_hermes(skill)
+    tap_identifier = _tap_skill_identifier(tap=tap, skill=skill)
+    setup_command = _omh_scoped_command(
+        omh_command,
+        "setup",
+        omh_home=omh_home,
+        hermes_home=hermes_home,
+    )
+    doctor_command = _omh_scoped_command(
+        omh_command,
+        "doctor",
+        omh_home=omh_home,
+        hermes_home=hermes_home,
+    )
     install_steps = (
         [
             HermesSmokeStep(
@@ -96,10 +109,13 @@ def hermes_release_smoke_steps(
             ),
             HermesSmokeStep(
                 "skill_install",
-                ("hermes", "skills", "install", skill, "--yes"),
+                ("hermes", "skills", "install", tap_identifier, "--yes"),
                 "install",
                 True,
-                proof_boundary="Installs the router skill in the current Hermes profile; this does not prove chat usage.",
+                proof_boundary=(
+                    "Installs the router skill by full GitHub identifier in the current Hermes profile; "
+                    "this does not prove chat usage."
+                ),
             ),
         ]
         if install_path == "tap"
@@ -130,20 +146,46 @@ def hermes_release_smoke_steps(
         ),
         HermesSmokeStep(
             "skill_check",
-            ("hermes", "skills", "check", skill),
+            ("hermes", "skills", "check", skill_name),
             "verify",
             False,
             proof_boundary="Runs Hermes skill validation for the OMH router skill.",
         ),
-        HermesSmokeStep(
-            "skill_inspect",
-            ("hermes", "skills", "inspect", skill),
-            "verify",
-            False,
-            proof_boundary="Prints Hermes-visible skill metadata/content for operator confirmation.",
-        ),
     ]
+    if install_path == "tap":
+        check_steps.append(
+            HermesSmokeStep(
+                "skill_inspect",
+                ("hermes", "skills", "inspect", tap_identifier),
+                "verify",
+                False,
+                proof_boundary="Prints Hermes-visible skill metadata/content for operator confirmation.",
+            )
+        )
+    else:
+        check_steps.append(
+            HermesSmokeStep(
+                "setup_doctor",
+                doctor_command,
+                "verify",
+                False,
+                proof_boundary=(
+                    "Checks OMH-managed local skill registration. Hermes v0.15.1 does not reliably inspect "
+                    "skills.external_dirs local skills by short name, so setup-path smoke uses list/check plus OMH doctor."
+                ),
+            )
+        )
     return install_steps + check_steps
+
+
+def _skill_name_for_hermes(skill: str) -> str:
+    return skill.rstrip("/").split("/")[-1]
+
+
+def _tap_skill_identifier(*, tap: str, skill: str) -> str:
+    if "/" in skill:
+        return skill
+    return f"{tap.rstrip('/')}/skills/{skill}"
 
 
 def hermes_release_smoke_plan(
@@ -319,8 +361,9 @@ def _expand_home(value: str | Path | None, env_key: str, default: str) -> Path:
     return Path(os.path.expandvars(source)).expanduser().resolve()
 
 
-def _omh_setup_command(
+def _omh_scoped_command(
     omh_command: str,
+    command_name: str,
     *,
     omh_home: str | Path | None = None,
     hermes_home: str | Path | None = None,
@@ -330,7 +373,7 @@ def _omh_setup_command(
         command.extend(["--omh-home", str(omh_home)])
     if hermes_home is not None:
         command.extend(["--hermes-home", str(hermes_home)])
-    command.append("setup")
+    command.append(command_name)
     return tuple(command)
 
 
@@ -352,9 +395,14 @@ def _hermes_smoke_next_action(ok: bool, failed_step: str) -> str:
     if failed_step == "tap_add":
         return "Check Hermes tap support, network access, and whether the tap is already configured; rerun the smoke after repair."
     if failed_step == "skill_install":
-        return "Check tap visibility and Hermes skill scan output, then rerun `hermes skills install oh-my-hermes --yes`."
+        return (
+            "Check tap visibility and Hermes skill scan output, then rerun "
+            "`hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes`."
+        )
     if failed_step == "omh_setup":
         return "Run `omh setup` manually and inspect `omh doctor` for blocking setup checks."
+    if failed_step == "setup_doctor":
+        return "Run `omh doctor` manually and repair the OMH-managed skill registration reported there."
     if failed_step in {"tap_list", "skills_list", "skill_check", "skill_inspect"}:
         return "Inspect the failing Hermes skills command output and confirm the target Hermes profile is the one OMH was installed into."
     return "Inspect the failed Hermes release smoke step and rerun after repair."

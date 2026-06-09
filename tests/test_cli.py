@@ -126,7 +126,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(commands[0], ["omh-dev", "--omh-home", str(omh_home.resolve()), "--hermes-home", str(hermes_home.resolve()), "setup"])
         self.assertIn(["hermes", "skills", "list", "--enabled-only"], commands)
         self.assertIn(["hermes", "skills", "check", "oh-my-hermes"], commands)
-        self.assertIn(["hermes", "skills", "inspect", "oh-my-hermes"], commands)
+        self.assertIn(["omh-dev", "--omh-home", str(omh_home.resolve()), "--hermes-home", str(hermes_home.resolve()), "doctor"], commands)
+        self.assertNotIn(["hermes", "skills", "inspect", "oh-my-hermes"], commands)
 
     def test_release_hermes_smoke_live_requires_target_confirmation(self) -> None:
         status, _stdout, stderr = run_cli(["release", "hermes-smoke", "--live"])
@@ -1946,7 +1947,10 @@ class CliTests(unittest.TestCase):
             self.assertTrue(payload["hermes_native"]["requires_hermes_reload"])
             self.assertIn("Hermes Agent chat", payload["hermes_native"]["normal_user_surface"])
             self.assertIn("hermes skills tap add rlaope/oh-my-hermes-agent", payload["hermes_native"]["equivalent_hermes_commands"])
-            self.assertIn("hermes skills install oh-my-hermes", payload["hermes_native"]["equivalent_hermes_commands"])
+            self.assertIn(
+                "hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes",
+                payload["hermes_native"]["equivalent_hermes_commands"],
+            )
             self.assertEqual(payload["hermes_native"]["hermes_config_key"], "skills.external_dirs")
             self.assertIn("not the normal chat UX", payload["hermes_native"]["wrapper_backend_surface"])
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))

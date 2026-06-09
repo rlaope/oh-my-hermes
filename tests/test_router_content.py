@@ -393,7 +393,7 @@ class RouterContentTests(unittest.TestCase):
         site_css = Path("site/styles.css").read_text(encoding="utf-8")
 
         self.assertIn("hermes skills tap add rlaope/oh-my-hermes-agent", readme)
-        self.assertIn("hermes skills install oh-my-hermes", readme)
+        self.assertIn("hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes", readme)
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh", readme)
         self.assertIn("https://rlaope.github.io/oh-my-hermes-agent/", readme)
         self.assertIn("[Documentation](docs/README.md)", readme)

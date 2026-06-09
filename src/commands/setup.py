@@ -199,7 +199,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "normal_user_surface": "Hermes Agent chat and installed Hermes skills",
         "equivalent_hermes_commands": [
             "hermes skills tap add rlaope/oh-my-hermes-agent",
-            "hermes skills install oh-my-hermes",
+            "hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes",
         ],
         "bootstrap_final_state": bootstrap_final_state,
         "skills_dir": str(paths.skills_dir),

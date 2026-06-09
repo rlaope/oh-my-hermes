@@ -22,7 +22,7 @@ Normal users should talk to Hermes Agent or invoke installed Hermes skills throu
 
 Hermes-native install paths should converge on the same skill-visible state:
 
-- `hermes skills tap add rlaope/oh-my-hermes-agent`, then `hermes skills install oh-my-hermes` installs this tap-compatible skill pack directly when Hermes supports taps.
+- `hermes skills tap add rlaope/oh-my-hermes-agent`, then `hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes` installs this tap-compatible skill pack directly when Hermes supports taps.
 - `omh setup` installs generated managed skills and registers their directory through `skills.external_dirs` when a local bootstrap or repair path is preferred.
 
 Priority:

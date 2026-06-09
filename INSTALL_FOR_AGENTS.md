@@ -79,7 +79,7 @@ door:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install oh-my-hermes
+hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
 ```
 
 Install direct workflow skills only when the user wants them exposed as explicit

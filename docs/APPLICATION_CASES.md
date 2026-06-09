@@ -12,7 +12,7 @@ Install the Hermes skill pack through Hermes' native skill surface:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install oh-my-hermes
+hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
 ```
 
 If the deployment needs the managed bootstrap path, install and verify the same
@@ -164,7 +164,7 @@ config that `omh apply` updated when using the bootstrap path:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install oh-my-hermes
+hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
 omh setup
 omh doctor
 ```
@@ -415,8 +415,8 @@ Before using these cases as public release evidence, verify:
 
 - The one-command installer still works.
 - `hermes skills tap add rlaope/oh-my-hermes-agent` and
-  `hermes skills install oh-my-hermes` are documented as the primary install
-  path when Hermes taps are available.
+  `hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes`
+  are documented as the primary install path when Hermes taps are available.
 - `omh setup` reports the managed skill directory, equivalent Hermes install
   intent, and Hermes config registration clearly.
 - `omh doctor` reports the managed skill directory as healthy after setup.

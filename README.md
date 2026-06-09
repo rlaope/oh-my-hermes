@@ -13,7 +13,7 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Status" src="https://img.shields.io/badge/status-quality--gated%20preview-blue">
+  <img alt="Status" src="https://img.shields.io/badge/status-1.0.0%20stable-blue">
 </p>
 
 **oh-my-hermes-agent** makes Hermes Agent feel more capable after install. OMH
@@ -96,8 +96,12 @@ Hermes-native front door:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install oh-my-hermes
+hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
 ```
+
+Use the full identifier above for the first install. It avoids short-name
+resolver ambiguity in current Hermes CLI releases and still installs the
+`oh-my-hermes` skill.
 
 For pinned releases after a matching `v<version>` tag exists:
 
@@ -240,12 +244,12 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke set
 ```
 
 Before a release candidate, run the live Hermes profile smoke from the target
-operator profile:
+operator profile. The tap smoke uses the same full identifier install path:
 
 ```sh
 omh release hermes-smoke --live --install-path tap --target-confirmed
 ```
 
-OMH is a quality-gated preview. Stable release, richer profile activation
-probes, and more artifact-backed wrapper examples are tracked in the roadmap
-and release docs.
+OMH 1.0.0 is a quality-gated stable baseline. Richer profile activation probes
+and more artifact-backed wrapper examples are tracked in the roadmap and
+release docs.

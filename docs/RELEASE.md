@@ -16,7 +16,7 @@ Hermes-native skill install:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install oh-my-hermes
+hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
 ```
 
 Pinned stable install:
@@ -103,12 +103,14 @@ The live smoke runs install/setup plus:
 hermes skills tap list
 hermes skills list --enabled-only
 hermes skills check oh-my-hermes
-hermes skills inspect oh-my-hermes
+hermes skills inspect rlaope/oh-my-hermes-agent/skills/oh-my-hermes
 ```
 
-Passing this smoke means Hermes CLI install/list/check/inspect commands
-succeeded for the target profile. It still does not prove a later Hermes chat
-session selected OMH unless that chat response is observed separately.
+Passing the tap smoke means Hermes CLI install/list/check/inspect commands
+succeeded for the target profile. Passing the setup smoke means OMH managed
+skill setup, Hermes list/check visibility, and `omh doctor` succeeded for the
+target profile. It still does not prove a later Hermes chat session selected
+OMH unless that chat response is observed separately.
 
 Runtime evidence smoke:
 
