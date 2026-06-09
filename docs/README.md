@@ -85,6 +85,8 @@ merge.
   `harness_quality/v1` instead of being prose-only wrapper behavior.
 - Harness catalog changes should pass `omh harness validate`, and user-facing
   harness examples should stay backed by conformance tests.
+- Release checks should include `omh release hermes-smoke`; use `--live` only
+  from the target Hermes profile when an operator wants real install evidence.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
 - Goal execution docs should describe `.omh/goals` metadata-only ledgers,

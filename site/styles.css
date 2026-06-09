@@ -601,6 +601,11 @@ h1 {
   padding: 78px clamp(20px, 5vw, 74px);
 }
 
+.section--usage {
+  background:
+    linear-gradient(180deg, #ffffff 0, #f4f8f7 100%);
+}
+
 .section--light {
   background:
     linear-gradient(180deg, #ffffff, #f9fbf8);
@@ -706,6 +711,39 @@ h1 {
 
 .command--inline {
   margin-top: 22px;
+}
+
+.usage-story {
+  max-width: 920px;
+}
+
+.usage-story .eyebrow {
+  color: var(--accent-strong);
+}
+
+.usage-story blockquote {
+  margin: 0 0 22px;
+  padding: 0 0 0 20px;
+  border-left: 4px solid var(--gold);
+  color: var(--night);
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 850;
+  line-height: 1.08;
+}
+
+.usage-story p {
+  max-width: 820px;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.usage-story p:last-child {
+  margin-bottom: 0;
+}
+
+.usage-story code {
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
 .steps {

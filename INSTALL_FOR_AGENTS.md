@@ -54,6 +54,24 @@ Install success means a Hermes-usable skill path is configured and doctor has no
 blocking checks. It does not mean Hermes has already reloaded the skills,
 loaded the optional plugin, executed code, reviewed a PR, passed CI, or merged.
 
+For release-candidate verification, add the Hermes CLI smoke. Plan mode is safe
+and non-mutating:
+
+```sh
+omh release hermes-smoke
+```
+
+When the operator explicitly wants to prove the current Hermes profile can
+install, list, check, and inspect OMH, run one live smoke:
+
+```sh
+omh release hermes-smoke --live --install-path tap --target-confirmed
+```
+
+Use `--install-path setup` instead when the release must prove the `omh setup`
+bootstrap path. Passing either live smoke still does not prove a later Hermes
+chat session selected OMH unless that chat response is observed separately.
+
 ## Optional Hermes Skill Tap
 
 If the target Hermes environment supports skill taps, this is the native front
