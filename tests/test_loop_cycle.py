@@ -13,6 +13,7 @@ from omh.goal_loop import (
     build_loop_status_card,
     create_loop_cycle,
     record_loop_feedback,
+    tick_loop_runtime,
     update_loop_permission,
     validate_loop_cycle,
 )
@@ -136,6 +137,128 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(updated["wait_reason"], "none")
         self.assertEqual(updated["next_action"], "continue_loop")
         self.assertEqual(card["next_action"], "continue_loop")
+
+    def test_loop_tick_prepares_runtime_queue_without_observed_execution(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Become a loop engineering reference implementation",
+                goal_reframe="Prepare repeated research, planning, handoff, and feedback slices with strict evidence boundaries.",
+                success_criteria=["Runtime tick queue exists"],
+                permission_profile="handoff_only",
+                allowed_executors=["codex", "claude-code"],
+            )
+
+            updated = tick_loop_runtime(
+                paths,
+                cycle["loop_id"],
+                trigger="scheduled",
+                cadence="daily",
+                worktree_base=".worktrees",
+                subagent_role="researcher",
+                connector="linear",
+                connector_action="create_triage_comment",
+            )
+            card = build_loop_status_card(paths, cycle["loop_id"])
+
+        queue = updated["runtime"]["queue"]
+        self.assertEqual(updated["runtime"]["schema_version"], "loop_runtime/v1")
+        self.assertEqual(updated["runtime"]["heartbeat_count"], 1)
+        self.assertEqual(updated["next_action"], "observe_runtime_queue")
+        self.assertEqual(queue[0]["schema_version"], "loop_queue_item/v1")
+        self.assertEqual(queue[0]["planned_action"], "research")
+        self.assertEqual(queue[0]["status"], "prepared_not_observed")
+        self.assertFalse(queue[0]["observed"])
+        self.assertFalse(queue[0]["worktree_plan"]["created"])
+        self.assertFalse(queue[0]["subagent_plan"]["dispatched"])
+        self.assertFalse(queue[0]["connector_plan"]["dispatched"])
+        self.assertEqual(queue[0]["connector_plan"]["connector"], "linear")
+        self.assertEqual(card["runtime_summary"]["pending_queue_count"], 1)
+        self.assertIn("not worktree creation", card["runtime_summary"]["claim_boundary"])
+        self.assertIn("prepared runtime queue", card["safe_copy"]["next_step"])
+        self.assertEqual(validate_loop_cycle(updated), {"ok": True, "errors": []})
+
+    def test_loop_tick_respects_external_wait_and_permission_gate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            waiting = create_loop_cycle(
+                paths,
+                goal_summary="Reach public adoption",
+                goal_reframe="Keep internal work separate from public response waiting.",
+                success_criteria=["External wait is respected"],
+            )
+            record_loop_feedback(paths, waiting["loop_id"], external_wait="Waiting for market response")
+
+            blocked_by_wait = tick_loop_runtime(paths, waiting["loop_id"], trigger="automation")
+
+            permission = create_loop_cycle(
+                paths,
+                goal_summary="Start only after the user picks authority",
+                goal_reframe="Ask for an allowed action before queueing work.",
+                success_criteria=["Permission is requested"],
+                permission_profile="custom",
+            )
+            blocked_by_permission = tick_loop_runtime(paths, permission["loop_id"], trigger="wrapper")
+
+        self.assertEqual(blocked_by_wait["next_action"], "record_external_wait")
+        self.assertEqual(blocked_by_wait["runtime"]["queue"][0]["status"], "blocked_by_wait")
+        self.assertEqual(blocked_by_wait["runtime"]["queue"][0]["planned_action"], "wait_for_external_observation")
+        self.assertEqual(blocked_by_wait["runtime"]["queue"][0]["worktree_plan"]["strategy"], "none")
+        self.assertEqual(blocked_by_wait["runtime"]["queue"][0]["subagent_plan"]["strategy"], "none")
+        self.assertEqual(blocked_by_permission["next_action"], "request_permission")
+        self.assertEqual(blocked_by_permission["runtime"]["queue"][0]["status"], "blocked_by_permission")
+        self.assertEqual(blocked_by_permission["runtime"]["queue"][0]["planned_action"], "request_permission")
+        self.assertEqual(blocked_by_permission["runtime"]["queue"][0]["worktree_plan"]["strategy"], "none")
+
+    def test_loop_runtime_validation_rejects_prepared_items_with_observed_claims(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Protect prepared observed boundaries",
+                goal_reframe="Reject local runtime queue entries that pretend prepared work already happened.",
+                success_criteria=["Contradictory runtime evidence is rejected"],
+                permission_profile="execute_with_gates",
+            )
+
+            updated = tick_loop_runtime(paths, cycle["loop_id"], connector="linear")
+
+        item = updated["runtime"]["queue"][0]
+        item["observed"] = True
+        item["worktree_plan"]["created"] = True
+        item["subagent_plan"]["dispatched"] = True
+        item["connector_plan"]["dispatched"] = True
+        validation = validate_loop_cycle(updated)
+
+        self.assertFalse(validation["ok"])
+        self.assertIn("runtime.queue[0].observed must be false unless status is observed", validation["errors"])
+        self.assertIn("runtime.queue[0].worktree_plan.created must be false before observation", validation["errors"])
+        self.assertIn("runtime.queue[0].subagent_plan.dispatched must be false before observation", validation["errors"])
+        self.assertIn("runtime.queue[0].connector_plan.dispatched must be false before observation", validation["errors"])
+
+    def test_loop_runtime_validation_rejects_observed_status_without_observed_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Protect observed status boundaries",
+                goal_reframe="Reject runtime queue entries that claim observed status without evidence flags.",
+                success_criteria=["Observed status requires observed evidence"],
+                permission_profile="execute_with_gates",
+            )
+
+            updated = tick_loop_runtime(paths, cycle["loop_id"], connector="linear")
+
+        item = updated["runtime"]["queue"][0]
+        item["status"] = "observed"
+        validation = validate_loop_cycle(updated)
+
+        self.assertFalse(validation["ok"])
+        self.assertIn("runtime.queue[0].observed must be true when status is observed", validation["errors"])
+        self.assertIn("runtime.queue[0].worktree_plan.created must be true when observed", validation["errors"])
+        self.assertIn("runtime.queue[0].subagent_plan.dispatched must be true when observed", validation["errors"])
+        self.assertIn("runtime.queue[0].connector_plan.dispatched must be true when observed", validation["errors"])
 
 
 if __name__ == "__main__":

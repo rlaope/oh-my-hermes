@@ -93,9 +93,10 @@ merge.
   `goal_completion_gate/v1`, `goal_status_card/v1`, and
   `goal_continuation/v1` as wrapper contracts that name the next action before
   completion is claimed.
-- Loop docs should describe `.omh/loops` metadata-only `loop_cycle/v1` state
-  and `loop_status_card/v1` next actions as orchestration evidence only; goal
-  completion still belongs to linked `goal_ledger/v1` evidence.
+- Loop docs should describe `.omh/loops` metadata-only `loop_cycle/v1` state,
+  `loop_runtime/v1` tick queues, and `loop_status_card/v1` next actions as
+  orchestration evidence only; goal completion still belongs to linked
+  `goal_ledger/v1` evidence.
 - Memory/context docs should state that OMH reviews local or wrapper-supplied
   context only; it does not read or mutate opaque Hermes internal memory.
 - The GitHub Pages site should stay a short public entry point that links back

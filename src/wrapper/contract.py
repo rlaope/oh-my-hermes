@@ -30,6 +30,7 @@ VISIBLE_ACTIONS = (
     "apply_target_change",
     "choose_permission_profile",
     "start_loop",
+    "run_loop_tick",
     "show_loop_status",
     "keep_memory",
     "forget_memory",
@@ -296,6 +297,7 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
                 actions=[
                     _action("choose_permission_profile", "Choose permission profile", "primary"),
                     _action("start_loop", "Start loop", "primary", enabled=False),
+                    _action("run_loop_tick", "Run loop tick", "secondary", enabled=False),
                     _action("show_loop_status", "Show loop status", "secondary"),
                     _action("cancel", "Cancel", "secondary"),
                 ],
@@ -315,7 +317,11 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
                         "external publication",
                         "market response",
                         "goal completion",
+                        "worktree creation",
+                        "subagent dispatch",
+                        "connector I/O",
                     ],
+                    "runtime_tick_contract": "After start, wrappers may call the loop tick backend with deterministic queue shape to prepare the next queued worktree/subagent/connector step without claiming observation.",
                 },
             )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"

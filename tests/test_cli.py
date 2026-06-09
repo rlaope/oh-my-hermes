@@ -673,6 +673,41 @@ class CliTests(unittest.TestCase):
             self.assertIn("executor_dispatch", started["loop"]["authority_envelope"]["blocked_actions"])
             self.assertNotIn("raw_north_star", json.dumps(started))
 
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "tick",
+                    "--loop",
+                    "loop-cli",
+                    "--trigger",
+                    "scheduled",
+                    "--cadence",
+                    "daily",
+                    "--worktree-base",
+                    ".worktrees",
+                    "--subagent-role",
+                    "researcher",
+                    "--connector",
+                    "linear",
+                    "--connector-action",
+                    "comment_on_issue",
+                    "--note",
+                    "Release-readiness loop heartbeat",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            ticked = json.loads(stdout)
+            self.assertEqual(ticked["loop"]["runtime"]["schema_version"], "loop_runtime/v1")
+            self.assertEqual(ticked["loop"]["runtime"]["heartbeat_count"], 1)
+            self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["status"], "prepared_not_observed")
+            self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["worktree_plan"]["created"])
+            self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
+            self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
+            self.assertEqual(ticked["status_card"]["runtime_summary"]["pending_queue_count"], 1)
+            self.assertIn("connector I/O", ticked["status_card"]["runtime_summary"]["claim_boundary"])
+
             status, stdout, stderr = run_cli(home + ["loop", "permit", "--loop", "loop-cli", "--allow-action", "merge"])
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)

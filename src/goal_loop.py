@@ -14,6 +14,8 @@ from .paths import OmhPaths
 
 LOOP_CYCLE_SCHEMA = "loop_cycle/v1"
 LOOP_STATUS_CARD_SCHEMA = "loop_status_card/v1"
+LOOP_RUNTIME_SCHEMA = "loop_runtime/v1"
+LOOP_QUEUE_ITEM_SCHEMA = "loop_queue_item/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -49,6 +51,18 @@ LOOP_ACTIONS = (
     "external_posting_prep",
     "external_posting",
     "merge",
+)
+LOOP_CONTROL_ACTIONS = (
+    "request_permission",
+    "wait_for_external_observation",
+    "checkpoint_resume",
+    "show_loop_status",
+)
+LOOP_QUEUE_STATUSES = (
+    "prepared_not_observed",
+    "blocked_by_permission",
+    "blocked_by_wait",
+    "observed",
 )
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
@@ -135,6 +149,7 @@ def create_loop_cycle(
         "feedback_gate": _feedback_gate(),
         "linked_goal_id": _storage_id(linked_goal_id, "linked_goal_id") if linked_goal_id else "",
         "cycles": [],
+        "runtime": _runtime_state(),
         "next_action": "continue_loop",
         "completion_claim_allowed": False,
         "claim_boundary": _claim_boundary(),
@@ -252,6 +267,52 @@ def update_loop_permission(
     return _write_loop(paths, cycle)
 
 
+def tick_loop_runtime(
+    paths: OmhPaths,
+    loop_id: str,
+    *,
+    trigger: str = "manual",
+    cadence: str = "",
+    worktree_base: str = "",
+    worktree_branch: str = "",
+    subagent_role: str = "",
+    connector: str = "",
+    connector_action: str = "",
+    note: str = "",
+) -> dict[str, Any]:
+    cycle = read_loop_cycle(paths, loop_id)
+    envelope = _dict_value(cycle, "authority_envelope")
+    plan = _next_runtime_plan(cycle, envelope)
+    queue_item = _runtime_queue_item(
+        cycle,
+        envelope,
+        plan,
+        trigger=trigger,
+        cadence=cadence,
+        worktree_base=worktree_base,
+        worktree_branch=worktree_branch,
+        subagent_role=subagent_role,
+        connector=connector,
+        connector_action=connector_action,
+        note=note,
+    )
+    runtime = _runtime_state(cycle.get("runtime"))
+    runtime["heartbeat_count"] = int(runtime.get("heartbeat_count", 0)) + 1
+    runtime["last_tick_at"] = queue_item["created_at"]
+    runtime["last_trigger"] = queue_item["trigger"]
+    runtime["last_planned_action"] = queue_item["planned_action"]
+    runtime["last_queue_id"] = queue_item["queue_id"]
+    runtime.setdefault("queue", []).append(queue_item)
+    cycle["runtime"] = runtime
+    if queue_item["status"] == "prepared_not_observed":
+        cycle["phase"] = str(plan["phase"])
+        cycle["wait_reason"] = "none"
+        cycle["next_action"] = "observe_runtime_queue"
+    else:
+        cycle["next_action"] = str(plan["next_action"])
+    return _write_loop(paths, cycle)
+
+
 def build_loop_status_card(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
     cycle = read_loop_cycle(paths, loop_id)
     envelope = _dict_value(cycle, "authority_envelope")
@@ -271,6 +332,7 @@ def build_loop_status_card(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
         "approval_required_for": list(envelope.get("blocked_actions", [])),
         "allowed_executors": list(envelope.get("allowed_executors", [])),
         "feedback_gate": cycle.get("feedback_gate", _feedback_gate()),
+        "runtime_summary": _runtime_summary(cycle),
         "linked_goal_completion": linked_gate or {"observed": False, "reason": "no linked goal ledger"},
         "next_action": _next_action(cycle),
         "safe_copy": _safe_status_copy(cycle, envelope),
@@ -353,6 +415,9 @@ def validate_loop_cycle(cycle: dict[str, Any]) -> dict[str, Any]:
             errors.append("authority_envelope.forbidden_actions is invalid")
         if not isinstance(budget_limits, dict):
             errors.append("authority_envelope.budget_limits is required")
+    runtime = cycle.get("runtime")
+    if runtime is not None:
+        errors.extend(_validate_runtime(runtime))
     if cycle.get("completion_claim_allowed") is not False:
         errors.append("loop_cycle cannot directly allow goal completion claims")
     return {"ok": not errors, "errors": errors}
@@ -466,6 +531,320 @@ def _feedback_gate(
     }
 
 
+def _runtime_state(value: object | None = None) -> dict[str, Any]:
+    runtime = value if isinstance(value, dict) else {}
+    queue = runtime.get("queue", [])
+    if not isinstance(queue, list):
+        queue = []
+    try:
+        heartbeat_count = int(runtime.get("heartbeat_count", 0) or 0)
+    except (TypeError, ValueError):
+        heartbeat_count = 0
+    return {
+        "schema_version": LOOP_RUNTIME_SCHEMA,
+        "heartbeat_count": heartbeat_count,
+        "last_tick_at": str(runtime.get("last_tick_at", "")),
+        "last_trigger": _safe_summary(str(runtime.get("last_trigger", "")), limit=80),
+        "last_planned_action": _safe_summary(str(runtime.get("last_planned_action", "")), limit=80),
+        "last_queue_id": _safe_summary(str(runtime.get("last_queue_id", "")), limit=140),
+        "queue": queue,
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _next_runtime_plan(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[str, str]:
+    wait_reason = str(cycle.get("wait_reason", "none"))
+    if wait_reason == "permission_required":
+        return {
+            "planned_action": "request_permission",
+            "phase": "waiting",
+            "status": "blocked_by_permission",
+            "next_action": "request_permission",
+            "reason": "The loop has no allowed action yet.",
+        }
+    if wait_reason == "waiting_external_observation":
+        return {
+            "planned_action": "wait_for_external_observation",
+            "phase": "waiting",
+            "status": "blocked_by_wait",
+            "next_action": "record_external_wait",
+            "reason": "The loop is waiting for external evidence and should not auto-continue.",
+        }
+    if wait_reason in {"context_exhausted", "budget_exhausted"}:
+        return {
+            "planned_action": "checkpoint_resume",
+            "phase": "waiting",
+            "status": "blocked_by_wait",
+            "next_action": "record_checkpoint",
+            "reason": "The loop needs a checkpoint before more context or budget is available.",
+        }
+
+    planned_action, phase = _phase_runtime_action(str(cycle.get("phase", "interview")))
+    allowed = set(_string_set(envelope.get("allowed_actions", [])))
+    if planned_action not in allowed:
+        return {
+            "planned_action": planned_action,
+            "phase": str(cycle.get("phase", "interview")),
+            "status": "blocked_by_permission",
+            "next_action": "request_permission",
+            "reason": f"`{planned_action}` is outside the current authority envelope.",
+        }
+    return {
+        "planned_action": planned_action,
+        "phase": phase,
+        "status": "prepared_not_observed",
+        "next_action": "observe_runtime_queue",
+        "reason": "Prepared the next loop step for a wrapper, scheduler, or executor to observe.",
+    }
+
+
+def _phase_runtime_action(phase: str) -> tuple[str, str]:
+    if phase == "research":
+        return "planning", "plan"
+    if phase == "plan":
+        return "executor_handoff", "handoff"
+    if phase == "handoff":
+        return "executor_dispatch", "handoff"
+    if phase == "execution":
+        return "review_fix_loop", "feedback"
+    if phase == "feedback":
+        return "research", "research"
+    return "research", "research"
+
+
+def _runtime_queue_item(
+    cycle: dict[str, Any],
+    envelope: dict[str, Any],
+    plan: dict[str, str],
+    *,
+    trigger: str,
+    cadence: str,
+    worktree_base: str,
+    worktree_branch: str,
+    subagent_role: str,
+    connector: str,
+    connector_action: str,
+    note: str,
+) -> dict[str, Any]:
+    planned_action = plan["planned_action"]
+    queue_id = _new_item_id("queue")
+    branch_hint = worktree_branch.strip() or f"omh-loop/{cycle.get('loop_id', 'loop')}/{planned_action}"
+    role = subagent_role.strip() or _default_subagent_role(planned_action)
+    connector_name = connector.strip()
+    is_prepared = plan["status"] == "prepared_not_observed"
+    return {
+        "schema_version": LOOP_QUEUE_ITEM_SCHEMA,
+        "queue_id": queue_id,
+        "created_at": utc_now(),
+        "trigger": _safe_summary(trigger or "manual", limit=80),
+        "cadence": _safe_summary(cadence, limit=80) if cadence.strip() else "",
+        "planned_action": planned_action,
+        "status": plan["status"],
+        "phase": plan["phase"],
+        "reason": _safe_summary(plan["reason"], limit=320),
+        "worktree_plan": (
+            _worktree_plan(cycle, planned_action, worktree_base, branch_hint) if is_prepared else _empty_worktree_plan()
+        ),
+        "subagent_plan": (
+            _subagent_plan(cycle, planned_action, role, envelope) if is_prepared else _empty_subagent_plan()
+        ),
+        "connector_plan": (
+            _connector_plan(connector_name, connector_action, planned_action)
+            if is_prepared
+            else _connector_plan("", "", planned_action)
+        ),
+        "note": _safe_summary(note, limit=240) if note.strip() else "",
+        "observed": False,
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _worktree_plan(cycle: dict[str, Any], planned_action: str, worktree_base: str, branch_hint: str) -> dict[str, Any]:
+    base = _safe_summary(worktree_base, limit=160) if worktree_base.strip() else ".worktrees"
+    loop_id = str(cycle.get("loop_id", "loop"))
+    path_hint = f"{base.rstrip('/')}/omh-loop-{_slugify(loop_id)}-{_slugify(planned_action)}"
+    return {
+        "strategy": "planned_only",
+        "path_hint": path_hint,
+        "branch_hint": _safe_summary(branch_hint, limit=180),
+        "created": False,
+        "observed": False,
+        "boundary": "OMH records the worktree plan; an authorized wrapper or executor must create and observe it.",
+    }
+
+
+def _empty_worktree_plan() -> dict[str, Any]:
+    return {
+        "strategy": "none",
+        "path_hint": "",
+        "branch_hint": "",
+        "created": False,
+        "observed": False,
+        "boundary": "No worktree plan is prepared while the loop is blocked.",
+    }
+
+
+def _subagent_plan(
+    cycle: dict[str, Any],
+    planned_action: str,
+    role: str,
+    envelope: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "strategy": "planned_only",
+        "role": _safe_summary(role, limit=80),
+        "allowed_executors": list(envelope.get("allowed_executors", [])),
+        "prompt_seed": _safe_summary(
+            f"Continue loop {cycle.get('loop_id', '')}: {planned_action} for {cycle.get('goal', {}).get('summary', '')}",
+            limit=320,
+        ),
+        "dispatched": False,
+        "observed": False,
+        "boundary": "OMH prepares the subagent handoff; the wrapper/runtime records dispatch evidence separately.",
+    }
+
+
+def _empty_subagent_plan() -> dict[str, Any]:
+    return {
+        "strategy": "none",
+        "role": "",
+        "allowed_executors": [],
+        "prompt_seed": "",
+        "dispatched": False,
+        "observed": False,
+        "boundary": "No subagent plan is prepared while the loop is blocked.",
+    }
+
+
+def _connector_plan(connector: str, connector_action: str, planned_action: str) -> dict[str, Any]:
+    if not connector:
+        return {
+            "strategy": "none",
+            "connector": "",
+            "action": "",
+            "dispatched": False,
+            "observed": False,
+            "boundary": "No connector was requested for this tick.",
+        }
+    return {
+        "strategy": "planned_only",
+        "connector": _safe_summary(connector, limit=120),
+        "action": _safe_summary(connector_action or planned_action, limit=160),
+        "dispatched": False,
+        "observed": False,
+        "boundary": "OMH records connector intent only; connector I/O requires a separate observed wrapper action.",
+    }
+
+
+def _default_subagent_role(planned_action: str) -> str:
+    if planned_action == "research":
+        return "researcher"
+    if planned_action == "planning":
+        return "planner"
+    if planned_action in {"executor_handoff", "executor_dispatch", "repo_edit"}:
+        return "executor"
+    if planned_action in {"review_fix_loop", "ci_fix_loop"}:
+        return "verifier"
+    return "operator"
+
+
+def _runtime_summary(cycle: dict[str, Any]) -> dict[str, Any]:
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
+    pending = [item for item in queue if not (item.get("status") == "observed" and item.get("observed") is True)]
+    last = queue[-1] if queue else {}
+    return {
+        "schema_version": LOOP_RUNTIME_SCHEMA,
+        "heartbeat_count": runtime["heartbeat_count"],
+        "last_tick_at": runtime["last_tick_at"],
+        "last_trigger": runtime["last_trigger"],
+        "last_planned_action": runtime["last_planned_action"],
+        "pending_queue_count": len(pending),
+        "last_queue_id": runtime["last_queue_id"],
+        "last_queue_status": str(last.get("status", "")),
+        "last_queue_reason": str(last.get("reason", "")),
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _validate_runtime(runtime: object) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(runtime, dict):
+        return ["runtime must be an object"]
+    if runtime.get("schema_version") != LOOP_RUNTIME_SCHEMA:
+        errors.append(f"runtime.schema_version must be {LOOP_RUNTIME_SCHEMA}")
+    queue = runtime.get("queue", [])
+    if not isinstance(queue, list):
+        errors.append("runtime.queue must be a list")
+        return errors
+    allowed_runtime_actions = set(LOOP_ACTIONS) | set(LOOP_CONTROL_ACTIONS)
+    for index, item in enumerate(queue):
+        if not isinstance(item, dict):
+            errors.append(f"runtime.queue[{index}] must be an object")
+            continue
+        if item.get("schema_version") != LOOP_QUEUE_ITEM_SCHEMA:
+            errors.append(f"runtime.queue[{index}].schema_version must be {LOOP_QUEUE_ITEM_SCHEMA}")
+        if item.get("status") not in LOOP_QUEUE_STATUSES:
+            errors.append(f"runtime.queue[{index}].status is unsupported")
+        if item.get("planned_action") not in allowed_runtime_actions:
+            errors.append(f"runtime.queue[{index}].planned_action is unsupported")
+        plans: dict[str, dict[str, Any]] = {}
+        for key in ("worktree_plan", "subagent_plan", "connector_plan"):
+            plan = item.get(key)
+            if not isinstance(plan, dict):
+                errors.append(f"runtime.queue[{index}].{key} must be an object")
+                continue
+            plans[key] = plan
+        if item.get("status") == "observed":
+            if item.get("observed") is not True:
+                errors.append(f"runtime.queue[{index}].observed must be true when status is observed")
+            worktree_plan = plans.get("worktree_plan", {})
+            if worktree_plan.get("strategy") != "none":
+                if worktree_plan.get("created") is not True:
+                    errors.append(f"runtime.queue[{index}].worktree_plan.created must be true when observed")
+                if worktree_plan.get("observed") is not True:
+                    errors.append(f"runtime.queue[{index}].worktree_plan.observed must be true when observed")
+            subagent_plan = plans.get("subagent_plan", {})
+            if subagent_plan.get("strategy") != "none":
+                if subagent_plan.get("dispatched") is not True:
+                    errors.append(f"runtime.queue[{index}].subagent_plan.dispatched must be true when observed")
+                if subagent_plan.get("observed") is not True:
+                    errors.append(f"runtime.queue[{index}].subagent_plan.observed must be true when observed")
+            connector_plan = plans.get("connector_plan", {})
+            if connector_plan.get("strategy") != "none":
+                if connector_plan.get("dispatched") is not True:
+                    errors.append(f"runtime.queue[{index}].connector_plan.dispatched must be true when observed")
+                if connector_plan.get("observed") is not True:
+                    errors.append(f"runtime.queue[{index}].connector_plan.observed must be true when observed")
+        else:
+            if item.get("observed") is not False:
+                errors.append(f"runtime.queue[{index}].observed must be false unless status is observed")
+            if plans.get("worktree_plan", {}).get("created") is not False:
+                errors.append(f"runtime.queue[{index}].worktree_plan.created must be false before observation")
+            if plans.get("worktree_plan", {}).get("observed") is not False:
+                errors.append(f"runtime.queue[{index}].worktree_plan.observed must be false before observation")
+            if plans.get("subagent_plan", {}).get("dispatched") is not False:
+                errors.append(f"runtime.queue[{index}].subagent_plan.dispatched must be false before observation")
+            if plans.get("subagent_plan", {}).get("observed") is not False:
+                errors.append(f"runtime.queue[{index}].subagent_plan.observed must be false before observation")
+            if plans.get("connector_plan", {}).get("dispatched") is not False:
+                errors.append(f"runtime.queue[{index}].connector_plan.dispatched must be false before observation")
+            if plans.get("connector_plan", {}).get("observed") is not False:
+                errors.append(f"runtime.queue[{index}].connector_plan.observed must be false before observation")
+        if item.get("status") in {"blocked_by_permission", "blocked_by_wait"}:
+            for key, plan in plans.items():
+                if plan.get("strategy") != "none":
+                    errors.append(f"runtime.queue[{index}].{key}.strategy must be none while blocked")
+    return errors
+
+
+def _runtime_claim_boundary() -> str:
+    return (
+        "A loop runtime tick prepares local orchestration work only. It is not worktree creation, "
+        "subagent dispatch, connector I/O, implementation, review, CI, merge, publication, or goal completion evidence."
+    )
+
+
 def _dict_value(value: dict[str, Any], key: str) -> dict[str, Any]:
     nested = value.get(key)
     return nested if isinstance(nested, dict) else {}
@@ -523,6 +902,8 @@ def _safe_status_copy(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[s
         next_step = "Record external evidence when it arrives; continue internal work only when a new gap is available."
     elif wait_reason in {"context_exhausted", "budget_exhausted"}:
         next_step = "Checkpoint this loop and resume from the recorded status when context or budget is available."
+    elif cycle.get("next_action") == "observe_runtime_queue":
+        next_step = "Review the prepared runtime queue item, then record observed worktree, subagent, connector, or executor evidence separately."
     elif "executor_dispatch" in envelope.get("allowed_actions", []):
         next_step = "Continue the next research, plan, handoff, or gated executor step within the authority envelope."
     else:

@@ -129,6 +129,9 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 - **Durable goal mode contracts** - long work can stay tied to `.omh/goals`
   ledgers, completion gates, and explicit "continue/checkpoint/block/complete"
   next actions instead of ending with a vague summary.
+- **Loop runtime ticks** - ambitious `./loop` goals can be advanced by a local
+  tick with a deterministic queue shape for worktree, subagent, connector, and
+  handoff plans without pretending those steps already ran.
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
@@ -148,7 +151,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs`. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
-| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across interview, research, planning, handoff, feedback, waiting, and resume states inside an explicit permission profile. |
+| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across interview, research, planning, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
@@ -166,7 +169,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
 | "Take this idea from plan to deploy and monitor it safely." | Shape the idea, record decision gates, prepare an executor handoff only if code is accepted, then track release/deploy/monitor status separately. |
 | "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
-| "./loop make this a 10k-star quality OSS." | Start a direct ambitious goal loop, preserve the large goal, separate implementable work from external waiting, and keep execution behind the selected permission profile. |
+| "./loop make this a 10k-star quality OSS." | Start a direct ambitious goal loop, preserve the large goal, queue worktree/subagent/connector plans through runtime ticks with deterministic queue shapes, separate implementable work from external waiting, and keep execution behind the selected permission profile. |
 | "Deploy and monitor this release with rollback checks." | Show release scope, go/no-go, health signals, rollback gate, and post-deploy status without claiming infrastructure execution. |
 | "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a coding-agent handoff only after acceptance. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |

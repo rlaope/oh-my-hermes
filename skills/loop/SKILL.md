@@ -1,6 +1,6 @@
 ---
 name: loop
-description: Hermes Loop workflow: ambitious goal interview, research, planning, handoff, feedback, and resume cycles.
+description: Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, handoff, feedback, and resume cycles.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, goal-loop]
@@ -16,7 +16,7 @@ This is a Hermes-native `loop` workflow skill.
 
 ## Use When
 
-Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through research, planning, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through research, planning, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 
     Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
 
@@ -31,13 +31,13 @@ Quality bar:
 
 - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
 - Reframe the north-star goal into implementable internal work without shrinking its ambition.
-- Separate research, plan, ultragoal/handoff, feedback, waiting, and resume decisions.
+- Separate research, plan, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
 - Expose a permission profile before executor dispatch, repository mutation, PR, merge, or external publishing.
-- Keep prepared handoffs, observed executor work, linked goal completion, and external waiting as distinct evidence states.
+- Keep prepared worktree/subagent/connector plans, observed executor work, linked goal completion, and external waiting as distinct evidence states.
 
 Handoff policy:
 
-Keep loop orchestration, interviews, research, planning, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor handoffs only when the loop produces concrete coding work and record completion only from linked goal/runtime evidence.
+Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 
 Required inputs:
 
@@ -51,18 +51,21 @@ Expected outputs:
 
 - loop_cycle/v1 state
 - loop_status_card/v1 next action
+- loop_runtime/v1 queued tick
 - executor-neutral handoff only when permitted
 - external-wait or checkpoint boundary
 
 Artifact expectations:
 
 - metadata-only .omh/loops loop_cycle/v1 artifact
+- loop_runtime/v1 queue entries
 - loop_status_card/v1 wrapper payload
 - linked goal_ledger/v1 only when completion evidence is required
 
 Safety rules:
 
 - Do not treat loop persistence as permission to bypass the selected permission profile.
+- Do not treat a runtime tick as worktree creation, subagent dispatch, connector I/O, implementation, review, CI, merge, publication, or completion evidence.
 - Do not claim goal completion from loop state; require linked goal_ledger/v1 completion evidence.
 - When context or token budget runs out, checkpoint or rely on resumable state instead of pretending the loop is complete.
 - External results such as market response, stars, or adoption are waiting states unless observed evidence is supplied.
