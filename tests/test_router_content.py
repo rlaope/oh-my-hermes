@@ -495,6 +495,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('set -- "$@" --source "$OMH_PACKAGE_URL"', install_sh)
         self.assertIn("Installing OMH package...", install_sh)
         self.assertIn("--disable-pip-version-check -q", install_sh)
+        self.assertIn("--force-reinstall", install_sh)
         self.assertIn("wrapper_actions", harness_quality)
         self.assertIn("overclaim_guards", harness_quality)
         self.assertIn("harness_progress/v1", harness_quality)

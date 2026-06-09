@@ -123,6 +123,34 @@ class CliTests(unittest.TestCase):
             self.assertEqual(profile["default_executor"], "choose")
             self.assertFalse((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
 
+    def test_install_and_update_default_to_human_summary_with_json_escape_hatch(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh")]
+
+            status, stdout, stderr = run_cli(base + ["install"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH install complete.", stdout)
+            self.assertIn("Skills: 29 managed skill(s)", stdout)
+            self.assertIn("Next: run `omh setup`", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
+            status, stdout, stderr = run_cli(base + ["update", "--dry-run"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH update preview complete.", stdout)
+            self.assertIn("Next: rerun without `--dry-run`", stdout)
+
+            status, stdout, stderr = run_cli(base + ["update", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertEqual(json.loads(stdout)["package"], "oh-my-hermes-agent")
+
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

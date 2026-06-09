@@ -25,7 +25,11 @@ from .common import _paths, _print_json, _wants_json
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    _print_json(_install_result(args))
+    payload = _install_result(args)
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_install_summary(payload, command=str(getattr(args, "command", "install")))
     return 0
 
 
@@ -451,6 +455,29 @@ def _print_doctor_summary(payload: dict[str, object]) -> None:
     print("For machine-readable output, rerun with `--json`.")
 
 
+def _print_install_summary(payload: dict[str, object], *, command: str) -> None:
+    skills = payload.get("skills", [])
+    if not isinstance(skills, list):
+        skills = []
+    dry_run = bool(payload.get("dry_run", False))
+    label = "update" if command == "update" else "install"
+    title = f"OMH {label} preview complete." if dry_run else f"OMH {label} complete."
+    print(title)
+    print(f"Skills: {len(skills)} managed skill(s) at {payload.get('skills_dir', '')}")
+    print(f"Source: {payload.get('source', 'builtin')}")
+    channel = str(payload.get("release_channel", "")).strip()
+    package_url = str(payload.get("release_package_url", "")).strip()
+    if channel:
+        print(f"Release channel: {channel}")
+    if package_url and package_url != "local":
+        print(f"Package URL: {package_url}")
+    if dry_run:
+        print("Next: rerun without `--dry-run` to refresh the managed skills.")
+    else:
+        print("Next: run `omh setup` to repair Hermes registration, or `omh doctor` to verify health.")
+    print("For machine-readable output, rerun with `--json`.")
+
+
 def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
     try:
         result = install_plugin_bundle(paths, force=args.force, dry_run=args.dry_run)
@@ -559,10 +586,12 @@ def _add_top_level_commands(sub) -> None:
 
     install = sub.add_parser("install")
     _add_common_install_options(install)
+    install.add_argument("--json", action="store_true", help="Print the full machine-readable install payload.")
     install.set_defaults(func=cmd_install)
 
     update = sub.add_parser("update")
     _add_common_install_options(update)
+    update.add_argument("--json", action="store_true", help="Print the full machine-readable update payload.")
     update.set_defaults(func=cmd_update)
 
     convert = sub.add_parser("convert")

@@ -148,7 +148,7 @@ install_into_venv() {
   say "Installing OMH package..."
   # Intentional shell splitting: OMH_PIP_ARGS is an advanced operator escape hatch.
   # shellcheck disable=SC2086
-  PIP_DISABLE_PIP_VERSION_CHECK=1 "$OMH_RUNTIME_PYTHON" -m pip install --disable-pip-version-check -q $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+  PIP_DISABLE_PIP_VERSION_CHECK=1 "$OMH_RUNTIME_PYTHON" -m pip install --disable-pip-version-check -q --force-reinstall $OMH_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
   OMH_COMMAND_HINT="$OMH_VENV_DIR/bin/omh"
   link_omh_command
 }
@@ -161,7 +161,7 @@ install_into_python() {
   say "Installing OMH package..."
   # Intentional shell splitting: OMH_DIRECT_PIP_ARGS is an advanced operator escape hatch.
   # shellcheck disable=SC2086
-  PIP_DISABLE_PIP_VERSION_CHECK=1 "$OMH_PYTHON" -m pip install --disable-pip-version-check -q $OMH_DIRECT_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
+  PIP_DISABLE_PIP_VERSION_CHECK=1 "$OMH_PYTHON" -m pip install --disable-pip-version-check -q --force-reinstall $OMH_DIRECT_PIP_ARGS --upgrade "$OMH_PACKAGE_URL"
   OMH_RUNTIME_PYTHON="$OMH_PYTHON"
 }
 
