@@ -24,10 +24,10 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 
-The installer also prints the installed `omh` command path. On `pip --user`
-installs, some shells do not include the Python user scripts directory on
-`PATH`; if that happens, add the printed directory to `PATH` or run the printed
-absolute `omh` path directly.
+The installer also prints the installed `omh` command path. By default it uses
+an isolated OMH virtual environment and links `omh` into a user bin directory
+when possible. If that directory is not on `PATH`, add the printed directory to
+`PATH` or run the printed absolute `omh` path directly.
 
 Plugin support is optional. Use it when an operator wants OMH to provide a
 thin Hermes plugin bridge in addition to the skill pack:
@@ -133,9 +133,12 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 For custom release archives or local package sources accepted by `pip`, pass
 `OMH_PACKAGE_URL`.
 
-The installer prepares the `omh` command, runs `omh setup` to install managed
+The installer creates an isolated OMH virtual environment, links the `omh`
+command into `~/.local/bin` when possible, runs `omh setup` to install managed
 Hermes skills and register the managed skill directory with Hermes, then runs
-`omh doctor` as a separate health check.
+`omh doctor` as a separate health check. This avoids Homebrew and distro Python
+`externally-managed-environment` failures while keeping the user-facing command
+simple.
 
 From the user's point of view, the intended final state matches the Hermes tap
 path: Hermes can discover OMH skills and the user talks to Hermes. `omh setup`
@@ -514,10 +517,16 @@ Skip the final health check:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_RUN_DOCTOR=0 sh
 ```
 
-Use the active environment instead of a user-level install:
+Use the active Python environment instead of the default isolated venv:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PIP_ARGS= sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_INSTALL_MODE=python OMH_PIP_ARGS= sh
+```
+
+Customize the isolated install locations:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_VENV_DIR="$HOME/.local/share/omh/venv" OMH_BIN_DIR="$HOME/.local/bin" sh
 ```
 
 Pass a current `omh setup` flag before `install.sh` has a first-class
