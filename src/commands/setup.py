@@ -35,9 +35,11 @@ from ..snippet import WORKSPACE_SNIPPET
 from ..targets import record_target_observation
 from ..team_profiles import TeamProfileError, inspect_team_profile_pack, install_team_profile_pack, list_team_profile_packs
 from .common import _paths, _print_json, _wants_json
+from .language import LANGUAGE_CODES, language_from_env, language_options, normalize_language, tr
 
 
 def cmd_install(args: argparse.Namespace) -> int:
+    language = _resolve_language(args)
     if _wants_json(args):
         payload = _install_result(args)
         _print_json(payload)
@@ -45,17 +47,18 @@ def cmd_install(args: argparse.Namespace) -> int:
         command = str(getattr(args, "command", "install"))
         label = "update" if command == "update" else "install"
         progress = _HumanProgress(enabled=True, use_color=_use_color())
-        progress.header(f"OMH {label}", "Refresh the managed Hermes skill pack.")
-        progress.step(1, 1, "Preparing managed skills")
+        progress.header(f"OMH {label}", tr(language, "install_subtitle"))
+        progress.step(1, 1, tr(language, "step_install_skills"))
         payload = _install_result(args)
         skills = payload.get("skills", [])
-        progress.done(f"{len(skills) if isinstance(skills, list) else 0} managed skill(s) ready")
-        _print_install_summary(payload, command=str(getattr(args, "command", "install")))
+        progress.done(tr(language, "done_skills_ready", count=len(skills) if isinstance(skills, list) else 0))
+        _print_install_summary(payload, command=str(getattr(args, "command", "install")), language=language)
     return 0
 
 
 def _install_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
+    language = _resolve_language(args)
     try:
         release = package_url_for(args.channel, args.version or "", args.package_url or "")
     except ValueError as exc:
@@ -65,7 +68,14 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
     source_dir = Path(args.from_skills_dir or args.source).expanduser().resolve() if (args.from_skills_dir or args.source) else None
     source = str(source_dir) if source_dir else "builtin"
     result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
-    result.update({"release_channel": release.channel, "release_version": release.version, "release_package_url": release.package_url})
+    result.update(
+        {
+            "release_channel": release.channel,
+            "release_version": release.version,
+            "release_package_url": release.package_url,
+            "language": language,
+        }
+    )
     if not args.dry_run:
         update_state(
             paths,
@@ -124,6 +134,9 @@ def _apply_result(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
+    language = _resolve_language(args)
+    if args.registration_only and (args.remove_files or args.all or args.purge):
+        raise OmhError("--registration-only cannot be combined with --remove-files, --all, or --purge")
     paths = _paths(args)
     current = read_config(paths.hermes_config_path)
     try:
@@ -132,9 +145,36 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if not args.dry_run and change.changed:
         write_config(paths.hermes_config_path, change.text)
-    result = uninstall_skill_pack(paths, remove_files=args.remove_files and not args.dry_run)
-    result.update({"config_changed": change.changed, "dry_run": args.dry_run})
-    _print_json(result)
+    remove_all = bool(args.all or args.purge or (not args.registration_only and not args.remove_files))
+    result = uninstall_skill_pack(
+        paths,
+        remove_files=bool(args.remove_files),
+        remove_all=remove_all,
+        dry_run=bool(args.dry_run),
+        force=bool(args.force),
+        remove_command_package=bool(remove_all and not args.keep_command),
+    )
+    scope = (
+        tr(language, "uninstall_scope_all")
+        if remove_all
+        else tr(language, "uninstall_scope_files")
+        if args.remove_files
+        else tr(language, "uninstall_scope_registration")
+    )
+    result.update(
+        {
+            "config_changed": change.changed,
+            "config_message": change.message,
+            "scope": scope,
+            "registration_only": bool(args.registration_only),
+            "dry_run": args.dry_run,
+            "language": language,
+        }
+    )
+    if _wants_json(args):
+        _print_json(result)
+    else:
+        _print_uninstall_summary(result, language=language)
     return 0
 
 
@@ -179,51 +219,57 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
 
 def cmd_setup(args: argparse.Namespace) -> int:
     paths = _paths(args)
+    language = _setup_language(args)
     if _setup_should_interact(args):
-        _run_setup_wizard(args, paths)
+        if not _language_was_explicit(args):
+            language = _ask_setup_language(use_color=_use_color())
+            args.language = language
+        _run_setup_wizard(args, paths, language)
 
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
-        progress.header("OMH setup", "Connect the installed OMH workflows to this Hermes profile.")
+        progress.header(tr(language, "setup_title"), tr(language, "setup_subtitle"))
     total_steps = 4 + (1 if args.with_plugin else 0) + (1 if args.profile_pack else 0)
     step_index = 1
 
-    progress.step(step_index, total_steps, "Installing managed skills", detail=str(paths.skills_dir))
+    progress.step(step_index, total_steps, tr(language, "step_install_skills"), detail=str(paths.skills_dir))
     steps: dict[str, object] = {"install": _install_result(args)}
     install_skills = steps["install"].get("skills", []) if isinstance(steps["install"], dict) else []
-    progress.done(f"{len(install_skills) if isinstance(install_skills, list) else 0} skill(s) installed")
+    progress.done(tr(language, "done_skills_installed", count=len(install_skills) if isinstance(install_skills, list) else 0))
     step_index += 1
 
-    progress.step(step_index, total_steps, "Registering Hermes skill discovery", detail=str(paths.hermes_config_path))
+    progress.step(step_index, total_steps, tr(language, "step_register"), detail=str(paths.hermes_config_path))
     if args.skip_apply:
         steps["apply"] = {"skipped": True, "message": "Skipped Hermes config registration because --skip-apply was set."}
-        progress.skip("skipped by --skip-apply")
+        progress.skip(tr(language, "skip_by_flag", flag="--skip-apply"))
     else:
         steps["apply"] = _apply_result(args)
         apply_message = steps["apply"].get("message", "configured") if isinstance(steps["apply"], dict) else "configured"
-        progress.done(str(apply_message))
+        progress.done(_config_change_label(language, str(apply_message)))
     step_index += 1
 
     if args.with_plugin:
-        progress.step(step_index, total_steps, "Installing optional plugin bridge", detail=str(paths.hermes_plugin_dir))
+        progress.step(step_index, total_steps, tr(language, "step_plugin"), detail=str(paths.hermes_plugin_dir))
         steps["plugin"] = _plugin_setup_result(args, paths)
         plugin_status = steps["plugin"].get("status", "installed") if isinstance(steps["plugin"], dict) else "installed"
         progress.done(str(plugin_status))
         step_index += 1
 
     if args.profile_pack:
-        progress.step(step_index, total_steps, "Activating visible team role preset", detail=", ".join(args.profile_pack))
+        progress.step(step_index, total_steps, tr(language, "step_team"), detail=", ".join(args.profile_pack))
         steps["team_profiles"] = _team_profile_setup_result(args, paths)
-        progress.done(f"{len(steps['team_profiles']) if isinstance(steps['team_profiles'], list) else 0} profile pack(s) activated")
+        progress.done(
+            tr(language, "done_profile_packs", count=len(steps["team_profiles"]) if isinstance(steps["team_profiles"], list) else 0)
+        )
         step_index += 1
 
-    progress.step(step_index, total_steps, "Saving routing preferences")
+    progress.step(step_index, total_steps, tr(language, "step_preferences"))
     steps["profile"] = _setup_profile_result(args, paths)
     profile_executor = steps["profile"].get("default_executor", "choose") if isinstance(steps["profile"], dict) else "choose"
-    progress.done(f"default executor: {profile_executor}")
+    progress.done(tr(language, "done_default_executor", executor=profile_executor))
     step_index += 1
 
-    progress.step(step_index, total_steps, "Detecting Hermes target topology")
+    progress.step(step_index, total_steps, tr(language, "step_targets"))
     steps["targets"] = record_target_observation(
         paths,
         source="setup",
@@ -239,9 +285,16 @@ def cmd_setup(args: argparse.Namespace) -> int:
     )
     target_topology = steps["targets"].get("topology", {}) if isinstance(steps["targets"], dict) else {}
     if isinstance(target_topology, dict):
-        progress.done(f"{target_topology.get('mode', 'unknown')} ({target_topology.get('known_target_count', 0)} target(s))")
+        progress.done(
+            tr(
+                language,
+                "done_target_topology",
+                mode=target_topology.get("mode", "unknown"),
+                count=target_topology.get("known_target_count", 0),
+            )
+        )
     else:
-        progress.done("target topology recorded")
+        progress.done(tr(language, "target_recorded"))
     if args.dry_run:
         bootstrap_final_state = (
             "dry run would install generated skills and register the managed OMH skills directory for Hermes discovery"
@@ -294,7 +347,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
                 }
             },
         )
-    payload: dict[str, object] = {"ok": True, "steps": steps, "dry_run": args.dry_run, "hermes_native": hermes_native}
+    payload: dict[str, object] = {"ok": True, "steps": steps, "dry_run": args.dry_run, "hermes_native": hermes_native, "language": language}
     if args.with_plugin:
         payload["plugin_distribution"] = steps["plugin"]
     if args.profile_pack:
@@ -302,7 +355,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     if _wants_json(args):
         _print_json(payload)
     else:
-        _print_setup_summary(payload)
+        _print_setup_summary(payload, language=language)
     return 0
 
 
@@ -318,104 +371,136 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def _run_setup_wizard(args: argparse.Namespace, paths) -> None:
+def _resolve_language(args: argparse.Namespace) -> str:
+    raw = getattr(args, "language", None)
+    try:
+        return normalize_language(raw) if raw else language_from_env()
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+
+
+def _setup_language(args: argparse.Namespace) -> str:
+    if _language_was_explicit(args):
+        return _resolve_language(args)
+    return "en"
+
+
+def _language_was_explicit(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "language", None) or os.environ.get("OMH_LANG") or os.environ.get("OMH_LANGUAGE"))
+
+
+def _ask_setup_language(*, use_color: bool) -> str:
+    return _ask_single_choice(
+        tr("en", "language_title"),
+        [tr("en", "language_intro")],
+        language_options(),
+        default_choice="1",
+        use_color=use_color,
+        language="en",
+    )
+
+
+def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
     use_color = _use_color()
-    print(_color("OMH setup", "1;36", use_color))
-    print("I will install the OMH skill pack, connect it to Hermes, and only ask for choices that change runtime behavior.")
-    print(f"Hermes home: {_color(str(paths.hermes_home), '36', use_color)}")
+    print(_color(tr(language, "setup_title"), "1;36", use_color))
+    print(tr(language, "wizard_subtitle"))
+    print(f"{tr(language, 'hermes_home')}: {_color(str(paths.hermes_home), '36', use_color)}")
     if paths.hermes_config_path.exists():
         config_text = read_config(paths.hermes_config_path)
         registered = str(paths.skills_dir) in external_dirs(config_text)
-        status = "already registered" if registered else "will register OMH skills"
-        print(f"Hermes config: {_color(str(paths.hermes_config_path), '36', use_color)} ({status})")
+        status = tr(language, "status_already_registered") if registered else tr(language, "status_will_register")
+        print(f"{tr(language, 'hermes_config')}: {_color(str(paths.hermes_config_path), '36', use_color)} ({status})")
     else:
-        print(f"Hermes config: {_color(str(paths.hermes_config_path), '36', use_color)} (will create)")
-    print(f"Managed skills: {_color(str(paths.skills_dir), '36', use_color)}")
+        print(f"{tr(language, 'hermes_config')}: {_color(str(paths.hermes_config_path), '36', use_color)} ({tr(language, 'status_will_create')})")
+    print(f"{tr(language, 'managed_skills')}: {_color(str(paths.skills_dir), '36', use_color)}")
 
     args.skip_apply = not _ask_yes_no(
-        "Register OMH skills in this Hermes profile?",
+        tr(language, "register_question"),
         default=True,
         use_color=use_color,
-        note="This updates skills.external_dirs so Hermes can discover the managed OMH skills.",
+        note=tr(language, "register_note"),
+        language=language,
     )
-    args.default_executor = _ask_default_executor(use_color=use_color)
+    args.default_executor = _ask_default_executor(use_color=use_color, language=language)
     args.profile = setup_profile_categories_for_executor(str(args.default_executor))
     args.with_plugin = _ask_yes_no(
-        "Install the optional plugin bridge?",
+        tr(language, "plugin_question"),
         default=False,
         use_color=use_color,
-        note="The plugin exposes local status context to Hermes; OMH skills work without it.",
+        note=tr(language, "plugin_note"),
+        language=language,
     )
-    args.profile_pack = _ask_team_profile_packs(use_color=use_color)
+    args.profile_pack = _ask_team_profile_packs(use_color=use_color, language=language)
     print("")
 
 
-def _ask_default_executor(*, use_color: bool) -> str:
+def _ask_default_executor(*, use_color: bool, language: str) -> str:
     options = [
         {
             "choice": "1",
             "value": "choose",
-            "label": "Ask me when coding is needed",
-            "description": "Recommended. Hermes prepares the workflow and asks before choosing Codex, Claude Code, or another executor.",
+            "label": tr(language, "executor_choose_label"),
+            "description": tr(language, "executor_choose_desc"),
         },
         {
             "choice": "2",
             "value": "codex",
-            "label": "Codex tracked handoff",
-            "description": "Use Codex as the default for implementation-shaped work and keep dispatch/result/review/CI evidence separate.",
+            "label": tr(language, "executor_codex_label"),
+            "description": tr(language, "executor_codex_desc"),
         },
         {
             "choice": "3",
             "value": "claude-code",
-            "label": "Claude Code prompt handoff",
-            "description": "Prepare copy-ready Claude Code prompts; OMH will not claim Claude Code ran unless a wrapper records evidence.",
+            "label": tr(language, "executor_claude_label"),
+            "description": tr(language, "executor_claude_desc"),
         },
         {
             "choice": "4",
             "value": "generic",
-            "label": "Portable prompt handoff",
-            "description": "Prepare executor-neutral prompts for any coding agent without direct dispatch.",
+            "label": tr(language, "executor_generic_label"),
+            "description": tr(language, "executor_generic_desc"),
         },
         {
             "choice": "5",
             "value": "hermes",
-            "label": "Keep coding-like work in Hermes",
-            "description": "Keep retained planning and small changes with Hermes; larger coding can still be handed off per request.",
+            "label": tr(language, "executor_hermes_label"),
+            "description": tr(language, "executor_hermes_desc"),
         },
         {
             "choice": "6",
             "value": "omx-runtime",
-            "label": "Plugin/runtime prompt handoff",
-            "description": "Prepare OMX/OMO/OMC-style runtime prompts without assuming those runtimes are active.",
+            "label": tr(language, "executor_runtime_label"),
+            "description": tr(language, "executor_runtime_desc"),
         },
     ]
     value = _ask_single_choice(
-        "Default for coding-shaped requests",
+        tr(language, "executor_title"),
         [
-            "This is only a default. All OMH skills are installed either way.",
-            "Hermes can still ask or route differently when a request needs it.",
+            tr(language, "executor_intro_1"),
+            tr(language, "executor_intro_2"),
         ],
         options,
         default_choice="1",
         use_color=use_color,
+        language=language,
     )
     try:
         build_setup_profile(default_executor=value)
     except ValueError as exc:
-        print(_color(f"Invalid default executor: {exc}", "31", use_color))
+        print(_color(tr(language, "invalid_executor", error=exc), "31", use_color))
         return "choose"
     return value
 
 
-def _ask_team_profile_packs(*, use_color: bool) -> list[str]:
+def _ask_team_profile_packs(*, use_color: bool, language: str) -> list[str]:
     catalog = list_team_profile_packs()
     packs = catalog.get("packs", []) if isinstance(catalog, dict) else []
     options = [
         {
             "choice": "0",
             "value": "",
-            "label": "No extra team persona now",
-            "description": "Recommended for first install. All OMH workflows remain installed and available.",
+            "label": tr(language, "team_none_label"),
+            "description": tr(language, "team_none_desc"),
         }
     ]
     for idx, pack in enumerate(packs, start=1):
@@ -430,31 +515,33 @@ def _ask_team_profile_packs(*, use_color: bool) -> list[str]:
         )
     while True:
         value = _ask_single_choice(
-            "Activate a visible team persona now?",
+            tr(language, "team_title"),
             [
-                "These are optional Hermes role files, not missing features.",
-                "You can add them later with `omh setup --profile-pack <id>`.",
+                tr(language, "team_intro_1"),
+                tr(language, "team_intro_2"),
             ],
             options,
             default_choice="0",
             use_color=use_color,
+            language=language,
         )
         if not value:
             return []
         return [value]
 
 
-def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "") -> bool:
+def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:
     if _keyboard_menu_available():
         value = _ask_single_choice(
             prompt,
             [note] if note else [],
             [
-                {"choice": "1", "value": "yes", "label": "Yes", "description": "Apply this setup step."},
-                {"choice": "2", "value": "no", "label": "No", "description": "Skip this step for now."},
+                {"choice": "1", "value": "yes", "label": tr(language, "yes"), "description": tr(language, "yes_desc")},
+                {"choice": "2", "value": "no", "label": tr(language, "no"), "description": tr(language, "no_desc")},
             ],
             default_choice="1" if default else "2",
             use_color=use_color,
+            language=language,
         )
         return value == "yes"
     suffix = "Y/n" if default else "y/N"
@@ -464,11 +551,11 @@ def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "") 
         value = _ask(prompt, default=suffix, use_color=use_color).strip().lower()
         if not value or value == suffix.lower():
             return default
-        if value in {"y", "yes", "1"}:
+        if value in {"y", "yes", "1", "예", "네", "はい", "是"}:
             return True
-        if value in {"n", "no", "2"}:
+        if value in {"n", "no", "2", "아니요", "いいえ", "否"}:
             return False
-        print(_color("Please answer y or n.", "31", use_color))
+        print(_color(tr(language, "invalid_yes_no"), "31", use_color))
 
 
 def _ask_single_choice(
@@ -478,31 +565,32 @@ def _ask_single_choice(
     *,
     default_choice: str,
     use_color: bool,
+    language: str = "en",
 ) -> str:
     normalized = [_normalize_choice_option(option) for option in options]
     if _keyboard_menu_available():
-        return _keyboard_single_choice(title, intro_lines, normalized, default_choice=default_choice, use_color=use_color)
+        return _keyboard_single_choice(title, intro_lines, normalized, default_choice=default_choice, use_color=use_color, language=language)
 
     print("")
     print(_color(title, "1;32", use_color))
     for line in intro_lines:
         print(f"  {line}")
     for option in normalized:
-        suffix = " (recommended)" if option["choice"] == default_choice else ""
+        suffix = f" ({tr(language, 'recommended')})" if option["choice"] == default_choice else ""
         print(f"  {option['choice']}) {option['label']}{suffix}")
         if option["description"]:
             print(f"     {option['description']}")
     values_by_choice = {option["choice"]: option["value"] for option in normalized}
     values_by_value = {option["value"]: option["value"] for option in normalized}
     while True:
-        raw = _ask("Select", default=default_choice, use_color=use_color).strip()
+        raw = _ask(tr(language, "select"), default=default_choice, use_color=use_color).strip()
         value = raw or default_choice
         if value in values_by_choice:
             return values_by_choice[value]
         if value in values_by_value:
             return values_by_value[value]
         valid = ", ".join(option["choice"] for option in normalized)
-        print(_color(f"Invalid selection. Choose one of: {valid}.", "31", use_color))
+        print(_color(tr(language, "invalid_selection", valid=valid), "31", use_color))
 
 
 def _normalize_choice_option(option: dict[str, str]) -> dict[str, str]:
@@ -521,11 +609,20 @@ def _keyboard_single_choice(
     *,
     default_choice: str,
     use_color: bool,
+    language: str = "en",
 ) -> str:
     cursor = _default_choice_index(options, default_choice)
     rendered_lines = 0
     while True:
-        lines = _choice_menu_lines(title, intro_lines, options, cursor, default_choice=default_choice, use_color=use_color)
+        lines = _choice_menu_lines(
+            title,
+            intro_lines,
+            options,
+            cursor,
+            default_choice=default_choice,
+            use_color=use_color,
+            language=language,
+        )
         if rendered_lines:
             sys.stdout.write(f"\033[{rendered_lines}F\033[J")
         sys.stdout.write("\n".join(lines) + "\n")
@@ -556,16 +653,17 @@ def _choice_menu_lines(
     *,
     default_choice: str,
     use_color: bool,
+    language: str = "en",
 ) -> list[str]:
     lines = ["", _color(title, "1;32", use_color)]
     for line in intro_lines:
         lines.append(f"  {line}")
-    lines.append(_color("  Use ↑/↓, Space/Enter, or a number. Colors are not required.", "2", use_color))
+    lines.append(_color(f"  {tr(language, 'menu_hint')}", "2", use_color))
     for index, option in enumerate(options):
         active = index == cursor
         pointer = ">" if active else " "
         marker = "[x]" if active else "[ ]"
-        suffix = " (recommended)" if option["choice"] == default_choice else ""
+        suffix = f" ({tr(language, 'recommended')})" if option["choice"] == default_choice else ""
         label = f"  {pointer} {marker} {option['choice']}) {option['label']}{suffix}"
         if active:
             label = _color(label, "1;36", use_color)
@@ -665,7 +763,7 @@ class _HumanProgress:
             time.sleep(0.04)
 
 
-def _print_setup_summary(payload: dict[str, object]) -> None:
+def _print_setup_summary(payload: dict[str, object], *, language: str = "en") -> None:
     use_color = _use_color()
     steps = payload.get("steps", {})
     hermes_native = payload.get("hermes_native", {})
@@ -682,63 +780,59 @@ def _print_setup_summary(payload: dict[str, object]) -> None:
     topology = targets.get("topology", {}) if isinstance(targets, dict) else {}
 
     dry_run = bool(payload.get("dry_run", False))
-    title = "OMH setup preview complete." if dry_run else "OMH setup complete."
+    title = tr(language, "setup_preview_complete") if dry_run else tr(language, "setup_complete")
     print("")
     print(_color(title, "1;36", use_color))
-    print(_color("Summary", "1;32", use_color))
-    print(f"  Skills: {len(skills)} managed skill(s) at {hermes_native.get('skills_dir', '')}")
+    print(_color(tr(language, "summary"), "1;32", use_color))
+    print(f"  {tr(language, 'skills_line', count=len(skills), path=hermes_native.get('skills_dir', ''))}")
 
     discovery_status = str(hermes_native.get("discovery_status", ""))
     if discovery_status == "config_registered_reload_required":
         print(
-            "  Hermes registration: configured in "
-            f"{hermes_native.get('hermes_config_path', '')} "
-            "(restart or reload Hermes Agent to observe it)."
+            f"  {tr(language, 'registration_configured', path=hermes_native.get('hermes_config_path', ''))}"
         )
     elif discovery_status == "dry_run_not_observed":
-        print("  Hermes registration: dry run only; no local registration was observed.")
+        print(f"  {tr(language, 'registration_dry_run')}")
     elif discovery_status == "not_registered_skip_apply":
-        print("  Hermes registration: skipped by --skip-apply.")
+        print(f"  {tr(language, 'registration_skipped')}")
     else:
-        print(f"  Hermes registration: {discovery_status or 'unknown'}")
+        print(f"  {tr(language, 'registration_unknown', status=discovery_status or 'unknown')}")
 
     if isinstance(apply, dict) and apply.get("message"):
-        print(f"  Apply: {apply.get('message')}")
+        print(f"  {tr(language, 'apply_line', message=apply.get('message'))}")
 
     if isinstance(profile, dict):
         selected = ", ".join(str(item) for item in profile.get("selected_categories", []) or [])
         executor = str(profile.get("default_executor", ""))
         if selected or executor:
-            print(f"  Default handoff: {_executor_summary(executor)}")
+            print(f"  {tr(language, 'default_handoff', summary=_executor_summary(executor))}")
             if selected:
-                print(f"  Setup profile: {selected}")
+                print(f"  {tr(language, 'setup_profile', selected=selected)}")
 
     if isinstance(topology, dict):
         print(
-            "  Target topology: "
-            f"{topology.get('mode', 'unknown')} "
-            f"({topology.get('known_target_count', 0)} known target(s))."
+            f"  {tr(language, 'target_topology', mode=topology.get('mode', 'unknown'), count=topology.get('known_target_count', 0))}"
         )
 
     plugin = payload.get("plugin_distribution")
     if isinstance(plugin, dict):
-        print(f"  Plugin bridge: {plugin.get('status', 'installed')}")
+        print(f"  {tr(language, 'plugin_bridge', status=plugin.get('status', 'installed'))}")
     elif not dry_run:
-        print("  Plugin bridge: optional; install later with `omh setup --with-plugin`.")
+        print(f"  {tr(language, 'plugin_optional')}")
 
     team_profiles = payload.get("team_profiles")
     if isinstance(team_profiles, list) and team_profiles:
-        print(f"  Team persona: {len(team_profiles)} profile pack(s) activated.")
+        print(f"  {tr(language, 'team_activated', count=len(team_profiles))}")
     elif not dry_run:
-        print("  Team persona: none activated; all OMH workflows are still installed.")
+        print(f"  {tr(language, 'team_none')}")
 
-    print(_color("Next", "1;32", use_color))
+    print(_color(tr(language, "next"), "1;32", use_color))
     if dry_run:
-        print("  Rerun without `--dry-run` to install and register the managed skills.")
+        print(f"  {tr(language, 'setup_next_dry')}")
     else:
-        print("  Restart or reload Hermes Agent, then try this in Hermes chat:")
-        print("  Use OMH request-to-handoff for: I want to safely add a feature to this repo.")
-    print("  For machine-readable output, rerun with `--json`.")
+        print(f"  {tr(language, 'setup_next_reload')}")
+        print(f"  {tr(language, 'setup_next_prompt')}")
+    print(f"  {tr(language, 'machine_readable')}")
 
 
 def _print_doctor_summary(payload: dict[str, object]) -> None:
@@ -763,31 +857,96 @@ def _print_doctor_summary(payload: dict[str, object]) -> None:
     print("For machine-readable output, rerun with `--json`.")
 
 
-def _print_install_summary(payload: dict[str, object], *, command: str) -> None:
+def _print_uninstall_summary(payload: dict[str, object], *, language: str = "en") -> None:
+    use_color = _use_color()
+    dry_run = bool(payload.get("dry_run", False))
+    title = tr(language, "uninstall_preview_complete") if dry_run else tr(language, "uninstall_complete")
+    removed = payload.get("removed_paths", [])
+    would_remove = payload.get("would_remove", [])
+    kept = payload.get("kept_paths", [])
+    if not isinstance(removed, list):
+        removed = []
+    if not isinstance(would_remove, list):
+        would_remove = []
+    if not isinstance(kept, list):
+        kept = []
+    command_kept = payload.get("command_package_kept", [])
+    if not isinstance(command_kept, list):
+        command_kept = []
+    command_kept_paths = {
+        item.get("path", "")
+        for item in command_kept
+        if isinstance(item, dict)
+    }
+
+    print("")
+    print(_color(title, "1;36", use_color))
+    print(_color(tr(language, "summary"), "1;32", use_color))
+    print(f"  {tr(language, 'scope')}: {payload.get('scope', '')}")
+    config_message = _config_change_label(language, str(payload.get("config_message", "")))
+    print(f"  {tr(language, 'uninstall_config', message=config_message)}")
+    if dry_run:
+        print(f"  {tr(language, 'uninstall_would_remove', count=len(would_remove))}")
+        for path in would_remove[:8]:
+            print(f"    - {path}")
+    else:
+        print(f"  {tr(language, 'uninstall_removed', count=len(removed))}")
+        for path in removed[:8]:
+            print(f"    - {path}")
+    if not removed and not would_remove:
+        print(f"  {tr(language, 'uninstall_none')}")
+    for item in kept:
+        if isinstance(item, dict):
+            if item.get("path", "") in command_kept_paths:
+                continue
+            print(f"  {tr(language, 'kept')}: {item.get('path', '')} ({item.get('reason', '')})")
+    print(_color(tr(language, "next"), "1;32", use_color))
+    command_removed = payload.get("command_package_removed_paths", [])
+    command_would_remove = payload.get("command_package_would_remove", [])
+    if not isinstance(command_removed, list):
+        command_removed = []
+    if not isinstance(command_would_remove, list):
+        command_would_remove = []
+    if dry_run and command_would_remove:
+        print(f"  {tr(language, 'uninstall_command_would_remove', count=len(command_would_remove))}")
+    elif command_removed:
+        print(f"  {tr(language, 'uninstall_command_removed', count=len(command_removed))}")
+    elif command_kept:
+        print(f"  {tr(language, 'uninstall_command_kept')}")
+    print(f"  {tr(language, 'machine_readable')}")
+
+
+def _print_install_summary(payload: dict[str, object], *, command: str, language: str = "en") -> None:
     use_color = _use_color()
     skills = payload.get("skills", [])
     if not isinstance(skills, list):
         skills = []
     dry_run = bool(payload.get("dry_run", False))
     label = "update" if command == "update" else "install"
-    title = f"OMH {label} preview complete." if dry_run else f"OMH {label} complete."
+    title = tr(language, "install_preview_complete", label=label) if dry_run else tr(language, "install_complete", label=label)
     print("")
     print(_color(title, "1;36", use_color))
-    print(_color("Summary", "1;32", use_color))
-    print(f"  Skills: {len(skills)} managed skill(s) at {payload.get('skills_dir', '')}")
-    print(f"  Source: {payload.get('source', 'builtin')}")
+    print(_color(tr(language, "summary"), "1;32", use_color))
+    print(f"  {tr(language, 'skills_line', count=len(skills), path=payload.get('skills_dir', ''))}")
+    print(f"  {tr(language, 'source', source=payload.get('source', 'builtin'))}")
     channel = str(payload.get("release_channel", "")).strip()
     package_url = str(payload.get("release_package_url", "")).strip()
     if channel:
-        print(f"  Release channel: {channel}")
+        print(f"  {tr(language, 'release_channel', channel=channel)}")
     if package_url and package_url != "local":
-        print(f"  Package URL: {package_url}")
-    print(_color("Next", "1;32", use_color))
+        print(f"  {tr(language, 'package_url', url=package_url)}")
+    print(_color(tr(language, "next"), "1;32", use_color))
     if dry_run:
-        print("  Rerun without `--dry-run` to refresh the managed skills.")
+        print(f"  {tr(language, 'install_next_dry')}")
     else:
-        print("  Run `omh setup` to repair Hermes registration, or `omh doctor` to verify health.")
-    print("  For machine-readable output, rerun with `--json`.")
+        print(f"  {tr(language, 'install_next')}")
+    print(f"  {tr(language, 'machine_readable')}")
+
+
+def _config_change_label(language: str, message: str) -> str:
+    key = "config_" + message.replace(".", "_").replace(" ", "_").replace("-", "_")
+    translated = tr(language, key)
+    return translated if translated != key else message
 
 
 def _executor_summary(executor: str) -> str:
@@ -880,6 +1039,7 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--channel", choices=RELEASE_CHANNELS, default="preview", help="Release channel metadata for this install/update.")
     p.add_argument("--version", default="", help="Stable release version such as 1.0.0 or v1.0.0.")
     p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
+    p.add_argument("--language", default=None, help=f"Human output language for setup/install/update ({', '.join(LANGUAGE_CODES)}).")
     p.add_argument("--force", action="store_true")
     p.add_argument("--dry-run", action="store_true")
 
@@ -938,8 +1098,15 @@ def _add_top_level_commands(sub) -> None:
     apply.set_defaults(func=cmd_apply)
 
     uninstall = sub.add_parser("uninstall")
-    uninstall.add_argument("--remove-files", action="store_true")
+    uninstall.add_argument("--registration-only", action="store_true", help="Only remove the OMH skills.external_dirs registration from Hermes config.")
+    uninstall.add_argument("--remove-files", action="store_true", help="Legacy mode: remove Hermes registration and the managed OMH home directory.")
+    uninstall.add_argument("--all", action="store_true", help="Remove all OMH-managed local state, plugin bundle, and generated team role files.")
+    uninstall.add_argument("--purge", action="store_true", help="Alias for --all.")
+    uninstall.add_argument("--keep-command", action="store_true", help="Keep the install.sh-managed omh command venv/link during full cleanup.")
+    uninstall.add_argument("--force", action="store_true", help="Also remove an unmanaged ~/.hermes/plugins/omh directory when using --all.")
     uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--json", action="store_true", help="Print the machine-readable uninstall payload.")
+    uninstall.add_argument("--language", default=None, help=f"Human output language ({', '.join(LANGUAGE_CODES)}).")
     uninstall.set_defaults(func=cmd_uninstall)
 
     list_cmd = sub.add_parser("list")

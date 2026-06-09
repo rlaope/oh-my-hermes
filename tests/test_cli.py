@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
 from argparse import Namespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from _cli_harness import run_cli
 from omh.cli import OmhError, cmd_runtime_merge
+from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.skill_pack import builtin_skill_templates
 
 
@@ -83,6 +86,7 @@ class CliTests(unittest.TestCase):
             base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
             answers = "\n".join(
                 [
+                    "1",
                     "y",
                     "2",
                     "y",
@@ -127,6 +131,34 @@ class CliTests(unittest.TestCase):
             self.assertEqual(profile["default_executor"], "choose")
             self.assertFalse((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
 
+    def test_setup_and_install_support_localized_human_output(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(base + ["setup", "--no-interactive", "--language", "ko"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH 설정", stdout)
+            self.assertIn("관리 스킬 설치", stdout)
+            self.assertIn("OMH 설정이 완료되었습니다.", stdout)
+            self.assertIn("기계가 읽는 출력", stdout)
+
+            install_root = root / "install"
+            status, stdout, stderr = run_cli(["--omh-home", str(install_root / ".omh"), "install", "--language", "zh"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("刷新托管 Hermes 技能包", stdout)
+            self.assertIn("已准备 29 个托管技能", stdout)
+            self.assertIn("OMH install 已完成。", stdout)
+
+    def test_language_catalogs_have_matching_keys(self) -> None:
+        expected_keys = set(MESSAGES["en"])
+        for code in LANGUAGE_CODES:
+            self.assertEqual(set(MESSAGES[code]), expected_keys, f"{code} translation keys should match English")
+
     def test_install_and_update_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -136,7 +168,7 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
-            self.assertIn("Preparing managed skills", stdout)
+            self.assertIn("Installing managed skills", stdout)
             self.assertIn("OMH install complete.", stdout)
             self.assertIn("Skills: 29 managed skill(s)", stdout)
             self.assertIn("Run `omh setup`", stdout)
@@ -2243,6 +2275,112 @@ class CliTests(unittest.TestCase):
             self.assertEqual(doctor_stderr, "")
             self.assertEqual(doctor_status, 0)
             self.assertTrue(json.loads(doctor_stdout)["ok"])
+
+    def test_uninstall_defaults_to_full_managed_cleanup_and_preserves_unrelated_hermes_files(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, _stdout, stderr = run_cli(base + ["setup", "--with-plugin", "--profile-pack", "cto-loop"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue((omh_home / "skills").exists())
+            self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
+            managed_agent = hermes_home / "agents" / "omh-cto-loop-cto.md"
+            self.assertTrue(managed_agent.exists())
+            managed_agent.write_text("operator-edited but still manifest-managed\n", encoding="utf-8")
+            unrelated_agent = hermes_home / "agents" / "personal-agent.md"
+            unrelated_agent.write_text("operator-owned\n", encoding="utf-8")
+            unrelated_plugin = hermes_home / "plugins" / "other" / "plugin.yaml"
+            unrelated_plugin.parent.mkdir(parents=True, exist_ok=True)
+            unrelated_plugin.write_text("name: other\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(base + ["uninstall", "--dry-run"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            preview = json.loads(stdout)
+            self.assertTrue(preview["remove_all"])
+            self.assertIn(str(omh_home.resolve()), preview["would_remove"])
+            self.assertIn(str((hermes_home / "plugins" / "omh").resolve()), preview["would_remove"])
+            self.assertIn(str(managed_agent.resolve()), preview["would_remove"])
+            self.assertTrue((omh_home / "skills").exists())
+            self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
+
+            status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertTrue(payload["remove_all"])
+            self.assertFalse(omh_home.exists())
+            self.assertFalse((hermes_home / "plugins" / "omh").exists())
+            self.assertFalse(managed_agent.exists())
+            self.assertTrue(unrelated_agent.exists())
+            self.assertTrue(unrelated_plugin.exists())
+            self.assertNotIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_uninstall_registration_only_keeps_managed_files(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin"])[0], 0)
+
+            status, stdout, stderr = run_cli(base + ["uninstall", "--registration-only"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertFalse(payload["remove_all"])
+            self.assertTrue(payload["registration_only"])
+            self.assertTrue((omh_home / "skills").exists())
+            self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
+            self.assertNotIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_uninstall_removes_install_sh_managed_command_package_when_detected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            fake_venv = root / "venv"
+            fake_venv_bin = fake_venv / "bin"
+            fake_venv_bin.mkdir(parents=True)
+            fake_python = fake_venv_bin / "python"
+            fake_python.write_text("# fake python\n", encoding="utf-8")
+            fake_omh = fake_venv_bin / "omh"
+            fake_omh.write_text("# fake omh\n", encoding="utf-8")
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            fake_link = fake_bin / "omh"
+            fake_link.symlink_to(fake_omh)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup"])[0], 0)
+            env = {**os.environ, "OMH_VENV_DIR": str(fake_venv), "OMH_BIN_DIR": str(fake_bin)}
+            with patch.dict(os.environ, env, clear=True), patch.object(sys, "executable", str(fake_python)):
+                status, stdout, stderr = run_cli(base + ["uninstall", "--dry-run"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                preview = json.loads(stdout)
+                self.assertIn(str(fake_link), preview["command_package_would_remove"])
+                self.assertIn(str(fake_venv.resolve()), preview["command_package_would_remove"])
+                self.assertTrue(fake_link.exists())
+                self.assertTrue(fake_venv.exists())
+
+                status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertTrue(payload["command_package_removed"])
+            self.assertFalse(fake_link.exists())
+            self.assertFalse(fake_venv.exists())
 
     def test_setup_and_chat_detect_persisted_hermes_target_topology_drift(self) -> None:
         with TemporaryDirectory() as tmp:

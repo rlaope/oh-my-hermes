@@ -147,6 +147,14 @@ Hermes skills and register the managed skill directory with Hermes, then runs
 `externally-managed-environment` failures while keeping the user-facing command
 simple.
 
+Installer and setup output can be localized with `OMH_LANG` or `--language`.
+Supported language codes are `en`, `ko`, `ja`, and `zh`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_LANG=ko sh
+omh setup --language ko
+```
+
 From the user's point of view, the intended final state matches the Hermes tap
 path: Hermes can discover OMH skills and the user talks to Hermes. `omh setup`
 is the bootstrap/maintenance route that produces that state through generated
@@ -168,8 +176,10 @@ omh runtime status
 omh probe
 ```
 
-`omh setup` should report a human-readable setup summary by default. The same
-command with `--json` should include install and apply steps plus a
+`omh setup` should report a human-readable setup summary by default. In a real
+terminal it first asks for setup language, then only asks for choices that
+change behavior. The same command with `--json` should include install and apply
+steps plus a
 `hermes_native_setup/v1` block that names the equivalent Hermes skill install
 path, managed skill directory, and `skills.external_dirs` registration key.
 `hermes_native.observed` means the local bootstrap/apply step actually ran; it
@@ -524,6 +534,15 @@ Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
 to setup profile categories for automation that already uses it, but new scripts
 should prefer `OMH_DEFAULT_EXECUTOR`.
 
+Choose installer/setup output language during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_LANG=ja sh
+```
+
+Supported values are `en`, `ko`, `ja`, and `zh`. The same setting can be passed
+directly to setup with `omh setup --language zh`.
+
 Skip automatic Hermes config registration:
 
 ```sh
@@ -560,14 +579,40 @@ for stable install recipes.
 
 ## Uninstall
 
-Remove the Hermes config registration:
+Remove OMH-managed local state and Hermes integration files:
 
 ```sh
 omh uninstall
 ```
 
-Remove the registration and managed files:
+This unregisters `~/.omh/skills` from Hermes config, removes `~/.omh`, removes
+the managed `~/.hermes/plugins/omh` plugin bundle when it has an OMH manifest,
+removes generated team role files recorded in OMH team-profile manifests, and
+removes the install.sh-managed `omh` command venv/link when the current command
+is running from that managed venv. It does not delete unrelated Hermes files,
+unrelated plugins, unrelated agents, or pipx/development Python environments
+that OMH cannot safely identify as install.sh-managed.
+
+Preview the cleanup first:
+
+```sh
+omh uninstall --dry-run
+```
+
+Only remove the Hermes config registration:
+
+```sh
+omh uninstall --registration-only
+```
+
+Legacy cleanup for just the registration plus managed `~/.omh` directory:
 
 ```sh
 omh uninstall --remove-files
 ```
+
+`omh uninstall --all` and `omh uninstall --purge` are explicit aliases for the
+default full cleanup. Add `--force` only when you intentionally want to remove
+an unmanaged `~/.hermes/plugins/omh` directory. Add `--keep-command` when you
+want to keep the install.sh-managed command venv/link while removing Hermes
+state.

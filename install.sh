@@ -35,6 +35,11 @@ OMH_PROFILE_PACKS="${OMH_PROFILE_PACKS:-}"
 OMH_SETUP_PROFILES="${OMH_SETUP_PROFILES:-}"
 OMH_DEFAULT_EXECUTOR="${OMH_DEFAULT_EXECUTOR:-}"
 OMH_SETUP_ARGS="${OMH_SETUP_ARGS:-}"
+OMH_LANG_RAW="${OMH_LANG:-${OMH_LANGUAGE:-}}"
+OMH_LANG_WAS_SET=0
+if [ -n "$OMH_LANG_RAW" ]; then
+  OMH_LANG_WAS_SET=1
+fi
 OMH_RUNTIME_PYTHON="$OMH_PYTHON"
 OMH_COMMAND_HINT=""
 
@@ -78,13 +83,99 @@ say_fail() {
   printf '      %s %s\n' "$(color '1;31' '[failed]')" "$1"
 }
 
+normalize_omh_lang() {
+  OMH_LANG_KEY="$(printf '%s' "$1" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
+  case "$OMH_LANG_KEY" in
+    ""|en|eng|english)
+      printf 'en'
+      ;;
+    ko|kr|kor|korean)
+      printf 'ko'
+      ;;
+    ja|jp|jpn|japanese)
+      printf 'ja'
+      ;;
+    zh|cn|zho|chi|chinese)
+      printf 'zh'
+      ;;
+    *)
+      printf 'omh installer: unsupported OMH_LANG %s (expected en, ko, ja, or zh).\n' "$1" >&2
+      exit 1
+      ;;
+  esac
+}
+
+OMH_LANG="$(normalize_omh_lang "$OMH_LANG_RAW")"
+
+msg() {
+  case "$OMH_LANG:$1" in
+    ko:installer_title) printf 'OMH 설치 관리자' ;;
+    ko:installer_subtitle) printf '시스템 Python 패키지를 건드리지 않고 oh-my-hermes-agent를 설치합니다.' ;;
+    ko:channel) printf '채널' ;;
+    ko:mode) printf '모드' ;;
+    ko:step_create_venv) printf '격리된 Python 환경 생성:' ;;
+    ko:step_install_package) printf 'OMH 패키지 설치' ;;
+    ko:step_install_python) printf '선택한 Python에 OMH 패키지 설치' ;;
+    ko:step_expose_command) printf 'omh 명령어 연결' ;;
+    ko:step_setup) printf '관리 Hermes 스킬 설정' ;;
+    ko:step_doctor) printf '설치 확인' ;;
+    ko:done) printf '완료' ;;
+    ko:installed) printf 'oh-my-hermes-agent 설치가 완료되었습니다.' ;;
+    ko:next_path) printf 'Hermes Agent를 열고 설치된 OMH 스킬을 사용하세요. 상태 확인은 '\''omh doctor'\'', 재설정은 '\''omh setup'\''을 실행하세요.' ;;
+    ko:next_command_path) printf 'Hermes Agent를 열고 설치된 OMH 스킬을 사용하세요. 상태 확인은 '\''%s doctor'\''를 실행하거나 해당 디렉터리를 PATH에 추가하세요.' "$2" ;;
+    ja:installer_title) printf 'OMH インストーラー' ;;
+    ja:installer_subtitle) printf 'システム Python パッケージを変更せずに oh-my-hermes-agent をインストールします。' ;;
+    ja:channel) printf 'チャンネル' ;;
+    ja:mode) printf 'モード' ;;
+    ja:step_create_venv) printf '分離された Python 環境を作成:' ;;
+    ja:step_install_package) printf 'OMH パッケージをインストール' ;;
+    ja:step_install_python) printf '選択した Python に OMH パッケージをインストール' ;;
+    ja:step_expose_command) printf 'omh コマンドを公開' ;;
+    ja:step_setup) printf '管理 Hermes スキルを設定' ;;
+    ja:step_doctor) printf 'インストールを検証' ;;
+    ja:done) printf '完了' ;;
+    ja:installed) printf 'oh-my-hermes-agent のインストールが完了しました。' ;;
+    zh:installer_title) printf 'OMH 安装器' ;;
+    zh:installer_subtitle) printf '在不改动系统 Python 包的情况下安装 oh-my-hermes-agent。' ;;
+    zh:channel) printf '频道' ;;
+    zh:mode) printf '模式' ;;
+    zh:step_create_venv) printf '创建隔离 Python 环境:' ;;
+    zh:step_install_package) printf '安装 OMH 包' ;;
+    zh:step_install_python) printf '将 OMH 包安装到所选 Python' ;;
+    zh:step_expose_command) printf '公开 omh 命令' ;;
+    zh:step_setup) printf '设置托管 Hermes 技能' ;;
+    zh:step_doctor) printf '验证安装' ;;
+    zh:done) printf '完成' ;;
+    zh:installed) printf 'oh-my-hermes-agent 已安装。' ;;
+    *)
+      case "$1" in
+        installer_title) printf 'OMH installer' ;;
+        installer_subtitle) printf 'Install oh-my-hermes-agent without touching system Python packages.' ;;
+        channel) printf 'Channel' ;;
+        mode) printf 'Mode' ;;
+        step_create_venv) printf 'Create isolated Python environment at' ;;
+        step_install_package) printf 'Install OMH package' ;;
+        step_install_python) printf 'Install OMH package into selected Python' ;;
+        step_expose_command) printf 'Expose the omh command' ;;
+        step_setup) printf 'Set up managed Hermes skills' ;;
+        step_doctor) printf 'Verify installation' ;;
+        done) printf 'done' ;;
+        installed) printf 'oh-my-hermes-agent is installed.' ;;
+        next_path) printf 'Open Hermes Agent and use the installed OMH skills. Run '\''omh doctor'\'' for health checks or '\''omh setup'\'' to reapply Hermes registration.' ;;
+        next_command_path) printf 'Open Hermes Agent and use the installed OMH skills. Run '\''%s doctor'\'' for health checks or add its directory to PATH.' "$2" ;;
+        *) printf '%s' "$1" ;;
+      esac
+      ;;
+  esac
+}
+
 run_step() {
   OMH_STEP_PREFIX="$1"
   OMH_STEP_LABEL="$2"
   shift 2
   say_step "$OMH_STEP_PREFIX" "$OMH_STEP_LABEL"
   if OMH_STEP_OUTPUT="$("$@" 2>&1)"; then
-    say_ok "done"
+    say_ok "$(msg done)"
     return 0
   fi
   say_fail "$OMH_STEP_LABEL"
@@ -191,9 +282,9 @@ install_into_venv() {
     say "Set OMH_VENV_DIR to an explicit directory and retry."
     exit 1
   fi
-  run_step "[1/5]" "Create isolated Python environment at $OMH_VENV_DIR" "$OMH_PYTHON" -m venv "$OMH_VENV_DIR"
+  run_step "[1/5]" "$(msg step_create_venv) $OMH_VENV_DIR" "$OMH_PYTHON" -m venv "$OMH_VENV_DIR"
   OMH_RUNTIME_PYTHON="$OMH_VENV_DIR/bin/python"
-  run_step "[2/5]" "Install OMH package" sh -c '
+  run_step "[2/5]" "$(msg step_install_package)" sh -c '
     # Intentional shell splitting: OMH_PIP_ARGS is an advanced operator escape hatch.
     # shellcheck disable=SC2086
     PIP_DISABLE_PIP_VERSION_CHECK=1 "$1" -m pip install --disable-pip-version-check -q --force-reinstall $2 --upgrade "$3"
@@ -207,7 +298,7 @@ install_into_python() {
   if [ -z "$OMH_PIP_ARGS_WAS_SET" ]; then
     OMH_DIRECT_PIP_ARGS="--user"
   fi
-  run_step "[1/5]" "Install OMH package into selected Python" sh -c '
+  run_step "[1/5]" "$(msg step_install_python)" sh -c '
     # Intentional shell splitting: OMH_DIRECT_PIP_ARGS is an advanced operator escape hatch.
     # shellcheck disable=SC2086
     PIP_DISABLE_PIP_VERSION_CHECK=1 "$1" -m pip install --disable-pip-version-check -q --force-reinstall $2 --upgrade "$3"
@@ -248,9 +339,9 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
   esac
 fi
 
-say_header "OMH installer" "Install oh-my-hermes-agent without touching system Python packages."
-say_note "Channel: $OMH_CHANNEL"
-say_note "Mode: $OMH_INSTALL_MODE"
+say_header "$(msg installer_title)" "$(msg installer_subtitle)"
+say_note "$(msg channel): $OMH_CHANNEL"
+say_note "$(msg mode): $OMH_INSTALL_MODE"
 case "$OMH_INSTALL_MODE" in
   venv)
     install_into_venv
@@ -266,7 +357,7 @@ esac
 
 OMH_COMMAND_PATH="$(find_omh_command || true)"
 if [ -n "$OMH_COMMAND_PATH" ]; then
-  say_step "[3/5]" "Expose the omh command"
+  say_step "[3/5]" "$(msg step_expose_command)"
   say_ok "$OMH_COMMAND_PATH"
   if ! command -v omh >/dev/null 2>&1; then
     OMH_COMMAND_DIR="$(dirname "$OMH_COMMAND_PATH")"
@@ -280,6 +371,10 @@ else
 fi
 
 set -- setup --channel "$OMH_CHANNEL" --package-url "$OMH_PACKAGE_URL"
+
+if [ "$OMH_LANG_WAS_SET" = "1" ]; then
+  set -- "$@" --language "$OMH_LANG"
+fi
 
 if [ "$OMH_CHANNEL" = "local" ] && [ -d "$OMH_PACKAGE_URL" ]; then
   set -- "$@" --source "$OMH_PACKAGE_URL"
@@ -321,22 +416,22 @@ if [ -n "$OMH_SETUP_ARGS" ]; then
   set -- "$@" $OMH_SETUP_ARGS
 fi
 
-say_step "[4/5]" "Set up managed Hermes skills"
+say_step "[4/5]" "$(msg step_setup)"
 run_omh "$@"
 
 if [ "$OMH_RUN_DOCTOR" = "0" ]; then
   say_note "Skipped doctor check because OMH_RUN_DOCTOR=0."
 else
-  say_step "[5/5]" "Verify installation"
+  say_step "[5/5]" "$(msg step_doctor)"
   run_omh doctor
 fi
 
 printf '\n'
-say "$(color '1;36' 'oh-my-hermes-agent is installed.')"
+say "$(color '1;36' "$(msg installed)")"
 if command -v omh >/dev/null 2>&1; then
-  say "Open Hermes Agent and use the installed OMH skills. Run 'omh doctor' for health checks or 'omh setup' to reapply Hermes registration."
+  say "$(msg next_path)"
 elif [ -n "$OMH_COMMAND_PATH" ]; then
-  say "Open Hermes Agent and use the installed OMH skills. Run '$OMH_COMMAND_PATH doctor' for health checks or add its directory to PATH."
+  say "$(msg next_command_path "$OMH_COMMAND_PATH")"
 else
   say "Open Hermes Agent and use the installed OMH skills. Run '$OMH_PYTHON -m omh.cli doctor' for health checks."
 fi

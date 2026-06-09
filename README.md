@@ -66,13 +66,20 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 omh setup
 ```
 
+Terminal setup output supports English, Korean, Japanese, and Chinese:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_LANG=ko sh
+omh setup --language ko
+```
+
 The installer normally runs setup for you. Keep `omh setup` in the quick start
 because it is the repeatable repair step that installs generated skills under
 `~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
-Hermes registration, the default coding executor preference, the optional plugin
-bridge, and optional visible team personas. Non-interactive shells use the safe
-defaults. Add `--json`
+the setup language, Hermes registration, the default coding executor preference,
+the optional plugin bridge, and optional visible team personas. Non-interactive
+shells use the safe defaults. Add `--json`
 when an operator or wrapper needs the full machine-readable payload.
 
 Verify the local install:
