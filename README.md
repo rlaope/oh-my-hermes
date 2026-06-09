@@ -108,6 +108,9 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
   Claude Code, generic agents, OMH-style runtimes, or Hermes-retained work.
 - **Evidence-aware status** - prepared, dispatched, executed, reviewed,
   verified, CI, and merge-ready states stay separate.
+- **Durable goal mode contracts** - long work can stay tied to `.omh/goals`
+  ledgers, completion gates, and explicit "continue/checkpoint/block/complete"
+  next actions instead of ending with a vague summary.
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
@@ -130,6 +133,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
+| Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Wrapper contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Discord, Slack, or hosted adapters. |
 | Optional plugin bridge | `omh setup --with-plugin` installs `~/.hermes/plugins/omh` with metadata-only `omh_status` support. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |

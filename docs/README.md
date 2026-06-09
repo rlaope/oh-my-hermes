@@ -87,6 +87,10 @@ merge.
   harness examples should stay backed by conformance tests.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
+- Goal execution docs should describe `.omh/goals` metadata-only ledgers,
+  `goal_completion_gate/v1`, `goal_status_card/v1`, and
+  `goal_continuation/v1` as wrapper contracts that name the next action before
+  completion is claimed.
 - Memory/context docs should state that OMH reviews local or wrapper-supplied
   context only; it does not read or mutate opaque Hermes internal memory.
 - The GitHub Pages site should stay a short public entry point that links back

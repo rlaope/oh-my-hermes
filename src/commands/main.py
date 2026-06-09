@@ -34,6 +34,15 @@ from .docs import (
     cmd_harness_list,
     cmd_harness_validate,
 )
+from .goal import (
+    _add_goal_commands,
+    cmd_goal_blocker,
+    cmd_goal_checkpoint,
+    cmd_goal_complete,
+    cmd_goal_continue,
+    cmd_goal_create,
+    cmd_goal_status,
+)
 from .hermes import _add_hermes_commands, cmd_hermes_plan
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
@@ -90,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_hermes_commands(sub)
     _add_memory_commands(sub)
     _add_runtime_commands(sub)
+    _add_goal_commands(sub)
     _add_state_commands(sub)
     return parser
 

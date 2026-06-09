@@ -66,6 +66,10 @@ MEMORY_CONTEXT_REFERENCE_CONTEXT = (
     f"`{MEMORY_REVIEW_SCHEMA}` is separate from `status_card/v1`; `{HANDOFF_CONTEXT_PACK_SCHEMA}` "
     "may be attached to executor handoffs only when unresolved conflicts are absent."
 )
+GOAL_STATUS_REFERENCE_CONTEXT = (
+    "`goal_status_card/v1` and `goal_continuation/v1` are goal-execution payloads separate "
+    "from generic `status_card/v1`; they must name the next action instead of merely summarizing work."
+)
 
 def _target_topology_router_section() -> str:
     return "\n\n".join(
@@ -126,7 +130,7 @@ def _trigger_table(definitions: list[SkillDefinition]) -> str:
 
 def _harness_summary(harness: HarnessDefinition) -> str:
     evidence_ladder = " -> ".join(f"`{step}`" for step in harness.evidence_ladder[:4])
-    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions[:4])
+    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions[:5])
     return (
         f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "
         f"Ladder: {evidence_ladder}. Actions: {wrapper_actions or '`show_status`'}. "
@@ -371,7 +375,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 {_target_topology_skill_contract_bullets()}
 {_memory_context_skill_contract_bullets(definition)}
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
-  - goal tools -> `.omh/goals/` ledgers or explicit checklists,
+  - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
   - question renderers -> one concise question in the current Hermes interface,
   - native subagents -> Hermes delegation when available, otherwise sequential lanes,
   - shell bridge commands -> optional bridge mode only.
@@ -407,6 +411,7 @@ def workflow_reference_markdown() -> str:
         "",
         TARGET_TOPOLOGY_REFERENCE_CONTEXT,
         MEMORY_CONTEXT_REFERENCE_CONTEXT,
+        GOAL_STATUS_REFERENCE_CONTEXT,
         "",
         "## Skills",
         "",
