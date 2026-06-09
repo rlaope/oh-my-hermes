@@ -178,6 +178,9 @@ Hermes before claiming the skill is visible in chat.
 `omh doctor` should report a healthy summary by default; `omh doctor --json`
 returns the full check payload. `omh list` should show the managed skills
 available to Hermes.
+`omh install` and `omh update` also print concise summaries by default; use
+`--json` or `OMH_OUTPUT=json` when a wrapper or automation needs the complete
+manifest payload.
 `omh runtime status` should show the local runtime artifact directory and the
 latest install/apply/doctor state when those commands have run. `omh probe`
 reports observable Hermes capability surfaces without mutating Hermes internals.

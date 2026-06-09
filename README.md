@@ -82,6 +82,8 @@ omh doctor
 
 `omh doctor` prints a short health summary by default. Use `omh doctor --json`
 for the full check payload.
+`omh install` and `omh update` follow the same rule: human-readable summaries
+for terminal use, `--json` for wrappers and automation.
 
 The installer creates an isolated OMH virtual environment, links the `omh`
 command into `~/.local/bin` when possible, and prints the installed command
