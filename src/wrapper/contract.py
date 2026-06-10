@@ -7,6 +7,7 @@ from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_tex
 from ..routing.chat import public_route_payload, route_chat_message
 from ..coding_delegation import build_coding_delegation_payload
 from ..executors import executor_label
+from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..skills.catalog import retained_delegation_skill_names
 
@@ -32,6 +33,10 @@ VISIBLE_ACTIONS = (
     "start_loop",
     "run_loop_tick",
     "show_loop_status",
+    "show_loop_queue",
+    "prepare_loop_handoff",
+    "observe_loop_queue",
+    "block_loop_queue",
     "keep_memory",
     "forget_memory",
     "update_memory",
@@ -182,12 +187,25 @@ def build_chat_interaction_payload(
 
     if resolved_mode == "clarify" or route["action"] != "dispatch":
         base["next_action"] = "answer_clarification"
-        base["chat_response"] = build_chat_response_from_route(route, thread_key=str(base["thread_key"]))
+        base["chat_response"] = build_chat_response_from_route(
+            route,
+            thread_key=str(base["thread_key"]),
+            message=message,
+            include_message=include_message,
+        )
         return _finish_interaction(base, target_notice)
 
     if resolved_mode == "route":
-        base["chat_response"] = build_chat_response_from_route(route, thread_key=str(base["thread_key"]))
+        base["chat_response"] = build_chat_response_from_route(
+            route,
+            thread_key=str(base["thread_key"]),
+            message=message,
+            include_message=include_message,
+        )
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "dispatch_to_workflow"))
+        loop_start_card = _nested(_nested(base["chat_response"], "state"), "loop_start_card")
+        if loop_start_card:
+            base["loop_start_card"] = loop_start_card
         return _finish_interaction(base, target_notice)
 
     if resolved_mode == "delegate":
@@ -252,7 +270,13 @@ def build_chat_status_interaction(
     return payload
 
 
-def build_chat_response_from_route(decision: dict[str, object], *, thread_key: str = "") -> dict[str, object]:
+def build_chat_response_from_route(
+    decision: dict[str, object],
+    *,
+    thread_key: str = "",
+    message: str = "",
+    include_message: bool = False,
+) -> dict[str, object]:
     action = str(decision.get("action", "fallback"))
     if action == "dispatch":
         selected = str(decision.get("selected_skill", "the selected workflow"))
@@ -287,6 +311,11 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
             body = str(policy.get("wrapper_guidance", "")) or (
                 "Start the loop interview, choose a permission profile, and keep every later step inside the recorded authority envelope."
             )
+            loop_start_card = build_loop_start_card(
+                message or selected,
+                include_goal=include_message,
+                source=str(decision.get("source", "generic")),
+            )
             return _chat_response(
                 kind="loop",
                 headline="I can start a goal loop for this.",
@@ -298,6 +327,7 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
                     _action("choose_permission_profile", "Choose permission profile", "primary"),
                     _action("start_loop", "Start loop", "primary", enabled=False),
                     _action("run_loop_tick", "Run loop tick", "secondary", enabled=False),
+                    _action("show_loop_queue", "Show loop queue", "secondary", enabled=False),
                     _action("show_loop_status", "Show loop status", "secondary"),
                     _action("cancel", "Cancel", "secondary"),
                 ],
@@ -308,6 +338,7 @@ def build_chat_response_from_route(decision: dict[str, object], *, thread_key: s
                     "selected_workflow": selected,
                     "policy_next_action": policy_next_action,
                     "permission_profile_required": True,
+                    "loop_start_card": loop_start_card,
                     "evidence_not_observed": [
                         "executor dispatch",
                         "implementation",

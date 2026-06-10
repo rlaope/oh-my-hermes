@@ -49,9 +49,11 @@ Required inputs:
 
 Expected outputs:
 
+- loop_start_card/v1 setup prompt
 - loop_cycle/v1 state
 - loop_status_card/v1 next action
 - loop_runtime/v1 queued tick
+- loop_queue_handoff/v1 only when permitted
 - executor-neutral handoff only when permitted
 - external-wait or checkpoint boundary
 
@@ -60,6 +62,7 @@ Artifact expectations:
 - metadata-only .omh/loops loop_cycle/v1 artifact
 - loop_runtime/v1 queue entries
 - loop_status_card/v1 wrapper payload
+- loop_start_card/v1 wrapper setup card
 - linked goal_ledger/v1 only when completion evidence is required
 
 Safety rules:

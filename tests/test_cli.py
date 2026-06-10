@@ -971,6 +971,28 @@ class CliTests(unittest.TestCase):
                 home
                 + [
                     "loop",
+                    "start-card",
+                    "./loop",
+                    "Make",
+                    "OMH",
+                    "a",
+                    "10k-star",
+                    "quality",
+                    "project",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            start_card = json.loads(stdout)["loop_start_card"]
+            self.assertEqual(start_card["schema_version"], "loop_start_card/v1")
+            self.assertEqual(start_card["goal_summary"], "{message}")
+            self.assertEqual(start_card["next_action"], "choose_permission_profile")
+            self.assertNotIn("10k-star quality", stdout)
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
                     "start",
                     "--loop-id",
                     "loop-cli",
@@ -1030,6 +1052,49 @@ class CliTests(unittest.TestCase):
             self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
             self.assertEqual(ticked["status_card"]["runtime_summary"]["pending_queue_count"], 1)
             self.assertIn("connector I/O", ticked["status_card"]["runtime_summary"]["claim_boundary"])
+            queue_id = ticked["loop"]["runtime"]["queue"][0]["queue_id"]
+
+            status, stdout, stderr = run_cli(home + ["loop", "queue", "list", "--loop", "loop-cli"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            queue_list = json.loads(stdout)["loop_queue"]
+            self.assertEqual(queue_list["schema_version"], "loop_queue_list/v1")
+            self.assertEqual(queue_list["pending_queue_count"], 1)
+            self.assertEqual(queue_list["queue"][0]["queue_id"], queue_id)
+
+            status, stdout, stderr = run_cli(home + ["loop", "queue", "handoff", "--loop", "loop-cli", "--queue", queue_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            queue_handoff = json.loads(stdout)["queue_handoff"]
+            self.assertEqual(queue_handoff["schema_version"], "loop_queue_handoff/v1")
+            self.assertEqual(queue_handoff["queue_id"], queue_id)
+            self.assertIn("Continue OMH loop", queue_handoff["handoff_text"])
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "queue",
+                    "observe",
+                    "--loop",
+                    "loop-cli",
+                    "--queue",
+                    queue_id,
+                    "--evidence-ref",
+                    "wrapper:queue:observed",
+                    "--summary",
+                    "Wrapper observed the queued step.",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            observed = json.loads(stdout)
+            self.assertEqual(observed["loop"]["runtime"]["queue"][0]["status"], "observed")
+            self.assertTrue(observed["loop"]["runtime"]["queue"][0]["observed"])
+            self.assertFalse(observed["loop"]["runtime"]["queue"][0]["worktree_plan"]["created"])
+            self.assertFalse(observed["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
+            self.assertFalse(observed["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
+            self.assertEqual(observed["status_card"]["runtime_summary"]["observed_queue_count"], 1)
 
             status, stdout, stderr = run_cli(home + ["loop", "permit", "--loop", "loop-cli", "--allow-action", "merge"])
             self.assertEqual(stderr, "")
@@ -1051,6 +1116,48 @@ class CliTests(unittest.TestCase):
             shown = json.loads(stdout)
             self.assertEqual(shown["status_card"]["phase"], "waiting")
             self.assertFalse(shown["status_card"]["completion_claim_allowed"])
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "start",
+                    "--loop-id",
+                    "loop-block",
+                    "--goal-summary",
+                    "Block a queued step",
+                    "--goal-reframe",
+                    "Prepare a queue item and record an explicit blocker.",
+                    "--criterion",
+                    "Blocker is recorded",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            status, stdout, stderr = run_cli(home + ["loop", "tick", "--loop", "loop-block"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            block_queue_id = json.loads(stdout)["loop"]["runtime"]["queue"][0]["queue_id"]
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "queue",
+                    "block",
+                    "--loop",
+                    "loop-block",
+                    "--queue",
+                    block_queue_id,
+                    "--reason",
+                    "Need maintainer approval",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            blocked = json.loads(stdout)
+            self.assertEqual(blocked["loop"]["runtime"]["queue"][0]["status"], "blocked")
+            self.assertEqual(blocked["loop"]["runtime"]["queue"][0]["blocker_reason"], "Need maintainer approval")
+            self.assertEqual(blocked["status_card"]["runtime_summary"]["blocked_queue_count"], 1)
 
     def test_loop_status_lists_invalid_local_artifacts_without_crashing(self) -> None:
         with TemporaryDirectory() as tmp:

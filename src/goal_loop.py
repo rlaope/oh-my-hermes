@@ -16,6 +16,9 @@ LOOP_CYCLE_SCHEMA = "loop_cycle/v1"
 LOOP_STATUS_CARD_SCHEMA = "loop_status_card/v1"
 LOOP_RUNTIME_SCHEMA = "loop_runtime/v1"
 LOOP_QUEUE_ITEM_SCHEMA = "loop_queue_item/v1"
+LOOP_START_CARD_SCHEMA = "loop_start_card/v1"
+LOOP_QUEUE_LIST_SCHEMA = "loop_queue_list/v1"
+LOOP_QUEUE_HANDOFF_SCHEMA = "loop_queue_handoff/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -62,8 +65,18 @@ LOOP_QUEUE_STATUSES = (
     "prepared_not_observed",
     "blocked_by_permission",
     "blocked_by_wait",
+    "blocked",
     "observed",
 )
+LOOP_EXECUTOR_OPTIONS = (
+    {"id": "choose", "label": "Ask me each time", "dispatchable_by_default": False},
+    {"id": "codex", "label": "Codex lifecycle handoff", "dispatchable_by_default": True},
+    {"id": "claude-code", "label": "Claude Code prompt handoff", "dispatchable_by_default": False},
+    {"id": "generic", "label": "Generic coding-agent prompt", "dispatchable_by_default": False},
+    {"id": "omx-runtime", "label": "Plugin/runtime handoff", "dispatchable_by_default": False},
+    {"id": "hermes", "label": "Hermes-retained work", "dispatchable_by_default": False},
+)
+LOOP_EXECUTOR_OPTION_IDS = tuple(str(option["id"]) for option in LOOP_EXECUTOR_OPTIONS)
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
 _PROFILE_ALLOWED_ACTIONS: dict[str, set[str]] = {
@@ -182,6 +195,72 @@ def list_loop_cycles(paths: OmhPaths) -> list[dict[str, Any]]:
         if isinstance(data, dict):
             cycles.append(data)
     return cycles
+
+
+def build_loop_start_card(
+    goal_summary: str,
+    *,
+    include_goal: bool = False,
+    source: str = "omh",
+    default_permission_profile: str = "handoff_only",
+    default_executor: str = "choose",
+) -> dict[str, Any]:
+    summary = _safe_summary(goal_summary)
+    if not summary:
+        raise ValueError("loop start-card requires a goal summary")
+    if default_permission_profile not in PERMISSION_PROFILES:
+        raise ValueError(f"unsupported permission profile: {default_permission_profile}")
+    if default_executor not in LOOP_EXECUTOR_OPTION_IDS:
+        raise ValueError(f"unsupported loop default executor: {default_executor}")
+    return {
+        "schema_version": LOOP_START_CARD_SCHEMA,
+        "source": _safe_summary(source, limit=120),
+        "status": "interview_required",
+        "goal_summary": summary if include_goal else "{message}",
+        "goal_summary_hash": sha256_text(goal_summary),
+        "goal_length": len(goal_summary),
+        "next_action": "choose_permission_profile",
+        "default_permission_profile": default_permission_profile,
+        "default_executor": _safe_summary(default_executor, limit=120),
+        "permission_profiles": [_permission_profile_option(profile) for profile in PERMISSION_PROFILES if profile != "custom"],
+        "executor_options": [dict(option) for option in LOOP_EXECUTOR_OPTIONS],
+        "required_inputs": [
+            {
+                "id": "goal_reframe",
+                "label": "Goal reframe",
+                "prompt": "Reframe the north-star goal into implementable internal work without shrinking its ambition.",
+            },
+            {
+                "id": "success_criteria",
+                "label": "Success criteria",
+                "prompt": "Name the evidence that would prove internal work progressed, plus what remains external waiting.",
+            },
+            {
+                "id": "permission_profile",
+                "label": "Permission profile",
+                "prompt": "Choose how far the loop may go before it asks for explicit authority.",
+            },
+        ],
+        "suggested_success_criteria": [
+            "Comparable capability gaps are identified and closed with tests or docs.",
+            "Prepared handoffs and observed executor results remain separate.",
+            "External adoption or market response is recorded as waiting until evidence exists.",
+        ],
+        "backend_contract": {
+            "operation": "loop.start",
+            "required_fields": ["goal_summary", "goal_reframe", "success_criteria", "permission_profile"],
+            "optional_fields": ["allowed_executors", "linked_goal_id", "source"],
+            "creates_artifact": "loop_cycle/v1",
+        },
+        "actions": [
+            "choose_permission_profile",
+            "start_loop",
+            "show_loop_status",
+            "cancel",
+        ],
+        "claim_boundary": _claim_boundary(),
+        "runtime_claim_boundary": _runtime_claim_boundary(),
+    }
 
 
 def record_loop_feedback(
@@ -310,6 +389,130 @@ def tick_loop_runtime(
         cycle["next_action"] = "observe_runtime_queue"
     else:
         cycle["next_action"] = str(plan["next_action"])
+    return _write_loop(paths, cycle)
+
+
+def list_loop_queue(paths: OmhPaths, loop_id: str, *, include_observed: bool = False) -> dict[str, Any]:
+    cycle = read_loop_cycle(paths, loop_id)
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
+    visible = [
+        _queue_item_summary(item)
+        for item in queue
+        if include_observed or not (item.get("status") == "observed" and item.get("observed") is True)
+    ]
+    return {
+        "schema_version": LOOP_QUEUE_LIST_SCHEMA,
+        "loop_id": cycle["loop_id"],
+        "include_observed": include_observed,
+        "queue": visible,
+        "pending_queue_count": sum(1 for item in queue if item.get("status") == "prepared_not_observed"),
+        "blocked_queue_count": sum(1 for item in queue if item.get("status") in {"blocked", "blocked_by_permission", "blocked_by_wait"}),
+        "observed_queue_count": sum(1 for item in queue if item.get("status") == "observed" and item.get("observed") is True),
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def inspect_loop_queue_item(paths: OmhPaths, loop_id: str, queue_id: str) -> dict[str, Any]:
+    cycle = read_loop_cycle(paths, loop_id)
+    item = _queue_item_ref(cycle, queue_id)[1]
+    return {
+        "schema_version": LOOP_QUEUE_ITEM_SCHEMA,
+        "loop_id": cycle["loop_id"],
+        "queue_item": item,
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def build_loop_queue_handoff(paths: OmhPaths, loop_id: str, queue_id: str) -> dict[str, Any]:
+    cycle = read_loop_cycle(paths, loop_id)
+    item = _queue_item_ref(cycle, queue_id)[1]
+    if item.get("status") != "prepared_not_observed":
+        raise ValueError("only prepared_not_observed loop queue items can render a handoff")
+    text = _queue_handoff_text(cycle, item)
+    return {
+        "schema_version": LOOP_QUEUE_HANDOFF_SCHEMA,
+        "loop_id": cycle["loop_id"],
+        "queue_id": item["queue_id"],
+        "planned_action": item["planned_action"],
+        "phase": item["phase"],
+        "status": item["status"],
+        "handoff_text": text,
+        "worktree_plan": item.get("worktree_plan", _empty_worktree_plan()),
+        "subagent_plan": item.get("subagent_plan", _empty_subagent_plan()),
+        "connector_plan": item.get("connector_plan", _connector_plan("", "", str(item.get("planned_action", "")))),
+        "next_action": "observe_or_block_loop_queue",
+        "actions": ["observe_loop_queue", "block_loop_queue", "show_loop_status"],
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def observe_loop_queue_item(
+    paths: OmhPaths,
+    loop_id: str,
+    queue_id: str,
+    *,
+    evidence_refs: Iterable[str],
+    worktree_evidence_refs: Iterable[str] | None = None,
+    subagent_evidence_refs: Iterable[str] | None = None,
+    connector_evidence_refs: Iterable[str] | None = None,
+    summary: str = "",
+) -> dict[str, Any]:
+    refs = _safe_list(evidence_refs, limit=320)
+    worktree_refs = _safe_list(worktree_evidence_refs or [], limit=320)
+    subagent_refs = _safe_list(subagent_evidence_refs or [], limit=320)
+    connector_refs = _safe_list(connector_evidence_refs or [], limit=320)
+    aggregate_refs = _safe_list([*refs, *worktree_refs, *subagent_refs, *connector_refs], limit=320)
+    if not aggregate_refs:
+        raise ValueError("loop queue observation requires at least one evidence ref")
+    cycle = read_loop_cycle(paths, loop_id)
+    runtime, item = _queue_item_ref(cycle, queue_id)
+    if item.get("status") != "prepared_not_observed":
+        raise ValueError("only prepared_not_observed loop queue items can be observed")
+    item["status"] = "observed"
+    item["observed"] = True
+    item["observed_at"] = utc_now()
+    item["observed_evidence_refs"] = aggregate_refs
+    item["observation_summary"] = _safe_summary(summary, limit=320) if summary.strip() else "Queue item observed by wrapper or operator evidence."
+    _mark_queue_plans_observed(
+        item,
+        worktree_evidence_refs=worktree_refs,
+        subagent_evidence_refs=subagent_refs,
+        connector_evidence_refs=connector_refs,
+    )
+    runtime["last_queue_id"] = str(item["queue_id"])
+    runtime["last_queue_status"] = "observed"
+    cycle["runtime"] = runtime
+    cycle["phase"] = "feedback"
+    cycle["wait_reason"] = "none"
+    cycle["next_action"] = "record_feedback"
+    return _write_loop(paths, cycle)
+
+
+def block_loop_queue_item(
+    paths: OmhPaths,
+    loop_id: str,
+    queue_id: str,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    blocker = _safe_summary(reason, limit=320)
+    if not blocker:
+        raise ValueError("loop queue blocker reason is required")
+    cycle = read_loop_cycle(paths, loop_id)
+    runtime, item = _queue_item_ref(cycle, queue_id)
+    if item.get("status") == "observed" or item.get("observed") is True:
+        raise ValueError("observed loop queue items cannot be blocked")
+    item["status"] = "blocked"
+    item["observed"] = False
+    item["blocked_at"] = utc_now()
+    item["blocker_reason"] = blocker
+    runtime["last_queue_id"] = str(item["queue_id"])
+    runtime["last_queue_status"] = "blocked"
+    cycle["runtime"] = runtime
+    cycle["phase"] = "blocked"
+    cycle["wait_reason"] = "none"
+    cycle["next_action"] = "resolve_runtime_queue_blocker"
     return _write_loop(paths, cycle)
 
 
@@ -493,6 +696,12 @@ def _string_set(values: object) -> set[str]:
     return {str(value) for value in values if str(value).strip()}
 
 
+def _string_list(values: object) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return [str(value) for value in values if str(value).strip()]
+
+
 def _valid_actions(values: Iterable[str]) -> set[str]:
     actions = {str(value).strip() for value in values if str(value).strip()}
     unknown = sorted(actions - set(LOOP_ACTIONS))
@@ -655,6 +864,11 @@ def _runtime_queue_item(
         ),
         "note": _safe_summary(note, limit=240) if note.strip() else "",
         "observed": False,
+        "observed_at": "",
+        "observed_evidence_refs": [],
+        "observation_summary": "",
+        "blocked_at": "",
+        "blocker_reason": "",
         "claim_boundary": _runtime_claim_boundary(),
     }
 
@@ -669,6 +883,7 @@ def _worktree_plan(cycle: dict[str, Any], planned_action: str, worktree_base: st
         "branch_hint": _safe_summary(branch_hint, limit=180),
         "created": False,
         "observed": False,
+        "evidence_refs": [],
         "boundary": "OMH records the worktree plan; an authorized wrapper or executor must create and observe it.",
     }
 
@@ -680,6 +895,7 @@ def _empty_worktree_plan() -> dict[str, Any]:
         "branch_hint": "",
         "created": False,
         "observed": False,
+        "evidence_refs": [],
         "boundary": "No worktree plan is prepared while the loop is blocked.",
     }
 
@@ -700,6 +916,7 @@ def _subagent_plan(
         ),
         "dispatched": False,
         "observed": False,
+        "evidence_refs": [],
         "boundary": "OMH prepares the subagent handoff; the wrapper/runtime records dispatch evidence separately.",
     }
 
@@ -712,6 +929,7 @@ def _empty_subagent_plan() -> dict[str, Any]:
         "prompt_seed": "",
         "dispatched": False,
         "observed": False,
+        "evidence_refs": [],
         "boundary": "No subagent plan is prepared while the loop is blocked.",
     }
 
@@ -724,6 +942,7 @@ def _connector_plan(connector: str, connector_action: str, planned_action: str) 
             "action": "",
             "dispatched": False,
             "observed": False,
+            "evidence_refs": [],
             "boundary": "No connector was requested for this tick.",
         }
     return {
@@ -732,6 +951,7 @@ def _connector_plan(connector: str, connector_action: str, planned_action: str) 
         "action": _safe_summary(connector_action or planned_action, limit=160),
         "dispatched": False,
         "observed": False,
+        "evidence_refs": [],
         "boundary": "OMH records connector intent only; connector I/O requires a separate observed wrapper action.",
     }
 
@@ -751,7 +971,8 @@ def _default_subagent_role(planned_action: str) -> str:
 def _runtime_summary(cycle: dict[str, Any]) -> dict[str, Any]:
     runtime = _runtime_state(cycle.get("runtime"))
     queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
-    pending = [item for item in queue if not (item.get("status") == "observed" and item.get("observed") is True)]
+    pending = [item for item in queue if item.get("status") == "prepared_not_observed"]
+    unobserved = [item for item in queue if not (item.get("status") == "observed" and item.get("observed") is True)]
     last = queue[-1] if queue else {}
     return {
         "schema_version": LOOP_RUNTIME_SCHEMA,
@@ -760,11 +981,181 @@ def _runtime_summary(cycle: dict[str, Any]) -> dict[str, Any]:
         "last_trigger": runtime["last_trigger"],
         "last_planned_action": runtime["last_planned_action"],
         "pending_queue_count": len(pending),
+        "unobserved_queue_count": len(unobserved),
         "last_queue_id": runtime["last_queue_id"],
         "last_queue_status": str(last.get("status", "")),
         "last_queue_reason": str(last.get("reason", "")),
+        "blocked_queue_count": sum(1 for item in queue if item.get("status") in {"blocked", "blocked_by_permission", "blocked_by_wait"}),
+        "observed_queue_count": sum(1 for item in queue if item.get("status") == "observed" and item.get("observed") is True),
         "claim_boundary": _runtime_claim_boundary(),
     }
+
+
+def _permission_profile_option(profile: str) -> dict[str, Any]:
+    allowed = sorted(_PROFILE_ALLOWED_ACTIONS[profile])
+    descriptions = {
+        "observe_only": "Research and plan only; no executor dispatch, repo edits, PRs, merge, or publishing.",
+        "handoff_only": "Prepare research, planning, ultragoal, handoff, and external-posting drafts without observed execution claims.",
+        "execute_with_gates": "Allow executor dispatch, repo edits, PRs, review, CI, and release-note work while merge and external posting stay gated.",
+        "full_loop": "Allow the broadest local loop path while still requiring observed evidence and explicit external-production authority.",
+    }
+    return {
+        "id": profile,
+        "label": profile.replace("_", " "),
+        "description": descriptions.get(profile, ""),
+        "allowed_action_count": len(allowed),
+        "allowed_actions": allowed,
+    }
+
+
+def _queue_item_summary(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "queue_id": str(item.get("queue_id", "")),
+        "created_at": str(item.get("created_at", "")),
+        "trigger": str(item.get("trigger", "")),
+        "cadence": str(item.get("cadence", "")),
+        "planned_action": str(item.get("planned_action", "")),
+        "phase": str(item.get("phase", "")),
+        "status": str(item.get("status", "")),
+        "reason": str(item.get("reason", "")),
+        "observed": bool(item.get("observed", False)),
+        "observed_evidence_refs": _string_list(item.get("observed_evidence_refs", [])),
+        "blocker_reason": str(item.get("blocker_reason", "")),
+        "worktree_strategy": str(_dict_value(item, "worktree_plan").get("strategy", "")),
+        "subagent_strategy": str(_dict_value(item, "subagent_plan").get("strategy", "")),
+        "connector_strategy": str(_dict_value(item, "connector_plan").get("strategy", "")),
+        "claim_boundary": str(item.get("claim_boundary", _runtime_claim_boundary())),
+    }
+
+
+def _queue_item_ref(cycle: dict[str, Any], queue_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    safe_queue_id = _storage_id(queue_id, "queue_id")
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = runtime.get("queue", [])
+    for item in queue:
+        if isinstance(item, dict) and str(item.get("queue_id", "")) == safe_queue_id:
+            return runtime, item
+    raise ValueError(f"loop queue item not found: {safe_queue_id}")
+
+
+def _queue_handoff_text(cycle: dict[str, Any], item: dict[str, Any]) -> str:
+    goal = _dict_value(cycle, "goal")
+    worktree = _dict_value(item, "worktree_plan")
+    subagent = _dict_value(item, "subagent_plan")
+    connector = _dict_value(item, "connector_plan")
+    lines = [
+        f"Continue OMH loop `{cycle.get('loop_id', '')}`.",
+        f"Goal: {goal.get('summary', '')}",
+        f"Planned action: {item.get('planned_action', '')}",
+        f"Phase: {item.get('phase', '')}",
+        "",
+        "Boundary:",
+        _runtime_claim_boundary(),
+    ]
+    if worktree.get("strategy") != "none":
+        lines.extend(
+            [
+                "",
+                "Worktree plan:",
+                f"- Path hint: {worktree.get('path_hint', '')}",
+                f"- Branch hint: {worktree.get('branch_hint', '')}",
+            ]
+        )
+    if subagent.get("strategy") != "none":
+        lines.extend(
+            [
+                "",
+                "Subagent plan:",
+                f"- Role: {subagent.get('role', '')}",
+                f"- Prompt seed: {subagent.get('prompt_seed', '')}",
+            ]
+        )
+    if connector.get("strategy") != "none":
+        lines.extend(
+            [
+                "",
+                "Connector intent:",
+                f"- Connector: {connector.get('connector', '')}",
+                f"- Action: {connector.get('action', '')}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "After an authorized wrapper or operator observes this work, record evidence with the loop queue observation contract. If it cannot proceed, block the queue item with a reason.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _mark_queue_plans_observed(
+    item: dict[str, Any],
+    *,
+    worktree_evidence_refs: list[str],
+    subagent_evidence_refs: list[str],
+    connector_evidence_refs: list[str],
+) -> None:
+    worktree = _dict_value(item, "worktree_plan")
+    if worktree.get("strategy") != "none" and worktree_evidence_refs:
+        worktree["created"] = True
+        worktree["observed"] = True
+        worktree["evidence_refs"] = list(worktree_evidence_refs)
+    subagent = _dict_value(item, "subagent_plan")
+    if subagent.get("strategy") != "none" and subagent_evidence_refs:
+        subagent["dispatched"] = True
+        subagent["observed"] = True
+        subagent["evidence_refs"] = list(subagent_evidence_refs)
+    connector = _dict_value(item, "connector_plan")
+    if connector.get("strategy") != "none" and connector_evidence_refs:
+        connector["dispatched"] = True
+        connector["observed"] = True
+        connector["evidence_refs"] = list(connector_evidence_refs)
+
+
+def _validate_typed_plan_observation(
+    errors: list[str],
+    index: int,
+    key: str,
+    plan: dict[str, Any],
+    *,
+    primary_flag: str,
+) -> None:
+    refs = _string_list(plan.get("evidence_refs", []))
+    if plan.get("strategy") == "none":
+        if plan.get(primary_flag) is not False:
+            errors.append(f"runtime.queue[{index}].{key}.{primary_flag} must be false when strategy is none")
+        if plan.get("observed") is not False:
+            errors.append(f"runtime.queue[{index}].{key}.observed must be false when strategy is none")
+        if refs:
+            errors.append(f"runtime.queue[{index}].{key}.evidence_refs must be empty when strategy is none")
+        return
+    primary_observed = plan.get(primary_flag) is True
+    observed = plan.get("observed") is True
+    if primary_observed != observed:
+        errors.append(f"runtime.queue[{index}].{key}.{primary_flag} and observed must change together")
+    if primary_observed or observed:
+        if not refs:
+            errors.append(f"runtime.queue[{index}].{key}.evidence_refs must include at least one typed evidence ref when observed")
+        if plan.get(primary_flag) is not True:
+            errors.append(f"runtime.queue[{index}].{key}.{primary_flag} must be true when typed evidence is observed")
+        if plan.get("observed") is not True:
+            errors.append(f"runtime.queue[{index}].{key}.observed must be true when typed evidence is observed")
+
+
+def _validate_unobserved_plan(
+    errors: list[str],
+    index: int,
+    key: str,
+    plan: dict[str, Any],
+    *,
+    primary_flag: str,
+) -> None:
+    if plan.get(primary_flag) is not False:
+        errors.append(f"runtime.queue[{index}].{key}.{primary_flag} must be false before observation")
+    if plan.get("observed") is not False:
+        errors.append(f"runtime.queue[{index}].{key}.observed must be false before observation")
+    if _string_list(plan.get("evidence_refs", [])):
+        errors.append(f"runtime.queue[{index}].{key}.evidence_refs must be empty before observation")
 
 
 def _validate_runtime(runtime: object) -> list[str]:
@@ -798,39 +1189,29 @@ def _validate_runtime(runtime: object) -> list[str]:
         if item.get("status") == "observed":
             if item.get("observed") is not True:
                 errors.append(f"runtime.queue[{index}].observed must be true when status is observed")
+            evidence_refs = item.get("observed_evidence_refs")
+            if not isinstance(evidence_refs, list) or not evidence_refs or not all(str(ref).strip() for ref in evidence_refs):
+                errors.append(f"runtime.queue[{index}].observed_evidence_refs must include at least one evidence ref when observed")
             worktree_plan = plans.get("worktree_plan", {})
-            if worktree_plan.get("strategy") != "none":
-                if worktree_plan.get("created") is not True:
-                    errors.append(f"runtime.queue[{index}].worktree_plan.created must be true when observed")
-                if worktree_plan.get("observed") is not True:
-                    errors.append(f"runtime.queue[{index}].worktree_plan.observed must be true when observed")
+            _validate_typed_plan_observation(errors, index, "worktree_plan", worktree_plan, primary_flag="created")
             subagent_plan = plans.get("subagent_plan", {})
-            if subagent_plan.get("strategy") != "none":
-                if subagent_plan.get("dispatched") is not True:
-                    errors.append(f"runtime.queue[{index}].subagent_plan.dispatched must be true when observed")
-                if subagent_plan.get("observed") is not True:
-                    errors.append(f"runtime.queue[{index}].subagent_plan.observed must be true when observed")
+            _validate_typed_plan_observation(errors, index, "subagent_plan", subagent_plan, primary_flag="dispatched")
             connector_plan = plans.get("connector_plan", {})
-            if connector_plan.get("strategy") != "none":
-                if connector_plan.get("dispatched") is not True:
-                    errors.append(f"runtime.queue[{index}].connector_plan.dispatched must be true when observed")
-                if connector_plan.get("observed") is not True:
-                    errors.append(f"runtime.queue[{index}].connector_plan.observed must be true when observed")
+            _validate_typed_plan_observation(errors, index, "connector_plan", connector_plan, primary_flag="dispatched")
+        elif item.get("status") == "blocked":
+            if not str(item.get("blocker_reason", "")).strip():
+                errors.append(f"runtime.queue[{index}].blocker_reason is required when status is blocked")
+            if item.get("observed") is not False:
+                errors.append(f"runtime.queue[{index}].observed must be false unless status is observed")
+            _validate_unobserved_plan(errors, index, "worktree_plan", plans.get("worktree_plan", {}), primary_flag="created")
+            _validate_unobserved_plan(errors, index, "subagent_plan", plans.get("subagent_plan", {}), primary_flag="dispatched")
+            _validate_unobserved_plan(errors, index, "connector_plan", plans.get("connector_plan", {}), primary_flag="dispatched")
         else:
             if item.get("observed") is not False:
                 errors.append(f"runtime.queue[{index}].observed must be false unless status is observed")
-            if plans.get("worktree_plan", {}).get("created") is not False:
-                errors.append(f"runtime.queue[{index}].worktree_plan.created must be false before observation")
-            if plans.get("worktree_plan", {}).get("observed") is not False:
-                errors.append(f"runtime.queue[{index}].worktree_plan.observed must be false before observation")
-            if plans.get("subagent_plan", {}).get("dispatched") is not False:
-                errors.append(f"runtime.queue[{index}].subagent_plan.dispatched must be false before observation")
-            if plans.get("subagent_plan", {}).get("observed") is not False:
-                errors.append(f"runtime.queue[{index}].subagent_plan.observed must be false before observation")
-            if plans.get("connector_plan", {}).get("dispatched") is not False:
-                errors.append(f"runtime.queue[{index}].connector_plan.dispatched must be false before observation")
-            if plans.get("connector_plan", {}).get("observed") is not False:
-                errors.append(f"runtime.queue[{index}].connector_plan.observed must be false before observation")
+            _validate_unobserved_plan(errors, index, "worktree_plan", plans.get("worktree_plan", {}), primary_flag="created")
+            _validate_unobserved_plan(errors, index, "subagent_plan", plans.get("subagent_plan", {}), primary_flag="dispatched")
+            _validate_unobserved_plan(errors, index, "connector_plan", plans.get("connector_plan", {}), primary_flag="dispatched")
         if item.get("status") in {"blocked_by_permission", "blocked_by_wait"}:
             for key, plan in plans.items():
                 if plan.get("strategy") != "none":

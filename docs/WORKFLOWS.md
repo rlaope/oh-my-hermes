@@ -130,15 +130,18 @@ Hermes Loop workflow: ambitious goal interview, research, planning, runtime tick
   - permission profile
   - feedback or wait signal
 - Expected outputs:
+  - loop_start_card/v1 setup prompt
   - loop_cycle/v1 state
   - loop_status_card/v1 next action
   - loop_runtime/v1 queued tick
+  - loop_queue_handoff/v1 only when permitted
   - executor-neutral handoff only when permitted
   - external-wait or checkpoint boundary
 - Artifact expectations:
   - metadata-only .omh/loops loop_cycle/v1 artifact
   - loop_runtime/v1 queue entries
   - loop_status_card/v1 wrapper payload
+  - loop_start_card/v1 wrapper setup card
   - linked goal_ledger/v1 only when completion evidence is required
 - Safety rules:
   - Do not treat loop persistence as permission to bypass the selected permission profile.
@@ -1431,14 +1434,16 @@ Run ambitious goal loops through interview, research, planning, runtime ticks wi
   - permission profile
   - feedback or wait signal
 - Outputs:
+  - loop_start_card/v1 setup card
   - loop_cycle/v1 artifact
   - loop_runtime/v1 queue entry
+  - loop_queue_handoff/v1 actionable handoff
   - loop_status_card/v1 next action
   - permission envelope
   - linked goal or runtime evidence references when available
 - Stop conditions:
   - next loop step is clear
-  - runtime tick queue is prepared or blocked with a reason
+  - runtime tick queue is prepared, observed, or blocked with a reason
   - permission boundaries are explicit
   - external waiting and context exhaustion are recorded
   - goal completion claims are delegated to goal_ledger/v1
@@ -1446,6 +1451,7 @@ Run ambitious goal loops through interview, research, planning, runtime ticks wi
   - validate loop_cycle/v1
   - inspect loop_runtime/v1 queue
   - inspect loop_status_card/v1
+  - inspect loop_queue_handoff/v1 when a queued item is actionable
   - check linked goal_completion_gate/v1 before completion copy
 - Evidence ladder:
   - `loop_triggered`
@@ -1459,6 +1465,10 @@ Run ambitious goal loops through interview, research, planning, runtime ticks wi
   - `choose_permission_profile`
   - `start_loop`
   - `run_loop_tick`
+  - `show_loop_queue`
+  - `prepare_loop_handoff`
+  - `observe_loop_queue`
+  - `block_loop_queue`
   - `show_loop_status`
   - `prepare_handoff`
   - `choose_executor`

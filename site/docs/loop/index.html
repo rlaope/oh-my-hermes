@@ -132,6 +132,41 @@
       </section>
 
       <section class="feature-section">
+        <div class="feature-copy">
+          <h2>Start card to queue lifecycle</h2>
+          <p>
+            A chat wrapper can ask OMH for a <code>loop_start_card/v1</code>
+            before a loop artifact exists. After the user chooses a permission
+            profile, Hermes can start the loop, tick it, show the prepared
+            queue, render a handoff for the actionable item, then close that
+            item as observed or blocked.
+          </p>
+        </div>
+        <div class="lifecycle-strip" aria-label="Loop start and queue lifecycle">
+          <article class="lifecycle-step">
+            <span>1</span>
+            <strong>Start card</strong>
+            <p>Explain the goal boundary and ask for permission profile.</p>
+          </article>
+          <article class="lifecycle-step">
+            <span>2</span>
+            <strong>Runtime queue</strong>
+            <p>Prepare the next worktree, subagent, connector, or handoff plan.</p>
+          </article>
+          <article class="lifecycle-step">
+            <span>3</span>
+            <strong>Handoff</strong>
+            <p>Render the selected queue item as executor-ready instructions.</p>
+          </article>
+          <article class="lifecycle-step">
+            <span>4</span>
+            <strong>Observe or block</strong>
+            <p>Record evidence refs, or stop the queue item with a reason.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="feature-section">
         <h2>How Hermes can present it</h2>
         <div class="discord-frame" aria-label="Hermes Loop chat example">
           <div class="discord-channel"># founder-loop</div>

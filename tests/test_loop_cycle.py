@@ -9,9 +9,16 @@ from _local_package import load_local_package
 load_local_package()
 from omh.goal_loop import (
     LOOP_CYCLE_SCHEMA,
+    LOOP_START_CARD_SCHEMA,
     LOOP_STATUS_CARD_SCHEMA,
+    block_loop_queue_item,
+    build_loop_queue_handoff,
+    build_loop_start_card,
     build_loop_status_card,
     create_loop_cycle,
+    inspect_loop_queue_item,
+    list_loop_queue,
+    observe_loop_queue_item,
     record_loop_feedback,
     tick_loop_runtime,
     update_loop_permission,
@@ -21,6 +28,27 @@ from omh.paths import resolve_paths
 
 
 class GoalLoopTests(unittest.TestCase):
+    def test_loop_start_card_redacts_goal_and_exposes_start_contract(self) -> None:
+        card = build_loop_start_card(
+            "Make OMH a 10k-star quality Hermes-native project",
+            source="discord",
+            default_permission_profile="handoff_only",
+        )
+        serialized = str(card)
+
+        self.assertEqual(card["schema_version"], LOOP_START_CARD_SCHEMA)
+        self.assertEqual(card["status"], "interview_required")
+        self.assertEqual(card["goal_summary"], "{message}")
+        self.assertEqual(card["next_action"], "choose_permission_profile")
+        self.assertEqual(card["backend_contract"]["operation"], "loop.start")
+        self.assertIn("goal_reframe", card["backend_contract"]["required_fields"])
+        self.assertIn("handoff_only", {option["id"] for option in card["permission_profiles"]})
+        self.assertIn("loop_cycle/v1", card["backend_contract"]["creates_artifact"])
+        self.assertNotIn("10k-star quality", serialized)
+
+        visible = build_loop_start_card("Make OMH public launch-ready", include_goal=True)
+        self.assertEqual(visible["goal_summary"], "Make OMH public launch-ready")
+
     def test_loop_cycle_records_permission_profile_without_completion_claim(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -179,6 +207,118 @@ class GoalLoopTests(unittest.TestCase):
         self.assertIn("prepared runtime queue", card["safe_copy"]["next_step"])
         self.assertEqual(validate_loop_cycle(updated), {"ok": True, "errors": []})
 
+    def test_loop_queue_lifecycle_lists_handoffs_observes_and_blocks_items(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Make loop queue work actionable",
+                goal_reframe="Prepare runtime queue items and require explicit observation evidence before claiming they ran.",
+                success_criteria=["Queue items can be listed", "Observation evidence is required"],
+                permission_profile="handoff_only",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(
+                paths,
+                cycle["loop_id"],
+                worktree_base=".worktrees",
+                subagent_role="researcher",
+                connector="linear",
+                connector_action="comment",
+            )
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+
+            listing = list_loop_queue(paths, cycle["loop_id"])
+            inspected = inspect_loop_queue_item(paths, cycle["loop_id"], queue_id)
+            handoff = build_loop_queue_handoff(paths, cycle["loop_id"], queue_id)
+            observed = observe_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                evidence_refs=["wrapper:queue-observation:1"],
+                summary="Wrapper observed the queued research handoff.",
+            )
+            card = build_loop_status_card(paths, cycle["loop_id"])
+
+        item = observed["runtime"]["queue"][0]
+        self.assertEqual(listing["schema_version"], "loop_queue_list/v1")
+        self.assertEqual(listing["pending_queue_count"], 1)
+        self.assertEqual(inspected["queue_item"]["queue_id"], queue_id)
+        self.assertEqual(handoff["schema_version"], "loop_queue_handoff/v1")
+        self.assertIn("Continue OMH loop", handoff["handoff_text"])
+        self.assertEqual(handoff["next_action"], "observe_or_block_loop_queue")
+        self.assertEqual(item["status"], "observed")
+        self.assertTrue(item["observed"])
+        self.assertEqual(item["observed_evidence_refs"], ["wrapper:queue-observation:1"])
+        self.assertFalse(item["worktree_plan"]["created"])
+        self.assertFalse(item["subagent_plan"]["dispatched"])
+        self.assertFalse(item["connector_plan"]["dispatched"])
+        self.assertEqual(observed["phase"], "feedback")
+        self.assertEqual(observed["next_action"], "record_feedback")
+        self.assertEqual(card["runtime_summary"]["pending_queue_count"], 0)
+        self.assertEqual(card["runtime_summary"]["observed_queue_count"], 1)
+        self.assertEqual(validate_loop_cycle(observed), {"ok": True, "errors": []})
+
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Observe typed loop queue effects",
+                goal_reframe="Only typed evidence should mark worktree, subagent, or connector effects observed.",
+                success_criteria=["Typed evidence controls subplan observation"],
+                permission_profile="handoff_only",
+            )
+            ticked = tick_loop_runtime(
+                paths,
+                cycle["loop_id"],
+                connector="linear",
+                connector_action="comment",
+            )
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            observed = observe_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                evidence_refs=["wrapper:queue-observation:2"],
+                worktree_evidence_refs=["worktree:created:1"],
+                subagent_evidence_refs=["subagent:dispatch:1"],
+                connector_evidence_refs=["connector:linear:comment:1"],
+            )
+
+        typed_item = observed["runtime"]["queue"][0]
+        self.assertTrue(typed_item["worktree_plan"]["created"])
+        self.assertEqual(typed_item["worktree_plan"]["evidence_refs"], ["worktree:created:1"])
+        self.assertTrue(typed_item["subagent_plan"]["dispatched"])
+        self.assertEqual(typed_item["subagent_plan"]["evidence_refs"], ["subagent:dispatch:1"])
+        self.assertTrue(typed_item["connector_plan"]["dispatched"])
+        self.assertEqual(typed_item["connector_plan"]["evidence_refs"], ["connector:linear:comment:1"])
+        self.assertEqual(validate_loop_cycle(observed), {"ok": True, "errors": []})
+
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Block a queue item safely",
+                goal_reframe="Record queue blockers without creating observation evidence.",
+                success_criteria=["Blocked queue items preserve evidence boundaries"],
+                permission_profile="handoff_only",
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            blocked = block_loop_queue_item(paths, cycle["loop_id"], queue_id, reason="Need maintainer approval")
+            card = build_loop_status_card(paths, cycle["loop_id"])
+
+        blocked_item = blocked["runtime"]["queue"][0]
+        self.assertEqual(blocked_item["status"], "blocked")
+        self.assertFalse(blocked_item["observed"])
+        self.assertEqual(blocked_item["blocker_reason"], "Need maintainer approval")
+        self.assertEqual(blocked["phase"], "blocked")
+        self.assertEqual(blocked["next_action"], "resolve_runtime_queue_blocker")
+        self.assertEqual(card["runtime_summary"]["blocked_queue_count"], 1)
+        self.assertFalse(blocked_item["worktree_plan"]["created"])
+        self.assertFalse(blocked_item["subagent_plan"]["dispatched"])
+        self.assertEqual(validate_loop_cycle(blocked), {"ok": True, "errors": []})
+
     def test_loop_tick_respects_external_wait_and_permission_gate(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -256,9 +396,37 @@ class GoalLoopTests(unittest.TestCase):
 
         self.assertFalse(validation["ok"])
         self.assertIn("runtime.queue[0].observed must be true when status is observed", validation["errors"])
-        self.assertIn("runtime.queue[0].worktree_plan.created must be true when observed", validation["errors"])
-        self.assertIn("runtime.queue[0].subagent_plan.dispatched must be true when observed", validation["errors"])
-        self.assertIn("runtime.queue[0].connector_plan.dispatched must be true when observed", validation["errors"])
+        self.assertIn("runtime.queue[0].observed_evidence_refs must include at least one evidence ref when observed", validation["errors"])
+
+    def test_loop_runtime_validation_rejects_typed_observed_subplans_without_typed_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Protect typed subplan boundaries",
+                goal_reframe="Reject runtime queue entries that mark subplans observed without typed evidence refs.",
+                success_criteria=["Typed observed effects require typed evidence"],
+                permission_profile="execute_with_gates",
+            )
+
+            updated = tick_loop_runtime(paths, cycle["loop_id"], connector="linear")
+
+        item = updated["runtime"]["queue"][0]
+        item["status"] = "observed"
+        item["observed"] = True
+        item["observed_evidence_refs"] = ["wrapper:queue:observed"]
+        item["worktree_plan"]["created"] = True
+        item["worktree_plan"]["observed"] = True
+        item["subagent_plan"]["dispatched"] = True
+        item["subagent_plan"]["observed"] = True
+        item["connector_plan"]["dispatched"] = True
+        item["connector_plan"]["observed"] = True
+        validation = validate_loop_cycle(updated)
+
+        self.assertFalse(validation["ok"])
+        self.assertIn("runtime.queue[0].worktree_plan.evidence_refs must include at least one typed evidence ref when observed", validation["errors"])
+        self.assertIn("runtime.queue[0].subagent_plan.evidence_refs must include at least one typed evidence ref when observed", validation["errors"])
+        self.assertIn("runtime.queue[0].connector_plan.evidence_refs must include at least one typed evidence ref when observed", validation["errors"])
 
 
 if __name__ == "__main__":

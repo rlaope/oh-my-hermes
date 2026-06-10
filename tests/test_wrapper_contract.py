@@ -150,6 +150,24 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("observed status", payload["chat_response"]["body"])
         self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
+    def test_loop_interaction_exposes_start_card_without_raw_goal_by_default(self) -> None:
+        message = "./loop make OMH a 10k-star quality Hermes-native project"
+
+        payload = build_chat_interaction_payload(message, source="discord")
+
+        serialized = json.dumps(payload)
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "start_goal_loop")
+        self.assertEqual(payload["chat_response"]["kind"], "loop")
+        self.assertEqual(payload["loop_start_card"]["schema_version"], "loop_start_card/v1")
+        self.assertEqual(payload["loop_start_card"]["goal_summary"], "{message}")
+        self.assertEqual(payload["chat_response"]["state"]["loop_start_card"]["schema_version"], "loop_start_card/v1")
+        action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
+        self.assertIn("choose_permission_profile", action_ids)
+        self.assertIn("start_loop", action_ids)
+        self.assertIn("show_loop_queue", action_ids)
+        self.assertNotIn("10k-star quality", serialized)
+
     def test_cancel_routes_to_control_action_without_plan_ui(self) -> None:
         payload = build_chat_interaction_payload("cancel", source="discord")
 
