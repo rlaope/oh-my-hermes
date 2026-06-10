@@ -30,7 +30,7 @@ def cmd_playbook_recommend(args: argparse.Namespace) -> int:
 
 
 def _add_playbook_commands(sub) -> None:
-    playbook = sub.add_parser("playbook")
+    playbook = sub.add_parser("playbook", help="Recommend or inspect complete Hermes workflow playbooks.")
     playbook_sub = playbook.add_subparsers(dest="playbook_command", required=True)
 
     playbook_list = playbook_sub.add_parser("list")

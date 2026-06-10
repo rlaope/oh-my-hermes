@@ -982,6 +982,62 @@ h1 {
   background: rgba(240, 184, 110, 0.18);
 }
 
+.loop-image-frame {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid rgba(126, 215, 194, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(15, 24, 34, 0.96), rgba(20, 70, 68, 0.86));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 30px 76px rgba(16, 28, 40, 0.28);
+  transform: translateZ(0);
+}
+
+.loop-image-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 48%, rgba(255, 255, 255, 0.16) 50%, transparent 56%),
+    radial-gradient(circle at 84% 14%, rgba(126, 215, 194, 0.2), transparent 28%);
+  mix-blend-mode: screen;
+  opacity: 0.72;
+}
+
+.loop-image-frame img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.loop-image-frame--spotlight {
+  min-height: 270px;
+  transform: perspective(900px) rotateY(-5deg) translateZ(0);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.loop-spotlight:hover .loop-image-frame--spotlight {
+  transform: perspective(900px) rotateY(-2deg) translateY(-4px) translateZ(20px);
+  border-color: rgba(240, 184, 110, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 38px 96px rgba(16, 28, 40, 0.36);
+}
+
+.loop-image-frame--hero {
+  width: min(100%, 920px);
+  margin-top: 28px;
+}
+
 .flagship-showcase {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);

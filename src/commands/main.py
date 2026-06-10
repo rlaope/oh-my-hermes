@@ -85,11 +85,29 @@ from .state import _add_state_commands, cmd_state_clear, cmd_state_finish, cmd_s
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="omh",
-        description="Bootstrap, verify, and operate oh-my-hermes support contracts for Hermes Agent.",
+        description=(
+            "Install OMH once, then use Hermes chat.\n"
+            "This command is for setup, health checks, local artifacts,\n"
+            "and wrapper/backend operations."
+        ),
+        epilog=(
+            "Quick start:\n"
+            "  omh setup\n"
+            "  omh doctor\n\n"
+            "Normal use happens in Hermes chat:\n"
+            "  Use OMH request-to-handoff for: I want to safely add a feature to this repo.\n\n"
+            "Operator examples:\n"
+            "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
+            "  omh loop status\n"
+            "  omh runtime status\n\n"
+            "Use --json on setup/install/update/doctor/uninstall when a wrapper\n"
+            "or automation needs machine-readable output."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--omh-home", default=None)
-    parser.add_argument("--hermes-home", default=None)
-    sub = parser.add_subparsers(dest="command")
+    parser.add_argument("--omh-home", default=None, help="Override the managed OMH home directory (default: ~/.omh).")
+    parser.add_argument("--hermes-home", default=None, help="Override the target Hermes home directory (default: ~/.hermes).")
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     _add_top_level_commands(sub)
     _add_docs_commands(sub)
@@ -112,18 +130,18 @@ def _print_welcome() -> None:
     print(
         """OMH - oh-my-hermes-agent
 
-Install OMH, then talk to Hermes. The CLI is the bootstrap, doctor, verifier,
-and wrapper/backend surface; the normal user experience is Hermes Agent chat
-with installed OMH skills.
+Install OMH, then talk to Hermes. The `omh` command is the setup, doctor,
+verifier, and wrapper/backend surface; the normal user experience is Hermes
+Agent chat with installed OMH skills.
 
 Start:
-  omh setup              Install/update managed Hermes skills
-  omh doctor             Check local OMH and Hermes skill registration
+  omh setup              Install skills and connect them to Hermes
+  omh doctor             Check local OMH health and registration
 
 Useful operator commands:
-  omh recommend "risky refactor"
-  omh playbook recommend "turn this issue into a PR"
-  omh loop status
+  omh chat interact "turn this issue into a PR-ready plan"
+  omh loop status        Show ambitious goal loop state
+  omh runtime status     Show local evidence artifacts
 
 After setup, restart or reload Hermes Agent and try:
   Use OMH request-to-handoff for: I want to safely add a feature to this repo.

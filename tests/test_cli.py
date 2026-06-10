@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from _cli_harness import run_cli
 from omh.cli import OmhError, cmd_runtime_merge
+from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.skill_pack import builtin_skill_templates
 
@@ -24,8 +25,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH - oh-my-hermes-agent", stdout)
         self.assertIn("omh setup", stdout)
-        self.assertIn("Hermes Agent chat", stdout)
+        self.assertIn("Agent chat with installed OMH skills", stdout)
         self.assertIn("omh --help", stdout)
+
+    def test_root_help_explains_command_lanes(self) -> None:
+        help_text = build_parser().format_help()
+
+        self.assertIn("Install OMH once, then use Hermes chat.", help_text)
+        self.assertIn("Quick start:", help_text)
+        self.assertIn("Normal use happens in Hermes chat:", help_text)
+        self.assertIn("setup", help_text)
+        self.assertIn("Install managed skills and connect them", help_text)
+        self.assertIn("chat", help_text)
+        self.assertIn("wrapper chat events", help_text)
+        self.assertIn("Use --json on setup/install/update/doctor/uninstall", help_text)
 
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -41,6 +54,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("Skills:", stdout)
             self.assertIn("Hermes registration:", stdout)
+            self.assertIn("Coding handoff default:", stdout)
+            self.assertIn("Visible team preset:", stdout)
             self.assertIn("Restart or reload Hermes Agent", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             with self.assertRaises(json.JSONDecodeError):
@@ -52,6 +67,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("OMH doctor: ok", stdout)
             self.assertIn("Checks:", stdout)
+            self.assertIn("Boundary: restart or reload Hermes", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
 
             dry_root = root / "dry"
@@ -99,10 +115,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup", stdout)
-            self.assertIn("Default for coding-shaped requests", stdout)
-            self.assertIn("All OMH skills are installed either way", stdout)
-            self.assertIn("Activate a visible team persona now", stdout)
-            self.assertIn("These are optional Hermes role files, not missing features", stdout)
+            self.assertIn("When a request may need coding", stdout)
+            self.assertIn("does not hide or remove any OMH skills", stdout)
+            self.assertIn("Add an optional visible team role preset", stdout)
+            self.assertIn("They do not enable or disable OMH workflows", stdout)
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("Plugin bridge:", stdout)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
@@ -1816,16 +1832,21 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("omh ", json.dumps(payload["chat_response"]).lower())
 
     def test_chat_interact_delegate_mode_defaults_to_executor_choice(self) -> None:
-        status, stdout, stderr = run_cli(["chat", "interact", "--mode", "delegate", "--source", "discord", "risky", "refactor"])
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(
+                base + ["chat", "interact", "--mode", "delegate", "--source", "discord", "risky", "refactor"]
+            )
 
-        self.assertEqual(stderr, "")
-        self.assertEqual(status, 0)
-        payload = json.loads(stdout)
-        actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
-        self.assertEqual(payload["next_action"], "choose_executor")
-        self.assertTrue(payload["delegation"]["executor_selection"]["choice_required"])
-        self.assertNotIn("executor_handoff", payload["delegation"])
-        self.assertIn("choose_executor", actions)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
+            self.assertEqual(payload["next_action"], "choose_executor")
+            self.assertTrue(payload["delegation"]["executor_selection"]["choice_required"])
+            self.assertNotIn("executor_handoff", payload["delegation"])
+            self.assertIn("choose_executor", actions)
 
     def test_chat_interact_delegate_mode_can_prepare_codex_handoff(self) -> None:
         status, stdout, stderr = run_cli(["chat", "interact", "--mode", "delegate", "--executor", "codex", "--source", "discord", "risky", "refactor"])

@@ -95,7 +95,7 @@ def _optional_positive_int(value: int | None, flag: str) -> int | None:
 
 
 def _add_memory_commands(sub) -> None:
-    memory = sub.add_parser("memory")
+    memory = sub.add_parser("memory", help="Inspect, pack, or apply OMH memory/context review artifacts.")
     memory_sub = memory.add_subparsers(dest="memory_command", required=True)
 
     inspect = memory_sub.add_parser("inspect")
