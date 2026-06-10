@@ -42,6 +42,7 @@ COMMAND_PACKAGE_STATUS_SCHEMA_VERSION = "command_package_status/v1"
 RELEASE_UPDATE_SCHEMA_VERSION = "release_update_status/v1"
 SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION = "setup_operator_summary/v1"
 DOCTOR_SUMMARY_SCHEMA_VERSION = "doctor_summary/v1"
+MCP_SETUP_SCHEMA_VERSION = "omh_mcp_setup/v1"
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -336,11 +337,13 @@ def _setup_operator_summary(
     status = "dry_run" if dry_run else "skills_only" if getattr(args, "skip_apply", False) else "configured"
     plugin_status = "installed" if getattr(args, "with_plugin", False) else "optional"
     team_status = "profile_pack" if getattr(args, "profile_pack", []) else "available"
+    mcp = steps.get("mcp", {})
+    mcp_mode = str(mcp.get("mode", "none")) if isinstance(mcp, dict) else "none"
     summary = {
         "schema_version": SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION,
         "scope": _setup_scope(args),
         "install_mode": "managed_skills",
-        "mcp_mode": "none",
+        "mcp_mode": mcp_mode,
         "plugin_mode": plugin_status,
         "team_mode": team_status,
         "status": status,
@@ -366,7 +369,7 @@ def _setup_operator_summary(
 def _setup_scope(args: argparse.Namespace) -> str:
     if getattr(args, "omh_home", None) or getattr(args, "hermes_home", None):
         return "custom"
-    return "user"
+    return "project" if str(getattr(args, "scope", "") or "").strip().lower() == "project" else "user"
 
 
 def _doctor_operator_summary(checks: list[object]) -> dict[str, object]:
@@ -611,18 +614,21 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
-    paths = _paths(args)
     language = _setup_language(args)
+    paths = _paths(args)
     if _setup_should_interact(args):
         if not _language_was_explicit(args):
             language = _ask_setup_language(use_color=_use_color())
             args.language = language
+        if not _setup_paths_were_explicit(args) and not getattr(args, "scope", None):
+            args.scope = _ask_setup_scope(use_color=_use_color(), language=language)
+            paths = _paths(args)
         _run_setup_wizard(args, paths, language)
 
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
         progress.header(tr(language, "setup_title"), tr(language, "setup_subtitle"))
-    total_steps = 4 + (1 if args.with_plugin else 0) + (1 if args.profile_pack else 0)
+    total_steps = 4 + (1 if args.with_plugin else 0) + (1 if args.with_mcp else 0) + (1 if args.profile_pack else 0)
     step_index = 1
 
     progress.step(step_index, total_steps, tr(language, "step_install_skills"), detail=str(paths.skills_dir))
@@ -648,6 +654,13 @@ def cmd_setup(args: argparse.Namespace) -> int:
         progress.done(str(plugin_status))
         step_index += 1
 
+    steps["mcp"] = _mcp_setup_result(args, paths)
+    if args.with_mcp:
+        progress.step(step_index, total_steps, tr(language, "step_mcp"), detail=str(paths.runtime_state_path))
+        mcp_status = steps["mcp"].get("status", "bridge_requested") if isinstance(steps["mcp"], dict) else "bridge_requested"
+        progress.done(tr(language, "done_mcp_bridge", status=mcp_status))
+        step_index += 1
+
     if args.profile_pack:
         progress.step(step_index, total_steps, tr(language, "step_team"), detail=", ".join(args.profile_pack))
         steps["team_profiles"] = _team_profile_setup_result(args, paths)
@@ -671,6 +684,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         setup_context={
             "apply_skipped": bool(args.skip_apply),
             "with_plugin": bool(args.with_plugin),
+            "with_mcp": bool(args.with_mcp),
             "profile_packs": list(args.profile_pack),
             "setup_profiles": list(args.profile),
             "default_executor": str(getattr(args, "default_executor", "") or ""),
@@ -714,6 +728,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "discovery_status": discovery_status,
         "requires_hermes_reload": not args.skip_apply,
         "normal_user_surface": "Hermes Agent chat and installed Hermes skills",
+        "setup_scope": _setup_scope(args),
         "equivalent_hermes_commands": [
             "hermes skills tap add rlaope/oh-my-hermes-agent",
             "hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes",
@@ -722,6 +737,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "skills_dir": str(paths.skills_dir),
         "hermes_config_path": str(paths.hermes_config_path),
         "hermes_config_key": "skills.external_dirs",
+        "mcp_setup": steps["mcp"],
         "target_topology": steps["targets"]["topology"],
         "wrapper_backend_surface": "omh chat interact and runtime commands are adapter/operator contracts, not the normal chat UX",
     }
@@ -737,6 +753,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
                     "hermes_native": hermes_native,
                     "operator_summary": operator_summary,
                     "setup_profile": steps["profile"],
+                    "mcp_setup": steps["mcp"],
                     "team_profiles": steps.get("team_profiles", []),
                     "target_observation": steps["targets"],
                 }
@@ -770,7 +787,15 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
         return False
     if _wants_json(args) or getattr(args, "dry_run", False):
         return False
-    if args.profile or getattr(args, "default_executor", None) or args.profile_pack or args.with_plugin or args.skip_apply:
+    if (
+        args.profile
+        or getattr(args, "default_executor", None)
+        or args.profile_pack
+        or args.with_plugin
+        or args.with_mcp
+        or args.skip_apply
+        or getattr(args, "scope", None)
+    ):
         return False
     return sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -793,6 +818,10 @@ def _language_was_explicit(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "language", None) or os.environ.get("OMH_LANG") or os.environ.get("OMH_LANGUAGE"))
 
 
+def _setup_paths_were_explicit(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "omh_home", None) or getattr(args, "hermes_home", None))
+
+
 def _ask_setup_language(*, use_color: bool) -> str:
     return _ask_single_choice(
         tr("en", "language_title"),
@@ -801,6 +830,33 @@ def _ask_setup_language(*, use_color: bool) -> str:
         default_choice="1",
         use_color=use_color,
         language="en",
+    )
+
+
+def _ask_setup_scope(*, use_color: bool, language: str) -> str:
+    return _ask_single_choice(
+        tr(language, "scope_title"),
+        [
+            tr(language, "scope_intro_1"),
+            tr(language, "scope_intro_2"),
+        ],
+        [
+            {
+                "choice": "1",
+                "value": "user",
+                "label": tr(language, "scope_user_label"),
+                "description": tr(language, "scope_user_desc"),
+            },
+            {
+                "choice": "2",
+                "value": "project",
+                "label": tr(language, "scope_project_label"),
+                "description": tr(language, "scope_project_desc"),
+            },
+        ],
+        default_choice="1",
+        use_color=use_color,
+        language=language,
     )
 
 
@@ -832,6 +888,13 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
         default=False,
         use_color=use_color,
         note=tr(language, "plugin_note"),
+        language=language,
+    )
+    args.with_mcp = _ask_yes_no(
+        tr(language, "mcp_question"),
+        default=False,
+        use_color=use_color,
+        note=tr(language, "mcp_note"),
         language=language,
     )
     args.profile_pack = _ask_team_profile_packs(use_color=use_color, language=language)
@@ -1652,6 +1715,37 @@ def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
     return result
 
 
+def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
+    requested = bool(getattr(args, "with_mcp", False))
+    if requested:
+        status = "would_record_bridge_preference" if args.dry_run else "bridge_preference_recorded"
+        mode = "bridge_requested"
+    else:
+        status = "not_requested"
+        mode = "none"
+    return {
+        "schema_version": MCP_SETUP_SCHEMA_VERSION,
+        "mode": mode,
+        "requested": requested,
+        "status": status,
+        "dry_run": bool(args.dry_run),
+        "observed": False,
+        "scope": _setup_scope(args),
+        "paths": {
+            "omh_home": str(paths.omh_home),
+            "runtime_state_path": str(paths.runtime_state_path),
+        },
+        "claim_boundary": (
+            "OMH setup records the operator MCP bridge preference only; it does not prove an MCP host "
+            "loaded OMH, called a tool, or observed runtime evidence."
+        ),
+        "next_action": (
+            "Use Hermes skills as the normal surface. Treat MCP bridge availability as unobserved until a "
+            "Hermes/MCP host records a concrete load or tool-call event."
+        ),
+    }
+
+
 def _setup_profile_result(args: argparse.Namespace, paths) -> dict[str, object]:
     default_executor = str(getattr(args, "default_executor", "") or "") or None
     if args.dry_run:
@@ -1749,6 +1843,12 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
 def _add_top_level_commands(sub) -> None:
     setup = sub.add_parser("setup", help="Install managed skills and connect them to the target Hermes profile.")
     _add_common_install_options(setup)
+    setup.add_argument(
+        "--scope",
+        choices=("user", "project"),
+        default=argparse.SUPPRESS,
+        help="Install to user-wide ~/.omh/~/.hermes or project-local ./.omh/./.hermes paths.",
+    )
     setup.add_argument("--json", action="store_true", help="Print the full machine-readable setup payload.")
     setup.add_argument("--yes", action="store_true", help="Use default setup choices without interactive prompts.")
     setup.add_argument("--interactive", action="store_true", help="Force the interactive setup wizard.")
@@ -1770,6 +1870,11 @@ def _add_top_level_commands(sub) -> None:
         "--with-plugin",
         action="store_true",
         help="Also install the optional OMH Hermes plugin bundle under ~/.hermes/plugins/omh.",
+    )
+    setup.add_argument(
+        "--with-mcp",
+        action="store_true",
+        help="Record an optional OMH MCP bridge preference without claiming MCP host runtime load.",
     )
     setup.add_argument(
         "--profile-pack",

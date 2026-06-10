@@ -32,9 +32,11 @@ OMH_FORCE_LINK="${OMH_FORCE_LINK:-0}"
 OMH_AUTO_APPLY="${OMH_AUTO_APPLY:-1}"
 OMH_RUN_DOCTOR="${OMH_RUN_DOCTOR:-1}"
 OMH_WITH_PLUGIN="${OMH_WITH_PLUGIN:-0}"
+OMH_WITH_MCP="${OMH_WITH_MCP:-0}"
 OMH_PROFILE_PACKS="${OMH_PROFILE_PACKS:-}"
 OMH_SETUP_PROFILES="${OMH_SETUP_PROFILES:-}"
 OMH_DEFAULT_EXECUTOR="${OMH_DEFAULT_EXECUTOR:-}"
+OMH_SCOPE="${OMH_SCOPE:-}"
 OMH_SETUP_ARGS="${OMH_SETUP_ARGS:-}"
 OMH_LANG_RAW="${OMH_LANG:-${OMH_LANGUAGE:-}}"
 OMH_LANG_WAS_SET=0
@@ -416,6 +418,14 @@ if [ "$OMH_WITH_PLUGIN" = "1" ]; then
   set -- "$@" --with-plugin
 fi
 
+if [ "$OMH_WITH_MCP" = "1" ]; then
+  set -- "$@" --with-mcp
+fi
+
+if [ -n "$OMH_SCOPE" ]; then
+  set -- "$@" --scope "$OMH_SCOPE"
+fi
+
 if [ -n "$OMH_PROFILE_PACKS" ]; then
   for OMH_PROFILE_PACK in $(printf '%s' "$OMH_PROFILE_PACKS" | tr ',' ' '); do
     set -- "$@" --profile-pack "$OMH_PROFILE_PACK"
@@ -447,7 +457,11 @@ if [ "$OMH_RUN_DOCTOR" = "0" ]; then
   say_note "Skipped doctor check because OMH_RUN_DOCTOR=0."
 else
   say_step "[5/5]" "$(msg step_doctor)"
-  run_omh doctor
+  if [ -n "$OMH_SCOPE" ]; then
+    run_omh --scope "$OMH_SCOPE" doctor
+  else
+    run_omh doctor
+  fi
 fi
 
 printf '\n'

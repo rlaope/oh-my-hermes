@@ -95,11 +95,26 @@ def default_hermes_home() -> Path:
     return expand_path(os.environ.get("HERMES_HOME", "~/.hermes"))
 
 
+def project_omh_home(cwd: str | Path | None = None) -> Path:
+    return expand_path(cwd or Path.cwd()) / ".omh"
+
+
+def project_hermes_home(cwd: str | Path | None = None) -> Path:
+    return expand_path(cwd or Path.cwd()) / ".hermes"
+
+
 def resolve_paths(
     omh_home: str | Path | None = None,
     hermes_home: str | Path | None = None,
+    *,
+    scope: str | None = None,
 ) -> OmhPaths:
+    normalized_scope = str(scope or "user").strip().lower()
+    if normalized_scope not in {"user", "project"}:
+        normalized_scope = "user"
+    default_omh = project_omh_home() if normalized_scope == "project" else default_omh_home()
+    default_hermes = project_hermes_home() if normalized_scope == "project" else default_hermes_home()
     return OmhPaths(
-        omh_home=expand_path(omh_home) if omh_home else default_omh_home(),
-        hermes_home=expand_path(hermes_home) if hermes_home else default_hermes_home(),
+        omh_home=expand_path(omh_home) if omh_home else default_omh,
+        hermes_home=expand_path(hermes_home) if hermes_home else default_hermes,
     )

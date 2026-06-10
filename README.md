@@ -77,11 +77,20 @@ The installer normally runs setup for you. Keep `omh setup` in the quick start
 because it is the repeatable repair step that installs generated skills under
 `~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
-the setup language, Hermes registration, the default coding handoff style, the
-optional plugin bridge, and optional visible team role presets. All OMH
+the setup language, install scope, Hermes registration, the default coding
+handoff style, the optional plugin/MCP bridge preferences, and optional visible
+team role presets. All OMH
 workflows are installed either way. Non-interactive shells use the safe
 defaults. Add `--json`
 when an operator or wrapper needs the full machine-readable payload.
+
+The default user scope installs under `~/.omh` and `~/.hermes`. Use project
+scope when a repository should carry its own isolated OMH/Hermes setup:
+
+```sh
+omh setup --scope project
+omh --scope project doctor
+```
 
 Verify the local install:
 
@@ -189,7 +198,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Surface | What it provides |
 | --- | --- |
 | Hermes skill tap | Tap-compatible skills under `skills/<name>/SKILL.md`. |
-| Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs`. |
+| Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs` in user or project scope. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
 | Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards, `loop_engineering/v1` snapshots, and queue lifecycle actions help wrappers show what can start, what is only prepared, and what was later observed or blocked. |
@@ -199,6 +208,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
 | Optional plugin bridge | `omh setup --with-plugin` installs `~/.hermes/plugins/omh` with metadata-only `omh_status` support. |
+| Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |
 
 ## How It Feels In Hermes
@@ -246,7 +256,7 @@ Hermes loaded the plugin, executed code, reviewed a PR, passed CI, or merged.
 The installer can also pass these advanced setup choices directly:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SCOPE=project OMH_WITH_PLUGIN=1 OMH_WITH_MCP=1 OMH_PROFILE_PACKS=cto-loop sh
 ```
 
 ## Documentation

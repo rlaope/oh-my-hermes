@@ -24,14 +24,22 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
-detects the Hermes config path, confirms skill registration, asks for the
-default coding handoff style, and can opt into the plugin bridge or a visible
-team role preset. Those choices do not add or remove OMH workflows; they only
-save defaults for how Hermes should present handoff and role surfaces. In
-non-interactive shells it uses safe defaults and prints a concise step-by-step
-summary. Use
+selects user or project scope, detects the Hermes config path, confirms skill
+registration, asks for the default coding handoff style, and can opt into the
+plugin bridge, MCP bridge preference, or a visible team role preset. Those
+choices do not add or remove OMH workflows; they only save defaults for how
+Hermes should present handoff and role surfaces. In non-interactive shells it
+uses safe defaults and prints a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
+
+The default user scope writes `~/.omh` and `~/.hermes`. Use project scope when
+one repository needs isolated local OMH skills and Hermes config:
+
+```sh
+omh setup --scope project
+omh --scope project doctor
+```
 
 The installer also prints the installed `omh` command path. By default it uses
 an isolated OMH virtual environment and links `omh` into a user bin directory
@@ -50,6 +58,17 @@ That installs `~/.hermes/plugins/omh` with metadata-only status support. It
 does not execute code, patch Hermes core, or prove Hermes has loaded the
 plugin. If the target Hermes runtime requires a separate plugin enable command,
 follow that runtime's plugin enable/reload step.
+
+MCP bridge setup is also optional and intentionally conservative:
+
+```sh
+omh setup --with-mcp
+```
+
+This records `mcp_mode: bridge_requested` in setup state and keeps
+`observed: false` until a Hermes/MCP host records a concrete load or tool-call
+event. It is a preference/contract marker, not proof that an MCP runtime is
+active.
 
 ## Install Path A: Hermes-Native Skill Tap
 
@@ -543,6 +562,18 @@ Install the optional plugin bridge during bootstrap:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 sh
+```
+
+Record the optional MCP bridge preference during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_MCP=1 sh
+```
+
+Use project-local OMH/Hermes paths during bootstrap:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SCOPE=project sh
 ```
 
 Install one or more optional Hermes agent/profile packs during bootstrap. These

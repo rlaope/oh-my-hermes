@@ -57,6 +57,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Skills:", stdout)
             self.assertIn("Setup scope:", stdout)
             self.assertIn("Install mode: managed Hermes skills", stdout)
+            self.assertIn("MCP mode: none", stdout)
             self.assertIn("Setup state:", stdout)
             self.assertIn("Hermes registration:", stdout)
             self.assertIn("Coding handoff default:", stdout)
@@ -202,6 +203,7 @@ class CliTests(unittest.TestCase):
                     "y",
                     "2",
                     "y",
+                    "y",
                     "4",
                 ]
             ) + "\n"
@@ -217,6 +219,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("They do not enable or disable OMH workflows", stdout)
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("Plugin bridge:", stdout)
+            self.assertIn("MCP mode: bridge requested", stdout)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
             self.assertEqual(profile["selected_categories"], ["codex-lifecycle"])
@@ -224,6 +227,9 @@ class CliTests(unittest.TestCase):
             self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
             self.assertTrue((hermes_home / "agents" / "omh-cto-loop-cto.md").exists())
             self.assertTrue((omh_home / "team-profile-packs" / "cto-loop.json").exists())
+            state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["last_setup"]["mcp_setup"]["mode"], "bridge_requested")
+            self.assertFalse(state["last_setup"]["mcp_setup"]["observed"])
 
     def test_setup_interactive_wizard_uses_defaults_on_eof(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -242,6 +248,52 @@ class CliTests(unittest.TestCase):
             self.assertEqual(profile["selected_categories"], ["safety-first"])
             self.assertEqual(profile["default_executor"], "choose")
             self.assertFalse((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
+
+    def test_setup_project_scope_uses_project_local_paths(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            with patch("omh.paths.Path.cwd", return_value=root):
+                status, stdout, stderr = run_cli(["setup", "--scope", "project"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["operator_summary"]["scope"], "project")
+            self.assertEqual(payload["hermes_native"]["setup_scope"], "project")
+            self.assertEqual(payload["operator_summary"]["paths"]["omh_home"], str((root / ".omh").resolve()))
+            self.assertEqual(payload["operator_summary"]["paths"]["hermes_home"], str((root / ".hermes").resolve()))
+            self.assertTrue((root / ".omh" / "skills").exists())
+            self.assertTrue((root / ".hermes" / "config.yaml").exists())
+            self.assertIn(str((root / ".omh" / "skills").resolve()), (root / ".hermes" / "config.yaml").read_text(encoding="utf-8"))
+
+            with patch("omh.paths.Path.cwd", return_value=root):
+                doctor_status, doctor_stdout, doctor_stderr = run_cli(["--scope", "project", "doctor"])
+            self.assertEqual(doctor_stderr, "")
+            self.assertEqual(doctor_status, 0)
+            self.assertTrue(json.loads(doctor_stdout)["ok"])
+
+    def test_setup_with_mcp_records_unobserved_bridge_preference(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["setup", "--with-mcp"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            mcp = payload["steps"]["mcp"]
+            self.assertEqual(payload["operator_summary"]["mcp_mode"], "bridge_requested")
+            self.assertEqual(mcp["schema_version"], "omh_mcp_setup/v1")
+            self.assertTrue(mcp["requested"])
+            self.assertFalse(mcp["observed"])
+            self.assertIn("does not prove an MCP host loaded OMH", mcp["claim_boundary"])
+            state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["last_setup"]["mcp_setup"]["mode"], "bridge_requested")
 
     def test_setup_and_install_support_localized_human_output(self) -> None:
         with TemporaryDirectory() as tmp:

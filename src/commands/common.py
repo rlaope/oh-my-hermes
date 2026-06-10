@@ -14,7 +14,7 @@ from ..targets import TARGET_METADATA_KEYS
 
 
 def _paths(args: argparse.Namespace):
-    return resolve_paths(args.omh_home, args.hermes_home)
+    return resolve_paths(args.omh_home, args.hermes_home, scope=getattr(args, "scope", None))
 
 
 def _print_json(data: object) -> None:

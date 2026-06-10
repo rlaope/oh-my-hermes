@@ -111,6 +111,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--omh-home", default=None, help="Override the managed OMH home directory (default: ~/.omh).")
     parser.add_argument("--hermes-home", default=None, help="Override the target Hermes home directory (default: ~/.hermes).")
+    parser.add_argument(
+        "--scope",
+        choices=("user", "project"),
+        default=None,
+        help="Choose default OMH/Hermes paths when explicit homes are not supplied.",
+    )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     _add_top_level_commands(sub)
