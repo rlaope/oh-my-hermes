@@ -363,11 +363,13 @@ Expected behavior:
   `strategy-synthesis`, `meeting-facilitation`, or `business-research` rather
   than `coding-handling`
 
-### Current Limit
+### Transport Boundary
 
-OMH does not fetch company data, read private feedback systems, or post to
-Discord/Slack by itself. A wrapper or Hermes environment must supply observed
-source evidence before Hermes can claim data was actually reviewed.
+OMH assumes Hermes Agent or the hosted chat surface receives messages, renders
+replies, and owns platform-specific transport. OMH does not duplicate that
+layer. It supplies deterministic routing, plan, handoff, and status contracts,
+and it requires observed source evidence before Hermes can claim data was
+actually reviewed.
 
 ## Grounded UltraQA Scenario Matrix
 

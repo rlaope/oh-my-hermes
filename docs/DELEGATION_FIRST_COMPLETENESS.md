@@ -55,12 +55,12 @@ The strongest existing path is:
 6. Separate wrapper/runtime evidence is required before OMH can say execution,
    review, verification, CI, merge, or merge-readiness was observed.
 
-## Completeness Gaps
+## Integration Boundaries
 
-| Priority | Gap | Why it matters | Target story |
+| Priority | Boundary | Why it matters | Target story |
 | --- | --- | --- | --- |
-| P0 | Actual Discord and Slack adapters are not implemented in this repository. | The core contract is ready, but platform auth, retries, edits, and posting still belong to wrapper projects. | Build example adapter shims only after transport dependencies and packaging are approved. |
-| P1 | Adapter projects still need transport-specific examples. | Golden JSON locks the wrapper contract, but production bots need platform auth, retry, edit, and thread patterns. | Add adapter shims only after transport dependencies are approved. |
+| P0 | Hermes Agent or the hosted chat surface owns transport. | OMH should not duplicate platform auth, retries, edits, or posting when Hermes-hosted chat already supplies that layer. | Keep OMH focused on fixture-backed wrapper contracts and local status artifacts. |
+| P1 | Hosted chat surfaces still need contract-consumption examples. | Golden JSON locks the wrapper contract, but operators still need examples for rendering replies, actions, status cards, and thread keys. | Add fixture-backed examples that do not introduce platform SDK dependencies. |
 | P2 | Run-backed lifecycle reporting is Codex-only in Phase 1. | Other executor targets are supported as prompt-only handoffs until a tested lifecycle contract exists. | Generalize only after another executor contract exists. |
 
 ## First Implementation Contract

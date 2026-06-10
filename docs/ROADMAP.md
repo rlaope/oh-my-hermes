@@ -9,8 +9,9 @@
 - Richer routing catalog fields
 - More playbook-backed situation pipelines for wrapper UX, research, planning,
   and release flows
-- More artifact-backed application cases for bot wrappers
-- Example Discord/Slack adapter shims that consume `chat_interaction/v1`
+- More artifact-backed application cases for Hermes-hosted chat surfaces
+- More fixture-backed Hermes Agent wrapper examples that consume
+  `chat_interaction/v1` without duplicating platform transport
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
 - Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
