@@ -166,7 +166,12 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   next actions instead of ending with a vague summary.
 - **Loop runtime ticks** - ambitious `./loop` goals can be advanced by a local
   tick with a deterministic queue shape for worktree, subagent, connector, and
-  handoff plans; Hermes can show the queue, prepare the next handoff, then mark
+  handoff plans plus a `loop_engineering/v1` snapshot over automation,
+  worktree, skill, connector, and subagent blocks; a tick can also record a
+  workflow pattern such as fan-out, adversarial verification, tournament, or
+  triage batch while still treating that pattern as orchestration metadata. A
+  cost policy keeps reads bounded, schema scaffolds stable, and extra verifier
+  lanes opt-in. Hermes can show the queue, prepare the next handoff, then mark
   it observed or blocked without pretending those steps already ran.
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
@@ -187,7 +192,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs`. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
-| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across interview, research, planning, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards and queue lifecycle actions help wrappers show what can start, what is only prepared, and what was later observed or blocked. |
+| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards, `loop_engineering/v1` snapshots, and queue lifecycle actions help wrappers show what can start, what is only prepared, and what was later observed or blocked. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
@@ -205,7 +210,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
 | "Take this idea from plan to deploy and monitor it safely." | Shape the idea, record decision gates, prepare an executor handoff only if code is accepted, then track release/deploy/monitor status separately. |
 | "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
-| "./loop make this a 10k-star quality OSS." | Show a start card for permission and executor choice, preserve the large goal, queue worktree/subagent/connector plans through runtime ticks, prepare handoffs for actionable queue items, then record whether each item was observed or blocked. |
+| "./loop make this a 10k-star quality OSS." | Show a start card for permission and executor choice, preserve the large goal, expose the loop pipeline and automation/worktree/skill/connector/subagent block state, queue worktree/subagent/connector plans through runtime ticks, prepare handoffs for actionable queue items, then record whether each item was observed or blocked. |
 | "Deploy and monitor this release with rollback checks." | Show release scope, go/no-go, health signals, rollback gate, and post-deploy status without claiming infrastructure execution. |
 | "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a coding-agent handoff only after acceptance. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |

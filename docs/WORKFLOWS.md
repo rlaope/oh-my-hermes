@@ -114,14 +114,17 @@ Hermes Loop workflow: ambitious goal interview, research, planning, runtime tick
 - Phase: `continuous-goal-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `loop-gated`
-- Handoff policy: Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
-- Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through research, planning, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+- Handoff policy: Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+- Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 - Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
 - Quality bar:
   - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
   - Reframe the north-star goal into implementable internal work without shrinking its ambition.
-  - Separate research, plan, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
+  - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
   - Expose a permission profile before executor dispatch, repository mutation, PR, merge, or external publishing.
+  - Expose the automation, worktree, skill, connector, and subagent building-block states without treating planned blocks as observed work.
+  - Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.
+  - Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.
   - Keep prepared worktree/subagent/connector plans, observed executor work, linked goal completion, and external waiting as distinct evidence states.
 - Required inputs:
   - north-star goal summary
@@ -132,14 +135,18 @@ Hermes Loop workflow: ambitious goal interview, research, planning, runtime tick
 - Expected outputs:
   - loop_start_card/v1 setup prompt
   - loop_cycle/v1 state
+  - loop_engineering/v1 pipeline/building-block snapshot
+  - loop cost_policy for bounded reads and verifier restraint
   - loop_status_card/v1 next action
-  - loop_runtime/v1 queued tick
+  - loop_runtime/v1 queued tick with loop policy refs
   - loop_queue_handoff/v1 only when permitted
   - executor-neutral handoff only when permitted
   - external-wait or checkpoint boundary
 - Artifact expectations:
   - metadata-only .omh/loops loop_cycle/v1 artifact
-  - loop_runtime/v1 queue entries
+  - loop_engineering/v1 status over automation, worktree, skill, connector, and subagent blocks
+  - loop_runtime/v1 queue entries with context_policy_ref and cost_policy_ref
+  - loop_subagent_result_contract/v1 for prepared subagent handoffs
   - loop_status_card/v1 wrapper payload
   - loop_start_card/v1 wrapper setup card
   - linked goal_ledger/v1 only when completion evidence is required
@@ -1416,15 +1423,18 @@ Run complete app operation loops from idea through decision, handoff, release, d
 
 ### goal-loop
 
-Run ambitious goal loops through interview, research, planning, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
+Run ambitious goal loops through task discovery, distribution, execution, verification, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
 
-- Use when: Use when a direct loop invocation or explicit long-horizon goal needs repeated cycles until evidence, authority, context, or external waiting stops the next step.
+- Use when: Use when a direct loop invocation or explicit long-horizon goal needs repeated cycles over automation, worktree, skill, connector, and subagent building blocks until evidence, authority, context, or external waiting stops the next step.
 - Quality tier: `loop-gated`
 - Quality bar:
   - Confirm the direct loop trigger, north-star goal, reframe, success criteria, and permission profile before cycling.
   - Separate implementable internal work from external outcomes such as stars, market reaction, adoption, or social distribution.
   - Continue automatically only inside the selected authority envelope; otherwise surface a permission action.
-  - Use runtime ticks with deterministic queue shapes to prepare worktree, subagent, and connector plans, but require separate observed evidence before claiming those steps ran.
+  - Use runtime ticks with deterministic queue shapes to prepare automation, worktree, skill, connector, and subagent states, but require separate observed evidence before claiming those steps ran.
+  - Keep loop_engineering/v1 focused on bounded state and evidence refs rather than dumping large intermediate context into the parent loop.
+  - Use fan-out, adversarial verification, tournament, or triage-batch workflow patterns for research validation, support triage, or implementation review only when the extra lanes add evidence value.
+  - Keep the schema scaffold stable for repeated ticks and avoid re-scanning or re-emitting large context when evidence refs are enough.
   - Treat feedback as a gate: clear internal actionable gaps continue the loop; external waiting records a wait state.
   - Never report goal completion from loop state unless linked goal_ledger/v1 completion evidence is ready.
 - Inputs:
@@ -1436,19 +1446,24 @@ Run ambitious goal loops through interview, research, planning, runtime ticks wi
 - Outputs:
   - loop_start_card/v1 setup card
   - loop_cycle/v1 artifact
-  - loop_runtime/v1 queue entry
+  - loop_engineering/v1 pipeline/building-block snapshot
+  - loop cost_policy for bounded reads and verifier restraint
+  - loop_runtime/v1 queue entry with loop policy refs
   - loop_queue_handoff/v1 actionable handoff
+  - loop_subagent_result_contract/v1 when a subagent is planned
   - loop_status_card/v1 next action
   - permission envelope
   - linked goal or runtime evidence references when available
 - Stop conditions:
   - next loop step is clear
   - runtime tick queue is prepared, observed, or blocked with a reason
+  - automation/worktree/skill/connector/subagent block states are visible
   - permission boundaries are explicit
   - external waiting and context exhaustion are recorded
   - goal completion claims are delegated to goal_ledger/v1
 - Verification:
   - validate loop_cycle/v1
+  - inspect loop_engineering/v1 snapshot
   - inspect loop_runtime/v1 queue
   - inspect loop_status_card/v1
   - inspect loop_queue_handoff/v1 when a queued item is actionable

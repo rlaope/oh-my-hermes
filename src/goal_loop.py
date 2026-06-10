@@ -19,6 +19,8 @@ LOOP_QUEUE_ITEM_SCHEMA = "loop_queue_item/v1"
 LOOP_START_CARD_SCHEMA = "loop_start_card/v1"
 LOOP_QUEUE_LIST_SCHEMA = "loop_queue_list/v1"
 LOOP_QUEUE_HANDOFF_SCHEMA = "loop_queue_handoff/v1"
+LOOP_ENGINEERING_SCHEMA = "loop_engineering/v1"
+LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA = "loop_subagent_result_contract/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -68,6 +70,29 @@ LOOP_QUEUE_STATUSES = (
     "blocked",
     "observed",
 )
+LOOP_PIPELINE_STEPS = (
+    "task_discovery",
+    "distribution",
+    "execution",
+    "verification",
+    "next_task_decision",
+)
+LOOP_BUILDING_BLOCKS = (
+    "automation",
+    "worktree",
+    "skill",
+    "connector",
+    "subagent",
+)
+LOOP_WORKFLOW_PATTERNS = (
+    "single_step",
+    "fan_out_synthesize",
+    "adversarial_verification",
+    "tournament",
+    "triage_batch",
+)
+LOOP_CONTEXT_POLICY_REF = "loop_engineering.context_policy"
+LOOP_COST_POLICY_REF = "loop_engineering.cost_policy"
 LOOP_EXECUTOR_OPTIONS = (
     {"id": "choose", "label": "Ask me each time", "dispatchable_by_default": False},
     {"id": "codex", "label": "Codex lifecycle handoff", "dispatchable_by_default": True},
@@ -163,6 +188,7 @@ def create_loop_cycle(
         "linked_goal_id": _storage_id(linked_goal_id, "linked_goal_id") if linked_goal_id else "",
         "cycles": [],
         "runtime": _runtime_state(),
+        "loop_engineering": _loop_engineering_template(),
         "next_action": "continue_loop",
         "completion_claim_allowed": False,
         "claim_boundary": _claim_boundary(),
@@ -252,6 +278,7 @@ def build_loop_start_card(
             "optional_fields": ["allowed_executors", "linked_goal_id", "source"],
             "creates_artifact": "loop_cycle/v1",
         },
+        "loop_engineering": _loop_engineering_template(),
         "actions": [
             "choose_permission_profile",
             "start_loop",
@@ -357,6 +384,7 @@ def tick_loop_runtime(
     subagent_role: str = "",
     connector: str = "",
     connector_action: str = "",
+    workflow_pattern: str = "single_step",
     note: str = "",
 ) -> dict[str, Any]:
     cycle = read_loop_cycle(paths, loop_id)
@@ -373,6 +401,7 @@ def tick_loop_runtime(
         subagent_role=subagent_role,
         connector=connector,
         connector_action=connector_action,
+        workflow_pattern=workflow_pattern,
         note=note,
     )
     runtime = _runtime_state(cycle.get("runtime"))
@@ -536,6 +565,7 @@ def build_loop_status_card(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
         "allowed_executors": list(envelope.get("allowed_executors", [])),
         "feedback_gate": cycle.get("feedback_gate", _feedback_gate()),
         "runtime_summary": _runtime_summary(cycle),
+        "loop_engineering": _loop_engineering_status(cycle),
         "linked_goal_completion": linked_gate or {"observed": False, "reason": "no linked goal ledger"},
         "next_action": _next_action(cycle),
         "safe_copy": _safe_status_copy(cycle, envelope),
@@ -710,6 +740,327 @@ def _valid_actions(values: Iterable[str]) -> set[str]:
     return actions
 
 
+def _workflow_pattern(value: str) -> str:
+    pattern = _safe_summary(value or "single_step", limit=80) or "single_step"
+    if pattern not in LOOP_WORKFLOW_PATTERNS:
+        raise ValueError(f"unsupported loop workflow pattern: {pattern}")
+    return pattern
+
+
+def _loop_engineering_template() -> dict[str, Any]:
+    return {
+        "schema_version": LOOP_ENGINEERING_SCHEMA,
+        "definition": "A loop is a local system that prompts agents through task discovery, distribution, execution, verification, and the next task decision.",
+        "pipeline": [
+            {
+                "id": step,
+                "label": step.replace("_", " "),
+                "claim_boundary": "This step describes orchestration state only until observed evidence refs are recorded.",
+            }
+            for step in LOOP_PIPELINE_STEPS
+        ],
+        "building_blocks": [
+            {
+                "id": block,
+                "label": block.replace("_", " "),
+                "claim_boundary": _building_block_boundary(block),
+            }
+            for block in LOOP_BUILDING_BLOCKS
+        ],
+        "workflow_patterns": [
+            {
+                "id": pattern,
+                "label": pattern.replace("_", " "),
+                "claim_boundary": "Pattern selection changes orchestration shape only; it is not dispatch or execution evidence.",
+            }
+            for pattern in LOOP_WORKFLOW_PATTERNS
+        ],
+        "context_policy": _loop_context_policy(),
+        "cost_policy": _loop_cost_policy(),
+        "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _loop_engineering_status(cycle: dict[str, Any]) -> dict[str, Any]:
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
+    workflow_summary = _workflow_pattern_summary(queue)
+    contract = _loop_engineering_contract(cycle)
+    return {
+        "schema_version": LOOP_ENGINEERING_SCHEMA,
+        "loop_id": str(cycle.get("loop_id", "")),
+        "current_pipeline_step": _pipeline_step_for_phase(
+            str(cycle.get("phase", "interview")),
+            str(cycle.get("wait_reason", "none")),
+        ),
+        "pipeline": [
+            {
+                "id": step,
+                "state": _pipeline_step_state(step, cycle, queue),
+                "evidence_refs": _pipeline_step_evidence_refs(step, cycle, queue),
+                "claim_boundary": "State is orchestration metadata unless the evidence refs point to observed wrapper/runtime artifacts.",
+            }
+            for step in LOOP_PIPELINE_STEPS
+        ],
+        "building_blocks": _building_block_statuses(cycle, queue),
+        "workflow_patterns": workflow_summary,
+        "context_policy": contract["context_policy"],
+        "cost_policy": contract["cost_policy"],
+        "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _loop_engineering_contract(cycle: dict[str, Any]) -> dict[str, Any]:
+    contract = cycle.get("loop_engineering")
+    if isinstance(contract, dict) and contract.get("schema_version") == LOOP_ENGINEERING_SCHEMA:
+        return {
+            **contract,
+            "context_policy": contract.get("context_policy") or _loop_context_policy(),
+            "cost_policy": contract.get("cost_policy") or _loop_cost_policy(),
+        }
+    return _loop_engineering_template()
+
+
+def _queue_loop_engineering(planned_action: str, status: str, workflow_pattern: str) -> dict[str, Any]:
+    return {
+        "schema_version": LOOP_ENGINEERING_SCHEMA,
+        "pipeline_step": _pipeline_step_for_action(planned_action),
+        "workflow_pattern": workflow_pattern,
+        "status": status,
+        "context_policy_ref": LOOP_CONTEXT_POLICY_REF,
+        "cost_policy_ref": LOOP_COST_POLICY_REF,
+        "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _subagent_result_contract(planned_action: str, workflow_pattern: str) -> dict[str, Any]:
+    return {
+        "schema_version": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
+        "planned_action": _safe_summary(planned_action, limit=80),
+        "workflow_pattern": workflow_pattern,
+        "status_values": ["ok", "blocked", "needs_human", "failed"],
+        "required_fields": ["status", "summary", "evidence_refs", "next_actions"],
+        "optional_fields": ["artifacts", "changed_files", "risks", "verification"],
+        "max_summary_chars": 1200,
+        "parent_context_policy": "Return a bounded structured result and evidence refs; do not paste the full transcript, raw logs, or large artifacts into parent context.",
+        "large_output_policy": "Store large outputs outside parent context and return a path, id, hash, or wrapper evidence ref.",
+        "cost_policy": _loop_cost_policy(workflow_pattern),
+        "verification_policy": _subagent_verification_policy(planned_action, workflow_pattern),
+    }
+
+
+def _loop_context_policy() -> dict[str, Any]:
+    return {
+        "read_model": "bounded_state_and_evidence_refs",
+        "parent_context": "Keep the parent loop focused on decision state, summaries, evidence refs, and next actions.",
+        "large_output_policy": "Reference bulky subagent, connector, test, or research output by artifact path, id, hash, or evidence ref.",
+        "subagent_return": "Subagents should return structured result objects, not replay their full working context.",
+        "summary_budget_chars": 1200,
+    }
+
+
+def _loop_cost_policy(workflow_pattern: str = "single_step") -> dict[str, Any]:
+    pattern = workflow_pattern if workflow_pattern in LOOP_WORKFLOW_PATTERNS else "single_step"
+    return {
+        "workflow_pattern": pattern,
+        "bounded_reads": True,
+        "reuse_schema_scaffold": True,
+        "avoid_full_rescan": True,
+        "default_verifier_lanes": 1,
+        "extra_verifier_policy": "Add verifier lanes only for high-risk changes, failed evidence, explicit review requests, or adversarial_verification/tournament patterns.",
+        "large_output_policy": "Keep large outputs in artifacts and pass refs, not full text.",
+        "summary_budget_chars": 1200,
+    }
+
+
+def _subagent_verification_policy(planned_action: str, workflow_pattern: str) -> str:
+    if workflow_pattern == "adversarial_verification":
+        return "Return independent objections, checked evidence refs, and a pass/fail/blocked verdict."
+    if workflow_pattern == "tournament":
+        return "Return candidate approach id, scoring criteria, tradeoffs, and evidence refs for synthesis."
+    if planned_action in {"review_fix_loop", "ci_fix_loop"}:
+        return "Return verification command evidence, failures, fixes required, and residual risk."
+    return "Return enough evidence refs for the parent loop to decide whether to continue, block, or ask for authority."
+
+
+def _pipeline_step_for_action(planned_action: str) -> str:
+    if planned_action in {"research", "planning", "ultragoal_creation"}:
+        return "task_discovery"
+    if planned_action in {"executor_handoff", "executor_dispatch"}:
+        return "distribution"
+    if planned_action in {
+        "repo_edit",
+        "pr_creation",
+        "pr_revision",
+        "release_note_work",
+        "external_posting_prep",
+        "external_posting",
+        "merge",
+    }:
+        return "execution"
+    if planned_action in {"review_fix_loop", "ci_fix_loop"}:
+        return "verification"
+    return "next_task_decision"
+
+
+def _pipeline_step_for_phase(phase: str, wait_reason: str) -> str:
+    if wait_reason != "none" or phase in {"waiting", "blocked", "complete"}:
+        return "next_task_decision"
+    if phase == "handoff":
+        return "distribution"
+    if phase == "execution":
+        return "execution"
+    if phase == "feedback":
+        return "verification"
+    return "task_discovery"
+
+
+def _pipeline_step_state(step: str, cycle: dict[str, Any], queue: list[dict[str, Any]]) -> str:
+    if step == "task_discovery":
+        goal = _dict_value(cycle, "goal")
+        criteria = cycle.get("success_criteria")
+        return "observed" if goal.get("summary") and isinstance(criteria, list) and criteria else "missing"
+    if step == "verification":
+        feedback = _dict_value(cycle, "feedback_gate")
+        if feedback.get("observed_artifacts"):
+            return "observed"
+        return _queue_pipeline_state(queue, step)
+    if step == "next_task_decision":
+        if str(cycle.get("wait_reason", "none")) != "none":
+            return "waiting"
+        if str(cycle.get("next_action", "")).strip():
+            return "ready"
+        return "pending"
+    return _queue_pipeline_state(queue, step)
+
+
+def _pipeline_step_evidence_refs(step: str, cycle: dict[str, Any], queue: list[dict[str, Any]]) -> list[str]:
+    loop_id = str(cycle.get("loop_id", "loop"))
+    if step == "task_discovery":
+        return [f"loop:{loop_id}:goal", f"loop:{loop_id}:success_criteria"]
+    if step == "verification":
+        refs = _string_list(_dict_value(cycle, "feedback_gate").get("observed_artifacts", []))
+        return refs or _queue_pipeline_refs(queue, step)
+    if step == "next_task_decision":
+        return [f"loop:{loop_id}:next_action:{_next_action(cycle)}"]
+    return _queue_pipeline_refs(queue, step)
+
+
+def _queue_pipeline_state(queue: list[dict[str, Any]], step: str) -> str:
+    relevant: list[dict[str, Any]] = []
+    for item in queue:
+        if _queue_item_pipeline_step(item) == step:
+            relevant.append(item)
+    if any(item.get("status") == "observed" and item.get("observed") is True for item in relevant):
+        return "observed"
+    if any(item.get("status") == "prepared_not_observed" for item in relevant):
+        return "prepared_not_observed"
+    if any(item.get("status") in {"blocked", "blocked_by_permission", "blocked_by_wait"} for item in relevant):
+        return "blocked"
+    return "pending"
+
+
+def _queue_pipeline_refs(queue: list[dict[str, Any]], step: str) -> list[str]:
+    refs: list[str] = []
+    for item in queue:
+        if _queue_item_pipeline_step(item) == step:
+            queue_id = str(item.get("queue_id", ""))
+            if queue_id:
+                refs.append(f"loop_queue:{queue_id}")
+    return sorted(set(refs))
+
+
+def _queue_item_pipeline_step(item: dict[str, Any]) -> str:
+    return str(item.get("pipeline_step", _pipeline_step_for_action(str(item.get("planned_action", "")))))
+
+
+def _building_block_statuses(cycle: dict[str, Any], queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    runtime = _runtime_state(cycle.get("runtime"))
+    return [
+        {
+            "id": "automation",
+            "state": "ticked" if int(runtime.get("heartbeat_count", 0) or 0) else "available",
+            "detail": "Runtime ticks may be manual, scheduled, wrapper-driven, or automation-driven.",
+            "evidence_refs": [f"runtime:heartbeat:{runtime.get('heartbeat_count', 0)}"],
+            "claim_boundary": _building_block_boundary("automation"),
+        },
+        _plan_building_block("worktree", queue, "worktree_plan", "created"),
+        {
+            "id": "skill",
+            "state": "available",
+            "detail": "The loop skill owns visible orchestration, not hidden execution.",
+            "evidence_refs": ["skill:loop"],
+            "claim_boundary": _building_block_boundary("skill"),
+        },
+        _plan_building_block("connector", queue, "connector_plan", "dispatched"),
+        _plan_building_block("subagent", queue, "subagent_plan", "dispatched"),
+    ]
+
+
+def _plan_building_block(block: str, queue: list[dict[str, Any]], key: str, flag: str) -> dict[str, Any]:
+    plans = [_dict_value(item, key) for item in queue if isinstance(item, dict)]
+    requested = [plan for plan in plans if plan.get("strategy") != "none"]
+    refs: list[str] = []
+    for plan in requested:
+        refs.extend(_string_list(plan.get("evidence_refs", [])))
+    if any(plan.get("observed") is True and plan.get(flag) is True for plan in requested):
+        state = "observed"
+    elif requested:
+        state = "planned_not_observed"
+    elif any(item.get("status") in {"blocked", "blocked_by_permission", "blocked_by_wait"} for item in queue):
+        state = "blocked"
+    else:
+        state = "not_requested"
+    result: dict[str, Any] = {
+        "id": block,
+        "state": state,
+        "detail": _building_block_detail(block),
+        "evidence_refs": sorted(set(refs)),
+        "claim_boundary": _building_block_boundary(block),
+    }
+    if block == "subagent":
+        result["result_contract_schema"] = LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA
+    return result
+
+
+def _building_block_detail(block: str) -> str:
+    details = {
+        "worktree": "Worktree entries are path and branch hints until a wrapper records creation evidence.",
+        "connector": "Connector entries are intent only until wrapper evidence records I/O.",
+        "subagent": "Subagent entries are handoff plans until dispatch and result evidence are recorded.",
+    }
+    return details.get(block, "")
+
+
+def _building_block_boundary(block: str) -> str:
+    boundaries = {
+        "automation": "A tick records orchestration intent; it is not proof that downstream work happened.",
+        "worktree": "A worktree plan is not worktree creation evidence.",
+        "skill": "Skill routing is not plan acceptance, dispatch, execution, or completion evidence.",
+        "connector": "Connector intent is not connector I/O evidence.",
+        "subagent": "A subagent plan is not dispatch, execution, or result evidence.",
+    }
+    return boundaries.get(block, _runtime_claim_boundary())
+
+
+def _workflow_pattern_summary(queue: list[dict[str, Any]]) -> dict[str, Any]:
+    used: dict[str, int] = {}
+    for item in queue:
+        pattern = str(item.get("workflow_pattern", "")).strip()
+        if pattern:
+            used[pattern] = used.get(pattern, 0) + 1
+    last = str(queue[-1].get("workflow_pattern", "")) if queue else ""
+    return {
+        "available": list(LOOP_WORKFLOW_PATTERNS),
+        "used": used,
+        "last": last,
+        "claim_boundary": "A workflow pattern is an orchestration shape, not proof that any subagent or executor ran.",
+    }
+
+
 def _criteria_objects(criteria: Iterable[str]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for index, criterion in enumerate(criteria, start=1):
@@ -770,6 +1121,9 @@ def _next_runtime_plan(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[
             "status": "blocked_by_permission",
             "next_action": "request_permission",
             "reason": "The loop has no allowed action yet.",
+            "context_policy_ref": LOOP_CONTEXT_POLICY_REF,
+            "cost_policy_ref": LOOP_COST_POLICY_REF,
+            "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
         }
     if wait_reason == "waiting_external_observation":
         return {
@@ -778,6 +1132,9 @@ def _next_runtime_plan(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[
             "status": "blocked_by_wait",
             "next_action": "record_external_wait",
             "reason": "The loop is waiting for external evidence and should not auto-continue.",
+            "context_policy_ref": LOOP_CONTEXT_POLICY_REF,
+            "cost_policy_ref": LOOP_COST_POLICY_REF,
+            "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
         }
     if wait_reason in {"context_exhausted", "budget_exhausted"}:
         return {
@@ -786,6 +1143,9 @@ def _next_runtime_plan(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[
             "status": "blocked_by_wait",
             "next_action": "record_checkpoint",
             "reason": "The loop needs a checkpoint before more context or budget is available.",
+            "context_policy_ref": LOOP_CONTEXT_POLICY_REF,
+            "cost_policy_ref": LOOP_COST_POLICY_REF,
+            "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
         }
 
     planned_action, phase = _phase_runtime_action(str(cycle.get("phase", "interview")))
@@ -797,6 +1157,9 @@ def _next_runtime_plan(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[
             "status": "blocked_by_permission",
             "next_action": "request_permission",
             "reason": f"`{planned_action}` is outside the current authority envelope.",
+            "context_policy_ref": LOOP_CONTEXT_POLICY_REF,
+            "cost_policy_ref": LOOP_COST_POLICY_REF,
+            "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
         }
     return {
         "planned_action": planned_action,
@@ -804,6 +1167,9 @@ def _next_runtime_plan(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[
         "status": "prepared_not_observed",
         "next_action": "observe_runtime_queue",
         "reason": "Prepared the next loop step for a wrapper, scheduler, or executor to observe.",
+        "context_policy_ref": LOOP_CONTEXT_POLICY_REF,
+        "cost_policy_ref": LOOP_COST_POLICY_REF,
+        "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
     }
 
 
@@ -833,6 +1199,7 @@ def _runtime_queue_item(
     subagent_role: str,
     connector: str,
     connector_action: str,
+    workflow_pattern: str,
     note: str,
 ) -> dict[str, Any]:
     planned_action = plan["planned_action"]
@@ -841,6 +1208,7 @@ def _runtime_queue_item(
     role = subagent_role.strip() or _default_subagent_role(planned_action)
     connector_name = connector.strip()
     is_prepared = plan["status"] == "prepared_not_observed"
+    pattern = _workflow_pattern(workflow_pattern)
     return {
         "schema_version": LOOP_QUEUE_ITEM_SCHEMA,
         "queue_id": queue_id,
@@ -848,6 +1216,14 @@ def _runtime_queue_item(
         "trigger": _safe_summary(trigger or "manual", limit=80),
         "cadence": _safe_summary(cadence, limit=80) if cadence.strip() else "",
         "planned_action": planned_action,
+        "workflow_pattern": pattern,
+        "pipeline_step": _pipeline_step_for_action(planned_action),
+        "context_policy_ref": plan.get("context_policy_ref", LOOP_CONTEXT_POLICY_REF),
+        "cost_policy_ref": plan.get("cost_policy_ref", LOOP_COST_POLICY_REF),
+        "subagent_result_contract_schema": plan.get(
+            "subagent_result_contract_schema",
+            LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
+        ),
         "status": plan["status"],
         "phase": plan["phase"],
         "reason": _safe_summary(plan["reason"], limit=320),
@@ -855,7 +1231,7 @@ def _runtime_queue_item(
             _worktree_plan(cycle, planned_action, worktree_base, branch_hint) if is_prepared else _empty_worktree_plan()
         ),
         "subagent_plan": (
-            _subagent_plan(cycle, planned_action, role, envelope) if is_prepared else _empty_subagent_plan()
+            _subagent_plan(cycle, planned_action, role, envelope, pattern) if is_prepared else _empty_subagent_plan()
         ),
         "connector_plan": (
             _connector_plan(connector_name, connector_action, planned_action)
@@ -869,6 +1245,7 @@ def _runtime_queue_item(
         "observation_summary": "",
         "blocked_at": "",
         "blocker_reason": "",
+        "loop_engineering": _queue_loop_engineering(planned_action, plan["status"], pattern),
         "claim_boundary": _runtime_claim_boundary(),
     }
 
@@ -905,15 +1282,18 @@ def _subagent_plan(
     planned_action: str,
     role: str,
     envelope: dict[str, Any],
+    workflow_pattern: str,
 ) -> dict[str, Any]:
     return {
         "strategy": "planned_only",
         "role": _safe_summary(role, limit=80),
         "allowed_executors": list(envelope.get("allowed_executors", [])),
+        "workflow_pattern": workflow_pattern,
         "prompt_seed": _safe_summary(
             f"Continue loop {cycle.get('loop_id', '')}: {planned_action} for {cycle.get('goal', {}).get('summary', '')}",
             limit=320,
         ),
+        "result_contract": _subagent_result_contract(planned_action, workflow_pattern),
         "dispatched": False,
         "observed": False,
         "evidence_refs": [],
@@ -926,7 +1306,9 @@ def _empty_subagent_plan() -> dict[str, Any]:
         "strategy": "none",
         "role": "",
         "allowed_executors": [],
+        "workflow_pattern": "",
         "prompt_seed": "",
+        "result_contract": {},
         "dispatched": False,
         "observed": False,
         "evidence_refs": [],
@@ -1015,6 +1397,8 @@ def _queue_item_summary(item: dict[str, Any]) -> dict[str, Any]:
         "trigger": str(item.get("trigger", "")),
         "cadence": str(item.get("cadence", "")),
         "planned_action": str(item.get("planned_action", "")),
+        "workflow_pattern": str(item.get("workflow_pattern", "")),
+        "pipeline_step": str(item.get("pipeline_step", "")),
         "phase": str(item.get("phase", "")),
         "status": str(item.get("status", "")),
         "reason": str(item.get("reason", "")),
@@ -1047,6 +1431,8 @@ def _queue_handoff_text(cycle: dict[str, Any], item: dict[str, Any]) -> str:
         f"Continue OMH loop `{cycle.get('loop_id', '')}`.",
         f"Goal: {goal.get('summary', '')}",
         f"Planned action: {item.get('planned_action', '')}",
+        f"Workflow pattern: {item.get('workflow_pattern', 'single_step')}",
+        f"Pipeline step: {_queue_item_pipeline_step(item)}",
         f"Phase: {item.get('phase', '')}",
         "",
         "Boundary:",
@@ -1068,6 +1454,7 @@ def _queue_handoff_text(cycle: dict[str, Any], item: dict[str, Any]) -> str:
                 "Subagent plan:",
                 f"- Role: {subagent.get('role', '')}",
                 f"- Prompt seed: {subagent.get('prompt_seed', '')}",
+                "- Result contract: return status, summary, evidence_refs, and next_actions; reference large outputs by path, hash, or evidence ref instead of pasting full context.",
             ]
         )
     if connector.get("strategy") != "none":
@@ -1179,6 +1566,18 @@ def _validate_runtime(runtime: object) -> list[str]:
             errors.append(f"runtime.queue[{index}].status is unsupported")
         if item.get("planned_action") not in allowed_runtime_actions:
             errors.append(f"runtime.queue[{index}].planned_action is unsupported")
+        pattern = str(item.get("workflow_pattern", ""))
+        if pattern and pattern not in LOOP_WORKFLOW_PATTERNS:
+            errors.append(f"runtime.queue[{index}].workflow_pattern is unsupported")
+        pipeline_step = str(item.get("pipeline_step", ""))
+        if pipeline_step and pipeline_step not in LOOP_PIPELINE_STEPS:
+            errors.append(f"runtime.queue[{index}].pipeline_step is unsupported")
+        engineering = item.get("loop_engineering")
+        if engineering is not None:
+            if not isinstance(engineering, dict):
+                errors.append(f"runtime.queue[{index}].loop_engineering must be an object")
+            elif engineering.get("schema_version") != LOOP_ENGINEERING_SCHEMA:
+                errors.append(f"runtime.queue[{index}].loop_engineering.schema_version must be {LOOP_ENGINEERING_SCHEMA}")
         plans: dict[str, dict[str, Any]] = {}
         for key in ("worktree_plan", "subagent_plan", "connector_plan"):
             plan = item.get(key)
@@ -1186,6 +1585,14 @@ def _validate_runtime(runtime: object) -> list[str]:
                 errors.append(f"runtime.queue[{index}].{key} must be an object")
                 continue
             plans[key] = plan
+            if key == "subagent_plan" and plan.get("strategy") != "none":
+                contract = plan.get("result_contract")
+                if not isinstance(contract, dict):
+                    errors.append(f"runtime.queue[{index}].subagent_plan.result_contract must be an object")
+                elif contract.get("schema_version") != LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA:
+                    errors.append(
+                        f"runtime.queue[{index}].subagent_plan.result_contract.schema_version must be {LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA}"
+                    )
         if item.get("status") == "observed":
             if item.get("observed") is not True:
                 errors.append(f"runtime.queue[{index}].observed must be true when status is observed")

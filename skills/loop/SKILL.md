@@ -16,7 +16,7 @@ This is a Hermes-native `loop` workflow skill.
 
 ## Use When
 
-Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through research, planning, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 
     Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
 
@@ -31,13 +31,16 @@ Quality bar:
 
 - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
 - Reframe the north-star goal into implementable internal work without shrinking its ambition.
-- Separate research, plan, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
+- Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
 - Expose a permission profile before executor dispatch, repository mutation, PR, merge, or external publishing.
+- Expose the automation, worktree, skill, connector, and subagent building-block states without treating planned blocks as observed work.
+- Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.
+- Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.
 - Keep prepared worktree/subagent/connector plans, observed executor work, linked goal completion, and external waiting as distinct evidence states.
 
 Handoff policy:
 
-Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 
 Required inputs:
 
@@ -51,8 +54,10 @@ Expected outputs:
 
 - loop_start_card/v1 setup prompt
 - loop_cycle/v1 state
+- loop_engineering/v1 pipeline/building-block snapshot
+- loop cost_policy for bounded reads and verifier restraint
 - loop_status_card/v1 next action
-- loop_runtime/v1 queued tick
+- loop_runtime/v1 queued tick with loop policy refs
 - loop_queue_handoff/v1 only when permitted
 - executor-neutral handoff only when permitted
 - external-wait or checkpoint boundary
@@ -60,7 +65,9 @@ Expected outputs:
 Artifact expectations:
 
 - metadata-only .omh/loops loop_cycle/v1 artifact
-- loop_runtime/v1 queue entries
+- loop_engineering/v1 status over automation, worktree, skill, connector, and subagent blocks
+- loop_runtime/v1 queue entries with context_policy_ref and cost_policy_ref
+- loop_subagent_result_contract/v1 for prepared subagent handoffs
 - loop_status_card/v1 wrapper payload
 - loop_start_card/v1 wrapper setup card
 - linked goal_ledger/v1 only when completion evidence is required

@@ -5,6 +5,7 @@ import argparse
 from ..goal_loop import (
     LOOP_ACTIONS,
     LOOP_EXECUTOR_OPTION_IDS,
+    LOOP_WORKFLOW_PATTERNS,
     PERMISSION_PROFILES,
     block_loop_queue_item,
     build_loop_queue_handoff,
@@ -153,6 +154,7 @@ def cmd_loop_tick(args: argparse.Namespace) -> int:
             subagent_role=args.subagent_role or "",
             connector=args.connector or "",
             connector_action=args.connector_action or "",
+            workflow_pattern=args.workflow_pattern,
             note=args.note or "",
         )
         _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), args.loop_id)})
@@ -272,6 +274,7 @@ def _add_loop_commands(sub) -> None:
     tick.add_argument("--subagent-role", default="")
     tick.add_argument("--connector", default="")
     tick.add_argument("--connector-action", default="")
+    tick.add_argument("--workflow-pattern", choices=LOOP_WORKFLOW_PATTERNS, default="single_step")
     tick.add_argument("--note", default="")
     tick.set_defaults(func=cmd_loop_tick)
 

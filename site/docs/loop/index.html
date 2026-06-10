@@ -123,8 +123,12 @@
             separately.
           </p>
           <ul class="docs-list">
+            <li><code>loop_engineering/v1</code> shows task discovery, distribution, execution, verification, and next-task decision state.</li>
+            <li>Automation, worktree, skill, connector, and subagent blocks stay visible as separate states.</li>
+            <li>Workflow patterns such as fan-out, adversarial verification, tournament, and triage batch are orchestration metadata, not dispatch evidence.</li>
+            <li>Cost policy keeps reads bounded, reuses stable schema scaffolds, and avoids extra verifier lanes unless evidence warrants them.</li>
             <li>Prepared queue item is not worktree creation.</li>
-            <li>Prepared subagent plan is not subagent dispatch.</li>
+            <li>Prepared subagent plan is not subagent dispatch; subagent results should return status, summary, evidence refs, and next actions.</li>
             <li>Prepared connector plan is not connector I/O.</li>
             <li>External outcomes stay waiting until observed.</li>
           </ul>
@@ -138,8 +142,8 @@
             A chat wrapper can ask OMH for a <code>loop_start_card/v1</code>
             before a loop artifact exists. After the user chooses a permission
             profile, Hermes can start the loop, tick it, show the prepared
-            queue, render a handoff for the actionable item, then close that
-            item as observed or blocked.
+            queue and loop engineering snapshot, render a handoff for the
+            actionable item, then close that item as observed or blocked.
           </p>
         </div>
         <div class="lifecycle-strip" aria-label="Loop start and queue lifecycle">

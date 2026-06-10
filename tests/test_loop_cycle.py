@@ -44,6 +44,18 @@ class GoalLoopTests(unittest.TestCase):
         self.assertIn("goal_reframe", card["backend_contract"]["required_fields"])
         self.assertIn("handoff_only", {option["id"] for option in card["permission_profiles"]})
         self.assertIn("loop_cycle/v1", card["backend_contract"]["creates_artifact"])
+        self.assertEqual(card["loop_engineering"]["schema_version"], "loop_engineering/v1")
+        self.assertEqual(
+            [step["id"] for step in card["loop_engineering"]["pipeline"]],
+            ["task_discovery", "distribution", "execution", "verification", "next_task_decision"],
+        )
+        self.assertEqual(
+            {block["id"] for block in card["loop_engineering"]["building_blocks"]},
+            {"automation", "worktree", "skill", "connector", "subagent"},
+        )
+        self.assertEqual(card["loop_engineering"]["context_policy"]["read_model"], "bounded_state_and_evidence_refs")
+        self.assertTrue(card["loop_engineering"]["cost_policy"]["reuse_schema_scaffold"])
+        self.assertEqual(card["loop_engineering"]["cost_policy"]["default_verifier_lanes"], 1)
         self.assertNotIn("10k-star quality", serialized)
 
         visible = build_loop_start_card("Make OMH public launch-ready", include_goal=True)
@@ -187,6 +199,7 @@ class GoalLoopTests(unittest.TestCase):
                 subagent_role="researcher",
                 connector="linear",
                 connector_action="create_triage_comment",
+                workflow_pattern="fan_out_synthesize",
             )
             card = build_loop_status_card(paths, cycle["loop_id"])
 
@@ -196,6 +209,17 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(updated["next_action"], "observe_runtime_queue")
         self.assertEqual(queue[0]["schema_version"], "loop_queue_item/v1")
         self.assertEqual(queue[0]["planned_action"], "research")
+        self.assertEqual(queue[0]["workflow_pattern"], "fan_out_synthesize")
+        self.assertEqual(queue[0]["pipeline_step"], "task_discovery")
+        self.assertEqual(queue[0]["cost_policy_ref"], "loop_engineering.cost_policy")
+        self.assertEqual(queue[0]["loop_engineering"]["schema_version"], "loop_engineering/v1")
+        self.assertEqual(queue[0]["loop_engineering"]["cost_policy_ref"], "loop_engineering.cost_policy")
+        self.assertEqual(
+            queue[0]["subagent_plan"]["result_contract"]["schema_version"],
+            "loop_subagent_result_contract/v1",
+        )
+        self.assertIn("do not paste the full transcript", queue[0]["subagent_plan"]["result_contract"]["parent_context_policy"])
+        self.assertTrue(queue[0]["subagent_plan"]["result_contract"]["cost_policy"]["bounded_reads"])
         self.assertEqual(queue[0]["status"], "prepared_not_observed")
         self.assertFalse(queue[0]["observed"])
         self.assertFalse(queue[0]["worktree_plan"]["created"])
@@ -203,6 +227,11 @@ class GoalLoopTests(unittest.TestCase):
         self.assertFalse(queue[0]["connector_plan"]["dispatched"])
         self.assertEqual(queue[0]["connector_plan"]["connector"], "linear")
         self.assertEqual(card["runtime_summary"]["pending_queue_count"], 1)
+        self.assertEqual(card["loop_engineering"]["current_pipeline_step"], "task_discovery")
+        self.assertEqual(card["loop_engineering"]["workflow_patterns"]["used"], {"fan_out_synthesize": 1})
+        self.assertEqual(card["loop_engineering"]["pipeline"][0]["state"], "observed")
+        self.assertIn("structured result objects", card["loop_engineering"]["context_policy"]["subagent_return"])
+        self.assertIn("Add verifier lanes only", card["loop_engineering"]["cost_policy"]["extra_verifier_policy"])
         self.assertIn("not worktree creation", card["runtime_summary"]["claim_boundary"])
         self.assertIn("prepared runtime queue", card["safe_copy"]["next_step"])
         self.assertEqual(validate_loop_cycle(updated), {"ok": True, "errors": []})
@@ -243,9 +272,17 @@ class GoalLoopTests(unittest.TestCase):
         item = observed["runtime"]["queue"][0]
         self.assertEqual(listing["schema_version"], "loop_queue_list/v1")
         self.assertEqual(listing["pending_queue_count"], 1)
+        self.assertEqual(listing["queue"][0]["workflow_pattern"], "single_step")
+        self.assertEqual(listing["queue"][0]["pipeline_step"], "task_discovery")
         self.assertEqual(inspected["queue_item"]["queue_id"], queue_id)
+        self.assertEqual(
+            inspected["queue_item"]["subagent_plan"]["result_contract"]["required_fields"],
+            ["status", "summary", "evidence_refs", "next_actions"],
+        )
         self.assertEqual(handoff["schema_version"], "loop_queue_handoff/v1")
         self.assertIn("Continue OMH loop", handoff["handoff_text"])
+        self.assertIn("Workflow pattern: single_step", handoff["handoff_text"])
+        self.assertIn("Result contract: return status, summary, evidence_refs", handoff["handoff_text"])
         self.assertEqual(handoff["next_action"], "observe_or_block_loop_queue")
         self.assertEqual(item["status"], "observed")
         self.assertTrue(item["observed"])
@@ -427,6 +464,41 @@ class GoalLoopTests(unittest.TestCase):
         self.assertIn("runtime.queue[0].worktree_plan.evidence_refs must include at least one typed evidence ref when observed", validation["errors"])
         self.assertIn("runtime.queue[0].subagent_plan.evidence_refs must include at least one typed evidence ref when observed", validation["errors"])
         self.assertIn("runtime.queue[0].connector_plan.evidence_refs must include at least one typed evidence ref when observed", validation["errors"])
+
+    def test_loop_runtime_validation_rejects_invalid_engineering_and_result_contracts(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Keep loop context bounded",
+                goal_reframe="Reject runtime entries that lose the structured loop engineering and subagent result contract.",
+                success_criteria=["Loop engineering contracts are validated"],
+                permission_profile="handoff_only",
+            )
+
+            updated = tick_loop_runtime(paths, cycle["loop_id"], workflow_pattern="tournament")
+
+        item = updated["runtime"]["queue"][0]
+        item["workflow_pattern"] = "unknown_pattern"
+        item["pipeline_step"] = "unknown_step"
+        item["loop_engineering"]["schema_version"] = "wrong"
+        item["subagent_plan"]["result_contract"]["schema_version"] = "wrong"
+        validation = validate_loop_cycle(updated)
+
+        self.assertFalse(validation["ok"])
+        self.assertIn("runtime.queue[0].workflow_pattern is unsupported", validation["errors"])
+        self.assertIn("runtime.queue[0].pipeline_step is unsupported", validation["errors"])
+        self.assertIn("runtime.queue[0].loop_engineering.schema_version must be loop_engineering/v1", validation["errors"])
+        self.assertIn(
+            "runtime.queue[0].subagent_plan.result_contract.schema_version must be loop_subagent_result_contract/v1",
+            validation["errors"],
+        )
+
+        item["subagent_plan"].pop("result_contract")
+        validation = validate_loop_cycle(updated)
+
+        self.assertFalse(validation["ok"])
+        self.assertIn("runtime.queue[0].subagent_plan.result_contract must be an object", validation["errors"])
 
 
 if __name__ == "__main__":

@@ -1044,6 +1044,8 @@ class CliTests(unittest.TestCase):
                     "linear",
                     "--connector-action",
                     "comment_on_issue",
+                    "--workflow-pattern",
+                    "adversarial_verification",
                     "--note",
                     "Release-readiness loop heartbeat",
                 ]
@@ -1054,10 +1056,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(ticked["loop"]["runtime"]["schema_version"], "loop_runtime/v1")
             self.assertEqual(ticked["loop"]["runtime"]["heartbeat_count"], 1)
             self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["status"], "prepared_not_observed")
+            self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["workflow_pattern"], "adversarial_verification")
+            self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["pipeline_step"], "task_discovery")
+            self.assertEqual(
+                ticked["loop"]["runtime"]["queue"][0]["subagent_plan"]["result_contract"]["schema_version"],
+                "loop_subagent_result_contract/v1",
+            )
             self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["worktree_plan"]["created"])
             self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
             self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
             self.assertEqual(ticked["status_card"]["runtime_summary"]["pending_queue_count"], 1)
+            self.assertEqual(ticked["status_card"]["loop_engineering"]["workflow_patterns"]["last"], "adversarial_verification")
             self.assertIn("connector I/O", ticked["status_card"]["runtime_summary"]["claim_boundary"])
             queue_id = ticked["loop"]["runtime"]["queue"][0]["queue_id"]
 
@@ -1068,6 +1077,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(queue_list["schema_version"], "loop_queue_list/v1")
             self.assertEqual(queue_list["pending_queue_count"], 1)
             self.assertEqual(queue_list["queue"][0]["queue_id"], queue_id)
+            self.assertEqual(queue_list["queue"][0]["workflow_pattern"], "adversarial_verification")
 
             status, stdout, stderr = run_cli(home + ["loop", "queue", "handoff", "--loop", "loop-cli", "--queue", queue_id])
             self.assertEqual(stderr, "")
@@ -1076,6 +1086,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(queue_handoff["schema_version"], "loop_queue_handoff/v1")
             self.assertEqual(queue_handoff["queue_id"], queue_id)
             self.assertIn("Continue OMH loop", queue_handoff["handoff_text"])
+            self.assertIn("Workflow pattern: adversarial_verification", queue_handoff["handoff_text"])
 
             status, stdout, stderr = run_cli(
                 home
