@@ -18,12 +18,12 @@ SCHEMA_VERSION = "wrapper_adapter_shim/v1"
 
 
 def run_shim(source: str, argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=f"Render a transport-free {source} wrapper fixture.")
+    parser = argparse.ArgumentParser(description=f"Render a {source} Hermes chat fixture.")
     parser.add_argument(
         "event_json",
         nargs="?",
         default=str(_default_fixture(source)),
-        help="Fixture event JSON path. No SDK, bot token, or network call is used.",
+        help="Fixture event JSON path for the Hermes chat contract example.",
     )
     parser.add_argument("--mode", choices=INTERACTION_MODES, default="auto")
     parser.add_argument("--limit", type=int, default=3)

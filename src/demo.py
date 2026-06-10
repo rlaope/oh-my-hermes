@@ -42,7 +42,7 @@ def build_orchestration_demo(
         "message_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
         "message_length": len(task),
         "redaction_policy": "metadata_only",
-        "summary": "Deterministic local wrapper orchestration demo; no LLM, API, bot SDK, network, or Hermes core patching is used.",
+        "summary": "Deterministic local Hermes chat orchestration demo with routing, planning, handoff, and status contracts.",
         "steps": [
             {
                 "id": "recommend",

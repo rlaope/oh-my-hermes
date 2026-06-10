@@ -47,9 +47,9 @@ omh doctor
 ```
 
 That installs `~/.hermes/plugins/omh` with metadata-only status support. It
-does not execute code, install Discord or Slack transports, patch Hermes core,
-or prove Hermes has loaded the plugin. If the target Hermes runtime requires a
-separate plugin enable command, follow that runtime's plugin enable/reload step.
+does not execute code, patch Hermes core, or prove Hermes has loaded the
+plugin. If the target Hermes runtime requires a separate plugin enable command,
+follow that runtime's plugin enable/reload step.
 
 ## Install Path A: Hermes-Native Skill Tap
 
@@ -476,12 +476,10 @@ Before calling the bot integration ready, verify these points:
 - If skills do not appear, run `omh setup`, then `omh doctor`, then restart the
   bot again.
 
-Current limitation: actual Discord, Slack, Hermes, coding executors, GitHub, CI,
-and merge operations still happen outside OMH. `omh chat interact`,
-`omh chat route`, `omh coding delegate`, and `omh coding lifecycle` choose
-contracts and record local metadata, but the wrapper adapter must render
-messages, dispatch to Hermes or the selected coding executor, and record only
-evidence it actually observed.
+Current limitation: `omh chat interact`, `omh chat route`,
+`omh coding delegate`, and `omh coding lifecycle` choose contracts and record
+local metadata. Hermes Agent and the selected executor still provide the actual
+conversation, execution, GitHub, CI, and merge evidence that OMH later records.
 
 ## Update
 

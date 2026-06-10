@@ -1608,7 +1608,7 @@ _HARNESSES = [
         evidence_ladder=("claims_scoped", "docs_updated", "generated_docs_checked", "public_claims_verified"),
         wrapper_actions=("show_docs", "record_claim_check", "show_status"),
         overclaim_guards=(
-            "Documentation of a future adapter is not proof that a transport exists.",
+            "Documentation of a future surface is not proof that evidence was observed.",
             "Generated docs must match catalog data before release claims are made.",
         ),
     ),

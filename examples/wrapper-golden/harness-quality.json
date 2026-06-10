@@ -1,6 +1,6 @@
 {
   "schema_version": "harness_quality_examples/v1",
-  "description": "Golden examples for rendering harness_quality/v1 in Discord, Slack, or hosted wrappers. These fixtures are deterministic local contracts, not platform SDK fixtures.",
+  "description": "Golden examples for rendering harness_quality/v1 in Hermes Agent chat surfaces. These fixtures are deterministic local contracts.",
   "examples": [
     {
       "scenario": "coding_handoff_quality",

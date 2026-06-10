@@ -68,8 +68,8 @@ merge.
 - Operator runbooks should use document titles, not command-like names, when
   they describe wrapper responsibilities and status evidence.
 - Demo and shim examples should stay fixture-backed, deterministic, and
-  transport-free unless a scoped integration explicitly opts into a real bot or
-  network adapter.
+  Hermes Agent-facing unless a scoped integration explicitly opts into a
+  different runtime surface.
 - Playbook docs should describe situation-level pipelines for company work, app
   operation loops such as idea-to-deploy / CTO loop / deploy-and-monitor, and
   coding handoffs, plus ownership boundaries, rather than becoming a second

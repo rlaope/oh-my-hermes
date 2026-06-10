@@ -905,7 +905,7 @@ _PLAYBOOKS = (
         ),
         acceptance_criteria=(
             "The pipeline identifies which layer owns each stage.",
-            "Wrapper actions are platform-neutral ids, not transport SDK calls.",
+            "Wrapper actions are stable Hermes-facing ids.",
             "Evidence stages are strict enough for repeated status reporting.",
         ),
         not_evidence_until_observed=_COMMON_NOT_EVIDENCE,

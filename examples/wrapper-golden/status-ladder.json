@@ -1,6 +1,6 @@
 {
   "schema_version": "wrapper_golden_examples/v1",
-  "description": "Platform-neutral wrapper examples for chat status rendering, deep-interview prompts, and status cards. These are deterministic examples, not platform SDK fixtures.",
+  "description": "Hermes Agent surface examples for chat status rendering, deep-interview prompts, and status cards. These are deterministic examples.",
   "scenarios": [
     {
       "scenario": "clarify_needed",

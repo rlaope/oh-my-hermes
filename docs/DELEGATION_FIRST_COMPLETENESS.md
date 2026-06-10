@@ -55,12 +55,12 @@ The strongest existing path is:
 6. Separate wrapper/runtime evidence is required before OMH can say execution,
    review, verification, CI, merge, or merge-readiness was observed.
 
-## Integration Boundaries
+## Hermes Surface Readiness
 
-| Priority | Boundary | Why it matters | Target story |
+| Priority | Focus | Why it matters | Target story |
 | --- | --- | --- | --- |
-| P0 | Hermes Agent or the hosted chat surface owns transport. | OMH should not duplicate platform auth, retries, edits, or posting when Hermes-hosted chat already supplies that layer. | Keep OMH focused on fixture-backed wrapper contracts and local status artifacts. |
-| P1 | Hosted chat surfaces still need contract-consumption examples. | Golden JSON locks the wrapper contract, but operators still need examples for rendering replies, actions, status cards, and thread keys. | Add fixture-backed examples that do not introduce platform SDK dependencies. |
+| P0 | Hermes Agent consumes OMH contracts. | OMH should read as a Hermes-native capability layer, not as a separate bot product. | Keep OMH focused on fixture-backed chat contracts and local status artifacts. |
+| P1 | Hermes-facing examples should stay concrete. | Golden JSON locks the wrapper contract, but operators still need examples for rendering replies, actions, status cards, and thread keys. | Add fixture-backed examples that show chat UX without implying missing platform code. |
 | P2 | Run-backed lifecycle reporting is Codex-only in Phase 1. | Other executor targets are supported as prompt-only handoffs until a tested lifecycle contract exists. | Generalize only after another executor contract exists. |
 
 ## First Implementation Contract

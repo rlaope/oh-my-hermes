@@ -1,14 +1,13 @@
 {
   "schema_version": "hermes_agent_integration_examples/v1",
-  "description": "Transport-free contract examples for Hermes-agent wrappers consuming OMH outputs.",
+  "description": "Contract examples for Hermes Agent surfaces consuming OMH outputs.",
   "runbook": "docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md",
-  "transport_boundary": {
-    "wrapper_owns": [
-      "platform events",
+  "hermes_surface_contract": {
+    "hermes_surface_owns": [
+      "chat rendering",
       "button rendering",
       "thread lifecycle",
-      "message edits",
-      "notifications"
+      "status narration"
     ],
     "omh_owns": [
       "chat_interaction/v1",
@@ -18,9 +17,6 @@
       "metadata-only runtime evidence boundaries"
     ],
     "non_goals": [
-      "platform SDK implementation",
-      "bot authentication",
-      "network calls",
       "Hermes core patching",
       "hidden executor launch"
     ]
@@ -28,7 +24,7 @@
   "consumed_contracts": [
     {
       "schema_version": "chat_interaction/v1",
-      "consumed_by": "Hermes-agent wrapper",
+      "consumed_by": "Hermes Agent surface",
       "required_fields": [
         "source",
         "thread_key",
@@ -47,7 +43,7 @@
     },
     {
       "schema_version": "chat_response/v1",
-      "consumed_by": "Hermes-agent wrapper",
+      "consumed_by": "Hermes Agent surface",
       "required_fields": [
         "kind",
         "visibility",
@@ -68,7 +64,7 @@
     },
     {
       "schema_version": "status_card/v1",
-      "consumed_by": "Hermes-agent wrapper",
+      "consumed_by": "Hermes Agent surface",
       "required_fields": [
         "run_id",
         "severity",

@@ -1,9 +1,8 @@
 # Chat Wrapper Examples
 
-This page shows how a Discord-style wrapper can render OMH output as a normal
-Hermes Agent chat response. The example is generated from local fixtures; it
-does not require a bot SDK, credentials, network access, an LLM call, or Hermes
-core changes.
+This page shows how a Discord-style Hermes Agent surface can render OMH output
+as a normal chat response. The example is generated from local fixtures so the
+contract is easy to inspect.
 
 For the operator runbook that ties these examples to state transitions,
 responsibilities, and evidence boundaries, read
@@ -211,6 +210,5 @@ What gets better for the team:
 | Status rows | `status_card.steps[]` |
 | Primary status action | `status_card.primary_action` |
 
-Wrappers should render these fields natively and keep platform-specific work
-outside OMH: authentication, posting, message edits, retries, buttons, and
-thread lifecycle all remain adapter responsibilities.
+Hermes Agent surfaces should render these fields natively and keep OMH focused
+on the routing, handoff, status, and evidence contract.

@@ -148,9 +148,9 @@ class WrapperGoldenExampleTests(unittest.TestCase):
 
         self.assertEqual(payload["schema_version"], "hermes_agent_integration_examples/v1")
         self.assertTrue(Path(payload["runbook"]).exists())
-        self.assertIn("platform SDK implementation", payload["transport_boundary"]["non_goals"])
-        self.assertIn("network calls", payload["transport_boundary"]["non_goals"])
-        self.assertIn("Hermes core patching", payload["transport_boundary"]["non_goals"])
+        self.assertIn("chat rendering", payload["hermes_surface_contract"]["hermes_surface_owns"])
+        self.assertIn("Hermes core patching", payload["hermes_surface_contract"]["non_goals"])
+        self.assertIn("hidden executor launch", payload["hermes_surface_contract"]["non_goals"])
 
         contracts = {item["schema_version"]: item for item in payload["consumed_contracts"]}
         self.assertEqual(
@@ -193,7 +193,7 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertIn(item["wrapper_action"], source["expected_response"]["action_ids"])
                 self.assertNotIn("token", json.dumps(item).lower())
 
-    def test_transport_free_adapter_shims_render_fixture_events(self) -> None:
+    def test_hermes_surface_shims_render_fixture_events(self) -> None:
         cases = (
             (
                 "examples/discord-adapter-shim.py",

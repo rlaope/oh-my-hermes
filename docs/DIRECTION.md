@@ -108,18 +108,17 @@ Selected coding executors own:
 
 5. Prefer local deterministic artifacts over hidden magic.
    Runtime records, wrapper sessions, and plans should be inspectable,
-   schema-versioned, redacted by default, and local-only unless a wrapper
-   outside this repository performs transport work.
+   schema-versioned, redacted by default, and local-first.
 
    Memory/context review follows the same rule. OMH may inspect OMH-local
    memory files, wrapper sessions, target topology, setup profiles, and
    wrapper-supplied snapshots; it must not claim it read or changed opaque
    Hermes internal memory.
 
-6. Do not widen into platform transports prematurely.
-   Transport adapters, auth, retries, message edits, and posting belong outside
-   this repository until their dependency and packaging story is explicitly
-   approved.
+6. Keep Hermes Agent as the chat surface.
+   OMH should not describe missing Discord/Slack bot layers as product gaps.
+   The product story is that Hermes Agent receives natural language and consumes
+   OMH skills, workflows, and local status contracts.
 
 7. Treat compatibility skill names as UX affordances.
    Workflow names may remain installed for familiarity, but their generated
@@ -150,10 +149,9 @@ Split into separate PRs only when:
    Keep this document, architecture docs, README, generated skills, examples,
    and tests aligned around delegation-first wrapper orchestration.
 
-2. Wrapper-native UX depth.
-   Expand golden JSON into adapter pseudocode examples for Discord and Slack
-   actions, threads, buttons, and status updates without adding transport
-   dependencies.
+2. Hermes-native UX depth.
+   Expand golden JSON into Hermes Agent-facing examples for actions, threads,
+   buttons, and status updates without turning them into separate bot products.
 
 3. Evidence completeness.
    Keep review, CI, merge-readiness, and merge observation records strict at
@@ -164,10 +162,10 @@ Split into separate PRs only when:
    non-coding requests feel first-class rather than like coding handoff
    leftovers.
 
-5. Adapter boundary readiness.
-   Only after the local contract is stable, consider example shims or adapter
-   packages that consume `chat_interaction/v1` without moving platform secrets
-   or network behavior into core OMH.
+5. Hermes surface readiness.
+   Keep improving examples that consume `chat_interaction/v1` from the Hermes
+   Agent side so users understand the chat-first flow without learning CLI
+   commands.
 
 6. Skill-first distribution.
    Lead with Hermes skill tap/install when the target Hermes environment
@@ -198,6 +196,6 @@ Before accepting direction-changing work, verify:
 - Does it keep coding execution in a selected executor handoff when code
   changes are required?
 - Does it preserve `prepared_not_observed` until wrapper evidence exists?
-- Does it avoid Hermes core patching, LLM/API calls, and transport networking?
+- Does it avoid Hermes core patching and hidden LLM/API calls?
 - Does it keep chat users free from command knowledge?
 - Does it fit one coherent goal PR unless there is a clear reason to split?

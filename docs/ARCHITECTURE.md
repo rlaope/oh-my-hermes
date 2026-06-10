@@ -32,7 +32,7 @@ flowchart LR
   user["User in Hermes, Discord, Slack, or hosted chat"]
   skills["Installed OMH skills\nHermes skill tap or omh setup"]
   plugin["Optional OMH plugin\n~/.hermes/plugins/omh"]
-  wrapper["Wrapper adapter\nbuttons, threads, edits"]
+  wrapper["Hermes chat surface\nbuttons, threads, edits"]
   omh["OMH local contract layer\nplaybooks, routing, plan, handoff, status"]
   hermes["Hermes Agent\nclarify, research, plan, narrate"]
   executor["Selected coding executor\nimplementation, verification"]
@@ -58,7 +58,7 @@ flowchart LR
 Chat user
   -> Hermes Agent owns conversation, planning, and status narration
   -> Installed OMH skills provide workflow and evidence guidance
-  -> Optional wrapper owns transport UX and asks OMH for backend contracts
+  -> Hermes chat surface asks OMH for backend contracts
   -> Executor owns main coding work when dispatched
   -> Runtime artifacts own observed evidence
 ```
@@ -144,7 +144,7 @@ OMH directly when Hermes taps are available.
 `plugin_bundle/omh/` is the optional Hermes plugin payload installed by
 `omh setup --with-plugin` to `~/.hermes/plugins/omh`. The v1 plugin registers
 only a metadata-only `omh_status` tool and a passive `pre_llm_call` hook. It
-does not run verification commands, install transports, patch Hermes core, or
+does not run verification commands, patch Hermes core, or
 claim execution evidence from prepared handoffs.
 
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
@@ -259,10 +259,10 @@ Routing, planning, and delegation have eight local surfaces:
    operators create deterministic `hermes_plan/v1` planning scaffolds under
    `.hermes/plans/` without claiming that execution or review already happened.
 
-`omh chat interact` is the primary adapter contract. It composes the lower-level
-surfaces into one response envelope so each transport does not need to invent
-its own orchestration policy. The `chat_response/v1` subobject is safe for the
-adapter to render directly: it names the state, provides concise copy, exposes
+`omh chat interact` is the primary Hermes-facing chat contract. It composes the
+lower-level surfaces into one response envelope so each Hermes Agent surface can
+share the same orchestration policy. The `chat_response/v1` subobject is safe
+to render directly: it names the state, provides concise copy, exposes
 platform-neutral actions, and never asks the end user to run an `omh` command.
 The surrounding envelope preserves source metadata, message hash and length,
 thread key, selected mode, next action, redaction policy, and claim boundary.
@@ -291,8 +291,8 @@ the companion `run.json` is marked as
 and `coding_delegation.json` as a required pair. The run envelope is
 implementation bookkeeping, not proof that Hermes executed the handoff.
 
-Neither the wrapper contract nor the lower-level surfaces include Discord SDKs,
-Slack SDKs, network calls, Codex process launching, or Hermes core patching.
+The wrapper contract and lower-level surfaces are local contracts; execution
+evidence still comes from Hermes Agent and the selected executor.
 
 Hermes planning writes Markdown plans under the configured Hermes home rather
 than runtime JSON under `.omh/runtime/`. The artifact is user-facing: it includes

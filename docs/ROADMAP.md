@@ -11,7 +11,7 @@
   and release flows
 - More artifact-backed application cases for Hermes-hosted chat surfaces
 - More fixture-backed Hermes Agent wrapper examples that consume
-  `chat_interaction/v1` without duplicating platform transport
+  `chat_interaction/v1`
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
 - Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
@@ -35,8 +35,8 @@
 - Explicit Codex executor handoff contracts for delegation-first coding flows
 - Wrapper-facing delegated coding status summaries that separate prepared
   handoff from observed execution, review, CI, and merge evidence
-- Wrapper-native `chat_interaction/v1` and `chat_response/v1` contracts for
-  Discord, Slack, and hosted Hermes adapters
+- Hermes-facing `chat_interaction/v1` and `chat_response/v1` contracts for
+  hosted chat surfaces
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated

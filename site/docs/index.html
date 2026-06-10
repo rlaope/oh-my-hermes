@@ -245,12 +245,12 @@ omh chat interact --source slack "diagnose installation health"</code>
           <h2>Hermes Agent Integration Runbook</h2>
           <p>
             Operators should treat OMH as the local contract layer consumed by a
-            Hermes-agent wrapper, not as a transport bot. The runbook explains which
-            fields to render, which owner is responsible for each transition, and which
-            claims are still not evidence.
+            Hermes Agent chat surface. The runbook explains which fields to render,
+            which owner is responsible for each transition, and which claims are still
+            not evidence.
           </p>
           <ul class="docs-list">
-            <li>Wrapper owns platform events, buttons, threads, edits, and notifications.</li>
+            <li>Hermes Agent owns the user-visible chat flow, actions, and status narration.</li>
             <li>OMH owns deterministic contracts, fixture examples, prepared handoffs, and status boundaries.</li>
             <li>Codex-like executors own implementation evidence only after dispatch is observed.</li>
           </ul>
@@ -266,8 +266,7 @@ omh chat interact --source slack "diagnose installation health"</code>
         <section class="docs-section" id="demo">
           <h2>Local demo</h2>
           <p>
-            Use the deterministic orchestration demo to inspect the full wrapper path before
-            building a real adapter.
+            Use the deterministic orchestration demo to inspect the full Hermes chat path.
           </p>
           <div class="command" role="region" aria-label="Demo commands" tabindex="0">
             <code>omh demo orchestration
@@ -275,8 +274,7 @@ uv run python examples/discord-adapter-shim.py
 uv run python examples/slack-adapter-shim.py</code>
           </div>
           <p>
-            The demo and shims are fixture-backed. They do not call bot SDKs, LLM APIs,
-            network services, or Hermes internals.
+            The demo and shims are fixture-backed examples of the local OMH contract.
           </p>
         </section>
 

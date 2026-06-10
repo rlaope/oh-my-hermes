@@ -136,9 +136,9 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 
 - **Natural-language first** - users in chat do not need to know `omh` commands.
 - **Install-first, not dashboard-first** - get Hermes-visible skills without
-  adopting a hosted service, bot SDK, or separate app.
-- **Hermes-native boundary** - no Hermes core patching, hidden transport bot, or
-  network service inside this package.
+  adopting a separate dashboard or app.
+- **Hermes-native boundary** - OMH extends Hermes Agent with skills,
+  workflows, plugin context, and local evidence contracts.
 - **Delegation-first coding** - coding-heavy requests become prepared handoffs
   for the selected executor: Codex when supported, or prompt-only handoff for
   Claude Code, generic agents, OMH-style runtimes, or Hermes-retained work.
@@ -174,7 +174,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
-| Wrapper contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Discord, Slack, or hosted adapters. |
+| Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
 | Optional plugin bridge | `omh setup --with-plugin` installs `~/.hermes/plugins/omh` with metadata-only `omh_status` support. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |
 

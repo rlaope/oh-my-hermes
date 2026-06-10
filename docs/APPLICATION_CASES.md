@@ -295,9 +295,9 @@ PYTHONPATH=tests python3 -m unittest tests/test_cli.py -v
 
 ### Current Limit
 
-Playbooks are deterministic local contracts. They do not post messages,
-authenticate transport bots, launch coding executors, or prove that a later
-stage happened. Runtime status must still come from observed evidence records.
+Playbooks are deterministic local contracts. They do not launch coding
+executors or prove that a later stage happened. Runtime status must still come
+from observed evidence records.
 
 ## Case 5: Company Workflows Without CLI Knowledge
 
@@ -363,13 +363,11 @@ Expected behavior:
   `strategy-synthesis`, `meeting-facilitation`, or `business-research` rather
   than `coding-handling`
 
-### Transport Boundary
+### Evidence Boundary
 
-OMH assumes Hermes Agent or the hosted chat surface receives messages, renders
-replies, and owns platform-specific transport. OMH does not duplicate that
-layer. It supplies deterministic routing, plan, handoff, and status contracts,
-and it requires observed source evidence before Hermes can claim data was
-actually reviewed.
+OMH supplies deterministic routing, plan, handoff, and status contracts for
+Hermes Agent. It still requires observed source evidence before Hermes can
+claim data was actually reviewed.
 
 ## Grounded UltraQA Scenario Matrix
 

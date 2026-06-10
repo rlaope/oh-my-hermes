@@ -6,10 +6,9 @@ Skills answer "which workflow guidance should Hermes use?" Playbooks answer
 "what should the whole wrapper experience do next, and which layer owns each
 stage?"
 
-They are local, deterministic, and transport-free. A Discord, Slack, or hosted
-adapter can use playbooks to render a natural request as a plan, research lane,
-status card, or coding handoff without requiring the user to know command
-names.
+They are local and deterministic. Hermes Agent-facing surfaces can use
+playbooks to render a natural request as a plan, research lane, status card, or
+coding handoff without requiring the user to know command names.
 
 ## Commands
 
@@ -52,10 +51,8 @@ files.
 
 Playbooks deliberately separate ownership:
 
-- Wrappers own platform UX: buttons, threads, message edits, credentials, and
-  posting.
 - Hermes owns conversation, clarification, source-backed research, planning,
-  and status narration.
+  status narration, and the user-visible chat flow.
 - OMH owns deterministic local contracts, playbook selection, prepared handoff
   payloads, and metadata-only evidence records.
 - Selected coding executors own main coding work after dispatch or prompt

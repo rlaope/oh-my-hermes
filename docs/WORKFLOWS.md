@@ -1699,6 +1699,6 @@ Keep public docs accurate, installable, and aligned with actual behavior.
 - Delegation expectation: Record docs delegation only when Hermes exposes a docs lane or wrapper-side docs result.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - Documentation of a future adapter is not proof that a transport exists.
+  - Documentation of a future surface is not proof that evidence was observed.
   - Generated docs must match catalog data before release claims are made.
 - Fallback: If behavior is not implemented yet, label it as roadmap instead of current capability.
