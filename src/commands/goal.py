@@ -123,7 +123,7 @@ def cmd_goal_continue(args: argparse.Namespace) -> int:
 
 
 def _add_goal_commands(sub) -> None:
-    goal = sub.add_parser("goal")
+    goal = sub.add_parser("goal", help="Manage durable local goal ledgers and completion gates.")
     goal_sub = goal.add_subparsers(dest="goal_command", required=True)
 
     goal_create = goal_sub.add_parser("create")

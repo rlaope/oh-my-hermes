@@ -180,7 +180,7 @@ def cmd_coding_lifecycle_report(args: argparse.Namespace) -> int:
 
 
 def _add_coding_commands(sub) -> None:
-    coding = sub.add_parser("coding")
+    coding = sub.add_parser("coding", help="Prepare executor-neutral or tracked coding handoff artifacts.")
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
 
     delegate = coding_sub.add_parser("delegate")

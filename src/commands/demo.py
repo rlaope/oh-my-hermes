@@ -18,7 +18,7 @@ def cmd_demo_orchestration(args: argparse.Namespace) -> int:
 
 
 def _add_demo_commands(sub) -> None:
-    demo = sub.add_parser("demo")
+    demo = sub.add_parser("demo", help="Print deterministic demo artifacts for OMH orchestration examples.")
     demo_sub = demo.add_subparsers(dest="demo_command", required=True)
 
     orchestration = demo_sub.add_parser("orchestration")

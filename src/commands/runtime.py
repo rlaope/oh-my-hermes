@@ -280,7 +280,7 @@ def _bounded_limit(args: argparse.Namespace) -> int | None:
 
 
 def _add_runtime_commands(sub) -> None:
-    runtime = sub.add_parser("runtime")
+    runtime = sub.add_parser("runtime", help="Read and record local prepared-vs-observed runtime evidence.")
     runtime_sub = runtime.add_subparsers(dest="runtime_command", required=True)
 
     runtime_status = runtime_sub.add_parser("status")

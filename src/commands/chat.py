@@ -218,7 +218,7 @@ def cmd_chat_session_list(args: argparse.Namespace) -> int:
 
 
 def _add_chat_commands(sub) -> None:
-    chat = sub.add_parser("chat")
+    chat = sub.add_parser("chat", help="Turn wrapper chat events into OMH routing, handoff, and status envelopes.")
     chat_sub = chat.add_subparsers(dest="chat_command", required=True)
 
     route = chat_sub.add_parser("route")

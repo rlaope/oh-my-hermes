@@ -25,9 +25,11 @@ as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
 detects the Hermes config path, confirms skill registration, asks for the
-default coding executor preference, and can opt into the plugin bridge or a
-visible team persona. In non-interactive shells it uses safe defaults and prints
-a concise step-by-step summary. Use
+default coding handoff style, and can opt into the plugin bridge or a visible
+team role preset. Those choices do not add or remove OMH workflows; they only
+save defaults for how Hermes should present handoff and role surfaces. In
+non-interactive shells it uses safe defaults and prints a concise step-by-step
+summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
 
@@ -177,8 +179,9 @@ omh probe
 ```
 
 `omh setup` should report a human-readable setup summary by default. In a real
-terminal it first asks for setup language, then only asks for choices that
-change behavior. The same command with `--json` should include install and apply
+terminal it first asks for setup language, then only asks for optional defaults
+that change how handoffs or visible role presets are presented. The same command
+with `--json` should include install and apply
 steps plus a
 `hermes_native_setup/v1` block that names the equivalent Hermes skill install
 path, managed skill directory, and `skills.external_dirs` registration key.
@@ -516,13 +519,14 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/inst
 ```
 
 Install one or more optional Hermes agent/profile packs during bootstrap. These
-are visible role/persona files only; all OMH workflows are installed either way:
+are visible team role preset files only; all OMH workflows are installed either
+way:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
 ```
 
-Record a default executor preference during bootstrap:
+Record a default coding handoff style during bootstrap:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_DEFAULT_EXECUTOR=claude-code sh

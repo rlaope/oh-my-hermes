@@ -55,7 +55,7 @@ def cmd_state_clear(args: argparse.Namespace) -> int:
 
 
 def _add_state_commands(sub) -> None:
-    state = sub.add_parser("state")
+    state = sub.add_parser("state", help="Inspect or update lightweight workflow lifecycle state.")
     state_sub = state.add_subparsers(dest="state_command", required=True)
 
     state_status = state_sub.add_parser("status")

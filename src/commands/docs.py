@@ -82,7 +82,7 @@ def cmd_harness_validate(args: argparse.Namespace) -> int:
 
 
 def _add_docs_commands(sub) -> None:
-    docs = sub.add_parser("docs")
+    docs = sub.add_parser("docs", help="Render or check generated OMH workflow reference docs.")
     docs_sub = docs.add_subparsers(dest="docs_command", required=True)
 
     docs_workflows = docs_sub.add_parser("workflows")
@@ -93,7 +93,7 @@ def _add_docs_commands(sub) -> None:
 
 
 def _add_harness_commands(sub) -> None:
-    harness = sub.add_parser("harness")
+    harness = sub.add_parser("harness", help="List, inspect, and validate workflow harness contracts.")
     harness_sub = harness.add_subparsers(dest="harness_command", required=True)
 
     harness_list = harness_sub.add_parser("list")

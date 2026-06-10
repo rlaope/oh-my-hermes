@@ -836,12 +836,15 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
 
 
 def _print_doctor_summary(payload: dict[str, object]) -> None:
+    use_color = _use_color()
     checks = payload.get("checks", [])
     if not isinstance(checks, list):
         checks = []
     ok = bool(payload.get("ok", False))
-    print("OMH doctor: ok" if ok else "OMH doctor: needs attention")
+    print(_color("OMH doctor: ok" if ok else "OMH doctor: needs attention", "1;36" if ok else "1;33", use_color))
     print(f"Checks: {sum(1 for check in checks if isinstance(check, dict) and check.get('ok'))}/{len(checks)} passing")
+    if ok:
+        print("Summary: local files, managed skills, and Hermes registration checks passed.")
     for check in checks:
         if not isinstance(check, dict) or check.get("ok"):
             continue
@@ -854,6 +857,7 @@ def _print_doctor_summary(payload: dict[str, object]) -> None:
     next_action = str(payload.get("recommended_next_action", "")).strip()
     if next_action:
         print(f"Next: {next_action}")
+    print("Boundary: restart or reload Hermes before treating chat visibility as observed.")
     print("For machine-readable output, rerun with `--json`.")
 
 
@@ -951,11 +955,11 @@ def _config_change_label(language: str, message: str) -> str:
 
 def _executor_summary(executor: str) -> str:
     labels = {
-        "choose": "ask before choosing executor",
-        "codex": "Codex tracked handoff",
+        "choose": "ask before choosing a coding executor",
+        "codex": "Codex tracked handoff when selected",
         "claude-code": "Claude Code prompt handoff",
-        "generic": "portable prompt handoff",
-        "hermes": "Hermes-retained work",
+        "generic": "portable prompt handoff for any coding agent",
+        "hermes": "keep small coding-like work in Hermes by default",
         "omx-runtime": "plugin/runtime prompt handoff",
         "omo-runtime": "plugin/runtime prompt handoff",
         "omc-runtime": "plugin/runtime prompt handoff",
@@ -1045,7 +1049,7 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
 
 
 def _add_top_level_commands(sub) -> None:
-    setup = sub.add_parser("setup")
+    setup = sub.add_parser("setup", help="Install managed skills and connect them to the target Hermes profile.")
     _add_common_install_options(setup)
     setup.add_argument("--json", action="store_true", help="Print the full machine-readable setup payload.")
     setup.add_argument("--yes", action="store_true", help="Use default setup choices without interactive prompts.")
@@ -1077,27 +1081,27 @@ def _add_top_level_commands(sub) -> None:
     )
     setup.set_defaults(func=cmd_setup)
 
-    install = sub.add_parser("install")
+    install = sub.add_parser("install", help="Refresh the managed OMH skill pack without changing Hermes registration.")
     _add_common_install_options(install)
     install.add_argument("--json", action="store_true", help="Print the full machine-readable install payload.")
     install.set_defaults(func=cmd_install)
 
-    update = sub.add_parser("update")
+    update = sub.add_parser("update", help="Refresh OMH from a preview, stable, local, or explicit package source.")
     _add_common_install_options(update)
     update.add_argument("--json", action="store_true", help="Print the full machine-readable update payload.")
     update.set_defaults(func=cmd_update)
 
-    convert = sub.add_parser("convert")
+    convert = sub.add_parser("convert", help="Import a local skills directory into the managed OMH skill pack.")
     convert.add_argument("--from-skills-dir", required=True)
     convert.add_argument("--force", action="store_true")
     convert.add_argument("--dry-run", action="store_true")
     convert.set_defaults(func=cmd_convert)
 
-    apply = sub.add_parser("apply")
+    apply = sub.add_parser("apply", help="Register the managed OMH skills directory in Hermes config.")
     apply.add_argument("--dry-run", action="store_true")
     apply.set_defaults(func=cmd_apply)
 
-    uninstall = sub.add_parser("uninstall")
+    uninstall = sub.add_parser("uninstall", help="Remove OMH-managed registration, local files, and optional command package.")
     uninstall.add_argument("--registration-only", action="store_true", help="Only remove the OMH skills.external_dirs registration from Hermes config.")
     uninstall.add_argument("--remove-files", action="store_true", help="Legacy mode: remove Hermes registration and the managed OMH home directory.")
     uninstall.add_argument("--all", action="store_true", help="Remove all OMH-managed local state, plugin bundle, and generated team role files.")
@@ -1109,27 +1113,27 @@ def _add_top_level_commands(sub) -> None:
     uninstall.add_argument("--language", default=None, help=f"Human output language ({', '.join(LANGUAGE_CODES)}).")
     uninstall.set_defaults(func=cmd_uninstall)
 
-    list_cmd = sub.add_parser("list")
+    list_cmd = sub.add_parser("list", help="Print the installed managed skill manifest as JSON.")
     list_cmd.set_defaults(func=cmd_list)
 
-    doctor = sub.add_parser("doctor")
+    doctor = sub.add_parser("doctor", help="Check local OMH install health and Hermes skill registration.")
     doctor.add_argument("--json", action="store_true", help="Print the full machine-readable doctor payload.")
     doctor.set_defaults(func=cmd_doctor)
 
-    recommend = sub.add_parser("recommend")
+    recommend = sub.add_parser("recommend", help="Map a task description to likely OMH workflow skills.")
     recommend.add_argument("task", nargs="+", help="Task description to map to OMH workflow skills.")
     recommend.add_argument("--limit", type=int, default=5, help="Maximum recommendations to return.")
     recommend.set_defaults(func=cmd_recommend)
 
-    snippet = sub.add_parser("snippet")
+    snippet = sub.add_parser("snippet", help="Print or write the workspace guidance snippet for agents.")
     snippet.add_argument("--dry-run", action="store_true")
     snippet.add_argument("--output", default=None)
     snippet.set_defaults(func=cmd_snippet)
 
-    probe = sub.add_parser("probe")
+    probe = sub.add_parser("probe", help="Inspect observable OMH/Hermes capability surfaces as JSON.")
     probe.set_defaults(func=cmd_probe)
 
-    profile = sub.add_parser("profile")
+    profile = sub.add_parser("profile", help="List or inspect optional visible team role/profile packs.")
     profile_sub = profile.add_subparsers(dest="profile_command", required=True)
     profile_list = profile_sub.add_parser("list")
     profile_list.set_defaults(func=cmd_profile_list)

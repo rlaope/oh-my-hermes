@@ -137,7 +137,7 @@ def cmd_loop_tick(args: argparse.Namespace) -> int:
 
 
 def _add_loop_commands(sub) -> None:
-    loop = sub.add_parser("loop")
+    loop = sub.add_parser("loop", help="Start, inspect, and advance ambitious goal loop control-plane records.")
     loop_sub = loop.add_subparsers(dest="loop_command", required=True)
 
     start = loop_sub.add_parser("start")

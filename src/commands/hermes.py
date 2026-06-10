@@ -45,7 +45,7 @@ def cmd_hermes_plan(args: argparse.Namespace) -> int:
 
 
 def _add_hermes_commands(sub) -> None:
-    hermes = sub.add_parser("hermes")
+    hermes = sub.add_parser("hermes", help="Build Hermes-facing plan scaffolds for natural-language work.")
     hermes_sub = hermes.add_subparsers(dest="hermes_command", required=True)
 
     plan = hermes_sub.add_parser("plan")

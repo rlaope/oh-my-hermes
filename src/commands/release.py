@@ -41,7 +41,7 @@ def cmd_release_hermes_smoke(args: argparse.Namespace) -> int:
 
 
 def _add_release_commands(sub) -> None:
-    release = sub.add_parser("release")
+    release = sub.add_parser("release", help="Plan or run release smoke checks for real Hermes installation paths.")
     release_sub = release.add_subparsers(dest="release_command", required=True)
 
     smoke = release_sub.add_parser(
