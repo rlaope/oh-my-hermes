@@ -26,6 +26,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("OMH - oh-my-hermes-agent", stdout)
         self.assertIn("omh setup", stdout)
         self.assertIn("Agent chat with installed OMH skills", stdout)
+        self.assertIn("If this screen appears after `omh uninstall`", stdout)
         self.assertIn("omh --help", stdout)
 
     def test_root_help_explains_command_lanes(self) -> None:
@@ -198,11 +199,39 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH update preview complete.", stdout)
             self.assertIn("Rerun without `--dry-run`", stdout)
 
+            status, stdout, stderr = run_cli(base + ["update"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH update complete.", stdout)
+            self.assertIn("Source: installed command package (builtin)", stdout)
+            self.assertIn("Recorded package URL:", stdout)
+            self.assertIn("Command package: unchanged", stdout)
+            self.assertIn("State log:", stdout)
+            self.assertIn("last_update", stdout)
+            self.assertIn("Run `omh doctor` to verify health", stdout)
+            self.assertIn("To update the `omh` command itself", stdout)
+            self.assertNotIn("  Package URL:", stdout)
+
             status, stdout, stderr = run_cli(base + ["update", "--json"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
-            self.assertEqual(json.loads(stdout)["package"], "oh-my-hermes-agent")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["package"], "oh-my-hermes-agent")
+            self.assertEqual(payload["operation"], "update")
+            self.assertEqual(payload["managed_skills"]["status"], "updated")
+            self.assertEqual(payload["command_package"]["schema_version"], "command_package_status/v1")
+            self.assertEqual(payload["command_package"]["status"], "unchanged")
+            self.assertFalse(payload["command_package"]["updated"])
+            self.assertIn("install.sh", payload["command_package"]["update_instruction"])
+            self.assertEqual(payload["runtime_state_key"], "last_update")
+            self.assertTrue(str(payload["runtime_state_path"]).endswith("runtime/state.json"))
+
+            state = json.loads((root / ".omh" / "runtime" / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["last_update"]["operation"], "update")
+            self.assertEqual(state["last_update"]["command_package"]["status"], "unchanged")
+            self.assertEqual(state["last_update"]["managed_skills"]["count"], 29)
 
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -2336,12 +2365,35 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             self.assertTrue(payload["remove_all"])
+            self.assertEqual(payload["operation"], "uninstall")
+            self.assertEqual(payload["command_package"]["schema_version"], "command_package_status/v1")
+            self.assertEqual(payload["command_package"]["status"], "kept")
+            self.assertFalse(payload["command_package"]["removed"])
             self.assertFalse(omh_home.exists())
             self.assertFalse((hermes_home / "plugins" / "omh").exists())
             self.assertFalse(managed_agent.exists())
             self.assertTrue(unrelated_agent.exists())
             self.assertTrue(unrelated_plugin.exists())
             self.assertNotIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
+
+    def test_uninstall_terminal_summary_explains_when_command_remains_on_path(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup"])[0], 0)
+
+            status, stdout, stderr = run_cli(base + ["uninstall"], output_json=False)
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertIn("OMH uninstall complete.", stdout)
+            self.assertIn("Command package: not removed", stdout)
+            self.assertIn("If `omh` still runs after uninstall", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
 
     def test_uninstall_registration_only_keeps_managed_files(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -2391,6 +2443,8 @@ class CliTests(unittest.TestCase):
                 preview = json.loads(stdout)
                 self.assertIn(str(fake_link), preview["command_package_would_remove"])
                 self.assertIn(str(fake_venv.resolve()), preview["command_package_would_remove"])
+                self.assertEqual(preview["command_package"]["status"], "would_remove")
+                self.assertTrue(preview["command_package"]["removal_requested"])
                 self.assertTrue(fake_link.exists())
                 self.assertTrue(fake_venv.exists())
 
@@ -2400,6 +2454,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             self.assertTrue(payload["command_package_removed"])
+            self.assertEqual(payload["command_package"]["status"], "removed")
+            self.assertTrue(payload["command_package"]["removed"])
             self.assertFalse(fake_link.exists())
             self.assertFalse(fake_venv.exists())
 

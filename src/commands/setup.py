@@ -37,6 +37,9 @@ from ..team_profiles import TeamProfileError, inspect_team_profile_pack, install
 from .common import _paths, _print_json, _wants_json
 from .language import LANGUAGE_CODES, language_from_env, language_options, normalize_language, tr
 
+INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh"
+COMMAND_PACKAGE_STATUS_SCHEMA_VERSION = "command_package_status/v1"
+
 
 def cmd_install(args: argparse.Namespace) -> int:
     language = _resolve_language(args)
@@ -44,21 +47,21 @@ def cmd_install(args: argparse.Namespace) -> int:
         payload = _install_result(args)
         _print_json(payload)
     else:
-        command = str(getattr(args, "command", "install"))
-        label = "update" if command == "update" else "install"
+        operation = _install_operation(args)
         progress = _HumanProgress(enabled=True, use_color=_use_color())
-        progress.header(f"OMH {label}", tr(language, "install_subtitle"))
+        progress.header(f"OMH {operation}", tr(language, "install_subtitle"))
         progress.step(1, 1, tr(language, "step_install_skills"))
         payload = _install_result(args)
         skills = payload.get("skills", [])
         progress.done(tr(language, "done_skills_ready", count=len(skills) if isinstance(skills, list) else 0))
-        _print_install_summary(payload, command=str(getattr(args, "command", "install")), language=language)
+        _print_install_summary(payload, command=operation, language=language)
     return 0
 
 
 def _install_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
     language = _resolve_language(args)
+    operation = _install_operation(args)
     try:
         release = package_url_for(args.channel, args.version or "", args.package_url or "")
     except ValueError as exc:
@@ -70,6 +73,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
     result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
     result.update(
         {
+            "operation": operation,
             "release_channel": release.channel,
             "release_version": release.version,
             "release_package_url": release.package_url,
@@ -77,6 +81,16 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
         }
     )
     if not args.dry_run:
+        result["runtime_state_path"] = str(paths.runtime_state_path)
+        result["runtime_state_key"] = f"last_{operation}"
+    result["managed_skills"] = _managed_skills_status(result, dry_run=bool(args.dry_run))
+    result["command_package"] = _command_package_status_for_install(
+        operation=operation,
+        source=source,
+        dry_run=bool(args.dry_run),
+    )
+    if not args.dry_run:
+        operation_log = _install_operation_log(result, source=source)
         update_state(
             paths,
             {
@@ -90,6 +104,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
                 "release_package_url": release.package_url,
                 "installed_skills": len(result.get("skills", [])),
                 "skills_dir": str(paths.skills_dir),
+                f"last_{operation}": operation_log,
             },
         )
     return result
@@ -97,6 +112,112 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
 
 def cmd_update(args: argparse.Namespace) -> int:
     return cmd_install(args)
+
+
+def _install_operation(args: argparse.Namespace) -> str:
+    return "update" if str(getattr(args, "command", "install")) == "update" else "install"
+
+
+def _managed_skills_status(result: dict[str, object], *, dry_run: bool) -> dict[str, object]:
+    skills = result.get("skills", [])
+    if not isinstance(skills, list):
+        skills = []
+    return {
+        "schema_version": "managed_skills_status/v1",
+        "status": "would_update" if dry_run else "updated",
+        "count": len(skills),
+        "skills_dir": str(result.get("skills_dir", "")),
+    }
+
+
+def _command_package_status_for_install(*, operation: str, source: str, dry_run: bool) -> dict[str, object]:
+    status = "unchanged"
+    reason = "managed skills were refreshed from the currently installed command package"
+    if dry_run:
+        status = "would_remain_unchanged"
+        reason = "dry run previews managed skill changes without changing the command package"
+    elif source != "builtin":
+        reason = "managed skills were refreshed from an explicit skill source; the command package was not changed"
+    return {
+        "schema_version": COMMAND_PACKAGE_STATUS_SCHEMA_VERSION,
+        "operation": operation,
+        "status": status,
+        "updated": False,
+        "source": "installed_command_package" if source == "builtin" else "explicit_skill_source",
+        "reason": reason,
+        "update_instruction": INSTALLER_COMMAND,
+    }
+
+
+def _install_operation_log(result: dict[str, object], *, source: str) -> dict[str, object]:
+    managed_skills = result.get("managed_skills", {})
+    command_package = result.get("command_package", {})
+    return {
+        "operation": str(result.get("operation", "")),
+        "source": source,
+        "release_channel": str(result.get("release_channel", "")),
+        "release_version": str(result.get("release_version", "")),
+        "release_package_url": str(result.get("release_package_url", "")),
+        "managed_skills": managed_skills if isinstance(managed_skills, dict) else {},
+        "command_package": command_package if isinstance(command_package, dict) else {},
+    }
+
+
+def _command_package_status_for_uninstall(result: dict[str, object]) -> dict[str, object]:
+    removed = _string_list(result.get("command_package_removed_paths", []))
+    would_remove = _string_list(result.get("command_package_would_remove", []))
+    kept = result.get("command_package_kept", [])
+    kept_items = kept if isinstance(kept, list) else []
+    removal_requested = bool(result.get("command_package_remove_requested", False))
+    dry_run = bool(result.get("dry_run", False))
+
+    if dry_run and would_remove:
+        status = "would_remove"
+        reason = "dry run found install.sh-managed command package paths"
+    elif removed:
+        status = "removed"
+        reason = "removed install.sh-managed command package paths"
+    elif kept_items:
+        status = "kept"
+        reason = _first_kept_reason(kept_items)
+    elif removal_requested:
+        status = "not_found"
+        reason = "command package removal was requested, but no install.sh-managed command package paths were found"
+    else:
+        status = "not_requested"
+        reason = "command package removal was not requested"
+
+    return {
+        "schema_version": COMMAND_PACKAGE_STATUS_SCHEMA_VERSION,
+        "operation": "uninstall",
+        "status": status,
+        "removal_requested": removal_requested,
+        "removed": bool(removed),
+        "would_remove": bool(would_remove),
+        "kept": bool(kept_items),
+        "reason": reason,
+        "remaining_command_instruction": tr(
+            str(result.get("language", "en")),
+            "uninstall_command_still_available",
+        )
+        if kept_items
+        else "",
+    }
+
+
+def _first_kept_reason(items: list[object]) -> str:
+    for item in items:
+        if isinstance(item, dict):
+            reason = str(item.get("reason", "")).strip()
+            if reason:
+                return reason
+    return "command package was not removed"
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
@@ -163,6 +284,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     )
     result.update(
         {
+            "operation": "uninstall",
             "config_changed": change.changed,
             "config_message": change.message,
             "scope": scope,
@@ -171,6 +293,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
             "language": language,
         }
     )
+    result["command_package"] = _command_package_status_for_uninstall(result)
     if _wants_json(args):
         _print_json(result)
     else:
@@ -917,6 +1040,7 @@ def _print_uninstall_summary(payload: dict[str, object], *, language: str = "en"
         print(f"  {tr(language, 'uninstall_command_removed', count=len(command_removed))}")
     elif command_kept:
         print(f"  {tr(language, 'uninstall_command_kept')}")
+        print(f"  {tr(language, 'uninstall_command_still_available')}")
     print(f"  {tr(language, 'machine_readable')}")
 
 
@@ -932,16 +1056,29 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     print(_color(title, "1;36", use_color))
     print(_color(tr(language, "summary"), "1;32", use_color))
     print(f"  {tr(language, 'skills_line', count=len(skills), path=payload.get('skills_dir', ''))}")
-    print(f"  {tr(language, 'source', source=payload.get('source', 'builtin'))}")
+    source = str(payload.get("source", "builtin"))
+    source_label = tr(language, "source_builtin") if source == "builtin" else source
+    print(f"  {tr(language, 'source', source=source_label)}")
     channel = str(payload.get("release_channel", "")).strip()
     package_url = str(payload.get("release_package_url", "")).strip()
     if channel:
         print(f"  {tr(language, 'release_channel', channel=channel)}")
     if package_url and package_url != "local":
-        print(f"  {tr(language, 'package_url', url=package_url)}")
+        package_url_key = "recorded_package_url" if source == "builtin" else "package_url"
+        print(f"  {tr(language, package_url_key, url=package_url)}")
+    if label == "update" and source == "builtin" and not dry_run:
+        print(f"  {tr(language, 'command_package_unchanged')}")
+    state_path = str(payload.get("runtime_state_path", "")).strip()
+    state_key = str(payload.get("runtime_state_key", "")).strip()
+    if state_path and state_key:
+        print(f"  {tr(language, 'state_log', path=state_path, entry=state_key)}")
     print(_color(tr(language, "next"), "1;32", use_color))
     if dry_run:
         print(f"  {tr(language, 'install_next_dry')}")
+    elif label == "update":
+        print(f"  {tr(language, 'update_next')}")
+        if source == "builtin":
+            print(f"  {tr(language, 'update_command_next')}")
     else:
         print(f"  {tr(language, 'install_next')}")
     print(f"  {tr(language, 'machine_readable')}")

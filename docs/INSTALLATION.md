@@ -483,19 +483,30 @@ conversation, execution, GitHub, CI, and merge evidence that OMH later records.
 
 ## Update
 
-Update the installed skill pack:
+Update the managed skill pack from the currently installed `omh` command
+package:
 
 ```sh
 omh update --channel preview
-omh setup
 omh doctor
 ```
 
 Use `omh update --channel stable --version <version>` to record a pinned stable
 update intent, or `omh update --channel local --from-skills-dir ./skills` for a
 local fixture. Local modifications block updates unless `--force` is supplied.
-Use `omh setup` after an update to reinstall managed skills and reapply Hermes
-registration. Then run `omh doctor` and restart Hermes Agent.
+Run `omh doctor` after an update. Use `omh setup` only when doctor reports that
+Hermes registration needs repair, then restart Hermes Agent. `omh update` does
+not fetch or replace the `omh` command package itself; rerun the installer to
+sync command-code changes from the preview or stable package source:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+```
+
+Successful `install` and `update` runs record a concise state log under
+`~/.omh/runtime/state.json` as `last_install` or `last_update`. The log records
+the managed skill count, source metadata, and command-package status without
+storing raw chat prompts.
 
 ## Reapply
 
@@ -594,6 +605,9 @@ removes the install.sh-managed `omh` command venv/link when the current command
 is running from that managed venv. It does not delete unrelated Hermes files,
 unrelated plugins, unrelated agents, or pipx/development Python environments
 that OMH cannot safely identify as install.sh-managed.
+If `omh` still runs after uninstall, that means the command package is still on
+`PATH`; remove it with the installer-managed venv, pip, or pipx environment
+that installed it.
 
 Preview the cleanup first:
 

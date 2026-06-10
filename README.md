@@ -91,8 +91,12 @@ omh doctor
 
 `omh doctor` prints a short health summary by default. Use `omh doctor --json`
 for the full check payload.
-`omh install` and `omh update` follow the same rule: human-readable summaries
-for terminal use, `--json` for wrappers and automation.
+`omh install`, `omh update`, and `omh uninstall` follow the same rule:
+human-readable summaries for terminal use, `--json` for wrappers and
+automation. `omh update` refreshes the managed skill pack from the currently
+installed command package; rerun the installer when you need to update the
+`omh` command code itself. Install and update summaries are also recorded in
+`~/.omh/runtime/state.json` as `last_install` or `last_update`.
 
 The installer creates an isolated OMH virtual environment, links the `omh`
 command into `~/.local/bin` when possible, and prints the installed command

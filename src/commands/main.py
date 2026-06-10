@@ -134,6 +134,10 @@ Install OMH, then talk to Hermes. The `omh` command is the setup, doctor,
 verifier, and wrapper/backend surface; the normal user experience is Hermes
 Agent chat with installed OMH skills.
 
+If this screen appears after `omh uninstall`, the command package is still on
+PATH. `uninstall` removes OMH-managed Hermes files and removes the command only
+when it can prove the command came from the install.sh-managed OMH venv.
+
 Start:
   omh setup              Install skills and connect them to Hermes
   omh doctor             Check local OMH health and registration
