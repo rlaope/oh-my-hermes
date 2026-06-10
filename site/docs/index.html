@@ -218,6 +218,15 @@ hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes</code>
           <div class="command" role="region" aria-label="Stable install command" tabindex="0">
             <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=&lt;version&gt; sh</code>
           </div>
+          <p>
+            Rerun the installer for preview command-package updates before the
+            next tag. When release automation knows the commit, pass
+            <code>OMH_SOURCE_REF=main@&lt;sha&gt;</code> so OMH can record the
+            movement in <code>~/.omh/runtime/state.json</code>.
+          </p>
+          <div class="command" role="region" aria-label="Preview update command" tabindex="0">
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SOURCE_REF=main@&lt;sha&gt; sh</code>
+          </div>
         </section>
 
         <section class="docs-section" id="chat">

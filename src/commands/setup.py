@@ -25,7 +25,7 @@ from ..plugin_pack import PluginPackError, install_plugin_bundle
 from ..probe import probe_capabilities
 from ..release import RELEASE_CHANNELS, package_url_for
 from ..routing.recommend import recommend_skills
-from ..runtime.artifacts import update_state
+from ..runtime.artifacts import read_state_result, update_state
 from ..setup_profiles import (
     build_setup_profile,
     setup_profile_categories_for_executor,
@@ -39,6 +39,7 @@ from .language import LANGUAGE_CODES, language_from_env, language_options, norma
 
 INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh"
 COMMAND_PACKAGE_STATUS_SCHEMA_VERSION = "command_package_status/v1"
+RELEASE_UPDATE_SCHEMA_VERSION = "release_update_status/v1"
 SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION = "setup_operator_summary/v1"
 DOCTOR_SUMMARY_SCHEMA_VERSION = "doctor_summary/v1"
 
@@ -72,6 +73,8 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
         raise OmhError("local channel requires --from-skills-dir or --source")
     source_dir = Path(args.from_skills_dir or args.source).expanduser().resolve() if (args.from_skills_dir or args.source) else None
     source = str(source_dir) if source_dir else "builtin"
+    source_ref = _release_source_ref(args, release)
+    previous_release = _previous_release_update_state(paths)
     result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
     result.update(
         {
@@ -79,6 +82,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
             "release_channel": release.channel,
             "release_version": release.version,
             "release_package_url": release.package_url,
+            "release_source_ref": source_ref,
             "language": language,
         }
     )
@@ -89,6 +93,17 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
     result["command_package"] = _command_package_status_for_install(
         operation=operation,
         source=source,
+        dry_run=bool(args.dry_run),
+        command_package_updated=bool(getattr(args, "command_package_updated", False)),
+    )
+    result["release_update"] = _release_update_status(
+        release_channel=release.channel,
+        release_version=release.version,
+        release_package_url=release.package_url,
+        source_ref=source_ref,
+        explicit_metadata=_explicit_release_metadata_supplied(args),
+        previous=previous_release,
+        command_package=result["command_package"],
         dry_run=bool(args.dry_run),
     )
     if not args.dry_run:
@@ -104,6 +119,8 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
                 "release_channel": release.channel,
                 "release_version": release.version,
                 "release_package_url": release.package_url,
+                "release_source_ref": source_ref,
+                "release_update": result["release_update"],
                 "installed_skills": len(result.get("skills", [])),
                 "skills_dir": str(paths.skills_dir),
                 f"last_{operation}": operation_log,
@@ -133,10 +150,21 @@ def _managed_skills_status(result: dict[str, object], *, dry_run: bool) -> dict[
     }
 
 
-def _command_package_status_for_install(*, operation: str, source: str, dry_run: bool) -> dict[str, object]:
+def _command_package_status_for_install(
+    *,
+    operation: str,
+    source: str,
+    dry_run: bool,
+    command_package_updated: bool = False,
+) -> dict[str, object]:
     status = "unchanged"
     reason = "managed skills were refreshed from the currently installed command package"
-    if dry_run:
+    updated = False
+    if command_package_updated:
+        status = "would_update" if dry_run else "updated"
+        updated = not dry_run
+        reason = "the installer reported that it refreshed the OMH command package before running this command"
+    elif dry_run:
         status = "would_remain_unchanged"
         reason = "dry run previews managed skill changes without changing the command package"
     elif source != "builtin":
@@ -145,22 +173,154 @@ def _command_package_status_for_install(*, operation: str, source: str, dry_run:
         "schema_version": COMMAND_PACKAGE_STATUS_SCHEMA_VERSION,
         "operation": operation,
         "status": status,
-        "updated": False,
-        "source": "installed_command_package" if source == "builtin" else "explicit_skill_source",
+        "updated": updated,
+        "source": _command_package_source(command_package_updated=command_package_updated, source=source),
         "reason": reason,
         "update_instruction": INSTALLER_COMMAND,
     }
 
 
+def _command_package_source(*, command_package_updated: bool, source: str) -> str:
+    if command_package_updated:
+        return "installer"
+    if source == "builtin":
+        return "installed_command_package"
+    return "explicit_skill_source"
+
+
+def _release_source_ref(args: argparse.Namespace, release) -> str:
+    explicit = str(getattr(args, "source_ref", "") or "").strip()
+    if explicit:
+        return explicit
+    return str(getattr(release, "source_label", "") or "").strip()
+
+
+def _explicit_release_metadata_supplied(args: argparse.Namespace) -> bool:
+    return any(
+        str(getattr(args, key, "") or "").strip()
+        for key in ("source_ref", "version", "package_url")
+    )
+
+
+def _previous_release_update_state(paths) -> dict[str, object]:
+    state, _ = read_state_result(paths)
+    state = state or {}
+    candidates = [state.get("release_update"), state, state.get("last_update"), state.get("last_install")]
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        if isinstance(candidate.get("current"), dict):
+            return candidate["current"]
+        release_update = candidate.get("release_update")
+        if isinstance(release_update, dict) and isinstance(release_update.get("current"), dict):
+            return release_update["current"]
+        if any(
+            candidate.get(key)
+            for key in ("release_channel", "release_version", "release_package_url", "release_source_ref")
+        ):
+            return candidate
+    return {}
+
+
+def _release_update_status(
+    *,
+    release_channel: str,
+    release_version: str,
+    release_package_url: str,
+    source_ref: str,
+    explicit_metadata: bool,
+    previous: dict[str, object],
+    command_package: dict[str, object],
+    dry_run: bool,
+) -> dict[str, object]:
+    previous_channel = _string_value(previous.get("release_channel") or previous.get("channel"))
+    previous_version = _string_value(previous.get("release_version") or previous.get("version"))
+    previous_package_url = _string_value(previous.get("release_package_url") or previous.get("package_url"))
+    previous_ref = _string_value(previous.get("release_source_ref") or previous.get("source_ref"))
+    current = {
+        "release_channel": release_channel,
+        "release_version": release_version,
+        "release_package_url": release_package_url,
+        "release_source_ref": source_ref,
+        "package_version": __version__,
+    }
+    command_status = str(command_package.get("status", ""))
+    command_package_changed = bool(command_package.get("updated")) or command_status == "would_update"
+    metadata_changed = any(
+        [
+            _metadata_value_changed(previous_channel, release_channel, explicit=explicit_metadata),
+            _metadata_value_changed(previous_version, release_version, explicit=explicit_metadata),
+            _metadata_value_changed(previous_package_url, release_package_url, explicit=explicit_metadata),
+            _metadata_value_changed(previous_ref, source_ref, explicit=explicit_metadata),
+        ]
+    )
+    changed = command_package_changed or metadata_changed
+    if dry_run:
+        if command_package_changed:
+            status = "would_update"
+        elif metadata_changed:
+            status = "would_record_metadata"
+        else:
+            status = "would_refresh"
+    elif command_package_changed:
+        status = "updated"
+    elif metadata_changed:
+        status = "metadata_recorded"
+    else:
+        status = "refreshed"
+    return {
+        "schema_version": RELEASE_UPDATE_SCHEMA_VERSION,
+        "status": status,
+        "changed": changed,
+        "command_package_changed": command_package_changed,
+        "metadata_changed": metadata_changed,
+        "previous": {
+            "release_channel": previous_channel,
+            "release_version": previous_version,
+            "release_package_url": previous_package_url,
+            "release_source_ref": previous_ref,
+        },
+        "current": current,
+        "display": {
+            "version_change": _change_label(previous_version, release_version),
+            "source_ref_change": _change_label(previous_ref, source_ref),
+            "package_url_change": _change_label(previous_package_url, release_package_url),
+        },
+    }
+
+
+def _string_value(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _metadata_value_changed(previous: str, current: str, *, explicit: bool) -> bool:
+    if explicit and current:
+        return previous != current
+    return bool(previous and previous != current)
+
+
+def _change_label(previous: str, current: str) -> str:
+    if previous and current:
+        return f"{previous} -> {current}"
+    if current:
+        return f"(none) -> {current}"
+    if previous:
+        return f"{previous} -> (none)"
+    return ""
+
+
 def _install_operation_log(result: dict[str, object], *, source: str) -> dict[str, object]:
     managed_skills = result.get("managed_skills", {})
     command_package = result.get("command_package", {})
+    release_update = result.get("release_update", {})
     return {
         "operation": str(result.get("operation", "")),
         "source": source,
         "release_channel": str(result.get("release_channel", "")),
         "release_version": str(result.get("release_version", "")),
         "release_package_url": str(result.get("release_package_url", "")),
+        "release_source_ref": str(result.get("release_source_ref", "")),
+        "release_update": release_update if isinstance(release_update, dict) else {},
         "managed_skills": managed_skills if isinstance(managed_skills, dict) else {},
         "command_package": command_package if isinstance(command_package, dict) else {},
     }
@@ -1225,8 +1385,26 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     if package_url and package_url != "local":
         package_url_key = "recorded_package_url" if source == "builtin" else "package_url"
         print(f"  {tr(language, package_url_key, url=package_url)}")
-    if label == "update" and source == "builtin" and not dry_run:
-        print(f"  {tr(language, 'command_package_unchanged')}")
+    release_update = payload.get("release_update", {})
+    if isinstance(release_update, dict):
+        display = release_update.get("display", {})
+        if isinstance(display, dict):
+            version_change = str(display.get("version_change", "")).strip()
+            source_ref_change = str(display.get("source_ref_change", "")).strip()
+            if version_change and str(payload.get("release_channel", "")) == "stable":
+                print(f"  {tr(language, 'release_version_change', change=version_change)}")
+            if source_ref_change:
+                print(f"  {tr(language, 'release_source_ref_change', change=source_ref_change)}")
+        status = str(release_update.get("status", "")).strip()
+        if status:
+            print(f"  {tr(language, 'release_update_status', status=status)}")
+    command_package = payload.get("command_package", {})
+    if isinstance(command_package, dict):
+        command_status = str(command_package.get("status", "")).strip()
+        if command_status == "updated":
+            print(f"  {tr(language, 'command_package_updated')}")
+        elif label == "update" and source == "builtin" and not dry_run:
+            print(f"  {tr(language, 'command_package_unchanged')}")
     state_path = str(payload.get("runtime_state_path", "")).strip()
     state_key = str(payload.get("runtime_state_key", "")).strip()
     if state_path and state_key:
@@ -1236,7 +1414,7 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
         print(f"  {tr(language, 'install_next_dry')}")
     elif label == "update":
         print(f"  {tr(language, 'update_next')}")
-        if source == "builtin":
+        if source == "builtin" and not (isinstance(command_package, dict) and command_package.get("updated")):
             print(f"  {tr(language, 'update_command_next')}")
     else:
         print(f"  {tr(language, 'install_next')}")
@@ -1561,6 +1739,8 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--channel", choices=RELEASE_CHANNELS, default="preview", help="Release channel metadata for this install/update.")
     p.add_argument("--version", default="", help="Stable release version such as 1.0.0 or v1.0.0.")
     p.add_argument("--package-url", default="", help="Explicit release archive URL for support and audit metadata.")
+    p.add_argument("--source-ref", default="", help="Release source ref metadata such as main, main@sha, or v1.0.1.")
+    p.add_argument("--command-package-updated", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--language", default=None, help=f"Human output language for setup/install/update ({', '.join(LANGUAGE_CODES)}).")
     p.add_argument("--force", action="store_true")
     p.add_argument("--dry-run", action="store_true")

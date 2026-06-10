@@ -310,6 +310,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH update complete.", stdout)
             self.assertIn("Source: installed command package (builtin)", stdout)
             self.assertIn("Recorded package URL:", stdout)
+            self.assertIn("Source ref: main -> main", stdout)
+            self.assertIn("Release state: refreshed", stdout)
             self.assertIn("Command package: unchanged", stdout)
             self.assertIn("State log:", stdout)
             self.assertIn("last_update", stdout)
@@ -329,12 +331,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["command_package"]["status"], "unchanged")
             self.assertFalse(payload["command_package"]["updated"])
             self.assertIn("install.sh", payload["command_package"]["update_instruction"])
+            self.assertEqual(payload["release_source_ref"], "main")
+            self.assertEqual(payload["release_update"]["schema_version"], "release_update_status/v1")
+            self.assertEqual(payload["release_update"]["status"], "refreshed")
+            self.assertEqual(payload["release_update"]["display"]["source_ref_change"], "main -> main")
             self.assertEqual(payload["runtime_state_key"], "last_update")
             self.assertTrue(str(payload["runtime_state_path"]).endswith("runtime/state.json"))
 
             state = json.loads((root / ".omh" / "runtime" / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["last_update"]["operation"], "update")
             self.assertEqual(state["last_update"]["command_package"]["status"], "unchanged")
+            self.assertEqual(state["last_update"]["release_update"]["status"], "refreshed")
             self.assertEqual(state["last_update"]["managed_skills"]["count"], 29)
 
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
@@ -2991,6 +2998,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             dry_run = json.loads(stdout)
             self.assertEqual(dry_run["release_channel"], "stable")
+            self.assertEqual(dry_run["release_source_ref"], "v1.0.0")
             self.assertIn("/tags/v1.0.0.zip", dry_run["release_package_url"])
 
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "install", "--dry-run", "--channel", "stable"])
@@ -3000,6 +3008,256 @@ class CliTests(unittest.TestCase):
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "update", "--channel", "local"])
             self.assertEqual(status, 2)
             self.assertIn("local channel requires", stderr)
+
+    def test_installer_reported_update_records_version_and_ref_movement(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "install",
+                    "--channel",
+                    "preview",
+                    "--source-ref",
+                    "main@old",
+                    "--command-package-updated",
+                    "--json",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            first = json.loads(stdout)
+            self.assertTrue(first["command_package"]["updated"])
+            self.assertEqual(first["release_update"]["current"]["release_source_ref"], "main@old")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "preview",
+                    "--source-ref",
+                    "main@new",
+                    "--command-package-updated",
+                    "--json",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            preview = json.loads(stdout)
+            self.assertEqual(preview["command_package"]["status"], "updated")
+            self.assertTrue(preview["command_package"]["updated"])
+            self.assertEqual(preview["release_update"]["status"], "updated")
+            self.assertTrue(preview["release_update"]["changed"])
+            self.assertTrue(preview["release_update"]["command_package_changed"])
+            self.assertTrue(preview["release_update"]["metadata_changed"])
+            self.assertEqual(preview["release_update"]["display"]["source_ref_change"], "main@old -> main@new")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "preview",
+                    "--source-ref",
+                    "main@human",
+                    "--command-package-updated",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Source ref: main@new -> main@human", stdout)
+            self.assertIn("Release state: updated", stdout)
+            self.assertIn("Command package: updated by installer", stdout)
+            self.assertNotIn("To update the `omh` command itself", stdout)
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.1",
+                    "--source-ref",
+                    "v1.0.1",
+                    "--command-package-updated",
+                    "--json",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            stable = json.loads(stdout)
+            self.assertEqual(stable["release_update"]["status"], "updated")
+            self.assertEqual(stable["release_update"]["display"]["version_change"], "(none) -> 1.0.1")
+            self.assertEqual(stable["release_update"]["display"]["source_ref_change"], "main@human -> v1.0.1")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "install",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.1",
+                    "--source-ref",
+                    "v1.0.1",
+                    "--command-package-updated",
+                    "--json",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.2",
+                    "--source-ref",
+                    "v1.0.2",
+                    "--command-package-updated",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Release version: 1.0.1 -> 1.0.2", stdout)
+            self.assertIn("Source ref: v1.0.1 -> v1.0.2", stdout)
+            self.assertIn("Release state: updated", stdout)
+
+    def test_direct_update_source_ref_metadata_does_not_claim_command_package_update(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            self.assertEqual(
+                run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "install",
+                        "--source-ref",
+                        "main@old",
+                        "--command-package-updated",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "update", "--source-ref", "main@manual"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Source ref: main@old -> main@manual", stdout)
+            self.assertIn("Release state: metadata_recorded", stdout)
+            self.assertIn("Command package: unchanged", stdout)
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "update", "--source-ref", "main@manual", "--json"],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["release_update"]["status"], "refreshed")
+            self.assertFalse(payload["release_update"]["command_package_changed"])
+            self.assertFalse(payload["release_update"]["metadata_changed"])
+
+    def test_first_direct_update_source_ref_records_metadata_without_package_update(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "update", "--source-ref", "main@first"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Source ref: (none) -> main@first", stdout)
+            self.assertIn("Release state: metadata_recorded", stdout)
+            self.assertIn("Command package: unchanged", stdout)
+
+    def test_latest_release_update_state_wins_over_stale_last_update(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "update", "--source-ref", "main@old"])[0], 0)
+            self.assertEqual(
+                run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "install",
+                        "--source-ref",
+                        "main@new",
+                        "--command-package-updated",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "update", "--source-ref", "main@new", "--json"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["release_update"]["status"], "refreshed")
+            self.assertEqual(payload["release_update"]["display"]["source_ref_change"], "main@new -> main@new")
+            self.assertFalse(payload["release_update"]["metadata_changed"])
+
+    def test_update_tolerates_malformed_previous_runtime_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            state_path = omh_home / "runtime" / "state.json"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text("{bad-json", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--source-ref",
+                    "main@repair",
+                    "--command-package-updated",
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["release_update"]["current"]["release_source_ref"], "main@repair")
+            repaired = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertIn("previous_state_error", repaired)
 
     def test_runtime_commands_record_show_and_delegate(self) -> None:
         with TemporaryDirectory() as tmp:

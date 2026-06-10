@@ -100,10 +100,12 @@ Human-facing maintenance and catalog commands follow the same rule:
 `--json` for wrappers and automation. Backend/control-plane commands such as
 `chat`, `coding`, `runtime`, `goal`, `loop`, `memory`, `state`, `harness`,
 `release`, and `demo` print JSON by design. `omh update` refreshes the managed
-skill pack from the currently installed command package; rerun the installer
-when you need to update the `omh` command code itself. Setup, install, update,
-and doctor summaries are recorded in `~/.omh/runtime/state.json` as
-`last_setup`, `last_install`, `last_update`, or `last_doctor`.
+skill pack from the currently installed command package. Rerun the installer to
+move the command package to the latest preview commit or a pinned stable tag;
+that installer-driven update is recorded with channel, version, package URL,
+and source ref metadata. Setup, install, update, and doctor summaries are
+recorded in `~/.omh/runtime/state.json` as `last_setup`, `last_install`,
+`last_update`, or `last_doctor`.
 
 The installer creates an isolated OMH virtual environment, links the `omh`
 command into `~/.local/bin` when possible, and prints the installed command
@@ -138,6 +140,10 @@ For pinned releases after a matching `v<version>` tag exists:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
+
+For preview updates before the next release, rerun the same installer. If your
+release automation knows the commit SHA, pass it as `OMH_SOURCE_REF=main@<sha>`
+so OMH can display and record `main@old -> main@new` instead of only `main`.
 
 ## Why OMH
 

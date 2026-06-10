@@ -5,6 +5,7 @@ OMH_REPO_ARCHIVE_ROOT="${OMH_REPO_ARCHIVE_ROOT:-https://github.com/rlaope/oh-my-
 OMH_CHANNEL="${OMH_CHANNEL:-preview}"
 OMH_VERSION="${OMH_VERSION:-}"
 OMH_PACKAGE_URL="${OMH_PACKAGE_URL:-}"
+OMH_SOURCE_REF="${OMH_SOURCE_REF:-}"
 OMH_PYTHON="${OMH_PYTHON:-python3}"
 OMH_PIP_ARGS_WAS_SET="${OMH_PIP_ARGS+x}"
 OMH_PIP_ARGS="${OMH_PIP_ARGS:-}"
@@ -316,6 +317,9 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
   case "$OMH_CHANNEL" in
     preview)
       OMH_PACKAGE_URL="$OMH_REPO_ARCHIVE_ROOT/heads/main.zip"
+      if [ -z "$OMH_SOURCE_REF" ]; then
+        OMH_SOURCE_REF="main"
+      fi
       ;;
     stable)
       if [ -z "$OMH_VERSION" ]; then
@@ -327,6 +331,9 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
         *) OMH_TAG="v$OMH_VERSION" ;;
       esac
       OMH_PACKAGE_URL="$OMH_REPO_ARCHIVE_ROOT/tags/$OMH_TAG.zip"
+      if [ -z "$OMH_SOURCE_REF" ]; then
+        OMH_SOURCE_REF="$OMH_TAG"
+      fi
       ;;
     local)
       say "omh installer: OMH_CHANNEL=local requires OMH_PACKAGE_URL to point at a local archive or path accepted by pip."
@@ -337,10 +344,27 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
       exit 1
       ;;
   esac
+elif [ -z "$OMH_SOURCE_REF" ]; then
+  case "$OMH_CHANNEL" in
+    local) OMH_SOURCE_REF="local" ;;
+    stable)
+      if [ -n "$OMH_VERSION" ]; then
+        case "$OMH_VERSION" in
+          v*) OMH_SOURCE_REF="$OMH_VERSION" ;;
+          *) OMH_SOURCE_REF="v$OMH_VERSION" ;;
+        esac
+      else
+        OMH_SOURCE_REF="custom-url"
+      fi
+      ;;
+    preview) OMH_SOURCE_REF="main" ;;
+    *) OMH_SOURCE_REF="custom-url" ;;
+  esac
 fi
 
 say_header "$(msg installer_title)" "$(msg installer_subtitle)"
 say_note "$(msg channel): $OMH_CHANNEL"
+say_note "Source ref: $OMH_SOURCE_REF"
 say_note "$(msg mode): $OMH_INSTALL_MODE"
 case "$OMH_INSTALL_MODE" in
   venv)
@@ -370,7 +394,7 @@ else
   say "Use '$OMH_RUNTIME_PYTHON -m omh.cli doctor' as a fallback and check the selected Python scripts directory."
 fi
 
-set -- setup --channel "$OMH_CHANNEL" --package-url "$OMH_PACKAGE_URL"
+set -- setup --channel "$OMH_CHANNEL" --package-url "$OMH_PACKAGE_URL" --source-ref "$OMH_SOURCE_REF" --command-package-updated
 
 if [ "$OMH_LANG_WAS_SET" = "1" ]; then
   set -- "$@" --language "$OMH_LANG"

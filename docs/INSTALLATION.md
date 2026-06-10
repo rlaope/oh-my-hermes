@@ -503,15 +503,21 @@ omh doctor
 ```
 
 Use `omh update --channel stable --version <version>` to record a pinned stable
-update intent, or `omh update --channel local --from-skills-dir ./skills` for a
-local fixture. Local modifications block updates unless `--force` is supplied.
+managed-skill refresh, or `omh update --channel local --from-skills-dir ./skills`
+for a local fixture. Local modifications block updates unless `--force` is
+supplied.
+
 Run `omh doctor` after an update. Use `omh setup` only when doctor reports that
 Hermes registration needs repair, then restart Hermes Agent. `omh update` does
-not fetch or replace the `omh` command package itself; rerun the installer to
-sync command-code changes from the preview or stable package source:
+not fetch or replace the running `omh` command package itself. Rerun the
+installer to sync command-code changes from the preview or stable package
+source; the installer passes command-package update evidence into OMH so the
+state log can show version/ref movement such as `1.0.0 -> 1.0.1` or
+`main@old -> main@new` when `OMH_SOURCE_REF` is provided:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SOURCE_REF=main@<sha> sh
 ```
 
 Successful setup, install, update, and doctor runs record concise state logs

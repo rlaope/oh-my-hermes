@@ -31,6 +31,12 @@ Preview install:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
 ```
 
+Preview update with an auditable source ref:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SOURCE_REF=main@<sha> sh
+```
+
 Custom archive:
 
 ```sh
