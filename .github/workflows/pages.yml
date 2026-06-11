@@ -34,7 +34,7 @@ jobs:
       - name: Validate harness catalog
         run: python -m omh.cli harness validate
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           enablement: true
       - name: Prepare static site
