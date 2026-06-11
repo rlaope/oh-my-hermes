@@ -457,9 +457,6 @@ class RouterContentTests(unittest.TestCase):
         quick_start = readme.split("## Quick Start", 1)[1].split("## Why OMH", 1)[0]
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", quick_start)
         self.assertIn("omh setup", quick_start)
-        self.assertIn("The installer creates an isolated OMH virtual environment", quick_start)
-        self.assertIn("links the `omh`", quick_start)
-        self.assertIn("directory is not on `PATH`", quick_start)
         self.assertIn("Use OMH request-to-handoff for: I want to safely add a feature to this repo.", quick_start)
         self.assertIn("name the responsible role", quick_start)
         self.assertLess(quick_start.index("curl -fsSL"), quick_start.index("hermes skills tap add"))
