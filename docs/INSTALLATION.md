@@ -25,10 +25,11 @@ as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
 selects user or project scope, detects the Hermes config path, confirms skill
-registration, asks for the default coding handoff style, and can opt into the
-plugin bridge, MCP bridge preference, or a visible team role preset. Those
-choices do not add or remove OMH workflows; they only save defaults for how
-Hermes should present handoff and role surfaces. In non-interactive shells it
+registration, asks for the default coding handoff style, installs the Hermes
+plugin bridge, and can opt into an MCP bridge preference or a visible team role
+preset. Those choices do not add or remove OMH workflows; they only save
+defaults for how Hermes should present handoff and role surfaces. In
+non-interactive shells it
 uses safe defaults and prints a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
@@ -46,13 +47,8 @@ an isolated OMH virtual environment and links `omh` into a user bin directory
 when possible. If that directory is not on `PATH`, add the printed directory to
 `PATH` or run the printed absolute `omh` path directly.
 
-Plugin support is optional. Use it when an operator wants OMH to provide a
-thin Hermes plugin bridge in addition to the skill pack:
-
-```sh
-omh setup --with-plugin
-omh doctor
-```
+Plugin support is installed by `omh setup` by default. It provides a thin
+Hermes plugin bridge in addition to the skill pack:
 
 That installs `~/.hermes/plugins/omh` with metadata-only status support. It
 does not execute code, patch Hermes core, or prove Hermes has loaded the
@@ -228,8 +224,8 @@ surface.
 `omh runtime status` should show the local runtime artifact directory and the
 latest install/apply/doctor state when those commands have run. `omh probe`
 reports observable Hermes capability surfaces without mutating Hermes internals.
-When `omh setup --with-plugin` has run, `omh doctor` also checks the managed
-plugin manifest plus local import/register smoke. `omh probe` reports
+After `omh setup` has run, `omh doctor` also checks the managed plugin manifest
+plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so
 operators do not mistake local install readiness for observed Hermes runtime
 use.
@@ -557,12 +553,6 @@ omh doctor
 Then restart Hermes Agent.
 
 ## Install Options
-
-Install the optional plugin bridge during bootstrap:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_PLUGIN=1 sh
-```
 
 Record the optional MCP bridge preference during bootstrap:
 

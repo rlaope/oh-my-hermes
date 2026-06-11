@@ -46,5 +46,5 @@
 - GitHub Pages source for the public OMH entry point
 - Situation playbooks exposed through `omh playbook list`, `inspect`, and
   `recommend`
-- Optional plugin distribution path through `omh setup --with-plugin`, with
-  local import/register smoke and conservative runtime-claim boundaries
+- Default plugin distribution path through `omh setup`, with local
+  import/register smoke and conservative runtime-claim boundaries

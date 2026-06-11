@@ -58,7 +58,7 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertIn("omh.plugin_bundle.omh", packages)
         self.assertIn("omh.plugin_bundle.omh", pyproject["tool"]["setuptools"]["package-data"])
 
-    def test_setup_default_does_not_install_plugin(self) -> None:
+    def test_setup_default_installs_plugin(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             omh_home = root / ".omh"
@@ -69,8 +69,9 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
-            self.assertNotIn("plugin", payload["steps"])
-            self.assertFalse((hermes_home / "plugins" / "omh").exists())
+            self.assertIn("plugin", payload["steps"])
+            self.assertEqual(payload["operator_summary"]["plugin_mode"], "installed")
+            self.assertTrue((hermes_home / "plugins" / "omh").exists())
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])[0], 0)
 
     def test_setup_with_plugin_installs_and_registers_smoke(self) -> None:

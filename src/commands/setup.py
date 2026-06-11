@@ -335,7 +335,8 @@ def _setup_operator_summary(
 ) -> dict[str, object]:
     dry_run = bool(getattr(args, "dry_run", False))
     status = "dry_run" if dry_run else "skills_only" if getattr(args, "skip_apply", False) else "configured"
-    plugin_status = "installed" if getattr(args, "with_plugin", False) else "optional"
+    plugin = steps.get("plugin", {})
+    plugin_status = str(plugin.get("status", "installed")) if isinstance(plugin, dict) else "installed"
     team_status = "profile_pack" if getattr(args, "profile_pack", []) else "available"
     mcp = steps.get("mcp", {})
     mcp_mode = str(mcp.get("mode", "none")) if isinstance(mcp, dict) else "none"
@@ -614,6 +615,7 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
+    args.with_plugin = True
     language = _setup_language(args)
     paths = _paths(args)
     if _setup_should_interact(args):
@@ -628,7 +630,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
         progress.header(tr(language, "setup_title"), tr(language, "setup_subtitle"))
-    total_steps = 4 + (1 if args.with_plugin else 0) + (1 if args.with_mcp else 0) + (1 if args.profile_pack else 0)
+    total_steps = 5 + (1 if args.with_mcp else 0) + (1 if args.profile_pack else 0)
     step_index = 1
 
     progress.step(step_index, total_steps, tr(language, "step_install_skills"), detail=str(paths.skills_dir))
@@ -647,12 +649,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
         progress.done(_config_change_label(language, str(apply_message)))
     step_index += 1
 
-    if args.with_plugin:
-        progress.step(step_index, total_steps, tr(language, "step_plugin"), detail=str(paths.hermes_plugin_dir))
-        steps["plugin"] = _plugin_setup_result(args, paths)
-        plugin_status = steps["plugin"].get("status", "installed") if isinstance(steps["plugin"], dict) else "installed"
-        progress.done(str(plugin_status))
-        step_index += 1
+    progress.step(step_index, total_steps, tr(language, "step_plugin"), detail=str(paths.hermes_plugin_dir))
+    steps["plugin"] = _plugin_setup_result(args, paths)
+    plugin_status = steps["plugin"].get("status", "installed") if isinstance(steps["plugin"], dict) else "installed"
+    progress.done(str(plugin_status))
+    step_index += 1
 
     steps["mcp"] = _mcp_setup_result(args, paths)
     if args.with_mcp:
@@ -683,7 +684,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         ensure_config=not args.skip_apply,
         setup_context={
             "apply_skipped": bool(args.skip_apply),
-            "with_plugin": bool(args.with_plugin),
+            "with_plugin": True,
             "with_mcp": bool(args.with_mcp),
             "profile_packs": list(args.profile_pack),
             "setup_profiles": list(args.profile),
@@ -769,8 +770,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "operator_summary": operator_summary,
         "language": language,
     }
-    if args.with_plugin:
-        payload["plugin_distribution"] = steps["plugin"]
+    payload["plugin_distribution"] = steps["plugin"]
     if args.profile_pack:
         payload["team_profiles"] = steps["team_profiles"]
     if _wants_json(args):
@@ -791,7 +791,6 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
         args.profile
         or getattr(args, "default_executor", None)
         or args.profile_pack
-        or args.with_plugin
         or args.with_mcp
         or args.skip_apply
         or getattr(args, "scope", None)
@@ -883,13 +882,6 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
     )
     args.default_executor = _ask_default_executor(use_color=use_color, language=language)
     args.profile = setup_profile_categories_for_executor(str(args.default_executor))
-    args.with_plugin = _ask_yes_no(
-        tr(language, "plugin_question"),
-        default=False,
-        use_color=use_color,
-        note=tr(language, "plugin_note"),
-        language=language,
-    )
     args.with_mcp = _ask_yes_no(
         tr(language, "mcp_question"),
         default=False,
@@ -1298,8 +1290,6 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
     plugin = payload.get("plugin_distribution")
     if isinstance(plugin, dict):
         print(f"  {tr(language, 'plugin_bridge', status=plugin.get('status', 'installed'))}")
-    elif not dry_run:
-        print(f"  {tr(language, 'plugin_optional')}")
 
     team_profiles = payload.get("team_profiles")
     if isinstance(team_profiles, list) and team_profiles:
@@ -1869,7 +1859,7 @@ def _add_top_level_commands(sub) -> None:
     setup.add_argument(
         "--with-plugin",
         action="store_true",
-        help="Also install the optional OMH Hermes plugin bundle under ~/.hermes/plugins/omh.",
+        help=argparse.SUPPRESS,
     )
     setup.add_argument(
         "--with-mcp",

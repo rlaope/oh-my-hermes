@@ -43,10 +43,10 @@ Custom archive:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes/archive/refs/tags/v<version>.zip sh
 ```
 
-Optional plugin/profile bootstrap smoke:
+Plugin/profile bootstrap smoke:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
 ```
 
 ## Required Checks
@@ -60,7 +60,7 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
-python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --with-plugin --dry-run --channel stable --version 1.0.0
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 python3 -m omh.cli release hermes-smoke
 uv build
@@ -139,7 +139,7 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Runtime validation status.
 - Capability probe status.
 - Hermes CLI install smoke status, including whether it was plan-only or live.
-- Optional plugin bundle status when `omh setup --with-plugin` changed.
+- Plugin bundle status when `omh setup` changed.
 - GitHub Pages workflow status when public site copy changed.
 - Known manual Hermes checks that could not be automated.
 - Any public claim that depends on wrapper evidence rather than Hermes-native

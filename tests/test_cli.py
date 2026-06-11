@@ -203,7 +203,6 @@ class CliTests(unittest.TestCase):
                     "y",
                     "2",
                     "y",
-                    "y",
                     "4",
                 ]
             ) + "\n"
@@ -219,6 +218,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("They do not enable or disable OMH workflows", stdout)
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("Plugin bridge:", stdout)
+            self.assertNotIn("Install optional plugin bridge", stdout)
             self.assertIn("MCP mode: bridge requested", stdout)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
@@ -247,7 +247,7 @@ class CliTests(unittest.TestCase):
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
             self.assertEqual(profile["selected_categories"], ["safety-first"])
             self.assertEqual(profile["default_executor"], "choose")
-            self.assertFalse((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
+            self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
 
     def test_setup_project_scope_uses_project_local_paths(self) -> None:
         with TemporaryDirectory() as tmp:

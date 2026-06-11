@@ -146,7 +146,7 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
     plugin = inspect_plugin_bundle(paths)
     plugin_expected = bool(plugin["plugin_dir_installed"]) or bool(state and state.get("last_plugin_distribution"))
     if not plugin_expected:
-        checks.append(Check("plugin_bundle", True, f"optional OMH plugin is not installed at {paths.hermes_plugin_dir}"))
+        checks.append(Check("plugin_bundle", True, f"managed OMH plugin bridge is not installed yet at {paths.hermes_plugin_dir}"))
     else:
         checks.extend(
             [
@@ -224,7 +224,7 @@ def _default_remediation(name: str) -> str:
     if name in {"runtime_artifacts", "workflow_state", "runtime_state"}:
         return "Repair the local OMH runtime directory or rerun with an --omh-home path that can store metadata-only artifacts."
     if name.startswith("plugin_"):
-        return "Run `omh setup --with-plugin` to reinstall the optional plugin bundle, or skip plugin checks if the plugin is not part of this setup."
+        return "Run `omh setup` to reinstall the managed plugin bridge, or `omh setup --force` if replacing local plugin edits is intended."
     if name.startswith("target_"):
         return "Repair the OMH target registry or rerun `omh setup` with the Hermes home used by the wrapper runtime."
     if name == "hermes_config":
@@ -240,7 +240,7 @@ def _default_next_action(name: str) -> str:
     if name.startswith("skill:") or name in {"manifest", "manifest_skills_dir", "skills_dir", "hermes_config"}:
         return "Run `omh setup`, then `omh doctor` again."
     if name.startswith("plugin_"):
-        return "Run `omh setup --with-plugin --force`, then `omh doctor` again, or leave the plugin uninstalled if using skills only."
+        return "Run `omh setup --force`, then `omh doctor` again."
     if name.startswith("target_"):
         return "Run `omh setup` for the current Hermes target, then rerun `omh doctor`."
     if name in {"runtime_artifacts", "workflow_state", "runtime_state"}:

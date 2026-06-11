@@ -34,6 +34,7 @@ Expected local result:
 
 - generated skills are installed under `~/.omh/skills`;
 - Hermes config includes that directory in `skills.external_dirs`;
+- the managed plugin bridge is installed under `~/.hermes/plugins/omh`;
 - normal users can talk to Hermes instead of running backend commands.
 
 ## Step 2: Verify
@@ -52,7 +53,7 @@ Report:
 
 Install success means a Hermes-usable skill path is configured and doctor has no
 blocking checks. It does not mean Hermes has already reloaded the skills,
-loaded the optional plugin, executed code, reviewed a PR, passed CI, or merged.
+loaded the plugin bridge, executed code, reviewed a PR, passed CI, or merged.
 
 For release-candidate verification, add the Hermes CLI smoke. Plan mode is safe
 and non-mutating:
@@ -97,26 +98,18 @@ hermes skills install code-review
 The tap path and `omh setup` path should converge on the same user experience:
 Hermes can see OMH guidance and the user talks to Hermes.
 
-## Optional Plugin Bridge
+## Plugin Bridge And Profile Packs
 
-Use the plugin only when the operator wants the thin native bridge in addition
-to skills:
+`omh setup` installs `~/.hermes/plugins/omh` and lets doctor verify local
+manifest, import, and register smoke checks. It does not patch Hermes core,
+implement Discord or Slack transports, start a network service, or prove Hermes
+loaded the plugin. Runtime plugin use must be observed separately.
 
-```sh
-omh setup --with-plugin
-omh doctor
-```
-
-This installs `~/.hermes/plugins/omh` and lets doctor verify local manifest,
-import, and register smoke checks. It does not patch Hermes core, implement
-Discord or Slack transports, start a network service, or prove Hermes loaded
-the plugin. Runtime plugin use must be observed separately.
-
-The one-command installer can include the same optional bridge or profile packs
-when the operator explicitly wants them:
+The one-command installer can still include profile packs when the operator
+explicitly wants them:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop sh
 ```
 
 ## First Hermes Prompt

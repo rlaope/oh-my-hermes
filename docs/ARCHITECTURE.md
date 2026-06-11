@@ -11,7 +11,7 @@ of copied prompt files.
 The architecture favors:
 
 - Hermes-native skill installation as the primary user-facing entry point
-- an optional thin Hermes plugin bridge for metadata-only status context
+- a thin Hermes plugin bridge for metadata-only status context
 - a small support command interface for bootstrap, verification, and wrappers
 - reversible local bootstrap installation
 - generated skill text from testable catalog data
@@ -141,8 +141,8 @@ skills/
 skill templates so `hermes skills tap add rlaope/oh-my-hermes` can expose
 OMH directly when Hermes taps are available.
 
-`plugin_bundle/omh/` is the optional Hermes plugin payload installed by
-`omh setup --with-plugin` to `~/.hermes/plugins/omh`. The v1 plugin registers
+`plugin_bundle/omh/` is the Hermes plugin payload installed by `omh setup` to
+`~/.hermes/plugins/omh`. The v1 plugin registers
 only a metadata-only `omh_status` tool and a passive `pre_llm_call` hook. It
 does not run verification commands, patch Hermes core, or
 claim execution evidence from prepared handoffs.

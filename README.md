@@ -79,10 +79,10 @@ because it is the repeatable repair step that installs generated skills under
 `~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
 the setup language, install scope, Hermes registration, the default coding
-handoff style, the optional plugin/MCP bridge preferences, and optional visible
-team role presets. All OMH
-workflows are installed either way. Non-interactive shells use the safe
-defaults. Add `--json`
+handoff style, optional MCP bridge preference, and optional visible team role
+presets. It also installs the lightweight Hermes plugin bridge so local OMH
+status context is available when Hermes supports it. All OMH workflows are
+installed either way. Non-interactive shells use the safe defaults. Add `--json`
 when an operator or wrapper needs the full machine-readable payload.
 
 The default user scope installs under `~/.omh` and `~/.hermes`. Use project
@@ -209,7 +209,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
-| Optional plugin bridge | `omh setup --with-plugin` installs `~/.hermes/plugins/omh` with metadata-only `omh_status` support. |
+| Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_status` support. |
 | Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |
 
@@ -231,10 +231,11 @@ For company and app operation work, OMH can help Hermes classify, brief, decide,
 handoff, and track the next workflow without pretending data was fetched, a
 meeting happened, code was implemented, or a deployment was observed.
 
-## Optional Profiles And Plugin
+## Profiles And Plugin
 
-Most installs only need the skill layer. Operators can opt into profiles or the
-thin plugin bridge when the target Hermes environment benefits from them.
+Setup installs the skill layer and the thin metadata-only plugin bridge by
+default. Operators can still opt into visible role profile packs when the target
+Hermes environment benefits from them.
 
 ```sh
 omh profile list
@@ -246,11 +247,6 @@ Profile packs write OMH-prefixed role files under `~/.hermes/agents`. The
 `cto-loop` pack exposes a CTO, PM, Dev, QA, Security, and Ops structure, but it
 is not installed by default.
 
-```sh
-omh setup --with-plugin
-omh doctor
-```
-
 The plugin bridge installs `~/.hermes/plugins/omh` and registers metadata-only
 status support. Local plugin install or import/register smoke is not proof that
 Hermes loaded the plugin, executed code, reviewed a PR, passed CI, or merged.
@@ -258,7 +254,7 @@ Hermes loaded the plugin, executed code, reviewed a PR, passed CI, or merged.
 The installer can also pass these advanced setup choices directly:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SCOPE=project OMH_WITH_PLUGIN=1 OMH_WITH_MCP=1 OMH_PROFILE_PACKS=cto-loop sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SCOPE=project OMH_WITH_MCP=1 OMH_PROFILE_PACKS=cto-loop sh
 ```
 
 ## Documentation
