@@ -1,6 +1,6 @@
 ---
 name: loop
-description: [omh] Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, handoff, feedback, and resume cycles.
+description: [omh] Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, goal-loop]
@@ -40,7 +40,7 @@ Bad example:
 
 ## Use When
 
-Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 
     Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
 
@@ -61,10 +61,13 @@ Quality bar:
 - Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.
 - Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.
 - Keep prepared worktree/subagent/connector plans, observed executor work, linked goal completion, and external waiting as distinct evidence states.
+- Use cheap inner-loop checks frequently and expensive outer-loop checks sparingly.
+- Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
+- Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
 
 Handoff policy:
 
-Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 
 Required inputs:
 
@@ -79,9 +82,11 @@ Expected outputs:
 - loop_start_card/v1 setup prompt
 - loop_cycle/v1 state
 - loop_engineering/v1 pipeline/building-block snapshot
-- loop cost_policy for bounded reads and verifier restraint
+- loop verification_policy for inner/outer checks
+- loop failure_mode_summary over verification gap, comprehension debt, and cognitive surrender
+- small-loop guidance: test as stop signal, plan -> execute -> verify, one task at a time
 - loop_status_card/v1 next action
-- loop_runtime/v1 queued tick with loop policy refs
+- loop_runtime/v1 queued tick with verification_plan refs
 - loop_queue_handoff/v1 only when permitted
 - executor-neutral handoff only when permitted
 - external-wait or checkpoint boundary
@@ -89,10 +94,10 @@ Expected outputs:
 Artifact expectations:
 
 - metadata-only .omh/loops loop_cycle/v1 artifact
-- loop_engineering/v1 status over automation, worktree, skill, connector, and subagent blocks
-- loop_runtime/v1 queue entries with context_policy_ref and cost_policy_ref
+- loop_engineering/v1 status over automation, worktree, skill, connector, subagent, verification policy, and failure modes
+- loop_runtime/v1 queue entries with context_policy_ref, cost_policy_ref, and verification_plan
 - loop_subagent_result_contract/v1 for prepared subagent handoffs
-- loop_status_card/v1 wrapper payload
+- loop_status_card/v1 wrapper payload with failure_mode_summary and small_loop_guidance
 - loop_start_card/v1 wrapper setup card
 - linked goal_ledger/v1 only when completion evidence is required
 
@@ -103,6 +108,8 @@ Safety rules:
 - Do not claim goal completion from loop state; require linked goal_ledger/v1 completion evidence.
 - When context or token budget runs out, checkpoint or rely on resumable state instead of pretending the loop is complete.
 - External results such as market response, stars, or adoption are waiting states unless observed evidence is supplied.
+- Do not let unattended loop progress bypass verification; missing or failed verification returns to plan/research or waits for evidence.
+- Do not let comprehension debt or cognitive surrender hide behind green-looking loop status.
 
 ## Harness Discipline
 

@@ -125,14 +125,49 @@
           <ul class="docs-list">
             <li><code>loop_engineering/v1</code> shows task discovery, distribution, execution, verification, and next-task decision state.</li>
             <li>Automation, worktree, skill, connector, and subagent blocks stay visible as separate states.</li>
+            <li><code>verification_plan</code> names the expected signal, evidence required, failure action, and stop signal for the current queue item.</li>
+            <li>Inner-loop checks are cheap and frequent: syntax, compile or import, focused test, command smoke, and schema validation.</li>
+            <li>Outer-loop checks are slower and rarer: integration evidence, semantic review, adversarial verifier, release gate, or human review.</li>
             <li>Workflow patterns such as fan-out, adversarial verification, tournament, and triage batch are orchestration metadata, not dispatch evidence.</li>
+            <li><code>failure_mode_summary</code> warns about verification gaps, comprehension debt, and cognitive surrender before the loop keeps moving.</li>
             <li>Cost policy keeps reads bounded, reuses stable schema scaffolds, and avoids extra verifier lanes unless evidence warrants them.</li>
+            <li><code>omh loop run-once --loop &lt;id&gt;</code> can wake exactly one eligible tick for wrappers, cron, or future automation without running code.</li>
             <li>Prepared queue item is not worktree creation.</li>
             <li>Prepared subagent plan is not subagent dispatch; subagent results should return status, summary, evidence refs, and next actions.</li>
             <li>Prepared connector plan is not connector I/O.</li>
             <li>External outcomes stay waiting until observed.</li>
           </ul>
         </aside>
+      </section>
+
+      <section class="feature-section feature-section--split">
+        <div class="feature-copy">
+          <h2>Verification inside the loop</h2>
+          <p>
+            Verification is part of the loop design, not an afterthought. OMH
+            keeps cheap inner-loop checks close to the current step and reserves
+            outer-loop checks for higher-risk or more semantic judgment. If a
+            check is missing or fails, Hermes should route back to research or
+            plan instead of advancing the queue as if the work succeeded.
+          </p>
+        </div>
+        <div class="usecase-grid">
+          <article class="case-card">
+            <span>Small loop</span>
+            <h3>Test as stop signal</h3>
+            <p>Name the cheapest check that proves this step is done before the queue item is prepared.</p>
+          </article>
+          <article class="case-card">
+            <span>Cycle shape</span>
+            <h3>Plan -> execute -> verify</h3>
+            <p>Keep one planned step, one handoff or execution lane, and one observed verification signal per cycle.</p>
+          </article>
+          <article class="case-card">
+            <span>Failure modes</span>
+            <h3>One task at a time</h3>
+            <p>Warnings for verification gap, comprehension debt, and cognitive surrender keep the loop from looking safer than it is.</p>
+          </article>
+        </div>
       </section>
 
       <section class="feature-section">
@@ -142,8 +177,9 @@
             A chat wrapper can ask OMH for a <code>loop_start_card/v1</code>
             before a loop artifact exists. After the user chooses a permission
             profile, Hermes can start the loop, tick it, show the prepared
-            queue and loop engineering snapshot, render a handoff for the
-            actionable item, then close that item as observed or blocked.
+            queue and loop engineering snapshot, render a handoff with
+            verification intent for the actionable item, then close that item
+            as observed or blocked.
           </p>
         </div>
         <div class="lifecycle-strip" aria-label="Loop start and queue lifecycle">

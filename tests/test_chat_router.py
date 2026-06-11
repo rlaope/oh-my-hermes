@@ -50,6 +50,34 @@ class ChatRouterTests(unittest.TestCase):
         self.assertTrue(decision["explicit"])
         self.assertEqual(decision["confidence"], "high")
 
+    def test_operations_surfaces_dispatch_to_dedicated_harnesses(self) -> None:
+        cases = (
+            (
+                "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
+                "operating-rhythm",
+                "operating-rhythm",
+            ),
+            (
+                "create a PPT report package for a monthly leadership status deck",
+                "report-package",
+                "report-package",
+            ),
+            (
+                "run an incident postmortem SLO error budget service reliability review",
+                "reliability-review",
+                "reliability-review",
+            ),
+        )
+
+        for message, skill, harness in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertEqual(decision["selected_harness"], harness)
+                self.assertEqual(decision["confidence"], "high")
+
     def test_event_text_extraction_supports_discord_slack_and_generic_shapes(self) -> None:
         self.assertEqual(extract_message_text({"message": {"content": "risky refactor"}}), "risky refactor")
         self.assertEqual(extract_message_text({"message": {"text": "risky refactor"}}), "risky refactor")

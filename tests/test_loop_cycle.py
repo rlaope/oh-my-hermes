@@ -20,6 +20,7 @@ from omh.goal_loop import (
     list_loop_queue,
     observe_loop_queue_item,
     record_loop_feedback,
+    run_loop_once,
     tick_loop_runtime,
     update_loop_permission,
     validate_loop_cycle,
@@ -56,6 +57,10 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(card["loop_engineering"]["context_policy"]["read_model"], "bounded_state_and_evidence_refs")
         self.assertTrue(card["loop_engineering"]["cost_policy"]["reuse_schema_scaffold"])
         self.assertEqual(card["loop_engineering"]["cost_policy"]["default_verifier_lanes"], 1)
+        self.assertIn("syntax_or_parse_check", card["loop_engineering"]["verification_policy"]["inner_loop_checks"])
+        self.assertIn("adversarial_verifier", card["loop_engineering"]["verification_policy"]["outer_loop_checks"])
+        self.assertIn("verification_gap", {mode["id"] for mode in card["loop_engineering"]["failure_modes"]})
+        self.assertIn("test_as_stop_signal", {item["id"] for item in card["small_loop_guidance"]["principles"]})
         self.assertNotIn("10k-star quality", serialized)
 
         visible = build_loop_start_card("Make OMH public launch-ready", include_goal=True)
@@ -214,6 +219,10 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(queue[0]["cost_policy_ref"], "loop_engineering.cost_policy")
         self.assertEqual(queue[0]["loop_engineering"]["schema_version"], "loop_engineering/v1")
         self.assertEqual(queue[0]["loop_engineering"]["cost_policy_ref"], "loop_engineering.cost_policy")
+        self.assertEqual(queue[0]["verification_plan"]["schema_version"], "loop_verification_plan/v1")
+        self.assertEqual(queue[0]["verification_plan"]["tier"], "outer")
+        self.assertEqual(queue[0]["verification_plan"]["failure_action"], "return_to_plan_or_research")
+        self.assertEqual(queue[0]["verification_plan"]["verifier_role"], "verifier")
         self.assertEqual(
             queue[0]["subagent_plan"]["result_contract"]["schema_version"],
             "loop_subagent_result_contract/v1",
@@ -232,9 +241,39 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(card["loop_engineering"]["pipeline"][0]["state"], "observed")
         self.assertIn("structured result objects", card["loop_engineering"]["context_policy"]["subagent_return"])
         self.assertIn("Add verifier lanes only", card["loop_engineering"]["cost_policy"]["extra_verifier_policy"])
+        self.assertIn("outer_loop_checks", card["loop_engineering"]["verification_policy"])
         self.assertIn("not worktree creation", card["runtime_summary"]["claim_boundary"])
         self.assertIn("prepared runtime queue", card["safe_copy"]["next_step"])
+        self.assertEqual(card["failure_mode_summary"]["warnings"][0]["id"], "verification_gap")
         self.assertEqual(validate_loop_cycle(updated), {"ok": True, "errors": []})
+
+    def test_loop_run_once_prepares_one_queue_item_without_execution(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Keep improving loop safety",
+                goal_reframe="Prepare one safe loop tick at a time and wait for observed evidence.",
+                success_criteria=["Run-once prepares one queue item"],
+                permission_profile="handoff_only",
+            )
+
+            first = run_loop_once(paths, cycle["loop_id"])
+            second = run_loop_once(paths, cycle["loop_id"])
+            card = build_loop_status_card(paths, cycle["loop_id"])
+
+        self.assertEqual(first["runtime"]["heartbeat_count"], 1)
+        self.assertEqual(first["runtime"]["queue"][0]["trigger"], "automation")
+        self.assertEqual(first["runtime"]["queue"][0]["cadence"], "run-once")
+        self.assertEqual(first["runtime"]["queue"][0]["status"], "prepared_not_observed")
+        self.assertEqual(first["runtime"]["queue"][0]["verification_plan"]["tier"], "inner")
+        self.assertFalse(first["runtime"]["queue"][0]["worktree_plan"]["created"])
+        self.assertFalse(first["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
+        self.assertFalse(first["runtime"]["queue"][0]["connector_plan"]["dispatched"])
+        self.assertEqual(second["runtime"]["heartbeat_count"], 1)
+        self.assertEqual(len(second["runtime"]["queue"]), 1)
+        self.assertEqual(card["next_action"], "observe_runtime_queue")
+        self.assertEqual(card["failure_mode_summary"]["warnings"][0]["id"], "verification_gap")
 
     def test_loop_queue_lifecycle_lists_handoffs_observes_and_blocks_items(self) -> None:
         with TemporaryDirectory() as tmp:

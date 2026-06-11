@@ -45,6 +45,21 @@ _SKILL_POLICIES = {
         evidence_boundary="Cancellation is observed only after the wrapper records the state change.",
         wrapper_guidance="Stop the active workflow state in the wrapper; do not create a plan, handoff, or execution claim.",
     ),
+    "operating-rhythm": RecommendationPolicy(
+        next_action="prepare_operating_record",
+        evidence_boundary="An operating rhythm record is not evidence that a meeting, scrum, sprint, retro, decision, or action item happened.",
+        wrapper_guidance="Prepare or update the local operations artifact; mark decisions and actions as prepared until supplied notes or acceptance are observed.",
+    ),
+    "report-package": RecommendationPolicy(
+        next_action="prepare_report_package",
+        evidence_boundary="A report package or PPT-ready outline is not source-review completion, stakeholder approval, presentation delivery, or binary PPTX export evidence.",
+        wrapper_guidance="Prepare a Markdown/JSON report outline from supplied inputs; keep missing numbers and approvals explicit.",
+    ),
+    "reliability-review": RecommendationPolicy(
+        next_action="prepare_reliability_review",
+        evidence_boundary="A reliability review is not SLO pass, healthy error-budget, incident closure, remediation completion, verification, review, CI, or merge evidence.",
+        wrapper_guidance="Collect service, SLO, incident, metric, and reference boundaries; create remediation handoffs only after an accepted fix direction exists.",
+    ),
 }
 _CATEGORY_POLICIES = {
     "planning": RecommendationPolicy(

@@ -42,10 +42,18 @@ class EfficiencyContractTests(unittest.TestCase):
     def test_generated_skill_pack_keeps_memory_guidance_under_budget(self) -> None:
         combined = "\n".join(template.content for template in builtin_skill_templates())
         explicit_budget = len(explicit_memory_context_skill_names()) + 1
+        compact_budget = (
+            sum(
+                1
+                for definition in builtin_definitions()
+                if definition.name != "oh-my-hermes" and memory_context_policy_for_skill(definition.name) == "compact"
+            )
+            + 1
+        )
 
         self.assertLessEqual(combined.count("memory_review_card/v1"), explicit_budget)
         self.assertLessEqual(combined.count("handoff_context_pack/v1"), explicit_budget)
-        self.assertLessEqual(combined.count("advisory local context"), 13)
+        self.assertLessEqual(combined.count("advisory local context"), compact_budget)
 
 
 if __name__ == "__main__":
