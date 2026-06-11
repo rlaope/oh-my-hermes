@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ KINDS_BY_SURFACE = {
 }
 OBSERVATION_STATUSES = ("prepared", "observed", "mixed", "not_observed")
 ARTIFACT_STATUSES = ("draft", "recorded", "blocked", "archived")
+OPERATION_SUMMARY_LIMIT = 240
 DEFAULT_NOT_EVIDENCE = {
     "operating-rhythm": (
         "meeting_held",
@@ -49,7 +51,7 @@ _ARTIFACT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")
 def new_operation_artifact_id(surface: str, kind: str, now: datetime | str | None = None) -> str:
     validate_surface_kind(surface, kind)
     stamp = _stamp(now)
-    return f"{stamp}-{_slugify(surface)}-{_slugify(kind)}"
+    return f"{stamp}-{_slugify(surface)}-{_slugify(kind)}-{secrets.token_hex(3)}"
 
 
 def build_operation_artifact(
@@ -166,6 +168,8 @@ def write_operation_artifact(paths: OmhPaths, record: dict[str, Any]) -> dict[st
     if errors:
         raise ValueError("; ".join(errors))
     artifact_id = str(record["artifact_id"])
+    if operation_artifact_exists(paths, artifact_id):
+        raise ValueError(f"operation artifact already exists: {artifact_id}")
     path = _artifact_path(paths, str(record["surface"]), artifact_id)
     atomic_write_json(path, record, private=True)
     _write_index_cache(paths)
@@ -200,6 +204,32 @@ def show_operation_artifact(paths: OmhPaths, artifact_id: str) -> dict[str, Any]
         if record:
             return record
     raise FileNotFoundError(artifact_id)
+
+
+def operation_artifact_exists(paths: OmhPaths, artifact_id: str) -> bool:
+    if not _valid_artifact_id(artifact_id):
+        return False
+    return any(_artifact_path(paths, surface, artifact_id).exists() for surface in SURFACES)
+
+
+def summarize_operation_artifact(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "artifact_id": str(record.get("artifact_id", "")),
+        "surface": str(record.get("surface", "")),
+        "kind": str(record.get("kind", "")),
+        "title": str(record.get("title", "")),
+        "status": str(record.get("status", "")),
+        "observation_status": str(record.get("observation_status", "")),
+        "updated_at": str(record.get("updated_at", "")),
+        "summary": _preview(str(record.get("summary", "")), limit=OPERATION_SUMMARY_LIMIT),
+        "counts": {
+            "sections": len(_string_list(record.get("sections", []))),
+            "decisions": len(_string_list(record.get("decisions", []))),
+            "action_items": len(_string_list(record.get("action_items", []))),
+            "metrics": len(_string_list(record.get("metrics", []))),
+            "references": len(_string_list(record.get("references", []))),
+        },
+    }
 
 
 def validate_operations_store(paths: OmhPaths) -> dict[str, Any]:
@@ -274,12 +304,19 @@ def export_operation_artifact_markdown(record: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def export_operations_bundle(paths: OmhPaths, *, surface: str | None = None, format: str = "json") -> dict[str, Any] | str:
-    records = list_operation_artifacts(paths, surface=surface)
+def export_operations_bundle(
+    paths: OmhPaths,
+    *,
+    surface: str | None = None,
+    format: str = "json",
+    limit: int | None = None,
+) -> dict[str, Any] | str:
+    records = list_operation_artifacts(paths, surface=surface, limit=limit)
     if format == "json":
         return {
             "schema_version": "omh_operations_export/v1",
             "surface": surface or "all",
+            "limit": limit if limit is not None else "all",
             "artifacts": records,
             "index_authority": "cache_only",
         }
@@ -355,6 +392,13 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return [str(value).strip()] if str(value).strip() else []
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _preview(value: str, *, limit: int) -> str:
+    clean = " ".join(str(value).split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 3)].rstrip() + "..."
 
 
 def _has_observed_evidence(record: dict[str, Any]) -> bool:

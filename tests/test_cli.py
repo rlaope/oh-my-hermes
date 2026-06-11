@@ -681,7 +681,62 @@ class CliTests(unittest.TestCase):
             exported = json.loads(stdout)
             self.assertEqual(exported["schema_version"], "omh_ops_export_result/v1")
             self.assertEqual(exported["ppt_scope"], "markdown_or_json_outline_only")
+            self.assertEqual(exported["limit"], 20)
+            self.assertEqual(exported["exported_count"], 1)
             self.assertIn("# Sprint retro", exported["export"])
+
+    def test_ops_cli_lists_and_exports_are_bounded_by_default(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "ops"]
+            for index in range(22):
+                status, stdout, stderr = run_cli(
+                    base
+                    + [
+                        "rhythm",
+                        "--title",
+                        f"Daily note {index}",
+                        "--summary",
+                        "x" * 500,
+                    ]
+                )
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+
+            status, stdout, stderr = run_cli(base + ["list"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            listing = json.loads(stdout)
+            self.assertEqual(listing["schema_version"], "omh_ops_list/v1")
+            self.assertTrue(listing["summary_only"])
+            self.assertEqual(listing["limit"], 20)
+            self.assertEqual(listing["total_count"], 22)
+            self.assertEqual(listing["count"], 20)
+            self.assertTrue(listing["truncated"])
+            self.assertLessEqual(len(listing["artifacts"][0]["summary"]), 240)
+            self.assertNotIn("sections", listing["artifacts"][0])
+
+            status, stdout, stderr = run_cli(base + ["export"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            exported = json.loads(stdout)
+            self.assertEqual(exported["limit"], 20)
+            self.assertEqual(exported["total_count"], 22)
+            self.assertEqual(exported["exported_count"], 20)
+            self.assertTrue(exported["truncated"])
+            self.assertEqual(exported["export"]["limit"], 20)
+            self.assertEqual(len(exported["export"]["artifacts"]), 20)
+
+            status, stdout, stderr = run_cli(base + ["export", "--all"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            all_export = json.loads(stdout)
+            self.assertEqual(all_export["limit"], "all")
+            self.assertEqual(all_export["exported_count"], 22)
+            self.assertFalse(all_export["truncated"])
 
     def test_ops_cli_keeps_report_package_independent_and_reliability_observed_evidence_strict(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -1441,6 +1496,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             run_once = json.loads(stdout)
+            self.assertEqual(run_once["run_once"]["schema_version"], "loop_run_once_result/v1")
+            self.assertEqual(run_once["run_once"]["outcome"], "created_tick")
+            self.assertTrue(run_once["run_once"]["advanced"])
             self.assertEqual(run_once["loop"]["runtime"]["schema_version"], "loop_runtime/v1")
             self.assertEqual(run_once["loop"]["runtime"]["heartbeat_count"], 1)
             self.assertEqual(run_once["loop"]["runtime"]["queue"][0]["trigger"], "automation")
@@ -1450,6 +1508,14 @@ class CliTests(unittest.TestCase):
             self.assertFalse(run_once["loop"]["runtime"]["queue"][0]["worktree_plan"]["created"])
             self.assertFalse(run_once["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
             self.assertFalse(run_once["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
+
+            status, stdout, stderr = run_cli(home + ["loop", "run-once", "--loop", "loop-run-once"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            pending_run_once = json.loads(stdout)
+            self.assertEqual(pending_run_once["run_once"]["outcome"], "pending_queue_exists")
+            self.assertFalse(pending_run_once["run_once"]["advanced"])
+            self.assertEqual(len(pending_run_once["loop"]["runtime"]["queue"]), 1)
 
             status, stdout, stderr = run_cli(
                 home

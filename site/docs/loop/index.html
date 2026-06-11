@@ -131,7 +131,7 @@
             <li>Workflow patterns such as fan-out, adversarial verification, tournament, and triage batch are orchestration metadata, not dispatch evidence.</li>
             <li><code>failure_mode_summary</code> warns about verification gaps, comprehension debt, and cognitive surrender before the loop keeps moving.</li>
             <li>Cost policy keeps reads bounded, reuses stable schema scaffolds, and avoids extra verifier lanes unless evidence warrants them.</li>
-            <li><code>omh loop run-once --loop &lt;id&gt;</code> can wake exactly one eligible tick for wrappers, cron, or future automation without running code.</li>
+            <li><code>omh loop run-once --loop &lt;id&gt;</code> can wake exactly one eligible tick for wrappers, cron, or future automation without running code, and its result distinguishes <code>created_tick</code> from <code>pending_queue_exists</code>.</li>
             <li>Prepared queue item is not worktree creation.</li>
             <li>Prepared subagent plan is not subagent dispatch; subagent results should return status, summary, evidence refs, and next actions.</li>
             <li>Prepared connector plan is not connector I/O.</li>

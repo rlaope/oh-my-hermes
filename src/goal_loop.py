@@ -24,6 +24,7 @@ LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA = "loop_subagent_result_contract/v1"
 LOOP_VERIFICATION_PLAN_SCHEMA = "loop_verification_plan/v1"
 LOOP_FAILURE_MODE_SUMMARY_SCHEMA = "loop_failure_mode_summary/v1"
 LOOP_SMALL_LOOP_GUIDANCE_SCHEMA = "loop_small_loop_guidance/v1"
+LOOP_RUN_ONCE_RESULT_SCHEMA = "loop_run_once_result/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -451,6 +452,40 @@ def run_loop_once(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
             "connector, executor, network, or code execution was performed by OMH."
         ),
     )
+
+
+def run_loop_once_result(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
+    before = read_loop_cycle(paths, loop_id)
+    before_runtime = _runtime_state(before.get("runtime"))
+    before_queue = [item for item in before_runtime.get("queue", []) if isinstance(item, dict)]
+    before_pending = [item for item in before_queue if item.get("status") == "prepared_not_observed"]
+    cycle = run_loop_once(paths, loop_id)
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
+    if before_pending:
+        queue_id = str(before_pending[-1].get("queue_id", ""))
+        outcome = "pending_queue_exists"
+        advanced = False
+        created_queue_count = 0
+    else:
+        created_queue_count = max(0, len(queue) - len(before_queue))
+        advanced = created_queue_count > 0
+        outcome = "created_tick" if advanced else "no_eligible_tick"
+        queue_id = str(queue[-1].get("queue_id", "")) if queue else ""
+    return {
+        "loop": cycle,
+        "run_once": {
+            "schema_version": LOOP_RUN_ONCE_RESULT_SCHEMA,
+            "loop_id": str(cycle.get("loop_id", loop_id)),
+            "outcome": outcome,
+            "advanced": advanced,
+            "created_queue_count": created_queue_count,
+            "queue_id": queue_id,
+            "pending_queue_count": sum(1 for item in queue if item.get("status") == "prepared_not_observed"),
+            "next_action": str(cycle.get("next_action", "")),
+            "claim_boundary": _runtime_claim_boundary(),
+        },
+    }
 
 
 def list_loop_queue(paths: OmhPaths, loop_id: str, *, include_observed: bool = False) -> dict[str, Any]:

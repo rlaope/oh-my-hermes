@@ -13,6 +13,7 @@ from omh.operations import (
     export_operation_artifact_markdown,
     list_operation_artifacts,
     show_operation_artifact,
+    summarize_operation_artifact,
     validate_operation_artifact,
     validate_operations_store,
     write_operation_artifact,
@@ -41,6 +42,67 @@ class OperationsArtifactTests(unittest.TestCase):
             self.assertEqual(len(list_operation_artifacts(paths, surface="operating-rhythm")), 1)
             self.assertTrue(paths.operations_index_path.exists())
             self.assertEqual(json.loads(paths.operations_index_path.read_text(encoding="utf-8"))["authority"], "cache_only")
+
+    def test_same_second_generated_artifact_ids_do_not_overwrite(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths_from_tmp(tmp)
+            created_at = "2026-06-11T00:00:00Z"
+            first = build_operation_artifact(
+                surface="operating-rhythm",
+                kind="meeting",
+                title="Leadership sync A",
+                created_at=created_at,
+            )
+            second = build_operation_artifact(
+                surface="operating-rhythm",
+                kind="meeting",
+                title="Leadership sync B",
+                created_at=created_at,
+            )
+
+            self.assertNotEqual(first["artifact_id"], second["artifact_id"])
+            write_operation_artifact(paths, first)
+            write_operation_artifact(paths, second)
+
+            records = list_operation_artifacts(paths, surface="operating-rhythm")
+            self.assertEqual(len(records), 2)
+            self.assertEqual({record["title"] for record in records}, {"Leadership sync A", "Leadership sync B"})
+
+    def test_duplicate_operation_artifact_ids_are_rejected(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths_from_tmp(tmp)
+            first = build_operation_artifact(
+                surface="operating-rhythm",
+                kind="meeting",
+                title="Leadership sync",
+                artifact_id="shared-artifact",
+            )
+            duplicate = build_operation_artifact(
+                surface="report-package",
+                kind="weekly-report",
+                title="Weekly report",
+                artifact_id="shared-artifact",
+            )
+            write_operation_artifact(paths, first)
+
+            with self.assertRaises(ValueError):
+                write_operation_artifact(paths, duplicate)
+
+    def test_operation_artifact_summaries_are_bounded(self) -> None:
+        record = build_operation_artifact(
+            surface="report-package",
+            kind="weekly-report",
+            title="Weekly report",
+            summary="x" * 500,
+            sections=["A", "B"],
+            references=["notes"],
+        )
+
+        summary = summarize_operation_artifact(record)
+
+        self.assertLessEqual(len(summary["summary"]), 240)
+        self.assertEqual(summary["counts"]["sections"], 2)
+        self.assertEqual(summary["counts"]["references"], 1)
 
     def test_observed_operating_rhythm_requires_supplied_evidence(self) -> None:
         errors = validate_operation_artifact(

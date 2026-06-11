@@ -19,6 +19,7 @@ from ..goal_loop import (
     read_loop_cycle,
     record_loop_feedback,
     run_loop_once,
+    run_loop_once_result,
     tick_loop_runtime,
     update_loop_permission,
     validate_loop_cycle,
@@ -166,8 +167,15 @@ def cmd_loop_tick(args: argparse.Namespace) -> int:
 
 def cmd_loop_run_once(args: argparse.Namespace) -> int:
     try:
-        cycle = run_loop_once(_paths(args), args.loop_id)
-        _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), args.loop_id)})
+        result = run_loop_once_result(_paths(args), args.loop_id)
+        cycle = result["loop"]
+        _print_json(
+            {
+                "loop": cycle,
+                "run_once": result["run_once"],
+                "status_card": build_loop_status_card(_paths(args), args.loop_id),
+            }
+        )
     except (FileNotFoundError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     return 0

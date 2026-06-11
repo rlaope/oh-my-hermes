@@ -20,7 +20,7 @@ from omh.goal_loop import (
     list_loop_queue,
     observe_loop_queue_item,
     record_loop_feedback,
-    run_loop_once,
+    run_loop_once_result,
     tick_loop_runtime,
     update_loop_permission,
     validate_loop_cycle,
@@ -258,10 +258,15 @@ class GoalLoopTests(unittest.TestCase):
                 permission_profile="handoff_only",
             )
 
-            first = run_loop_once(paths, cycle["loop_id"])
-            second = run_loop_once(paths, cycle["loop_id"])
+            first_result = run_loop_once_result(paths, cycle["loop_id"])
+            second_result = run_loop_once_result(paths, cycle["loop_id"])
+            first = first_result["loop"]
+            second = second_result["loop"]
             card = build_loop_status_card(paths, cycle["loop_id"])
 
+        self.assertEqual(first_result["run_once"]["schema_version"], "loop_run_once_result/v1")
+        self.assertEqual(first_result["run_once"]["outcome"], "created_tick")
+        self.assertTrue(first_result["run_once"]["advanced"])
         self.assertEqual(first["runtime"]["heartbeat_count"], 1)
         self.assertEqual(first["runtime"]["queue"][0]["trigger"], "automation")
         self.assertEqual(first["runtime"]["queue"][0]["cadence"], "run-once")
@@ -270,6 +275,8 @@ class GoalLoopTests(unittest.TestCase):
         self.assertFalse(first["runtime"]["queue"][0]["worktree_plan"]["created"])
         self.assertFalse(first["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
         self.assertFalse(first["runtime"]["queue"][0]["connector_plan"]["dispatched"])
+        self.assertEqual(second_result["run_once"]["outcome"], "pending_queue_exists")
+        self.assertFalse(second_result["run_once"]["advanced"])
         self.assertEqual(second["runtime"]["heartbeat_count"], 1)
         self.assertEqual(len(second["runtime"]["queue"]), 1)
         self.assertEqual(card["next_action"], "observe_runtime_queue")

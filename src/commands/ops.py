@@ -11,10 +11,15 @@ from ..operations import (
     export_operations_bundle,
     list_operation_artifacts,
     show_operation_artifact,
+    summarize_operation_artifact,
     validate_operations_store,
     write_operation_artifact,
 )
 from .common import _paths, _print_json
+
+
+DEFAULT_OPS_LIST_LIMIT = 20
+DEFAULT_OPS_EXPORT_LIMIT = 20
 
 
 def cmd_ops_write(args: argparse.Namespace) -> int:
@@ -60,7 +65,11 @@ def cmd_ops_write(args: argparse.Namespace) -> int:
 
 def cmd_ops_list(args: argparse.Namespace) -> int:
     try:
-        records = list_operation_artifacts(_paths(args), surface=args.surface or None, limit=_optional_positive_int(args.limit))
+        paths = _paths(args)
+        surface = args.surface or None
+        limit = _limit_from_args(args, default=DEFAULT_OPS_LIST_LIMIT)
+        all_records = list_operation_artifacts(paths, surface=surface)
+        records = all_records if limit is None else all_records[-limit:]
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     _print_json(
@@ -68,8 +77,12 @@ def cmd_ops_list(args: argparse.Namespace) -> int:
             "schema_version": "omh_ops_list/v1",
             "surface": args.surface or "all",
             "count": len(records),
+            "total_count": len(all_records),
+            "limit": limit if limit is not None else "all",
+            "truncated": limit is not None and len(all_records) > len(records),
+            "summary_only": True,
             "index_authority": "cache_only",
-            "artifacts": records,
+            "artifacts": [summarize_operation_artifact(record) for record in records],
         }
     )
     return 0
@@ -92,7 +105,11 @@ def cmd_ops_validate(args: argparse.Namespace) -> int:
 
 def cmd_ops_export(args: argparse.Namespace) -> int:
     try:
-        exported = export_operations_bundle(_paths(args), surface=args.surface or None, format=args.format)
+        paths = _paths(args)
+        surface = args.surface or None
+        limit = _limit_from_args(args, default=DEFAULT_OPS_EXPORT_LIMIT)
+        total_count = len(list_operation_artifacts(paths, surface=surface))
+        exported = export_operations_bundle(paths, surface=surface, format=args.format, limit=limit)
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     _print_json(
@@ -100,6 +117,10 @@ def cmd_ops_export(args: argparse.Namespace) -> int:
             "schema_version": "omh_ops_export_result/v1",
             "format": args.format,
             "surface": args.surface or "all",
+            "limit": limit if limit is not None else "all",
+            "total_count": total_count,
+            "exported_count": total_count if limit is None else min(total_count, limit),
+            "truncated": limit is not None and total_count > limit,
             "index_authority": "cache_only",
             "ppt_scope": "markdown_or_json_outline_only",
             "export": exported,
@@ -124,6 +145,12 @@ def _optional_positive_int(value: int | None) -> int | None:
     if value < 1:
         raise ValueError("--limit must be at least 1")
     return value
+
+
+def _limit_from_args(args: argparse.Namespace, *, default: int) -> int | None:
+    if args.all:
+        return None
+    return _optional_positive_int(args.limit) if args.limit is not None else default
 
 
 def _add_artifact_args(parser: argparse.ArgumentParser, *, surface: str, default_kind: str) -> None:
@@ -162,6 +189,7 @@ def _add_ops_commands(sub) -> None:
     list_cmd = ops_sub.add_parser("list", help="List operations artifacts from local storage.")
     list_cmd.add_argument("--surface", choices=SURFACES, default="")
     list_cmd.add_argument("--limit", type=int, default=None)
+    list_cmd.add_argument("--all", action="store_true", help="Return all artifact summaries instead of the default bounded window.")
     list_cmd.set_defaults(func=cmd_ops_list)
 
     show = ops_sub.add_parser("show", help="Show one operations artifact by id.")
@@ -174,4 +202,6 @@ def _add_ops_commands(sub) -> None:
     export = ops_sub.add_parser("export", help="Export operations artifacts as JSON or Markdown content inside JSON output.")
     export.add_argument("--surface", choices=SURFACES, default="")
     export.add_argument("--format", choices=("json", "markdown"), default="json")
+    export.add_argument("--limit", type=int, default=None)
+    export.add_argument("--all", action="store_true", help="Export all matching artifacts instead of the default bounded window.")
     export.set_defaults(func=cmd_ops_export)

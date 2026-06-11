@@ -158,7 +158,9 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   subagent, inner-loop checks, outer-loop checks, and verifier policy. Hermes
   can show the queue, prepare the next handoff, warn about verification gaps,
   comprehension debt, or cognitive surrender, then mark the item observed or
-  blocked without pretending those steps already ran.
+  blocked without pretending those steps already ran. The `run-once` result
+  explicitly reports whether it created a tick or found an existing pending
+  queue item.
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
@@ -182,7 +184,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards, `loop_engineering/v1` snapshots, `loop_status_card/v1` failure-mode warnings, and queue lifecycle actions help wrappers show what can start, what is only prepared, what verification is cheap or expensive, and what was later observed or blocked. |
 | PR-ready delivery process | `ultraprocess` is Ultra Process: Research -> Ralplan -> Ultragoal -> Code Review -> Sync Circle, one PR-ready delivery cycle without claiming unobserved executor work. Use `loop` instead when the goal should keep repeating after feedback. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
-| Operations artifacts | `omh ops rhythm`, `omh ops report`, and `omh ops reliability` create schema-versioned local records under `.omh/operations`. `omh ops export` returns Markdown or JSON outlines for wrapper/report use; binary PPTX export is intentionally a separate observed step. |
+| Operations artifacts | `omh ops rhythm`, `omh ops report`, and `omh ops reliability` create schema-versioned local records under `.omh/operations`. `omh ops list` is summary-only and bounded by default; `omh ops export` returns Markdown or JSON outlines for wrapper/report use; binary PPTX export is intentionally a separate observed step. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |

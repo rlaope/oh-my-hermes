@@ -714,6 +714,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("failure_mode_summary", site_loop)
         self.assertIn("verification gaps, comprehension debt, and cognitive surrender", site_loop)
         self.assertIn("omh loop run-once --loop", site_loop)
+        self.assertIn("created_tick", site_loop)
+        self.assertIn("pending_queue_exists", site_loop)
         self.assertIn("Test as stop signal", site_loop)
         self.assertIn("Automation, worktree, skill, connector, and subagent blocks", site_loop)
         self.assertIn("fan-out, adversarial verification, tournament, and triage batch", site_loop)
