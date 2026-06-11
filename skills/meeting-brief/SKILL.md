@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `meeting-brief` workflow skill.
 
+## Why This Exists
+
+`meeting-brief` exists to turn scattered context into a focused agenda, discussion prompts, decision points, and a record template without pretending the meeting already happened.
+
+## Do Not Use When
+
+- The user needs observed meeting minutes, decisions, or action items but has not provided notes.
+- The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
+- The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
+
+## Examples
+
+Good example:
+
+- Prompt: meeting-brief for a leadership sync on setup UX, plugin bridge defaults, and release risk.
+- Expected behavior: Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.
+- Why: The request is preparation for a meeting and should separate prep from observed outcomes.
+
+Bad example:
+
+- Prompt: meeting-brief summarize what the team decided yesterday.
+- Expected behavior: Ask for meeting notes or route to an ops/status summary with explicit evidence gaps.
+- Why: A prepared agenda cannot be treated as observed minutes or decisions.
+
 ## Use When
 
 Use when Hermes should prepare a meeting agenda, discussion prompts, decision points, and a record template.

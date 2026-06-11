@@ -16,6 +16,13 @@ def omh_description(description: str) -> str:
 
 
 @dataclass(frozen=True)
+class SkillExample:
+    prompt: str
+    expected: str
+    why: str
+
+
+@dataclass(frozen=True)
 class SkillDefinition:
     name: str
     description: str
@@ -38,9 +45,58 @@ class SkillDefinition:
         "Name the workflow target, constraints, validation evidence, and stop condition.",
         "Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.",
     )
+    why_this_exists: str = ""
+    do_not_use_when: tuple[str, ...] = ()
+    good_example: SkillExample | None = None
+    bad_example: SkillExample | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "description", omh_description(self.description))
+        routing_hint = self.triggers[0] if self.triggers else self.name
+        if not self.why_this_exists:
+            object.__setattr__(
+                self,
+                "why_this_exists",
+                (
+                    f"`{self.name}` exists to keep `{self.category}` work explicit, evidence-backed, "
+                    "and inside the Hermes/executor boundary instead of relying on ad hoc chat narration."
+                ),
+            )
+        if not self.do_not_use_when:
+            object.__setattr__(
+                self,
+                "do_not_use_when",
+                (
+                    "The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.",
+                    "The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.",
+                ),
+            )
+        if self.good_example is None:
+            object.__setattr__(
+                self,
+                "good_example",
+                SkillExample(
+                    prompt=(
+                        f"{routing_hint}: handle a {self.category} request that needs "
+                        "explicit evidence boundaries and a clear stop condition."
+                    ),
+                    expected=f"Run `{self.name}` only after naming the target, evidence boundary, and stop condition.",
+                    why="The request matches the catalog use case and keeps observed evidence separate from prepared guidance.",
+                ),
+            )
+        if self.bad_example is None:
+            object.__setattr__(
+                self,
+                "bad_example",
+                SkillExample(
+                    prompt=(
+                        f"{routing_hint}: treat casual chat or unaccepted work as if "
+                        "this workflow already produced verified results."
+                    ),
+                    expected=f"Ask a clarification question or route to a narrower workflow instead of forcing `{self.name}`.",
+                    why="The request lacks the required inputs or would overclaim work that Hermes did not observe.",
+                ),
+            )
 
 
 @dataclass(frozen=True)
@@ -227,6 +283,22 @@ _DEFINITIONS = [
             "Keep users command-agnostic by naming the next UX step rather than shell commands.",
             "Use request-to-handoff as the first path when a plain request needs role, plan, handoff, or status UX.",
         ),
+        why_this_exists="`oh-my-hermes` exists to keep Hermes chat routing conservative: it maps plain requests to the right workflow, explains evidence boundaries, and avoids making every keyword look like hidden implementation.",
+        do_not_use_when=(
+            "The user already invoked a more specific installed skill and its routing signals are unambiguous.",
+            "The message is ordinary chat, status acknowledgement, or a question that does not need workflow routing.",
+            "The wrapper wants to claim execution, review, CI, or merge evidence that no observed artifact provides.",
+        ),
+        good_example=SkillExample(
+            prompt="Use OMH request-to-handoff for: safely add a feature to this repo.",
+            expected="Classify the request, name the retained Hermes lane or prepared coding handoff, and expose the observed/prepared evidence boundary.",
+            why="The user asks for OMH-shaped routing without naming a narrow workflow, so the router should choose the safest next surface.",
+        ),
+        bad_example=SkillExample(
+            prompt="omh",
+            expected="Do not infer a coding workflow; explain setup or ask what the user wants to do next.",
+            why="A bare product name is too weak to justify workflow activation or implementation claims.",
+        ),
     ),
     SkillDefinition(
         "ralph",
@@ -266,6 +338,22 @@ _DEFINITIONS = [
             "Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.",
             "Tell the user the next action through goal_status_card/v1 or goal_continuation/v1 instead of ending with vague follow-up copy.",
             "For coding milestones, use prepared handoffs and observed executor evidence rather than hidden Hermes execution.",
+        ),
+        why_this_exists="`ultragoal` exists for work that can outlive one chat turn: it turns ambition into durable stories, checkpoints, and completion gates so progress can resume without pretending a summary is evidence.",
+        do_not_use_when=(
+            "The request is a single-turn answer, quick diagnosis, or small edit that does not need a durable ledger.",
+            "Acceptance criteria, current checkpoint, and final gate expectations are too vague to make a goal inspectable.",
+            "The user expects hidden Hermes code execution rather than explicit executor handoff and observed verification evidence.",
+        ),
+        good_example=SkillExample(
+            prompt="$ultragoal add per-skill quality rubrics, regenerate skills, test, and open a PR.",
+            expected="Create or update a goal ledger, split the story into verifiable checkpoints, and close only after generated docs, skills, and tests match.",
+            why="The task has multiple milestones and a final quality gate that should be inspectable across interruptions.",
+        ),
+        bad_example=SkillExample(
+            prompt="$ultragoal what does this one error mean?",
+            expected="Route to diagnosis or a direct answer instead of creating a durable goal.",
+            why="A narrow explanation does not need checkpointed long-running state.",
         ),
     ),
     SkillDefinition(
@@ -317,6 +405,22 @@ _DEFINITIONS = [
             "Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.",
             "Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.",
             "Keep prepared worktree/subagent/connector plans, observed executor work, linked goal completion, and external waiting as distinct evidence states.",
+        ),
+        why_this_exists="`loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.",
+        do_not_use_when=(
+            "The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.",
+            "The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.",
+            "The permission profile does not allow repeated research, handoff, queue, or feedback cycles.",
+        ),
+        good_example=SkillExample(
+            prompt="./loop make OMH a credible Hermes workflow pack with install, docs, QA, and feedback cycles.",
+            expected="Start a permission-scoped loop, maintain loop_cycle/v1 state, choose the next concrete task, and keep external outcomes as waiting states.",
+            why="The request is long-horizon and needs repeated discovery, verification, feedback, and resume decisions.",
+        ),
+        bad_example=SkillExample(
+            prompt="./loop merge this already reviewed one-line README fix.",
+            expected="Use a direct delivery or PR workflow instead of starting a persistent loop.",
+            why="The task is bounded and should stop after merge evidence rather than create ongoing cycles.",
         ),
     ),
     SkillDefinition(
@@ -374,6 +478,22 @@ _DEFINITIONS = [
             "Add docs-specialist sync when public behavior, commands, setup, examples, or claims changed.",
             "End with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.",
         ),
+        why_this_exists="`ultraprocess` exists to give Hermes one clean plan-to-PR operating cycle: research, reviewed plan, selected implementation handoff, review gate, docs sync, and PR-ready evidence.",
+        do_not_use_when=(
+            "The user wants an open-ended feedback loop or long-horizon campaign; use `loop` instead.",
+            "The task is still ambiguous enough that a deep interview is required before planning.",
+            "No repo, product, or delivery surface is available to support a plan-to-PR cycle.",
+        ),
+        good_example=SkillExample(
+            prompt="$ultraprocess research this setup bug, plan the fix, implement, review, sync docs, and prepare a PR.",
+            expected="Run exactly one delivery cycle and report which stages are observed, prepared, or blocked.",
+            why="The user explicitly asks for the full but bounded delivery path ending at PR readiness.",
+        ),
+        bad_example=SkillExample(
+            prompt="$ultraprocess keep improving the project until it becomes popular.",
+            expected="Route to `loop` or ask for a bounded goal rather than promise endless delivery.",
+            why="Popularity and indefinite improvement need long-horizon loop management, not one PR-ready cycle.",
+        ),
     ),
     SkillDefinition(
         "deep-interview",
@@ -412,6 +532,22 @@ _DEFINITIONS = [
             "Ask exactly one blocking question per turn unless the wrapper explicitly supports a structured batch.",
             "Tie each question to a missing decision that changes the plan, handoff, or stop condition.",
             "Emit a clarified brief with non-goals and acceptance criteria before planning or delegation.",
+        ),
+        why_this_exists="`deep-interview` exists to stop Hermes from guessing through ambiguous product, workflow, or implementation intent; it converts uncertainty into a clarified brief before planning or handoff.",
+        do_not_use_when=(
+            "The request already has concrete scope, acceptance criteria, and verification commands.",
+            "The missing information is discoverable from the repository or local artifacts without asking the user.",
+            "The user asked for immediate read-only analysis and the ambiguity does not change the answer.",
+        ),
+        good_example=SkillExample(
+            prompt="$deep-interview design channel-specific routing, but do not assume what channels mean.",
+            expected="Ask one decision-changing question at a time, then produce goals, non-goals, and acceptance criteria.",
+            why="The request explicitly rejects assumptions and needs product boundaries before implementation.",
+        ),
+        bad_example=SkillExample(
+            prompt="$deep-interview fix this failing test; the traceback and expected behavior are attached.",
+            expected="Proceed to diagnosis or implementation instead of interviewing.",
+            why="The required facts are already available, so more questions would slow the workflow.",
         ),
     ),
     SkillDefinition(
@@ -460,6 +596,22 @@ _DEFINITIONS = [
             "Require disjoint lane ownership before preparing multiple coding handoffs.",
             "Attach acceptance criteria, verification commands, and review expectations to each lane.",
             "Keep dispatch, execution, review, CI, and merge status evidence separate.",
+        ),
+        why_this_exists="`ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, or observed executor evidence.",
+        do_not_use_when=(
+            "The work touches the same files or invariants in ways that need one owner.",
+            "The plan is not accepted, lane boundaries are unclear, or verification commands are missing.",
+            "The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-executor handoffs.",
+        ),
+        good_example=SkillExample(
+            prompt="$ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.",
+            expected="Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.",
+            why="The work can be split cleanly and benefits from parallel execution discipline.",
+        ),
+        bad_example=SkillExample(
+            prompt="$ultrawork refactor the central router in five agents at once.",
+            expected="Keep one owner or re-plan boundaries before parallelization.",
+            why="Shared core logic makes parallel edits likely to conflict or hide regressions.",
         ),
     ),
     SkillDefinition(
@@ -620,6 +772,22 @@ _DEFINITIONS = [
             "Keep prep distinct from actual meeting minutes or accepted decisions.",
             "Identify missing context that would change the meeting structure.",
         ),
+        why_this_exists="`meeting-brief` exists to turn scattered context into a focused agenda, discussion prompts, decision points, and a record template without pretending the meeting already happened.",
+        do_not_use_when=(
+            "The user needs observed meeting minutes, decisions, or action items but has not provided notes.",
+            "The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.",
+            "The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.",
+        ),
+        good_example=SkillExample(
+            prompt="meeting-brief for a leadership sync on setup UX, plugin bridge defaults, and release risk.",
+            expected="Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.",
+            why="The request is preparation for a meeting and should separate prep from observed outcomes.",
+        ),
+        bad_example=SkillExample(
+            prompt="meeting-brief summarize what the team decided yesterday.",
+            expected="Ask for meeting notes or route to an ops/status summary with explicit evidence gaps.",
+            why="A prepared agenda cannot be treated as observed minutes or decisions.",
+        ),
     ),
     SkillDefinition(
         "feedback-triage",
@@ -661,6 +829,22 @@ _DEFINITIONS = [
             "Name the source boundary before clustering feedback.",
             "Classify signals into bug, feature, research, or strategy follow-up without overclaiming evidence.",
             "Recommend the next workflow instead of jumping straight to coding.",
+        ),
+        why_this_exists="`feedback-triage` exists to keep customer and community signals from jumping straight into roadmap or coding; it clusters evidence, ranks signals, and chooses the next workflow.",
+        do_not_use_when=(
+            "The request already contains an accepted product decision and asks for implementation.",
+            "There are no feedback items, source boundary, or product area to classify.",
+            "The user wants current market research rather than triage of supplied signals.",
+        ),
+        good_example=SkillExample(
+            prompt="feedback-triage these payment failure reports and feature requests before we plan fixes.",
+            expected="Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.",
+            why="The input is mixed feedback that needs classification before delivery decisions.",
+        ),
+        bad_example=SkillExample(
+            prompt="feedback-triage implement the accepted billing fix now.",
+            expected="Route to planning or coding handoff instead of re-triaging.",
+            why="The decision is already accepted, so triage would add delay without improving evidence.",
         ),
     ),
     SkillDefinition(
@@ -998,6 +1182,22 @@ _DEFINITIONS = [
             "Separate review findings from fix implementation; fixes become executor work.",
             "Say clearly when no actionable issue is found and name remaining test gaps.",
         ),
+        why_this_exists="`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.",
+        do_not_use_when=(
+            "The user asks to implement the fix rather than review existing code or claims.",
+            "There is no diff, file set, claim, artifact, or expected behavior to review.",
+            "The request is broad product critique, strategy, or planning rather than code or evidence review.",
+        ),
+        good_example=SkillExample(
+            prompt="$code-review check this PR for install/update UX regressions and missing tests.",
+            expected="Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.",
+            why="The task is explicitly review-shaped and has a behavioral risk surface.",
+        ),
+        bad_example=SkillExample(
+            prompt="$code-review add the missing setup flag and commit it.",
+            expected="Route implementation to a selected executor after review findings are established.",
+            why="Review can identify the issue, but code mutation is a separate execution step.",
+        ),
     ),
     SkillDefinition(
         "ai-slop-cleaner",
@@ -1177,6 +1377,22 @@ _DEFINITIONS = [
         required_inputs=("omh home", "Hermes home", "observed issue"),
         expected_outputs=("health checks", "fix guidance", "known proof boundary"),
         artifact_expectations=("doctor state summary when runtime artifacts are writable",),
+        why_this_exists="`doctor` exists to turn confusing install/setup states into grouped, local health evidence and the next repair action without treating a check as a fix.",
+        do_not_use_when=(
+            "The user is asking for a general product explanation rather than local health diagnostics.",
+            "The requested change is a repository bug fix, not an installed-environment check.",
+            "The wrapper wants to claim Hermes reload, skill execution, or plugin behavior that was not observed.",
+        ),
+        good_example=SkillExample(
+            prompt="doctor after omh update says setup is next but Hermes skills still look stale.",
+            expected="Inspect managed skills, Hermes registration, runtime state, and next repair action with explicit proof boundaries.",
+            why="The issue is local installation health and needs grouped diagnostic evidence.",
+        ),
+        bad_example=SkillExample(
+            prompt="doctor implement a new uninstall command UX.",
+            expected="Route to planning or implementation instead of health diagnostics.",
+            why="That is product development work, not a local health check.",
+        ),
     ),
 ]
 

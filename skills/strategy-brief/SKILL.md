@@ -14,6 +14,29 @@ metadata:
 
 This is a Hermes-native `strategy-brief` workflow skill.
 
+## Why This Exists
+
+`strategy-brief` exists to keep `strategy` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+
+## Do Not Use When
+
+- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+
+## Examples
+
+Good example:
+
+- Prompt: strategy-brief: handle a strategy request that needs explicit evidence boundaries and a clear stop condition.
+- Expected behavior: Run `strategy-brief` only after naming the target, evidence boundary, and stop condition.
+- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+
+Bad example:
+
+- Prompt: strategy-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `strategy-brief`.
+- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+
 ## Use When
 
 Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.

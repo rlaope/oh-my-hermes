@@ -14,6 +14,29 @@ metadata:
 
 This is a Hermes-native `idea-to-deploy` workflow skill.
 
+## Why This Exists
+
+`idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+
+## Do Not Use When
+
+- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+
+## Examples
+
+Good example:
+
+- Prompt: idea-to-deploy: handle a delivery request that needs explicit evidence boundaries and a clear stop condition.
+- Expected behavior: Run `idea-to-deploy` only after naming the target, evidence boundary, and stop condition.
+- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+
+Bad example:
+
+- Prompt: idea-to-deploy: treat casual chat or unaccepted work as if this workflow already produced verified results.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `idea-to-deploy`.
+- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+
 ## Use When
 
 Use when Hermes should carry a product or app idea through shaping, decision gates, plan acceptance, executor handoff, verification, release readiness, deploy, and monitoring boundaries.

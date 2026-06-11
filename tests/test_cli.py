@@ -3503,6 +3503,12 @@ class CliTests(unittest.TestCase):
 
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "workflow_catalog/v1")
+        skills = {skill["name"]: skill for skill in payload["skills"]}
+        self.assertIn("why_this_exists", skills["oh-my-hermes"])
+        self.assertIn("do_not_use_when", skills["oh-my-hermes"])
+        self.assertIn("good_example", skills["oh-my-hermes"])
+        self.assertIn("bad_example", skills["oh-my-hermes"])
+        self.assertIn("Use OMH request-to-handoff", skills["oh-my-hermes"]["good_example"]["prompt"])
         harnesses = {harness["name"]: harness for harness in payload["harnesses"]}
         self.assertEqual(harnesses["coding-handling"]["quality_tier"], "handoff-gated")
         self.assertIn("coding_delegation_prepared", harnesses["coding-handling"]["evidence_ladder"])

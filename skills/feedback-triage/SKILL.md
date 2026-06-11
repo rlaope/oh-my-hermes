@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `feedback-triage` workflow skill.
 
+## Why This Exists
+
+`feedback-triage` exists to keep customer and community signals from jumping straight into roadmap or coding; it clusters evidence, ranks signals, and chooses the next workflow.
+
+## Do Not Use When
+
+- The request already contains an accepted product decision and asks for implementation.
+- There are no feedback items, source boundary, or product area to classify.
+- The user wants current market research rather than triage of supplied signals.
+
+## Examples
+
+Good example:
+
+- Prompt: feedback-triage these payment failure reports and feature requests before we plan fixes.
+- Expected behavior: Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.
+- Why: The input is mixed feedback that needs classification before delivery decisions.
+
+Bad example:
+
+- Prompt: feedback-triage implement the accepted billing fix now.
+- Expected behavior: Route to planning or coding handoff instead of re-triaging.
+- Why: The decision is already accepted, so triage would add delay without improving evidence.
+
 ## Use When
 
 Use when Hermes should classify feedback, bug reports, and feature asks before deciding whether research, planning, or coding handoff is needed.

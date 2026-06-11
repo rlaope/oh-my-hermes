@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `loop` workflow skill.
 
+## Why This Exists
+
+`loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.
+
+## Do Not Use When
+
+- The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.
+- The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
+- The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
+
+## Examples
+
+Good example:
+
+- Prompt: ./loop make OMH a credible Hermes workflow pack with install, docs, QA, and feedback cycles.
+- Expected behavior: Start a permission-scoped loop, maintain loop_cycle/v1 state, choose the next concrete task, and keep external outcomes as waiting states.
+- Why: The request is long-horizon and needs repeated discovery, verification, feedback, and resume decisions.
+
+Bad example:
+
+- Prompt: ./loop merge this already reviewed one-line README fix.
+- Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
+- Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
+
 ## Use When
 
 Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.

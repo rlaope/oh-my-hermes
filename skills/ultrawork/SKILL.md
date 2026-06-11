@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `ultrawork` workflow skill.
 
+## Why This Exists
+
+`ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, or observed executor evidence.
+
+## Do Not Use When
+
+- The work touches the same files or invariants in ways that need one owner.
+- The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
+- The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-executor handoffs.
+
+## Examples
+
+Good example:
+
+- Prompt: $ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.
+- Expected behavior: Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.
+- Why: The work can be split cleanly and benefits from parallel execution discipline.
+
+Bad example:
+
+- Prompt: $ultrawork refactor the central router in five agents at once.
+- Expected behavior: Keep one owner or re-plan boundaries before parallelization.
+- Why: Shared core logic makes parallel edits likely to conflict or hide regressions.
+
 ## Use When
 
 Use when an accepted implementation plan can be split into independent, reviewable work lanes.

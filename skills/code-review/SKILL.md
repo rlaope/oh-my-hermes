@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `code-review` workflow skill.
 
+## Why This Exists
+
+`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.
+
+## Do Not Use When
+
+- The user asks to implement the fix rather than review existing code or claims.
+- There is no diff, file set, claim, artifact, or expected behavior to review.
+- The request is broad product critique, strategy, or planning rather than code or evidence review.
+
+## Examples
+
+Good example:
+
+- Prompt: $code-review check this PR for install/update UX regressions and missing tests.
+- Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.
+- Why: The task is explicitly review-shaped and has a behavioral risk surface.
+
+Bad example:
+
+- Prompt: $code-review add the missing setup flag and commit it.
+- Expected behavior: Route implementation to a selected executor after review findings are established.
+- Why: Review can identify the issue, but code mutation is a separate execution step.
+
 ## Use When
 
 Use for review-shaped requests; findings come first and must cite concrete evidence.

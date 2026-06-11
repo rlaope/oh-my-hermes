@@ -14,6 +14,29 @@ metadata:
 
 This is a Hermes-native `research-brief` workflow skill.
 
+## Why This Exists
+
+`research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+
+## Do Not Use When
+
+- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+
+## Examples
+
+Good example:
+
+- Prompt: research-brief: handle a research request that needs explicit evidence boundaries and a clear stop condition.
+- Expected behavior: Run `research-brief` only after naming the target, evidence boundary, and stop condition.
+- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+
+Bad example:
+
+- Prompt: research-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `research-brief`.
+- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+
 ## Use When
 
 Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.

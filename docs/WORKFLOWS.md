@@ -21,8 +21,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-router`
 - Quality tier: `routing-gated`
 - Handoff policy: Classify requests into Hermes-retained planning/research/interview lanes, executor choice, or prepared coding handoffs; do not execute code.
+- Why this exists: `oh-my-hermes` exists to keep Hermes chat routing conservative: it maps plain requests to the right workflow, explains evidence boundaries, and avoids making every keyword look like hidden implementation.
 - Use when: Use as the top-level router when a request references oh-my-hermes, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.
+- Do not use when:
+  - The user already invoked a more specific installed skill and its routing signals are unambiguous.
+  - The message is ordinary chat, status acknowledgement, or a question that does not need workflow routing.
+  - The wrapper wants to claim execution, review, CI, or merge evidence that no observed artifact provides.
 - Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`, `chat routing`, `request-to-handoff`, `plain request`, `role-owned next action`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
+- Good example:
+  - Prompt: Use OMH request-to-handoff for: safely add a feature to this repo.
+  - Expected behavior: Classify the request, name the retained Hermes lane or prepared coding handoff, and expose the observed/prepared evidence boundary.
+  - Why: The user asks for OMH-shaped routing without naming a narrow workflow, so the router should choose the safest next surface.
+- Bad example:
+  - Prompt: omh
+  - Expected behavior: Do not infer a coding workflow; explain setup or ask what the user wants to do next.
+  - Why: A bare product name is too weak to justify workflow activation or implementation claims.
 - Quality bar:
   - Route only from explicit invocation, strong catalog evidence, or a clear workflow-shaped request.
   - Return a clarification or fallback path instead of forcing low-confidence messages into a workflow.
@@ -51,8 +64,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `codex-handoff-guidance`
 - Quality tier: `handoff-gated`
 - Handoff policy: Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track the selected executor path instead of making Hermes the hidden coder.
+- Why this exists: `ralph` exists to keep `execution` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use after scope is concrete and the user wants one owner to continue through implementation and verification.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ralph`, `$ralph`, `finish until done`, `persistent execution`, `self-referential loop`
+- Good example:
+  - Prompt: ralph: handle a execution request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `ralph` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: ralph: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ralph`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Do not enter a finish-until-done loop until scope, acceptance criteria, and verification commands are concrete.
   - For coding edits, prepare and track selected executor evidence instead of implying Hermes implemented the changes.
@@ -81,8 +106,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `codex-handoff-guidance`
 - Quality tier: `checkpoint-gated`
 - Handoff policy: Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and delegate coding milestones to the selected executor with only observed runtime evidence.
+- Why this exists: `ultragoal` exists for work that can outlive one chat turn: it turns ambition into durable stories, checkpoints, and completion gates so progress can resume without pretending a summary is evidence.
 - Use when: Use when work needs durable goal artifacts, checkpointed progress, and final quality gates.
+- Do not use when:
+  - The request is a single-turn answer, quick diagnosis, or small edit that does not need a durable ledger.
+  - Acceptance criteria, current checkpoint, and final gate expectations are too vague to make a goal inspectable.
+  - The user expects hidden Hermes code execution rather than explicit executor handoff and observed verification evidence.
 - Strong routing signals: `ultragoal`, `$ultragoal`, `durable goal`, `multi-goal`, `goal ledger`
+- Good example:
+  - Prompt: $ultragoal add per-skill quality rubrics, regenerate skills, test, and open a PR.
+  - Expected behavior: Create or update a goal ledger, split the story into verifiable checkpoints, and close only after generated docs, skills, and tests match.
+  - Why: The task has multiple milestones and a final quality gate that should be inspectable across interruptions.
+- Bad example:
+  - Prompt: $ultragoal what does this one error mean?
+  - Expected behavior: Route to diagnosis or a direct answer instead of creating a durable goal.
+  - Why: A narrow explanation does not need checkpointed long-running state.
 - Quality bar:
   - Keep goal state durable, inspectable, and separate from chat narration.
   - Checkpoint every success, blocker, and final quality gate with fresh evidence.
@@ -115,8 +153,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `loop-gated`
 - Handoff policy: Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+- Why this exists: `loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.
 - Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+- Do not use when:
+  - The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.
+  - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
+  - The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
 - Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
+- Good example:
+  - Prompt: ./loop make OMH a credible Hermes workflow pack with install, docs, QA, and feedback cycles.
+  - Expected behavior: Start a permission-scoped loop, maintain loop_cycle/v1 state, choose the next concrete task, and keep external outcomes as waiting states.
+  - Why: The request is long-horizon and needs repeated discovery, verification, feedback, and resume decisions.
+- Bad example:
+  - Prompt: ./loop merge this already reviewed one-line README fix.
+  - Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
+  - Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
 - Quality bar:
   - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
   - Reframe the north-star goal into implementable internal work without shrinking its ambition.
@@ -166,8 +217,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `process-gated`
 - Handoff policy: Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor handoff such as Codex, Claude Code, another coding agent, or explicit Hermes-retained work only when the user accepts that owner.
+- Why this exists: `ultraprocess` exists to give Hermes one clean plan-to-PR operating cycle: research, reviewed plan, selected implementation handoff, review gate, docs sync, and PR-ready evidence.
 - Use when: Use when the user asks Hermes to take a concrete task through one full delivery cycle: research/codebase context, reviewed plan, selected implementation handoff, code review, docs sync when needed, and PR preparation.
+- Do not use when:
+  - The user wants an open-ended feedback loop or long-horizon campaign; use `loop` instead.
+  - The task is still ambiguous enough that a deep interview is required before planning.
+  - No repo, product, or delivery surface is available to support a plan-to-PR cycle.
 - Strong routing signals: `ultraprocess`, `$ultraprocess`, `./ultraprocess`, `/ultraprocess`, `single-cycle delivery`, `one-cycle delivery`, `end-to-end process`, `delivery process`, `research plan implement review docs pr`, `plan implement review docs pr`, `ralplan ultragoal code-review`, `codebase research web research planning implementation review docs sync pr`, `docs sync`, `pr-ready`, `prepare a pr`, `sync docs and prepare a pr`, `code-review sync docs and prepare a pr`, `make a pr`, `open a pr`, `끝까지 해줘`, `PR까지`, `계획 구현 리뷰 문서 PR`, `기획 구현 리뷰 문서 PR`, `코드베이스 조사 웹리서치 계획 구현 리뷰 문서 최신화 PR`, `문서 최신화 PR`
+- Good example:
+  - Prompt: $ultraprocess research this setup bug, plan the fix, implement, review, sync docs, and prepare a PR.
+  - Expected behavior: Run exactly one delivery cycle and report which stages are observed, prepared, or blocked.
+  - Why: The user explicitly asks for the full but bounded delivery path ending at PR readiness.
+- Bad example:
+  - Prompt: $ultraprocess keep improving the project until it becomes popular.
+  - Expected behavior: Route to `loop` or ask for a bounded goal rather than promise endless delivery.
+  - Why: Popularity and indefinite improvement need long-horizon loop management, not one PR-ready cycle.
 - Quality bar:
   - Complete exactly one plan-to-PR delivery cycle, then stop with status, evidence gaps, or a next recommended workflow.
   - Start with codebase/source research and a ralplan-style decision record before implementation handoff.
@@ -206,8 +270,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `clarity-gated`
 - Handoff policy: Run directly in Hermes or the chat wrapper; produce a clarified brief before any coding handoff is prepared.
+- Why this exists: `deep-interview` exists to stop Hermes from guessing through ambiguous product, workflow, or implementation intent; it converts uncertainty into a clarified brief before planning or handoff.
 - Use when: Use before planning or execution when requirements are materially ambiguous.
+- Do not use when:
+  - The request already has concrete scope, acceptance criteria, and verification commands.
+  - The missing information is discoverable from the repository or local artifacts without asking the user.
+  - The user asked for immediate read-only analysis and the ambiguity does not change the answer.
 - Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `온보딩`, `부드럽게`, `모호한 제품 요청`, `기획자`, `개발자 사이`
+- Good example:
+  - Prompt: $deep-interview design channel-specific routing, but do not assume what channels mean.
+  - Expected behavior: Ask one decision-changing question at a time, then produce goals, non-goals, and acceptance criteria.
+  - Why: The request explicitly rejects assumptions and needs product boundaries before implementation.
+- Bad example:
+  - Prompt: $deep-interview fix this failing test; the traceback and expected behavior are attached.
+  - Expected behavior: Proceed to diagnosis or implementation instead of interviewing.
+  - Why: The required facts are already available, so more questions would slow the workflow.
 - Quality bar:
   - Ask exactly one blocking question per turn unless the wrapper explicitly supports a structured batch.
   - Tie each question to a missing decision that changes the plan, handoff, or stop condition.
@@ -236,8 +313,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `codex-handoff-guidance`
 - Quality tier: `coordination-gated`
 - Handoff policy: Use Hermes for lane framing and status; implementation lanes should become selected executor handoff tasks unless they are research, interview, planning, or status-only.
+- Why this exists: `team` exists to keep `execution` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when multiple independent lanes materially improve throughput or verification.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `team`, `$team`, `swarm`, `parallel agents`, `coordinated workers`
+- Good example:
+  - Prompt: team: handle a execution request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `team` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: team: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `team`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Split only independent lanes with explicit ownership and verification boundaries.
   - Keep Hermes as coordinator and status narrator while coding lanes become executor handoffs.
@@ -266,8 +355,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `codex-handoff-guidance`
 - Quality tier: `handoff-gated`
 - Handoff policy: Keep the workflow name for compatibility, but convert coding lanes into explicit selected executor handoffs with disjoint scope, verification, and review evidence.
+- Why this exists: `ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, or observed executor evidence.
 - Use when: Use when an accepted implementation plan can be split into independent, reviewable work lanes.
+- Do not use when:
+  - The work touches the same files or invariants in ways that need one owner.
+  - The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
+  - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-executor handoffs.
 - Strong routing signals: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
+- Good example:
+  - Prompt: $ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.
+  - Expected behavior: Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.
+  - Why: The work can be split cleanly and benefits from parallel execution discipline.
+- Bad example:
+  - Prompt: $ultrawork refactor the central router in five agents at once.
+  - Expected behavior: Keep one owner or re-plan boundaries before parallelization.
+  - Why: Shared core logic makes parallel edits likely to conflict or hide regressions.
 - Quality bar:
   - Require disjoint lane ownership before preparing multiple coding handoffs.
   - Attach acceptance criteria, verification commands, and review expectations to each lane.
@@ -297,8 +399,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
 - Handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
+- Why this exists: `web-research` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the user needs current web evidence, links, citations, or source comparison before planning or handoff.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`, `investigate`, `research plan`, `조사`, `근거`, `출처`, `고객 피드백`
+- Good example:
+  - Prompt: web-research: handle a research request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `web-research` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: web-research: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `web-research`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Use official or primary sources first when current or external facts matter.
   - Separate direct evidence, inference, confidence, and residual uncertainty.
@@ -327,8 +441,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
 - Handoff policy: Keep business research in Hermes; prepare a selected executor handoff only after a later accepted plan requires code changes.
+- Why this exists: `research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `research-brief`, `business-research`, `business research`, `research brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`, `market evidence`, `data search`, `source scan`, `자료 조사`, `데이터 서치`, `근거 조사`, `피드백 추세`, `고객 피드백 추세`
+- Good example:
+  - Prompt: research-brief: handle a research request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `research-brief` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: research-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `research-brief`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - State the research question, source boundaries, and recency assumptions before synthesis.
   - Separate observed sources from inferred trends and unresolved uncertainty.
@@ -357,8 +483,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `decision-gated`
 - Handoff policy: Keep strategy synthesis in Hermes; do not create implementation handoff until a decision is accepted and code work is explicit.
+- Why this exists: `strategy-brief` exists to keep `strategy` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`, `next strategy`, `다음 전략`, `전략 정리`, `전략 메모`, `전략 옵션`, `의사결정`, `리더십 회의`
+- Good example:
+  - Prompt: strategy-brief: handle a strategy request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `strategy-brief` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: strategy-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `strategy-brief`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name the decision, constraints, options, tradeoffs, and rejected alternatives.
   - Tie recommendations to observed evidence or mark them as assumptions.
@@ -389,8 +527,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `facilitation-gated`
 - Handoff policy: Run meeting preparation in Hermes; only create follow-up coding handoff from observed decisions or accepted plans.
+- Why this exists: `meeting-brief` exists to turn scattered context into a focused agenda, discussion prompts, decision points, and a record template without pretending the meeting already happened.
 - Use when: Use when Hermes should prepare a meeting agenda, discussion prompts, decision points, and a record template.
+- Do not use when:
+  - The user needs observed meeting minutes, decisions, or action items but has not provided notes.
+  - The request is strategy synthesis without a meeting audience, agenda, or decision ceremony.
+  - The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
 - Strong routing signals: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`, `decisions needed`, `record template`, `meeting topics`, `회의 주제`, `회의 아젠다`, `아젠다`, `회의 준비`, `논의 질문`, `결정할 것`, `기록 템플릿`
+- Good example:
+  - Prompt: meeting-brief for a leadership sync on setup UX, plugin bridge defaults, and release risk.
+  - Expected behavior: Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.
+  - Why: The request is preparation for a meeting and should separate prep from observed outcomes.
+- Bad example:
+  - Prompt: meeting-brief summarize what the team decided yesterday.
+  - Expected behavior: Ask for meeting notes or route to an ops/status summary with explicit evidence gaps.
+  - Why: A prepared agenda cannot be treated as observed minutes or decisions.
 - Quality bar:
   - Turn context into agenda topics, prompts, decisions needed, and a record template.
   - Keep prep distinct from actual meeting minutes or accepted decisions.
@@ -421,8 +572,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `triage-gated`
 - Handoff policy: Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor handoff only after explicit coding intent or accepted plan evidence.
+- Why this exists: `feedback-triage` exists to keep customer and community signals from jumping straight into roadmap or coding; it clusters evidence, ranks signals, and chooses the next workflow.
 - Use when: Use when Hermes should classify feedback, bug reports, and feature asks before deciding whether research, planning, or coding handoff is needed.
+- Do not use when:
+  - The request already contains an accepted product decision and asks for implementation.
+  - There are no feedback items, source boundary, or product area to classify.
+  - The user wants current market research rather than triage of supplied signals.
 - Strong routing signals: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`, `bug or feature`, `feature request triage`, `payment failure feedback`, `feedback trends`, `고객 피드백`, `피드백`, `피드백 분류`, `피드백을 모아서`, `결제 실패 피드백`, `버그 기능 요청`, `기능 요청`
+- Good example:
+  - Prompt: feedback-triage these payment failure reports and feature requests before we plan fixes.
+  - Expected behavior: Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.
+  - Why: The input is mixed feedback that needs classification before delivery decisions.
+- Bad example:
+  - Prompt: feedback-triage implement the accepted billing fix now.
+  - Expected behavior: Route to planning or coding handoff instead of re-triaging.
+  - Why: The decision is already accepted, so triage would add delay without improving evidence.
 - Quality bar:
   - Name the source boundary before clustering feedback.
   - Classify signals into bug, feature, research, or strategy follow-up without overclaiming evidence.
@@ -451,8 +615,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `status-gated`
 - Handoff policy: Keep operating review and status narration in Hermes; delegate code fixes only from explicit accepted follow-up items.
+- Why this exists: `ops-review` exists to keep `operations` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should summarize observed status, risks, blockers, priorities, and follow-up actions for recurring operating work.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`, `release risks`, `risks and blockers`, `priorities`, `weekly status`, `운영 리뷰`, `주간 운영`, `상태 리뷰`, `리스크`, `블로커`, `우선순위`, `릴리즈 리스크`
+- Good example:
+  - Prompt: ops-review: handle a operations request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `ops-review` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: ops-review: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ops-review`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Tie every status claim to observed evidence or mark it as unknown.
   - Separate risks, blockers, priorities, and follow-up owners.
@@ -484,8 +660,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `delivery-gated`
 - Handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
+- Why this exists: `idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should carry a product or app idea through shaping, decision gates, plan acceptance, executor handoff, verification, release readiness, deploy, and monitoring boundaries.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`, `ship this idea`, `ship this feature`, `launch this feature`, `product delivery loop`, `app delivery loop`, `complete product loop`, `end-to-end app operation`, `완제품 루프`, `아이디어부터 배포`, `기획부터 배포`, `출시까지`, `앱 운영 루프`
+- Good example:
+  - Prompt: idea-to-deploy: handle a delivery request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `idea-to-deploy` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: idea-to-deploy: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `idea-to-deploy`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name the idea, user value, decision owner, non-goals, and success metric before planning delivery.
   - Expose idea, decision, plan, handoff, verification, release, deploy, and monitor stages as separate status steps.
@@ -517,8 +705,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `decision-gated`
 - Handoff policy: Keep CTO/PM-style synthesis, tradeoffs, risk ranking, decision notes, and status in Hermes; convert accepted implementation follow-ups into executor-neutral handoffs.
+- Why this exists: `cto-loop` exists to keep `leadership` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should run a leadership-style operating loop that turns signals into roadmap decisions, technical tradeoffs, delivery risk, release readiness, and explicit follow-up handoffs.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `cto-loop`, `cto loop`, `cto`, `cto pm`, `pm dev qa security ops`, `roadmap technical tradeoffs`, `technical tradeoff`, `delivery risk`, `release readiness`, `technical leadership loop`, `leadership operating loop`, `engineering leadership`, `CTO 구조`, `PM 구조`, `로드맵`, `아키텍처 트레이드오프`, `기술 리더십`, `출시 준비`
+- Good example:
+  - Prompt: cto-loop: handle a leadership request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `cto-loop` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: cto-loop: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `cto-loop`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Separate product priority, architecture tradeoff, delivery risk, release risk, and follow-up owner.
   - Tie recommendations to observed signals or mark assumptions.
@@ -551,8 +751,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `release-gated`
 - Handoff policy: Keep release checklist, health criteria, rollback gates, and status narration in Hermes; record deploy, monitor, incident, or rollback evidence only when the wrapper or operator observes it.
+- Why this exists: `deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should prepare or narrate a release operation with deploy checklist, health signals, rollback criteria, and post-deploy status without pretending to run infrastructure.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `deploy-and-monitor`, `deploy and monitor`, `deploy monitor`, `deployment monitoring`, `release monitor`, `post deploy`, `post-deploy`, `rollback`, `rollback gate`, `health check`, `incident watch`, `release health`, `배포 모니터링`, `배포 감시`, `롤백`, `헬스 체크`, `장애 감시`, `릴리즈 모니터링`
+- Good example:
+  - Prompt: deploy-and-monitor: handle a monitoring request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `deploy-and-monitor` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: deploy-and-monitor: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `deploy-and-monitor`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name release scope, target environment, health signals, rollback criteria, and evidence owner.
   - Show pre-deploy, deploy decision, monitor, rollback, and post-deploy record as distinct stages.
@@ -585,8 +797,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `hybrid-verification`
 - Quality tier: `scenario-gated`
 - Handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor handoffs.
+- Why this exists: `ultraqa` exists to keep `verification` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the task needs adversarial test scenarios, verification, and fix loops.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`, `real-world qa`, `qa scenario`, `release qa`, `장애 상황`, `쿠버네티스 장애`, `적절히 진단`, `검증 체크리스트`, `릴리즈 전 gate`
+- Good example:
+  - Prompt: ultraqa: handle a verification request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `ultraqa` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: ultraqa: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ultraqa`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Generate hostile scenarios from changed behavior and known risk areas.
   - Report pass/fail evidence separately from proposed fixes.
@@ -615,8 +839,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `acceptance-gated`
 - Handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor handoff after acceptance.
+- Why this exists: `plan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `답할 차례`, `준비할 차례`, `project template`, `결제 실패`, `결제 실패 이슈`, `재현 계획`, `고객 피드백`, `기능 요청`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `github pr workflow`, `상태와 다음 행동`, `프로젝트별 운영`
+- Good example:
+  - Prompt: plan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `plan` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: plan: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.
   - Keep draft plans unapproved until a user or wrapper accepts them.
@@ -645,8 +881,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `reviewed-plan-gated`
 - Handoff policy: Keep consensus planning and review in Hermes; produce explicit selected executor handoff guidance only after the plan is accepted.
+- Why this exists: `ralplan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when requirements are clear enough for planning but architecture, risks, or tests need review.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `PR로 만들`, `PR로 만들 수 있게`, `검증 command`, `리뷰 가능한 단위`
+- Good example:
+  - Prompt: ralplan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `ralplan` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: ralplan: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ralplan`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Include a planner view, risk review, and testability check before handoff.
   - Record unresolved tradeoffs and rejected options instead of flattening uncertainty.
@@ -676,8 +924,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `hybrid-review`
 - Quality tier: `finding-evidence-gated`
 - Handoff policy: Hermes may frame and summarize review evidence; fixes or code mutations found during review should be delegated to the selected coding executor.
+- Why this exists: `code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.
 - Use when: Use for review-shaped requests; findings come first and must cite concrete evidence.
+- Do not use when:
+  - The user asks to implement the fix rather than review existing code or claims.
+  - There is no diff, file set, claim, artifact, or expected behavior to review.
+  - The request is broad product critique, strategy, or planning rather than code or evidence review.
 - Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`
+- Good example:
+  - Prompt: $code-review check this PR for install/update UX regressions and missing tests.
+  - Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.
+  - Why: The task is explicitly review-shaped and has a behavioral risk surface.
+- Bad example:
+  - Prompt: $code-review add the missing setup flag and commit it.
+  - Expected behavior: Route implementation to a selected executor after review findings are established.
+  - Why: Review can identify the issue, but code mutation is a separate execution step.
 - Quality bar:
   - Lead with ranked findings grounded in file, diff, command, or artifact evidence.
   - Separate review findings from fix implementation; fixes become executor work.
@@ -706,8 +967,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `codex-handoff-guidance`
 - Quality tier: `regression-gated`
 - Handoff policy: Use Hermes to define cleanup scope and regression checks; delegate behavior-preserving edits to the selected coding executor once tests are clear.
+- Why this exists: `ai-slop-cleaner` exists to keep `maintenance` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for behavior-preserving cleanup with tests before and after edits.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `safe refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `위험한 리팩터링`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
+- Good example:
+  - Prompt: ai-slop-cleaner: handle a maintenance request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `ai-slop-cleaner` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: ai-slop-cleaner: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ai-slop-cleaner`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Lock current behavior with regression checks before non-trivial cleanup.
   - Prefer deletion, reuse, and boundary repair over new abstractions.
@@ -736,8 +1009,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
 - Handoff policy: Run as Hermes-side evidence gathering; hand coding to the selected executor only after source-backed guidance is summarized.
+- Why this exists: `best-practice-research` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when correctness depends on current official or upstream guidance.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `best-practice-research`, `best practice`, `official docs`, `upstream guidance`
+- Good example:
+  - Prompt: best-practice-research: handle a research request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `best-practice-research` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: best-practice-research: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `best-practice-research`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Use official or upstream sources first and name the version/environment assumptions.
   - Map applicability to the user's local context before recommending action.
@@ -765,8 +1050,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `validator-gated`
 - Handoff policy: Keep durable research in Hermes-managed artifacts; do not convert to executor handoff unless the research produces an accepted coding task.
+- Why this exists: `autoresearch-goal` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for validator-gated research that needs durable artifacts.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `autoresearch-goal`, `research goal`, `durable research`, `critic research`
+- Good example:
+  - Prompt: autoresearch-goal: handle a research request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `autoresearch-goal` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: autoresearch-goal: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `autoresearch-goal`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Define validator criteria before gathering evidence.
   - Keep durable research artifacts separate from coding execution evidence.
@@ -794,8 +1091,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `hybrid-measurement`
 - Quality tier: `measurement-gated`
 - Handoff policy: Hermes can own baselines, benchmark plans, and status; optimization code changes should be selected executor handoffs.
+- Why this exists: `performance-goal` exists to keep `optimization` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the goal is measurable performance improvement with evaluator evidence.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `performance-goal`, `performance goal`, `latency`, `throughput`, `benchmark`
+- Good example:
+  - Prompt: performance-goal: handle a optimization request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `performance-goal` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: performance-goal: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `performance-goal`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name the metric, baseline, budget, and benchmark command before optimizing.
   - Treat code-level optimization as executor work when edits are required.
@@ -824,8 +1133,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-knowledge`
 - Quality tier: `knowledge-gated`
 - Handoff policy: Run directly in Hermes as knowledge capture unless the note reveals a separate coding task.
+- Why this exists: `wiki` exists to keep `knowledge` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use to capture durable project knowledge in markdown artifacts.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `wiki`, `project wiki`, `memory`, `notes`
+- Good example:
+  - Prompt: wiki: handle a knowledge request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `wiki` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: wiki: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `wiki`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Capture durable facts with source evidence and retrieval hints.
   - Mark stale or uncertain knowledge instead of presenting it as permanent truth.
@@ -853,8 +1174,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `hybrid-review`
 - Quality tier: `evidence-gated`
 - Handoff policy: Use as optional advice gathering; evaluate the advice in Hermes and delegate coding changes separately.
+- Why this exists: `ask` exists to keep `review` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use only when an external advisor is configured and would materially improve the answer.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ask`, `$ask`, `external advisor`, `claude`, `gemini`
+- Good example:
+  - Prompt: ask: handle a review request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `ask` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: ask: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
@@ -882,8 +1215,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-operator`
 - Quality tier: `evidence-gated`
 - Handoff policy: Run directly in Hermes/runtime state; never delegate cancellation to a coding executor.
+- Why this exists: `cancel` exists to keep `operator` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use to cleanly end active adapted workflow state.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `cancel`, `$cancel`, `stop`, `abort`
+- Good example:
+  - Prompt: cancel: handle a operator request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `cancel` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: cancel: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `cancel`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
@@ -908,8 +1253,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-operator`
 - Quality tier: `evidence-gated`
 - Handoff policy: Use Hermes for inventory and guidance; delegate only repository code changes to the selected coding executor.
+- Why this exists: `skill` exists to keep `operator` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for local skill listing, search, add, remove, or edit tasks.
+- Do not use when:
+  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `skill`, `$skill`, `skills`, `manage skills`
+- Good example:
+  - Prompt: skill: handle a operator request that needs explicit evidence boundaries and a clear stop condition.
+  - Expected behavior: Run `skill` only after naming the target, evidence boundary, and stop condition.
+  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Bad example:
+  - Prompt: skill: treat casual chat or unaccepted work as if this workflow already produced verified results.
+  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `skill`.
+  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
@@ -934,8 +1291,21 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-operator`
 - Quality tier: `evidence-gated`
 - Handoff policy: Run directly as local health inspection; propose executor work only when a repo fix is required.
+- Why this exists: `doctor` exists to turn confusing install/setup states into grouped, local health evidence and the next repair action without treating a check as a fix.
 - Use when: Use to diagnose OMH installation and Hermes config registration.
+- Do not use when:
+  - The user is asking for a general product explanation rather than local health diagnostics.
+  - The requested change is a repository bug fix, not an installed-environment check.
+  - The wrapper wants to claim Hermes reload, skill execution, or plugin behavior that was not observed.
 - Strong routing signals: `doctor`, `$doctor`, `diagnose omh`, `installation health`
+- Good example:
+  - Prompt: doctor after omh update says setup is next but Hermes skills still look stale.
+  - Expected behavior: Inspect managed skills, Hermes registration, runtime state, and next repair action with explicit proof boundaries.
+  - Why: The issue is local installation health and needs grouped diagnostic evidence.
+- Bad example:
+  - Prompt: doctor implement a new uninstall command UX.
+  - Expected behavior: Route to planning or implementation instead of health diagnostics.
+  - Why: That is product development work, not a local health check.
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
