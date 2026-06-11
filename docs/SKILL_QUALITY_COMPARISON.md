@@ -316,8 +316,8 @@ hidden Codex runtime.
 
 ### P2: Add an installed-surface comparison doc
 
-OMX open-source has 46 skill files, while the local installed OMX skill surface
-showed 30 managed skills. OMH should document which skills are public, internal,
+OMX open-source and local installed skill inventories can expose different
+managed-skill counts. OMH should document which skills are public, internal,
 compatibility-only, deprecated, or not installed by default.
 
 Expected effect: less confusion between repository inventory and user-visible

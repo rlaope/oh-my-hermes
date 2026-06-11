@@ -93,6 +93,9 @@ class RouterContentTests(unittest.TestCase):
             "meeting-brief",
             "feedback-triage",
             "ops-review",
+            "operating-rhythm",
+            "report-package",
+            "reliability-review",
             "idea-to-deploy",
             "cto-loop",
             "deploy-and-monitor",
@@ -125,6 +128,9 @@ class RouterContentTests(unittest.TestCase):
                 self.assertEqual(recommend_module._CATEGORY_POLICIES[category].next_action, next_action)
 
         self.assertEqual(recommend_module._SKILL_POLICIES["cancel"].next_action, "cancel")
+        self.assertEqual(recommend_module._SKILL_POLICIES["operating-rhythm"].next_action, "prepare_operating_record")
+        self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
+        self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
 
         for helper in (
             recommend_module._next_action,
@@ -160,6 +166,9 @@ class RouterContentTests(unittest.TestCase):
                 "meeting-facilitation",
                 "customer-insight-triage",
                 "ops-review",
+                "operating-rhythm",
+                "report-package",
+                "reliability-review",
                 "app-delivery-loop",
                 "goal-loop",
                 "deep-interview",
@@ -275,6 +284,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("meeting-brief"), "meeting-facilitation")
         self.assertEqual(primary_harness_for_skill("feedback-triage"), "customer-insight-triage")
         self.assertEqual(primary_harness_for_skill("ops-review"), "ops-review")
+        self.assertEqual(primary_harness_for_skill("operating-rhythm"), "operating-rhythm")
+        self.assertEqual(primary_harness_for_skill("report-package"), "report-package")
+        self.assertEqual(primary_harness_for_skill("reliability-review"), "reliability-review")
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("deploy-and-monitor"), "app-delivery-loop")
@@ -294,6 +306,9 @@ class RouterContentTests(unittest.TestCase):
                 "meeting-brief",
                 "feedback-triage",
                 "ops-review",
+                "operating-rhythm",
+                "report-package",
+                "reliability-review",
                 "idea-to-deploy",
                 "cto-loop",
                 "deploy-and-monitor",
@@ -317,6 +332,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
         self.assertIn("loop_cycle/v1", skills["loop"].content)
         self.assertIn("permission profile", skills["loop"].content)
+        self.assertIn("verification_plan", skills["loop"].content)
+        self.assertIn("verification_gap", skills["loop"].content)
+        self.assertIn("test as stop signal", skills["loop"].content)
         self.assertIn("single-cycle-plan-to-pr", skills["ultraprocess"].content)
         self.assertIn("Do not continue into a repeated feedback loop", skills["ultraprocess"].content)
         self.assertIn("code-review gate", skills["ultraprocess"].content)
@@ -357,6 +375,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("record_monitor_signal", harnesses["app-delivery-loop"]["wrapper_actions"])
         self.assertEqual(harnesses["goal-loop"]["quality_tier"], "loop-gated")
         self.assertIn("feedback_gate_evaluated", harnesses["goal-loop"]["evidence_ladder"])
+        self.assertIn("verification_plan_attached", harnesses["goal-loop"]["evidence_ladder"])
+        self.assertIn("run_loop_once", harnesses["goal-loop"]["wrapper_actions"])
         self.assertIn("choose_permission_profile", harnesses["goal-loop"]["wrapper_actions"])
         self.assertIn("prepared", " ".join(harnesses["coding-handling"]["overclaim_guards"]).lower())
         quality = harnesses["coding-handling"]["harness_quality"]
@@ -688,6 +708,15 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("../../assets/omh-loop-engineering.png", site_loop)
         self.assertIn("loop_runtime/v1", site_loop)
         self.assertIn("loop_engineering/v1", site_loop)
+        self.assertIn("verification_plan", site_loop)
+        self.assertIn("Inner-loop checks are cheap and frequent", site_loop)
+        self.assertIn("Outer-loop checks are slower and rarer", site_loop)
+        self.assertIn("failure_mode_summary", site_loop)
+        self.assertIn("verification gaps, comprehension debt, and cognitive surrender", site_loop)
+        self.assertIn("omh loop run-once --loop", site_loop)
+        self.assertIn("created_tick", site_loop)
+        self.assertIn("pending_queue_exists", site_loop)
+        self.assertIn("Test as stop signal", site_loop)
         self.assertIn("Automation, worktree, skill, connector, and subagent blocks", site_loop)
         self.assertIn("fan-out, adversarial verification, tournament, and triage batch", site_loop)
         self.assertIn("Cost policy keeps reads bounded", site_loop)
@@ -785,6 +814,9 @@ class RouterContentTests(unittest.TestCase):
             "docs-specialist",
             "customer-insight-triage",
             "ops-review",
+            "operating-rhythm",
+            "report-package",
+            "reliability-review",
             "strategy-synthesis",
             "meeting-facilitation",
             "business-research",
@@ -814,6 +846,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("request-to-handoff", playbooks)
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
+        self.assertIn("operating-rhythm-history", playbooks)
+        self.assertIn("report-package", playbooks)
+        self.assertIn("reliability-incident-review", playbooks)
+        self.assertIn("binary PPTX export", playbooks)
         self.assertIn("not execution evidence", playbooks)
         self.assertIn("Situation playbooks", site)
         self.assertIn("request-to-handoff", site)

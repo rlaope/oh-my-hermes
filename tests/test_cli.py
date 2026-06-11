@@ -39,8 +39,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Install managed skills and connect them", help_text)
         self.assertIn("chat", help_text)
         self.assertIn("wrapper chat events", help_text)
+        self.assertIn("omh ops list", help_text)
         self.assertIn("Human-facing maintenance and catalog commands print summaries", help_text)
         self.assertIn("Backend/control-plane commands", help_text)
+        self.assertIn("memory, ops, state", help_text)
 
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -324,7 +326,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("刷新托管 Hermes 技能包", stdout)
-            self.assertIn("已准备 30 个托管技能", stdout)
+            self.assertIn(f"已准备 {len(builtin_skill_templates())} 个托管技能", stdout)
             self.assertIn("OMH install 已完成。", stdout)
 
     def test_language_catalogs_have_matching_keys(self) -> None:
@@ -343,7 +345,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Installing managed skills", stdout)
             self.assertIn("OMH install complete.", stdout)
-            self.assertIn("Skills: 30 managed skill(s)", stdout)
+            self.assertIn(f"Skills: {len(builtin_skill_templates())} managed skill(s)", stdout)
             self.assertIn("Run `omh setup`", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
@@ -394,7 +396,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(state["last_update"]["operation"], "update")
             self.assertEqual(state["last_update"]["command_package"]["status"], "unchanged")
             self.assertEqual(state["last_update"]["release_update"]["status"], "refreshed")
-            self.assertEqual(state["last_update"]["managed_skills"]["count"], 30)
+            self.assertEqual(state["last_update"]["managed_skills"]["count"], len(builtin_skill_templates()))
 
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -615,6 +617,180 @@ class CliTests(unittest.TestCase):
             delegation = json.loads(stdout)
             self.assertEqual(delegation["executor_handoff"]["context_pack"]["schema_version"], "handoff_context_pack/v1")
 
+    def test_ops_cli_writes_lists_shows_validates_and_exports_artifacts(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            base = ["--omh-home", str(omh_home), "ops"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "rhythm",
+                    "--kind",
+                    "retro",
+                    "--title",
+                    "Sprint retro",
+                    "--summary",
+                    "Prepared retro shell.",
+                    "--section",
+                    "What changed",
+                    "--decision",
+                    "Keep release train",
+                    "--action",
+                    "Follow up owners",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            rhythm = json.loads(stdout)
+            artifact = rhythm["artifact"]
+            self.assertEqual(rhythm["schema_version"], "omh_ops_write_result/v1")
+            self.assertEqual(artifact["surface"], "operating-rhythm")
+            self.assertEqual(artifact["kind"], "retro")
+            self.assertEqual(artifact["observation_status"], "prepared")
+            self.assertTrue(rhythm["boundary"]["prepared_is_not_observed"])
+            self.assertTrue((omh_home / "operations" / "index.json").exists())
+
+            status, stdout, stderr = run_cli(base + ["list", "--surface", "operating-rhythm"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            listing = json.loads(stdout)
+            self.assertEqual(listing["schema_version"], "omh_ops_list/v1")
+            self.assertEqual(listing["count"], 1)
+            self.assertEqual(listing["index_authority"], "cache_only")
+
+            status, stdout, stderr = run_cli(base + ["show", artifact["artifact_id"]])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["artifact"]["title"], "Sprint retro")
+
+            status, stdout, stderr = run_cli(base + ["validate"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["ok"])
+
+            status, stdout, stderr = run_cli(base + ["export", "--surface", "operating-rhythm", "--format", "markdown"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            exported = json.loads(stdout)
+            self.assertEqual(exported["schema_version"], "omh_ops_export_result/v1")
+            self.assertEqual(exported["ppt_scope"], "markdown_or_json_outline_only")
+            self.assertEqual(exported["limit"], 20)
+            self.assertEqual(exported["exported_count"], 1)
+            self.assertIn("# Sprint retro", exported["export"])
+
+    def test_ops_cli_lists_and_exports_are_bounded_by_default(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "ops"]
+            for index in range(22):
+                status, stdout, stderr = run_cli(
+                    base
+                    + [
+                        "rhythm",
+                        "--title",
+                        f"Daily note {index}",
+                        "--summary",
+                        "x" * 500,
+                    ]
+                )
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+
+            status, stdout, stderr = run_cli(base + ["list"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            listing = json.loads(stdout)
+            self.assertEqual(listing["schema_version"], "omh_ops_list/v1")
+            self.assertTrue(listing["summary_only"])
+            self.assertEqual(listing["limit"], 20)
+            self.assertEqual(listing["total_count"], 22)
+            self.assertEqual(listing["count"], 20)
+            self.assertTrue(listing["truncated"])
+            self.assertLessEqual(len(listing["artifacts"][0]["summary"]), 240)
+            self.assertNotIn("sections", listing["artifacts"][0])
+
+            status, stdout, stderr = run_cli(base + ["export"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            exported = json.loads(stdout)
+            self.assertEqual(exported["limit"], 20)
+            self.assertEqual(exported["total_count"], 22)
+            self.assertEqual(exported["exported_count"], 20)
+            self.assertTrue(exported["truncated"])
+            self.assertEqual(exported["export"]["limit"], 20)
+            self.assertEqual(len(exported["export"]["artifacts"]), 20)
+
+            status, stdout, stderr = run_cli(base + ["export", "--all"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            all_export = json.loads(stdout)
+            self.assertEqual(all_export["limit"], "all")
+            self.assertEqual(all_export["exported_count"], 22)
+            self.assertFalse(all_export["truncated"])
+
+    def test_ops_cli_keeps_report_package_independent_and_reliability_observed_evidence_strict(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "ops"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "report",
+                    "--kind",
+                    "ppt-outline",
+                    "--title",
+                    "Monthly leadership deck",
+                    "--section",
+                    "Slide 1: Context",
+                    "--assumption",
+                    "Numbers are supplied by the user.",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            report = json.loads(stdout)["artifact"]
+            self.assertEqual(report["surface"], "report-package")
+            self.assertNotIn("slo_pass", report["not_evidence_until_observed"])
+
+            status, stdout, stderr = run_cli(
+                base + ["reliability", "--kind", "slo-review", "--title", "API SLO", "--observed"]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("observed reliability artifacts require source, metric, or reference evidence", stderr)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "reliability",
+                    "--kind",
+                    "slo-review",
+                    "--title",
+                    "API SLO",
+                    "--observed",
+                    "--metric",
+                    "availability=99.95",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            reliability = json.loads(stdout)["artifact"]
+            self.assertEqual(reliability["surface"], "reliability-review")
+            self.assertEqual(reliability["observation_status"], "observed")
+
     def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
 
@@ -731,6 +907,44 @@ class CliTests(unittest.TestCase):
                 self.assertIn(boundary_fragment, top["evidence_boundary"])
                 self.assertIn("observ", top["wrapper_guidance"].lower())
 
+    def test_recommend_independent_operations_surfaces(self) -> None:
+        cases = (
+            (
+                "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
+                "operating-rhythm",
+                "prepare_operating_record",
+                "meeting, scrum, sprint",
+                "prepared",
+            ),
+            (
+                "create a PPT report package for a monthly leadership status deck",
+                "report-package",
+                "prepare_report_package",
+                "binary PPTX export",
+                "markdown/json",
+            ),
+            (
+                "run an incident postmortem SLO error budget service reliability review",
+                "reliability-review",
+                "prepare_reliability_review",
+                "healthy error-budget",
+                "metric",
+            ),
+        )
+
+        for message, skill, next_action, boundary_fragment, wrapper_fragment in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], skill)
+                self.assertEqual(top["hermes_role"], "retained-cognition")
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(boundary_fragment, top["evidence_boundary"])
+                self.assertIn(wrapper_fragment, top["wrapper_guidance"].lower())
+
     def test_recommend_direct_loop_routes_to_goal_loop_policy(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "./loop", "build", "a", "10k", "star", "open", "source", "project", "--limit", "2"])
 
@@ -794,6 +1008,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("meeting-prep-to-record", playbooks)
         self.assertIn("feedback-triage", playbooks)
         self.assertIn("weekly-ops-review", playbooks)
+        self.assertIn("operating-rhythm-history", playbooks)
+        self.assertIn("report-package", playbooks)
+        self.assertIn("reliability-incident-review", playbooks)
         self.assertIn("market-scan-to-strategy", playbooks)
         self.assertIn("local-pipeline-buildout", playbooks)
         self.assertIn("idea-to-deploy", playbooks)
@@ -804,6 +1021,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("deploy_monitor_status", playbooks["idea-to-deploy"]["pipeline"])
         self.assertIn("status_review", playbooks["cto-loop"]["pipeline"])
         self.assertIn("postdeploy_record", playbooks["deploy-and-monitor"]["pipeline"])
+        self.assertIn("capture_decisions", playbooks["operating-rhythm-history"]["pipeline"])
+        self.assertIn("export_outline", playbooks["report-package"]["pipeline"])
+        self.assertIn("track_remediation", playbooks["reliability-incident-review"]["pipeline"])
 
     def test_playbook_inspect_shows_owners_and_evidence_boundaries(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "inspect", "safe-feature-change"])
@@ -894,6 +1114,48 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(recommendations[0]["delegated_to_executor"], [])
                 self.assertNotEqual(recommendations[0]["id"], "safe-feature-change")
                 self.assertNotEqual(recommendations[0]["id"], "release-readiness-review")
+
+    def test_playbook_recommend_routes_independent_operations_surfaces(self) -> None:
+        cases = (
+            (
+                "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
+                "operating-rhythm-history",
+                "scope_cadence",
+                "meeting_held",
+            ),
+            (
+                "create a PPT report package for a monthly leadership status deck",
+                "report-package",
+                "scope_report",
+                "binary_pptx_export",
+            ),
+            (
+                "run an incident postmortem SLO error budget service reliability review",
+                "reliability-incident-review",
+                "scope_incident_or_service",
+                "error_budget_healthy",
+            ),
+        )
+
+        for message, playbook_id, next_action, not_evidence in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["playbook", "recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["id"], playbook_id)
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(not_evidence, top["not_evidence_until_observed"])
+                self.assertNotEqual(top["confidence"], "low")
+
+        status, stdout, stderr = run_cli(["playbook", "inspect", "report-package"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        report = json.loads(stdout)["playbook"]
+        self.assertEqual(report["delegated_to_executor"], [])
+        self.assertNotIn("slo_pass", report["not_evidence_until_observed"])
 
     def test_playbook_recommend_routes_app_operation_loops(self) -> None:
         cases = (
@@ -1059,6 +1321,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(start_card["schema_version"], "loop_start_card/v1")
             self.assertEqual(start_card["goal_summary"], "{message}")
             self.assertEqual(start_card["next_action"], "choose_permission_profile")
+            self.assertIn("syntax_or_parse_check", start_card["verification_policy"]["inner_loop_checks"])
+            self.assertIn("verification_gap", {mode["id"] for mode in start_card["failure_modes"]})
+            self.assertIn("test_as_stop_signal", {item["id"] for item in start_card["small_loop_guidance"]["principles"]})
             self.assertNotIn("10k-star quality", stdout)
 
             status, stdout, stderr = run_cli(
@@ -1123,6 +1388,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["status"], "prepared_not_observed")
             self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["workflow_pattern"], "adversarial_verification")
             self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["pipeline_step"], "task_discovery")
+            self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["verification_plan"]["schema_version"], "loop_verification_plan/v1")
+            self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["verification_plan"]["tier"], "outer")
+            self.assertEqual(ticked["loop"]["runtime"]["queue"][0]["verification_plan"]["failure_action"], "return_to_plan_or_research")
             self.assertEqual(
                 ticked["loop"]["runtime"]["queue"][0]["subagent_plan"]["result_contract"]["schema_version"],
                 "loop_subagent_result_contract/v1",
@@ -1132,6 +1400,8 @@ class CliTests(unittest.TestCase):
             self.assertFalse(ticked["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
             self.assertEqual(ticked["status_card"]["runtime_summary"]["pending_queue_count"], 1)
             self.assertEqual(ticked["status_card"]["loop_engineering"]["workflow_patterns"]["last"], "adversarial_verification")
+            self.assertIn("outer_loop_checks", ticked["status_card"]["loop_engineering"]["verification_policy"])
+            self.assertEqual(ticked["status_card"]["failure_mode_summary"]["warnings"][0]["id"], "verification_gap")
             self.assertIn("connector I/O", ticked["status_card"]["runtime_summary"]["claim_boundary"])
             queue_id = ticked["loop"]["runtime"]["queue"][0]["queue_id"]
 
@@ -1152,6 +1422,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(queue_handoff["queue_id"], queue_id)
             self.assertIn("Continue OMH loop", queue_handoff["handoff_text"])
             self.assertIn("Workflow pattern: adversarial_verification", queue_handoff["handoff_text"])
+            self.assertIn("Verification plan:", queue_handoff["handoff_text"])
 
             status, stdout, stderr = run_cli(
                 home
@@ -1178,6 +1449,7 @@ class CliTests(unittest.TestCase):
             self.assertFalse(observed["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
             self.assertFalse(observed["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
             self.assertEqual(observed["status_card"]["runtime_summary"]["observed_queue_count"], 1)
+            self.assertEqual(observed["status_card"]["failure_mode_summary"]["warnings"][0]["id"], "verification_gap")
 
             status, stdout, stderr = run_cli(home + ["loop", "permit", "--loop", "loop-cli", "--allow-action", "merge"])
             self.assertEqual(stderr, "")
@@ -1199,6 +1471,51 @@ class CliTests(unittest.TestCase):
             shown = json.loads(stdout)
             self.assertEqual(shown["status_card"]["phase"], "waiting")
             self.assertFalse(shown["status_card"]["completion_claim_allowed"])
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "start",
+                    "--loop-id",
+                    "loop-run-once",
+                    "--goal-summary",
+                    "Prepare a safe one-tick loop",
+                    "--goal-reframe",
+                    "Create one prepared queue item and wait for observed verification evidence.",
+                    "--criterion",
+                    "Run-once prepares a single queue item",
+                    "--permission-profile",
+                    "handoff_only",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+
+            status, stdout, stderr = run_cli(home + ["loop", "run-once", "--loop", "loop-run-once"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_once = json.loads(stdout)
+            self.assertEqual(run_once["run_once"]["schema_version"], "loop_run_once_result/v1")
+            self.assertEqual(run_once["run_once"]["outcome"], "created_tick")
+            self.assertTrue(run_once["run_once"]["advanced"])
+            self.assertEqual(run_once["loop"]["runtime"]["schema_version"], "loop_runtime/v1")
+            self.assertEqual(run_once["loop"]["runtime"]["heartbeat_count"], 1)
+            self.assertEqual(run_once["loop"]["runtime"]["queue"][0]["trigger"], "automation")
+            self.assertEqual(run_once["loop"]["runtime"]["queue"][0]["cadence"], "run-once")
+            self.assertEqual(run_once["loop"]["runtime"]["queue"][0]["status"], "prepared_not_observed")
+            self.assertEqual(run_once["loop"]["runtime"]["queue"][0]["verification_plan"]["tier"], "inner")
+            self.assertFalse(run_once["loop"]["runtime"]["queue"][0]["worktree_plan"]["created"])
+            self.assertFalse(run_once["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
+            self.assertFalse(run_once["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
+
+            status, stdout, stderr = run_cli(home + ["loop", "run-once", "--loop", "loop-run-once"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            pending_run_once = json.loads(stdout)
+            self.assertEqual(pending_run_once["run_once"]["outcome"], "pending_queue_exists")
+            self.assertFalse(pending_run_once["run_once"]["advanced"])
+            self.assertEqual(len(pending_run_once["loop"]["runtime"]["queue"]), 1)
 
             status, stdout, stderr = run_cli(
                 home
@@ -1270,6 +1587,9 @@ class CliTests(unittest.TestCase):
             ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "clarify", "ultraqa"),
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "clarify", "feedback-triage"),
             ("prepare weekly ops review from customer feedback and release risks", "clarify", "ops-review"),
+            ("회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘", "clarify", "operating-rhythm"),
+            ("create a PPT report package for a monthly leadership status deck", "clarify", "report-package"),
+            ("run an incident postmortem SLO error budget service reliability review", "clarify", "reliability-review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "clarify", "strategy-brief"),
             ("take this product idea from plan to deploy and monitor safely", "clarify", "idea-to-deploy"),
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "clarify", "cto-loop"),
@@ -1290,6 +1610,9 @@ class CliTests(unittest.TestCase):
                     "meeting-brief",
                     "feedback-triage",
                     "ops-review",
+                    "operating-rhythm",
+                    "report-package",
+                    "reliability-review",
                     "strategy-brief",
                     "idea-to-deploy",
                     "cto-loop",
@@ -1306,6 +1629,9 @@ class CliTests(unittest.TestCase):
         cases = (
             ("prepare a meeting agenda and record template for leadership sync", "meeting-brief"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review"),
+            ("회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘", "operating-rhythm"),
+            ("create a PPT report package for a monthly leadership status deck", "report-package"),
+            ("run an incident postmortem SLO error budget service reliability review", "reliability-review"),
         )
 
         for message, workflow in cases:
@@ -3516,6 +3842,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(harnesses["customer-insight-triage"]["quality_tier"], "triage-gated")
         self.assertIn("next_workflow_recommended", harnesses["customer-insight-triage"]["evidence_ladder"])
         self.assertEqual(harnesses["ops-review"]["quality_tier"], "status-gated")
+        self.assertEqual(harnesses["operating-rhythm"]["quality_tier"], "operations-gated")
+        self.assertIn("decisions_actions_recorded", harnesses["operating-rhythm"]["evidence_ladder"])
+        self.assertEqual(harnesses["report-package"]["quality_tier"], "report-gated")
+        self.assertIn("package_outline_prepared", harnesses["report-package"]["evidence_ladder"])
+        self.assertEqual(harnesses["reliability-review"]["quality_tier"], "reliability-gated")
+        self.assertIn("remediation_boundary_recorded", harnesses["reliability-review"]["evidence_ladder"])
         self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
         self.assertIn("deploy_monitor_observed_when_available", harnesses["app-delivery-loop"]["evidence_ladder"])
         self.assertIn("record_deploy", harnesses["app-delivery-loop"]["wrapper_actions"])
@@ -3543,10 +3875,16 @@ class CliTests(unittest.TestCase):
         self.assertIn("meeting-facilitation", harnesses)
         self.assertIn("customer-insight-triage", harnesses)
         self.assertIn("ops-review", harnesses)
+        self.assertIn("operating-rhythm", harnesses)
+        self.assertIn("report-package", harnesses)
+        self.assertIn("reliability-review", harnesses)
         self.assertIn("app-delivery-loop", harnesses)
         self.assertIn("blocking_question_asked", harnesses["deep-interview"]["evidence_ladder"])
         self.assertIn("ralplan", harnesses["planning"]["primary_skills"])
         self.assertIn("feedback-triage", harnesses["customer-insight-triage"]["primary_skills"])
+        self.assertIn("operating-rhythm", harnesses["operating-rhythm"]["primary_skills"])
+        self.assertIn("report-package", harnesses["report-package"]["primary_skills"])
+        self.assertIn("reliability-review", harnesses["reliability-review"]["primary_skills"])
         self.assertIn("idea-to-deploy", harnesses["app-delivery-loop"]["primary_skills"])
 
         status, stdout, stderr = run_cli(["harness", "inspect", "research"])

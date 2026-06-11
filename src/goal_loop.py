@@ -21,6 +21,10 @@ LOOP_QUEUE_LIST_SCHEMA = "loop_queue_list/v1"
 LOOP_QUEUE_HANDOFF_SCHEMA = "loop_queue_handoff/v1"
 LOOP_ENGINEERING_SCHEMA = "loop_engineering/v1"
 LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA = "loop_subagent_result_contract/v1"
+LOOP_VERIFICATION_PLAN_SCHEMA = "loop_verification_plan/v1"
+LOOP_FAILURE_MODE_SUMMARY_SCHEMA = "loop_failure_mode_summary/v1"
+LOOP_SMALL_LOOP_GUIDANCE_SCHEMA = "loop_small_loop_guidance/v1"
+LOOP_RUN_ONCE_RESULT_SCHEMA = "loop_run_once_result/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -91,6 +95,7 @@ LOOP_WORKFLOW_PATTERNS = (
     "tournament",
     "triage_batch",
 )
+LOOP_VERIFICATION_TIERS = ("none", "inner", "outer")
 LOOP_CONTEXT_POLICY_REF = "loop_engineering.context_policy"
 LOOP_COST_POLICY_REF = "loop_engineering.cost_policy"
 LOOP_EXECUTOR_OPTIONS = (
@@ -279,6 +284,9 @@ def build_loop_start_card(
             "creates_artifact": "loop_cycle/v1",
         },
         "loop_engineering": _loop_engineering_template(),
+        "verification_policy": _loop_verification_policy(),
+        "failure_modes": _failure_mode_definitions(),
+        "small_loop_guidance": _small_loop_guidance(),
         "actions": [
             "choose_permission_profile",
             "start_loop",
@@ -419,6 +427,65 @@ def tick_loop_runtime(
     else:
         cycle["next_action"] = str(plan["next_action"])
     return _write_loop(paths, cycle)
+
+
+def run_loop_once(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
+    cycle = read_loop_cycle(paths, loop_id)
+    runtime = _runtime_state(cycle.get("runtime"))
+    pending = [
+        item
+        for item in runtime.get("queue", [])
+        if isinstance(item, dict) and item.get("status") == "prepared_not_observed"
+    ]
+    if pending:
+        cycle["phase"] = str(pending[-1].get("phase", cycle.get("phase", "handoff")))
+        cycle["next_action"] = "observe_runtime_queue"
+        return _write_loop(paths, cycle)
+    return tick_loop_runtime(
+        paths,
+        loop_id,
+        trigger="automation",
+        cadence="run-once",
+        workflow_pattern="single_step",
+        note=(
+            "Non-daemon loop run-once prepared one queue item; no worktree, subagent, "
+            "connector, executor, network, or code execution was performed by OMH."
+        ),
+    )
+
+
+def run_loop_once_result(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
+    before = read_loop_cycle(paths, loop_id)
+    before_runtime = _runtime_state(before.get("runtime"))
+    before_queue = [item for item in before_runtime.get("queue", []) if isinstance(item, dict)]
+    before_pending = [item for item in before_queue if item.get("status") == "prepared_not_observed"]
+    cycle = run_loop_once(paths, loop_id)
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
+    if before_pending:
+        queue_id = str(before_pending[-1].get("queue_id", ""))
+        outcome = "pending_queue_exists"
+        advanced = False
+        created_queue_count = 0
+    else:
+        created_queue_count = max(0, len(queue) - len(before_queue))
+        advanced = created_queue_count > 0
+        outcome = "created_tick" if advanced else "no_eligible_tick"
+        queue_id = str(queue[-1].get("queue_id", "")) if queue else ""
+    return {
+        "loop": cycle,
+        "run_once": {
+            "schema_version": LOOP_RUN_ONCE_RESULT_SCHEMA,
+            "loop_id": str(cycle.get("loop_id", loop_id)),
+            "outcome": outcome,
+            "advanced": advanced,
+            "created_queue_count": created_queue_count,
+            "queue_id": queue_id,
+            "pending_queue_count": sum(1 for item in queue if item.get("status") == "prepared_not_observed"),
+            "next_action": str(cycle.get("next_action", "")),
+            "claim_boundary": _runtime_claim_boundary(),
+        },
+    }
 
 
 def list_loop_queue(paths: OmhPaths, loop_id: str, *, include_observed: bool = False) -> dict[str, Any]:
@@ -566,6 +633,8 @@ def build_loop_status_card(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
         "feedback_gate": cycle.get("feedback_gate", _feedback_gate()),
         "runtime_summary": _runtime_summary(cycle),
         "loop_engineering": _loop_engineering_status(cycle),
+        "failure_mode_summary": _failure_mode_summary(cycle),
+        "small_loop_guidance": _small_loop_guidance(),
         "linked_goal_completion": linked_gate or {"observed": False, "reason": "no linked goal ledger"},
         "next_action": _next_action(cycle),
         "safe_copy": _safe_status_copy(cycle, envelope),
@@ -777,6 +846,9 @@ def _loop_engineering_template() -> dict[str, Any]:
         ],
         "context_policy": _loop_context_policy(),
         "cost_policy": _loop_cost_policy(),
+        "verification_policy": _loop_verification_policy(),
+        "failure_modes": _failure_mode_definitions(),
+        "small_loop_guidance": _small_loop_guidance(),
         "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
         "claim_boundary": _runtime_claim_boundary(),
     }
@@ -807,6 +879,9 @@ def _loop_engineering_status(cycle: dict[str, Any]) -> dict[str, Any]:
         "workflow_patterns": workflow_summary,
         "context_policy": contract["context_policy"],
         "cost_policy": contract["cost_policy"],
+        "verification_policy": contract.get("verification_policy") or _loop_verification_policy(),
+        "failure_modes": contract.get("failure_modes") or _failure_mode_definitions(),
+        "small_loop_guidance": contract.get("small_loop_guidance") or _small_loop_guidance(),
         "subagent_result_contract_schema": LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA,
         "claim_boundary": _runtime_claim_boundary(),
     }
@@ -819,6 +894,9 @@ def _loop_engineering_contract(cycle: dict[str, Any]) -> dict[str, Any]:
             **contract,
             "context_policy": contract.get("context_policy") or _loop_context_policy(),
             "cost_policy": contract.get("cost_policy") or _loop_cost_policy(),
+            "verification_policy": contract.get("verification_policy") or _loop_verification_policy(),
+            "failure_modes": contract.get("failure_modes") or _failure_mode_definitions(),
+            "small_loop_guidance": contract.get("small_loop_guidance") or _small_loop_guidance(),
         }
     return _loop_engineering_template()
 
@@ -1238,6 +1316,7 @@ def _runtime_queue_item(
             if is_prepared
             else _connector_plan("", "", planned_action)
         ),
+        "verification_plan": _verification_plan(planned_action, pattern, is_prepared=is_prepared),
         "note": _safe_summary(note, limit=240) if note.strip() else "",
         "observed": False,
         "observed_at": "",
@@ -1338,6 +1417,48 @@ def _connector_plan(connector: str, connector_action: str, planned_action: str) 
     }
 
 
+def _verification_plan(planned_action: str, workflow_pattern: str, *, is_prepared: bool) -> dict[str, Any]:
+    pattern = _workflow_pattern(workflow_pattern)
+    if not is_prepared:
+        return {
+            "schema_version": LOOP_VERIFICATION_PLAN_SCHEMA,
+            "tier": "none",
+            "expected_signal": "No verification is expected while this queue item is blocked or waiting.",
+            "failure_action": "do_not_advance",
+            "evidence_required": [],
+            "stop_signal": "The blocker, permission request, or wait state is resolved.",
+            "verifier_role": "",
+            "claim_boundary": _runtime_claim_boundary(),
+        }
+    tier = "outer" if pattern in {"fan_out_synthesize", "adversarial_verification", "tournament"} else "inner"
+    if tier == "outer":
+        expected_signal = (
+            "Verifier review, integration-style evidence, semantic review, release gate, "
+            "or human judgment returns pass/fail with evidence refs."
+        )
+        evidence_required = ["verifier_result_ref", "checked_evidence_ref"]
+        stop_signal = "The verifier or human review returns pass with evidence refs."
+        verifier_role = "verifier"
+    else:
+        expected_signal = (
+            "Cheap focused evidence such as syntax, compile, schema validation, command smoke, "
+            "or targeted test output returns pass/fail."
+        )
+        evidence_required = ["focused_check_ref"]
+        stop_signal = "The focused check returns pass with an evidence ref."
+        verifier_role = ""
+    return {
+        "schema_version": LOOP_VERIFICATION_PLAN_SCHEMA,
+        "tier": tier,
+        "expected_signal": expected_signal,
+        "failure_action": "return_to_plan_or_research",
+        "evidence_required": evidence_required,
+        "stop_signal": stop_signal,
+        "verifier_role": verifier_role,
+        "claim_boundary": "Verification intent is metadata until a wrapper or operator records observed verification evidence.",
+    }
+
+
 def _default_subagent_role(planned_action: str) -> str:
     if planned_action == "research":
         return "researcher"
@@ -1370,6 +1491,162 @@ def _runtime_summary(cycle: dict[str, Any]) -> dict[str, Any]:
         "blocked_queue_count": sum(1 for item in queue if item.get("status") in {"blocked", "blocked_by_permission", "blocked_by_wait"}),
         "observed_queue_count": sum(1 for item in queue if item.get("status") == "observed" and item.get("observed") is True),
         "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def _loop_verification_policy() -> dict[str, Any]:
+    return {
+        "inner_loop_checks": [
+            "syntax_or_parse_check",
+            "compile_or_import_check",
+            "focused_unit_test",
+            "command_smoke",
+            "schema_validation",
+        ],
+        "outer_loop_checks": [
+            "integration_test",
+            "semantic_review",
+            "adversarial_verifier",
+            "release_gate",
+            "human_review",
+        ],
+        "verifier_policy": (
+            "Keep one cheap verification lane by default. Add a verifier subagent only for high-risk changes, "
+            "failed evidence, explicit review requests, or fan_out_synthesize/adversarial_verification/tournament patterns."
+        ),
+        "stop_signal": "A loop step stops only when its expected verification signal is observed, blocked, or explicitly deferred.",
+        "claim_boundary": "Verification policy is guidance until observed evidence refs are recorded.",
+    }
+
+
+def _failure_mode_definitions() -> list[dict[str, str]]:
+    return [
+        {
+            "id": "verification_gap",
+            "label": "verification gap",
+            "meaning": "The loop has prepared or observed work but still lacks enough verification evidence to advance safely.",
+        },
+        {
+            "id": "comprehension_debt",
+            "label": "comprehension debt",
+            "meaning": "The loop is accumulating delegated or generated work faster than summaries, ownership, or review evidence can explain.",
+        },
+        {
+            "id": "cognitive_surrender",
+            "label": "cognitive surrender",
+            "meaning": "The loop is broad enough that a human-owned judgment, acceptance signal, or stop condition should be refreshed.",
+        },
+    ]
+
+
+def _failure_mode_summary(cycle: dict[str, Any]) -> dict[str, Any]:
+    runtime = _runtime_state(cycle.get("runtime"))
+    queue = [item for item in runtime.get("queue", []) if isinstance(item, dict)]
+    feedback = _dict_value(cycle, "feedback_gate")
+    envelope = _dict_value(cycle, "authority_envelope")
+    modes = [
+        _verification_gap_mode(cycle, queue, feedback),
+        _comprehension_debt_mode(cycle, queue, feedback),
+        _cognitive_surrender_mode(cycle, envelope),
+    ]
+    warnings = [mode for mode in modes if mode["state"] == "warning"]
+    return {
+        "schema_version": LOOP_FAILURE_MODE_SUMMARY_SCHEMA,
+        "warnings": warnings,
+        "modes": modes,
+        "next_action": warnings[0]["next_action"] if warnings else "continue_with_current_loop_gate",
+        "claim_boundary": "Failure modes are loop safety warnings; they are not runtime execution evidence.",
+    }
+
+
+def _verification_gap_mode(cycle: dict[str, Any], queue: list[dict[str, Any]], feedback: dict[str, Any]) -> dict[str, str]:
+    pending = [item for item in queue if item.get("status") == "prepared_not_observed"]
+    observed = [item for item in queue if item.get("status") == "observed" and item.get("observed") is True]
+    if pending:
+        return _failure_mode(
+            "verification_gap",
+            "warning",
+            "A prepared queue item is waiting for observed work and verification evidence before the loop can advance.",
+            "observe_runtime_queue",
+        )
+    if observed and not _string_list(feedback.get("observed_artifacts", [])) and cycle.get("phase") == "feedback":
+        return _failure_mode(
+            "verification_gap",
+            "warning",
+            "Observed queue work exists, but feedback has not recorded verification artifacts yet.",
+            "record_feedback",
+        )
+    return _failure_mode("verification_gap", "clear", "No verification gap is currently visible.", "continue_loop")
+
+
+def _comprehension_debt_mode(
+    cycle: dict[str, Any],
+    queue: list[dict[str, Any]],
+    feedback: dict[str, Any],
+) -> dict[str, str]:
+    heartbeat_count = int(_runtime_state(cycle.get("runtime")).get("heartbeat_count", 0) or 0)
+    observed_count = sum(1 for item in queue if item.get("status") == "observed" and item.get("observed") is True)
+    feedback_count = len(cycle.get("cycles", []) if isinstance(cycle.get("cycles"), list) else [])
+    if heartbeat_count >= 3 and observed_count >= 2 and feedback_count == 0:
+        return _failure_mode(
+            "comprehension_debt",
+            "warning",
+            "Several loop ticks or observed items exist without a feedback checkpoint that explains what changed.",
+            "record_feedback",
+        )
+    if observed_count >= 3 and not str(feedback.get("internal_actionable_gap", "")).strip():
+        return _failure_mode(
+            "comprehension_debt",
+            "warning",
+            "Multiple observed loop items exist; refresh a concise summary, owner, and next risk before continuing.",
+            "record_feedback",
+        )
+    return _failure_mode("comprehension_debt", "clear", "Loop context is still bounded by summaries and evidence refs.", "continue_loop")
+
+
+def _cognitive_surrender_mode(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[str, str]:
+    allowed = set(_string_set(envelope.get("allowed_actions", [])))
+    broad_actions = {"executor_dispatch", "repo_edit", "pr_creation", "merge", "external_posting"}
+    if allowed & broad_actions and not str(cycle.get("linked_goal_id", "")).strip():
+        return _failure_mode(
+            "cognitive_surrender",
+            "warning",
+            "This loop can prepare broad actions; refresh human-owned judgment or link a goal ledger before treating it as self-steering.",
+            "show_loop_status",
+        )
+    return _failure_mode("cognitive_surrender", "clear", "Authority and stop conditions are explicit enough for the current loop state.", "continue_loop")
+
+
+def _failure_mode(mode_id: str, state: str, detail: str, next_action: str) -> dict[str, str]:
+    return {
+        "id": mode_id,
+        "state": state,
+        "detail": detail,
+        "next_action": next_action,
+    }
+
+
+def _small_loop_guidance() -> dict[str, Any]:
+    return {
+        "schema_version": LOOP_SMALL_LOOP_GUIDANCE_SCHEMA,
+        "principles": [
+            {
+                "id": "test_as_stop_signal",
+                "label": "test as stop signal",
+                "guidance": "Name the cheapest check that decides whether this step is done before the loop starts.",
+            },
+            {
+                "id": "plan_execute_verify",
+                "label": "plan -> execute -> verify",
+                "guidance": "Keep each cycle shaped as one planned step, one execution or handoff step, and one verification signal.",
+            },
+            {
+                "id": "one_task_at_a_time",
+                "label": "one task at a time",
+                "guidance": "Queue one concrete task per tick so failures can be traced and repaired without losing the goal.",
+            },
+        ],
+        "claim_boundary": "Small-loop guidance is a Hermes-facing operating recipe, not proof that work ran.",
     }
 
 
@@ -1464,6 +1741,18 @@ def _queue_handoff_text(cycle: dict[str, Any], item: dict[str, Any]) -> str:
                 "Connector intent:",
                 f"- Connector: {connector.get('connector', '')}",
                 f"- Action: {connector.get('action', '')}",
+            ]
+        )
+    verification = _dict_value(item, "verification_plan")
+    if verification:
+        lines.extend(
+            [
+                "",
+                "Verification plan:",
+                f"- Tier: {verification.get('tier', '')}",
+                f"- Expected signal: {verification.get('expected_signal', '')}",
+                f"- Failure action: {verification.get('failure_action', '')}",
+                f"- Stop signal: {verification.get('stop_signal', '')}",
             ]
         )
     lines.extend(
@@ -1593,6 +1882,9 @@ def _validate_runtime(runtime: object) -> list[str]:
                     errors.append(
                         f"runtime.queue[{index}].subagent_plan.result_contract.schema_version must be {LOOP_SUBAGENT_RESULT_CONTRACT_SCHEMA}"
                     )
+        verification_plan = item.get("verification_plan")
+        if verification_plan is not None:
+            _validate_verification_plan(errors, index, verification_plan)
         if item.get("status") == "observed":
             if item.get("observed") is not True:
                 errors.append(f"runtime.queue[{index}].observed must be true when status is observed")
@@ -1624,6 +1916,23 @@ def _validate_runtime(runtime: object) -> list[str]:
                 if plan.get("strategy") != "none":
                     errors.append(f"runtime.queue[{index}].{key}.strategy must be none while blocked")
     return errors
+
+
+def _validate_verification_plan(errors: list[str], index: int, value: object) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"runtime.queue[{index}].verification_plan must be an object")
+        return
+    if value.get("schema_version") != LOOP_VERIFICATION_PLAN_SCHEMA:
+        errors.append(f"runtime.queue[{index}].verification_plan.schema_version must be {LOOP_VERIFICATION_PLAN_SCHEMA}")
+    tier = str(value.get("tier", ""))
+    if tier not in LOOP_VERIFICATION_TIERS:
+        errors.append(f"runtime.queue[{index}].verification_plan.tier is unsupported")
+    evidence = value.get("evidence_required")
+    if not isinstance(evidence, list) or not all(isinstance(item, str) for item in evidence):
+        errors.append(f"runtime.queue[{index}].verification_plan.evidence_required must be a string list")
+    for key in ("expected_signal", "failure_action", "stop_signal", "claim_boundary"):
+        if not isinstance(value.get(key), str) or not str(value.get(key, "")).strip():
+            errors.append(f"runtime.queue[{index}].verification_plan.{key} must be a non-empty string")
 
 
 def _runtime_claim_boundary() -> str:

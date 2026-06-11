@@ -152,14 +152,15 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   ledgers, completion gates, and explicit "continue/checkpoint/block/complete"
   next actions instead of ending with a vague summary.
 - **Loop runtime ticks** - ambitious `./loop` goals can be advanced by a local
-  tick with a deterministic queue shape for worktree, subagent, connector, and
-  handoff plans plus a `loop_engineering/v1` snapshot over automation,
-  worktree, skill, connector, and subagent blocks; a tick can also record a
-  workflow pattern such as fan-out, adversarial verification, tournament, or
-  triage batch while still treating that pattern as orchestration metadata. A
-  cost policy keeps reads bounded, schema scaffolds stable, and extra verifier
-  lanes opt-in. Hermes can show the queue, prepare the next handoff, then mark
-  it observed or blocked without pretending those steps already ran.
+  tick or `omh loop run-once` with a deterministic queue shape for worktree,
+  subagent, connector, handoff, and `verification_plan` metadata plus a
+  `loop_engineering/v1` snapshot over automation, worktree, skill, connector,
+  subagent, inner-loop checks, outer-loop checks, and verifier policy. Hermes
+  can show the queue, prepare the next handoff, warn about verification gaps,
+  comprehension debt, or cognitive surrender, then mark the item observed or
+  blocked without pretending those steps already ran. The `run-once` result
+  explicitly reports whether it created a tick or found an existing pending
+  queue item.
 - **Local and inspectable** - skills, manifests, plans, sessions, and runtime
   records live in user-owned local directories.
 
@@ -169,6 +170,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | --- | --- | --- |
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Hermes turns ambiguous intent into a concrete goal, plan, execution-ready path, direct ambitious goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Hermes keeps non-coding company and product operations inside brief, evidence, and decision workflows. | "Payment failures keep coming up." |
+| `operating-rhythm` / `report-package` / `reliability-review` | Hermes records operating cadence, report packages, and reliability reviews as separate local artifacts with strict evidence boundaries. | "Turn the sprint retro, monthly report, and incident review into durable records." |
 | `idea-to-deploy` / coding handoff / executor selection | Hermes prepares work for Codex, Claude Code, or another selected executor instead of hiding coding inside Hermes. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## What You Get
@@ -179,9 +181,10 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs` in user or project scope. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
-| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards, `loop_engineering/v1` snapshots, and queue lifecycle actions help wrappers show what can start, what is only prepared, and what was later observed or blocked. |
+| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards, `loop_engineering/v1` snapshots, `loop_status_card/v1` failure-mode warnings, and queue lifecycle actions help wrappers show what can start, what is only prepared, what verification is cheap or expensive, and what was later observed or blocked. |
 | PR-ready delivery process | `ultraprocess` is Ultra Process: Research -> Ralplan -> Ultragoal -> Code Review -> Sync Circle, one PR-ready delivery cycle without claiming unobserved executor work. Use `loop` instead when the goal should keep repeating after feedback. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
+| Operations artifacts | `omh ops rhythm`, `omh ops report`, and `omh ops reliability` create schema-versioned local records under `.omh/operations`. `omh ops list` is summary-only and bounded by default; `omh ops export` returns Markdown or JSON outlines for wrapper/report use; binary PPTX export is intentionally a separate observed step. |
 | Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
@@ -197,16 +200,20 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | "Payment failures keep coming up." | Route to feedback triage or investigation first; prepare reproduction and evidence needs before coding. |
 | "Can this issue become a PR?" | Convert the issue into a plan, acceptance criteria, verification commands, and an executor-neutral handoff. |
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
+| "Keep meeting minutes, scrum notes, sprint plans, and retros in one history." | Use `operating-rhythm` to prepare or record a durable cadence artifact with decisions and follow-up actions separated from unobserved outcomes. |
+| "Create a monthly leadership PPT report package." | Use `report-package` to prepare a clean report or slide outline without requiring SRE evidence or claiming a binary deck was exported. |
+| "Run a postmortem, SLO, and error-budget reliability review." | Use `reliability-review` to require metric, incident, or source references before reliability claims advance. |
 | "Take this idea from plan to deploy and monitor it safely." | Shape the idea, record decision gates, prepare an executor handoff only if code is accepted, then track release/deploy/monitor status separately. |
 | "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
-| "./loop make this a 10k-star quality OSS." | Show a start card for permission and executor choice, preserve the large goal, expose the loop pipeline and automation/worktree/skill/connector/subagent block state, queue worktree/subagent/connector plans through runtime ticks, prepare handoffs for actionable queue items, then record whether each item was observed or blocked. |
+| "./loop make this a 10k-star quality OSS." | Show a start card for permission and executor choice, preserve the large goal, expose the loop pipeline and automation/worktree/skill/connector/subagent/verification state, queue one prepared step with inner or outer verification intent, warn on verification gaps or comprehension debt, then record whether each item was observed or blocked. |
 | "Deploy and monitor this release with rollback checks." | Show release scope, go/no-go, health signals, rollback gate, and post-deploy status without claiming infrastructure execution. |
 | "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a coding-agent handoff only after acceptance. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
 
-For company and app operation work, OMH can help Hermes classify, brief, decide,
-handoff, and track the next workflow without pretending data was fetched, a
-meeting happened, code was implemented, or a deployment was observed.
+For company and app operation work, OMH can help Hermes classify, brief, record,
+decide, handoff, and track the next workflow without pretending data was
+fetched, a meeting happened, code was implemented, a report was approved, a
+binary deck was exported, or a deployment was observed.
 
 ## Profiles And Plugin
 

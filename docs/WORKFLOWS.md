@@ -146,15 +146,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### loop
 
-[omh] Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, handoff, feedback, and resume cycles.
+[omh] Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
 
 - Category: `goal-loop`
 - Phase: `continuous-goal-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `loop-gated`
-- Handoff policy: Keep loop orchestration, interviews, research, planning, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+- Handoff policy: Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 - Why this exists: `loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.
-- Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+- Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 - Do not use when:
   - The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.
   - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
@@ -177,6 +177,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.
   - Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.
   - Keep prepared worktree/subagent/connector plans, observed executor work, linked goal completion, and external waiting as distinct evidence states.
+  - Use cheap inner-loop checks frequently and expensive outer-loop checks sparingly.
+  - Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
+  - Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
 - Required inputs:
   - north-star goal summary
   - goal reframe
@@ -187,18 +190,20 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - loop_start_card/v1 setup prompt
   - loop_cycle/v1 state
   - loop_engineering/v1 pipeline/building-block snapshot
-  - loop cost_policy for bounded reads and verifier restraint
+  - loop verification_policy for inner/outer checks
+  - loop failure_mode_summary over verification gap, comprehension debt, and cognitive surrender
+  - small-loop guidance: test as stop signal, plan -> execute -> verify, one task at a time
   - loop_status_card/v1 next action
-  - loop_runtime/v1 queued tick with loop policy refs
+  - loop_runtime/v1 queued tick with verification_plan refs
   - loop_queue_handoff/v1 only when permitted
   - executor-neutral handoff only when permitted
   - external-wait or checkpoint boundary
 - Artifact expectations:
   - metadata-only .omh/loops loop_cycle/v1 artifact
-  - loop_engineering/v1 status over automation, worktree, skill, connector, and subagent blocks
-  - loop_runtime/v1 queue entries with context_policy_ref and cost_policy_ref
+  - loop_engineering/v1 status over automation, worktree, skill, connector, subagent, verification policy, and failure modes
+  - loop_runtime/v1 queue entries with context_policy_ref, cost_policy_ref, and verification_plan
   - loop_subagent_result_contract/v1 for prepared subagent handoffs
-  - loop_status_card/v1 wrapper payload
+  - loop_status_card/v1 wrapper payload with failure_mode_summary and small_loop_guidance
   - loop_start_card/v1 wrapper setup card
   - linked goal_ledger/v1 only when completion evidence is required
 - Safety rules:
@@ -207,6 +212,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not claim goal completion from loop state; require linked goal_ledger/v1 completion evidence.
   - When context or token budget runs out, checkpoint or rely on resumable state instead of pretending the loop is complete.
   - External results such as market response, stars, or adoption are waiting states unless observed evidence is supplied.
+  - Do not let unattended loop progress bypass verification; missing or failed verification returns to plan/research or waits for evidence.
+  - Do not let comprehension debt or cognitive surrender hide behind green-looking loop status.
 
 ### ultraprocess
 
@@ -650,6 +657,139 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not infer status from missing evidence.
   - Separate observed facts, risks, blockers, decisions, and follow-up actions.
   - Do not report review, CI, release, or merge readiness from an ops summary alone.
+
+### operating-rhythm
+
+[omh] Hermes Operating Rhythm workflow: meeting minutes, scrum/sprint records, retros, decisions, and follow-up history.
+
+- Category: `operations`
+- Phase: `rhythm-history`
+- Hermes role: `retained-cognition`
+- Quality tier: `operations-gated`
+- Handoff policy: Keep cadence records, minutes scaffolds, decisions, and follow-up history in Hermes; delegate implementation only from separately accepted action items.
+- Why this exists: `operating-rhythm` exists so recurring operating work has durable minutes, decisions, and follow-up history without pretending a meeting outcome was observed.
+- Use when: Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.
+- Do not use when:
+  - The user only needs a one-off meeting agenda before the meeting; use `meeting-brief`.
+  - The request is a weekly status/risk summary rather than cadence history; use `ops-review`.
+  - The user asks for report packaging, PPT outline, or reliability evidence review.
+- Strong routing signals: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`, `sprint planning`, `sprint review`, `sprint retrospective`, `retro history`, `decision log`, `action item history`, `회의록 관리`, `회의 히스토리`, `운영 리듬`, `스크럼`, `스프린트 회고`, `결정 기록`, `액션 아이템`
+- Good example:
+  - Prompt: operating-rhythm 회의록 히스토리 관리하고 스크럼 스프린트 회고를 정리해줘.
+  - Expected behavior: Create a prepared operating record with cadence, decisions, action items, and not-evidence markers for missing observed notes.
+  - Why: The request is about recurring operating history, not a generic agenda or code handoff.
+- Bad example:
+  - Prompt: operating-rhythm implement the action items from the retro.
+  - Expected behavior: Route implementation to a plan or selected executor handoff after action items are accepted.
+  - Why: Operating records can capture follow-ups, but implementation is a separate observed work stream.
+- Quality bar:
+  - Name cadence, audience, time window, known notes, and missing evidence before producing a record.
+  - Separate agenda/templates from observed minutes, decisions, and action items.
+  - Record follow-up ownership only when supplied or explicitly mark it unknown.
+- Required inputs:
+  - cadence or meeting type
+  - audience or participants
+  - time window
+  - source notes or explicit missing-notes boundary
+- Expected outputs:
+  - operation artifact
+  - decision log
+  - action item history
+  - observed/prepared boundary
+- Artifact expectations:
+  - operation_artifact/v1 under .omh/operations when a wrapper or CLI records it
+- Safety rules:
+  - Do not treat a prepared record as proof that the meeting or scrum happened.
+  - Do not mark decisions or action items accepted without supplied notes or owner acknowledgement.
+  - Keep implementation follow-ups separate from operating history.
+
+### report-package
+
+[omh] Hermes Report Package workflow: weekly/monthly reports, executive briefs, PPT-ready outlines, and upload packages.
+
+- Category: `reporting`
+- Phase: `package-outline`
+- Hermes role: `retained-cognition`
+- Quality tier: `report-gated`
+- Handoff policy: Keep report narrative, sectioning, and Markdown/JSON outline packaging in Hermes; do not require reliability evidence unless the user asks for a reliability review.
+- Why this exists: `report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.
+- Use when: Use when Hermes should turn supplied inputs into a report, executive brief, PPT-ready outline, or upload package without claiming presentation delivery.
+- Do not use when:
+  - The user needs SLO, incident, or error-budget review; use `reliability-review`.
+  - The user asks for a live `.pptx` deck file rather than a PPT-ready outline.
+  - The request is meeting minutes, scrum history, or action-item tracking.
+- Strong routing signals: `report-package`, `report package`, `weekly report`, `monthly report`, `executive report`, `exec brief`, `leadership deck`, `status package`, `ppt outline`, `presentation outline`, `slide outline`, `upload package`, `보고서 패키지`, `주간 보고서`, `월간 보고서`, `경영진 보고`, `리더십 보고`, `PPT`, `피피티`, `슬라이드`, `발표자료`, `업로드 패키지`
+- Good example:
+  - Prompt: report-package 월간 리더십 보고서 PPT outline 만들어줘.
+  - Expected behavior: Prepare a report package with sections, assumptions, missing inputs, and Markdown/JSON outline scope.
+  - Why: The request is packaging known information for reporting, not reliability validation or code work.
+- Bad example:
+  - Prompt: report-package prove our SLO passed and close the incident.
+  - Expected behavior: Route to `reliability-review` and require metric or incident evidence.
+  - Why: Report packaging cannot satisfy reliability closure evidence.
+- Quality bar:
+  - Name audience, reporting period, sections, supplied facts, assumptions, and missing data.
+  - Keep report packaging independent from reliability review unless explicitly requested.
+  - Export only Markdown/JSON outlines unless a separate presentation tool produces a binary deck.
+- Required inputs:
+  - audience
+  - reporting period or scope
+  - supplied facts
+  - missing data or assumptions
+- Expected outputs:
+  - report package
+  - PPT-ready Markdown or JSON outline
+  - assumptions and missing-input list
+- Artifact expectations:
+  - operation_artifact/v1 report-package artifact when a wrapper or CLI records it
+- Safety rules:
+  - Do not claim source review completion from a prepared report package.
+  - Do not claim stakeholder approval or presentation delivery without observed evidence.
+  - Do not couple report packages to SLO, incident, or error-budget evidence by default.
+
+### reliability-review
+
+[omh] Hermes Reliability Review workflow: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence.
+
+- Category: `reliability`
+- Phase: `incident-and-slo-review`
+- Hermes role: `retained-cognition`
+- Quality tier: `reliability-gated`
+- Handoff policy: Keep incident/SLO/error-budget review in Hermes; prepare remediation handoffs only after an accepted fix direction exists and record closure only from observed evidence.
+- Why this exists: `reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
+- Use when: Use when Hermes should review incident notes, SLOs, error budgets, or service reliability evidence while keeping remediation and closure claims observed.
+- Do not use when:
+  - The user only needs a generic status report or leadership deck.
+  - No service, incident, SLO, metric, or reliability source boundary is available.
+  - The request is implementation of remediation rather than review of reliability evidence.
+- Strong routing signals: `reliability-review`, `reliability review`, `incident review`, `incident postmortem`, `postmortem`, `post-mortem`, `slo review`, `slo`, `sla`, `error budget`, `service reliability`, `reliability followup`, `remediation tracking`, `sre review`, `장애 리뷰`, `장애 회고`, `포스트모템`, `사후 분석`, `에러버짓`, `에러 버짓`, `서비스 신뢰성`, `신뢰성 검증`, `재발 방지`
+- Good example:
+  - Prompt: reliability-review 장애 포스트모템과 SLO 에러버짓 상태를 검토해줘.
+  - Expected behavior: Prepare a reliability artifact that separates metrics/references, assumptions, missing evidence, and remediation follow-ups.
+  - Why: The request is reliability evidence review with closure-sensitive claims.
+- Bad example:
+  - Prompt: reliability-review make a monthly PPT report for leadership.
+  - Expected behavior: Use `report-package` unless the report specifically asks for reliability evidence review.
+  - Why: Report packaging and reliability validation are independent operations surfaces.
+- Quality bar:
+  - Name service, incident/time window, SLO/error-budget target, source references, and missing observations.
+  - Separate supplied metrics, incident notes, assumptions, and remediation follow-ups.
+  - Keep closure and remediation status unobserved until evidence is supplied.
+- Required inputs:
+  - service or incident scope
+  - time window
+  - metric/source references
+  - known remediation items or gaps
+- Expected outputs:
+  - reliability review
+  - evidence and missing-evidence list
+  - remediation follow-up boundary
+- Artifact expectations:
+  - operation_artifact/v1 reliability-review artifact when a wrapper or CLI records it
+- Safety rules:
+  - Do not claim SLO pass, healthy error budget, incident closure, or remediation completion without source, metric, or reference evidence.
+  - Do not treat a reliability narrative as verification, review, CI, merge, or deploy evidence.
+  - Route code remediation through a separate accepted plan or executor handoff.
 
 ### idea-to-deploy
 
@@ -1775,6 +1915,158 @@ Summarize observed operating status, risks, blockers, priorities, and follow-up 
   - Missing evidence must stay unknown, not inferred green.
 - Fallback: If evidence is missing, produce a review scaffold and mark unknowns instead of claiming status.
 
+### operating-rhythm
+
+Maintain meeting, scrum, sprint, retro, decision, and follow-up history with prepared-vs-observed boundaries.
+
+- Use when: Use when recurring operating cadence records need durable structure or history.
+- Quality tier: `operations-gated`
+- Quality bar:
+  - Name cadence, audience, time window, known notes, and missing evidence before producing a record.
+  - Separate templates from observed minutes, decisions, and action items.
+  - Keep follow-up implementation outside the operating record until a separate handoff is accepted.
+- Inputs:
+  - cadence or meeting type
+  - audience or participants
+  - time window
+  - source notes or missing-notes boundary
+- Outputs:
+  - operation artifact
+  - decision log
+  - action item history
+  - observed/prepared boundary
+- Stop conditions:
+  - record structure is ready
+  - observed notes are separated from prepared shells
+  - unknown owners or decisions stay explicit
+- Verification:
+  - validate operation_artifact/v1
+  - check not_evidence_until_observed
+  - separate decisions from action items
+- Evidence ladder:
+  - `operation_rhythm_scoped`
+  - `record_structure_prepared`
+  - `decisions_actions_recorded`
+  - `status_boundary_recorded`
+- Wrapper actions:
+  - `show_record`
+  - `record_decision`
+  - `record_action`
+  - `export_markdown`
+  - `show_status`
+- Artifact events:
+  - `operation_rhythm_scoped`
+  - `record_structure_prepared`
+  - `decisions_actions_recorded`
+  - `status_boundary_recorded`
+- Delegation expectation: Record operating rhythm as Hermes-retained operations work; record implementation only from later accepted task records.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A prepared operating record is not evidence that a meeting, scrum, sprint, or retro happened.
+  - Draft decisions and action items are not accepted outcomes without supplied evidence.
+- Fallback: If notes are missing, create a prepared record shell and mark meeting outcomes not_observed.
+
+### report-package
+
+Package supplied inputs into reports, executive briefs, and PPT-ready Markdown/JSON outlines.
+
+- Use when: Use when report, deck, or upload-package work needs structured outputs without reliability coupling.
+- Quality tier: `report-gated`
+- Quality bar:
+  - Name audience, period, sections, supplied facts, assumptions, and missing data.
+  - Keep report packaging independent from SLO, incident, or error-budget review unless explicitly requested.
+  - Export only Markdown/JSON outline artifacts unless a presentation generator observes binary deck creation.
+- Inputs:
+  - audience
+  - reporting period or scope
+  - supplied facts
+  - assumptions or missing data
+- Outputs:
+  - report package
+  - PPT-ready Markdown or JSON outline
+  - assumptions and missing-input list
+- Stop conditions:
+  - audience and sections are explicit
+  - facts and assumptions are separated
+  - export scope is bounded
+- Verification:
+  - validate operation_artifact/v1
+  - check assumptions
+  - export Markdown/JSON only unless another tool makes a deck
+- Evidence ladder:
+  - `report_scope_recorded`
+  - `inputs_organized`
+  - `package_outline_prepared`
+  - `approval_boundary_recorded`
+- Wrapper actions:
+  - `show_report`
+  - `export_markdown`
+  - `export_json`
+  - `record_approval`
+  - `show_status`
+- Artifact events:
+  - `report_scope_recorded`
+  - `inputs_organized`
+  - `package_outline_prepared`
+  - `approval_boundary_recorded`
+- Delegation expectation: Record report packaging as Hermes-retained operations work; record stakeholder approval or presentation delivery only when observed.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A report package is not source-review completion, stakeholder approval, or presentation delivery evidence.
+  - A PPT-ready outline is not a binary PPTX export.
+  - Report packaging does not require reliability evidence unless the user asks for reliability review.
+- Fallback: If inputs are missing, produce a report scaffold and missing-data list instead of fabricating numbers.
+
+### reliability-review
+
+Review incidents, SLOs, error budgets, and remediation follow-ups with strict observed evidence boundaries.
+
+- Use when: Use when SRE-style incident, postmortem, SLO, error-budget, or service reliability review is requested.
+- Quality tier: `reliability-gated`
+- Quality bar:
+  - Name service, incident/time window, SLO/error-budget target, source references, and missing observations.
+  - Separate supplied metrics, incident notes, assumptions, and remediation follow-ups.
+  - Keep SLO pass, error-budget health, incident closure, and remediation completion unobserved until evidence is supplied.
+- Inputs:
+  - service or incident scope
+  - time window
+  - metric/source references
+  - known remediation items or gaps
+- Outputs:
+  - reliability review
+  - evidence and missing-evidence list
+  - remediation follow-up boundary
+- Stop conditions:
+  - source or metric boundary is explicit
+  - missing evidence is recorded
+  - closure claims remain observed-only
+- Verification:
+  - validate operation_artifact/v1
+  - require source/metric/reference for observed claims
+  - check remediation status separately
+- Evidence ladder:
+  - `reliability_scope_recorded`
+  - `evidence_boundary_recorded`
+  - `review_prepared_or_observed`
+  - `remediation_boundary_recorded`
+- Wrapper actions:
+  - `show_evidence`
+  - `record_gap`
+  - `prepare_handoff`
+  - `record_metric`
+  - `show_status`
+- Artifact events:
+  - `reliability_scope_recorded`
+  - `evidence_boundary_recorded`
+  - `review_prepared_or_observed`
+  - `remediation_boundary_recorded`
+- Delegation expectation: Record reliability review as Hermes-retained evidence work; record remediation implementation only from later accepted executor evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A reliability review is not SLO pass, healthy error-budget, incident closure, or remediation completion evidence.
+  - Remediation code changes require a separate accepted executor handoff and verification evidence.
+- Fallback: If metric or incident evidence is unavailable, produce a prepared review scaffold and mark closure evidence not_observed.
+
 ### app-delivery-loop
 
 Run complete app operation loops from idea through decision, handoff, release, deploy, and monitor status.
@@ -1833,18 +2125,21 @@ Run complete app operation loops from idea through decision, handoff, release, d
 
 ### goal-loop
 
-Run ambitious goal loops through task discovery, distribution, execution, verification, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
+Run ambitious goal loops through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
 
-- Use when: Use when a direct loop invocation or explicit long-horizon goal needs repeated cycles over automation, worktree, skill, connector, and subagent building blocks until evidence, authority, context, or external waiting stops the next step.
+- Use when: Use when a direct loop invocation or explicit long-horizon goal needs repeated cycles over automation, worktree, skill, connector, subagent, and verification building blocks until evidence, authority, context, or external waiting stops the next step.
 - Quality tier: `loop-gated`
 - Quality bar:
   - Confirm the direct loop trigger, north-star goal, reframe, success criteria, and permission profile before cycling.
   - Separate implementable internal work from external outcomes such as stars, market reaction, adoption, or social distribution.
   - Continue automatically only inside the selected authority envelope; otherwise surface a permission action.
-  - Use runtime ticks with deterministic queue shapes to prepare automation, worktree, skill, connector, and subagent states, but require separate observed evidence before claiming those steps ran.
+  - Use runtime ticks with deterministic queue shapes to prepare automation, worktree, skill, connector, subagent, and verification states, but require separate observed evidence before claiming those steps ran.
   - Keep loop_engineering/v1 focused on bounded state and evidence refs rather than dumping large intermediate context into the parent loop.
   - Use fan-out, adversarial verification, tournament, or triage-batch workflow patterns for research validation, support triage, or implementation review only when the extra lanes add evidence value.
   - Keep the schema scaffold stable for repeated ticks and avoid re-scanning or re-emitting large context when evidence refs are enough.
+  - Use inner-loop checks for frequent cheap confidence and outer-loop checks for expensive semantic or integration confidence.
+  - Surface verification_gap, comprehension_debt, and cognitive_surrender before the loop continues without enough judgment.
+  - Keep small-loop guidance visible: test as stop signal, plan -> execute -> verify, one task at a time.
   - Treat feedback as a gate: clear internal actionable gaps continue the loop; external waiting records a wait state.
   - Never report goal completion from loop state unless linked goal_ledger/v1 completion evidence is ready.
 - Inputs:
@@ -1857,25 +2152,28 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - loop_start_card/v1 setup card
   - loop_cycle/v1 artifact
   - loop_engineering/v1 pipeline/building-block snapshot
-  - loop cost_policy for bounded reads and verifier restraint
-  - loop_runtime/v1 queue entry with loop policy refs
+  - loop verification_policy for inner and outer checks
+  - loop_runtime/v1 queue entry with verification_plan
   - loop_queue_handoff/v1 actionable handoff
   - loop_subagent_result_contract/v1 when a subagent is planned
-  - loop_status_card/v1 next action
+  - loop_status_card/v1 next action with failure_mode_summary
+  - small_loop_guidance
   - permission envelope
   - linked goal or runtime evidence references when available
 - Stop conditions:
   - next loop step is clear
   - runtime tick queue is prepared, observed, or blocked with a reason
   - automation/worktree/skill/connector/subagent block states are visible
+  - verification tier and stop signal are explicit
+  - failure-mode warnings are visible
   - permission boundaries are explicit
   - external waiting and context exhaustion are recorded
   - goal completion claims are delegated to goal_ledger/v1
 - Verification:
   - validate loop_cycle/v1
   - inspect loop_engineering/v1 snapshot
-  - inspect loop_runtime/v1 queue
-  - inspect loop_status_card/v1
+  - inspect loop_runtime/v1 queue verification_plan
+  - inspect loop_status_card/v1 failure_mode_summary
   - inspect loop_queue_handoff/v1 when a queued item is actionable
   - check linked goal_completion_gate/v1 before completion copy
 - Evidence ladder:
@@ -1883,12 +2181,15 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - `goal_reframed`
   - `permission_profile_recorded`
   - `runtime_tick_queued`
+  - `verification_plan_attached`
   - `research_plan_handoff_cycle_recorded`
   - `feedback_gate_evaluated`
+  - `failure_modes_checked`
   - `wait_or_resume_boundary_recorded`
 - Wrapper actions:
   - `choose_permission_profile`
   - `start_loop`
+  - `run_loop_once`
   - `run_loop_tick`
   - `show_loop_queue`
   - `prepare_loop_handoff`
@@ -1908,6 +2209,7 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
 - Overclaim guards:
   - A loop_cycle/v1 artifact is not proof that coding, review, CI, merge, or external publication happened.
   - A loop_runtime/v1 tick is not proof that a worktree, subagent, connector, or executor actually ran.
+  - A loop verification_plan is not proof that verification passed.
   - A full-loop permission profile is still bounded by observed evidence and explicit external-production authority.
   - External outcomes stay waiting_external_observation until evidence is recorded.
 - Fallback: If no wrapper or CLI artifact is available, keep a visible checklist with the same permission profile and evidence boundaries.

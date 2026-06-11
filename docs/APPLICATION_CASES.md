@@ -259,6 +259,12 @@ The playbook layer picks a situation-level path above individual skills:
 - `meeting-prep-to-record` for agendas, discussion prompts, and record templates
 - `feedback-triage` for customer signals before roadmap or coding work
 - `weekly-ops-review` for status, risks, blockers, priorities, and follow-ups
+- `operating-rhythm-history` for meeting history, scrum, sprint, retro,
+  decision, and follow-up records
+- `report-package` for report, status package, executive brief, and PPT-ready
+  outlines that are independent from reliability review
+- `reliability-incident-review` for postmortem, SLO, error-budget, service
+  review, incident follow-up, and remediation evidence
 - `market-scan-to-strategy` for competitor evidence into strategic options
 - `deep-interview-to-plan` for ambiguity reduction
 - `local-pipeline-buildout` for repeatable wrapper process design
@@ -322,6 +328,9 @@ Use this flow for non-coding company work such as:
 - strategy memo preparation
 - meeting agenda and record preparation
 - weekly operating review
+- meeting history, scrum, sprint, retrospective, and decision records
+- report packages, executive briefs, and PPT-ready outlines
+- postmortems, SLO review, error-budget review, and service reliability checks
 
 Example prompts:
 
@@ -329,6 +338,9 @@ Example prompts:
 결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘
 prepare weekly ops review from customer feedback and release risks
 we need a competitor market scan and strategy memo for next week's leadership meeting
+organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions
+create a monthly leadership PPT report package from current status and risks
+run an incident postmortem with SLO, error budget, remediation, and service reliability evidence
 ```
 
 ### Expected Hermes-Facing Behavior
@@ -340,10 +352,14 @@ Hermes should use the business workflow skills:
 - `meeting-brief` for agenda, prompts, decisions needed, and record templates
 - `feedback-triage` for customer signal clustering and next-workflow routing
 - `ops-review` for evidence-bound status, risks, blockers, and follow-ups
+- `operating-rhythm` for durable cadence records and action history
+- `report-package` for report and slide outlines without SRE dependency
+- `reliability-review` for incident, SLO, error-budget, and remediation review
 
 These skills stay Hermes-retained by default. They should not create coding
-handoffs, product roadmaps, release claims, or meeting outcomes unless a later
-accepted artifact provides the missing evidence.
+handoffs, product roadmaps, release claims, report approvals, binary deck export
+claims, or meeting outcomes unless a later accepted artifact provides the
+missing evidence.
 
 ### Verification
 
@@ -360,8 +376,9 @@ Expected behavior:
   `ops-review`
 - coding delegation does not emit `executor_handoff`
 - harness quality uses `customer-insight-triage`, `ops-review`,
-  `strategy-synthesis`, `meeting-facilitation`, or `business-research` rather
-  than `coding-handling`
+  `strategy-synthesis`, `meeting-facilitation`, `business-research`,
+  `operating-rhythm`, `report-package`, or `reliability-review` rather than
+  `coding-handling`
 
 ### Evidence Boundary
 
@@ -396,6 +413,9 @@ wrapper operators a concrete contract result to render.
 | Repeated refactor workflow | `레거시 서비스를 위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트 순서로 리팩터링하고 싶어` | `ai-slop-cleaner` / `present_plan` | `safe-feature-change` | Prepared cleanup handoff names scope, tests, review, and regression expectations. |
 | Personal multi-agent work hub | `지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘` | `plan` / `present_plan` | `local-pipeline-buildout` | The wrapper can plan the hub contract before any coding executor is needed. |
 | Consulting/agency operating template | `고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해` | `plan` / `present_plan` | `local-pipeline-buildout` | Handoff is available only after the operator accepts the recurring workflow plan. |
+| Operating rhythm history | `회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘` | `operating-rhythm` / `clarify` | `operating-rhythm-history` | Hermes prepares or records cadence artifacts; meeting outcomes and action completion need observed notes. |
+| Leadership report package | `create a PPT report package for a monthly leadership status deck` | `report-package` / `clarify` | `report-package` | Hermes prepares a report outline; binary deck export and stakeholder approval remain separate evidence. |
+| Reliability incident review | `run an incident postmortem SLO error budget service reliability review` | `reliability-review` / `clarify` | `reliability-incident-review` | Reliability claims require metric, incident, source, and remediation evidence before status advances. |
 
 User-facing effect:
 
@@ -425,7 +445,8 @@ Before using these cases as public release evidence, verify:
   for wrapper rendering and status decisions.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
-  triage, ops review, app operation loops, local pipeline buildout, and
+  triage, ops review, operating rhythm history, report packages, reliability
+  incident review, app operation loops, local pipeline buildout, and
   release-readiness review.
 - The grounded cases above match actual generated skill and playbook behavior.
 - Runtime-backed cases above can create `.omh/runtime/runs/<run-id>/`

@@ -18,6 +18,9 @@ omh playbook inspect request-to-handoff
 omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "research latest official sources"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
+omh playbook recommend "organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions"
+omh playbook recommend "create a monthly leadership PPT report package from current status and risks"
+omh playbook recommend "run an incident postmortem with SLO, error budget, remediation, and service reliability evidence"
 omh playbook recommend "take this product idea from plan to deploy and monitor safely"
 omh playbook recommend "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness"
 omh playbook recommend "deploy and monitor this release with rollback and health checks"
@@ -38,6 +41,9 @@ files.
 | `meeting-prep-to-record` | A user wants context turned into a meeting agenda and record template. | Context -> agenda -> prompts -> decisions needed -> record template. |
 | `feedback-triage` | A user brings customer feedback, bug signals, or feature asks. | Source boundary -> clusters -> severity/opportunity -> next workflow. |
 | `weekly-ops-review` | A user wants a recurring status, risk, blocker, and priority review. | Scope -> observed status -> risks/blockers -> priorities -> follow-ups. |
+| `operating-rhythm-history` | A user wants meeting history, scrum, sprint, retrospective, decision, or follow-up records. | Scope cadence -> capture record -> capture decisions -> assign follow-ups -> export outline. |
+| `report-package` | A user wants a report, status package, executive brief, or PPT-ready outline independent of reliability review. | Scope audience -> gather inputs -> shape sections -> export outline -> record approval boundary. |
+| `reliability-incident-review` | A user wants postmortem, SLO, error-budget, incident follow-up, or service reliability review. | Scope service -> gather evidence -> assess reliability -> track remediation -> record unresolved gaps. |
 | `market-scan-to-strategy` | A user wants competitor or market evidence shaped into strategy. | Scope scan -> evidence matrix -> implications -> strategy brief. |
 | `deep-interview-to-plan` | A broad goal lacks scope, non-goals, or acceptance criteria. | One question -> clarified brief -> plan -> decision gate. |
 | `ambitious-goal-loop` | A user directly starts a long-horizon goal such as `./loop make this a 10k-star quality OSS`. | Interview -> reframe -> research -> plan -> handoff -> feedback -> wait or resume. |
@@ -105,6 +111,21 @@ routes to `feedback-triage` instead of a coding handoff. The wrapper can show
 that Hermes will classify feedback, rank severity or opportunity, and recommend
 the next workflow. It should not show executor actions unless the user later
 accepts a plan with explicit code work.
+
+For operations artifacts, prompts can route to three independent surfaces:
+
+```text
+organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions
+create a monthly leadership PPT report package from current status and risks
+run an incident postmortem with SLO, error budget, remediation, and service reliability evidence
+```
+
+`operating-rhythm-history` keeps cadence records, decisions, and action items
+durable without claiming the meeting happened unless notes are observed.
+`report-package` prepares report and slide outlines without requiring SRE
+links; binary PPTX export and stakeholder approval remain separate evidence.
+`reliability-incident-review` is strict about metric, incident, source, and
+remediation evidence before reliability claims advance.
 
 For app operations, a prompt like:
 

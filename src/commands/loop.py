@@ -18,6 +18,8 @@ from ..goal_loop import (
     observe_loop_queue_item,
     read_loop_cycle,
     record_loop_feedback,
+    run_loop_once,
+    run_loop_once_result,
     tick_loop_runtime,
     update_loop_permission,
     validate_loop_cycle,
@@ -163,6 +165,22 @@ def cmd_loop_tick(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_run_once(args: argparse.Namespace) -> int:
+    try:
+        result = run_loop_once_result(_paths(args), args.loop_id)
+        cycle = result["loop"]
+        _print_json(
+            {
+                "loop": cycle,
+                "run_once": result["run_once"],
+                "status_card": build_loop_status_card(_paths(args), args.loop_id),
+            }
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def cmd_loop_queue_list(args: argparse.Namespace) -> int:
     try:
         _print_json({"loop_queue": list_loop_queue(_paths(args), args.loop_id, include_observed=args.include_observed)})
@@ -277,6 +295,10 @@ def _add_loop_commands(sub) -> None:
     tick.add_argument("--workflow-pattern", choices=LOOP_WORKFLOW_PATTERNS, default="single_step")
     tick.add_argument("--note", default="")
     tick.set_defaults(func=cmd_loop_tick)
+
+    run_once = loop_sub.add_parser("run-once")
+    run_once.add_argument("--loop", dest="loop_id", required=True)
+    run_once.set_defaults(func=cmd_loop_run_once)
 
     queue = loop_sub.add_parser("queue")
     queue_sub = queue.add_subparsers(dest="queue_command", required=True)

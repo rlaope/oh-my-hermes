@@ -19,6 +19,12 @@ state:
   for meeting lanes.
 - "An ops review names risks and blockers, but it is not CI or release
   evidence" for operating review lanes.
+- "Operating rhythm history is recorded, but unprovided meeting outcomes remain
+  unobserved" for cadence lanes.
+- "A report package outline is ready, but approval and binary PPTX export are
+  not observed yet" for report lanes.
+- "A reliability review is drafted, but SLO, incident, and error-budget claims
+  require metric or source evidence" for reliability lanes.
 - "A coding handoff is prepared, but execution is not observed yet" for coding
   lanes.
 - "Review or CI is still missing" before merge-ready status is shown.
@@ -99,8 +105,10 @@ covering coding handoff, planning, research, and clarification lanes.
 
 The business workflow pack adds non-coding harnesses such as
 `business-research`, `strategy-synthesis`, `meeting-facilitation`,
-`customer-insight-triage`, and `ops-review`. These give wrappers the same
-evidence discipline for company work: research briefs are not fetched data,
-strategy briefs are not accepted decisions, meeting briefs are not meeting
-minutes, feedback triage is not a roadmap, and ops review is not release or CI
-evidence.
+`customer-insight-triage`, `ops-review`, `operating-rhythm`, `report-package`,
+and `reliability-review`. These give wrappers the same evidence discipline for
+company work: research briefs are not fetched data, strategy briefs are not
+accepted decisions, meeting briefs are not meeting minutes, feedback triage is
+not a roadmap, ops review is not release or CI evidence, report packages are
+not binary decks or approvals, and reliability reviews are not proof that SLOs
+passed without metric or source evidence.

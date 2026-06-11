@@ -35,11 +35,12 @@ OMH is a Hermes-native wrapper orchestration layer.
 
 The product should make chat surfaces feel capable without hiding who did what.
 Hermes should own intake, clarification, research, business briefs, meeting
-prep, feedback triage, app operation loops, planning, status narration, and
-handoff UX. The selected coding executor should own main coding work when work
-leaves Hermes. OMH should own the deterministic local contract between those
-worlds: generated skill guidance, playbooks, wrapper sessions, prepared handoff
-payloads, and evidence records.
+prep, feedback triage, operating records, report packages, reliability reviews,
+app operation loops, planning, status narration, and handoff UX. The selected
+coding executor should own main coding work when work leaves Hermes. OMH should
+own the deterministic local contract between those worlds: generated skill
+guidance, playbooks, wrapper sessions, prepared handoff payloads, and evidence
+records.
 
 The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a
@@ -53,6 +54,7 @@ merge.
 | --- | --- | --- |
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, or direct ambitious goal loop. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
+| `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |
 | `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, or another selected executor while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## Documentation Contracts
@@ -71,9 +73,10 @@ merge.
   Hermes Agent-facing unless a scoped integration explicitly opts into a
   different runtime surface.
 - Playbook docs should describe situation-level pipelines for company work, app
-  operation loops such as idea-to-deploy / CTO loop / deploy-and-monitor, and
-  coding handoffs, plus ownership boundaries, rather than becoming a second
-  skill catalog.
+  operation loops such as idea-to-deploy / CTO loop / deploy-and-monitor,
+  operations artifacts such as operating-rhythm / report-package /
+  reliability-review, and coding handoffs, plus ownership boundaries, rather
+  than becoming a second skill catalog.
 - Role docs should describe responsibility lanes, not runtime agents. A role can
   explain the next action, but it cannot prove execution without matching
   observed evidence.
@@ -94,9 +97,10 @@ merge.
   `goal_continuation/v1` as wrapper contracts that name the next action before
   completion is claimed.
 - Loop docs should describe `.omh/loops` metadata-only `loop_cycle/v1` state,
-  `loop_runtime/v1` tick queues, and `loop_status_card/v1` next actions as
-  orchestration evidence only; goal completion still belongs to linked
-  `goal_ledger/v1` evidence.
+  `loop_runtime/v1` tick queues, `verification_plan` metadata,
+  `failure_mode_summary` warnings, small-loop guidance, and
+  `loop_status_card/v1` next actions as orchestration evidence only; goal
+  completion still belongs to linked `goal_ledger/v1` evidence.
 - Memory/context docs should state that OMH reviews local or wrapper-supplied
   context only; it does not read or mutate opaque Hermes internal memory.
 - The GitHub Pages site should stay a short public entry point that links back
