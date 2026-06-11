@@ -72,7 +72,7 @@ def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
         omh_home=str(args.get("omh_home", "") or "") or None,
         hermes_home=str(args.get("hermes_home", "") or "") or None,
         preset=str(args.get("preset", "focused") or "focused"),
-        limit=int(args.get("limit") or 3),
+        limit=args.get("limit") or 3,
         token_metadata=token_metadata,
     )
     return json.dumps(payload, sort_keys=True)

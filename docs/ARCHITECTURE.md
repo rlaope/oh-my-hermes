@@ -146,8 +146,12 @@ OMH directly when Hermes taps are available.
 `omh_hud` tool, a detailed metadata-only `omh_status` tool, and a passive
 `pre_llm_call` hook. `omh hud` exposes the same status-line payload for local
 operator smoke tests. The HUD line reports host-supplied token metadata only
-when it is actually provided. It does not run verification commands, patch
-Hermes core, or claim execution evidence from prepared handoffs.
+when it is actually provided and stays limited to version, plugin bridge
+readiness, target topology, current or default coding agent, latest run, and
+evidence state.
+It intentionally omits install inventory such as managed skill counts. It does
+not run verification commands, patch Hermes core, or claim execution evidence
+from prepared handoffs.
 
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
 top-level error handling, and the public command handler re-export surface.

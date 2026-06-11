@@ -249,10 +249,17 @@ is not installed by default.
 
 The plugin bridge installs `~/.hermes/plugins/omh` and registers metadata-only
 HUD/status support. `omh hud` prints the same compact line a Hermes TUI or
-status surface can render, for example `[omh] v1.0.0 | tokens:unobserved | ...`.
-Token usage is shown only when the host supplies token metadata. Local plugin
-install or import/register smoke is not proof that Hermes loaded the plugin,
-executed code, reviewed a PR, passed CI, or merged.
+status surface can render, for example
+`[omh] v1.0.0 | plugin:ready | target:single | coding-agent:idle(ask)`.
+When host token metadata or runtime evidence exists, the line can add segments
+such as `tokens:1200/4000`, `coding-agent:<workflow>:<phase>(codex)#<id>`,
+and `evidence:prepared_not_observed`. HUD is intentionally small: version,
+host-supplied token metadata, plugin status, target topology, current or
+default coding agent, latest run, and evidence state. Skill inventory and deep
+diagnostics belong in `omh doctor`,
+`omh_status`, or machine-readable setup output, not the status line. Local
+plugin install or import/register smoke is not proof that Hermes loaded the
+plugin, executed code, reviewed a PR, passed CI, or merged.
 
 The installer can also pass these advanced setup choices directly:
 
