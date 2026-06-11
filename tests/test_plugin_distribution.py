@@ -92,7 +92,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(plugin["requires_hermes_plugin_enable"])
             self.assertTrue((plugin_dir / "plugin.yaml").exists())
             self.assertTrue((plugin_dir / ".omh-plugin-manifest.json").exists())
-            self.assertEqual(plugin["registered_tools"], ["omh_status"])
+            self.assertEqual(plugin["registered_tools"], ["omh_hud", "omh_status"])
             self.assertEqual(plugin["registered_hooks"], ["pre_llm_call"])
 
             inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
@@ -179,8 +179,16 @@ class PluginDistributionTests(unittest.TestCase):
             module = load_installed_plugin(hermes_home / "plugins" / "omh")
             ctx = FakeHermesContext()
             module.register(ctx)
+            self.assertIn("omh_hud", ctx.tools)
             self.assertIn("omh_status", ctx.tools)
             self.assertIn("pre_llm_call", ctx.hooks)
+
+            hud_handler = ctx.tools["omh_hud"]["args"][2]
+            hud_payload = json.loads(hud_handler({"omh_home": str(omh_home), "hermes_home": str(hermes_home), "limit": 1}))
+            self.assertEqual(hud_payload["schema_version"], "omh_hud/v1")
+            self.assertIn("[omh]", hud_payload["display"]["line"])
+            self.assertEqual(hud_payload["runtime"]["evidence_state"], "prepared_not_observed")
+            self.assertEqual(hud_payload["tokens"]["status"], "unobserved")
 
             handler = ctx.tools["omh_status"]["args"][2]
             payload = json.loads(handler({"omh_home": str(omh_home), "limit": 1}))
@@ -197,6 +205,7 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(hook_payload)
             context = hook_payload["context"]
+            self.assertIn("[omh]", context)
             self.assertIn("prepared handoffs are not execution", context)
             self.assertNotIn("this raw prompt should not leak", context)
 

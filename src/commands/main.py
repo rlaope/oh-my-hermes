@@ -44,6 +44,7 @@ from .goal import (
     cmd_goal_status,
 )
 from .hermes import _add_hermes_commands, cmd_hermes_plan
+from .hud import _add_hud_commands, cmd_hud
 from .loop import _add_loop_commands, cmd_loop_feedback, cmd_loop_permit, cmd_loop_start, cmd_loop_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
@@ -100,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh recommend \"risky refactor\"\n"
             "  omh playbook recommend \"turn this issue into a PR\"\n"
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
+            "  omh hud\n"
             "  omh loop status\n"
             "  omh runtime status\n\n"
             "Human-facing maintenance and catalog commands print summaries by default;\n"
@@ -128,6 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_chat_commands(sub)
     _add_coding_commands(sub)
     _add_hermes_commands(sub)
+    _add_hud_commands(sub)
     _add_loop_commands(sub)
     _add_memory_commands(sub)
     _add_runtime_commands(sub)
@@ -156,6 +159,7 @@ Useful operator commands:
   omh recommend "risky refactor"
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
+  omh hud                Show the compact OMH status line
   omh loop status        Show ambitious goal loop state
   omh runtime status     Show local evidence artifacts
 

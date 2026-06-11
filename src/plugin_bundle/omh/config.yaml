@@ -1,5 +1,6 @@
 omh_home: "~/.omh"
 status_limit: 3
+hud_preset: focused
 inject_context: true
 privacy: metadata_only
 claim_boundary: "Prepared handoffs are not execution, review, CI, merge-readiness, or merge evidence."
