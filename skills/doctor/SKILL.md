@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `doctor` workflow skill.
 
+## Why This Exists
+
+`doctor` exists to turn confusing install/setup states into grouped, local health evidence and the next repair action without treating a check as a fix.
+
+## Do Not Use When
+
+- The user is asking for a general product explanation rather than local health diagnostics.
+- The requested change is a repository bug fix, not an installed-environment check.
+- The wrapper wants to claim Hermes reload, skill execution, or plugin behavior that was not observed.
+
+## Examples
+
+Good example:
+
+- Prompt: doctor after omh update says setup is next but Hermes skills still look stale.
+- Expected behavior: Inspect managed skills, Hermes registration, runtime state, and next repair action with explicit proof boundaries.
+- Why: The issue is local installation health and needs grouped diagnostic evidence.
+
+Bad example:
+
+- Prompt: doctor implement a new uninstall command UX.
+- Expected behavior: Route to planning or implementation instead of health diagnostics.
+- Why: That is product development work, not a local health check.
+
 ## Use When
 
 Use to diagnose OMH installation and Hermes config registration.

@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `ultraprocess` workflow skill.
 
+## Why This Exists
+
+`ultraprocess` exists to give Hermes one clean plan-to-PR operating cycle: research, reviewed plan, selected implementation handoff, review gate, docs sync, and PR-ready evidence.
+
+## Do Not Use When
+
+- The user wants an open-ended feedback loop or long-horizon campaign; use `loop` instead.
+- The task is still ambiguous enough that a deep interview is required before planning.
+- No repo, product, or delivery surface is available to support a plan-to-PR cycle.
+
+## Examples
+
+Good example:
+
+- Prompt: $ultraprocess research this setup bug, plan the fix, implement, review, sync docs, and prepare a PR.
+- Expected behavior: Run exactly one delivery cycle and report which stages are observed, prepared, or blocked.
+- Why: The user explicitly asks for the full but bounded delivery path ending at PR readiness.
+
+Bad example:
+
+- Prompt: $ultraprocess keep improving the project until it becomes popular.
+- Expected behavior: Route to `loop` or ask for a bounded goal rather than promise endless delivery.
+- Why: Popularity and indefinite improvement need long-horizon loop management, not one PR-ready cycle.
+
 ## Use When
 
 Use when the user asks Hermes to take a concrete task through one full delivery cycle: research/codebase context, reviewed plan, selected implementation handoff, code review, docs sync when needed, and PR preparation.

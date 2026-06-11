@@ -14,6 +14,29 @@ metadata:
 
 This is a Hermes-native `performance-goal` workflow skill.
 
+## Why This Exists
+
+`performance-goal` exists to keep `optimization` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+
+## Do Not Use When
+
+- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
+- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+
+## Examples
+
+Good example:
+
+- Prompt: performance-goal for: <task that matches this workflow>
+- Expected behavior: Run `performance-goal` only after naming the target, evidence boundary, and stop condition.
+- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+
+Bad example:
+
+- Prompt: performance-goal for: <unrelated or unaccepted work>
+- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `performance-goal`.
+- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+
 ## Use When
 
 Use when the goal is measurable performance improvement with evaluator evidence.

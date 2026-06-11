@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `deep-interview` workflow skill.
 
+## Why This Exists
+
+`deep-interview` exists to stop Hermes from guessing through ambiguous product, workflow, or implementation intent; it converts uncertainty into a clarified brief before planning or handoff.
+
+## Do Not Use When
+
+- The request already has concrete scope, acceptance criteria, and verification commands.
+- The missing information is discoverable from the repository or local artifacts without asking the user.
+- The user asked for immediate read-only analysis and the ambiguity does not change the answer.
+
+## Examples
+
+Good example:
+
+- Prompt: $deep-interview design channel-specific routing, but do not assume what channels mean.
+- Expected behavior: Ask one decision-changing question at a time, then produce goals, non-goals, and acceptance criteria.
+- Why: The request explicitly rejects assumptions and needs product boundaries before implementation.
+
+Bad example:
+
+- Prompt: $deep-interview fix this failing test; the traceback and expected behavior are attached.
+- Expected behavior: Proceed to diagnosis or implementation instead of interviewing.
+- Why: The required facts are already available, so more questions would slow the workflow.
+
 ## Use When
 
 Use before planning or execution when requirements are materially ambiguous.

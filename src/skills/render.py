@@ -167,6 +167,33 @@ def _tuple_list(values: tuple[str, ...]) -> str:
     return "\n".join(f"- {value}" for value in values)
 
 
+def _example_block(label: str, definition: SkillDefinition, *, good: bool) -> str:
+    example = definition.good_example if good else definition.bad_example
+    if example is None:
+        return ""
+    return f"""{label} example:
+
+- Prompt: {example.prompt}
+- Expected behavior: {example.expected}
+- Why: {example.why}"""
+
+
+def _quality_rubric_sections(definition: SkillDefinition) -> str:
+    return f"""## Why This Exists
+
+{definition.why_this_exists}
+
+## Do Not Use When
+
+{_tuple_list(definition.do_not_use_when)}
+
+## Examples
+
+{_example_block("Good", definition, good=True)}
+
+{_example_block("Bad", definition, good=False)}"""
+
+
 def _skill_metadata_block(definition: SkillDefinition) -> str:
     return f"""Category: `{definition.category}`
 Phase: `{definition.phase}`
@@ -210,6 +237,8 @@ Use this skill when the user mentions oh-my-hermes or a workflow keyword such as
 This is best-effort Hermes prompt guidance. It does not override Hermes core routing and it does not claim exact runtime parity with another agent framework.
 
 Normal users should talk to Hermes Agent or invoke installed Hermes skills through Hermes' own skill surface. Do not ask chat users to run `omh` commands for ordinary workflow use. The `omh` command is bootstrap, maintenance, verification, and wrapper/backend infrastructure.
+
+{_quality_rubric_sections(_definitions_by_name()["oh-my-hermes"])}
 
 Hermes-native install paths should converge on the same skill-visible state:
 
@@ -340,6 +369,8 @@ def workflow_skill(name: str) -> SkillTemplate:
 
 This is a Hermes-native `{name}` workflow skill.
 
+{_quality_rubric_sections(definition)}
+
 ## Use When
 
 {definition.use_when}
@@ -431,8 +462,19 @@ def workflow_reference_markdown() -> str:
                 f"- Hermes role: `{definition.hermes_role}`",
                 f"- Quality tier: `{definition.quality_tier}`",
                 f"- Handoff policy: {definition.handoff_policy}",
+                f"- Why this exists: {definition.why_this_exists}",
                 f"- Use when: {definition.use_when}",
+                "- Do not use when:",
+                *[f"  - {item}" for item in definition.do_not_use_when],
                 f"- Strong routing signals: {triggers}",
+                "- Good example:",
+                f"  - Prompt: {definition.good_example.prompt if definition.good_example else ''}",
+                f"  - Expected behavior: {definition.good_example.expected if definition.good_example else ''}",
+                f"  - Why: {definition.good_example.why if definition.good_example else ''}",
+                "- Bad example:",
+                f"  - Prompt: {definition.bad_example.prompt if definition.bad_example else ''}",
+                f"  - Expected behavior: {definition.bad_example.expected if definition.bad_example else ''}",
+                f"  - Why: {definition.bad_example.why if definition.bad_example else ''}",
                 "- Quality bar:",
                 *[f"  - {item}" for item in definition.quality_bar],
                 "- Required inputs:",
@@ -506,6 +548,10 @@ def _skill_payload(definition: SkillDefinition) -> dict[str, object]:
         "primary_harness": primary_harness_for_skill(definition.name),
         "hermes_role": definition.hermes_role,
         "handoff_policy": definition.handoff_policy,
+        "why_this_exists": definition.why_this_exists,
+        "do_not_use_when": list(definition.do_not_use_when),
+        "good_example": _example_payload(definition.good_example),
+        "bad_example": _example_payload(definition.bad_example),
         "quality_tier": definition.quality_tier,
         "quality_bar": list(definition.quality_bar),
         "required_inputs": list(definition.required_inputs),
@@ -513,6 +559,12 @@ def _skill_payload(definition: SkillDefinition) -> dict[str, object]:
         "artifact_expectations": list(definition.artifact_expectations),
         "safety_rules": list(definition.safety_rules),
     }
+
+
+def _example_payload(example) -> dict[str, str]:
+    if example is None:
+        return {"prompt": "", "expected": "", "why": ""}
+    return {"prompt": example.prompt, "expected": example.expected, "why": example.why}
 
 
 def _harness_payload(harness: HarnessDefinition) -> dict[str, object]:

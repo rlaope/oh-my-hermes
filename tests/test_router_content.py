@@ -20,6 +20,20 @@ from omh.skills.catalog import (
 from omh.skills.render import workflow_reference_markdown, workflow_reference_payload
 
 
+FLAGSHIP_SKILLS = {
+    "oh-my-hermes",
+    "ultragoal",
+    "loop",
+    "ultraprocess",
+    "deep-interview",
+    "ultrawork",
+    "meeting-brief",
+    "feedback-triage",
+    "code-review",
+    "doctor",
+}
+
+
 class RouterContentTests(unittest.TestCase):
     def test_router_documents_best_effort_and_recovery(self) -> None:
         router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
@@ -177,11 +191,48 @@ class RouterContentTests(unittest.TestCase):
             self.assertGreaterEqual(len(definition.expected_outputs), 1, definition.name)
             self.assertGreaterEqual(len(definition.artifact_expectations), 1, definition.name)
             self.assertGreaterEqual(len(definition.safety_rules), 1, definition.name)
+            self.assertTrue(definition.why_this_exists, definition.name)
+            self.assertGreaterEqual(len(definition.do_not_use_when), 1, definition.name)
+            self.assertIsNotNone(definition.good_example, definition.name)
+            self.assertIsNotNone(definition.bad_example, definition.name)
+            self.assertTrue(definition.good_example.prompt, definition.name)
+            self.assertTrue(definition.good_example.expected, definition.name)
+            self.assertTrue(definition.good_example.why, definition.name)
+            self.assertTrue(definition.bad_example.prompt, definition.name)
+            self.assertTrue(definition.bad_example.expected, definition.name)
+            self.assertTrue(definition.bad_example.why, definition.name)
             self.assertTrue(definition.hermes_role, definition.name)
             self.assertIn(definition.delegation_boundary, {"default", "retained", "retained-catalog-intent"}, definition.name)
             self.assertTrue(definition.handoff_policy, definition.name)
         for template in builtin_skill_templates():
             self.assertIn("description: [omh] ", template.content.split("---", 2)[1], template.name)
+
+    def test_flagship_skills_render_quality_rubric_examples(self) -> None:
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+
+        for name in FLAGSHIP_SKILLS:
+            with self.subTest(name=name):
+                self.assertIn(name, templates)
+                definition = definitions[name]
+                content = templates[name]
+
+                self.assertIn("## Why This Exists", content)
+                self.assertIn("## Do Not Use When", content)
+                self.assertIn("## Examples", content)
+                self.assertIn("Good example:", content)
+                self.assertIn("Bad example:", content)
+                self.assertIn(definition.why_this_exists, content)
+                for rule in definition.do_not_use_when:
+                    self.assertIn(rule, content)
+                self.assertIn(definition.good_example.prompt, content)
+                self.assertIn(definition.good_example.expected, content)
+                self.assertIn(definition.good_example.why, content)
+                self.assertIn(definition.bad_example.prompt, content)
+                self.assertIn(definition.bad_example.expected, content)
+                self.assertIn(definition.bad_example.why, content)
+                self.assertNotIn("<task that matches this workflow>", definition.good_example.prompt)
+                self.assertNotIn("<unrelated or unaccepted work>", definition.bad_example.prompt)
 
     def test_catalog_marks_retained_and_codex_handoff_skills(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -274,6 +325,12 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertEqual(skills["oh-my-hermes"]["quality_tier"], "routing-gated")
         self.assertIn("Keep users command-agnostic", " ".join(skills["oh-my-hermes"]["quality_bar"]))
+        self.assertIn("why_this_exists", skills["oh-my-hermes"])
+        self.assertIn("do_not_use_when", skills["oh-my-hermes"])
+        self.assertIn("good_example", skills["oh-my-hermes"])
+        self.assertIn("bad_example", skills["oh-my-hermes"])
+        self.assertIn("routing conservative", skills["oh-my-hermes"]["why_this_exists"])
+        self.assertIn("Use OMH request-to-handoff", skills["oh-my-hermes"]["good_example"]["prompt"])
         self.assertEqual(harnesses["coding-handling"]["quality_tier"], "handoff-gated")
         self.assertIn("coding_delegation_prepared", harnesses["coding-handling"]["evidence_ladder"])
         self.assertIn("send_to_codex", harnesses["coding-handling"]["wrapper_actions"])
@@ -315,6 +372,12 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(f"- Hermes role: `{definition.hermes_role}`", reference)
             self.assertIn(f"- Quality tier: `{definition.quality_tier}`", reference)
             self.assertIn(f"- Handoff policy: {definition.handoff_policy}", reference)
+            self.assertIn(f"- Why this exists: {definition.why_this_exists}", reference)
+            self.assertIn("- Do not use when:", reference)
+            self.assertIn("- Good example:", reference)
+            self.assertIn("- Bad example:", reference)
+            self.assertIn(f"  - Prompt: {definition.good_example.prompt}", reference)
+            self.assertIn(f"  - Prompt: {definition.bad_example.prompt}", reference)
         for harness in builtin_harnesses():
             self.assertIn(f"### {harness.name}", reference)
             self.assertIn(f"- Quality tier: `{harness.quality_tier}`", reference)

@@ -98,12 +98,24 @@ def _validate_skill_definition(definition: SkillDefinition, harness_names: set[s
     _require_text(definition.name, f"{label} name", errors)
     _require_text(definition.description, f"{label} description", errors)
     _require_text(definition.use_when, f"{label} use_when", errors)
+    _require_text(definition.why_this_exists, f"{label} why_this_exists", errors)
     for field in ("triggers", "required_inputs", "expected_outputs", "artifact_expectations", "safety_rules", "quality_bar"):
         _require_text_sequence(getattr(definition, field), f"{label} {field}", errors)
+    _require_text_sequence(definition.do_not_use_when, f"{label} do_not_use_when", errors)
+    _validate_skill_example(definition.good_example, f"{label} good_example", errors)
+    _validate_skill_example(definition.bad_example, f"{label} bad_example", errors)
     primary_harness = primary_harness_for_skill(definition.name)
     if primary_harness not in harness_names:
         errors.append(f"{label} primary_harness is unknown: {primary_harness}")
     return errors
+
+
+def _validate_skill_example(example: object, label: str, errors: list[str]) -> None:
+    if example is None:
+        errors.append(f"{label} is required")
+        return
+    for field in ("prompt", "expected", "why"):
+        _require_text(getattr(example, field, None), f"{label} {field}", errors)
 
 
 def _validate_harness_definition(harness: HarnessDefinition) -> list[str]:

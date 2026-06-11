@@ -20,6 +20,30 @@ This is best-effort Hermes prompt guidance. It does not override Hermes core rou
 
 Normal users should talk to Hermes Agent or invoke installed Hermes skills through Hermes' own skill surface. Do not ask chat users to run `omh` commands for ordinary workflow use. The `omh` command is bootstrap, maintenance, verification, and wrapper/backend infrastructure.
 
+## Why This Exists
+
+`oh-my-hermes` exists to keep Hermes chat routing conservative: it maps plain requests to the right workflow, explains evidence boundaries, and avoids making every keyword look like hidden implementation.
+
+## Do Not Use When
+
+- The user already invoked a more specific installed skill and its routing signals are unambiguous.
+- The message is ordinary chat, status acknowledgement, or a question that does not need workflow routing.
+- The wrapper wants to claim execution, review, CI, or merge evidence that no observed artifact provides.
+
+## Examples
+
+Good example:
+
+- Prompt: Use OMH request-to-handoff for: safely add a feature to this repo.
+- Expected behavior: Classify the request, name the retained Hermes lane or prepared coding handoff, and expose the observed/prepared evidence boundary.
+- Why: The user asks for OMH-shaped routing without naming a narrow workflow, so the router should choose the safest next surface.
+
+Bad example:
+
+- Prompt: omh
+- Expected behavior: Do not infer a coding workflow; explain setup or ask what the user wants to do next.
+- Why: A bare product name is too weak to justify workflow activation or implementation claims.
+
 Hermes-native install paths should converge on the same skill-visible state:
 
 - `hermes skills tap add rlaope/oh-my-hermes`, then `hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes` installs this tap-compatible skill pack directly when Hermes supports taps.

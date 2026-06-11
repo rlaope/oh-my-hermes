@@ -14,6 +14,30 @@ metadata:
 
 This is a Hermes-native `ultragoal` workflow skill.
 
+## Why This Exists
+
+`ultragoal` exists for work that can outlive one chat turn: it turns ambition into durable stories, checkpoints, and completion gates so progress can resume without pretending a summary is evidence.
+
+## Do Not Use When
+
+- The request is a single-turn answer, quick diagnosis, or small edit that does not need a durable ledger.
+- Acceptance criteria, current checkpoint, and final gate expectations are too vague to make a goal inspectable.
+- The user expects hidden Hermes code execution rather than explicit executor handoff and observed verification evidence.
+
+## Examples
+
+Good example:
+
+- Prompt: $ultragoal add per-skill quality rubrics, regenerate skills, test, and open a PR.
+- Expected behavior: Create or update a goal ledger, split the story into verifiable checkpoints, and close only after generated docs, skills, and tests match.
+- Why: The task has multiple milestones and a final quality gate that should be inspectable across interruptions.
+
+Bad example:
+
+- Prompt: $ultragoal what does this one error mean?
+- Expected behavior: Route to diagnosis or a direct answer instead of creating a durable goal.
+- Why: A narrow explanation does not need checkpointed long-running state.
+
 ## Use When
 
 Use when work needs durable goal artifacts, checkpointed progress, and final quality gates.
