@@ -5,7 +5,7 @@
 The product direction is defined in `docs/DIRECTION.md`; this architecture
 document describes the current module boundaries that implement that direction.
 
-oh-my-hermes-agent should feel like a native Hermes workflow layer, not a pile
+oh-my-hermes should feel like a native Hermes workflow layer, not a pile
 of copied prompt files.
 
 The architecture favors:
@@ -138,7 +138,7 @@ skills/
 ## Main Modules
 
 `skills/` is the Hermes-native distribution surface. It mirrors the generated
-skill templates so `hermes skills tap add rlaope/oh-my-hermes-agent` can expose
+skill templates so `hermes skills tap add rlaope/oh-my-hermes` can expose
 OMH directly when Hermes taps are available.
 
 `plugin_bundle/omh/` is the optional Hermes plugin payload installed by

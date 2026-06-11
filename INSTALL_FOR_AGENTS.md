@@ -20,7 +20,7 @@ readiness until the target Hermes runtime or wrapper has been checked.
 ## Step 1: Install OMH
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
 The installer prepares the local `omh` command and normally runs setup. Re-run
@@ -78,8 +78,8 @@ If the target Hermes environment supports skill taps, this is the native front
 door:
 
 ```sh
-hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
 Install direct workflow skills only when the user wants them exposed as explicit
@@ -116,7 +116,7 @@ The one-command installer can include the same optional bridge or profile packs
 when the operator explicitly wants them:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop sh
 ```
 
 ## First Hermes Prompt

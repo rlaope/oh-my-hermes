@@ -1,6 +1,6 @@
 name: omh
 version: "1.0.0"
-description: "Oh My Hermes Agent native bridge for metadata-only runtime status and evidence-boundary context."
+description: "Oh My Hermes native bridge for metadata-only runtime status and evidence-boundary context."
 author: oh-my-hermes maintainers
 provides_tools:
   - omh_status

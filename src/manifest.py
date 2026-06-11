@@ -20,7 +20,7 @@ class SkillRecord:
 def new_manifest(source: str, skills_dir: Path, records: list[SkillRecord]) -> dict[str, Any]:
     return {
         "schema_version": 1,
-        "package": "oh-my-hermes-agent",
+        "package": "oh-my-hermes",
         "version": __version__,
         "source": source,
         "installed_at": utc_now(),

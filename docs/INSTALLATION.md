@@ -15,7 +15,7 @@ Use this when you just want Hermes to see OMH skills and have the local
 maintenance command available:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 omh doctor
 ```
@@ -75,8 +75,8 @@ active.
 Use this path when the target Hermes environment supports skill taps:
 
 ```sh
-hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
 Use the full identifier for first install. It avoids short-name resolver
@@ -128,7 +128,7 @@ The live smoke runs the selected install path and then verifies:
 hermes skills tap list
 hermes skills list --enabled-only
 hermes skills check oh-my-hermes
-hermes skills inspect rlaope/oh-my-hermes-agent/skills/oh-my-hermes
+hermes skills inspect rlaope/oh-my-hermes/skills/oh-my-hermes
 ```
 
 The tap path proves Hermes CLI install/list/check/inspect for the target
@@ -147,7 +147,7 @@ as a hosted Hermes wrapper.
 Run the installer:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
 By default this installs the preview channel from the `main` branch archive.
@@ -155,7 +155,7 @@ For pinned stable installs, pass a release version after the matching
 `v<version>` tag exists:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
 
 For custom release archives or local package sources accepted by `pip`, pass
@@ -172,7 +172,7 @@ Installer and setup output can be localized with `OMH_LANG` or `--language`.
 Supported language codes are `en`, `ko`, `ja`, and `zh`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_LANG=ko sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_LANG=ko sh
 omh setup --language ko
 ```
 
@@ -239,14 +239,14 @@ planning, and specialist review flows, see
 [Application Cases](APPLICATION_CASES.md).
 
 The public project site at
-`https://rlaope.github.io/oh-my-hermes-agent/` is a short entry point. Treat
+`https://rlaope.github.io/oh-my-hermes/` is a short entry point. Treat
 this `docs/` directory and the root README as the source of truth for operating
 details.
 
 ## Chat Wrapper Backend Flow
 
 If Hermes Agent is running behind a Discord bot, Slack app, or hosted chat
-adapter, install `oh-my-hermes-agent` on the same machine, container, or runtime
+adapter, install `oh-my-hermes` on the same machine, container, or runtime
 image that starts the wrapper.
 
 The backend flow is:
@@ -294,7 +294,7 @@ update with observed evidence.
 For a hosted bot, the practical bootstrap shape is usually:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 omh doctor
 ```
@@ -535,8 +535,8 @@ state log can show version/ref movement such as `1.0.0 -> 1.0.1` or
 `main@old -> main@new` when `OMH_SOURCE_REF` is provided:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SOURCE_REF=main@<sha> sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SOURCE_REF=main@<sha> sh
 ```
 
 Successful setup, install, update, and doctor runs record concise state logs
@@ -561,19 +561,19 @@ Then restart Hermes Agent.
 Install the optional plugin bridge during bootstrap:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_PLUGIN=1 sh
 ```
 
 Record the optional MCP bridge preference during bootstrap:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_MCP=1 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_MCP=1 sh
 ```
 
 Use project-local OMH/Hermes paths during bootstrap:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SCOPE=project sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SCOPE=project sh
 ```
 
 Install one or more optional Hermes agent/profile packs during bootstrap. These
@@ -581,13 +581,13 @@ are visible team role preset files only; all OMH workflows are installed either
 way:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
 ```
 
 Record a default coding handoff style during bootstrap:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_DEFAULT_EXECUTOR=claude-code sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_DEFAULT_EXECUTOR=claude-code sh
 ```
 
 Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
@@ -599,7 +599,7 @@ should prefer `OMH_DEFAULT_EXECUTOR`.
 Choose installer/setup output language during bootstrap:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_LANG=ja sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_LANG=ja sh
 ```
 
 Supported values are `en`, `ko`, `ja`, and `zh`. The same setting can be passed
@@ -608,32 +608,32 @@ directly to setup with `omh setup --language zh`.
 Skip automatic Hermes config registration:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_AUTO_APPLY=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_AUTO_APPLY=0 sh
 ```
 
 Skip the final health check:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_RUN_DOCTOR=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_RUN_DOCTOR=0 sh
 ```
 
 Use the active Python environment instead of the default isolated venv:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_INSTALL_MODE=python OMH_PIP_ARGS= sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_INSTALL_MODE=python OMH_PIP_ARGS= sh
 ```
 
 Customize the isolated install locations:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_VENV_DIR="$HOME/.local/share/omh/venv" OMH_BIN_DIR="$HOME/.local/bin" sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_VENV_DIR="$HOME/.local/share/omh/venv" OMH_BIN_DIR="$HOME/.local/bin" sh
 ```
 
 Pass a current `omh setup` flag before `install.sh` has a first-class
 environment variable for it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SETUP_ARGS="--dry-run" sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SETUP_ARGS="--dry-run" sh
 ```
 
 `OMH_SETUP_ARGS` is an advanced escape hatch. Prefer the named variables above

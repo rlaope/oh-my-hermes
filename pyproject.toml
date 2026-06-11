@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oh-my-hermes-agent"
+name = "oh-my-hermes"
 version = "1.0.0"
 description = "Install a Hermes-native skill workflow pack."
 readme = "README.md"
@@ -26,9 +26,9 @@ classifiers = [
 omh = "omh.cli:main"
 
 [project.urls]
-Homepage = "https://rlaope.github.io/oh-my-hermes-agent/"
-Issues = "https://github.com/rlaope/oh-my-hermes-agent/issues"
-Repository = "https://github.com/rlaope/oh-my-hermes-agent"
+Homepage = "https://rlaope.github.io/oh-my-hermes/"
+Issues = "https://github.com/rlaope/oh-my-hermes/issues"
+Repository = "https://github.com/rlaope/oh-my-hermes"
 
 [tool.setuptools]
 packages = [

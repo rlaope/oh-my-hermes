@@ -15,38 +15,38 @@ public claims are all checked.
 Hermes-native skill install:
 
 ```sh
-hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
 Pinned stable install:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
 
 Preview install:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
 Preview update with an auditable source ref:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SOURCE_REF=main@<sha> sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SOURCE_REF=main@<sha> sh
 ```
 
 Custom archive:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes-agent/archive/refs/tags/v<version>.zip sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes/archive/refs/tags/v<version>.zip sh
 ```
 
 Optional plugin/profile bootstrap smoke:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_PLUGIN=1 OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
 ```
 
 ## Required Checks
@@ -65,10 +65,10 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke pro
 python3 -m omh.cli release hermes-smoke
 uv build
 python3 -m venv /tmp/omh-wheel-smoke
-/tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl
+/tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes-1.0.0-py3-none-any.whl
 /tmp/omh-wheel-smoke/bin/omh --help
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.0
-OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes_agent-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
+OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
 ```
 
 ## Hermes CLI Install Smoke
@@ -109,7 +109,7 @@ The live smoke runs install/setup plus:
 hermes skills tap list
 hermes skills list --enabled-only
 hermes skills check oh-my-hermes
-hermes skills inspect rlaope/oh-my-hermes-agent/skills/oh-my-hermes
+hermes skills inspect rlaope/oh-my-hermes/skills/oh-my-hermes
 ```
 
 Passing the tap smoke means Hermes CLI install/list/check/inspect commands

@@ -1,6 +1,6 @@
 # Documentation
 
-This directory is the public operating map for oh-my-hermes-agent.
+This directory is the public operating map for oh-my-hermes.
 
 Read `docs/DIRECTION.md` first when a change could affect product identity,
 wrapper behavior, planning quality, coding delegation, or public claims. Read

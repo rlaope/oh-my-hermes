@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _print_welcome() -> None:
     print(
-        """OMH - oh-my-hermes-agent
+        """OMH - oh-my-hermes
 
 Install OMH, then talk to Hermes. The `omh` command is the setup, doctor,
 verifier, and wrapper/backend surface; the normal user experience is Hermes

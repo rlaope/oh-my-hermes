@@ -17,7 +17,7 @@
         <a aria-current="page" href="./">Docs</a>
         <a
           class="nav__icon"
-          href="https://github.com/rlaope/oh-my-hermes-agent"
+          href="https://github.com/rlaope/oh-my-hermes"
           aria-label="Open OMH repository on GitHub"
           title="GitHub repository"
         >
@@ -195,7 +195,7 @@
             bin directory when possible.
           </p>
           <div class="command" role="region" aria-label="Bootstrap commands" tabindex="0">
-            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 omh doctor</code>
           </div>
@@ -209,14 +209,14 @@ omh doctor</code>
             When Hermes skill taps are available, the native skill front door is:
           </p>
           <div class="command" role="region" aria-label="Hermes skill install commands" tabindex="0">
-            <code>hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes</code>
+            <code>hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code>
           </div>
           <p>
             Stable installs are pinned explicitly with a released tag.
           </p>
           <div class="command" role="region" aria-label="Stable install command" tabindex="0">
-            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=&lt;version&gt; sh</code>
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=&lt;version&gt; sh</code>
           </div>
           <p>
             Rerun the installer for preview command-package updates before the
@@ -225,7 +225,7 @@ hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes</code>
             movement in <code>~/.omh/runtime/state.json</code>.
           </p>
           <div class="command" role="region" aria-label="Preview update command" tabindex="0">
-            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SOURCE_REF=main@&lt;sha&gt; sh</code>
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SOURCE_REF=main@&lt;sha&gt; sh</code>
           </div>
         </section>
 

@@ -7,10 +7,10 @@ import shutil
 import subprocess
 from typing import Callable, Mapping, Sequence
 
-REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes-agent/archive/refs"
+REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
 HERMES_SMOKE_SCHEMA = "hermes_release_smoke/v1"
-DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes-agent"
+DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
 DEFAULT_HERMES_SKILL = "oh-my-hermes"
 INSTALL_PATHS = ("tap", "setup")
 
@@ -397,7 +397,7 @@ def _hermes_smoke_next_action(ok: bool, failed_step: str) -> str:
     if failed_step == "skill_install":
         return (
             "Check tap visibility and Hermes skill scan output, then rerun "
-            "`hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes`."
+            "`hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes`."
         )
     if failed_step == "omh_setup":
         return "Run `omh setup` manually and inspect `omh doctor` for blocking setup checks."

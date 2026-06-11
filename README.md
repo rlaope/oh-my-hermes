@@ -1,7 +1,7 @@
-# oh-my-hermes-agent
+# oh-my-hermes
 
 <p align="center">
-  <img src="assets/hermes-agent-hero.png" alt="Oh My Hermes Agent" width="720">
+  <img src="assets/hermes-agent-hero.png" alt="Oh My Hermes" width="720">
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
   <img alt="Status" src="https://img.shields.io/badge/status-1.0.0%20stable-blue">
 </p>
 
-**oh-my-hermes-agent** makes Hermes Agent feel more capable after install. OMH
+**oh-my-hermes** makes Hermes Agent feel more capable after install. OMH
 adds workflow skills, optional profiles, wrapper-facing contracts, local
 evidence records, and coding handoff preparation while keeping normal users in
 Hermes chat.
@@ -41,7 +41,7 @@ user says a plain request in Hermes
 > feel easier to start, easier to trust, and more natural to apply in real
 > work.
 
-[Website](https://rlaope.github.io/oh-my-hermes-agent/) -
+[Website](https://rlaope.github.io/oh-my-hermes/) -
 [Documentation](docs/README.md) -
 [Installation](docs/INSTALLATION.md) -
 [Agent Install](INSTALL_FOR_AGENTS.md) -
@@ -63,14 +63,14 @@ user says a plain request in Hermes
 Install OMH and apply the Hermes setup:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 ```
 
 Terminal setup output supports English, Korean, Japanese, and Chinese:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_LANG=ko sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_LANG=ko sh
 omh setup --language ko
 ```
 
@@ -137,8 +137,8 @@ If your Hermes environment supports native skill taps, this is the equivalent
 Hermes-native front door:
 
 ```sh
-hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
 Use the full identifier above for the first install. It avoids short-name
@@ -148,7 +148,7 @@ resolver ambiguity in current Hermes CLI releases and still installs the
 For pinned releases after a matching `v<version>` tag exists:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_CHANNEL=stable OMH_VERSION=<version> sh
 ```
 
 For preview updates before the next release, rerun the same installer. If your
@@ -258,7 +258,7 @@ Hermes loaded the plugin, executed code, reviewed a PR, passed CI, or merged.
 The installer can also pass these advanced setup choices directly:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | OMH_SCOPE=project OMH_WITH_PLUGIN=1 OMH_WITH_MCP=1 OMH_PROFILE_PACKS=cto-loop sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SCOPE=project OMH_WITH_PLUGIN=1 OMH_WITH_MCP=1 OMH_PROFILE_PACKS=cto-loop sh
 ```
 
 ## Documentation

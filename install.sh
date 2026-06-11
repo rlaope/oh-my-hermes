@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-OMH_REPO_ARCHIVE_ROOT="${OMH_REPO_ARCHIVE_ROOT:-https://github.com/rlaope/oh-my-hermes-agent/archive/refs}"
+OMH_REPO_ARCHIVE_ROOT="${OMH_REPO_ARCHIVE_ROOT:-https://github.com/rlaope/oh-my-hermes/archive/refs}"
 OMH_CHANNEL="${OMH_CHANNEL:-preview}"
 OMH_VERSION="${OMH_VERSION:-}"
 OMH_PACKAGE_URL="${OMH_PACKAGE_URL:-}"
@@ -113,7 +113,7 @@ OMH_LANG="$(normalize_omh_lang "$OMH_LANG_RAW")"
 msg() {
   case "$OMH_LANG:$1" in
     ko:installer_title) printf 'OMH 설치 관리자' ;;
-    ko:installer_subtitle) printf '시스템 Python 패키지를 건드리지 않고 oh-my-hermes-agent를 설치합니다.' ;;
+    ko:installer_subtitle) printf '시스템 Python 패키지를 건드리지 않고 oh-my-hermes를 설치합니다.' ;;
     ko:channel) printf '채널' ;;
     ko:mode) printf '모드' ;;
     ko:step_create_venv) printf '격리된 Python 환경 생성:' ;;
@@ -123,11 +123,11 @@ msg() {
     ko:step_setup) printf '관리 Hermes 스킬 설정' ;;
     ko:step_doctor) printf '설치 확인' ;;
     ko:done) printf '완료' ;;
-    ko:installed) printf 'oh-my-hermes-agent 설치가 완료되었습니다.' ;;
+    ko:installed) printf 'oh-my-hermes 설치가 완료되었습니다.' ;;
     ko:next_path) printf 'Hermes Agent를 열고 설치된 OMH 스킬을 사용하세요. 상태 확인은 '\''omh doctor'\'', 재설정은 '\''omh setup'\''을 실행하세요.' ;;
     ko:next_command_path) printf 'Hermes Agent를 열고 설치된 OMH 스킬을 사용하세요. 상태 확인은 '\''%s doctor'\''를 실행하거나 해당 디렉터리를 PATH에 추가하세요.' "$2" ;;
     ja:installer_title) printf 'OMH インストーラー' ;;
-    ja:installer_subtitle) printf 'システム Python パッケージを変更せずに oh-my-hermes-agent をインストールします。' ;;
+    ja:installer_subtitle) printf 'システム Python パッケージを変更せずに oh-my-hermes をインストールします。' ;;
     ja:channel) printf 'チャンネル' ;;
     ja:mode) printf 'モード' ;;
     ja:step_create_venv) printf '分離された Python 環境を作成:' ;;
@@ -137,9 +137,9 @@ msg() {
     ja:step_setup) printf '管理 Hermes スキルを設定' ;;
     ja:step_doctor) printf 'インストールを検証' ;;
     ja:done) printf '完了' ;;
-    ja:installed) printf 'oh-my-hermes-agent のインストールが完了しました。' ;;
+    ja:installed) printf 'oh-my-hermes のインストールが完了しました。' ;;
     zh:installer_title) printf 'OMH 安装器' ;;
-    zh:installer_subtitle) printf '在不改动系统 Python 包的情况下安装 oh-my-hermes-agent。' ;;
+    zh:installer_subtitle) printf '在不改动系统 Python 包的情况下安装 oh-my-hermes。' ;;
     zh:channel) printf '频道' ;;
     zh:mode) printf '模式' ;;
     zh:step_create_venv) printf '创建隔离 Python 环境:' ;;
@@ -149,11 +149,11 @@ msg() {
     zh:step_setup) printf '设置托管 Hermes 技能' ;;
     zh:step_doctor) printf '验证安装' ;;
     zh:done) printf '完成' ;;
-    zh:installed) printf 'oh-my-hermes-agent 已安装。' ;;
+    zh:installed) printf 'oh-my-hermes 已安装。' ;;
     *)
       case "$1" in
         installer_title) printf 'OMH installer' ;;
-        installer_subtitle) printf 'Install oh-my-hermes-agent without touching system Python packages.' ;;
+        installer_subtitle) printf 'Install oh-my-hermes without touching system Python packages.' ;;
         channel) printf 'Channel' ;;
         mode) printf 'Mode' ;;
         step_create_venv) printf 'Create isolated Python environment at' ;;
@@ -163,7 +163,7 @@ msg() {
         step_setup) printf 'Set up managed Hermes skills' ;;
         step_doctor) printf 'Verify installation' ;;
         done) printf 'done' ;;
-        installed) printf 'oh-my-hermes-agent is installed.' ;;
+        installed) printf 'oh-my-hermes is installed.' ;;
         next_path) printf 'Open Hermes Agent and use the installed OMH skills. Run '\''omh doctor'\'' for health checks or '\''omh setup'\'' to reapply Hermes registration.' ;;
         next_command_path) printf 'Open Hermes Agent and use the installed OMH skills. Run '\''%s doctor'\'' for health checks or add its directory to PATH.' "$2" ;;
         *) printf '%s' "$1" ;;

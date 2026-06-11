@@ -23,7 +23,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(stderr, "")
-        self.assertIn("OMH - oh-my-hermes-agent", stdout)
+        self.assertIn("OMH - oh-my-hermes", stdout)
         self.assertIn("omh setup", stdout)
         self.assertIn("Agent chat with installed OMH skills", stdout)
         self.assertIn("If this screen appears after `omh uninstall`", stdout)
@@ -376,7 +376,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             payload = json.loads(stdout)
-            self.assertEqual(payload["package"], "oh-my-hermes-agent")
+            self.assertEqual(payload["package"], "oh-my-hermes")
             self.assertEqual(payload["operation"], "update")
             self.assertEqual(payload["managed_skills"]["status"], "updated")
             self.assertEqual(payload["command_package"]["schema_version"], "command_package_status/v1")
@@ -2605,9 +2605,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["hermes_native"]["discovery_status"], "config_registered_reload_required")
             self.assertTrue(payload["hermes_native"]["requires_hermes_reload"])
             self.assertIn("Hermes Agent chat", payload["hermes_native"]["normal_user_surface"])
-            self.assertIn("hermes skills tap add rlaope/oh-my-hermes-agent", payload["hermes_native"]["equivalent_hermes_commands"])
+            self.assertIn("hermes skills tap add rlaope/oh-my-hermes", payload["hermes_native"]["equivalent_hermes_commands"])
             self.assertIn(
-                "hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes",
+                "hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes",
                 payload["hermes_native"]["equivalent_hermes_commands"],
             )
             self.assertEqual(payload["hermes_native"]["hermes_config_key"], "skills.external_dirs")

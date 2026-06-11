@@ -199,7 +199,7 @@ def _copy_resource_tree(root: Any, dest: Path) -> None:
 def _new_plugin_manifest(target: Path, file_records: list[dict[str, str]]) -> dict[str, Any]:
     return {
         "schema_version": PLUGIN_SCHEMA_VERSION,
-        "package": "oh-my-hermes-agent",
+        "package": "oh-my-hermes",
         "version": __version__,
         "plugin_name": PLUGIN_NAME,
         "plugin_dir": str(target),

@@ -1,6 +1,6 @@
 # Application Cases
 
-This guide documents the first three proof cases for `oh-my-hermes-agent`.
+This guide documents the first three proof cases for `oh-my-hermes`.
 Each case is designed to show visible skill impact without claiming hidden
 Hermes runtime behavior.
 
@@ -11,15 +11,15 @@ Hermes runtime behavior.
 Install the Hermes skill pack through Hermes' native skill surface:
 
 ```sh
-hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
 If the deployment needs the managed bootstrap path, install and verify the same
 Hermes-visible state through OMH:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 omh doctor
 ```
@@ -163,8 +163,8 @@ Install the skill pack through Hermes, or make sure Hermes can read the same
 config that `omh apply` updated when using the bootstrap path:
 
 ```sh
-hermes skills tap add rlaope/oh-my-hermes-agent
-hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 omh setup
 omh doctor
 ```
@@ -306,7 +306,7 @@ from observed evidence records.
 Install OMH once through the same Hermes-visible skill path:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 ```
 
@@ -414,8 +414,8 @@ User-facing effect:
 Before using these cases as public release evidence, verify:
 
 - The one-command installer still works.
-- `hermes skills tap add rlaope/oh-my-hermes-agent` and
-  `hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes`
+- `hermes skills tap add rlaope/oh-my-hermes` and
+  `hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes`
   are documented as the primary install path when Hermes taps are available.
 - `omh setup` reports the managed skill directory, equivalent Hermes install
   intent, and Hermes config registration clearly.

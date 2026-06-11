@@ -37,7 +37,7 @@ from ..team_profiles import TeamProfileError, inspect_team_profile_pack, install
 from .common import _paths, _print_json, _wants_json
 from .language import LANGUAGE_CODES, language_from_env, language_options, normalize_language, tr
 
-INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes-agent/main/install.sh | sh"
+INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh"
 COMMAND_PACKAGE_STATUS_SCHEMA_VERSION = "command_package_status/v1"
 RELEASE_UPDATE_SCHEMA_VERSION = "release_update_status/v1"
 SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION = "setup_operator_summary/v1"
@@ -112,7 +112,7 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
         update_state(
             paths,
             {
-                "package": "oh-my-hermes-agent",
+                "package": "oh-my-hermes",
                 "version": __version__,
                 "manifest_path": str(paths.manifest_path),
                 "manifest_sha256": sha256_file(paths.manifest_path),
@@ -730,8 +730,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "normal_user_surface": "Hermes Agent chat and installed Hermes skills",
         "setup_scope": _setup_scope(args),
         "equivalent_hermes_commands": [
-            "hermes skills tap add rlaope/oh-my-hermes-agent",
-            "hermes skills install rlaope/oh-my-hermes-agent/skills/oh-my-hermes --yes",
+            "hermes skills tap add rlaope/oh-my-hermes",
+            "hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes",
         ],
         "bootstrap_final_state": bootstrap_final_state,
         "skills_dir": str(paths.skills_dir),
@@ -1521,7 +1521,7 @@ def _print_list_summary(payload: dict[str, object], *, manifest_path: Path, skil
         print("  Run `omh setup` to install managed Hermes skills.")
         print(f"  {tr('en', 'machine_readable')}")
         return
-    package = str(payload.get("package", "oh-my-hermes-agent"))
+    package = str(payload.get("package", "oh-my-hermes"))
     installed_at = str(payload.get("installed_at", ""))
     print(f"  Package: {package}")
     print(f"  Skills: {len(skills)} managed skill(s) at {skills_dir}")

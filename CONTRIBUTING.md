@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve oh-my-hermes-agent.
+Thanks for helping improve oh-my-hermes.
 
 ## Development Setup
 

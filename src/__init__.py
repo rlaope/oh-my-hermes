@@ -1,3 +1,3 @@
-"""oh-my-hermes-agent package."""
+"""oh-my-hermes package."""
 
 __version__ = "1.0.0"

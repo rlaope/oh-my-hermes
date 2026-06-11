@@ -1,7 +1,7 @@
 # OMH Agent Contract
 
 This file is the repo-local operating contract for Codex agents working on
-oh-my-hermes-agent.
+oh-my-hermes.
 
 ## Product Direction
 
