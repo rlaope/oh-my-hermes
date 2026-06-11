@@ -44,7 +44,7 @@ jobs:
           cp -R site/. _site/
           cp assets/hermes-agent-hero.png _site/assets/hermes-agent-hero.png
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: "_site"
 
