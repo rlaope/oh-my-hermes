@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `ultraprocess`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
 
 ## Routing Contract
 
@@ -41,7 +41,7 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 - `hybrid-measurement`: `performance-goal`
 - `hybrid-review`: `code-review`, `ask`
 - `hybrid-verification`: `ultraqa`
-- `retained-cognition`: `loop`, `deep-interview`, `web-research`, `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `plan`, `ralplan`, `best-practice-research`, `autoresearch-goal`
+- `retained-cognition`: `loop`, `ultraprocess`, `deep-interview`, `web-research`, `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `plan`, `ralplan`, `best-practice-research`, `autoresearch-goal`
 - `retained-knowledge`: `wiki`
 - `retained-operator`: `cancel`, `skill`, `doctor`
 - `retained-router`: `oh-my-hermes`
@@ -106,6 +106,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `ralph`: `ralph`, `$ralph`, `finish until done`, `persistent execution`, `self-referential loop`
 - `ultragoal`: `ultragoal`, `$ultragoal`, `durable goal`, `multi-goal`, `goal ledger`
 - `loop`: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`
+- `ultraprocess`: `ultraprocess`, `$ultraprocess`, `./ultraprocess`, `/ultraprocess`, `single-cycle delivery`
 - `deep-interview`: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`
 - `team`: `team`, `$team`, `swarm`, `parallel agents`, `coordinated workers`
 - `ultrawork`: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`

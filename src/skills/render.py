@@ -201,7 +201,7 @@ def router_skill() -> SkillTemplate:
     harnesses = builtin_harnesses()
     body = f"""# Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `ultraprocess`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
 
 ## Routing Contract
 

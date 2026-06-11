@@ -30,6 +30,7 @@ VISIBLE_ACTIONS = (
     "show_target_status",
     "apply_target_change",
     "choose_permission_profile",
+    "start_ultraprocess",
     "start_loop",
     "run_loop_tick",
     "show_loop_status",
@@ -353,6 +354,54 @@ def build_chat_response_from_route(
                         "connector I/O",
                     ],
                     "runtime_tick_contract": "After start, wrappers may call the loop tick backend with deterministic queue shape to prepare the next queued worktree/subagent/connector step without claiming observation.",
+                },
+            )
+        if selected == "ultraprocess" or policy_next_action == "start_ultraprocess":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A delivery process route is not execution evidence."
+            body = str(policy.get("wrapper_guidance", "")) or (
+                "I will shape this into one planning, implementation handoff, review, docs sync, and PR-ready cycle."
+            )
+            return _chat_response(
+                kind="process",
+                headline="I can run one delivery process cycle for this.",
+                body=body,
+                phase="process_setup",
+                next_action="start_ultraprocess",
+                thread_key=thread_key,
+                actions=[
+                    _action("start_ultraprocess", "Start process", "primary"),
+                    _action("prepare_handoff", "Prepare handoff", "secondary", enabled=False),
+                    _action("show_status", "Show status", "secondary"),
+                    _action("cancel", "Cancel", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "policy_next_action": policy_next_action,
+                    "cycle_policy": "single_cycle",
+                    "continues_after_feedback": False,
+                    "process_stages": [
+                        "codebase_or_source_research",
+                        "ralplan",
+                        "implementation_handoff",
+                        "code_review",
+                        "docs_sync_when_needed",
+                        "pr_ready_or_pr_observed_report",
+                        "stop_or_recommend_next_workflow",
+                    ],
+                    "evidence_not_observed": [
+                        "accepted plan",
+                        "executor dispatch",
+                        "implementation",
+                        "code review",
+                        "docs sync",
+                        "CI",
+                        "PR creation",
+                        "merge readiness",
+                        "merge",
+                    ],
                 },
             )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"

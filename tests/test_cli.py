@@ -324,7 +324,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("刷新托管 Hermes 技能包", stdout)
-            self.assertIn("已准备 29 个托管技能", stdout)
+            self.assertIn("已准备 30 个托管技能", stdout)
             self.assertIn("OMH install 已完成。", stdout)
 
     def test_language_catalogs_have_matching_keys(self) -> None:
@@ -343,7 +343,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Installing managed skills", stdout)
             self.assertIn("OMH install complete.", stdout)
-            self.assertIn("Skills: 29 managed skill(s)", stdout)
+            self.assertIn("Skills: 30 managed skill(s)", stdout)
             self.assertIn("Run `omh setup`", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
@@ -394,7 +394,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(state["last_update"]["operation"], "update")
             self.assertEqual(state["last_update"]["command_package"]["status"], "unchanged")
             self.assertEqual(state["last_update"]["release_update"]["status"], "refreshed")
-            self.assertEqual(state["last_update"]["managed_skills"]["count"], 29)
+            self.assertEqual(state["last_update"]["managed_skills"]["count"], 30)
 
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -742,6 +742,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("not implementation", top["evidence_boundary"])
         self.assertIn("permission profile", top["wrapper_guidance"])
 
+    def test_recommend_ultraprocess_routes_plan_to_pr_process(self) -> None:
+        message = "research the codebase, make a plan, implement, code-review, sync docs, and open a PR"
+        status, stdout, stderr = run_cli(["recommend", message, "--limit", "2"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        top = json.loads(stdout)["recommendations"][0]
+        self.assertEqual(top["skill"], "ultraprocess")
+        self.assertEqual(top["next_action"], "start_ultraprocess")
+        self.assertIn("process orchestration", top["evidence_boundary"])
+        self.assertIn("prepared_not_observed", top["wrapper_guidance"])
+
     def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
 
@@ -969,6 +981,7 @@ class CliTests(unittest.TestCase):
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "ack", "run_cto_loop"),
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
             ("./loop make this project a 10k star OSS", "loop", "loop", "start_goal_loop"),
+            ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:

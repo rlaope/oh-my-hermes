@@ -126,6 +126,17 @@ _CATEGORY_POLICIES = {
             "handoff -> feedback only inside that authority envelope. Record external outcomes as waiting until observed."
         ),
     ),
+    "process": RecommendationPolicy(
+        next_action="start_ultraprocess",
+        evidence_boundary=(
+            "An Ultraprocess route is process orchestration only; it is not implementation, review, docs sync, "
+            "CI, PR creation, merge-readiness, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Show the plan -> implementation handoff -> code review -> docs sync -> PR stages, ask for or apply "
+            "an executor owner before code work, and keep every stage prepared_not_observed until matching evidence exists."
+        ),
+    ),
     "review": RecommendationPolicy(
         next_action="prepare_review_or_followup_handoff",
         evidence_boundary="A review recommendation is not a completed review or fix evidence.",

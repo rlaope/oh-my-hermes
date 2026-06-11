@@ -34,7 +34,7 @@ jobs:
       - name: Validate harness catalog
         run: python -m omh.cli harness validate
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           enablement: true
       - name: Prepare static site
@@ -44,7 +44,7 @@ jobs:
           cp -R site/. _site/
           cp assets/hermes-agent-hero.png _site/assets/hermes-agent-hero.png
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: "_site"
 

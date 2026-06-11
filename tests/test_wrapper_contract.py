@@ -168,6 +168,25 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("show_loop_queue", action_ids)
         self.assertNotIn("10k-star quality", serialized)
 
+    def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
+        message = "research the repo, plan, implement, code-review, sync docs, and prepare a PR"
+
+        payload = build_chat_interaction_payload(message, source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "start_ultraprocess")
+        self.assertEqual(payload["chat_response"]["kind"], "process")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
+        self.assertEqual(payload["chat_response"]["state"]["cycle_policy"], "single_cycle")
+        self.assertFalse(payload["chat_response"]["state"]["continues_after_feedback"])
+        self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
+        self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
+        self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertTrue(actions["start_ultraprocess"]["enabled"])
+        self.assertFalse(actions["prepare_handoff"]["enabled"])
+        self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
+
     def test_cancel_routes_to_control_action_without_plan_ui(self) -> None:
         payload = build_chat_interaction_payload("cancel", source="discord")
 
