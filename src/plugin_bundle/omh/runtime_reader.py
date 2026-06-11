@@ -345,13 +345,13 @@ def _token_summary(metadata: dict[str, Any]) -> dict[str, Any]:
 def _token_display(values: dict[str, int | float]) -> str:
     remaining = values.get("tokens_remaining")
     budget = values.get("token_budget")
-    percent = values.get("context_remaining_percent")
+    percent = _token_percent(values)
+    if percent is not None:
+        return f"{_format_percent(percent)}%"
     if remaining is not None and budget is not None:
         return f"{remaining}/{budget}"
     if remaining is not None:
         return f"remaining={remaining}"
-    if percent is not None:
-        return f"context={percent}%"
     parts = []
     if values.get("input_tokens") is not None:
         parts.append(f"in={values['input_tokens']}")
@@ -360,16 +360,31 @@ def _token_display(values: dict[str, int | float]) -> str:
     return ",".join(parts) if parts else "observed"
 
 
+def _token_percent(values: dict[str, int | float]) -> float | None:
+    supplied = values.get("context_remaining_percent")
+    if supplied is not None:
+        return float(supplied)
+    remaining = values.get("tokens_remaining")
+    budget = values.get("token_budget")
+    if remaining is None or budget is None or float(budget) <= 0:
+        return None
+    return float(remaining) / float(budget) * 100
+
+
+def _format_percent(value: float) -> str:
+    rounded = round(value, 1)
+    if rounded.is_integer():
+        return str(int(rounded))
+    return f"{rounded:.1f}"
+
+
 def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     version = str(payload.get("version", "unknown"))
-    tokens = payload.get("tokens", {})
     plugin = payload.get("plugin", {})
     topology = payload.get("target_topology", {})
     executor = payload.get("executor", {})
     runtime = payload.get("runtime", {})
     base = [f"[omh] v{version}"]
-    if _has_observed_tokens(tokens):
-        base.append(f"tokens:{tokens.get('summary', 'observed')}")
     if preset == "minimal":
         return [*base, _activity_label(runtime)]
     focused = [*base, f"plugin:{_plugin_display_status(plugin)}"]
@@ -383,10 +398,6 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     return focused
 
 
-def _has_observed_tokens(tokens: dict[str, Any]) -> bool:
-    return bool(tokens.get("values")) or str(tokens.get("status", "")) == "observed_from_host_metadata"
-
-
 def _plugin_display_status(plugin: dict[str, Any]) -> str:
     status = str(plugin.get("status", "unknown") or "unknown")
     labels = {
@@ -397,12 +408,9 @@ def _plugin_display_status(plugin: dict[str, Any]) -> str:
 
 
 def _coding_agent_segment(runtime: dict[str, Any], executor: dict[str, Any]) -> str:
-    run_id = str(runtime.get("latest_run_id", ""))
     agent = _coding_agent_label(runtime.get("executor_target") or executor.get("default"))
-    activity = _activity_label(runtime)
-    if run_id:
-        return f"coding-agent:{activity}({agent})#{_short_run_id(run_id)}"
-    return f"coding-agent:idle({agent})"
+    state = _coding_agent_state(runtime)
+    return f"coding-agent:{state}({agent})"
 
 
 def _coding_agent_label(value: Any) -> str:
@@ -426,9 +434,10 @@ def _activity_label(runtime: dict[str, Any]) -> str:
     return "idle" if workflow == "idle" else f"{workflow}:{phase}"
 
 
-def _short_run_id(run_id: str) -> str:
-    suffix = run_id.rsplit("-", 1)[-1].strip()
-    return suffix[:8] if suffix else run_id[:8]
+def _coding_agent_state(runtime: dict[str, Any]) -> str:
+    if not str(runtime.get("latest_run_id", "")):
+        return "idle"
+    return str(runtime.get("phase", "unknown") or "unknown")
 
 
 def _topology_label(topology: dict[str, Any]) -> str:

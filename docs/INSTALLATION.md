@@ -52,13 +52,14 @@ Hermes plugin bridge in addition to the skill pack:
 
 That installs `~/.hermes/plugins/omh` with metadata-only HUD/status support.
 `omh hud` prints the same compact status line a Hermes TUI or plugin surface can
-render. It shows only operationally useful status: OMH version, host-supplied
-token metadata, plugin readiness, target topology, current or default coding
-agent, latest run, and evidence state. Skill counts and setup inventory are
-left to `omh doctor` and `omh_status`. A quiet idle line looks like
+render. It shows only operationally useful status: OMH version, plugin
+readiness, target topology, current or default coding agent, and evidence
+state. Skill counts, setup inventory, token metadata, and deep diagnostics are
+left to `omh doctor`, `omh_status`, and machine-readable HUD JSON. A quiet idle
+line looks like
 `[omh] v1.0.0 | plugin:ready | target:single | coding-agent:idle(ask)`.
-Token usage appears only when the host supplies token metadata. The plugin does
-not execute code, patch Hermes core, or prove Hermes has loaded it.
+The plugin does not execute code, patch Hermes core, or prove Hermes has loaded
+it.
 If the target Hermes runtime requires a separate plugin enable command, follow
 that runtime's plugin enable/reload step.
 

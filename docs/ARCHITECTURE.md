@@ -145,10 +145,10 @@ OMH directly when Hermes taps are available.
 `~/.hermes/plugins/omh`. The v1 plugin registers a compact metadata-only
 `omh_hud` tool, a detailed metadata-only `omh_status` tool, and a passive
 `pre_llm_call` hook. `omh hud` exposes the same status-line payload for local
-operator smoke tests. The HUD line reports host-supplied token metadata only
-when it is actually provided and stays limited to version, plugin bridge
-readiness, target topology, current or default coding agent, latest run, and
-evidence state.
+operator smoke tests. The HUD line stays limited to version, plugin bridge
+readiness, target topology, current or default coding agent, and evidence
+state. Host-supplied token metadata remains available in the machine-readable
+payload but is not shown in the Hermes-facing status line.
 It intentionally omits install inventory such as managed skill counts. It does
 not run verification commands, patch Hermes core, or claim execution evidence
 from prepared handoffs.
