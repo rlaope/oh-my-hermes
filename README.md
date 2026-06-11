@@ -99,29 +99,6 @@ Verify the local install:
 omh doctor
 ```
 
-`omh doctor` prints a grouped health summary by default: managed skills,
-runtime state, Hermes registration, target topology, optional surfaces, the
-recommended next action, and the `last_doctor` state-log entry when writable.
-Use `omh doctor --json` for the full check payload.
-Human-facing maintenance and catalog commands follow the same rule:
-`omh install`, `omh update`, `omh uninstall`, `omh apply`, `omh list`,
-`omh recommend`, `omh playbook ...`, `omh profile ...`, `omh probe`, and
-`omh snippet --output` print readable summaries for terminal use, with
-`--json` for wrappers and automation. Backend/control-plane commands such as
-`chat`, `coding`, `runtime`, `goal`, `loop`, `memory`, `state`, `harness`,
-`release`, and `demo` print JSON by design. `omh update` refreshes the managed
-skill pack from the currently installed command package. Rerun the installer to
-move the command package to the latest preview commit or a pinned stable tag;
-that installer-driven update is recorded with channel, version, package URL,
-and source ref metadata. Setup, install, update, and doctor summaries are
-recorded in `~/.omh/runtime/state.json` as `last_setup`, `last_install`,
-`last_update`, or `last_doctor`.
-
-The installer creates an isolated OMH virtual environment, links the `omh`
-command into `~/.local/bin` when possible, and prints the installed command
-path. If that directory is not on `PATH`, add the printed directory to `PATH`
-or run the printed absolute `omh` path directly.
-
 Then talk to Hermes:
 
 ```text

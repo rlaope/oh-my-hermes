@@ -33,6 +33,30 @@ the user explicitly asks for separate PRs.
 When the user asks to merge, finish review fixes in the current PR first, rerun
 verification, wait for required checks, then merge if authority is clear.
 
+## Pull Request Reports
+
+PR descriptions must read like a useful feature report, not a terse changelog.
+When Codex opens a PR for this project, use the repository PR template and fill
+every relevant section with concrete, reviewable detail.
+
+Every PR body should explain:
+
+- What capability, workflow, command, or contract changed.
+- Why the change exists, including the user problem, product gap, or operational
+  failure that motivated it.
+- What the user or operator can do after the change that they could not do
+  before.
+- How the implementation works at the boundary level: important modules,
+  commands, generated files, persisted state, or wrapper contracts touched.
+- What verification was actually observed, including CI, targeted tests,
+  generated-output checks, dry-runs, or manual Hermes/TUI gaps.
+- What risks, rollout notes, compatibility concerns, or follow-up work remain.
+
+Avoid one-line summaries such as "update docs" or "fix setup" when the PR
+changes user-facing behavior. Prefer a short narrative plus bullets that make
+the feature's origin, behavior, and evidence obvious to a reviewer reading the
+PR without the chat history.
+
 ## Implementation Boundaries
 
 - No LLM, API, Discord, Slack, GitHub, or network calls inside core `omh`

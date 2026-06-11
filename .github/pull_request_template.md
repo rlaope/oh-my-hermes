@@ -1,6 +1,24 @@
-## Summary
+## Feature Report
 
-- 
+### What Changed
+
+-
+
+### Why This Exists
+
+-
+
+### User / Operator Impact
+
+-
+
+### How It Works
+
+-
+
+### Files And Contracts Touched
+
+-
 
 ## Validation
 
@@ -10,10 +28,15 @@
 - [ ] `python3 -m omh.cli harness validate`
 - [ ] `python3 -m omh.cli release hermes-smoke`
 - [ ] Relevant dry-run or smoke command:
+- [ ] Manual Hermes/TUI check, or explicit reason it was not run:
 
 ## Risk
 
-- 
+-
+
+## Compatibility / Rollout
+
+-
 
 ## Release / Claims
 
@@ -21,6 +44,6 @@
 - [ ] Runtime/native capability claims are backed by evidence or marked as not observed
 - [ ] Known manual Hermes checks are listed, including any `omh release hermes-smoke --live` gap
 
-## Notes
+## Follow-Up
 
-- 
+-
