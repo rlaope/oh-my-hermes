@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: coordination
-    role: codex-handoff-guidance
+    role: runtime-handoff-guidance
     quality_tier: coordination-gated
 ---
 
@@ -47,18 +47,18 @@ Use when multiple independent lanes materially improve throughput or verificatio
 
 Category: `execution`
 Phase: `coordination`
-Hermes role: `codex-handoff-guidance`
+Hermes role: `runtime-handoff-guidance`
 Quality tier: `coordination-gated`
 
 Quality bar:
 
 - Split only independent lanes with explicit ownership and verification boundaries.
-- Keep Hermes as coordinator and status narrator while coding lanes become executor handoffs.
+- Keep Hermes as coordinator and status narrator while coding lanes become runtime handoffs with explicit ownership.
 - Integrate lane evidence before reporting combined progress.
 
 Handoff policy:
 
-Use Hermes for lane framing and status; implementation lanes should become selected executor handoff tasks unless they are research, interview, planning, or status-only.
+Use Hermes for lane framing and status; implementation lanes should become selected runtime handoff tasks, including Hermes-owned coding when the user chooses that runtime.
 
 Required inputs:
 

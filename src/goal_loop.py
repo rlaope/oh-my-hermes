@@ -104,7 +104,7 @@ LOOP_EXECUTOR_OPTIONS = (
     {"id": "claude-code", "label": "Claude Code prompt handoff", "dispatchable_by_default": False},
     {"id": "generic", "label": "Generic coding-agent prompt", "dispatchable_by_default": False},
     {"id": "omx-runtime", "label": "Plugin/runtime handoff", "dispatchable_by_default": False},
-    {"id": "hermes", "label": "Hermes-retained work", "dispatchable_by_default": False},
+    {"id": "hermes", "label": "Hermes coding/runtime work", "dispatchable_by_default": False},
 )
 LOOP_EXECUTOR_OPTION_IDS = tuple(str(option["id"]) for option in LOOP_EXECUTOR_OPTIONS)
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -1653,9 +1653,9 @@ def _small_loop_guidance() -> dict[str, Any]:
 def _permission_profile_option(profile: str) -> dict[str, Any]:
     allowed = sorted(_PROFILE_ALLOWED_ACTIONS[profile])
     descriptions = {
-        "observe_only": "Research and plan only; no executor dispatch, repo edits, PRs, merge, or publishing.",
+        "observe_only": "Research and plan only; no executor/runtime dispatch, repo edits, PRs, merge, or publishing.",
         "handoff_only": "Prepare research, planning, ultragoal, handoff, and external-posting drafts without observed execution claims.",
-        "execute_with_gates": "Allow executor dispatch, repo edits, PRs, review, CI, and release-note work while merge and external posting stay gated.",
+        "execute_with_gates": "Allow executor/runtime dispatch, repo edits, PRs, review, CI, and release-note work while merge and external posting stay gated.",
         "full_loop": "Allow the broadest local loop path while still requiring observed evidence and explicit external-production authority.",
     }
     return {

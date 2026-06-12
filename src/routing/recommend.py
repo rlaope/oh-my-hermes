@@ -175,8 +175,19 @@ _HERMES_ROLE_POLICIES = {
             "A prepared coding handoff is not execution, review, CI, merge-readiness, or merge evidence."
         ),
         wrapper_guidance=(
-            "Ask for or apply the selected executor profile, expose executor-neutral handoff/status actions, "
+            "Ask for or apply the selected executor/runtime profile, expose executor-neutral handoff/status actions, "
             "and mark prepared work as prepared_not_observed."
+        ),
+    ),
+    "runtime-handoff-guidance": RecommendationPolicy(
+        next_action="prepare_coding_runtime_handoff",
+        evidence_boundary=(
+            "A prepared coding runtime handoff is not runtime start, worker dispatch, worktree creation, execution, "
+            "review, CI, merge-readiness, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Ask for or apply the selected runtime profile, expose runtime/team/worktree/status actions, "
+            "and mark prepared work as prepared_not_observed until observed runtime evidence exists."
         ),
     ),
 }

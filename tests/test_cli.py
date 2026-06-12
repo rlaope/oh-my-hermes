@@ -803,8 +803,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("ai-slop-cleaner", {recommendation["skill"] for recommendation in recommendations[:3]})
         self.assertTrue(any(recommendation["why"] and recommendation["suggested_prompt"] for recommendation in recommendations))
         cleanup = next(recommendation for recommendation in recommendations if recommendation["skill"] == "ai-slop-cleaner")
-        self.assertEqual(cleanup["hermes_role"], "codex-handoff-guidance")
-        self.assertIn("selected coding executor", cleanup["handoff_policy"])
+        self.assertEqual(cleanup["hermes_role"], "runtime-handoff-guidance")
+        self.assertIn("selected coding runtime", cleanup["handoff_policy"])
 
     def test_recommend_implementation_plan_includes_planning_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "implementation", "plan", "with", "review"])
@@ -1036,7 +1036,7 @@ class CliTests(unittest.TestCase):
         self.assertTrue({"hermes", "omh", "wrapper"} <= owners)
         self.assertIn("implementation", " ".join(playbook["delegated_to_executor"]))
         boundaries = " ".join(stage["evidence_boundary"] for stage in playbook["stages"])
-        self.assertIn("not executor dispatch", boundaries)
+        self.assertIn("not executor/runtime dispatch", boundaries)
 
         status, stdout, stderr = run_cli(["playbook", "inspect", "request-to-handoff"])
 
@@ -1045,11 +1045,11 @@ class CliTests(unittest.TestCase):
         stages = {stage["id"]: stage for stage in json.loads(stdout)["playbook"]["stages"]}
         self.assertEqual(
             stages["plan_or_prepare"]["evidence_required"],
-            ["accepted plan or explicit retained-Hermes outcome"],
+            ["accepted plan or explicit Hermes-owned outcome"],
         )
         self.assertEqual(
             stages["handoff_or_retain"]["evidence_required"],
-            ["prepared handoff or retained-Hermes result"],
+            ["prepared handoff or Hermes-owned result"],
         )
 
     def test_playbook_recommend_routes_feature_and_research_situations(self) -> None:
@@ -2008,6 +2008,61 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertTrue(json.loads(stdout)["ok"])
 
+    def test_coding_delegate_runtime_executor_prepares_runtime_contract_without_run(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "omx-runtime",
+                    "--source",
+                    "discord",
+                    "risky",
+                    "refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["runtime"]["recorded"], False)
+            self.assertEqual(payload["runtime"]["reason"], "runtime_handoff_is_wrapper_session_only")
+            self.assertEqual(payload["runtime"]["run_created"], False)
+            self.assertEqual(payload["work_owner_mode"], "runtime_handoff")
+            self.assertEqual(payload["selected_executor_profile"], "omx-runtime")
+            self.assertEqual(payload["runtime_handoff"]["schema_version"], "coding_runtime_handoff/v1")
+            self.assertEqual(payload["runtime_handoff"]["runtime_profile"]["runtime_family"], "omx")
+            self.assertTrue(payload["runtime_handoff"]["runtime_profile"]["supports_tmux_workers"])
+            self.assertIn("show_runtime_handoff", payload["harness_quality"]["wrapper_actions"])
+            self.assertIn("start_team", payload["harness_quality"]["wrapper_actions"])
+            self.assertIn("start_swarm", payload["harness_quality"]["wrapper_actions"])
+            self.assertIn("prepare_worktree", payload["harness_quality"]["wrapper_actions"])
+            self.assertIn("show_runtime_handoff", payload["runtime_handoff"]["harness_quality"]["wrapper_actions"])
+            self.assertIn("start_team", payload["runtime_handoff"]["harness_quality"]["wrapper_actions"])
+            self.assertIn("start_swarm", payload["runtime_handoff"]["harness_quality"]["wrapper_actions"])
+            self.assertIn("prepare_worktree", payload["runtime_handoff"]["harness_quality"]["wrapper_actions"])
+            self.assertIn("team", payload["runtime_handoff"]["team_contract"]["modes"])
+            self.assertIn("swarm", payload["runtime_handoff"]["team_contract"]["modes"])
+            self.assertTrue(any("tmux" in value for value in payload["runtime_handoff"]["team_contract"]["worker_protocol"]))
+            self.assertIn("worktree_creation", payload["runtime_handoff"]["evidence_contract"]["prepared_is_not"])
+            self.assertNotIn("prompt_handoff", payload)
+            self.assertNotIn("executor_handoff", payload)
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "validate"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["ok"])
+
     def test_coding_delegate_record_after_default_setup_does_not_create_choice_run(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2569,7 +2624,7 @@ class CliTests(unittest.TestCase):
         status, _, stderr = run_cli(["coding", "lifecycle", "start", "--record", "--executor", "claude-code", "risky", "refactor"])
 
         self.assertEqual(status, 2)
-        self.assertIn("Codex-only in Phase 1", stderr)
+        self.assertIn("Codex-only for run-backed tracking", stderr)
 
     def test_coding_lifecycle_cli_happy_path_reports_completion_for_non_review_task(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -3188,10 +3243,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
-            self.assertEqual(payload["next_action"], "show_prompt_handoff")
+            self.assertEqual(payload["next_action"], "show_runtime_handoff")
             self.assertEqual(payload["delegation"]["selected_executor_profile"], "omx-runtime")
+            self.assertEqual(payload["delegation"]["work_owner_mode"], "runtime_handoff")
             self.assertFalse(payload["delegation"]["dispatchable"])
+            self.assertEqual(payload["delegation"]["runtime_handoff"]["schema_version"], "coding_runtime_handoff/v1")
+            self.assertIn("team", payload["delegation"]["runtime_handoff"]["team_contract"]["modes"])
             self.assertNotIn("executor_handoff", payload["delegation"])
+            self.assertNotIn("prompt_handoff", payload["delegation"])
 
     def test_setup_default_executor_records_human_executor_choice(self) -> None:
         with TemporaryDirectory() as tmp:

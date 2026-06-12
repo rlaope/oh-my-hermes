@@ -58,7 +58,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep consensus planning and review in Hermes; produce explicit selected executor handoff guidance only after the plan is accepted.
+Keep consensus planning and review in Hermes; produce explicit selected executor/runtime handoff guidance only after the plan is accepted.
 
 Required inputs:
 

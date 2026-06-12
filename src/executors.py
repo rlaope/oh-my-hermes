@@ -5,14 +5,56 @@ from dataclasses import dataclass
 
 EXECUTOR_HANDOFF_SCHEMA_VERSION = "coding_executor_handoff/v1"
 PROMPT_HANDOFF_SCHEMA_VERSION = "coding_prompt_handoff/v1"
+RUNTIME_HANDOFF_SCHEMA_VERSION = "coding_runtime_handoff/v1"
 
-WORK_OWNER_MODES = ("retained_hermes", "prompt_only_handoff", "external_executor")
+WORK_OWNER_MODES = ("retained_hermes", "prompt_only_handoff", "runtime_handoff", "external_executor")
 DISPATCH_POLICIES = ("prepare_only", "ask_before_dispatch", "configured_auto_dispatch_reserved")
 
-EXECUTOR_PROFILES = ("codex", "claude-code", "omx-runtime", "omo-runtime", "omc-runtime", "generic")
+EXECUTOR_PROFILES = ("codex", "claude-code", "omx-runtime", "omo-runtime", "omc-runtime", "generic", "hermes")
 CODING_EXECUTOR_HANDOFF_TARGETS = ("codex",)
-CODING_EXECUTOR_TARGETS = ("choose", "hermes", *EXECUTOR_PROFILES)
-PROMPT_ONLY_EXECUTOR_PROFILES = tuple(profile for profile in EXECUTOR_PROFILES if profile != "codex")
+CODING_RUNTIME_HANDOFF_TARGETS = ("hermes", "omx-runtime", "omo-runtime", "omc-runtime")
+CODING_EXECUTOR_TARGETS = ("choose", *EXECUTOR_PROFILES)
+PROMPT_ONLY_EXECUTOR_PROFILES = ("claude-code", "generic")
+
+
+RUNTIME_PROFILE_DETAILS = {
+    "hermes": {
+        "label": "Hermes coding skill runtime",
+        "runtime_family": "omh",
+        "underlying_agent": "Hermes Agent",
+        "tool_label": "Hermes Agent",
+        "invocation_mode": "hermes_skill",
+        "dispatch_text_template": "Use the selected OMH coding skill for: {message}",
+        "recommended_for": "Hermes-owned coding using OMH skills, team/swarm guidance, tmux-style workers, worker protocol, and worktree discipline",
+    },
+    "omx-runtime": {
+        "label": "OMX runtime",
+        "runtime_family": "omx",
+        "underlying_agent": "Codex",
+        "tool_label": "OMX",
+        "invocation_mode": "oh_my_runtime",
+        "dispatch_text_template": "Run the selected OMX coding workflow with this task:\n{message}",
+        "recommended_for": "Codex-backed oh-my runtime workflows with skills, team/swarm workers, tmux-style coordination, and worktree-aware delivery",
+    },
+    "omo-runtime": {
+        "label": "OMO runtime",
+        "runtime_family": "omo",
+        "underlying_agent": "OpenAgent",
+        "tool_label": "OMO",
+        "invocation_mode": "oh_my_runtime",
+        "dispatch_text_template": "Run the selected OMO workflow with this task:\n{message}",
+        "recommended_for": "OpenAgent-style runtime workflows when the operator has OMO installed",
+    },
+    "omc-runtime": {
+        "label": "OMC runtime",
+        "runtime_family": "omc",
+        "underlying_agent": "Claude Code",
+        "tool_label": "OMC",
+        "invocation_mode": "oh_my_runtime",
+        "dispatch_text_template": "Run the selected OMC workflow with this task:\n{message}",
+        "recommended_for": "Claude Code-backed oh-my runtime workflows when the operator has OMC installed",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -45,11 +87,11 @@ def executor_selection_for_target(executor_target: str, *, action: str) -> Execu
         )
     if executor_target == "hermes":
         return ExecutorSelection(
-            work_owner_mode="retained_hermes",
-            selected_executor_profile=None,
+            work_owner_mode="runtime_handoff",
+            selected_executor_profile="hermes",
             dispatch_policy="prepare_only",
             dispatchable=False,
-            status="retained_hermes",
+            status="runtime_handoff_prepared",
         )
     if executor_target == "codex":
         return ExecutorSelection(
@@ -58,6 +100,14 @@ def executor_selection_for_target(executor_target: str, *, action: str) -> Execu
             dispatch_policy="ask_before_dispatch",
             dispatchable=True,
             status="handoff_prepared",
+        )
+    if executor_target in CODING_RUNTIME_HANDOFF_TARGETS:
+        return ExecutorSelection(
+            work_owner_mode="runtime_handoff",
+            selected_executor_profile=executor_target,
+            dispatch_policy="prepare_only",
+            dispatchable=False,
+            status="runtime_handoff_prepared",
         )
     if executor_target in PROMPT_ONLY_EXECUTOR_PROFILES:
         return ExecutorSelection(
@@ -89,23 +139,23 @@ def public_executor_options() -> list[dict[str, object]]:
         {
             "profile": "omx-runtime",
             "label": "OMX runtime",
-            "work_owner_mode": "prompt_only_handoff",
+            "work_owner_mode": "runtime_handoff",
             "dispatchable": False,
-            "recommended_for": "plugin/runtime-style coding workflow prompt handoff",
+            "recommended_for": RUNTIME_PROFILE_DETAILS["omx-runtime"]["recommended_for"],
         },
         {
             "profile": "omo-runtime",
             "label": "OMO runtime",
-            "work_owner_mode": "prompt_only_handoff",
+            "work_owner_mode": "runtime_handoff",
             "dispatchable": False,
-            "recommended_for": "plugin/runtime-style coding workflow prompt handoff",
+            "recommended_for": RUNTIME_PROFILE_DETAILS["omo-runtime"]["recommended_for"],
         },
         {
             "profile": "omc-runtime",
             "label": "OMC runtime",
-            "work_owner_mode": "prompt_only_handoff",
+            "work_owner_mode": "runtime_handoff",
             "dispatchable": False,
-            "recommended_for": "plugin/runtime-style coding workflow prompt handoff",
+            "recommended_for": RUNTIME_PROFILE_DETAILS["omc-runtime"]["recommended_for"],
         },
         {
             "profile": "generic",
@@ -116,10 +166,10 @@ def public_executor_options() -> list[dict[str, object]]:
         },
         {
             "profile": "hermes",
-            "label": "Keep with Hermes",
-            "work_owner_mode": "retained_hermes",
+            "label": "Hermes coding skill runtime",
+            "work_owner_mode": "runtime_handoff",
             "dispatchable": False,
-            "recommended_for": "planning, research, triage, or small retained work without coding-agent dispatch",
+            "recommended_for": RUNTIME_PROFILE_DETAILS["hermes"]["recommended_for"],
         },
     ]
 
@@ -152,4 +202,37 @@ def prompt_invocation_for_profile(profile: str) -> dict[str, str]:
         "dispatch_text_template": templates[profile],
         "message_placeholder": "{message}",
         "wrapper_note": "Copy or pass this prompt only when the user chooses that executor; OMH does not dispatch it.",
+    }
+
+
+def runtime_invocation_for_profile(profile: str) -> dict[str, str]:
+    if profile not in CODING_RUNTIME_HANDOFF_TARGETS:
+        raise ValueError(f"unsupported runtime executor profile: {profile}")
+    details = RUNTIME_PROFILE_DETAILS[profile]
+    return {
+        "mode": str(details["invocation_mode"]),
+        "tool_label": str(details["tool_label"]),
+        "dispatch_text_template": str(details["dispatch_text_template"]),
+        "message_placeholder": "{message}",
+        "wrapper_note": (
+            "Start this runtime only after the user or wrapper chooses it; OMH records the prepared runtime contract, "
+            "not execution evidence."
+        ),
+    }
+
+
+def runtime_profile_contract(profile: str) -> dict[str, object]:
+    if profile not in CODING_RUNTIME_HANDOFF_TARGETS:
+        raise ValueError(f"unsupported runtime executor profile: {profile}")
+    details = RUNTIME_PROFILE_DETAILS[profile]
+    return {
+        "profile": profile,
+        "label": str(details["label"]),
+        "runtime_family": str(details["runtime_family"]),
+        "underlying_agent": str(details["underlying_agent"]),
+        "supports_team_swarm": True,
+        "supports_tmux_workers": True,
+        "supports_worker_protocol": True,
+        "supports_worktree_guidance": True,
+        "requires_operator_runtime": profile != "hermes",
     }

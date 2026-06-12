@@ -35,7 +35,7 @@ Good example:
 Bad example:
 
 - Prompt: $code-review add the missing setup flag and commit it.
-- Expected behavior: Route implementation to a selected executor after review findings are established.
+- Expected behavior: Route implementation to a selected executor/runtime after review findings are established.
 - Why: Review can identify the issue, but code mutation is a separate execution step.
 
 ## Use When

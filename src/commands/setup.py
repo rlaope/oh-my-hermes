@@ -1688,9 +1688,9 @@ def _executor_summary(executor: str) -> str:
         "claude-code": "Claude Code prompt handoff",
         "generic": "portable prompt handoff for any coding agent",
         "hermes": "keep small coding-like work in Hermes by default",
-        "omx-runtime": "plugin/runtime prompt handoff",
-        "omo-runtime": "plugin/runtime prompt handoff",
-        "omc-runtime": "plugin/runtime prompt handoff",
+        "omx-runtime": "OMX runtime handoff",
+        "omo-runtime": "OMO runtime handoff",
+        "omc-runtime": "OMC runtime handoff",
     }
     return f"{labels.get(executor, 'unknown')} ({executor or 'unknown'})"
 

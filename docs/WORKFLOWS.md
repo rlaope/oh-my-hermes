@@ -4,7 +4,7 @@ This file is generated from `src/skills/catalog.py`. Update the catalog first, t
 
 The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.
 
-Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor, or prepare a coding handoff for coding-heavy execution.
+Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor/runtime profile, or prepare a coding handoff for coding-heavy execution.
 
 When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow state to the current Hermes target/thread, adapt only the steps that benefit from multiple targets, and fall back to single-target behavior when the active agent count is one.
 `memory_review_card/v1` is separate from `status_card/v1`; `handoff_context_pack/v1` may be attached to executor handoffs only when unresolved conflicts are absent.
@@ -61,9 +61,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `completion`
-- Hermes role: `codex-handoff-guidance`
+- Hermes role: `runtime-handoff-guidance`
 - Quality tier: `handoff-gated`
-- Handoff policy: Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track the selected executor path instead of making Hermes the hidden coder.
+- Handoff policy: Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track the selected coding runtime path instead of hiding execution inside chat narration.
 - Why this exists: `ralph` exists to keep `execution` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use after scope is concrete and the user wants one owner to continue through implementation and verification.
 - Do not use when:
@@ -80,7 +80,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Do not enter a finish-until-done loop until scope, acceptance criteria, and verification commands are concrete.
-  - For coding edits, prepare and track selected executor evidence instead of implying Hermes implemented the changes.
+  - For coding edits, prepare and track selected runtime evidence instead of implying unobserved work happened.
   - Report completion only from observed execution and verification evidence.
 - Required inputs:
   - concrete scope
@@ -103,9 +103,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `durable-goals`
-- Hermes role: `codex-handoff-guidance`
+- Hermes role: `runtime-handoff-guidance`
 - Quality tier: `checkpoint-gated`
-- Handoff policy: Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and delegate coding milestones to the selected executor with only observed runtime evidence.
+- Handoff policy: Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and route coding milestones to the selected runtime profile with only observed runtime evidence.
 - Why this exists: `ultragoal` exists for work that can outlive one chat turn: it turns ambition into durable stories, checkpoints, and completion gates so progress can resume without pretending a summary is evidence.
 - Use when: Use when work needs durable goal artifacts, checkpointed progress, and final quality gates.
 - Do not use when:
@@ -126,7 +126,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Checkpoint every success, blocker, and final quality gate with fresh evidence.
   - Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.
   - Tell the user the next action through goal_status_card/v1 or goal_continuation/v1 instead of ending with vague follow-up copy.
-  - For coding milestones, use prepared handoffs and observed executor evidence rather than hidden Hermes execution.
+  - For coding milestones, use prepared runtime handoffs and observed runtime evidence rather than hidden execution claims.
 - Required inputs:
   - goal statement
   - acceptance criteria
@@ -152,7 +152,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `continuous-goal-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `loop-gated`
-- Handoff policy: Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+- Handoff policy: Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/runtime/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 - Why this exists: `loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.
 - Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 - Do not use when:
@@ -172,7 +172,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
   - Reframe the north-star goal into implementable internal work without shrinking its ambition.
   - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
-  - Expose a permission profile before executor dispatch, repository mutation, PR, merge, or external publishing.
+  - Expose a permission profile before executor/runtime dispatch, repository mutation, PR, merge, or external publishing.
   - Expose the automation, worktree, skill, connector, and subagent building-block states without treating planned blocks as observed work.
   - Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.
   - Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.
@@ -223,7 +223,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `single-cycle-plan-to-pr`
 - Hermes role: `retained-cognition`
 - Quality tier: `process-gated`
-- Handoff policy: Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor handoff such as Codex, Claude Code, another coding agent, or explicit Hermes-retained work only when the user accepts that owner.
+- Handoff policy: Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor/runtime handoff such as Codex, Claude Code, OMX/OMO/OMC, another coding agent, or explicit Hermes coding runtime only when the user accepts that owner.
 - Why this exists: `ultraprocess` exists to give Hermes one clean plan-to-PR operating cycle: research, reviewed plan, selected implementation handoff, review gate, docs sync, and PR-ready evidence.
 - Use when: Use when the user asks Hermes to take a concrete task through one full delivery cycle: research/codebase context, reviewed plan, selected implementation handoff, code review, docs sync when needed, and PR preparation.
 - Do not use when:
@@ -242,7 +242,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Complete exactly one plan-to-PR delivery cycle, then stop with status, evidence gaps, or a next recommended workflow.
   - Start with codebase/source research and a ralplan-style decision record before implementation handoff.
-  - Use ultragoal or the selected executor path for implementation, with acceptance criteria and verification commands attached.
+  - Use ultragoal or the selected executor/runtime path for implementation, with acceptance criteria and verification commands attached.
   - Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.
   - Add docs-specialist sync when public behavior, commands, setup, examples, or claims changed.
   - End with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.
@@ -253,7 +253,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - verification expectations
 - Expected outputs:
   - ralplan-ready context and plan
-  - ultragoal or selected executor handoff
+  - ultragoal or selected executor/runtime handoff
   - code-review gate
   - docs sync checklist
   - single-cycle PR-ready summary with observed evidence and gaps
@@ -317,9 +317,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `coordination`
-- Hermes role: `codex-handoff-guidance`
+- Hermes role: `runtime-handoff-guidance`
 - Quality tier: `coordination-gated`
-- Handoff policy: Use Hermes for lane framing and status; implementation lanes should become selected executor handoff tasks unless they are research, interview, planning, or status-only.
+- Handoff policy: Use Hermes for lane framing and status; implementation lanes should become selected runtime handoff tasks, including Hermes-owned coding when the user chooses that runtime.
 - Why this exists: `team` exists to keep `execution` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when multiple independent lanes materially improve throughput or verification.
 - Do not use when:
@@ -336,7 +336,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - Split only independent lanes with explicit ownership and verification boundaries.
-  - Keep Hermes as coordinator and status narrator while coding lanes become executor handoffs.
+  - Keep Hermes as coordinator and status narrator while coding lanes become runtime handoffs with explicit ownership.
   - Integrate lane evidence before reporting combined progress.
 - Required inputs:
   - bounded lane definitions
@@ -359,15 +359,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `parallel-delivery`
-- Hermes role: `codex-handoff-guidance`
+- Hermes role: `runtime-handoff-guidance`
 - Quality tier: `handoff-gated`
-- Handoff policy: Keep the workflow name for compatibility, but convert coding lanes into explicit selected executor handoffs with disjoint scope, verification, and review evidence.
-- Why this exists: `ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, or observed executor evidence.
+- Handoff policy: Keep the workflow name for compatibility, but convert coding lanes into explicit selected runtime handoffs with disjoint scope, verification, review evidence, worker protocol, and worktree guidance.
+- Why this exists: `ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, worker protocol, worktree isolation, or observed runtime evidence.
 - Use when: Use when an accepted implementation plan can be split into independent, reviewable work lanes.
 - Do not use when:
   - The work touches the same files or invariants in ways that need one owner.
   - The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
-  - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-executor handoffs.
+  - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
 - Strong routing signals: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
 - Good example:
   - Prompt: $ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.
@@ -378,7 +378,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Expected behavior: Keep one owner or re-plan boundaries before parallelization.
   - Why: Shared core logic makes parallel edits likely to conflict or hide regressions.
 - Quality bar:
-  - Require disjoint lane ownership before preparing multiple coding handoffs.
+  - Require disjoint lane ownership before preparing multiple coding runtime handoffs.
   - Attach acceptance criteria, verification commands, and review expectations to each lane.
   - Keep dispatch, execution, review, CI, and merge status evidence separate.
 - Required inputs:
@@ -387,14 +387,14 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - disjoint file or responsibility scopes
   - verification commands
 - Expected outputs:
-  - executor handoff prompts or lane instructions
+  - runtime handoff prompts or lane instructions
   - status summary
   - review/CI evidence requirements
 - Artifact expectations:
   - prepared coding delegation record per implementation lane when wrappers can record them
 - Safety rules:
   - Do not start parallel coding without disjoint ownership boundaries.
-  - Keep Hermes responsible for orchestration/status, not hidden implementation.
+  - Keep Hermes responsible for orchestration/status; when Hermes itself is selected for coding, still preserve runtime evidence boundaries.
   - Record unobserved executor work as prepared_not_observed or not_observed.
 
 ### web-research
@@ -447,7 +447,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `business-brief`
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
-- Handoff policy: Keep business research in Hermes; prepare a selected executor handoff only after a later accepted plan requires code changes.
+- Handoff policy: Keep business research in Hermes; prepare a selected executor/runtime handoff only after a later accepted plan requires code changes.
 - Why this exists: `research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.
 - Do not use when:
@@ -578,7 +578,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `feedback`
 - Hermes role: `retained-cognition`
 - Quality tier: `triage-gated`
-- Handoff policy: Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor handoff only after explicit coding intent or accepted plan evidence.
+- Handoff policy: Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor/runtime handoff only after explicit coding intent or accepted plan evidence.
 - Why this exists: `feedback-triage` exists to keep customer and community signals from jumping straight into roadmap or coding; it clusters evidence, ranks signals, and chooses the next workflow.
 - Use when: Use when Hermes should classify feedback, bug reports, and feature asks before deciding whether research, planning, or coding handoff is needed.
 - Do not use when:
@@ -680,7 +680,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Why: The request is about recurring operating history, not a generic agenda or code handoff.
 - Bad example:
   - Prompt: operating-rhythm implement the action items from the retro.
-  - Expected behavior: Route implementation to a plan or selected executor handoff after action items are accepted.
+  - Expected behavior: Route implementation to a plan or selected executor/runtime handoff after action items are accepted.
   - Why: Operating records can capture follow-ups, but implementation is a separate observed work stream.
 - Quality bar:
   - Name cadence, audience, time window, known notes, and missing evidence before producing a record.
@@ -799,7 +799,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `app-delivery-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `delivery-gated`
-- Handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
+- Handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor/runtime handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
 - Why this exists: `idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should carry a product or app idea through shaping, decision gates, plan acceptance, executor handoff, verification, release readiness, deploy, and monitoring boundaries.
 - Do not use when:
@@ -817,7 +817,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Name the idea, user value, decision owner, non-goals, and success metric before planning delivery.
   - Expose idea, decision, plan, handoff, verification, release, deploy, and monitor stages as separate status steps.
-  - Prepare coding handoffs only after plan acceptance and selected executor choice.
+  - Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
   - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
 - Required inputs:
   - product idea
@@ -936,7 +936,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `qa`
 - Hermes role: `hybrid-verification`
 - Quality tier: `scenario-gated`
-- Handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor handoffs.
+- Handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor/runtime handoffs.
 - Why this exists: `ultraqa` exists to keep `verification` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the task needs adversarial test scenarios, verification, and fix loops.
 - Do not use when:
@@ -978,7 +978,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `plan`
 - Hermes role: `retained-cognition`
 - Quality tier: `acceptance-gated`
-- Handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor handoff after acceptance.
+- Handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor/runtime handoff after acceptance.
 - Why this exists: `plan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
 - Do not use when:
@@ -1020,7 +1020,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `reviewed-plan`
 - Hermes role: `retained-cognition`
 - Quality tier: `reviewed-plan-gated`
-- Handoff policy: Keep consensus planning and review in Hermes; produce explicit selected executor handoff guidance only after the plan is accepted.
+- Handoff policy: Keep consensus planning and review in Hermes; produce explicit selected executor/runtime handoff guidance only after the plan is accepted.
 - Why this exists: `ralplan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when requirements are clear enough for planning but architecture, risks, or tests need review.
 - Do not use when:
@@ -1077,7 +1077,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Why: The task is explicitly review-shaped and has a behavioral risk surface.
 - Bad example:
   - Prompt: $code-review add the missing setup flag and commit it.
-  - Expected behavior: Route implementation to a selected executor after review findings are established.
+  - Expected behavior: Route implementation to a selected executor/runtime after review findings are established.
   - Why: Review can identify the issue, but code mutation is a separate execution step.
 - Quality bar:
   - Lead with ranked findings grounded in file, diff, command, or artifact evidence.
@@ -1104,9 +1104,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `maintenance`
 - Phase: `cleanup`
-- Hermes role: `codex-handoff-guidance`
+- Hermes role: `runtime-handoff-guidance`
 - Quality tier: `regression-gated`
-- Handoff policy: Use Hermes to define cleanup scope and regression checks; delegate behavior-preserving edits to the selected coding executor once tests are clear.
+- Handoff policy: Use Hermes to define cleanup scope and regression checks; route behavior-preserving edits to the selected coding runtime once tests are clear.
 - Why this exists: `ai-slop-cleaner` exists to keep `maintenance` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for behavior-preserving cleanup with tests before and after edits.
 - Do not use when:
@@ -1148,7 +1148,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `evidence`
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
-- Handoff policy: Run as Hermes-side evidence gathering; hand coding to the selected executor only after source-backed guidance is summarized.
+- Handoff policy: Run as Hermes-side evidence gathering; hand coding to the selected executor/runtime only after source-backed guidance is summarized.
 - Why this exists: `best-practice-research` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when correctness depends on current official or upstream guidance.
 - Do not use when:
@@ -1230,7 +1230,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `measurement`
 - Hermes role: `hybrid-measurement`
 - Quality tier: `measurement-gated`
-- Handoff policy: Hermes can own baselines, benchmark plans, and status; optimization code changes should be selected executor handoffs.
+- Handoff policy: Hermes can own baselines, benchmark plans, and status; optimization code changes should be selected executor/runtime handoffs.
 - Why this exists: `performance-goal` exists to keep `optimization` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the goal is measurable performance improvement with evaluator evidence.
 - Do not use when:
@@ -1501,6 +1501,11 @@ Route implementation requests through scoped context, edit discipline, tests, re
   - `accept_plan`
   - `show_prompt_handoff`
   - `copy_prompt_handoff`
+  - `show_runtime_handoff`
+  - `start_runtime`
+  - `prepare_worktree`
+  - `start_team`
+  - `start_swarm`
   - `choose_executor`
   - `send_to_executor`
   - `send_to_codex`
@@ -2076,7 +2081,7 @@ Run complete app operation loops from idea through decision, handoff, release, d
 - Quality bar:
   - Name the product or release objective, user/customer value, success metric, non-goals, and owner.
   - Represent idea, decision, plan, handoff, verification, release, deploy, and monitor as separate stages.
-  - Keep coding work executor-neutral until a selected executor is chosen and a handoff is accepted.
+  - Keep coding work executor/runtime-neutral until a selected executor, runtime, or Hermes coding owner is chosen and a handoff is accepted.
   - Keep deploy, monitoring, rollback, incident, review, CI, and merge claims unavailable until observed evidence exists.
 - Inputs:
   - idea or release request
@@ -2091,7 +2096,7 @@ Run complete app operation loops from idea through decision, handoff, release, d
 - Stop conditions:
   - next stage is accepted or blocked
   - unobserved deploy/monitor claims stay explicit
-  - coding work has selected executor guidance when needed
+  - coding work has selected executor/runtime guidance when needed
 - Verification:
   - check every stage has an owner
   - separate prepared from observed
@@ -2204,7 +2209,7 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - `permission_profile_recorded`
   - `feedback_gate_recorded`
   - `loop_status_card_rendered`
-- Delegation expectation: Record loop state as Hermes-retained orchestration; record executor dispatch, implementation, review, CI, merge, and external publication only when observed by a linked runtime or operator artifact.
+- Delegation expectation: Record loop state as Hermes-retained orchestration; record executor/runtime dispatch, implementation, review, CI, merge, and external publication only when observed by a linked runtime or operator artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A loop_cycle/v1 artifact is not proof that coding, review, CI, merge, or external publication happened.

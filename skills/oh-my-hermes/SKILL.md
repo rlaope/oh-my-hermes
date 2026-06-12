@@ -61,7 +61,6 @@ Priority:
 
 Keep compatible workflow names installed, but use this advisory wrapper guidance to decide what Hermes should own:
 
-- `codex-handoff-guidance`: `ralph`, `ultragoal`, `team`, `ultrawork`, `ai-slop-cleaner`
 - `hybrid-measurement`: `performance-goal`
 - `hybrid-review`: `code-review`, `ask`
 - `hybrid-verification`: `ultraqa`
@@ -69,9 +68,10 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 - `retained-knowledge`: `wiki`
 - `retained-operator`: `cancel`, `skill`, `doctor`
 - `retained-router`: `oh-my-hermes`
+- `runtime-handoff-guidance`: `ralph`, `ultragoal`, `team`, `ultrawork`, `ai-slop-cleaner`
 - Full per-skill handoff policies live in generated workflow skills and `docs/WORKFLOWS.md`.
 
-General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor profile, prepare the matching handoff, and track only evidence it actually observes instead of implying Hermes coded secretly.
+General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor/runtime profile, prepare the matching handoff, and track only evidence it actually observes instead of implying code ran secretly.
 
 ## Multi-Agent Target Awareness
 
@@ -103,9 +103,9 @@ When a chat message is implementation-shaped and the wrapper wants a concrete ex
 omh coding delegate --source discord --executor codex --record "risky refactor"
 ```
 
-The command returns a `coding_delegation/v1` payload with a recommended workflow, harness, executor profile, acceptance criteria, verification expectations, and a `delegation_prompt_template` that the wrapper can forward with the user message substituted. It is deterministic and uses only local catalog metadata. Without an explicit executor, wrappers can receive an executor-choice response; non-Codex executors receive prompt-only handoffs unless a tested lifecycle contract exists.
+The command returns a `coding_delegation/v1` payload with a recommended workflow, harness, executor/runtime profile, acceptance criteria, verification expectations, and a `delegation_prompt_template` that the wrapper can forward with the user message substituted. It is deterministic and uses only local catalog metadata. Without an explicit executor, wrappers can receive an executor-choice response; Codex receives a lifecycle handoff, Claude Code and generic agents receive portable prompt handoffs, and Hermes/OMX/OMO/OMC receive `coding_runtime_handoff/v1` contracts with team/swarm, worker-protocol, and worktree guidance.
 
-With `--record`, `omh` creates a `.omh/runtime/runs/<run-id>/` prepared runtime run only for a Codex-selected delegate payload that contains a real `executor_handoff`. Executor-choice, prompt-only, retained-Hermes, clarify, and fallback responses return `runtime.recorded=false` and must stay wrapper/session state rather than prepared run evidence. For Codex runs, `coding_delegation.json` is paired with `run.json` marked `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
+With `--record`, `omh` creates a `.omh/runtime/runs/<run-id>/` prepared runtime run only for a Codex-selected delegate payload that contains a real `executor_handoff`. Executor-choice, prompt-only, runtime-handoff, clarify, and fallback responses return `runtime.recorded=false` and must stay wrapper/session state rather than prepared run evidence. For Codex runs, `coding_delegation.json` is paired with `run.json` marked `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
 
 ## Wrapper Backend Memory Context
 
@@ -166,7 +166,7 @@ Routing is conservative: route only on explicit invocation, strong keyword evide
 
 Use these harnesses to shape the response before adding new skills. They are quality lanes, not proof that a separate runtime role exists.
 
-- `coding-handling`: Route implementation requests through scoped context, edit discipline, tests, review, and evidence. Tier `handoff-gated`. Ladder: `coding_delegation_prepared` -> `executor_dispatch_observed` -> `executor_result_observed` -> `verification_recorded`. Actions: `accept_plan`, `show_prompt_handoff`, `copy_prompt_handoff`, `choose_executor`, `send_to_executor`. Privacy `metadata_only`.
+- `coding-handling`: Route implementation requests through scoped context, edit discipline, tests, review, and evidence. Tier `handoff-gated`. Ladder: `coding_delegation_prepared` -> `executor_dispatch_observed` -> `executor_result_observed` -> `verification_recorded`. Actions: `accept_plan`, `show_prompt_handoff`, `copy_prompt_handoff`, `show_runtime_handoff`, `start_runtime`. Privacy `metadata_only`.
 - `goal-execution`: Keep long-running work tied to explicit goals, checkpoints, and durable evidence. Tier `checkpoint-gated`. Ladder: `goal_created` -> `story_started` -> `checkpoint_recorded` -> `quality_gate_recorded`. Actions: `continue_goal`, `show_status`, `record_checkpoint`, `record_blocker`, `record_completion`. Privacy `metadata_only`.
 - `planning`: Turn clarified requirements into an execution-ready plan with tradeoffs and tests. Tier `acceptance-gated`. Ladder: `request_clarified` -> `plan_drafted` -> `option_tradeoffs_recorded` -> `test_strategy_recorded`. Actions: `accept_plan`, `revise_plan`, `cancel`, `prepare_handoff`. Privacy `metadata_only`.
 - `research`: Gather current or source-backed evidence before planning or coding handoff. Tier `source-gated`. Ladder: `research_question_scoped` -> `primary_sources_checked` -> `conflicts_checked` -> `evidence_synthesized`. Actions: `show_sources`, `ask_followup`, `prepare_plan`. Privacy `metadata_only`.
@@ -220,4 +220,4 @@ omh coding delegate --source discord --executor codex --record "risky refactor"
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
-Record only what is observed. A Codex-selected `coding_delegation.json` record and its `prepared_coding_delegation` run envelope prove a prepared handoff, not execution. Executor-choice and prompt-only handoffs do not create runtime runs. If Hermes does not expose delegation metadata, use `not_observed` or `not_available` instead of implying a specialist lane ran.
+Record only what is observed. A Codex-selected `coding_delegation.json` record and its `prepared_coding_delegation` run envelope prove a prepared handoff, not execution. Executor-choice, prompt-only, and runtime handoffs do not create lifecycle runtime runs. If Hermes or a chosen oh-my runtime does not expose delegation metadata, use `not_observed` or `not_available` instead of implying a specialist lane ran.

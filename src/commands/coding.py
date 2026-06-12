@@ -88,6 +88,8 @@ def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
         return "executor_choice_required"
     if payload.get("work_owner_mode") == "prompt_only_handoff":
         return "prompt_only_handoff_is_wrapper_session_only"
+    if payload.get("work_owner_mode") == "runtime_handoff":
+        return "runtime_handoff_is_wrapper_session_only"
     if payload.get("work_owner_mode") == "retained_hermes":
         return "retained_hermes_has_no_executor_handoff"
     if payload.get("selected_executor_profile") != "codex" or not isinstance(payload.get("executor_handoff"), dict):
@@ -106,7 +108,7 @@ def cmd_coding_lifecycle_start(args: argparse.Namespace) -> int:
     if not args.record:
         raise OmhError("coding lifecycle start requires --record")
     if args.executor != "codex":
-        raise OmhError("coding lifecycle is Codex-only in Phase 1; use coding delegate for prompt-only handoffs")
+        raise OmhError("coding lifecycle is Codex-only for run-backed tracking; use coding delegate for prompt-only or runtime handoffs")
     try:
         event_or_message, source_metadata = _chat_input_and_metadata(args)
         message = extract_message_text(event_or_message)

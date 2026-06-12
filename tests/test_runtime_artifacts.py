@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import os
 import stat
@@ -40,6 +41,7 @@ from omh.runtime_artifacts import (
     write_routing_decision,
     write_wrapper_contract,
 )
+from omh.runtime.records import validate_coding_runtime_handoff
 
 
 class RuntimeArtifactTests(unittest.TestCase):
@@ -271,6 +273,27 @@ class RuntimeArtifactTests(unittest.TestCase):
             errors = validate_coding_delegation_record(record)
 
             self.assertTrue(any("unsupported keys" in error and "message" in error for error in errors))
+
+    def test_validate_runtime_handoff_requires_boundary_evidence_contract(self) -> None:
+        handoff = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
+
+        self.assertEqual(validate_coding_runtime_handoff(handoff), [])
+
+        missing_key = deepcopy(handoff)
+        del missing_key["evidence_contract"]["prepared_is_not"]
+        self.assertIn("missing keys", json.dumps(validate_coding_runtime_handoff(missing_key)))
+
+        unknown_key = deepcopy(handoff)
+        unknown_key["evidence_contract"]["anything"] = ["runtime_start"]
+        self.assertIn("unsupported keys", json.dumps(validate_coding_runtime_handoff(unknown_key)))
+
+        empty_boundary = deepcopy(handoff)
+        empty_boundary["evidence_contract"]["prepared_is_not"] = []
+        self.assertIn("must not be empty", json.dumps(validate_coding_runtime_handoff(empty_boundary)))
+
+        missing_required_boundary = deepcopy(handoff)
+        missing_required_boundary["evidence_contract"]["observed_required_for"].remove("worker_dispatch")
+        self.assertIn("must include required boundaries", json.dumps(validate_coding_runtime_handoff(missing_required_boundary)))
 
     def test_validate_runtime_requires_coding_delegation_for_prepared_runs(self) -> None:
         with TemporaryDirectory() as tmp:

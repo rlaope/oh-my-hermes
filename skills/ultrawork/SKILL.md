@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: parallel-delivery
-    role: codex-handoff-guidance
+    role: runtime-handoff-guidance
     quality_tier: handoff-gated
 ---
 
@@ -16,13 +16,13 @@ This is a Hermes-native `ultrawork` workflow skill.
 
 ## Why This Exists
 
-`ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, or observed executor evidence.
+`ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, worker protocol, worktree isolation, or observed runtime evidence.
 
 ## Do Not Use When
 
 - The work touches the same files or invariants in ways that need one owner.
 - The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
-- The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-executor handoffs.
+- The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
 
 ## Examples
 
@@ -48,18 +48,18 @@ Use when an accepted implementation plan can be split into independent, reviewab
 
 Category: `execution`
 Phase: `parallel-delivery`
-Hermes role: `codex-handoff-guidance`
+Hermes role: `runtime-handoff-guidance`
 Quality tier: `handoff-gated`
 
 Quality bar:
 
-- Require disjoint lane ownership before preparing multiple coding handoffs.
+- Require disjoint lane ownership before preparing multiple coding runtime handoffs.
 - Attach acceptance criteria, verification commands, and review expectations to each lane.
 - Keep dispatch, execution, review, CI, and merge status evidence separate.
 
 Handoff policy:
 
-Keep the workflow name for compatibility, but convert coding lanes into explicit selected executor handoffs with disjoint scope, verification, and review evidence.
+Keep the workflow name for compatibility, but convert coding lanes into explicit selected runtime handoffs with disjoint scope, verification, review evidence, worker protocol, and worktree guidance.
 
 Required inputs:
 
@@ -70,7 +70,7 @@ Required inputs:
 
 Expected outputs:
 
-- executor handoff prompts or lane instructions
+- runtime handoff prompts or lane instructions
 - status summary
 - review/CI evidence requirements
 
@@ -81,7 +81,7 @@ Artifact expectations:
 Safety rules:
 
 - Do not start parallel coding without disjoint ownership boundaries.
-- Keep Hermes responsible for orchestration/status, not hidden implementation.
+- Keep Hermes responsible for orchestration/status; when Hermes itself is selected for coding, still preserve runtime evidence boundaries.
 - Record unobserved executor work as prepared_not_observed or not_observed.
 
 ## Harness Discipline

@@ -56,7 +56,7 @@ Quality bar:
 - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
 - Reframe the north-star goal into implementable internal work without shrinking its ambition.
 - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
-- Expose a permission profile before executor dispatch, repository mutation, PR, merge, or external publishing.
+- Expose a permission profile before executor/runtime dispatch, repository mutation, PR, merge, or external publishing.
 - Expose the automation, worktree, skill, connector, and subagent building-block states without treating planned blocks as observed work.
 - Choose workflow patterns such as single-step, fan-out-and-synthesize, adversarial verification, tournament, or triage batch as orchestration metadata only.
 - Keep repeated scaffold shape stable, summarize within bounded budgets, and add verifier lanes only when risk or evidence warrants them.
@@ -67,7 +67,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/runtime/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 
 Required inputs:
 

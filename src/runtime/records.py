@@ -3,7 +3,13 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from ..coding_contracts import CODING_EXECUTOR_HANDOFF_TARGETS, EXECUTOR_HANDOFF_SCHEMA_VERSION, PROMPT_HANDOFF_SCHEMA_VERSION
+from ..coding_contracts import (
+    CODING_EXECUTOR_HANDOFF_TARGETS,
+    CODING_RUNTIME_HANDOFF_TARGETS,
+    EXECUTOR_HANDOFF_SCHEMA_VERSION,
+    PROMPT_HANDOFF_SCHEMA_VERSION,
+    RUNTIME_HANDOFF_SCHEMA_VERSION,
+)
 from ..executors import DISPATCH_POLICIES, EXECUTOR_PROFILES, WORK_OWNER_MODES
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
 from ..local_store import utc_now
@@ -51,6 +57,7 @@ CODING_EXECUTOR_SELECTION_STATUSES = (
     "retained_hermes",
     "executor_choice_required",
     "handoff_prepared",
+    "runtime_handoff_prepared",
     "prompt_handoff_prepared",
 )
 CODING_DELEGATION_RECORD_KEYS = (
@@ -76,14 +83,17 @@ CODING_DELEGATION_RECORD_KEYS = (
     "recommendation_evidence",
     "harness_quality",
     "executor_handoff",
+    "runtime_handoff",
     "prompt_handoff",
     "acceptance_criteria",
     "verification",
     "status",
 )
 CODING_EXECUTOR_HANDOFF_SCHEMA_VERSION = EXECUTOR_HANDOFF_SCHEMA_VERSION
+CODING_RUNTIME_HANDOFF_SCHEMA_VERSION = RUNTIME_HANDOFF_SCHEMA_VERSION
 CODING_PROMPT_HANDOFF_SCHEMA_VERSION = PROMPT_HANDOFF_SCHEMA_VERSION
 CODING_EXECUTOR_TARGETS = CODING_EXECUTOR_HANDOFF_TARGETS
+CODING_RUNTIME_TARGETS = CODING_RUNTIME_HANDOFF_TARGETS
 CODING_EXECUTOR_HANDOFF_KEYS = (
     "schema_version",
     "work_owner_mode",
@@ -131,12 +141,70 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
 )
+CODING_RUNTIME_HANDOFF_KEYS = (
+    "schema_version",
+    "work_owner_mode",
+    "selected_executor_profile",
+    "runtime_profile",
+    "dispatchable",
+    "invocation",
+    "status",
+    "recording_contract",
+    "dispatch_contract",
+    "prompt_template",
+    "runtime_brief",
+    "team_contract",
+    "worktree_contract",
+    "scope",
+    "non_goals",
+    "acceptance_criteria",
+    "verification",
+    "review",
+    "evidence_contract",
+    "harness_quality",
+    "context_pack",
+    "context_pack_blocked",
+)
 CODING_PROMPT_HANDOFF_INVOCATION_KEYS = (
     "mode",
     "tool_label",
     "dispatch_text_template",
     "message_placeholder",
     "wrapper_note",
+)
+CODING_RUNTIME_HANDOFF_INVOCATION_KEYS = CODING_PROMPT_HANDOFF_INVOCATION_KEYS
+CODING_RUNTIME_PROFILE_KEYS = (
+    "profile",
+    "label",
+    "runtime_family",
+    "underlying_agent",
+    "supports_team_swarm",
+    "supports_tmux_workers",
+    "supports_worker_protocol",
+    "supports_worktree_guidance",
+    "requires_operator_runtime",
+)
+CODING_RUNTIME_EVIDENCE_CONTRACT_KEYS = ("prepared_is_not", "observed_required_for")
+CODING_RUNTIME_PREPARED_BOUNDARIES = (
+    "runtime_start",
+    "worktree_creation",
+    "worker_dispatch",
+    "implementation",
+    "verification",
+    "review",
+    "ci",
+    "merge",
+)
+CODING_RUNTIME_OBSERVED_BOUNDARIES = (
+    "runtime_start",
+    "worktree_creation",
+    "worker_dispatch",
+    "worker_result",
+    "verification",
+    "review",
+    "ci",
+    "merge_readiness",
+    "merge",
 )
 WRAPPER_SESSION_SCHEMA_VERSION = "wrapper_session/v1"
 WRAPPER_SESSION_RECORD_TYPE = "wrapper_session"
@@ -150,6 +218,7 @@ WRAPPER_SESSION_STATUSES = (
     "executor_choice_required",
     "executor_selected",
     "prompt_handoff_prepared",
+    "runtime_handoff_prepared",
     "handoff_prepared",
 )
 WRAPPER_SESSION_DECISIONS = ("none", "plan_accepted", "plan_revision_requested", "plan_cancelled")
@@ -180,6 +249,7 @@ WRAPPER_SESSION_STATUS_DECISIONS = {
     "executor_choice_required": "plan_accepted",
     "executor_selected": "plan_accepted",
     "prompt_handoff_prepared": "plan_accepted",
+    "runtime_handoff_prepared": "plan_accepted",
     "revision_requested": "plan_revision_requested",
     "cancelled": "plan_cancelled",
     "handoff_prepared": "plan_accepted",
@@ -203,6 +273,7 @@ WRAPPER_SESSION_RECORD_KEYS = (
     "selected_executor_profile",
     "dispatch_policy",
     "prompt_handoff",
+    "runtime_handoff",
     "current_run_id",
     "redaction_policy",
     "authority",
@@ -445,6 +516,9 @@ def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]
     executor_handoff = _compact_executor_handoff(delegation.get("executor_handoff"))
     if executor_handoff:
         record["executor_handoff"] = executor_handoff
+    runtime_handoff = _compact_runtime_handoff(delegation.get("runtime_handoff"))
+    if runtime_handoff:
+        record["runtime_handoff"] = runtime_handoff
     prompt_handoff = _compact_prompt_handoff(delegation.get("prompt_handoff"))
     if prompt_handoff:
         record["prompt_handoff"] = prompt_handoff
@@ -483,6 +557,7 @@ def build_wrapper_session_record(session: dict[str, Any]) -> dict[str, Any]:
         "selected_executor_profile": _optional_string(session.get("selected_executor_profile")),
         "dispatch_policy": str(session.get("dispatch_policy", "ask_before_dispatch")),
         "prompt_handoff": _compact_prompt_handoff(session.get("prompt_handoff")),
+        "runtime_handoff": _compact_runtime_handoff(session.get("runtime_handoff")),
         "current_run_id": str(session.get("current_run_id", "")),
         "redaction_policy": "metadata_only",
         "authority": {
@@ -704,6 +779,48 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     return compact
 
 
+def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or not value:
+        return {}
+    compact: dict[str, Any] = {
+        "schema_version": str(value.get("schema_version", "")),
+        "work_owner_mode": str(value.get("work_owner_mode", "")),
+        "selected_executor_profile": str(value.get("selected_executor_profile", "")),
+        "runtime_profile": _compact_runtime_profile(value.get("runtime_profile", {})),
+        "dispatchable": bool(value.get("dispatchable", False)),
+        "invocation": _compact_runtime_invocation(value.get("invocation", {})),
+        "status": str(value.get("status", "")),
+        "recording_contract": str(value.get("recording_contract", "")),
+        "dispatch_contract": str(value.get("dispatch_contract", "")),
+        "prompt_template": str(value.get("prompt_template", "")),
+        "runtime_brief": _compact_runtime_brief(value.get("runtime_brief", {})),
+        "team_contract": _compact_team_contract(value.get("team_contract", {})),
+        "worktree_contract": _compact_worktree_contract(value.get("worktree_contract", {})),
+        "scope": _compact_string_list(value.get("scope", [])),
+        "non_goals": _compact_string_list(value.get("non_goals", [])),
+        "acceptance_criteria": _compact_string_list(value.get("acceptance_criteria", [])),
+        "verification": _compact_string_list(value.get("verification", [])),
+        "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
+    }
+    harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
+    if harness_quality:
+        compact["harness_quality"] = harness_quality
+    review = value.get("review")
+    if isinstance(review, dict):
+        compact["review"] = {
+            "required": bool(review.get("required", False)),
+            "workflow": _optional_string(review.get("workflow")),
+            "evidence_required": str(review.get("evidence_required", "")),
+        }
+    context_pack = _compact_context_pack(value.get("context_pack"))
+    if context_pack:
+        compact["context_pack"] = context_pack
+    context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
+    if context_pack_blocked:
+        compact["context_pack_blocked"] = context_pack_blocked
+    return compact
+
+
 def _compact_prompt_invocation(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
@@ -713,6 +830,62 @@ def _compact_prompt_invocation(value: Any) -> dict[str, str]:
         "dispatch_text_template": str(value.get("dispatch_text_template", "")),
         "message_placeholder": str(value.get("message_placeholder", "")),
         "wrapper_note": str(value.get("wrapper_note", "")),
+    }
+
+
+def _compact_runtime_invocation(value: Any) -> dict[str, str]:
+    return _compact_prompt_invocation(value)
+
+
+def _compact_runtime_profile(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "profile": str(value.get("profile", "")),
+        "label": str(value.get("label", "")),
+        "runtime_family": str(value.get("runtime_family", "")),
+        "underlying_agent": str(value.get("underlying_agent", "")),
+        "supports_team_swarm": bool(value.get("supports_team_swarm", False)),
+        "supports_tmux_workers": bool(value.get("supports_tmux_workers", value.get("supports_worker_protocol", False))),
+        "supports_worker_protocol": bool(value.get("supports_worker_protocol", False)),
+        "supports_worktree_guidance": bool(value.get("supports_worktree_guidance", False)),
+        "requires_operator_runtime": bool(value.get("requires_operator_runtime", False)),
+    }
+
+
+def _compact_runtime_brief(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "task_source": str(value.get("task_source", "")),
+        "recommended_workflow": str(value.get("recommended_workflow", "")),
+        "recommended_harness": str(value.get("recommended_harness", "")),
+        "intent": str(value.get("intent", "")),
+        "runtime_owns": _compact_string_list(value.get("runtime_owns", [])),
+        "hermes_owns": _compact_string_list(value.get("hermes_owns", [])),
+    }
+
+
+def _compact_team_contract(value: Any) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "modes": _compact_string_list(value.get("modes", [])),
+        "leader_owns": _compact_string_list(value.get("leader_owns", [])),
+        "worker_protocol": _compact_string_list(value.get("worker_protocol", [])),
+        "fanout_when": _compact_string_list(value.get("fanout_when", [])),
+        "do_not_fanout_when": _compact_string_list(value.get("do_not_fanout_when", [])),
+    }
+
+
+def _compact_worktree_contract(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "policy": str(value.get("policy", "")),
+        "isolation": str(value.get("isolation", "")),
+        "required_before": _compact_string_list(value.get("required_before", [])),
+        "not_observed_by_omh": _compact_string_list(value.get("not_observed_by_omh", [])),
     }
 
 
@@ -1139,6 +1312,8 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
             _require(isinstance(value, str), errors, f"coding_delegation {key}[{index}] must be a string")
     if "executor_handoff" in delegation:
         errors.extend(validate_coding_executor_handoff(delegation["executor_handoff"]))
+    if "runtime_handoff" in delegation:
+        errors.extend(validate_coding_runtime_handoff(delegation["runtime_handoff"]))
     if "prompt_handoff" in delegation:
         errors.extend(validate_coding_prompt_handoff(delegation["prompt_handoff"]))
     if "harness_quality" in delegation:
@@ -1201,6 +1376,8 @@ def validate_wrapper_session_record(session: dict[str, Any]) -> list[str]:
     )
     if session.get("prompt_handoff"):
         errors.extend(validate_coding_prompt_handoff(session["prompt_handoff"]))
+    if session.get("runtime_handoff"):
+        errors.extend(validate_coding_runtime_handoff(session["runtime_handoff"]))
     _require(isinstance(session.get("current_run_id"), str), errors, "wrapper_session current_run_id must be a string")
     run_id = str(session.get("current_run_id", ""))
     if session.get("status") == "handoff_prepared":
@@ -1211,6 +1388,10 @@ def validate_wrapper_session_record(session: dict[str, Any]) -> list[str]:
         _require(not run_id, errors, "wrapper_session prompt_handoff_prepared must not have current_run_id")
         _require(bool(session.get("prompt_handoff")), errors, "wrapper_session prompt_handoff_prepared requires prompt_handoff")
         _require(session.get("work_owner_mode") == "prompt_only_handoff", errors, "wrapper_session prompt_handoff_prepared requires prompt_only_handoff mode")
+    elif session.get("status") == "runtime_handoff_prepared":
+        _require(not run_id, errors, "wrapper_session runtime_handoff_prepared must not have current_run_id")
+        _require(bool(session.get("runtime_handoff")), errors, "wrapper_session runtime_handoff_prepared requires runtime_handoff")
+        _require(session.get("work_owner_mode") == "runtime_handoff", errors, "wrapper_session runtime_handoff_prepared requires runtime_handoff mode")
     elif session.get("status") == "executor_choice_required":
         _require(not run_id, errors, "wrapper_session executor_choice_required must not have current_run_id")
         _require(session.get("selected_executor_profile") is None, errors, "wrapper_session executor_choice_required must not select an executor")
@@ -1351,6 +1532,137 @@ def validate_executor_selection(selection: Any, label: str) -> list[str]:
     return errors
 
 
+def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(handoff, dict), errors, "coding_delegation runtime_handoff must be an object")
+    if not isinstance(handoff, dict):
+        return errors
+    extra_keys = sorted(set(handoff) - set(CODING_RUNTIME_HANDOFF_KEYS))
+    _require(not extra_keys, errors, f"coding_delegation runtime_handoff has unsupported keys: {extra_keys}")
+    _require(
+        handoff.get("schema_version") == CODING_RUNTIME_HANDOFF_SCHEMA_VERSION,
+        errors,
+        "coding_delegation runtime_handoff schema_version is invalid",
+    )
+    _require(handoff.get("work_owner_mode") == "runtime_handoff", errors, "coding_delegation runtime_handoff work_owner_mode must be runtime_handoff")
+    _require(handoff.get("selected_executor_profile") in CODING_RUNTIME_TARGETS, errors, "coding_delegation runtime_handoff selected_executor_profile is invalid")
+    _require(handoff.get("dispatchable") is False, errors, "coding_delegation runtime_handoff dispatchable must be false")
+    for key in ("status", "recording_contract", "dispatch_contract", "prompt_template"):
+        _require(isinstance(handoff.get(key), str), errors, f"coding_delegation runtime_handoff {key} must be a string")
+    _require(handoff.get("status") == "prepared_not_observed", errors, "coding_delegation runtime_handoff status must be prepared_not_observed")
+    _require(handoff.get("recording_contract") == "runtime_prepared_not_started", errors, "coding_delegation runtime_handoff recording_contract is invalid")
+    _require(
+        handoff.get("dispatch_contract") == "wrapper_or_user_starts_runtime; omh_does_not_execute_runtime",
+        errors,
+        "coding_delegation runtime_handoff dispatch_contract is invalid",
+    )
+    _require("{message}" in str(handoff.get("prompt_template", "")), errors, "coding_delegation runtime_handoff prompt_template must keep {message} placeholder")
+    forbidden = ("codex_skill", "codex_invocation", "executor_handoff", "prompt_handoff", "run_id")
+    for key in forbidden:
+        _require(key not in handoff, errors, f"coding_delegation runtime_handoff must not contain {key}")
+
+    runtime_profile = handoff.get("runtime_profile")
+    _require(isinstance(runtime_profile, dict), errors, "coding_delegation runtime_handoff runtime_profile must be an object")
+    if isinstance(runtime_profile, dict):
+        extra_profile_keys = sorted(set(runtime_profile) - set(CODING_RUNTIME_PROFILE_KEYS))
+        _require(not extra_profile_keys, errors, f"coding_delegation runtime_handoff runtime_profile has unsupported keys: {extra_profile_keys}")
+        for key in ("profile", "label", "runtime_family", "underlying_agent"):
+            _require(isinstance(runtime_profile.get(key), str), errors, f"coding_delegation runtime_handoff runtime_profile.{key} must be a string")
+        _require(runtime_profile.get("profile") == handoff.get("selected_executor_profile"), errors, "coding_delegation runtime_handoff runtime_profile.profile must match selected executor")
+        for key in ("supports_team_swarm", "supports_worker_protocol", "supports_worktree_guidance", "requires_operator_runtime"):
+            _require(isinstance(runtime_profile.get(key), bool), errors, f"coding_delegation runtime_handoff runtime_profile.{key} must be boolean")
+        if "supports_tmux_workers" in runtime_profile:
+            _require(isinstance(runtime_profile.get("supports_tmux_workers"), bool), errors, "coding_delegation runtime_handoff runtime_profile.supports_tmux_workers must be boolean")
+            _require(runtime_profile.get("supports_tmux_workers") is True, errors, "coding_delegation runtime_handoff must support tmux-style worker guidance")
+        _require(runtime_profile.get("supports_team_swarm") is True, errors, "coding_delegation runtime_handoff must support team/swarm guidance")
+        _require(runtime_profile.get("supports_worker_protocol") is True, errors, "coding_delegation runtime_handoff must support worker protocol")
+        _require(runtime_profile.get("supports_worktree_guidance") is True, errors, "coding_delegation runtime_handoff must support worktree guidance")
+
+    invocation = handoff.get("invocation")
+    _require(isinstance(invocation, dict), errors, "coding_delegation runtime_handoff invocation must be an object")
+    if isinstance(invocation, dict):
+        extra_invocation_keys = sorted(set(invocation) - set(CODING_RUNTIME_HANDOFF_INVOCATION_KEYS))
+        _require(not extra_invocation_keys, errors, f"coding_delegation runtime_handoff invocation has unsupported keys: {extra_invocation_keys}")
+        for key in CODING_RUNTIME_HANDOFF_INVOCATION_KEYS:
+            _require(isinstance(invocation.get(key), str), errors, f"coding_delegation runtime_handoff invocation.{key} must be a string")
+        _require("{message}" in str(invocation.get("dispatch_text_template", "")), errors, "coding_delegation runtime_handoff invocation.dispatch_text_template must keep {message}")
+
+    brief = handoff.get("runtime_brief")
+    _require(isinstance(brief, dict), errors, "coding_delegation runtime_handoff runtime_brief must be an object")
+    if isinstance(brief, dict):
+        for key in ("task_source", "recommended_workflow", "recommended_harness", "intent"):
+            _require(isinstance(brief.get(key), str), errors, f"coding_delegation runtime_handoff runtime_brief.{key} must be a string")
+        for key in ("runtime_owns", "hermes_owns"):
+            _require(isinstance(brief.get(key), list), errors, f"coding_delegation runtime_handoff runtime_brief.{key} must be a list")
+            if isinstance(brief.get(key), list):
+                for index, value in enumerate(brief[key]):
+                    _require(isinstance(value, str), errors, f"coding_delegation runtime_handoff runtime_brief.{key}[{index}] must be a string")
+
+    team_contract = handoff.get("team_contract")
+    _require(isinstance(team_contract, dict), errors, "coding_delegation runtime_handoff team_contract must be an object")
+    if isinstance(team_contract, dict):
+        expected = {"modes", "leader_owns", "worker_protocol", "fanout_when", "do_not_fanout_when"}
+        _require(not (set(team_contract) - expected), errors, f"coding_delegation runtime_handoff team_contract has unsupported keys: {sorted(set(team_contract) - expected)}")
+        for key in expected:
+            _require(isinstance(team_contract.get(key), list), errors, f"coding_delegation runtime_handoff team_contract.{key} must be a list")
+            if isinstance(team_contract.get(key), list):
+                for index, value in enumerate(team_contract[key]):
+                    _require(isinstance(value, str), errors, f"coding_delegation runtime_handoff team_contract.{key}[{index}] must be a string")
+        _require("team" in team_contract.get("modes", []), errors, "coding_delegation runtime_handoff team_contract.modes must include team")
+        _require("swarm" in team_contract.get("modes", []), errors, "coding_delegation runtime_handoff team_contract.modes must include swarm")
+
+    worktree_contract = handoff.get("worktree_contract")
+    _require(isinstance(worktree_contract, dict), errors, "coding_delegation runtime_handoff worktree_contract must be an object")
+    if isinstance(worktree_contract, dict):
+        expected = {"policy", "isolation", "required_before", "not_observed_by_omh"}
+        _require(not (set(worktree_contract) - expected), errors, f"coding_delegation runtime_handoff worktree_contract has unsupported keys: {sorted(set(worktree_contract) - expected)}")
+        for key in ("policy", "isolation"):
+            _require(isinstance(worktree_contract.get(key), str), errors, f"coding_delegation runtime_handoff worktree_contract.{key} must be a string")
+        for key in ("required_before", "not_observed_by_omh"):
+            _require(isinstance(worktree_contract.get(key), list), errors, f"coding_delegation runtime_handoff worktree_contract.{key} must be a list")
+            if isinstance(worktree_contract.get(key), list):
+                for index, value in enumerate(worktree_contract[key]):
+                    _require(isinstance(value, str), errors, f"coding_delegation runtime_handoff worktree_contract.{key}[{index}] must be a string")
+
+    for key in ("scope", "non_goals", "acceptance_criteria", "verification"):
+        _require(isinstance(handoff.get(key), list), errors, f"coding_delegation runtime_handoff {key} must be a list")
+        if isinstance(handoff.get(key), list):
+            for index, value in enumerate(handoff[key]):
+                _require(isinstance(value, str), errors, f"coding_delegation runtime_handoff {key}[{index}] must be a string")
+    review = handoff.get("review")
+    _require(isinstance(review, dict), errors, "coding_delegation runtime_handoff review must be an object")
+    if isinstance(review, dict):
+        _require(isinstance(review.get("required"), bool), errors, "coding_delegation runtime_handoff review.required must be boolean")
+        _require(review.get("workflow") is None or isinstance(review.get("workflow"), str), errors, "coding_delegation runtime_handoff review.workflow must be a string or null")
+        _require(isinstance(review.get("evidence_required"), str), errors, "coding_delegation runtime_handoff review.evidence_required must be a string")
+    contract = handoff.get("evidence_contract")
+    _require(isinstance(contract, dict), errors, "coding_delegation runtime_handoff evidence_contract must be an object")
+    if isinstance(contract, dict):
+        extra_contract_keys = sorted(set(contract) - set(CODING_RUNTIME_EVIDENCE_CONTRACT_KEYS))
+        missing_contract_keys = sorted(set(CODING_RUNTIME_EVIDENCE_CONTRACT_KEYS) - set(contract))
+        _require(not extra_contract_keys, errors, f"coding_delegation runtime_handoff evidence_contract has unsupported keys: {extra_contract_keys}")
+        _require(not missing_contract_keys, errors, f"coding_delegation runtime_handoff evidence_contract is missing keys: {missing_contract_keys}")
+        for nested_key in CODING_RUNTIME_EVIDENCE_CONTRACT_KEYS:
+            nested_value = contract.get(nested_key)
+            _require(isinstance(nested_value, list), errors, f"coding_delegation runtime_handoff evidence_contract.{nested_key} must be a list")
+            if isinstance(nested_value, list):
+                _require(len(nested_value) >= 1, errors, f"coding_delegation runtime_handoff evidence_contract.{nested_key} must not be empty")
+                for index, item in enumerate(nested_value):
+                    _require(isinstance(item, str), errors, f"coding_delegation runtime_handoff evidence_contract.{nested_key}[{index}] must be a string")
+                required = CODING_RUNTIME_PREPARED_BOUNDARIES if nested_key == "prepared_is_not" else CODING_RUNTIME_OBSERVED_BOUNDARIES
+                values = {item for item in nested_value if isinstance(item, str)}
+                missing_values = sorted(set(required) - values)
+                _require(
+                    not missing_values,
+                    errors,
+                    f"coding_delegation runtime_handoff evidence_contract.{nested_key} must include required boundaries: {missing_values}",
+                )
+    if "harness_quality" in handoff:
+        errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation runtime_handoff harness_quality"))
+    errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation runtime_handoff"))
+    return errors
+
+
 def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
     errors: list[str] = []
     _require(isinstance(handoff, dict), errors, "coding_delegation prompt_handoff must be an object")
@@ -1366,6 +1678,7 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
     _require(handoff.get("work_owner_mode") == "prompt_only_handoff", errors, "coding_delegation prompt_handoff work_owner_mode must be prompt_only_handoff")
     _require(handoff.get("selected_executor_profile") in CODING_SELECTED_EXECUTOR_PROFILES, errors, "coding_delegation prompt_handoff selected_executor_profile is invalid")
     _require(handoff.get("selected_executor_profile") != "codex", errors, "coding_delegation prompt_handoff must not target codex")
+    _require(handoff.get("selected_executor_profile") not in CODING_RUNTIME_TARGETS, errors, "coding_delegation prompt_handoff must not target a runtime profile")
     _require(handoff.get("dispatchable") is False, errors, "coding_delegation prompt_handoff dispatchable must be false")
     for key in ("status", "recording_contract", "dispatch_contract", "prompt_template"):
         _require(isinstance(handoff.get(key), str), errors, f"coding_delegation prompt_handoff {key} must be a string")
@@ -1428,25 +1741,35 @@ def validate_coding_handoff_combination(delegation: dict[str, Any], label: str) 
     selected = delegation.get("selected_executor_profile")
     dispatchable = delegation.get("dispatchable")
     has_executor = "executor_handoff" in delegation
+    has_runtime = "runtime_handoff" in delegation
     has_prompt = "prompt_handoff" in delegation
     choice_required = bool(delegation.get("executor_selection", {}).get("choice_required")) if isinstance(delegation.get("executor_selection"), dict) else False
     if mode == "retained_hermes":
         _require(not has_executor, errors, f"{label} retained_hermes must not include executor_handoff")
+        _require(not has_runtime, errors, f"{label} retained_hermes must not include runtime_handoff")
         _require(not has_prompt, errors, f"{label} retained_hermes must not include prompt_handoff")
         _require(dispatchable is False, errors, f"{label} retained_hermes must not be dispatchable")
     if mode == "prompt_only_handoff":
         _require(has_prompt, errors, f"{label} prompt_only_handoff requires prompt_handoff")
         _require(not has_executor, errors, f"{label} prompt_only_handoff must not include executor_handoff")
+        _require(not has_runtime, errors, f"{label} prompt_only_handoff must not include runtime_handoff")
         _require(dispatchable is False, errors, f"{label} prompt_only_handoff must not be dispatchable")
         _require(selected != "codex", errors, f"{label} prompt_only_handoff must not select codex")
+    if mode == "runtime_handoff":
+        _require(has_runtime, errors, f"{label} runtime_handoff requires runtime_handoff")
+        _require(not has_executor, errors, f"{label} runtime_handoff must not include executor_handoff")
+        _require(not has_prompt, errors, f"{label} runtime_handoff must not include prompt_handoff")
+        _require(dispatchable is False, errors, f"{label} runtime_handoff must not be dispatchable")
+        _require(selected in CODING_RUNTIME_TARGETS, errors, f"{label} runtime_handoff selected executor is invalid")
     if mode == "external_executor":
         if choice_required:
-            _require(not has_executor and not has_prompt, errors, f"{label} executor_choice_required must not include a handoff")
+            _require(not has_executor and not has_runtime and not has_prompt, errors, f"{label} executor_choice_required must not include a handoff")
             _require(selected is None, errors, f"{label} executor_choice_required must not select an executor")
             _require(dispatchable is False, errors, f"{label} executor_choice_required must not be dispatchable")
         else:
             _require(selected == "codex", errors, f"{label} external_executor is Codex-only in phase 1")
             _require(has_executor, errors, f"{label} external_executor requires executor_handoff")
+            _require(not has_runtime, errors, f"{label} external_executor must not include runtime_handoff")
             _require(not has_prompt, errors, f"{label} external_executor must not include prompt_handoff")
             _require(dispatchable is True, errors, f"{label} external_executor must be dispatchable")
     return errors

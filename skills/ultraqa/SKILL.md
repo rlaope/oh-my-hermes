@@ -58,7 +58,7 @@ Quality bar:
 
 Handoff policy:
 
-Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor handoffs.
+Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor/runtime handoffs.
 
 Required inputs:
 

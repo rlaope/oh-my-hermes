@@ -54,12 +54,12 @@ Quality bar:
 
 - Name the idea, user value, decision owner, non-goals, and success metric before planning delivery.
 - Expose idea, decision, plan, handoff, verification, release, deploy, and monitor stages as separate status steps.
-- Prepare coding handoffs only after plan acceptance and selected executor choice.
+- Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
 - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
 
 Handoff policy:
 
-Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
+Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor/runtime handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
 
 Required inputs:
 

@@ -4,12 +4,19 @@ from dataclasses import asdict, dataclass
 import hashlib
 from typing import Any
 
-from .coding_contracts import CODING_EXECUTOR_TARGETS, EXECUTOR_HANDOFF_SCHEMA_VERSION, PROMPT_HANDOFF_SCHEMA_VERSION
+from .coding_contracts import (
+    CODING_EXECUTOR_TARGETS,
+    EXECUTOR_HANDOFF_SCHEMA_VERSION,
+    PROMPT_HANDOFF_SCHEMA_VERSION,
+    RUNTIME_HANDOFF_SCHEMA_VERSION,
+)
 from .executors import (
     executor_label,
     executor_selection_for_target,
     prompt_invocation_for_profile,
     public_executor_options,
+    runtime_invocation_for_profile,
+    runtime_profile_contract,
 )
 from .harness_quality import with_wrapper_actions
 from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
@@ -122,6 +129,9 @@ def build_coding_delegation_payload(
     if selection.selected_executor_profile == "codex" and delegation.action == "delegate":
         payload["executor_handoff"] = _executor_handoff(executor_target, delegation)
         _attach_context_pack(payload["executor_handoff"], context_pack)
+    elif selection.work_owner_mode == "runtime_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
+        payload["runtime_handoff"] = _runtime_handoff(selection.selected_executor_profile, delegation)
+        _attach_context_pack(payload["runtime_handoff"], context_pack)
     elif selection.work_owner_mode == "prompt_only_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
@@ -130,6 +140,7 @@ def build_coding_delegation_payload(
         action=delegation.action,
         work_owner_mode=selection.work_owner_mode,
         has_executor_handoff="executor_handoff" in payload,
+        has_runtime_handoff="runtime_handoff" in payload,
         has_prompt_handoff="prompt_handoff" in payload,
         choice_required=selection.choice_required,
     )
@@ -145,6 +156,9 @@ def build_coding_delegation_payload(
         prompt_handoff = payload.get("prompt_handoff")
         if isinstance(prompt_handoff, dict) and "prompt_template" in prompt_handoff:
             payload["prompt_handoff_prompt"] = str(prompt_handoff["prompt_template"]).replace("{message}", message)
+        runtime_handoff = payload.get("runtime_handoff")
+        if isinstance(runtime_handoff, dict) and "prompt_template" in runtime_handoff:
+            payload["runtime_handoff_prompt"] = str(runtime_handoff["prompt_template"]).replace("{message}", message)
     return payload
 
 
@@ -200,7 +214,7 @@ def coding_delegation_record_payload(
     payload_metadata = payload.get("source_metadata")
     if isinstance(payload_metadata, dict):
         metadata.update({str(key): str(value) for key, value in payload_metadata.items() if str(value)})
-    return {
+    record: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "record_type": "coding_delegation",
         "source": payload.get("source", "generic"),
@@ -221,12 +235,14 @@ def coding_delegation_record_payload(
         "source_metadata": metadata,
         "recommendation_evidence": payload.get("recommendations", []),
         "harness_quality": payload.get("harness_quality", {}),
-        "executor_handoff": payload.get("executor_handoff"),
-        "prompt_handoff": payload.get("prompt_handoff"),
         "acceptance_criteria": delegation.get("acceptance_criteria", []),
         "verification": delegation.get("verification", []),
         "status": "prepared_not_observed",
     }
+    for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+        if isinstance(payload.get(key), dict):
+            record[key] = payload[key]
+    return record
 
 
 def _intent_for(message: str, workflow: str, score: int) -> str:
@@ -286,7 +302,7 @@ def _acceptance_criteria(intent: str, action: str, workflow: str) -> tuple[str, 
                 "Keep missing evidence explicit and avoid claiming execution or a coding handoff.",
             )
         return (
-            "Ask the smallest blocking clarification before executor dispatch.",
+            "Ask the smallest blocking clarification before executor/runtime dispatch.",
             "Preserve the original task constraints in the eventual handoff.",
         )
     criteria = {
@@ -473,20 +489,152 @@ def _prompt_handoff(profile: str, delegation: CodingDelegation) -> dict[str, obj
     }
 
 
+def _runtime_handoff(profile: str, delegation: CodingDelegation) -> dict[str, object]:
+    invocation = runtime_invocation_for_profile(profile)
+    contract = runtime_profile_contract(profile)
+    label = executor_label(profile)
+    return {
+        "schema_version": RUNTIME_HANDOFF_SCHEMA_VERSION,
+        "work_owner_mode": "runtime_handoff",
+        "selected_executor_profile": profile,
+        "runtime_profile": contract,
+        "dispatchable": False,
+        "invocation": invocation,
+        "status": "prepared_not_observed",
+        "recording_contract": "runtime_prepared_not_started",
+        "dispatch_contract": "wrapper_or_user_starts_runtime; omh_does_not_execute_runtime",
+        "prompt_template": _runtime_prompt_template(delegation, profile=profile, label=label),
+        "runtime_brief": {
+            "task_source": "original_message_at_runtime_start",
+            "recommended_workflow": delegation.recommended_workflow,
+            "recommended_harness": delegation.recommended_harness,
+            "intent": delegation.intent,
+            "runtime_owns": [
+                "repository inspection when coding is selected",
+                "team or swarm lane creation when the task is safely splittable",
+                "tmux-style worker or pane coordination when the chosen runtime supports it",
+                "worker ACK/claim/result discipline",
+                "worktree isolation when parallel, risky, or multi-file coding starts",
+                "verification evidence reporting",
+            ],
+            "hermes_owns": [
+                "chat intake",
+                "runtime selection narration",
+                "prepared versus observed evidence boundaries",
+                "status narration from observed runtime artifacts",
+            ],
+        },
+        "team_contract": {
+            "modes": ["solo", "team", "swarm"],
+            "leader_owns": [
+                "scope split",
+                "worker assignment",
+                "shared-file conflict control",
+                "verification integration",
+                "final status report",
+            ],
+            "worker_protocol": [
+                "ACK assigned lane before editing",
+                "use tmux-style worker labels or equivalent runtime lane IDs for parallel work",
+                "claim files or worktree before shared changes",
+                "report changed files, tests, blockers, and evidence refs",
+                "escalate scope expansion to the leader",
+            ],
+            "fanout_when": [
+                "lanes are independent",
+                "verification can be integrated by one leader",
+                "parallel worktree or file ownership is explicit",
+            ],
+            "do_not_fanout_when": [
+                "requirements are still ambiguous",
+                "lanes would edit the same files without a merge plan",
+                "review or verification ownership is unclear",
+            ],
+        },
+        "worktree_contract": {
+            "policy": "recommended_for_parallel_or_risky_coding",
+            "isolation": "use one branch/worktree per worker lane when more than one coding agent may edit the repository",
+            "required_before": [
+                "parallel implementation",
+                "risky refactor",
+                "large generated changes",
+                "team or swarm coding",
+            ],
+            "not_observed_by_omh": [
+                "worktree creation",
+                "branch creation",
+                "worker process launch",
+                "merge back to main worktree",
+            ],
+        },
+        "scope": [
+            "Use the original task message as the runtime request.",
+            f"Run {label} with the recommended OMH workflow unless local runtime routing has stronger evidence.",
+            "For Hermes-owned coding, use OMH coding skills directly instead of pretending a separate executor ran.",
+            "For OMX/OMO/OMC, treat the runtime as the chosen oh-my execution layer, not a plain prompt.",
+            "Keep prepared runtime state separate from observed runtime evidence.",
+        ],
+        "non_goals": [
+            "Do not claim OMH started the runtime.",
+            "Do not claim worktrees, workers, subagents, or tmux panes exist until observed.",
+            "Do not claim implementation, review, CI, or merge status from this prepared runtime handoff.",
+        ],
+        "acceptance_criteria": list(delegation.acceptance_criteria),
+        "verification": list(delegation.verification),
+        "review": {
+            "required": delegation.review_required,
+            "workflow": delegation.review_workflow,
+            "evidence_required": "Runtime review evidence must be reported after real runtime work occurs.",
+        },
+        "evidence_contract": {
+            "prepared_is_not": [
+                "runtime_start",
+                "worktree_creation",
+                "worker_dispatch",
+                "implementation",
+                "verification",
+                "review",
+                "ci",
+                "merge",
+            ],
+            "observed_required_for": [
+                "runtime_start",
+                "worktree_creation",
+                "worker_dispatch",
+                "worker_result",
+                "verification",
+                "review",
+                "ci",
+                "merge_readiness",
+                "merge",
+            ],
+        },
+        "harness_quality": with_wrapper_actions(
+            harness_quality_contract(delegation.recommended_harness),
+            ("show_runtime_handoff", "start_runtime", "prepare_worktree", "start_team", "start_swarm", "choose_executor", "show_status"),
+        ),
+    }
+
+
 def _public_harness_quality(
     harness: str,
     *,
     action: str,
     work_owner_mode: str,
     has_executor_handoff: bool,
+    has_runtime_handoff: bool,
     has_prompt_handoff: bool,
     choice_required: bool,
 ) -> dict[str, object]:
     contract = harness_quality_contract(harness)
     if action == "delegate" and has_executor_handoff:
         return with_wrapper_actions(contract, ("send_to_executor", "send_to_codex", "show_status"))
+    if action == "delegate" and has_runtime_handoff:
+        return with_wrapper_actions(contract, ("show_runtime_handoff", "start_runtime", "prepare_worktree", "start_team", "start_swarm", "choose_executor", "show_status"))
     if action == "delegate" and has_prompt_handoff:
         return with_wrapper_actions(contract, ("show_prompt_handoff", "copy_prompt_handoff", "choose_executor", "show_status"))
+    if action == "delegate" and work_owner_mode == "runtime_handoff":
+        return with_wrapper_actions(contract, ("show_runtime_handoff", "choose_executor", "show_status"))
     if action == "delegate" and work_owner_mode == "prompt_only_handoff":
         return with_wrapper_actions(contract, ("show_prompt_handoff", "copy_prompt_handoff", "choose_executor", "show_status"))
     if action == "delegate" and choice_required:
@@ -546,6 +694,33 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
     )
 
 
+def _runtime_prompt_template(delegation: CodingDelegation, *, profile: str, label: str) -> str:
+    return (
+        "You are {label}, receiving a Hermes-orchestrated runtime handoff.\n\n"
+        "Runtime profile: `{profile}`\n"
+        "Recommended OMH workflow: `{workflow}`\n"
+        "Recommended harness: `{harness}`\n"
+        "Intent: `{intent}`\n"
+        "Prepared status: `prepared_not_observed`\n\n"
+        "Runtime rules:\n"
+        "- Treat this as a runtime contract prepared by Hermes/OMH, not as observed execution.\n"
+        "- Use solo execution unless lanes are independent; use team/swarm only with explicit lane ownership.\n"
+        "- Use tmux-style workers, panes, or equivalent runtime lanes when parallel coding is selected.\n"
+        "- Use a worktree or equivalent isolation before risky or parallel coding.\n"
+        "- Workers must ACK, claim scope/files, report results, and escalate blockers to the leader.\n"
+        "- Report exact files changed, worktrees used, verification commands, blockers, and evidence refs.\n"
+        "- Do not claim Hermes, OMH, or this runtime completed implementation, review, CI, or merge work without observed evidence.\n\n"
+        "Task:\n{message}"
+    ).format(
+        label=label,
+        profile=profile,
+        workflow=delegation.recommended_workflow,
+        harness=delegation.recommended_harness,
+        intent=delegation.intent,
+        message="{message}",
+    )
+
+
 def _codex_skill_for_workflow(workflow: str) -> str:
     name = workflow.strip() or "oh-my-hermes"
     return name if name.startswith("$") else f"${name}"
@@ -570,7 +745,7 @@ def _delegation_prompt_template(action: str, intent: str, workflow: str, harness
                 message="{message}",
             )
         return (
-            "Clarify this {intent} request before executor dispatch.\n\n"
+            "Clarify this {intent} request before executor/runtime dispatch.\n\n"
             "Candidate workflow: `{workflow}` / `{harness}`.\n\n"
             "Task:\n{message}"
         ).format(intent=intent, workflow=workflow, harness=harness, message="{message}")

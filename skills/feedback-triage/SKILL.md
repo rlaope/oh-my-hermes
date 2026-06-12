@@ -59,7 +59,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor handoff only after explicit coding intent or accepted plan evidence.
+Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor/runtime handoff only after explicit coding intent or accepted plan evidence.
 
 Required inputs:
 

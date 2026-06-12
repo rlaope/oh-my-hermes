@@ -24,6 +24,7 @@ PLAN_DECISION_TRANSITIONS = {
     "executor_choice_required": {"cancel"},
     "executor_selected": {"cancel"},
     "prompt_handoff_prepared": set(),
+    "runtime_handoff_prepared": set(),
     "revision_requested": {"revise", "cancel"},
     "clarifying": {"cancel"},
     "routed": {"cancel"},
@@ -163,7 +164,7 @@ def select_wrapper_session_executor(
         _session_dir(paths, session_id),
         {
             "event": "executor_selected",
-            "message": "wrapper session selected executor profile",
+            "message": "wrapper session selected executor/runtime profile",
             "data": {
                 "work_owner_mode": selection.work_owner_mode,
                 "selected_executor_profile": selection.selected_executor_profile,
@@ -213,6 +214,13 @@ def prepare_wrapper_session_handoff(
             "status": build_wrapper_session_status(paths, session_id),
             "handoff": {"prompt_handoff": session.get("prompt_handoff", {})},
         }
+    if session["status"] == "runtime_handoff_prepared":
+        return {
+            "schema_version": WRAPPER_SESSION_RESULT_SCHEMA_VERSION,
+            "session": session,
+            "status": build_wrapper_session_status(paths, session_id),
+            "handoff": _runtime_session_handoff_envelope(session.get("runtime_handoff", {})),
+        }
     if session["status"] == "executor_choice_required" and not executor_target:
         raise WrapperSessionError("wrapper session requires executor selection before preparing a handoff")
     if executor_target:
@@ -220,9 +228,18 @@ def prepare_wrapper_session_handoff(
         session = _existing_session(paths, session_id)
     if session["status"] not in {"plan_accepted", "executor_selected"}:
         raise WrapperSessionError("wrapper session plan must be accepted before preparing a handoff")
-    if session.get("work_owner_mode") == "retained_hermes":
-        raise WrapperSessionError("retained Hermes selection does not create an executor handoff")
     selected_executor = str(session.get("selected_executor_profile") or "codex")
+    if session.get("work_owner_mode") == "runtime_handoff" and selected_executor:
+        return _prepare_runtime_session_handoff(
+            paths,
+            session,
+            event_or_message,
+            limit=limit,
+            include_message=include_message,
+            source_metadata=source_metadata,
+            executor_target=selected_executor,
+            context_pack=context_pack,
+        )
     if selected_executor and selected_executor != "codex":
         return _prepare_prompt_only_session_handoff(
             paths,
@@ -338,6 +355,84 @@ def _prepare_prompt_only_session_handoff(
     return result
 
 
+def _prepare_runtime_session_handoff(
+    paths: OmhPaths,
+    session: dict[str, Any],
+    event_or_message: dict[str, Any] | str,
+    *,
+    limit: int,
+    include_message: bool,
+    source_metadata: dict[str, str] | None,
+    executor_target: str,
+    context_pack: dict[str, object] | None,
+) -> dict[str, object]:
+    message = extract_message_text(event_or_message)
+    metadata = _source_metadata(event_or_message)
+    metadata.update({str(key): str(value) for key, value in (source_metadata or {}).items() if str(value)})
+    metadata.update({str(key): str(value) for key, value in session.get("source_metadata", {}).items() if str(value)})
+    metadata = _compact_coding_source_metadata(metadata)
+    payload = build_coding_delegation_payload(
+        message,
+        source=str(session["source"]),
+        limit=limit,
+        include_message=include_message,
+        source_metadata=metadata,
+        executor_target=executor_target,
+        context_pack=context_pack,
+    )
+    runtime_handoff = payload.get("runtime_handoff")
+    if not isinstance(runtime_handoff, dict):
+        raise WrapperSessionError("selected runtime produced no runtime handoff")
+    session_id = str(session["session_id"])
+    session = {
+        **session,
+        "status": "runtime_handoff_prepared",
+        "work_owner_mode": "runtime_handoff",
+        "selected_executor_profile": executor_target,
+        "dispatch_policy": "prepare_only",
+        "prompt_handoff": {},
+        "runtime_handoff": runtime_handoff,
+        "current_run_id": "",
+        "updated_at": utc_now(),
+    }
+    write_wrapper_session(paths, session)
+    append_wrapper_session_event(
+        _session_dir(paths, session_id),
+        {
+            "event": "runtime_handoff_prepared",
+            "message": "wrapper session prepared runtime coding handoff",
+            "data": {
+                "selected_executor_profile": executor_target,
+                "dispatchable": False,
+                "message_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest(),
+                "message_length": len(message),
+                "team_swarm_guidance": True,
+                "worktree_guidance": True,
+            },
+        },
+    )
+    result: dict[str, object] = {
+        "schema_version": WRAPPER_SESSION_RESULT_SCHEMA_VERSION,
+        "session": session,
+        "status": build_wrapper_session_status(paths, session_id),
+        "handoff": _runtime_session_handoff_envelope(runtime_handoff),
+    }
+    if include_message and "runtime_handoff_prompt" in payload:
+        result["runtime_handoff_prompt"] = payload["runtime_handoff_prompt"]
+    return result
+
+
+def _runtime_session_handoff_envelope(runtime_handoff: object) -> dict[str, object]:
+    return {
+        "schema_version": "runtime_session_handoff/v1",
+        "runtime_handoff": runtime_handoff if isinstance(runtime_handoff, dict) else {},
+        "runtime": {
+            "run_created": False,
+            "reason": "runtime_handoff_is_not_lifecycle_backed",
+        },
+    }
+
+
 def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, object]:
     session = _existing_session(paths, session_id)
     run_id = str(session.get("current_run_id", ""))
@@ -368,6 +463,7 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
         "selected_executor_profile": session.get("selected_executor_profile"),
         "dispatch_policy": session.get("dispatch_policy", "ask_before_dispatch"),
         "prompt_handoff": session.get("prompt_handoff", {}) if session["status"] == "prompt_handoff_prepared" else {},
+        "runtime_handoff": session.get("runtime_handoff", {}) if session["status"] == "runtime_handoff_prepared" else {},
         "next_action": _next_action_for_session(session),
         "chat_response": _session_chat_response(session),
         "claim_boundary": "Wrapper session state is not execution evidence.",
@@ -452,6 +548,7 @@ def _link_prepared_handoff_run(paths: OmhPaths, session: dict[str, Any], run_id:
         "selected_executor_profile": "codex",
         "dispatch_policy": "ask_before_dispatch",
         "prompt_handoff": {},
+        "runtime_handoff": {},
         "current_run_id": run_id,
         "updated_at": utc_now(),
     }
@@ -635,6 +732,7 @@ def _session_from_interaction(session_id: str, interaction: dict[str, object]) -
             "selected_executor_profile": selected_executor if isinstance(selected_executor, str) else None,
             "dispatch_policy": dispatch_policy,
             "prompt_handoff": {},
+            "runtime_handoff": {},
             "current_run_id": "",
         }
     )
@@ -682,8 +780,6 @@ def _existing_session(paths: OmhPaths, session_id: str) -> dict[str, Any]:
 
 
 def _next_action_for_session(session: dict[str, Any]) -> str:
-    if session.get("status") == "executor_selected" and session.get("work_owner_mode") == "retained_hermes":
-        return "show_status"
     return {
         "plan_presented": "accept_or_revise_plan",
         "clarifying": "answer_clarification",
@@ -692,6 +788,7 @@ def _next_action_for_session(session: dict[str, Any]) -> str:
         "executor_choice_required": "choose_executor",
         "executor_selected": "prepare_handoff",
         "prompt_handoff_prepared": "show_prompt_handoff",
+        "runtime_handoff_prepared": "show_runtime_handoff",
         "revision_requested": "revise_plan",
         "cancelled": "cancelled",
         "handoff_prepared": "show_status",
@@ -720,7 +817,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
         return _chat_response(
             kind="handoff",
             headline="The plan is accepted.",
-            body="I can prepare the selected executor handoff, but no executor work is observed yet.",
+            body="I can prepare the selected executor/runtime handoff, but no executor or runtime work is observed yet.",
             phase="plan_accepted",
             next_action="prepare_handoff",
             thread_key=thread_key,
@@ -740,16 +837,16 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
         )
     if status == "executor_selected":
         selected = str(session.get("selected_executor_profile") or "Hermes")
-        if session.get("work_owner_mode") == "retained_hermes":
+        if session.get("work_owner_mode") == "runtime_handoff":
             return _chat_response(
-                kind="status",
-                headline="Hermes will keep this work.",
-                body="No executor handoff or runtime run is prepared for this selection.",
+                kind="handoff",
+                headline="The runtime choice is recorded.",
+                body=f"I can prepare the {selected} runtime contract next. No runtime work, team, swarm, or worktree is observed yet.",
                 phase="executor_selected",
-                next_action="show_status",
+                next_action="prepare_handoff",
                 thread_key=thread_key,
-                actions=[_action("show_status", "Show status", "primary"), _action("cancel", "Cancel", "secondary")],
-                claim_boundary="Retained Hermes selection is not dispatch or implementation evidence.",
+                actions=[_action("prepare_handoff", "Prepare handoff", "primary"), _action("cancel", "Cancel", "secondary")],
+                claim_boundary="Runtime selection is not runtime start, dispatch, or implementation evidence.",
             )
         return _chat_response(
             kind="handoff",
@@ -776,6 +873,26 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
                 _action("show_status", "Show status", "secondary"),
             ],
             claim_boundary="Prompt handoff is not dispatch, implementation, review, CI, or merge evidence.",
+        )
+    if status == "runtime_handoff_prepared":
+        selected = str(session.get("selected_executor_profile") or "runtime")
+        primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
+        return _chat_response(
+            kind="handoff",
+            headline="A runtime handoff is ready.",
+            body=f"The {selected} runtime contract is prepared with team/swarm, worker-protocol, and worktree guidance; no runtime evidence exists yet.",
+            phase="runtime_handoff_prepared",
+            next_action="show_runtime_handoff",
+            thread_key=thread_key,
+            actions=[
+                _action("show_runtime_handoff", "Show runtime", "primary"),
+                _action(primary_action, "Start runtime", "primary", enabled=False),
+                _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False),
+                _action("start_team", "Start team", "secondary", enabled=False),
+                _action("start_swarm", "Start swarm", "secondary", enabled=False),
+                _action("show_status", "Show status", "secondary"),
+            ],
+            claim_boundary="Runtime handoff is not runtime start, worktree creation, worker dispatch, implementation, review, CI, or merge evidence.",
         )
     if status == "revision_requested":
         return _chat_response(

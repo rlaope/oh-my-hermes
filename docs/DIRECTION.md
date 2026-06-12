@@ -76,7 +76,7 @@ OMH owns:
 - prepared coding handoff payloads
 - derived status that separates prepared intent from observed evidence
 
-Selected coding executors own:
+Selected coding executors/runtimes own:
 
 - main implementation work
 - code changes
@@ -100,11 +100,13 @@ Selected coding executors own:
    evidence synthesis should improve inside Hermes-facing surfaces.
 
 4. Delegate main coding deliberately.
-   Coding-heavy work should ask for or apply an executor profile, then become a
-   prepared handoff with scope, non-goals, acceptance criteria, verification
-   expectations, and review expectations. Codex can use the run-backed
-   lifecycle path in Phase 1; other profiles remain prompt-only until their
-   lifecycle contracts exist.
+   Coding-heavy work should ask for or apply an executor/runtime profile, then
+   become a prepared handoff with scope, non-goals, acceptance criteria,
+   verification expectations, and review expectations. Codex can use the
+   run-backed lifecycle path. Claude Code and generic agents can use portable
+   prompt handoffs. Hermes, OMX, OMO, and OMC can use `coding_runtime_handoff/v1`
+   contracts with team/swarm, worker-protocol, and worktree guidance while still
+   preserving prepared-vs-observed boundaries.
 
 5. Prefer local deterministic artifacts over hidden magic.
    Runtime records, wrapper sessions, and plans should be inspectable,
@@ -193,7 +195,7 @@ goal into separate PRs unless one of the Delivery Grain split conditions applies
 Before accepting direction-changing work, verify:
 
 - Does it keep Hermes as orchestrator and narrator, not hidden coder?
-- Does it keep coding execution in a selected executor handoff when code
+- Does it keep coding execution in a selected executor/runtime handoff when code
   changes are required?
 - Does it preserve `prepared_not_observed` until wrapper evidence exists?
 - Does it avoid Hermes core patching and hidden LLM/API calls?

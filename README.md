@@ -18,17 +18,19 @@
 
 **oh-my-hermes** makes Hermes Agent feel more capable after install. OMH
 adds workflow skills, optional profiles, wrapper-facing contracts, local
-evidence records, and coding handoff preparation while keeping normal users in
-Hermes chat.
+evidence records, and coding/runtime handoff preparation while keeping normal
+users in Hermes chat.
 
 The product is not "more CLI commands." The `omh` command is bootstrap,
-doctor, verifier, and wrapper/backend infrastructure. The main experience is:
+doctor, verifier, and wrapper/backend infrastructure. For Hermes wrappers and
+routers, that CLI contract is a first-class backend surface; for normal users,
+the main experience is:
 
 ```text
 user says a plain request in Hermes
   -> OMH routes it to the right skill/playbook/profile
   -> Hermes explains the next action and evidence boundary
-  -> coding is handed off only when the user or wrapper accepts that path
+  -> coding is handed off to the selected runtime only when the user or wrapper accepts that path
 ```
 
 > Have you ever felt that Hermes Agent is powerful, but still has a high
@@ -143,9 +145,10 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   adopting a separate dashboard or app.
 - **Hermes-native boundary** - OMH extends Hermes Agent with skills,
   workflows, plugin context, and local evidence contracts.
-- **Delegation-first coding** - coding-heavy requests become prepared handoffs
-  for the selected executor: Codex when supported, or prompt-only handoff for
-  Claude Code, generic agents, OMH-style runtimes, or Hermes-retained work.
+- **Runtime-aware coding** - coding-heavy requests become prepared handoffs
+  for the selected path: Codex lifecycle, Claude Code or generic prompt
+  handoff, or Hermes/OMX/OMO/OMC runtime handoff with team/swarm,
+  worker-protocol, and worktree guidance.
 - **Evidence-aware status** - prepared, dispatched, executed, reviewed,
   verified, CI, and merge-ready states stay separate.
 - **Durable goal mode contracts** - long work can stay tied to `.omh/goals`
@@ -171,7 +174,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Hermes turns ambiguous intent into a concrete goal, plan, execution-ready path, direct ambitious goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Hermes keeps non-coding company and product operations inside brief, evidence, and decision workflows. | "Payment failures keep coming up." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Hermes records operating cadence, report packages, and reliability reviews as separate local artifacts with strict evidence boundaries. | "Turn the sprint retro, monthly report, and incident review into durable records." |
-| `idea-to-deploy` / coding handoff / executor selection | Hermes prepares work for Codex, Claude Code, or another selected executor instead of hiding coding inside Hermes. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+| `idea-to-deploy` / coding runtime handoff / executor selection | Hermes prepares work for Codex, Claude Code, another coding agent, an oh-my runtime, or Hermes coding skills without hiding unobserved execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## What You Get
 
@@ -185,7 +188,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | PR-ready delivery process | `ultraprocess` is Ultra Process: Research -> Ralplan -> Ultragoal -> Code Review -> Sync Circle, one PR-ready delivery cycle without claiming unobserved executor work. Use `loop` instead when the goal should keep repeating after feedback. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Operations artifacts | `omh ops rhythm`, `omh ops report`, and `omh ops reliability` create schema-versioned local records under `.omh/operations`. `omh ops list` is summary-only and bounded by default; `omh ops export` returns Markdown or JSON outlines for wrapper/report use; binary PPTX export is intentionally a separate observed step. |
-| Coding handoffs | Executor-neutral handoff payloads with acceptance, review, and verification expectations. |
+| Coding handoffs | Executor/runtime-neutral handoff payloads with acceptance, review, verification, team/swarm, worker-protocol, and worktree expectations. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
@@ -198,7 +201,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Plain user message | OMH-shaped Hermes behavior |
 | --- | --- |
 | "Payment failures keep coming up." | Route to feedback triage or investigation first; prepare reproduction and evidence needs before coding. |
-| "Can this issue become a PR?" | Convert the issue into a plan, acceptance criteria, verification commands, and an executor-neutral handoff. |
+| "Can this issue become a PR?" | Convert the issue into a plan, acceptance criteria, verification commands, and an executor/runtime-neutral handoff. |
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
 | "Keep meeting minutes, scrum notes, sprint plans, and retros in one history." | Use `operating-rhythm` to prepare or record a durable cadence artifact with decisions and follow-up actions separated from unobserved outcomes. |
 | "Create a monthly leadership PPT report package." | Use `report-package` to prepare a clean report or slide outline without requiring SRE evidence or claiming a binary deck was exported. |
@@ -207,7 +210,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
 | "./loop make this a 10k-star quality OSS." | Show a start card for permission and executor choice, preserve the large goal, expose the loop pipeline and automation/worktree/skill/connector/subagent/verification state, queue one prepared step with inner or outer verification intent, warn on verification gaps or comprehension debt, then record whether each item was observed or blocked. |
 | "Deploy and monitor this release with rollback checks." | Show release scope, go/no-go, health signals, rollback gate, and post-deploy status without claiming infrastructure execution. |
-| "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a coding-agent handoff only after acceptance. |
+| "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a selected-runtime coding handoff only after acceptance. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
 
 For company and app operation work, OMH can help Hermes classify, brief, record,

@@ -55,14 +55,14 @@ Quality bar:
 
 - Complete exactly one plan-to-PR delivery cycle, then stop with status, evidence gaps, or a next recommended workflow.
 - Start with codebase/source research and a ralplan-style decision record before implementation handoff.
-- Use ultragoal or the selected executor path for implementation, with acceptance criteria and verification commands attached.
+- Use ultragoal or the selected executor/runtime path for implementation, with acceptance criteria and verification commands attached.
 - Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.
 - Add docs-specialist sync when public behavior, commands, setup, examples, or claims changed.
 - End with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.
 
 Handoff policy:
 
-Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor handoff such as Codex, Claude Code, another coding agent, or explicit Hermes-retained work only when the user accepts that owner.
+Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor/runtime handoff such as Codex, Claude Code, OMX/OMO/OMC, another coding agent, or explicit Hermes coding runtime only when the user accepts that owner.
 
 Required inputs:
 
@@ -74,7 +74,7 @@ Required inputs:
 Expected outputs:
 
 - ralplan-ready context and plan
-- ultragoal or selected executor handoff
+- ultragoal or selected executor/runtime handoff
 - code-review gate
 - docs sync checklist
 - single-cycle PR-ready summary with observed evidence and gaps

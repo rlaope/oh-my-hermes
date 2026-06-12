@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: completion
-    role: codex-handoff-guidance
+    role: runtime-handoff-guidance
     quality_tier: handoff-gated
 ---
 
@@ -47,18 +47,18 @@ Use after scope is concrete and the user wants one owner to continue through imp
 
 Category: `execution`
 Phase: `completion`
-Hermes role: `codex-handoff-guidance`
+Hermes role: `runtime-handoff-guidance`
 Quality tier: `handoff-gated`
 
 Quality bar:
 
 - Do not enter a finish-until-done loop until scope, acceptance criteria, and verification commands are concrete.
-- For coding edits, prepare and track selected executor evidence instead of implying Hermes implemented the changes.
+- For coding edits, prepare and track selected runtime evidence instead of implying unobserved work happened.
 - Report completion only from observed execution and verification evidence.
 
 Handoff policy:
 
-Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track the selected executor path instead of making Hermes the hidden coder.
+Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track the selected coding runtime path instead of hiding execution inside chat narration.
 
 Required inputs:
 

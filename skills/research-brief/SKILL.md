@@ -58,7 +58,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep business research in Hermes; prepare a selected executor handoff only after a later accepted plan requires code changes.
+Keep business research in Hermes; prepare a selected executor/runtime handoff only after a later accepted plan requires code changes.
 
 Required inputs:
 

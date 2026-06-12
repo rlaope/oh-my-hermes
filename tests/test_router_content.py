@@ -54,7 +54,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Responsibility role details are generated in `docs/WORKFLOWS.md`", router.content)
         self.assertIn("Full per-skill handoff policies live in generated workflow skills", router.content)
         self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
-        self.assertIn("selected executor profile", router.content)
+        self.assertIn("selected executor/runtime profile", router.content)
         self.assertIn("prepared_not_observed", router.content)
         self.assertIn("Multi-Agent Target Awareness", router.content)
         self.assertIn("omh_target_topology/v1", router.content)
@@ -77,7 +77,7 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(role.evidence_boundary, text)
             self.assertNotIn("secretly", text.lower())
             if role.id == "coding-handoff":
-                self.assertIn("not executor dispatch", text)
+                self.assertIn("not executor/runtime dispatch", text)
 
     def test_core_skill_set_contains_major_workflows(self) -> None:
         names = {skill.name for skill in builtin_skill_templates()}
@@ -274,10 +274,10 @@ class RouterContentTests(unittest.TestCase):
             definitions["ultraprocess"].description,
             "[omh] Ultra Process - Research - Ralplan - Ultragoal - Code Review - Sync Circle: one PR-ready delivery cycle.",
         )
-        self.assertEqual(definitions["ultrawork"].hermes_role, "codex-handoff-guidance")
-        self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "codex-handoff-guidance")
-        self.assertIn("selected executor", definitions["ultrawork"].handoff_policy)
-        self.assertIn("selected executor handoff", definitions["ultraprocess"].handoff_policy)
+        self.assertEqual(definitions["ultrawork"].hermes_role, "runtime-handoff-guidance")
+        self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "runtime-handoff-guidance")
+        self.assertIn("selected runtime", definitions["ultrawork"].handoff_policy)
+        self.assertIn("selected executor/runtime handoff", definitions["ultraprocess"].handoff_policy)
         self.assertEqual(primary_harness_for_skill("web-research"), "research")
         self.assertEqual(primary_harness_for_skill("research-brief"), "business-research")
         self.assertEqual(primary_harness_for_skill("strategy-brief"), "strategy-synthesis")
@@ -324,7 +324,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Catalog Metadata", skills["ultragoal"].content)
         self.assertIn("Category: `execution`", skills["ultragoal"].content)
         self.assertIn("Phase: `durable-goals`", skills["ultragoal"].content)
-        self.assertIn("Hermes role: `codex-handoff-guidance`", skills["ultragoal"].content)
+        self.assertIn("Hermes role: `runtime-handoff-guidance`", skills["ultragoal"].content)
         self.assertIn("Handoff policy:", skills["ultragoal"].content)
         self.assertIn("Runtime Evidence", skills["ultragoal"].content)
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
@@ -767,7 +767,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Raise the product's capability level by strengthening contracts", direction)
         self.assertIn("Hermes owns:", direction)
         self.assertIn("OMH owns:", direction)
-        self.assertIn("Selected coding executors own:", direction)
+        self.assertIn("Selected coding executors/runtimes own:", direction)
         self.assertIn("prepared_not_observed", direction)
         self.assertIn("One user goal should normally produce one PR.", direction)
         self.assertIn("Keep users command-agnostic in chat.", direction)

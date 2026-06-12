@@ -20,7 +20,7 @@ The first command renders the fixture event in
 the full deterministic path:
 
 ```text
-recommend -> chat response -> Hermes plan -> selected executor handoff -> status card
+recommend -> chat response -> Hermes plan -> selected executor/runtime handoff -> status card
 ```
 
 ## Discord-Style Plan Response
@@ -61,9 +61,10 @@ a progress block in the same thread:
 
 ```text
 Hermes Agent  BOT
-A coding-agent handoff is ready.
+A coding-runtime handoff is ready.
 
-I have prepared the handoff, but executor dispatch is not observed yet.
+I have prepared the handoff, but runtime start or executor/runtime dispatch is not
+observed yet.
 
 Status
 [ready]   Handoff
@@ -74,7 +75,7 @@ Status
 [pending] Merge Ready
 [pending] Merged
 
-Primary action: Send to executor
+Primary action: Show runtime handoff or send to executor
 Claim boundary: Preparation is not execution evidence.
 ```
 
@@ -83,8 +84,10 @@ User-facing effect:
 - Prepared handoff is presented as ready to dispatch, not completed work.
 - If the selected profile is Codex, the wrapper can use the handoff's
   `$skill {message}` invocation, such as `$ai-slop-cleaner {message}`, rather
-  than asking the chat user to run it. Prompt-only profiles render a copyable
-  handoff instead of lifecycle evidence.
+  than asking the chat user to run it. Hermes/OMX/OMO/OMC profiles render a
+  runtime handoff with team/swarm, worker-protocol, and worktree guidance.
+  Claude Code and generic profiles render a copyable prompt handoff instead of
+  lifecycle evidence.
 - Execution, verification, CI, merge-readiness, and merge stay separate.
 - The wrapper can keep editing the same thread as evidence arrives.
 
@@ -141,8 +144,8 @@ Claim boundary: Routing is not execution evidence.
 What gets better for the team:
 
 - The request stays in a Hermes-retained QA workflow.
-- `omh coding delegate` does not emit a dispatchable executor handoff for this
-  scenario until a concrete code change is accepted.
+- `omh coding delegate` does not emit a dispatchable executor or runtime
+  handoff for this scenario until a concrete code change is accepted.
 - QA scenarios, expected behavior, and observed results can be recorded without
   pretending the product was fixed.
 

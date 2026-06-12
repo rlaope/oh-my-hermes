@@ -100,7 +100,7 @@ maps these transitions back to the status ladder scenarios in
 
 - A route decision is not execution evidence.
 - A draft plan is not execution evidence.
-- A prepared handoff is not executor dispatch.
+- A prepared handoff is not executor/runtime dispatch, worker start, or worktree creation.
 - Executor dispatch is not executor completion.
 - Executor completion is not review evidence.
 - Review evidence is not CI evidence.

@@ -61,7 +61,7 @@ Playbooks deliberately separate ownership:
   status narration, and the user-visible chat flow.
 - OMH owns deterministic local contracts, playbook selection, prepared handoff
   payloads, and metadata-only evidence records.
-- Selected coding executors own main coding work after dispatch or prompt
+- Selected coding executors/runtimes own main coding work after dispatch, runtime start, or prompt
   handoff.
 
 Prepared handoff remains `prepared_not_observed` until the wrapper or operator
@@ -135,7 +135,7 @@ take this product idea from plan to deploy and monitor safely
 
 routes to `idea-to-deploy`. The wrapper can show one complete stage rail:
 shape idea, record the decision gate, draft the delivery plan, prepare a
-selected executor handoff if code is needed, check verification and release
+selected executor/runtime handoff if code is needed, check verification and release
 readiness, then record deploy and monitor status. This feels like a finished
 product loop to the operator, but deploy, health, rollback, and monitoring stay
 unobserved until the wrapper or operator records evidence.

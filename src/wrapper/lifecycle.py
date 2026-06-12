@@ -214,8 +214,8 @@ def _blocking_reason(next_action: str) -> str:
     return {
         "prepare_coding_delegation": "coding delegation is not prepared",
         "route_coding_request": "request must be routed before coding delegation",
-        "clarify_coding_request": "request needs clarification before executor dispatch",
-        "dispatch_to_executor": "executor dispatch is not observed",
+        "clarify_coding_request": "request needs clarification before executor/runtime dispatch",
+        "dispatch_to_executor": "executor/runtime dispatch is not observed",
         "wait_for_executor_evidence": "executor evidence is not observed",
         "surface_executor_blocker": "executor reported blocked or failed",
         "surface_review_blocker": "review failed or blocked completion",

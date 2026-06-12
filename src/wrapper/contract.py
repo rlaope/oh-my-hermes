@@ -24,6 +24,12 @@ VISIBLE_ACTIONS = (
     "choose_executor",
     "show_prompt_handoff",
     "copy_prompt_handoff",
+    "show_runtime_handoff",
+    "start_runtime",
+    "start_hermes_coding",
+    "start_team",
+    "start_swarm",
+    "prepare_worktree",
     "send_to_executor",
     "send_to_codex",
     "show_status",
@@ -82,7 +88,7 @@ _STATUS_COPY = {
     "dispatch_to_executor": (
         "handoff",
         "An executor handoff is ready.",
-        "I have prepared the handoff, but executor dispatch is not observed yet.",
+        "I have prepared the handoff, but executor/runtime dispatch is not observed yet.",
         "Preparation is not execution evidence.",
     ),
     "wait_for_executor_evidence": (
@@ -222,6 +228,8 @@ def build_chat_interaction_payload(
         action = str(_nested(delegation, "delegation").get("action", "fallback"))
         if action == "delegate" and delegation.get("executor_handoff"):
             base["next_action"] = "send_to_executor"
+        elif action == "delegate" and delegation.get("runtime_handoff"):
+            base["next_action"] = "show_runtime_handoff"
         elif action == "delegate" and delegation.get("prompt_handoff"):
             base["next_action"] = "show_prompt_handoff"
         elif action == "delegate" and _nested(delegation, "executor_selection").get("choice_required"):
@@ -341,7 +349,7 @@ def build_chat_response_from_route(
                     "permission_profile_required": True,
                     "loop_start_card": loop_start_card,
                     "evidence_not_observed": [
-                        "executor dispatch",
+                        "executor/runtime dispatch",
                         "implementation",
                         "review",
                         "CI",
@@ -393,7 +401,7 @@ def build_chat_response_from_route(
                     ],
                     "evidence_not_observed": [
                         "accepted plan",
-                        "executor dispatch",
+                        "executor/runtime dispatch",
                         "implementation",
                         "code review",
                         "docs sync",
@@ -490,7 +498,7 @@ def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key
             "coding_delegate_available": bool(coding_delegate.get("available", False)),
             "evidence_not_observed": [
                 "plan acceptance",
-                "executor dispatch",
+                "executor/runtime dispatch",
                 "executor result",
                 "verification",
             ],
@@ -553,11 +561,48 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "dispatchable": False,
             },
         )
+    if action == "delegate" and delegation_payload.get("runtime_handoff"):
+        runtime_handoff = _nested(delegation_payload, "runtime_handoff")
+        selected = str(runtime_handoff.get("selected_executor_profile") or "runtime")
+        runtime_profile = _nested(runtime_handoff, "runtime_profile")
+        runtime_label = str(runtime_profile.get("label") or executor_label(selected))
+        primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
+        return _chat_response(
+            kind="handoff",
+            headline="A runtime handoff is ready.",
+            body=(
+                f"I prepared a {runtime_label} runtime contract with team/swarm, worker-protocol, and worktree guidance. "
+                "This is not runtime start, implementation, review, CI, or merge evidence."
+            ),
+            phase="runtime_handoff_prepared",
+            next_action="show_runtime_handoff",
+            thread_key=thread_key,
+            actions=[
+                _action("show_runtime_handoff", "Show runtime", "primary", payload={"selected_executor_profile": selected}),
+                _action(primary_action, "Start runtime", "primary", enabled=False, payload={"selected_executor_profile": selected}),
+                _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
+                _action("start_team", "Start team", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
+                _action("start_swarm", "Start swarm", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
+                _action("choose_executor", "Change runtime", "secondary"),
+                _action("show_status", "Show status", "secondary"),
+            ],
+            claim_boundary="Runtime handoff is prepared only; OMH has not started Hermes, OMX, OMO, OMC, workers, tmux, or worktrees.",
+            extra_state={
+                "delegation_action": action,
+                "intent": delegation.get("intent", "unknown"),
+                "work_owner_mode": "runtime_handoff",
+                "selected_executor_profile": selected,
+                "runtime_family": runtime_profile.get("runtime_family", ""),
+                "underlying_agent": runtime_profile.get("underlying_agent", ""),
+                "dispatch_policy": "prepare_only",
+                "dispatchable": False,
+            },
+        )
     if action == "delegate" and _nested(delegation_payload, "executor_selection").get("choice_required"):
         return _chat_response(
             kind="handoff",
             headline="Choose who should own the coding work.",
-            body="I can keep this with Hermes, prepare a prompt for another coding agent, or prepare a Codex lifecycle handoff.",
+            body="I can keep this with Hermes, prepare an oh-my runtime handoff, prepare a prompt for another coding agent, or prepare a Codex lifecycle handoff.",
             phase="executor_choice_required",
             next_action="choose_executor",
             thread_key=thread_key,

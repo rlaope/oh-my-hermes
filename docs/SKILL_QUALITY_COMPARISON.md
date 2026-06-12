@@ -126,7 +126,7 @@ Impact: safer release behavior and fewer stale skill files.
 ### 2. Hermes-native product boundary
 
 OMH skills repeatedly state that Hermes should orchestrate, clarify, research,
-plan, and narrate status, while coding work becomes selected executor handoff
+plan, and narrate status, while coding work becomes selected executor/runtime handoff
 evidence. This is aligned with the project direction and prevents the most
 dangerous wrapper error: claiming implementation, review, CI, or merge evidence
 from a prepared prompt.

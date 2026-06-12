@@ -285,12 +285,15 @@ returns a `coding_executor_handoff/v1` instruction payload that names Codex as
 the executor target without launching Codex. Codex handoffs include
 `codex_skill` and `codex_invocation.dispatch_text_template`, so a wrapper can
 turn a Hermes workflow into the Codex `$skill {message}` surface while still
-keeping the raw message out of persisted OMH artifacts. With non-Codex
-profiles, it returns a `coding_prompt_handoff/v1` prompt-only payload that must
-not create a lifecycle run or observed execution evidence. That record stores a
-compact snapshot of the generated acceptance criteria, verification
-expectations, report contract, and evidence contract, but not the raw prompt
-body. With `--record`,
+keeping the raw message out of persisted OMH artifacts. Claude Code and generic
+profiles return a `coding_prompt_handoff/v1` prompt-only payload that must not
+create a lifecycle run or observed execution evidence. Hermes, OMX, OMO, and OMC
+profiles return a `coding_runtime_handoff/v1` contract with runtime profile,
+team/swarm, worker-protocol, and worktree guidance. Runtime handoffs are still
+prepared state only: they do not mean Hermes, tmux, workers, subagents, or
+worktrees were started. That record stores a compact snapshot of the generated
+acceptance criteria, verification expectations, report contract, and evidence
+contract, but not the raw prompt body. With `--record`,
 the companion `run.json` is marked as
 `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and
 `observation_status: prepared_not_observed`; validation treats the run envelope
@@ -298,7 +301,7 @@ and `coding_delegation.json` as a required pair. The run envelope is
 implementation bookkeeping, not proof that Hermes executed the handoff.
 
 The wrapper contract and lower-level surfaces are local contracts; execution
-evidence still comes from Hermes Agent and the selected executor.
+evidence still comes from Hermes Agent and the selected executor/runtime.
 
 Hermes planning writes Markdown plans under the configured Hermes home rather
 than runtime JSON under `.omh/runtime/`. The artifact is user-facing: it includes
@@ -437,7 +440,7 @@ acceptance criteria, verification expectations, recommendation evidence,
 `message_sha256`, `message_length`, and status `prepared_not_observed`. That
 status means a handoff was prepared; the companion run envelope is also marked
 `prepared_coding_delegation`, not proof that Hermes executed the task.
-Executor-choice, retained-Hermes, clarify, fallback, and prompt-only handoffs
+Executor-choice, runtime-handoff, clarify, fallback, and prompt-only handoffs
 return `runtime.recorded=false` and should stay in wrapper/session state.
 
 Bot wrappers can still call `omh runtime delegate` after the response if

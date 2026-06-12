@@ -137,6 +137,28 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("show_prompt_handoff", actions)
         self.assertIn("copy_prompt_handoff", actions)
 
+    def test_delegate_mode_can_prepare_runtime_handoff(self) -> None:
+        payload = build_chat_interaction_payload("risky refactor", mode="delegate", source="discord", executor_target="omx-runtime")
+
+        actions = {action["id"] for action in payload["chat_response"]["actions"]}
+        runtime = payload["delegation"]["runtime_handoff"]
+        self.assertEqual(payload["next_action"], "show_runtime_handoff")
+        self.assertEqual(payload["delegation"]["work_owner_mode"], "runtime_handoff")
+        self.assertFalse(payload["delegation"]["dispatchable"])
+        self.assertEqual(runtime["schema_version"], "coding_runtime_handoff/v1")
+        self.assertEqual(runtime["runtime_profile"]["runtime_family"], "omx")
+        self.assertTrue(runtime["runtime_profile"]["supports_team_swarm"])
+        self.assertTrue(runtime["runtime_profile"]["supports_tmux_workers"])
+        self.assertTrue(runtime["runtime_profile"]["supports_worker_protocol"])
+        self.assertTrue(runtime["runtime_profile"]["supports_worktree_guidance"])
+        self.assertIn("team", runtime["team_contract"]["modes"])
+        self.assertIn("swarm", runtime["team_contract"]["modes"])
+        self.assertTrue(any("tmux" in value for value in runtime["team_contract"]["worker_protocol"]))
+        self.assertIn("show_runtime_handoff", actions)
+        self.assertIn("start_runtime", actions)
+        self.assertIn("prepare_worktree", actions)
+        self.assertNotIn("prompt_handoff", payload["delegation"])
+
     def test_route_mode_surfaces_recommendation_policy_actions(self) -> None:
         payload = build_chat_interaction_payload(
             "prepare weekly ops review from customer feedback and release risks",

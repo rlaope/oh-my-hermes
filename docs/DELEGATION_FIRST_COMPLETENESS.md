@@ -28,10 +28,10 @@ evidence exists.
 | Surface | Current role | Evidence |
 | --- | --- | --- |
 | `omh chat interact` | Composes route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. | `src/wrapper/contract.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
-| `omh chat session` | Persists metadata-only chat session decisions, executor selection, plan acceptance/revision/cancel state, prompt-only handoffs, and accepted Codex lifecycle links. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
+| `omh chat session` | Persists metadata-only chat session decisions, executor/runtime selection, plan acceptance/revision/cancel state, prompt-only handoffs, runtime handoffs, and accepted Codex lifecycle links. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
-| `omh coding delegate` | Prepares metadata-only coding handoffs, executor-choice contracts, and prompt-only payloads without overclaiming execution. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
+| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, and Hermes/OMX/OMO/OMC runtime contracts without overclaiming execution. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
 | `omh coding lifecycle` | Tracks Codex-selected handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
 | `omh memory inspect/pack/apply` | Reviews OMH-local and wrapper-supplied context, creates `memory_review_card/v1`, and attaches only conflict-free `handoff_context_pack/v1` summaries to executor handoffs. | `src/memory.py`, `tests/test_memory.py` |
 | `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime/artifacts.py`, `README.md` |
@@ -48,10 +48,11 @@ The strongest existing path is:
    `omh chat session start`.
 4. For planning-shaped work, the wrapper presents the draft plan and records
    accept/revise/cancel decisions with `omh chat session`.
-5. For accepted implementation-shaped work, the wrapper records executor
-   selection. Codex selection prepares a lifecycle handoff and links the session
-   to the runtime run id; non-Codex selection prepares a prompt-only handoff
-   without a lifecycle run.
+5. For accepted implementation-shaped work, the wrapper records executor or
+   runtime selection. Codex selection prepares a lifecycle handoff and links
+   the session to the runtime run id; Claude Code and generic agents prepare a
+   prompt-only handoff; Hermes/OMX/OMO/OMC prepare a runtime handoff without a
+   lifecycle run.
 6. Separate wrapper/runtime evidence is required before OMH can say execution,
    review, verification, CI, merge, or merge-readiness was observed.
 
@@ -61,7 +62,7 @@ The strongest existing path is:
 | --- | --- | --- | --- |
 | P0 | Hermes Agent consumes OMH contracts. | OMH should read as a Hermes-native capability layer, not as a separate bot product. | Keep OMH focused on fixture-backed chat contracts and local status artifacts. |
 | P1 | Hermes-facing examples should stay concrete. | Golden JSON locks the wrapper contract, but operators still need examples for rendering replies, actions, status cards, and thread keys. | Add fixture-backed examples that show chat UX without implying missing platform code. |
-| P2 | Run-backed lifecycle reporting is Codex-only in Phase 1. | Other executor targets are supported as prompt-only handoffs until a tested lifecycle contract exists. | Generalize only after another executor contract exists. |
+| P2 | Run-backed lifecycle reporting is Codex-only until another runtime provides observed dispatch/result contracts. | Other targets are still supported without overclaiming: prompt-only for Claude Code/generic agents and runtime handoff contracts for Hermes/OMX/OMO/OMC. | Generalize lifecycle reporting only after another executor or runtime can provide observed dispatch/result contracts. |
 
 ## First Implementation Contract
 
@@ -75,12 +76,15 @@ Expected behavior:
   choice contract.
 - `omh coding delegate --executor codex` returns a dispatch-capable Codex
   lifecycle handoff that can be tracked through `omh coding lifecycle`.
-- `omh coding delegate --executor claude-code`, `--executor omx-runtime`,
-  `--executor omo-runtime`, `--executor omc-runtime`, or `--executor generic`
-  returns a prompt-only handoff that does not create a lifecycle run.
-- The payload names the selected executor target and includes:
+- `omh coding delegate --executor claude-code` or `--executor generic` returns
+  a prompt-only handoff that does not create a lifecycle run.
+- `omh coding delegate --executor hermes`, `--executor omx-runtime`,
+  `--executor omo-runtime`, or `--executor omc-runtime` returns a runtime
+  handoff contract with team/swarm, worker-protocol, and worktree guidance, but
+  still does not create a lifecycle run.
+- The payload names the selected executor/runtime target and includes:
   - executor target and handoff mode
-  - a prompt template or instruction payload for the selected executor
+  - a prompt template, instruction payload, or runtime contract for the selected coding owner
   - scope and non-goals
   - acceptance criteria
   - verification expectations
@@ -109,8 +113,9 @@ Non-goals:
 Wrappers should be able to express the chain in human terms:
 
 1. Hermes received and clarified or planned the request.
-2. OMH either asks the user to choose an executor, prepares a prompt-only
-   handoff, or prepares a Codex lifecycle handoff.
+2. OMH either asks the user to choose an executor/runtime, prepares a
+   prompt-only handoff, prepares a Hermes/OMX/OMO/OMC runtime handoff, or
+   prepares a Codex lifecycle handoff.
 3. Executor execution is pending, running, blocked, completed, or not observed
    according to wrapper evidence.
 4. Review, verification, CI, and merge status stay separate from prepared
@@ -133,7 +138,9 @@ source, source metadata, message hash and length, `thread_key`, mode,
 visibility, headline, body, state, platform-neutral actions, and claim boundary.
 Allowed actions include `answer:*`, `accept_plan`, `revise_plan`,
 `prepare_handoff`, `choose_executor`, `show_prompt_handoff`,
-`copy_prompt_handoff`, `send_to_executor`, `show_status`,
+`copy_prompt_handoff`, `show_runtime_handoff`, `start_runtime`,
+`start_hermes_coding`, `prepare_worktree`, `start_team`, `start_swarm`,
+`send_to_executor`, `show_status`,
 `show_memory_status`, `apply_memory_updates`, and `cancel`. Memory review
 actions such as `keep_memory`, `forget_memory`, `update_memory`, and
 `change_memory_scope` belong to `memory_review_card/v1`, not
@@ -156,6 +163,6 @@ steps without parsing prose.
 - Tests prove hostile shell text remains a placeholder in any argv/template
   contract.
 - README and architecture docs describe Hermes as the orchestrator and the
-  selected executor as the main coding owner for implementation work, while
+  selected executor, runtime, or Hermes coding skill as the main coding owner for implementation work, while
   preserving Codex-only lifecycle tracking in Phase 1.
 - Runtime validation remains local-only and deterministic.

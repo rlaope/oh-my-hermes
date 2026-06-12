@@ -624,7 +624,7 @@ def _quality_gate(
         "pass_conditions": pass_conditions,
         "must_observe_before_claiming": [
             "plan acceptance",
-            "executor dispatch",
+            "executor/runtime dispatch",
             "executor result",
             "verification",
             "review when required",

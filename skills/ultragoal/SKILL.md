@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: durable-goals
-    role: codex-handoff-guidance
+    role: runtime-handoff-guidance
     quality_tier: checkpoint-gated
 ---
 
@@ -48,7 +48,7 @@ Use when work needs durable goal artifacts, checkpointed progress, and final qua
 
 Category: `execution`
 Phase: `durable-goals`
-Hermes role: `codex-handoff-guidance`
+Hermes role: `runtime-handoff-guidance`
 Quality tier: `checkpoint-gated`
 
 Quality bar:
@@ -57,11 +57,11 @@ Quality bar:
 - Checkpoint every success, blocker, and final quality gate with fresh evidence.
 - Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.
 - Tell the user the next action through goal_status_card/v1 or goal_continuation/v1 instead of ending with vague follow-up copy.
-- For coding milestones, use prepared handoffs and observed executor evidence rather than hidden Hermes execution.
+- For coding milestones, use prepared runtime handoffs and observed runtime evidence rather than hidden execution claims.
 
 Handoff policy:
 
-Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and delegate coding milestones to the selected executor with only observed runtime evidence.
+Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and route coding milestones to the selected runtime profile with only observed runtime evidence.
 
 Required inputs:
 

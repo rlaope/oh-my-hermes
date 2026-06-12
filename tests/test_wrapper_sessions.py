@@ -201,7 +201,7 @@ class WrapperSessionTests(unittest.TestCase):
             session_path = paths.runtime_wrapper_sessions_dir / session_id / "session.json"
             self.assertNotIn(message, session_path.read_text(encoding="utf-8"))
 
-    def test_retained_hermes_selection_does_not_prepare_executor_run(self) -> None:
+    def test_hermes_selection_prepares_runtime_handoff_without_executor_run(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             started = create_or_resume_wrapper_session(paths, "risky refactor", source="discord")
@@ -210,10 +210,44 @@ class WrapperSessionTests(unittest.TestCase):
             record_plan_decision(paths, session_id, "accept")
             selected = select_wrapper_session_executor(paths, session_id, "hermes")
 
-            self.assertEqual(selected["session"]["work_owner_mode"], "retained_hermes")
-            self.assertEqual(selected["status"]["chat_response"]["state"]["next_action"], "show_status")
-            with self.assertRaises(WrapperSessionError):
-                prepare_wrapper_session_handoff(paths, session_id, "risky refactor")
+            self.assertEqual(selected["session"]["work_owner_mode"], "runtime_handoff")
+            self.assertEqual(selected["session"]["selected_executor_profile"], "hermes")
+            self.assertEqual(selected["status"]["chat_response"]["state"]["next_action"], "prepare_handoff")
+
+            prepared = prepare_wrapper_session_handoff(paths, session_id, "risky refactor")
+
+            self.assertEqual(prepared["session"]["status"], "runtime_handoff_prepared")
+            self.assertEqual(prepared["session"]["current_run_id"], "")
+            self.assertEqual(prepared["session"]["selected_executor_profile"], "hermes")
+            self.assertEqual(prepared["handoff"]["runtime"]["run_created"], False)
+            self.assertEqual(prepared["handoff"]["runtime_handoff"]["schema_version"], "coding_runtime_handoff/v1")
+            self.assertEqual(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["runtime_family"], "omh")
+            self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_team_swarm"])
+            self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_tmux_workers"])
+            self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_worktree_guidance"])
+            self.assertEqual(prepared["status"]["next_action"], "show_runtime_handoff")
+            self.assertEqual(validate_runtime(paths)["runs"], [])
+
+    def test_runtime_handoff_preparation_is_idempotent_and_preserves_envelope(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "risky refactor", source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "omx-runtime")
+
+            first = prepare_wrapper_session_handoff(paths, session_id, "risky refactor")
+            second = prepare_wrapper_session_handoff(paths, session_id, "risky refactor")
+
+            self.assertEqual(second["session"]["status"], "runtime_handoff_prepared")
+            self.assertEqual(second["handoff"]["schema_version"], "runtime_session_handoff/v1")
+            self.assertEqual(second["handoff"]["runtime"]["run_created"], False)
+            self.assertEqual(second["handoff"]["runtime"]["reason"], "runtime_handoff_is_not_lifecycle_backed")
+            self.assertEqual(
+                second["handoff"]["runtime_handoff"]["schema_version"],
+                first["handoff"]["runtime_handoff"]["schema_version"],
+            )
+            self.assertEqual(second["handoff"]["runtime_handoff"]["runtime_profile"]["runtime_family"], "omx")
             self.assertEqual(validate_runtime(paths)["runs"], [])
 
     def test_invalid_plan_decision_transitions_are_rejected(self) -> None:

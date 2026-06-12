@@ -58,7 +58,7 @@ Quality bar:
 
 Handoff policy:
 
-Run as Hermes-side evidence gathering; hand coding to the selected executor only after source-backed guidance is summarized.
+Run as Hermes-side evidence gathering; hand coding to the selected executor/runtime only after source-backed guidance is summarized.
 
 Required inputs:
 

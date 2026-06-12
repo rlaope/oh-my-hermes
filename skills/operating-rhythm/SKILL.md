@@ -35,7 +35,7 @@ Good example:
 Bad example:
 
 - Prompt: operating-rhythm implement the action items from the retro.
-- Expected behavior: Route implementation to a plan or selected executor handoff after action items are accepted.
+- Expected behavior: Route implementation to a plan or selected executor/runtime handoff after action items are accepted.
 - Why: Operating records can capture follow-ups, but implementation is a separate observed work stream.
 
 ## Use When

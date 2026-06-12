@@ -269,11 +269,11 @@ The backend flow is:
    the same thread and calls `omh chat interact` again with the updated message.
 6. If the interaction presents a plan, the wrapper waits for the user to accept
    or revise it before preparing any coding handoff.
-7. If the accepted interaction exposes executor selection or a handoff action,
-   the wrapper uses the chosen executor profile. Codex can use the run-backed
-   lifecycle path; Claude Code, OMH-style runtime profiles, generic agents, and
-   Hermes-retained work use prompt-only or retained handoff paths in Phase 1.
-   The wrapper records only what it actually observes.
+7. If the accepted interaction exposes executor or runtime selection, the
+   wrapper uses the chosen profile. Codex can use the run-backed lifecycle path;
+   Claude Code and generic agents use prompt-only handoffs; Hermes, OMX, OMO,
+   and OMC use runtime handoffs with team/swarm, worker-protocol, and worktree
+   guidance. The wrapper records only what it actually observes.
 8. If the wrapper observes Hermes target metadata such as `agent_ref`,
    `agent_count`, or `hermes_home`, `chat_interaction/v1` may include
    `target_notice` and `target_topology`. Render the concise notice or
@@ -468,10 +468,14 @@ Before calling the bot integration ready, verify these points:
 - `omh coding lifecycle start --executor codex --record "<message>"` creates a
   prepared Codex handoff lifecycle without storing the raw prompt body by
   default.
-- `omh coding delegate --executor claude-code --record "<message>"` and other
-  non-Codex profiles return a `coding_prompt_handoff/v1` prompt-only payload
-  without creating a lifecycle run.
-- Executor-choice, retained-Hermes, clarify, fallback, and prompt-only handoffs
+- `omh coding delegate --executor claude-code --record "<message>"` and generic
+  profiles return a `coding_prompt_handoff/v1` prompt-only payload without
+  creating a lifecycle run.
+- `omh coding delegate --executor hermes --record "<message>"` and
+  `omx-runtime` / `omo-runtime` / `omc-runtime` return a
+  `coding_runtime_handoff/v1` payload with runtime, team/swarm,
+  worker-protocol, and worktree guidance without creating a lifecycle run.
+- Executor-choice, runtime-handoff, clarify, fallback, and prompt-only handoffs
   return `runtime.recorded=false`; wrappers should not expect
   `runtime.run.run_id` for those paths.
 - Codex handoff payloads expose `codex_skill` plus
@@ -512,7 +516,7 @@ Before calling the bot integration ready, verify these points:
 
 Current limitation: `omh chat interact`, `omh chat route`,
 `omh coding delegate`, and `omh coding lifecycle` choose contracts and record
-local metadata. Hermes Agent and the selected executor still provide the actual
+local metadata. Hermes Agent and the selected executor/runtime still provide the actual
 conversation, execution, GitHub, CI, and merge evidence that OMH later records.
 
 ## Update

@@ -50,15 +50,15 @@ Use roles inside the flagship `request-to-handoff` path:
 ### Coding Handoff
 
 - ID: `coding-handoff`
-- Purpose: Own executor selection, prepared handoff payloads, and status narration while selected executors own code changes.
+- Purpose: Own executor/runtime selection, prepared handoff payloads, and status narration while the chosen coding agent or runtime owns code changes.
 - Owns:
-  - Executor choice or prompt-only fallback
-  - Prepared coding handoff with acceptance and verification expectations
+  - Executor, runtime, or Hermes coding-skill choice
+  - Prepared coding handoff with team/swarm, worker, worktree, acceptance, and verification expectations when relevant
   - Observed lifecycle status when a tested executor contract records it
 - Primary skills: `ultragoal`, `ultrawork`, `ralph`, `ai-slop-cleaner`
 - Primary harnesses: `goal-execution`, `parallel-delivery`, `coding-handling`
-- Wrapper actions: `choose_executor`, `show_prompt_handoff`, `send_to_executor`, `show_status`
-- Evidence boundary: A prepared coding handoff is not executor dispatch, result, verification, review, CI, merge readiness, or merge evidence.
+- Wrapper actions: `choose_executor`, `show_prompt_handoff`, `show_runtime_handoff`, `start_team`, `start_swarm`, `prepare_worktree`, `send_to_executor`, `show_status`
+- Evidence boundary: A prepared coding handoff is not executor/runtime dispatch, worker start, worktree creation, result, verification, review, CI, merge readiness, or merge evidence.
 
 ## Public Claim Rule
 

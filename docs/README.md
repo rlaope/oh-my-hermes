@@ -55,7 +55,7 @@ merge.
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, or direct ambitious goal loop. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |
-| `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, or another selected executor while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+| `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, another runtime, or Hermes coding skills while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## Documentation Contracts
 

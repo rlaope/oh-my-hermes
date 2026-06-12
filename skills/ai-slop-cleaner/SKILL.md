@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, maintenance]
     category: maintenance
     phase: cleanup
-    role: codex-handoff-guidance
+    role: runtime-handoff-guidance
     quality_tier: regression-gated
 ---
 
@@ -47,7 +47,7 @@ Use for behavior-preserving cleanup with tests before and after edits.
 
 Category: `maintenance`
 Phase: `cleanup`
-Hermes role: `codex-handoff-guidance`
+Hermes role: `runtime-handoff-guidance`
 Quality tier: `regression-gated`
 
 Quality bar:
@@ -58,7 +58,7 @@ Quality bar:
 
 Handoff policy:
 
-Use Hermes to define cleanup scope and regression checks; delegate behavior-preserving edits to the selected coding executor once tests are clear.
+Use Hermes to define cleanup scope and regression checks; route behavior-preserving edits to the selected coding runtime once tests are clear.
 
 Required inputs:
 

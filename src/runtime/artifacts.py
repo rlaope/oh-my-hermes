@@ -697,7 +697,7 @@ def _delegated_status_summary(
     if not prepared:
         return "No prepared coding delegation was found for this run."
     if action == "clarify":
-        return "The coding request needs clarification before executor dispatch."
+        return "The coding request needs clarification before executor/runtime dispatch."
     if action == "fallback":
         return "The coding request fell back to the router; do not dispatch it to an executor yet."
     if action != "delegate":
@@ -786,6 +786,8 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
                     errors.append(f"{coding_delegation_path}: executor choice must not be stored as a prepared runtime run")
                 if coding.get("work_owner_mode") == "prompt_only_handoff":
                     errors.append(f"{coding_delegation_path}: prompt-only handoff must not be stored as a prepared runtime run")
+                if coding.get("work_owner_mode") == "runtime_handoff":
+                    errors.append(f"{coding_delegation_path}: runtime handoff must not be stored as a prepared runtime run")
                 if (
                     coding.get("work_owner_mode") != "external_executor"
                     or coding.get("selected_executor_profile") != "codex"
