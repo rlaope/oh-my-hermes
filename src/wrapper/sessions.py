@@ -463,7 +463,7 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
             source=str(session["source"]),
             source_metadata={str(key): str(value) for key, value in session.get("source_metadata", {}).items()},
         )
-        executor_status = build_executor_session_status(paths, session)
+        executor_status = build_executor_session_status(paths, session, linked_status=runtime_status)
         chat_response = enhance_chat_response_with_executor_session(
             interaction["chat_response"],
             executor_status,
@@ -492,7 +492,7 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
     else:
         observation_errors = []
         runtime_observation = runtime_observation_not_applicable("session is not a prepared runtime handoff")
-    executor_status = build_executor_session_status(paths, session)
+    executor_status = build_executor_session_status(paths, session, runtime_status=runtime_observation)
     chat_response = enhance_chat_response_with_executor_session(
         _session_chat_response(session),
         executor_status,

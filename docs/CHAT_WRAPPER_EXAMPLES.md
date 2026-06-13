@@ -211,7 +211,9 @@ What gets better for the team:
 | Evidence boundary | `chat_response.claim_boundary` |
 | Status headline | `status_card.headline` |
 | Status rows | `status_card.steps[]` |
-| Primary status action | `status_card.primary_action` |
+| Primary status action id | `status_card.primary_action` |
+| Primary status button label | `status_card.primary_action_label`, `status_card.executor_next_action_label`, or the matching `executor_actions[].label` |
+| User-facing executor status | `status_card.executor_display_status_lines[]` |
 
 Hermes Agent surfaces should render these fields natively and keep OMH focused
 on the routing, handoff, status, and evidence contract.

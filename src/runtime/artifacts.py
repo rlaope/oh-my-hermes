@@ -1195,7 +1195,8 @@ def _add_duplicate_wrapper_run_link_errors(session_results: list[dict[str, Any]]
 
 SENSITIVE_KEY_PARTS = ("secret", "token", "api_key", "apikey", "password")
 SENSITIVE_TEXT_KEY_PARTS = ("prompt", "response")
-SENSITIVE_TEXT_KEYS = ("message", "raw_message", "task_statement")
+SENSITIVE_TEXT_KEYS = ("message", "raw_message", "task_statement", "external_session_ref", "summary")
+SENSITIVE_LIST_KEYS = ("evidence_refs", "observed_evidence_refs")
 EVIDENCE_KEYS_TO_PRESERVE = ("prompt_dispatched", "hermes_response_observed", "verification_observed")
 
 
@@ -1203,9 +1204,17 @@ def _should_redact_key(key: str) -> bool:
     lowered = key.lower()
     if lowered in EVIDENCE_KEYS_TO_PRESERVE:
         return False
+    if lowered in SENSITIVE_LIST_KEYS:
+        return True
     if lowered in SENSITIVE_TEXT_KEYS:
         return True
     return any(part in lowered for part in SENSITIVE_KEY_PARTS + SENSITIVE_TEXT_KEY_PARTS)
+
+
+def _redacted_value(key: str, value: Any) -> Any:
+    if key.lower() in SENSITIVE_LIST_KEYS and isinstance(value, list):
+        return ["[redacted]"] if value else []
+    return "[redacted]"
 
 
 def _redact(value: Any) -> Any:
@@ -1213,7 +1222,7 @@ def _redact(value: Any) -> Any:
         redacted: dict[str, Any] = {}
         for key, item in value.items():
             if _should_redact_key(str(key)):
-                redacted[key] = "[redacted]"
+                redacted[key] = _redacted_value(str(key), item)
             else:
                 redacted[key] = _redact(item)
         return redacted

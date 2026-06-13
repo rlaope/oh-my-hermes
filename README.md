@@ -275,13 +275,13 @@ manual commands:
 
 ```text
 Hermes: A coding-agent handoff is ready.
-Buttons: Open in Codex | Attach session | Refresh status
-Status: coding-agent: prepared(codex)
-        executor-session: not_attached
-        handoff: prepared
-        dispatch: not_observed
-        result: not_observed
-        verification: not_requested
+Buttons: Open in Codex | Attach existing session | Refresh status
+Status: Coding agent is prepared in Codex.
+        Executor session is not attached yet.
+        Handoff is ready.
+        Dispatch/open has not been observed yet.
+        Executor result has not been observed yet.
+        Hermes verification has not been requested yet.
 ```
 
 When a wrapper observes a button action or external executor session, it records

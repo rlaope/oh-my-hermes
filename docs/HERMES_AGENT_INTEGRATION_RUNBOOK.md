@@ -135,15 +135,15 @@ omh chat session request-verification "$SESSION_ID"
 omh chat session status "$SESSION_ID"
 ```
 
-The resulting status lines are intentionally plain:
+The resulting display status lines are intended for normal chat surfaces:
 
 ```text
-coding-agent: running(codex)
-executor-session: attached
-handoff: prepared
-dispatch: observed
-result: not_observed
-verification: not_requested
+Coding agent is running in Codex.
+Executor session is attached.
+Handoff is ready.
+Dispatch/open has been observed.
+Executor result has not been observed yet.
+Hermes verification has not been requested yet.
 ```
 
 For prompt-only Claude Code or generic agents, the same wrapper session action

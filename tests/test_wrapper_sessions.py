@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import shutil
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,6 +17,7 @@ from omh.runtime_records import validate_wrapper_session_record
 from omh.wrapper.executor_sessions import (
     ExecutorSessionError,
     attach_executor_session,
+    build_executor_session_status,
     open_executor_session,
     record_executor_session_result,
     request_executor_session_verification,
@@ -461,8 +463,12 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(prepared_status["result"], "not_observed")
             self.assertTrue(prepared_actions["open_executor_session"]["enabled"])
             self.assertEqual(prepared_actions["open_executor_session"]["label"], "Open in Codex")
+            self.assertEqual(prepared_actions["attach_executor_session"]["label"], "Attach existing session")
+            self.assertEqual(prepared_actions["attach_executor_session"]["payload"]["input_schema"]["required"], ["external_session_ref"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["chat_response"]["actions"]})
             self.assertEqual(prepared["status"]["status_card"]["executor_session_status"]["coding_agent"], "prepared(codex)")
+            self.assertEqual(prepared["status"]["status_card"]["executor_next_action_label"], "Open in Codex")
+            self.assertIn("Coding agent is prepared in Codex.", prepared_status["display_status_lines"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["status_card"]["executor_actions"]})
             with self.assertRaisesRegex(ExecutorSessionError, "requires --observed"):
                 open_executor_session(paths, session_id, external_session_ref="codex-thread-1")
@@ -558,6 +564,74 @@ class WrapperSessionTests(unittest.TestCase):
             with self.assertRaisesRegex(ExecutorSessionError, "after executor result is recorded"):
                 open_executor_session(paths, session_id, observed=True, external_session_ref="codex-thread-2")
 
+    def test_invalid_executor_session_record_is_ignored_for_status_claims(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "risky refactor", source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "claude-code")
+            prepare_wrapper_session_handoff(paths, session_id, "risky refactor")
+            session_dir = paths.runtime_wrapper_sessions_dir / session_id
+            (session_dir / "executor_session.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "executor_session/v1",
+                        "record_type": "executor_session",
+                        "session_id": session_id,
+                        "updated_at": "2026-06-13T00:00:00Z",
+                        "selected_executor_profile": "claude-code",
+                        "session_kind": "prompt_only",
+                        "status": "completed",
+                        "open_action": "observed",
+                        "attached": True,
+                        "external_session_ref": "claude-secret-session",
+                        "dispatch_observed": True,
+                        "result": "completed",
+                        "result_observed": False,
+                        "verification": "not_requested",
+                        "verification_requested": False,
+                        "evidence_refs": ["private-ref"],
+                        "summary": "looks complete but is invalid",
+                        "claim_boundary": "Executor session records are metadata-only wrapper/operator observations.",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status = build_wrapper_session_status(paths, session_id)["executor_session_status"]
+            actions = {action["id"]: action for action in status["actions"]}
+
+            self.assertEqual(status["result"], "not_observed")
+            self.assertIn("executor_session_error", status)
+            self.assertFalse(actions["ask_hermes_verify"]["enabled"])
+            self.assertIn("Action is blocked", status["display_status_lines"][-1])
+
+    def test_missing_linked_codex_run_blocks_local_executor_completion_claims(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            handoff = prepare_wrapper_session_handoff(paths, session_id, message)
+            run_id = str(handoff["session"]["current_run_id"])
+            open_executor_session(paths, session_id, observed=True, external_session_ref="codex-thread-1")
+            record_executor_session_result(paths, session_id, result="completed", evidence_refs=["codex-summary"])
+            shutil.rmtree(paths.runtime_runs_dir / run_id)
+
+            session = json.loads((paths.runtime_wrapper_sessions_dir / session_id / "session.json").read_text(encoding="utf-8"))
+            status = build_executor_session_status(paths, session)
+            actions = {action["id"]: action for action in status["actions"]}
+
+            self.assertEqual(status["result"], "not_observed")
+            self.assertEqual(status["dispatch"], "not_observed")
+            self.assertIn(f"linked runtime run not found: {run_id}", status["linked_lifecycle_error"])
+            self.assertFalse(actions["ask_hermes_verify"]["enabled"])
+            with self.assertRaisesRegex(ExecutorSessionError, "linked runtime run not found"):
+                request_executor_session_verification(paths, session_id)
+
     def test_prompt_only_executor_session_tracks_attached_result_without_runtime_run(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -590,7 +664,12 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(completed["status"]["result"], "completed")
             exported = export_runtime(paths, redacted=True)
             self.assertEqual(exported["wrapper_sessions"][0]["executor_session"]["schema_version"], "executor_session/v1")
+            self.assertEqual(exported["wrapper_sessions"][0]["executor_session"]["external_session_ref"], "[redacted]")
+            self.assertEqual(exported["wrapper_sessions"][0]["executor_session"]["evidence_refs"], ["[redacted]"])
+            self.assertEqual(exported["wrapper_sessions"][0]["executor_session"]["summary"], "[redacted]")
             self.assertNotIn(message, json.dumps(exported))
+            self.assertNotIn("claude-session-1", json.dumps(exported))
+            self.assertNotIn("claude-summary", json.dumps(exported))
             self.assertEqual(validate_runtime(paths)["runs"], [])
             self.assertTrue(validate_runtime(paths)["ok"])
 

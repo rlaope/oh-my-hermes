@@ -44,17 +44,30 @@ class ExecutorSessionError(ValueError):
     pass
 
 
-def build_executor_session_status(paths: OmhPaths, session: dict[str, Any]) -> dict[str, object]:
+def build_executor_session_status(
+    paths: OmhPaths,
+    session: dict[str, Any],
+    *,
+    linked_status: dict[str, Any] | None = None,
+    runtime_status: dict[str, Any] | None = None,
+) -> dict[str, object]:
     session_id = str(session.get("session_id", ""))
-    record = read_executor_session(paths, session_id) or _default_executor_session(session)
-    linked_status = _linked_status(paths, session)
-    runtime_status = _runtime_status(paths, session)
-    dispatch_observed = _dispatch_observed(record, linked_status, runtime_status)
-    result_status = _result_status(record, linked_status)
-    verification_status = _verification_status(record, linked_status)
+    record, record_error = read_executor_session_result(_session_dir(paths, session_id))
+    record_found = record is not None and record_error is None
+    record = record if record_found else _default_executor_session(session)
+    if linked_status is None:
+        linked_status, linked_status_error = _linked_status_result(paths, session)
+    else:
+        linked_status_error = None
+    if runtime_status is None:
+        runtime_status = _runtime_status(paths, session)
+    dispatch_observed = _dispatch_observed(record, linked_status, runtime_status, linked_status_error=linked_status_error)
+    result_status = _result_status(record, linked_status, linked_status_error=linked_status_error)
+    verification_status = _verification_status(record, linked_status, linked_status_error=linked_status_error)
     agent_state = _agent_state(record, dispatch_observed, result_status)
     executor = _selected_executor(session, record)
     attached = bool(record.get("attached", False))
+    status_blocker = record_error or linked_status_error or ""
     status = {
         "schema_version": EXECUTOR_SESSION_STATUS_SCHEMA_VERSION,
         "session_id": session_id,
@@ -68,7 +81,13 @@ def build_executor_session_status(paths: OmhPaths, session: dict[str, Any]) -> d
         "result": result_status,
         "verification": verification_status,
         "external_session_ref": str(record.get("external_session_ref", "")),
-        "actions": build_executor_session_actions(session, record, dispatch_observed=dispatch_observed, result_status=result_status),
+        "actions": build_executor_session_actions(
+            session,
+            record,
+            dispatch_observed=dispatch_observed,
+            result_status=result_status,
+            status_blocker=status_blocker,
+        ),
         "status_lines": [
             f"coding-agent: {agent_state}({executor})",
             f"executor-session: {'attached' if attached else 'not_attached'}",
@@ -77,13 +96,27 @@ def build_executor_session_status(paths: OmhPaths, session: dict[str, Any]) -> d
             f"result: {result_status}",
             f"verification: {verification_status}",
         ],
+        "display_status_lines": _display_status_lines(
+            executor=executor,
+            agent_state=agent_state,
+            attached=attached,
+            handoff_state=_handoff_state(session),
+            dispatch_observed=dispatch_observed,
+            result_status=result_status,
+            verification_status=verification_status,
+            status_blocker=status_blocker,
+        ),
         "claim_boundary": (
             "Executor session status is wrapper/operator metadata. It does not prove execution, "
             "result, verification, review, CI, or merge unless the matching observed evidence is recorded."
         ),
     }
-    if record.get("schema_version") == EXECUTOR_SESSION_SCHEMA_VERSION:
+    if record_found and record.get("schema_version") == EXECUTOR_SESSION_SCHEMA_VERSION:
         status["record"] = record
+    if record_error:
+        status["executor_session_error"] = record_error
+    if linked_status_error:
+        status["linked_lifecycle_error"] = linked_status_error
     if linked_status:
         status["linked_lifecycle_status"] = {
             "run_id": linked_status.get("run_id", ""),
@@ -101,6 +134,7 @@ def build_executor_session_actions(
     *,
     dispatch_observed: bool | None = None,
     result_status: str | None = None,
+    status_blocker: str = "",
 ) -> list[dict[str, object]]:
     record = record or _default_executor_session(session)
     executor = _selected_executor(session, record)
@@ -122,19 +156,40 @@ def build_executor_session_actions(
             _open_label(executor),
             "primary",
             enabled=(
-                _handoff_state(session) == "prepared"
+                not status_blocker
+                and _handoff_state(session) == "prepared"
                 and result_status == "not_observed"
                 and not attached
                 and not dispatch_observed
             ),
-            payload={**base_payload, "backend_action": "open-executor"},
+            payload={**base_payload, "backend_action": "open-executor", "disabled_reason": status_blocker},
         ),
         _action(
             "attach_executor_session",
-            "Attach session",
+            "Attach existing session",
             "secondary",
-            enabled=_handoff_state(session) == "prepared" and result_status == "not_observed",
-            payload={**base_payload, "backend_action": "attach-executor"},
+            enabled=not status_blocker and _handoff_state(session) == "prepared" and result_status == "not_observed",
+            payload={
+                **base_payload,
+                "backend_action": "attach-executor",
+                "disabled_reason": status_blocker,
+                "input_schema": {
+                    "type": "object",
+                    "required": ["external_session_ref"],
+                    "properties": {
+                        "external_session_ref": {
+                            "type": "string",
+                            "title": "Executor session reference",
+                            "description": "Codex thread id, Claude Code session id, tmux pane, or another operator-visible executor reference.",
+                        },
+                        "evidence_ref": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional evidence refs showing where the wrapper observed the attachment.",
+                        },
+                    },
+                },
+            },
         ),
         _action(
             "refresh_executor_status",
@@ -147,36 +202,36 @@ def build_executor_session_actions(
             "record_executor_completed",
             "Record completed",
             "secondary",
-            enabled=bool(attached or dispatch_observed) and result_status == "not_observed",
-            payload={**base_payload, "backend_action": "record-executor", "result": "completed"},
+            enabled=not status_blocker and bool(attached or dispatch_observed) and result_status == "not_observed",
+            payload={**base_payload, "backend_action": "record-executor", "result": "completed", "disabled_reason": status_blocker},
         ),
         _action(
             "record_executor_blocked",
             "Record blocked",
             "secondary",
-            enabled=bool(attached or dispatch_observed) and result_status == "not_observed",
-            payload={**base_payload, "backend_action": "record-executor", "result": "blocked"},
+            enabled=not status_blocker and bool(attached or dispatch_observed) and result_status == "not_observed",
+            payload={**base_payload, "backend_action": "record-executor", "result": "blocked", "disabled_reason": status_blocker},
         ),
         _action(
             "record_executor_failed",
             "Record failed",
             "secondary",
-            enabled=bool(attached or dispatch_observed) and result_status == "not_observed",
-            payload={**base_payload, "backend_action": "record-executor", "result": "failed"},
+            enabled=not status_blocker and bool(attached or dispatch_observed) and result_status == "not_observed",
+            payload={**base_payload, "backend_action": "record-executor", "result": "failed", "disabled_reason": status_blocker},
         ),
         _action(
             "ask_hermes_verify",
             "Ask Hermes to verify",
             "secondary",
-            enabled=result_status == "completed",
-            payload={**base_payload, "backend_action": "request-verification"},
+            enabled=not status_blocker and result_status == "completed",
+            payload={**base_payload, "backend_action": "request-verification", "disabled_reason": status_blocker},
         ),
     ]
 
 
 def read_executor_session(paths: OmhPaths, session_id: str) -> dict[str, Any] | None:
-    record = read_json_object(_executor_session_path(paths, session_id))
-    return record if isinstance(record, dict) else None
+    record, error = read_executor_session_result(_session_dir(paths, session_id))
+    return None if error else record
 
 
 def open_executor_session(
@@ -255,7 +310,10 @@ def record_executor_session_result(
     session = _existing_session(paths, session_id)
     _require_prepared_handoff(session)
     current = read_executor_session(paths, session_id) or _default_executor_session(session)
-    if not _dispatch_observed(current, _linked_status(paths, session), _runtime_status(paths, session)) and not bool(current.get("attached", False)):
+    linked_status, linked_status_error = _linked_status_result(paths, session)
+    if linked_status_error:
+        raise ExecutorSessionError(linked_status_error)
+    if not _dispatch_observed(current, linked_status, _runtime_status(paths, session)) and not bool(current.get("attached", False)):
         raise ExecutorSessionError("cannot record executor result before an executor session is opened or attached")
     refs = list(evidence_refs or [])
     if str(session.get("current_run_id", "")):
@@ -285,7 +343,10 @@ def request_executor_session_verification(
     session = _existing_session(paths, session_id)
     _require_prepared_handoff(session)
     current = read_executor_session(paths, session_id) or _default_executor_session(session)
-    if _result_status(current, _linked_status(paths, session)) != "completed":
+    linked_status, linked_status_error = _linked_status_result(paths, session)
+    if linked_status_error:
+        raise ExecutorSessionError(linked_status_error)
+    if _result_status(current, linked_status) != "completed":
         raise ExecutorSessionError("cannot request Hermes verification before executor completion is recorded")
     record = _merge_executor_session(
         paths,
@@ -343,6 +404,12 @@ def enhance_status_card_with_executor_session(
     updated = dict(status_card)
     updated["executor_session_status"] = _executor_status_summary(executor_status)
     updated["executor_status_lines"] = list(executor_status.get("status_lines", [])) if isinstance(executor_status.get("status_lines"), list) else []
+    updated["executor_display_status_lines"] = (
+        list(executor_status.get("display_status_lines", [])) if isinstance(executor_status.get("display_status_lines"), list) else []
+    )
+    executor_next_action = _next_executor_action(executor_status)
+    updated["executor_next_action"] = executor_next_action
+    updated["executor_next_action_label"] = _executor_action_label(executor_status, executor_next_action)
     updated["executor_actions"] = [action for action in executor_status.get("actions", []) if isinstance(action, dict)]
     return updated
 
@@ -352,6 +419,7 @@ def build_executor_session_status_card(executor_status: dict[str, object]) -> di
     dispatch = str(executor_status.get("dispatch", "not_observed"))
     verification = str(executor_status.get("verification", "not_requested"))
     next_action = _next_executor_action(executor_status)
+    next_action_label = _executor_action_label(executor_status, next_action)
     card = {
         "schema_version": "status_card/v1",
         "run_id": "",
@@ -360,7 +428,9 @@ def build_executor_session_status_card(executor_status: dict[str, object]) -> di
         "headline": "Executor session status",
         "summary": "Hermes can show the selected coding-agent session without claiming unobserved execution, verification, review, CI, or merge.",
         "next_action": next_action,
+        "next_action_label": next_action_label,
         "primary_action": next_action,
+        "primary_action_label": next_action_label,
         "steps": [
             _card_step("handoff", "Handoff", "complete" if executor_status.get("handoff") == "prepared" else "pending", "Executor handoff prepared by Hermes."),
             _card_step("dispatch", "Dispatch", "complete" if dispatch == "observed" else "pending", "Observed wrapper open or attach event."),
@@ -585,14 +655,14 @@ def _record_codex_result_if_needed(
         raise ExecutorSessionError(str(exc)) from exc
 
 
-def _linked_status(paths: OmhPaths, session: dict[str, Any]) -> dict[str, Any]:
+def _linked_status_result(paths: OmhPaths, session: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     run_id = str(session.get("current_run_id", ""))
     if not run_id:
-        return {}
+        return {}, None
     try:
-        return report_codex_delegation_lifecycle(paths, run_id)
+        return report_codex_delegation_lifecycle(paths, run_id), None
     except FileNotFoundError:
-        return {}
+        return {}, f"linked runtime run not found: {run_id}"
 
 
 def _runtime_status(paths: OmhPaths, session: dict[str, Any]) -> dict[str, Any]:
@@ -604,7 +674,15 @@ def _runtime_status(paths: OmhPaths, session: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _dispatch_observed(record: dict[str, Any], linked_status: dict[str, Any], runtime_status: dict[str, Any]) -> bool:
+def _dispatch_observed(
+    record: dict[str, Any],
+    linked_status: dict[str, Any],
+    runtime_status: dict[str, Any],
+    *,
+    linked_status_error: str | None = None,
+) -> bool:
+    if linked_status_error:
+        return False
     if bool(record.get("dispatch_observed", False)):
         return True
     if linked_status and str(linked_status.get("next_action", "")) != "dispatch_to_executor":
@@ -614,14 +692,18 @@ def _dispatch_observed(record: dict[str, Any], linked_status: dict[str, Any], ru
     return False
 
 
-def _result_status(record: dict[str, Any], linked_status: dict[str, Any]) -> str:
+def _result_status(record: dict[str, Any], linked_status: dict[str, Any], *, linked_status_error: str | None = None) -> str:
+    if linked_status_error:
+        return "not_observed"
     linked_execution = linked_status.get("execution", {}) if linked_status else {}
     if isinstance(linked_execution, dict) and linked_execution.get("observed"):
         return str(linked_execution.get("status", "not_observed"))
     return str(record.get("result", "not_observed"))
 
 
-def _verification_status(record: dict[str, Any], linked_status: dict[str, Any]) -> str:
+def _verification_status(record: dict[str, Any], linked_status: dict[str, Any], *, linked_status_error: str | None = None) -> str:
+    if linked_status_error:
+        return "not_requested"
     linked_verification = linked_status.get("verification", {}) if linked_status else {}
     if isinstance(linked_verification, dict) and linked_verification.get("observed"):
         return "observed"
@@ -663,7 +745,10 @@ def _require_prepared_handoff(session: dict[str, Any]) -> None:
 
 def _require_no_observed_result(paths: OmhPaths, session: dict[str, Any]) -> None:
     current = read_executor_session(paths, str(session.get("session_id", ""))) or _default_executor_session(session)
-    if _result_status(current, _linked_status(paths, session)) != "not_observed":
+    linked_status, linked_status_error = _linked_status_result(paths, session)
+    if linked_status_error:
+        raise ExecutorSessionError(linked_status_error)
+    if _result_status(current, linked_status) != "not_observed":
         raise ExecutorSessionError("cannot open or attach an executor session after executor result is recorded")
 
 
@@ -681,6 +766,48 @@ def _open_summary(session: dict[str, Any], *, observed: bool) -> str:
     if observed:
         return "Wrapper observed an executor open action. This records dispatch/open only, not executor result."
     return "Wrapper prepared an executor open action. No executor dispatch/open is observed yet."
+
+
+def _display_status_lines(
+    *,
+    executor: str,
+    agent_state: str,
+    attached: bool,
+    handoff_state: str,
+    dispatch_observed: bool,
+    result_status: str,
+    verification_status: str,
+    status_blocker: str,
+) -> list[str]:
+    lines = [
+        f"Coding agent is {agent_state} in {executor_label(executor)}.",
+        "Executor session is attached." if attached else "Executor session is not attached yet.",
+        "Handoff is ready." if handoff_state == "prepared" else "Handoff is not ready yet.",
+        "Dispatch/open has been observed." if dispatch_observed else "Dispatch/open has not been observed yet.",
+        _result_display_line(result_status),
+        _verification_display_line(verification_status),
+    ]
+    if status_blocker:
+        lines.append(f"Action is blocked until OMH can read valid evidence: {status_blocker}")
+    return lines
+
+
+def _result_display_line(result_status: str) -> str:
+    if result_status == "completed":
+        return "Executor result is recorded as completed."
+    if result_status == "blocked":
+        return "Executor result is blocked."
+    if result_status == "failed":
+        return "Executor result is failed."
+    return "Executor result has not been observed yet."
+
+
+def _verification_display_line(verification_status: str) -> str:
+    if verification_status == "observed":
+        return "Hermes verification evidence is observed."
+    if verification_status == "requested":
+        return "Hermes verification has been requested."
+    return "Hermes verification has not been requested yet."
 
 
 def _claim_boundary() -> str:
@@ -725,6 +852,15 @@ def _next_executor_action(executor_status: dict[str, object]) -> str:
     if result == "completed" and verification == "not_requested":
         return "ask_hermes_verify"
     return "show_status"
+
+
+def _executor_action_label(executor_status: dict[str, object], action_id: str) -> str:
+    for action in executor_status.get("actions", []):
+        if isinstance(action, dict) and action.get("id") == action_id:
+            return str(action.get("label") or action_id)
+    if action_id == "show_status":
+        return "Show status"
+    return action_id.replace("_", " ").title()
 
 
 def _executor_status_card_severity(result: str, verification: str) -> str:
