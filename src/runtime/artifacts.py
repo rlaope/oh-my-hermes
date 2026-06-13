@@ -393,6 +393,7 @@ def show_wrapper_session_record(paths: OmhPaths, session_id: str) -> dict[str, A
         "session": session,
         "events": events,
         "runtime_observations": observations,
+        "executor_session": read_json_object(session_dir / "executor_session.json"),
     }
     if event_errors:
         result["event_errors"] = event_errors

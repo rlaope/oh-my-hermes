@@ -2184,6 +2184,104 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertTrue(json.loads(stdout)["ok"])
 
+    def test_chat_session_executor_actions_track_codex_without_user_cli_commands(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home_args = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "risky refactor"
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "start",
+                    "--source",
+                    "discord",
+                    "--source-event-id",
+                    "m1",
+                    "--channel-ref",
+                    "c1",
+                    message,
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            session_id = json.loads(stdout)["session"]["session_id"]
+            self.assertEqual(run_cli(home_args + ["chat", "session", "accept-plan", session_id])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "select-executor", session_id, "codex"])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "prepare-handoff", session_id, message])[0], 0)
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "session", "status", session_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            prepared_status = json.loads(stdout)
+            self.assertEqual(prepared_status["executor_session_status"]["coding_agent"], "prepared(codex)")
+            self.assertEqual(prepared_status["status_card"]["executor_session_status"]["coding_agent"], "prepared(codex)")
+            action_ids = {action["id"] for action in prepared_status["chat_response"]["actions"]}
+            self.assertIn("open_executor_session", action_ids)
+            self.assertIn("record_executor_completed", action_ids)
+            card_action_ids = {action["id"] for action in prepared_status["status_card"]["executor_actions"]}
+            self.assertIn("open_executor_session", card_action_ids)
+
+            status, _stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "open-executor",
+                    session_id,
+                    "--external-session-ref",
+                    "codex-thread-without-observation",
+                ]
+            )
+            self.assertNotEqual(status, 0)
+            self.assertIn("requires --observed", stderr)
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "open-executor",
+                    session_id,
+                    "--observed",
+                    "--external-session-ref",
+                    "codex-thread-1",
+                    "--evidence-ref",
+                    "discord-button",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            opened = json.loads(stdout)
+            self.assertEqual(opened["status"]["coding_agent"], "running(codex)")
+            self.assertEqual(opened["status"]["dispatch"], "observed")
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "record-executor",
+                    session_id,
+                    "--result",
+                    "completed",
+                    "--evidence-ref",
+                    "codex-summary",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            completed = json.loads(stdout)
+            self.assertEqual(completed["status"]["coding_agent"], "completed(codex)")
+            self.assertEqual(completed["status"]["result"], "completed")
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "session", "request-verification", session_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["status"]["verification"], "requested")
+
     def test_runtime_observe_rejects_plain_workflow_run_without_runtime_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

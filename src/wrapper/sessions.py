@@ -27,6 +27,13 @@ from ..runtime.artifacts import (
     validate_runtime_observations_for_wrapper_session,
 )
 from .contract import build_chat_interaction_payload, build_chat_status_interaction
+from .executor_sessions import (
+    build_executor_session_status,
+    build_executor_session_status_card,
+    enhance_chat_response_with_executor_session,
+    enhance_status_card_with_executor_session,
+    read_executor_session_result,
+)
 from ..coding_delegation import build_coding_delegation_payload
 
 
@@ -456,6 +463,15 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
             source=str(session["source"]),
             source_metadata={str(key): str(value) for key, value in session.get("source_metadata", {}).items()},
         )
+        executor_status = build_executor_session_status(paths, session)
+        chat_response = enhance_chat_response_with_executor_session(
+            interaction["chat_response"],
+            executor_status,
+        )
+        status_card = enhance_status_card_with_executor_session(
+            interaction["status_card"],
+            executor_status,
+        )
         return {
             "schema_version": WRAPPER_SESSION_RESULT_SCHEMA_VERSION,
             "session_id": session_id,
@@ -463,7 +479,9 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
             "current_run_id": run_id,
             "session_status": session["status"],
             "runtime_status": runtime_status,
-            "chat_response": interaction["chat_response"],
+            "executor_session_status": executor_status,
+            "status_card": status_card,
+            "chat_response": chat_response,
             "claim_boundary": "Execution claims come from the linked runtime run ledger, not the wrapper session.",
         }
     if session["status"] == "runtime_handoff_prepared":
@@ -474,6 +492,12 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
     else:
         observation_errors = []
         runtime_observation = runtime_observation_not_applicable("session is not a prepared runtime handoff")
+    executor_status = build_executor_session_status(paths, session)
+    chat_response = enhance_chat_response_with_executor_session(
+        _session_chat_response(session),
+        executor_status,
+    )
+    status_card = build_executor_session_status_card(executor_status)
     return {
         "schema_version": WRAPPER_SESSION_RESULT_SCHEMA_VERSION,
         "session_id": session_id,
@@ -487,8 +511,10 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
         "runtime_handoff": session.get("runtime_handoff", {}) if session["status"] == "runtime_handoff_prepared" else {},
         "runtime_observation": runtime_observation,
         "runtime_observation_errors": observation_errors,
+        "executor_session_status": executor_status,
+        "status_card": status_card,
         "next_action": _next_action_for_session(session),
-        "chat_response": _session_chat_response(session),
+        "chat_response": chat_response,
         "claim_boundary": "Wrapper session state is not execution evidence.",
     }
 
@@ -511,15 +537,19 @@ def show_wrapper_session(paths: OmhPaths, session_id: str) -> dict[str, Any]:
         raise FileNotFoundError(session_id)
     events, event_errors = read_wrapper_session_events_result(session_dir)
     observations, observation_errors = read_runtime_observations_result(session_dir)
+    executor_session, executor_session_error = read_executor_session_result(session_dir)
     result = {
         "session": session,
         "events": events,
         "runtime_observations": observations,
+        "executor_session": executor_session,
     }
     if event_errors:
         result["event_errors"] = event_errors
     if observation_errors:
         result["runtime_observation_errors"] = observation_errors
+    if executor_session_error:
+        result["executor_session_error"] = executor_session_error
     return result
 
 
@@ -733,6 +763,13 @@ def _validate_wrapper_session_dir(session_dir: Path) -> dict[str, Any]:
             )
         if session:
             errors.extend(validate_runtime_observations_for_wrapper_session(observations_path, session, observations))
+    executor_session_path = session_dir / "executor_session.json"
+    if executor_session_path.exists():
+        executor_session, executor_session_error = read_executor_session_result(session_dir)
+        if executor_session_error:
+            errors.append(executor_session_error)
+        if executor_session and executor_session.get("session_id") != session_id:
+            errors.append(f"{executor_session_path}: session_id must match directory name")
     return {"session_id": session_id, "ok": not errors, "errors": errors}
 
 

@@ -120,14 +120,37 @@ omh chat session prepare-handoff "$SESSION_ID" "risky refactor"
 omh chat session status "$SESSION_ID"
 ```
 
-Use coding lifecycle commands only after a linked handoff run exists:
+After a handoff is prepared, render the returned `chat_response.actions` as
+Hermes-native buttons. A normal user should see actions such as Open in Codex,
+Open in Claude Code, Attach session, Refresh status, Record completed, Record
+blocked, or Ask Hermes to verify. The wrapper process maps those buttons back
+to backend calls; the user does not need to know the command names.
+
+For a Codex handoff, the wrapper can record an observed open and later result:
 
 ```sh
-omh coding lifecycle dispatch --run "$RUN_ID"
-omh coding lifecycle result --run "$RUN_ID" --result completed --evidence-ref codex-log
-omh coding lifecycle verify --run "$RUN_ID" --completion-status completed
-omh coding lifecycle report --run "$RUN_ID"
+omh chat session open-executor "$SESSION_ID" --observed --external-session-ref "$CODEX_THREAD"
+omh chat session record-executor "$SESSION_ID" --result completed --evidence-ref codex-summary
+omh chat session request-verification "$SESSION_ID"
+omh chat session status "$SESSION_ID"
 ```
+
+The resulting status lines are intentionally plain:
+
+```text
+coding-agent: running(codex)
+executor-session: attached
+handoff: prepared
+dispatch: observed
+result: not_observed
+verification: not_requested
+```
+
+For prompt-only Claude Code or generic agents, the same wrapper session action
+records attached/result metadata without creating a Codex lifecycle run. For
+Hermes/OMX/OMO/OMC runtime handoffs, an observed open also records the
+`runtime_start` ladder step; worktree, worker, review, CI, and merge still
+require separate evidence.
 
 If a wrapper cannot prove a transition, keep the status at `not_observed` and
 show the next required evidence instead of inferring progress.

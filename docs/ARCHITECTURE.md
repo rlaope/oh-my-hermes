@@ -190,6 +190,14 @@ runtime artifact layer. It starts prepared handoffs, records dispatch and
 executor observations, records verification observations, and reports derived
 status without mutating prepared handoff records into execution proof.
 
+`wrapper/executor_sessions.py` owns wrapper-native executor session metadata.
+It turns chat buttons such as Open in Codex, Open in Claude Code, Attach
+session, Refresh status, Record completed, Record blocked, and Ask Hermes to
+verify into `executor_session/v1` records and status lines. It can bridge to the
+Codex lifecycle run or a runtime-start observation when the wrapper reports an
+observed open, but it does not launch Codex, Claude Code, Hermes, workers,
+worktrees, or network transports.
+
 `hermes_planning.py` owns deterministic Hermes-facing planning artifacts under
 `.hermes/plans/` and the machine-readable plan wrapper contract used after plan
 acceptance.
@@ -265,17 +273,22 @@ Routing, planning, and delegation have eight local surfaces:
 5. Wrapper session persistence. `omh chat session` lets wrappers persist
    metadata-only plan decisions, recover status by `session_id`, and link an
    accepted plan to a prepared coding run without owning execution evidence.
-6. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
+6. Wrapper-native executor session actions. After a handoff is prepared, the
+   wrapper can render action buttons and record observed open/attach/result or
+   verification-request events as `executor_session/v1` metadata. This is the
+   layer that lets a Discord or Hermes chat user ask "what is happening with
+   Codex or Claude Code?" without typing backend commands.
+7. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
    hosted Hermes wrappers run a deterministic pre-dispatch decision before they
    forward a plain user message to Hermes.
-7. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
+8. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
    implementation-shaped messages into a deterministic `coding_delegation/v1`
    handoff payload for an executor lane.
-8. Runtime observation recording. `omh runtime observe` lets wrappers or
+9. Runtime observation recording. `omh runtime observe` lets wrappers or
    operators append `runtime_observation/v1` evidence for selected runtime
    handoffs without implying unrecorded worktree, worker, verification, review,
    CI, or merge steps.
-9. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
+10. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
    operators create deterministic `hermes_plan/v1` planning scaffolds under
    `.hermes/plans/` without claiming that execution or review already happened.
 
@@ -349,6 +362,14 @@ records own chat continuity, route summary, plan accepted/revision/cancelled
 decisions, and a `current_run_id` link. The linked run remains the only
 authoritative source for prepared handoff, dispatch, executor result,
 verification, review, CI, merge readiness, and merge observations.
+
+`executor_session/v1` is the chat-facing companion to that recovery layer. It
+records that a wrapper observed an open/attach/result/verification-request
+event for the selected executor. For Codex, observed open maps to lifecycle
+dispatch and observed result maps to the Codex run ledger. For Claude Code and
+generic agents, it remains prompt-only session metadata. For Hermes/OMX/OMO/OMC
+runtime handoffs, observed open records `runtime_start` while later ladder
+steps remain missing until explicit `runtime_observation/v1` evidence exists.
 
 Future routing work should deepen the catalog first, then render richer skill
 metadata from it.

@@ -29,6 +29,7 @@ evidence exists.
 | --- | --- | --- |
 | `omh chat interact` | Composes route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. | `src/wrapper/contract.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
 | `omh chat session` | Persists metadata-only chat session decisions, executor/runtime selection, plan acceptance/revision/cancel state, prompt-only handoffs, runtime handoffs, and accepted Codex lifecycle links. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
+| `omh chat session open-executor`, `attach-executor`, `record-executor`, `request-verification` | Backend actions for wrapper-rendered buttons such as Open in Codex, Open in Claude Code, Attach session, Refresh status, Record completed, Record blocked, and Ask Hermes to verify. They write `executor_session/v1` metadata and do not launch hidden executors. | `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
 | `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, and Hermes/OMX/OMO/OMC runtime contracts without overclaiming execution. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
@@ -56,7 +57,13 @@ The strongest existing path is:
    lifecycle run. Runtime handoffs now include runtime-specific templates and a
    `runtime_observation/v1` contract so wrappers know exactly which events must
    be observed later.
-6. Separate wrapper/runtime evidence is required before OMH can say execution,
+6. The wrapper renders executor-session buttons instead of asking the user to
+   type backend commands. When it observes Open in Codex, Attach session, Record
+   completed, Record blocked, or Ask Hermes to verify, it writes
+   `executor_session/v1` metadata and derives status lines such as
+   `coding-agent: running(codex)`, `dispatch: observed`, and
+   `verification: requested`.
+7. Separate wrapper/runtime evidence is required before OMH can say execution,
    review, verification, CI, merge, or merge-readiness was observed.
 
 ## Hermes Surface Readiness
@@ -92,6 +99,10 @@ Expected behavior:
 - `omh runtime observe --run <id>` or `omh runtime observe --session <id>`
   appends one observed, blocked, failed, or not-observed runtime ladder event
   without upgrading missing events into evidence.
+- `omh chat session open-executor`, `attach-executor`, `record-executor`, and
+  `request-verification` are wrapper backend actions. They are meant to sit
+  behind chat buttons, write `executor_session/v1`, and update status cards
+  without requiring a normal chat user to type commands.
 - For wrapper sessions, the observed `--runtime-profile` must match the
   prepared `coding_runtime_handoff/v1` profile. Prompt-only handoffs and Codex
   lifecycle runs do not become runtime ladders just because an observation file

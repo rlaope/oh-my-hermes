@@ -50,6 +50,11 @@ Runtime handoffs for Hermes/OMX/OMO/OMC use `runtime_observation/v1` records
 when wrappers or operators later observe runtime start, worktree, worker,
 verification, review, CI, or merge ladder events.
 
+Executor session buttons use `executor_session/v1` records when a wrapper
+observes Open in Codex, Open in Claude Code, Attach session, Record completed,
+Record blocked, or Ask Hermes to verify. They update chat status without
+requiring normal users to type backend commands.
+
 Operating models are setup defaults for Hermes collaboration posture. They
 should not be described as installed agents unless a separate profile pack is
 selected.

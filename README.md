@@ -149,6 +149,10 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   for the selected path: Codex lifecycle, Claude Code or generic prompt
   handoff, or Hermes/OMX/OMO/OMC runtime handoff with team/swarm,
   worker-protocol, and worktree guidance.
+- **Wrapper-native executor sessions** - after a handoff is ready, Hermes chat
+  surfaces can render buttons such as Open in Codex, Open in Claude Code,
+  Attach session, Refresh status, Record completed, Record blocked, and Ask
+  Hermes to verify. The user does not need to type backend commands.
 - **Operating model defaults** - a solo operator, small team, research ops, or
   coding runtime team can be recorded during setup so Hermes starts from the
   right collaboration posture without forcing visible role files.
@@ -265,6 +269,25 @@ omh runtime observe --session <session-id> --runtime-profile omx-runtime --event
 `--runtime-profile` must match the prepared runtime handoff on that wrapper
 session. Prompt-only and Codex lifecycle sessions report runtime observation as
 not applicable instead of asking for a fake runtime ladder.
+
+For chat users, this normally appears as a status card and buttons rather than
+manual commands:
+
+```text
+Hermes: A coding-agent handoff is ready.
+Buttons: Open in Codex | Attach session | Refresh status
+Status: coding-agent: prepared(codex)
+        executor-session: not_attached
+        handoff: prepared
+        dispatch: not_observed
+        result: not_observed
+        verification: not_requested
+```
+
+When a wrapper observes a button action or external executor session, it records
+`executor_session/v1` metadata under the wrapper session. That can update the
+status to `coding-agent: running(codex)` or `completed(claude-code)` without
+claiming review, CI, merge readiness, or merge.
 
 The status card will still show worktree creation, worker dispatch, worker
 result, verification, review, CI, and merge as missing until matching

@@ -11,6 +11,13 @@ from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_m
 from ..runtime.artifacts import create_run, summarize_delegated_coding_status, write_routing_decision
 from ..targets import TARGET_METADATA_KEYS, build_target_change_notice, inspect_target_observation, record_target_observation
 from ..wrapper.contract import INTERACTION_MODES, build_chat_interaction_payload, build_chat_status_interaction
+from ..wrapper.executor_sessions import (
+    ExecutorSessionError,
+    attach_executor_session,
+    open_executor_session,
+    record_executor_session_result,
+    request_executor_session_verification,
+)
 from ..wrapper.sessions import (
     WrapperSessionError,
     build_wrapper_session_status,
@@ -204,6 +211,78 @@ def cmd_chat_session_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat_session_open_executor(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            open_executor_session(
+                _paths(args),
+                args.session_id,
+                observed=args.observed,
+                external_session_ref=args.external_session_ref or "",
+                evidence_refs=args.evidence_ref or [],
+                summary=args.summary or "",
+            )
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_chat_session_attach_executor(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            attach_executor_session(
+                _paths(args),
+                args.session_id,
+                external_session_ref=args.external_session_ref,
+                evidence_refs=args.evidence_ref or [],
+                summary=args.summary or "",
+            )
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_chat_session_record_executor(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            record_executor_session_result(
+                _paths(args),
+                args.session_id,
+                result=args.result,
+                evidence_refs=args.evidence_ref or [],
+                summary=args.summary or "",
+            )
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_chat_session_request_verification(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            request_executor_session_verification(
+                _paths(args),
+                args.session_id,
+                evidence_refs=args.evidence_ref or [],
+                summary=args.summary or "",
+            )
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def cmd_chat_session_show(args: argparse.Namespace) -> int:
     try:
         _print_json(show_wrapper_session(_paths(args), args.session_id))
@@ -348,6 +427,38 @@ def _add_chat_commands(sub) -> None:
     session_status = session_sub.add_parser("status")
     session_status.add_argument("session_id")
     session_status.set_defaults(func=cmd_chat_session_status)
+
+    session_open_executor = session_sub.add_parser("open-executor")
+    session_open_executor.add_argument("session_id")
+    session_open_executor.add_argument(
+        "--observed",
+        action="store_true",
+        help="Record that the wrapper observed opening or dispatching to the selected executor session.",
+    )
+    session_open_executor.add_argument("--external-session-ref", default="")
+    session_open_executor.add_argument("--evidence-ref", action="append")
+    session_open_executor.add_argument("--summary", default="")
+    session_open_executor.set_defaults(func=cmd_chat_session_open_executor)
+
+    session_attach_executor = session_sub.add_parser("attach-executor")
+    session_attach_executor.add_argument("session_id")
+    session_attach_executor.add_argument("--external-session-ref", required=True)
+    session_attach_executor.add_argument("--evidence-ref", action="append")
+    session_attach_executor.add_argument("--summary", default="")
+    session_attach_executor.set_defaults(func=cmd_chat_session_attach_executor)
+
+    session_record_executor = session_sub.add_parser("record-executor")
+    session_record_executor.add_argument("session_id")
+    session_record_executor.add_argument("--result", choices=("completed", "blocked", "failed"), required=True)
+    session_record_executor.add_argument("--evidence-ref", action="append")
+    session_record_executor.add_argument("--summary", default="")
+    session_record_executor.set_defaults(func=cmd_chat_session_record_executor)
+
+    session_request_verification = session_sub.add_parser("request-verification")
+    session_request_verification.add_argument("session_id")
+    session_request_verification.add_argument("--evidence-ref", action="append")
+    session_request_verification.add_argument("--summary", default="")
+    session_request_verification.set_defaults(func=cmd_chat_session_request_verification)
 
     session_show = session_sub.add_parser("show")
     session_show.add_argument("session_id")
