@@ -38,6 +38,7 @@ packages = [
   "omh.plugin_bundle",
   "omh.plugin_bundle.omh",
   "omh.plugin_bundle.omh.hooks",
+  "omh.plugin_bundle.omh.references",
   "omh.plugin_bundle.omh.tools",
   "omh.profiles",
   "omh.routing",
@@ -59,3 +60,4 @@ omh = "src"
 
 [tool.setuptools.package-data]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]
+"omh.plugin_bundle.omh.references" = ["*.md"]

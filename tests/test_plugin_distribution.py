@@ -53,10 +53,16 @@ class PluginDistributionTests(unittest.TestCase):
         root = resources.files("omh.plugin_bundle.omh")
         self.assertTrue(root.joinpath("plugin.yaml").is_file())
         self.assertTrue(root.joinpath("config.yaml").is_file())
+        self.assertTrue(root.joinpath("references", "role-planning-lead.md").is_file())
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
         packages = set(pyproject["tool"]["setuptools"]["packages"])
         self.assertIn("omh.plugin_bundle.omh", packages)
+        self.assertIn("omh.plugin_bundle.omh.references", packages)
         self.assertIn("omh.plugin_bundle.omh", pyproject["tool"]["setuptools"]["package-data"])
+        self.assertIn(
+            "*.md",
+            pyproject["tool"]["setuptools"]["package-data"]["omh.plugin_bundle.omh.references"],
+        )
 
     def test_setup_default_installs_plugin(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -92,8 +98,8 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(plugin["requires_hermes_plugin_enable"])
             self.assertTrue((plugin_dir / "plugin.yaml").exists())
             self.assertTrue((plugin_dir / ".omh-plugin-manifest.json").exists())
-            self.assertEqual(plugin["registered_tools"], ["omh_hud", "omh_status"])
-            self.assertEqual(plugin["registered_hooks"], ["pre_llm_call"])
+            self.assertEqual(plugin["registered_tools"], ["omh_hud", "omh_role", "omh_status"])
+            self.assertEqual(plugin["registered_hooks"], ["on_session_end", "pre_llm_call", "pre_tool_call"])
 
             inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
             self.assertTrue(inspection["plugin_distribution_ready"])
@@ -180,8 +186,11 @@ class PluginDistributionTests(unittest.TestCase):
             ctx = FakeHermesContext()
             module.register(ctx)
             self.assertIn("omh_hud", ctx.tools)
+            self.assertIn("omh_role", ctx.tools)
             self.assertIn("omh_status", ctx.tools)
+            self.assertIn("on_session_end", ctx.hooks)
             self.assertIn("pre_llm_call", ctx.hooks)
+            self.assertIn("pre_tool_call", ctx.hooks)
 
             hud_handler = ctx.tools["omh_hud"]["args"][2]
             hud_payload = json.loads(hud_handler({"omh_home": str(omh_home), "hermes_home": str(hermes_home), "limit": 1}))
@@ -197,6 +206,52 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(payload["runs"][0]["prepared_handoff"])
             self.assertFalse(payload["runs"][0]["execution_observed"])
             self.assertIn("not execution evidence", payload["evidence_boundary"]["prepared_handoff"])
+
+            role_handler = ctx.tools["omh_role"]["args"][2]
+            roles = json.loads(role_handler({"action": "list"}))
+            self.assertEqual(roles["schema_version"], "omh_role_catalog/v1")
+            self.assertIn("planning-lead", roles["roles"])
+            role_payload = json.loads(role_handler({"action": "read", "role": "planning-lead"}))
+            self.assertEqual(role_payload["schema_version"], "omh_role_context/v1")
+            self.assertEqual(role_payload["status"], "available")
+            self.assertIn("Planning Lead", role_payload["context"])
+            self.assertIn("not runtime delegation", role_payload["claim_boundary"])
+
+            role_hook_payload = ctx.hooks["pre_llm_call"](
+                omh_home=str(omh_home),
+                user_message="[omh-role:planning-lead] do not leak this exact sentence",
+                is_first_turn=True,
+            )
+            self.assertIsNotNone(role_hook_payload)
+            role_context = role_hook_payload["context"]
+            self.assertIn("[OMH Role: planning-lead]", role_context)
+            self.assertIn("Planning Lead", role_context)
+            self.assertNotIn("do not leak this exact sentence", role_context)
+
+            self.assertIsNone(
+                ctx.hooks["pre_tool_call"](
+                    tool_name="delegate_task",
+                    tool_input={"goal": "[omh-role:planning-lead] prepare a plan"},
+                )
+            )
+            tool_warning = ctx.hooks["pre_tool_call"](
+                tool_name="delegate_task",
+                tool_input={"goal": "[omh-role:nope] prepare a plan"},
+            )
+            self.assertIsNotNone(tool_warning)
+            self.assertIn("Unknown role 'nope'", tool_warning["context"])
+            self.assertIn("planning-lead", tool_warning["context"])
+
+            session_checkpoint = ctx.hooks["on_session_end"](omh_home=str(omh_home))
+            self.assertEqual(session_checkpoint["status"], "checkpoint_written")
+            checkpoint = json.loads((omh_home / "runtime" / "plugin-session-end.json").read_text(encoding="utf-8"))
+            self.assertEqual(checkpoint["schema_version"], "omh_plugin_session_end/v1")
+            self.assertEqual(checkpoint["privacy"], "metadata_only")
+            payload_after_checkpoint = json.loads(handler({"omh_home": str(omh_home), "limit": 1}))
+            self.assertEqual(
+                payload_after_checkpoint["plugin_session_end"]["schema_version"],
+                "omh_plugin_session_end/v1",
+            )
 
             hook_payload = ctx.hooks["pre_llm_call"](
                 omh_home=str(omh_home),

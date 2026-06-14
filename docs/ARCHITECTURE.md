@@ -41,7 +41,7 @@ flowchart LR
 
   user --> hermes
   skills --> hermes
-  plugin -->|"omh_hud, omh_status, pre_llm_call"| hermes
+  plugin -->|"omh_hud, omh_role, omh_status, hooks"| hermes
   user --> wrapper
   wrapper -->|"chat_interaction/v1"| omh
   omh -->|"answer, clarify, plan, or status"| wrapper
@@ -143,15 +143,18 @@ OMH directly when Hermes taps are available.
 
 `plugin_bundle/omh/` is the Hermes plugin payload installed by `omh setup` to
 `~/.hermes/plugins/omh`. The v1 plugin registers a compact metadata-only
-`omh_hud` tool, a detailed metadata-only `omh_status` tool, and a passive
-`pre_llm_call` hook. `omh hud` exposes the same status-line payload for local
-operator smoke tests. The HUD line stays limited to version, plugin bridge
-readiness, target topology, current or default coding agent, and evidence
-state. Host-supplied token metadata remains available in the machine-readable
-payload but is not shown in the Hermes-facing status line.
+`omh_hud` tool, a detailed metadata-only `omh_status` tool, an `omh_role` role
+context tool, and passive lifecycle hooks for bounded status context, role
+marker validation, and metadata-only session-end checkpointing. `omh hud`
+exposes the same status-line payload for local operator smoke tests. The HUD
+line stays limited to version, plugin bridge readiness, target topology, current
+or default coding agent, and evidence state. Host-supplied token metadata
+remains available in the machine-readable payload but is not shown in the
+Hermes-facing status line.
 It intentionally omits install inventory such as managed skill counts. It does
 not run verification commands, patch Hermes core, or claim execution evidence
-from prepared handoffs.
+from prepared handoffs. Role context is prompt guidance only; it is not proof
+that a separate role, worker, or executor ran.
 
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
 top-level error handling, and the public command handler re-export surface.

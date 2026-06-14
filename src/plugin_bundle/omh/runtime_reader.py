@@ -8,8 +8,8 @@ from typing import Any
 STATUS_SCHEMA_VERSION = "omh_status/v1"
 HUD_SCHEMA_VERSION = "omh_hud/v1"
 HUD_PRESETS = {"minimal", "focused", "full"}
-HUD_REQUIRED_TOOLS = ("omh_hud", "omh_status")
-HUD_REQUIRED_HOOKS = ("pre_llm_call",)
+HUD_REQUIRED_TOOLS = ("omh_hud", "omh_role", "omh_status")
+HUD_REQUIRED_HOOKS = ("on_session_end", "pre_llm_call", "pre_tool_call")
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -175,7 +175,9 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
         "plugin_yaml": (plugin_dir / "plugin.yaml").is_file(),
         "init_py": (plugin_dir / "__init__.py").is_file(),
         "hud_tool": (plugin_dir / "tools" / "hud_tool.py").is_file(),
+        "role_tool": (plugin_dir / "tools" / "role_tool.py").is_file(),
         "status_tool": (plugin_dir / "tools" / "status_tool.py").is_file(),
+        "role_catalog": any((plugin_dir / "references").glob("role-*.md")) if (plugin_dir / "references").is_dir() else False,
         "managed_manifest": (plugin_dir / ".omh-plugin-manifest.json").is_file(),
     }
     yaml_text = _read_text(plugin_dir / "plugin.yaml")
@@ -189,10 +191,13 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
         "files": files,
         "tools": {
             "omh_hud": files["hud_tool"] and "omh_hud" in tool_sources,
+            "omh_role": files["role_tool"] and files["role_catalog"] and "omh_role" in tool_sources,
             "omh_status": files["status_tool"] and "omh_status" in tool_sources,
         },
         "hooks": {
+            "on_session_end": "on_session_end" in hook_sources,
             "pre_llm_call": "pre_llm_call" in hook_sources,
+            "pre_tool_call": "pre_tool_call" in hook_sources,
         },
         "advertised_tools": sorted(advertised_tools),
         "advertised_hooks": sorted(advertised_hooks),
@@ -495,6 +500,7 @@ def read_omh_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[
         "runtime_dir": str(runtime_dir),
         "runtime_state_present": bool(state),
         "latest_run_id": str(state.get("last_run_id", "")) if state else "",
+        "plugin_session_end": _read_json(runtime_dir / "plugin-session-end.json"),
         "runs": runs,
         "evidence_boundary": {
             "prepared_handoff": "not execution evidence",

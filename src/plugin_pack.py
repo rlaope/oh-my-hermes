@@ -264,10 +264,11 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
         if not callable(register):
             return {"import_smoke": True, "register_smoke": False, "error": "register(ctx) is missing"}
         register(ctx)
-        required_tools = {"omh_hud", "omh_status"}
+        required_tools = {"omh_hud", "omh_role", "omh_status"}
+        required_hooks = {"on_session_end", "pre_llm_call", "pre_tool_call"}
         return {
             "import_smoke": True,
-            "register_smoke": required_tools.issubset(set(ctx.tools)) and "pre_llm_call" in ctx.hooks,
+            "register_smoke": required_tools.issubset(set(ctx.tools)) and required_hooks.issubset(set(ctx.hooks)),
             "registered_tools": sorted(ctx.tools),
             "registered_hooks": sorted(ctx.hooks),
         }
