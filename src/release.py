@@ -16,6 +16,7 @@ RELEASE_CHANNELS = ("stable", "preview", "local")
 HERMES_SMOKE_SCHEMA = "hermes_release_smoke/v1"
 RELEASE_CHECKLIST_SCHEMA = "release_readiness_checklist/v1"
 INSTALLED_COMMAND_SMOKE_SCHEMA = "installed_omh_command_smoke/v1"
+INSTALLED_COMMAND_PATH_CHECK_SCHEMA = "installed_omh_path_check/v1"
 FIRST_USE_STATUS_SMOKE_SCHEMA = "first_use_status_smoke/v1"
 RELEASE_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*(?:[-_+.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$")
 DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
@@ -200,6 +201,16 @@ def release_readiness_checklist(
             False,
             "Release smoke plan renders with plan-only evidence boundaries.",
             "Plan mode does not touch the current Hermes profile.",
+        ),
+        ReleaseChecklistItem(
+            "installed_command_path",
+            "Check installed omh command is on PATH",
+            f"command -v {omh_display}",
+            "installed-command",
+            True,
+            False,
+            "The shell resolves the installed OMH command before any nested smoke uses it.",
+            "PATH resolution proves command discoverability only; it does not prove console-script importability.",
         ),
         ReleaseChecklistItem(
             "installed_command_help",
@@ -497,7 +508,7 @@ def hermes_release_smoke_plan(
             hermes_home=target["hermes_home"],
         )
     )
-    ok = not (command_smoke.get("observed") and not command_smoke.get("ok"))
+    ok = bool(command_smoke.get("ok", True))
     return {
         "schema_version": HERMES_SMOKE_SCHEMA,
         "mode": "plan",
@@ -560,9 +571,10 @@ def installed_command_smoke_plan(
         "observed": False,
         "command_under_test": omh_command,
         "target_binding": target,
+        "path_check": _installed_command_path_check_plan(omh_command),
         "proof_boundary": (
             "Plan mode lists installed-command checks only. Run release hermes-smoke with "
-            "--include-command-smoke to observe the installed OMH executable."
+            "--include-command-smoke to observe PATH resolution and the installed OMH executable."
         ),
         "steps": [step.to_payload() for step in steps],
     }
@@ -755,6 +767,31 @@ def run_hermes_release_smoke(
         )
     )
     hermes_path = shutil.which("hermes")
+    if include_command_smoke and not bool(command_smoke.get("ok", False)):
+        return {
+            "schema_version": HERMES_SMOKE_SCHEMA,
+            "mode": "live",
+            "ok": False,
+            "observed": bool(command_smoke.get("observed", False)),
+            "install_path": install_path,
+            "skill": skill,
+            "tap": tap,
+            "target_binding": target,
+            "hermes_cli": {"found": bool(hermes_path), "path": hermes_path},
+            "results": [],
+            "installed_command_smoke": command_smoke,
+            "first_use_status_smoke": first_use_status_smoke_plan(
+                omh_command=omh_command,
+                omh_home=target["omh_home"],
+                hermes_home=target["hermes_home"],
+            ),
+            "failed_step": "installed_command_smoke",
+            "recommended_next_action": _hermes_smoke_next_action(False, "installed_command_smoke"),
+            "proof_boundary": (
+                "Installed command smoke failed before live Hermes profile mutation. No Hermes install, list, "
+                "check, or inspect command was run."
+            ),
+        }
     results: list[dict[str, object]] = []
     smoke_env = {"HERMES_HOME": str(target["hermes_home"])}
     if not hermes_path:
@@ -842,6 +879,28 @@ def run_installed_command_smoke(
     plan = installed_command_smoke_plan(omh_command=omh_command, omh_home=omh_home, hermes_home=hermes_home)
     target = plan["target_binding"]
     execute = runner or _subprocess_runner
+    path_check = _installed_command_path_check(omh_command)
+    if not bool(path_check["ok"]):
+        return {
+            "schema_version": INSTALLED_COMMAND_SMOKE_SCHEMA,
+            "mode": "live",
+            "ok": False,
+            "observed": False,
+            "command_under_test": omh_command,
+            "target_binding": target,
+            "path_check": path_check,
+            "results": [],
+            "failed_step": "installed_omh_path",
+            "recommended_next_action": _installed_command_smoke_next_action(
+                False,
+                "installed_omh_path",
+                command_under_test=omh_command,
+            ),
+            "proof_boundary": (
+                "Installed command smoke did not execute because the OMH command was not discoverable or "
+                "executable. PATH resolution is recorded separately in path_check."
+            ),
+        }
     results: list[dict[str, object]] = []
     ok = True
     failed_step = ""
@@ -877,9 +936,14 @@ def run_installed_command_smoke(
         "observed": bool(results),
         "command_under_test": omh_command,
         "target_binding": target,
+        "path_check": path_check,
         "results": results,
         "failed_step": failed_step,
-        "recommended_next_action": _installed_command_smoke_next_action(ok, failed_step),
+        "recommended_next_action": _installed_command_smoke_next_action(
+            ok,
+            failed_step,
+            command_under_test=omh_command,
+        ),
         "proof_boundary": (
             "Installed command smoke observes the OMH console script and plan rendering only. "
             "It does not mutate Hermes or prove live chat usage."
@@ -922,6 +986,57 @@ def _bounded_text(value: str, limit: int = 1200) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 15].rstrip() + "\n...[truncated]"
+
+
+def _installed_command_path_check_plan(omh_command: str) -> dict[str, object]:
+    command = str(omh_command or "omh").strip()
+    return {
+        "schema_version": INSTALLED_COMMAND_PATH_CHECK_SCHEMA,
+        "mode": "plan",
+        "ok": True,
+        "observed": False,
+        "command_under_test": command,
+        "check": _path_check_kind(command),
+        "resolved_path": None,
+        "proof_boundary": (
+            "Plan mode does not inspect the operator PATH. Live command smoke resolves the command before running it."
+        ),
+    }
+
+
+def _installed_command_path_check(omh_command: str) -> dict[str, object]:
+    command = str(omh_command or "omh").strip()
+    check = _path_check_kind(command)
+    resolved_path: str | None = None
+    ok = False
+    if check == "direct_path":
+        path = Path(command).expanduser()
+        ok = path.is_file() and os.access(path, os.X_OK)
+        resolved_path = str(path.resolve()) if path.exists() else None
+    else:
+        resolved = shutil.which(command)
+        ok = bool(resolved)
+        resolved_path = str(Path(resolved).resolve()) if resolved else None
+    return {
+        "schema_version": INSTALLED_COMMAND_PATH_CHECK_SCHEMA,
+        "mode": "live",
+        "ok": ok,
+        "observed": True,
+        "command_under_test": command,
+        "check": check,
+        "resolved_path": resolved_path,
+        "proof_boundary": (
+            "This observes command discoverability/executability only; the later help/setup-plan steps prove "
+            "console-script importability and plan rendering."
+        ),
+    }
+
+
+def _path_check_kind(command: str) -> str:
+    separators = [os.sep]
+    if os.altsep:
+        separators.append(os.altsep)
+    return "direct_path" if any(separator in command for separator in separators) else "path_lookup"
 
 
 def _target_binding(*, omh_home: str | Path | None = None, hermes_home: str | Path | None = None) -> dict[str, object]:
@@ -1018,9 +1133,25 @@ def _hermes_smoke_next_action(ok: bool, failed_step: str) -> str:
     return "Inspect the failed Hermes release smoke step and rerun after repair."
 
 
-def _installed_command_smoke_next_action(ok: bool, failed_step: str) -> str:
+def _installed_command_smoke_next_action(
+    ok: bool,
+    failed_step: str,
+    *,
+    command_under_test: str = "omh",
+) -> str:
+    command = str(command_under_test or "omh").strip() or "omh"
     if ok:
-        return "Installed `omh` command path is runnable; continue with Hermes profile smoke or release tagging."
+        return (
+            f"Installed `{command}` command path is runnable; "
+            "continue with Hermes profile smoke or release tagging."
+        )
+    if failed_step == "installed_omh_path":
+        if _path_check_kind(command) == "direct_path":
+            return f"Make {shlex.quote(command)} executable, or pass --omh-command with an executable OMH path."
+        return (
+            f"Install OMH so `command -v {shlex.quote(command)}` resolves, "
+            "or pass --omh-command with an executable OMH path."
+        )
     if failed_step == "installed_omh_help":
         return "Check PATH, package installation, and console-script importability for `omh`."
     if failed_step == "installed_omh_setup_plan":

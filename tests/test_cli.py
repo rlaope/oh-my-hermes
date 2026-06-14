@@ -615,6 +615,38 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["installed_command_smoke"]["results"][0]["command"], [str(fake_omh), "--help"])
         self.assertFalse(payload["first_use_status_smoke"]["observed"])
 
+    def test_release_hermes_smoke_cli_fails_when_installed_command_is_not_on_path(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            missing_command = "omh-definitely-not-on-path-for-test"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "release",
+                    "hermes-smoke",
+                    "--install-path",
+                    "setup",
+                    "--omh-command",
+                    missing_command,
+                    "--include-command-smoke",
+                ]
+            )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 1)
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertFalse(payload["observed"])
+        self.assertEqual(payload["installed_command_smoke"]["failed_step"], "installed_omh_path")
+        self.assertFalse(payload["installed_command_smoke"]["observed"])
+        self.assertTrue(payload["installed_command_smoke"]["path_check"]["observed"])
+        self.assertIn(f"command -v {missing_command}", payload["installed_command_smoke"]["recommended_next_action"])
+
     def test_release_hermes_smoke_live_requires_target_confirmation(self) -> None:
         status, _stdout, stderr = run_cli(["release", "hermes-smoke", "--live"])
 
@@ -930,6 +962,34 @@ class CliTests(unittest.TestCase):
         self.assertEqual(top["next_action"], "present_plan")
         self.assertIn("not execution evidence", top["evidence_boundary"])
         self.assertIn("Accept plan", top["wrapper_guidance"])
+
+    def test_recommend_payment_failure_signal_routes_to_feedback_triage(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "결제 실패 이슈가 자주 나와", "--limit", "3"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertEqual(recommendations[0]["skill"], "feedback-triage")
+        self.assertEqual(recommendations[0]["next_action"], "triage_feedback")
+        self.assertIn("Feedback triage", recommendations[0]["evidence_boundary"])
+
+    def test_recommend_dangerous_refactor_routes_to_reviewed_plan_first(self) -> None:
+        cases = (
+            "이거 위험한 리팩터링 같아",
+            "dangerous refactor",
+            "unsafe refactor",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "ralplan")
+                self.assertEqual(recommendations[0]["next_action"], "present_plan")
+                self.assertIn("draft plan", recommendations[0]["evidence_boundary"])
 
     def test_recommend_web_research_stays_hermes_owned(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "latest", "web", "research", "official", "sources"])
@@ -1327,10 +1387,10 @@ class CliTests(unittest.TestCase):
 
     def test_chat_interact_routes_grounded_operator_examples(self) -> None:
         cases = (
-            ("결제 실패 이슈가 자주 나와", "plan", "plan", "present_plan"),
+            ("결제 실패 이슈가 자주 나와", "feedback-triage", "ack", "triage_feedback"),
             ("이 이슈 PR로 만들 수 있게 정리해줘", "ralplan", "plan", "present_plan"),
             ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa", "ack", "dispatch_to_workflow"),
-            ("이거 위험한 리팩터링 같아", "ai-slop-cleaner", "plan", "present_plan"),
+            ("이거 위험한 리팩터링 같아", "ralplan", "plan", "present_plan"),
             ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "ack", "prepare_review_or_followup_handoff"),
             ("온보딩을 더 부드럽게 만들고 싶어", "deep-interview", "clarification", "answer_clarification"),
             ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
@@ -1754,7 +1814,7 @@ class CliTests(unittest.TestCase):
 
     def test_playbook_recommend_routes_grounded_operator_examples(self) -> None:
         cases = (
-            ("결제 실패 이슈가 자주 나와", "safe-feature-change"),
+            ("결제 실패 이슈가 자주 나와", "feedback-triage"),
             ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "release-readiness-review"),
             ("레거시 서비스를 위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트 순서로 리팩터링하고 싶어", "safe-feature-change"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "local-pipeline-buildout"),
@@ -2455,6 +2515,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["runtime"]["recorded"], False)
             self.assertEqual(payload["runtime"]["reason"], "executor_choice_required")
             self.assertEqual(payload["runtime"]["run_created"], False)
+            self.assertEqual(payload["runtime"]["record_status"], "record_skipped_until_executor_selected")
+            self.assertIn("skipped until executor selected", payload["runtime"]["record_notice"])
+            self.assertEqual(payload["runtime"]["next_action"], "select_executor_then_record")
             self.assertFalse((omh_home / "runtime" / "runs").exists())
 
             status, stdout, stderr = run_cli(base + ["runtime", "validate"])

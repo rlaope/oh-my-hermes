@@ -41,7 +41,7 @@ Bad example:
 
 Use when requirements are clear enough for planning but architecture, risks, or tests need review.
 
-    Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `PR로 만들`, `PR로 만들 수 있게`, `검증 command`, `리뷰 가능한 단위`
+    Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `risky planning`, `dangerous`, `dangerous planning`, `unsafe`, `refactor safety`, `PR로 만들`, `PR로 만들 수 있게`, `위험한 리팩터링`, `리팩터링 위험`, `리스크 있는 리팩터링`, `검증 command`, `리뷰 가능한 단위`
 
 ## Catalog Metadata
 

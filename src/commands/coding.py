@@ -53,6 +53,9 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
                 "recorded": False,
                 "reason": runtime_skip_reason,
                 "run_created": False,
+                "record_status": _coding_delegate_record_status(runtime_skip_reason),
+                "record_notice": _coding_delegate_record_notice(runtime_skip_reason),
+                "next_action": _coding_delegate_record_next_action(runtime_skip_reason),
             }
         elif args.record:
             delegation = payload["delegation"]
@@ -95,6 +98,36 @@ def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
     if payload.get("selected_executor_profile") != "codex" or not isinstance(payload.get("executor_handoff"), dict):
         return "codex_executor_handoff_required_for_runtime_record"
     return ""
+
+
+def _coding_delegate_record_status(reason: str) -> str:
+    if reason == "executor_choice_required":
+        return "record_skipped_until_executor_selected"
+    return "record_skipped"
+
+
+def _coding_delegate_record_notice(reason: str) -> str:
+    if reason == "executor_choice_required":
+        return "Runtime record skipped until executor selected; no run was created."
+    if reason == "prompt_only_handoff_is_wrapper_session_only":
+        return "Runtime record skipped because prompt-only handoffs stay in wrapper session state."
+    if reason == "runtime_handoff_is_wrapper_session_only":
+        return "Runtime record skipped because runtime handoffs stay prepared until runtime evidence is observed."
+    if reason == "retained_hermes_has_no_executor_handoff":
+        return "Runtime record skipped because retained Hermes guidance has no executor handoff."
+    return "Runtime record skipped because a Codex executor handoff is required before creating a run."
+
+
+def _coding_delegate_record_next_action(reason: str) -> str:
+    if reason == "executor_choice_required":
+        return "select_executor_then_record"
+    if reason == "prompt_only_handoff_is_wrapper_session_only":
+        return "copy_prompt_or_select_run_backed_executor"
+    if reason == "runtime_handoff_is_wrapper_session_only":
+        return "observe_runtime_start_before_recording_execution"
+    if reason == "retained_hermes_has_no_executor_handoff":
+        return "continue_in_hermes_or_select_executor"
+    return "select_codex_executor_for_run_backed_record"
 
 
 def _context_pack(args: argparse.Namespace) -> dict[str, object] | None:

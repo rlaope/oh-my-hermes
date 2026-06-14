@@ -585,7 +585,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request already contains an accepted product decision and asks for implementation.
   - There are no feedback items, source boundary, or product area to classify.
   - The user wants current market research rather than triage of supplied signals.
-- Strong routing signals: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`, `bug or feature`, `feature request triage`, `payment failure feedback`, `feedback trends`, `고객 피드백`, `피드백`, `피드백 분류`, `피드백을 모아서`, `결제 실패 피드백`, `버그 기능 요청`, `기능 요청`
+- Strong routing signals: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`, `bug or feature`, `feature request triage`, `payment failure feedback`, `feedback trends`, `payment failure`, `payment failure issue`, `payment failure reports`, `고객 피드백`, `피드백`, `피드백 분류`, `피드백을 모아서`, `결제 실패`, `결제 실패 이슈`, `결제 실패 피드백`, `결제 오류`, `고객 불만`, `버그 제보`, `버그 기능 요청`, `기능 요청`
 - Good example:
   - Prompt: feedback-triage these payment failure reports and feature requests before we plan fixes.
   - Expected behavior: Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.
@@ -984,7 +984,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Do not use when:
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `답할 차례`, `준비할 차례`, `project template`, `결제 실패`, `결제 실패 이슈`, `재현 계획`, `고객 피드백`, `기능 요청`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `github pr workflow`, `상태와 다음 행동`, `프로젝트별 운영`
+- Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `답할 차례`, `준비할 차례`, `project template`, `재현 계획`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `github pr workflow`, `상태와 다음 행동`, `프로젝트별 운영`
 - Good example:
   - Prompt: plan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
   - Expected behavior: Run `plan` only after naming the target, evidence boundary, and stop condition.
@@ -1026,7 +1026,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Do not use when:
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `PR로 만들`, `PR로 만들 수 있게`, `검증 command`, `리뷰 가능한 단위`
+- Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `risky planning`, `dangerous`, `dangerous planning`, `unsafe`, `refactor safety`, `PR로 만들`, `PR로 만들 수 있게`, `위험한 리팩터링`, `리팩터링 위험`, `리스크 있는 리팩터링`, `검증 command`, `리뷰 가능한 단위`
 - Good example:
   - Prompt: ralplan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
   - Expected behavior: Run `ralplan` only after naming the target, evidence boundary, and stop condition.
@@ -1112,7 +1112,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Do not use when:
   - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `safe refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `위험한 리팩터링`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
+- Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `behavior-preserving refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
 - Good example:
   - Prompt: ai-slop-cleaner: handle a maintenance request that needs explicit evidence boundaries and a clear stop condition.
   - Expected behavior: Run `ai-slop-cleaner` only after naming the target, evidence boundary, and stop condition.

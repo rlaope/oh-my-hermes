@@ -106,14 +106,14 @@ operator
 결제 실패 이슈가 자주 나와
 
 Hermes Agent  BOT
-I routed this to `plan` because it needs a safe plan first.
+I know which workflow should handle this.
 
-Accept or revise the plan first; the handoff button stays disabled until
-acceptance. A draft plan is still only planning evidence.
+Cluster feedback and recommend the next workflow; do not create a coding handoff
+unless code work is explicit.
 
-[ Accept plan ] [ Revise plan ] [ Prepare handoff ] disabled
+[ Show status ]
 
-Claim boundary: A draft plan is not execution evidence.
+Claim boundary: Feedback triage is not a roadmap, implementation plan, or coding handoff by default.
 ```
 
 What gets better for the team:

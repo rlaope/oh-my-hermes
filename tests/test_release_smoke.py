@@ -27,8 +27,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         items = {item["id"]: item for item in payload["items"]}
         self.assertIn("unit_tests", items)
         self.assertIn("installed_command_smoke", items)
+        self.assertIn("installed_command_path", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
+        self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
         self.assertEqual(items["installed_command_help"]["command"], "/tmp/omh --help")
         self.assertIn("--include-command-smoke", items["installed_command_smoke"]["command"])
         self.assertIn("dist/oh_my_hermes-1.0.0-py3-none-any.whl", items["wheel_install"]["command"])
@@ -49,6 +51,7 @@ class ReleaseSmokeTests(unittest.TestCase):
 
         items = {item["id"]: item for item in payload["items"]}
         self.assertEqual(items["installed_command_help"]["command"], "'/tmp/omh command' --help")
+        self.assertEqual(items["installed_command_path"]["command"], "command -v '/tmp/omh command'")
         self.assertIn("--omh-command '/tmp/omh command'", items["installed_command_smoke"]["command"])
         self.assertIn("'/tmp/omh command' release hermes-smoke --live", items["live_tap_smoke"]["command"])
 
@@ -78,6 +81,8 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["target_binding"]["hermes_home"], hermes_home)
         self.assertIn("--hermes-home", payload["live_command"])
         self.assertEqual(payload["installed_command_smoke"]["schema_version"], "installed_omh_command_smoke/v1")
+        self.assertEqual(payload["installed_command_smoke"]["path_check"]["schema_version"], "installed_omh_path_check/v1")
+        self.assertFalse(payload["installed_command_smoke"]["path_check"]["observed"])
         installed_commands = [step["command"] for step in payload["installed_command_smoke"]["steps"]]
         self.assertEqual(installed_commands[0], ["omh", "--help"])
         self.assertIn(
@@ -176,6 +181,8 @@ class ReleaseSmokeTests(unittest.TestCase):
         hermes_home = str(Path("/tmp/hermes-smoke").resolve())
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["installed_command_smoke"]["observed"])
+        self.assertTrue(payload["installed_command_smoke"]["path_check"]["ok"])
+        self.assertEqual(payload["installed_command_smoke"]["path_check"]["mode"], "live")
         self.assertIn(["omh-dev", "--help"], seen)
         self.assertIn(
             [
@@ -207,6 +214,22 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["failed_step"], "installed_command_smoke")
         self.assertEqual(payload["installed_command_smoke"]["failed_step"], "installed_omh_help")
         self.assertIn("console script", payload["recommended_next_action"])
+
+    def test_installed_command_smoke_fails_before_help_when_omh_is_not_on_path(self) -> None:
+        def runner(command, _timeout, _env):  # pragma: no cover - path check should stop first
+            raise AssertionError(f"unexpected command: {command}")
+
+        with patch("omh.release.shutil.which", side_effect=lambda command: "/usr/local/bin/hermes" if command == "hermes" else None):
+            payload = run_hermes_release_smoke(runner=runner, omh_command="omh-dev", include_command_smoke=True)
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["failed_step"], "installed_command_smoke")
+        self.assertEqual(payload["installed_command_smoke"]["failed_step"], "installed_omh_path")
+        self.assertFalse(payload["installed_command_smoke"]["observed"])
+        self.assertTrue(payload["installed_command_smoke"]["path_check"]["observed"])
+        self.assertFalse(payload["installed_command_smoke"]["path_check"]["ok"])
+        self.assertEqual(payload["installed_command_smoke"]["results"], [])
+        self.assertIn("command -v omh-dev", payload["installed_command_smoke"]["recommended_next_action"])
 
     def test_live_smoke_stops_on_required_failure(self) -> None:
         def runner(command, _timeout, _env):
@@ -241,7 +264,12 @@ class ReleaseSmokeTests(unittest.TestCase):
             seen.append(list(command))
             return CommandResult(command, 0, "ok", "")
 
-        with patch("omh.release.shutil.which", return_value=None):
+        def which(command: str) -> str | None:
+            if command == "omh-dev":
+                return "/usr/local/bin/omh-dev"
+            return None
+
+        with patch("omh.release.shutil.which", side_effect=which):
             payload = run_hermes_release_smoke(runner=runner, omh_command="omh-dev", include_command_smoke=True)
 
         self.assertFalse(payload["ok"])

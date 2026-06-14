@@ -41,7 +41,7 @@ Bad example:
 
 Use for behavior-preserving cleanup with tests before and after edits.
 
-    Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `safe refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `위험한 리팩터링`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
+    Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `behavior-preserving refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
 
 ## Catalog Metadata
 

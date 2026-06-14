@@ -98,8 +98,9 @@ python3 -m omh.cli release hermes-smoke
 
 The plan includes two release-contract subchecks:
 
-- `installed_command_smoke`: proves the installed `omh` console script can run
-  `omh --help` and render the setup-path smoke plan.
+- `installed_command_smoke`: first resolves the installed `omh` command path,
+  then proves the console script can run `omh --help` and render the setup-path
+  smoke plan.
 - `first_use_status_smoke`: documents the first Hermes chat/status path and
   locks that pre-handoff status cards do not expose executor open/result
   actions.
@@ -107,6 +108,7 @@ The plan includes two release-contract subchecks:
 Run the installed command smoke in CI or a release shell after installing OMH:
 
 ```sh
+command -v omh
 omh --help
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```

@@ -119,13 +119,15 @@ omh release hermes-smoke
 ```
 
 The plan also reports `installed_command_smoke` and
-`first_use_status_smoke`. The first checks that the installed `omh` console
-script can run; the second locks the first Hermes chat/status boundary so
-pre-handoff status does not show executor open/result actions.
+`first_use_status_smoke`. The first checks that the installed `omh` command is
+discoverable on PATH before proving the console script can run; the second locks
+the first Hermes chat/status boundary so pre-handoff status does not show
+executor open/result actions.
 
 After installing OMH into the target runtime, verify the command path too:
 
 ```sh
+command -v omh
 omh --help
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
