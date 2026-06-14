@@ -56,7 +56,7 @@ from .ops import (
     cmd_ops_write,
 )
 from .playbook import _add_playbook_commands, cmd_playbook_inspect, cmd_playbook_list, cmd_playbook_recommend
-from .release import _add_release_commands, cmd_release_hermes_smoke
+from .release import _add_release_commands, cmd_release_checklist, cmd_release_hermes_smoke
 from .runtime import (
     _add_runtime_commands,
     cmd_runtime_ci,
@@ -113,10 +113,10 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh loop status\n"
             "  omh ops list\n"
             "  omh runtime status\n\n"
-            "Human-facing maintenance and catalog commands print summaries by default;\n"
+            "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
             "Backend/control-plane commands such as chat, coding, runtime, goal, loop,\n"
-            "memory, ops, state, harness, release, and demo print JSON by design."
+            "memory, ops, state, harness, release smoke, and demo print JSON by design."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

@@ -5,10 +5,57 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from omh.release import CommandResult, _subprocess_runner, hermes_release_smoke_plan, run_hermes_release_smoke
+from omh.release import (
+    CommandResult,
+    _subprocess_runner,
+    hermes_release_smoke_plan,
+    release_readiness_checklist,
+    run_hermes_release_smoke,
+)
 
 
 class ReleaseSmokeTests(unittest.TestCase):
+    def test_release_readiness_checklist_is_plan_only_and_names_required_gates(self) -> None:
+        payload = release_readiness_checklist(version="v1.0.0", omh_command="/tmp/omh")
+
+        self.assertEqual(payload["schema_version"], "release_readiness_checklist/v1")
+        self.assertEqual(payload["mode"], "plan")
+        self.assertFalse(payload["observed"])
+        self.assertEqual(payload["version"], "1.0.0")
+        self.assertEqual(payload["tag"], "v1.0.0")
+        self.assertIn("does not run commands", payload["proof_boundary"])
+        items = {item["id"]: item for item in payload["items"]}
+        self.assertIn("unit_tests", items)
+        self.assertIn("installed_command_smoke", items)
+        self.assertIn("live_tap_smoke", items)
+        self.assertIn("tag_and_publish", items)
+        self.assertEqual(items["installed_command_help"]["command"], "/tmp/omh --help")
+        self.assertIn("--include-command-smoke", items["installed_command_smoke"]["command"])
+        self.assertIn("dist/oh_my_hermes-1.0.0-py3-none-any.whl", items["wheel_install"]["command"])
+        self.assertIn("wheel_setup_dry_run", items)
+        self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
+        self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
+        self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
+        self.assertFalse(items["tag_and_publish"]["required"])
+        self.assertIn('git tag -a v1.0.0 -m "Release v1.0.0"', items["tag_and_publish"]["command"])
+        self.assertTrue(items["tag_and_publish"]["requires_release_authority"])
+        self.assertGreaterEqual(payload["required_item_count"], 16)
+
+    def test_release_readiness_checklist_rejects_unsafe_versions_and_quotes_command_paths(self) -> None:
+        with self.assertRaises(ValueError):
+            release_readiness_checklist(version="1.0.0; echo injected")
+
+        payload = release_readiness_checklist(version="1.0.0", omh_command="/tmp/omh command")
+
+        items = {item["id"]: item for item in payload["items"]}
+        self.assertEqual(items["installed_command_help"]["command"], "'/tmp/omh command' --help")
+        self.assertIn("--omh-command '/tmp/omh command'", items["installed_command_smoke"]["command"])
+        self.assertIn("'/tmp/omh command' release hermes-smoke --live", items["live_tap_smoke"]["command"])
+
+    def test_release_readiness_checklist_rejects_empty_version(self) -> None:
+        with self.assertRaises(ValueError):
+            release_readiness_checklist(version=" ")
+
     def test_hermes_smoke_plan_is_non_mutating_until_live(self) -> None:
         omh_home = str(Path("/tmp/omh-smoke").resolve())
         hermes_home = str(Path("/tmp/hermes-smoke").resolve())
