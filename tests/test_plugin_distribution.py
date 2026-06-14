@@ -98,7 +98,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(plugin["requires_hermes_plugin_enable"])
             self.assertTrue((plugin_dir / "plugin.yaml").exists())
             self.assertTrue((plugin_dir / ".omh-plugin-manifest.json").exists())
-            self.assertEqual(plugin["registered_tools"], ["omh_hud", "omh_role", "omh_status"])
+            self.assertEqual(plugin["registered_tools"], ["omh_gather_evidence", "omh_hud", "omh_role", "omh_status"])
             self.assertEqual(plugin["registered_hooks"], ["on_session_end", "pre_llm_call", "pre_tool_call"])
 
             inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
@@ -185,6 +185,7 @@ class PluginDistributionTests(unittest.TestCase):
             module = load_installed_plugin(hermes_home / "plugins" / "omh")
             ctx = FakeHermesContext()
             module.register(ctx)
+            self.assertIn("omh_gather_evidence", ctx.tools)
             self.assertIn("omh_hud", ctx.tools)
             self.assertIn("omh_role", ctx.tools)
             self.assertIn("omh_status", ctx.tools)
@@ -206,6 +207,49 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(payload["runs"][0]["prepared_handoff"])
             self.assertFalse(payload["runs"][0]["execution_observed"])
             self.assertIn("not execution evidence", payload["evidence_boundary"]["prepared_handoff"])
+
+            evidence_handler = ctx.tools["omh_gather_evidence"]["args"][2]
+            evidence = json.loads(
+                evidence_handler(
+                    {
+                        "commands": ["python3 -m compileall -q ."],
+                        "project_root": str(root),
+                        "workdir": str(root),
+                        "timeout": 30,
+                        "truncate": 1000,
+                    }
+                )
+            )
+            self.assertEqual(evidence["schema_version"], "omh_evidence_probe/v1")
+            self.assertTrue(evidence["all_pass"])
+            self.assertEqual(evidence["results"][0]["evidence_type"], "observed_local_command")
+            self.assertIn("not executor dispatch", evidence["claim_boundary"])
+
+            rejected = json.loads(
+                evidence_handler(
+                    {
+                        "commands": ["python3 -m compileall -q .; echo bad"],
+                        "project_root": str(root),
+                        "workdir": str(root),
+                    }
+                )
+            )
+            self.assertFalse(rejected["all_pass"])
+            self.assertEqual(rejected["results"][0]["evidence_type"], "rejected")
+            self.assertIn("shell metacharacters", rejected["results"][0]["output_tail"])
+
+            bounded_root = root / "inside"
+            bounded_root.mkdir()
+            outside_workdir = json.loads(
+                evidence_handler(
+                    {
+                        "commands": ["python3 -m compileall -q ."],
+                        "project_root": str(bounded_root),
+                        "workdir": str(root),
+                    }
+                )
+            )
+            self.assertIn("workdir must stay within project_root", outside_workdir["error"])
 
             role_handler = ctx.tools["omh_role"]["args"][2]
             roles = json.loads(role_handler({"action": "list"}))

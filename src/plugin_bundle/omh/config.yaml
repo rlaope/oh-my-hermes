@@ -4,3 +4,22 @@ hud_preset: focused
 inject_context: true
 privacy: metadata_only
 claim_boundary: "Prepared handoffs are not execution, review, CI, merge-readiness, or merge evidence."
+evidence:
+  # Token-prefix allowlist for explicit local verification probes.
+  # These commands are run with shell=False and bounded to the requested project_root.
+  allowlist_prefixes:
+    - "omh --help"
+    - "omh doctor"
+    - "omh probe"
+    - "omh harness validate"
+    - "omh docs workflows --check"
+    - "omh release checklist"
+    - "python -m unittest"
+    - "python3 -m unittest"
+    - "python -m compileall"
+    - "python3 -m compileall"
+    - "uv run python -m unittest"
+    - "uv run python -m compileall"
+    - "uv run python -m src.cli docs workflows --check"
+    - "uv run python -m src.cli harness validate"
+    - "git diff --check"

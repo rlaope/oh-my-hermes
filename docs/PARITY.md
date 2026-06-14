@@ -22,6 +22,7 @@ The comparison is based on public oh-my agent runtime patterns across:
 - skill and plugin installation surfaces
 - native plugin/HUD/status context
 - specialist role or profile systems
+- bounded evidence probe tools
 - team, swarm, worker, and worktree orchestration
 - MCP/tool bridge setup
 - loop/autopilot delivery flows
@@ -36,6 +37,7 @@ implementation or claim runtime behavior it did not observe.
 | --- | --- | --- | --- |
 | Skill and plugin distribution | Available | Tap-compatible `skills/*/SKILL.md`, `omh setup`, and optional `~/.hermes/plugins/omh` bridge. | Observed Hermes plugin load still needs host runtime evidence. |
 | Specialist role/profile system | Available | Skill catalog metadata, operating models, optional visible profile packs, wrapper role narration, plugin `omh_role`, and `[omh-role:name]` context injection. | Observed role execution still requires wrapper or runtime evidence; role context is not a hidden live agent. |
+| Bounded evidence probe | Available | Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as doctor, harness validation, docs checks, unittest, compileall, and whitespace checks. | It is not a general shell, executor dispatch, PR review, CI, merge, or live Hermes plugin-load signal. |
 | Team, swarm, and worker protocol | Partial | `team`, `ultrawork`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | OMH does not launch hidden tmux teams, spawn workers, or manage panes by itself. |
 | Worktree and project-session isolation | Partial | Coding runtime handoff contracts, loop queue metadata, and runtime observations for worktree creation. | OMH records and requests isolation but does not create Git worktrees in v1. |
 | HUD, status, and session observability | Available | `omh hud`, plugin `omh_hud`/`omh_status`, wrapper sessions, runtime runs, and status cards. | Live host HUD rendering depends on Hermes/plugin support. |
@@ -52,6 +54,8 @@ This PR implements the first vertical slice:
   beside the current local capability probe.
 - Harden the plugin bridge with native role context lookup, role marker
   injection, delegate marker validation, and session-end checkpoints.
+- Add a bounded `omh_gather_evidence` plugin tool for explicit allowlisted
+  local verification probes.
 - Keep the default `omh probe` output unchanged unless `--parity` is passed.
 - Document the comparison, non-goals, and next implementation slices.
 - Add unit tests that lock the JSON schema, human summary, and conservative
@@ -63,7 +67,7 @@ Next PR candidates:
 | --- | --- |
 | Worktree/session isolation runbooks and smoke fixtures | Makes executor-neutral worktree guidance operational before any creator command exists. |
 | Real OMH MCP bridge contract | Turns MCP preference into an installable, testable bridge when Hermes support is stable enough. |
-| Allowlisted evidence runner design | Evaluates whether a command-running verifier can fit OMH's explicit opt-in and prepared-vs-observed model. |
+| Live Hermes plugin-load smoke evidence | Separates installed/importable plugin payloads from host-observed plugin runtime use. |
 
 ## Acceptance Criteria
 
@@ -75,6 +79,9 @@ Next PR candidates:
   until observed runtime support exists.
 - Specialist roles are `available` only as prompt context, marker validation,
   and profile guidance. They are not hidden runtime agents.
+- Bounded evidence probes are `available` only as explicit allowlisted local
+  command results. They are not executor dispatch, implementation, review, CI,
+  merge, or plugin-load evidence.
 - The matrix never claims hidden worker launch, worktree creation, MCP tool
   calls, plugin runtime load, executor execution, review, CI, or merge
   evidence.
@@ -87,3 +94,4 @@ Next PR candidates:
 - No Discord/Slack transport implementation.
 - No Hermes core patch.
 - No network calls, LLM calls, or executor dispatch from the parity verifier.
+- No arbitrary shell or connector command runner from the plugin bridge.

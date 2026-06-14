@@ -8,10 +8,18 @@ def register(ctx):
     from .hooks.llm_hooks import pre_llm_call
     from .hooks.session_hooks import on_session_end
     from .hooks.tool_hooks import pre_tool_call
+    from .tools.evidence_tool import OMH_EVIDENCE_SCHEMA, omh_evidence_handler
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
     from .tools.role_tool import OMH_ROLE_SCHEMA, omh_role_handler
     from .tools.status_tool import OMH_STATUS_SCHEMA, omh_status_handler
 
+    ctx.register_tool(
+        "omh_gather_evidence",
+        _TOOLSET,
+        OMH_EVIDENCE_SCHEMA,
+        omh_evidence_handler,
+        description=OMH_EVIDENCE_SCHEMA["description"],
+    )
     ctx.register_tool(
         "omh_hud",
         _TOOLSET,

@@ -8,7 +8,7 @@ from typing import Any
 STATUS_SCHEMA_VERSION = "omh_status/v1"
 HUD_SCHEMA_VERSION = "omh_hud/v1"
 HUD_PRESETS = {"minimal", "focused", "full"}
-HUD_REQUIRED_TOOLS = ("omh_hud", "omh_role", "omh_status")
+HUD_REQUIRED_TOOLS = ("omh_gather_evidence", "omh_hud", "omh_role", "omh_status")
 HUD_REQUIRED_HOOKS = ("on_session_end", "pre_llm_call", "pre_tool_call")
 
 
@@ -174,6 +174,7 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
     files = {
         "plugin_yaml": (plugin_dir / "plugin.yaml").is_file(),
         "init_py": (plugin_dir / "__init__.py").is_file(),
+        "evidence_tool": (plugin_dir / "tools" / "evidence_tool.py").is_file(),
         "hud_tool": (plugin_dir / "tools" / "hud_tool.py").is_file(),
         "role_tool": (plugin_dir / "tools" / "role_tool.py").is_file(),
         "status_tool": (plugin_dir / "tools" / "status_tool.py").is_file(),
@@ -190,6 +191,7 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
     return {
         "files": files,
         "tools": {
+            "omh_gather_evidence": files["evidence_tool"] and "omh_gather_evidence" in tool_sources,
             "omh_hud": files["hud_tool"] and "omh_hud" in tool_sources,
             "omh_role": files["role_tool"] and files["role_catalog"] and "omh_role" in tool_sources,
             "omh_status": files["status_tool"] and "omh_status" in tool_sources,

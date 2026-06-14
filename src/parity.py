@@ -60,6 +60,18 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         claim_boundary="Role context is prompt guidance, not observed delegation, worker start, execution, review, CI, or merge evidence.",
     ),
     ParityCapability(
+        id="bounded_evidence_probe",
+        title="Bounded evidence probe",
+        common_pattern="Let the host agent run explicitly allowlisted local verification commands and return structured pass/fail output.",
+        omh_surface="Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as OMH doctor, harness validation, docs checks, unittest, compileall, and git diff whitespace checks.",
+        status="available",
+        evidence=("src/plugin_bundle/omh/tools/evidence_tool.py", "src/plugin_bundle/omh/config.yaml", "tests/test_plugin_distribution.py"),
+        missing_piece="It is not a general command runner and does not observe executor dispatch, PR review, CI, merge, or Hermes plugin runtime load.",
+        v1_decision="Ship a narrow explicit verification probe before any broader evidence runner or connector tool.",
+        user_value="Hermes can gather basic local verification evidence without asking users to paste terminal output or granting arbitrary shell access.",
+        claim_boundary="Evidence probes prove only the allowlisted local command result they ran.",
+    ),
+    ParityCapability(
         id="team_swarm_workers",
         title="Team, swarm, and worker protocol",
         common_pattern="Coordinate multiple lanes with explicit worker ownership, status, handoff, and review boundaries.",
@@ -154,9 +166,9 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
         "probe_alignment": _probe_alignment(probe_payload or {}),
         "recommended_next_prs": [
             {
-                "id": "native-role-evidence",
-                "title": "Record wrapper-observed role lane results",
-                "why": "Closes the specialist role gap without claiming hidden Hermes agents.",
+                "id": "observed-plugin-load",
+                "title": "Add live Hermes plugin load smoke evidence",
+                "why": "Separates installed/importable plugin payloads from host-observed plugin runtime use.",
             },
             {
                 "id": "worktree-runbook",

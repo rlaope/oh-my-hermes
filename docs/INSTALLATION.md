@@ -51,7 +51,7 @@ Plugin support is installed by `omh setup` by default. It provides a thin
 Hermes plugin bridge in addition to the skill pack:
 
 That installs `~/.hermes/plugins/omh` with metadata-only HUD/status/role
-support.
+support and a bounded evidence probe.
 `omh hud` prints the same compact status line a Hermes TUI or plugin surface can
 render. It shows only operationally useful status: OMH version, plugin
 readiness, target topology, current or default coding agent, and evidence
@@ -61,8 +61,11 @@ line looks like
 `[omh] v1.0.0 | plugin:ready | target:single | coding-agent:idle(ask)`.
 The plugin also exposes `omh_role`, validates `[omh-role:name]` markers for
 delegated subagent prompts, and records a metadata-only session-end checkpoint
-when OMH runtime state exists. It does not execute code, patch Hermes core, or
-prove Hermes has loaded it.
+when OMH runtime state exists. It also exposes `omh_gather_evidence` for
+explicit allowlisted local verification probes such as OMH doctor, harness
+validation, docs checks, unittest, compileall, and whitespace checks. It does
+not provide an arbitrary shell, patch Hermes core, dispatch executors, or prove
+Hermes has loaded it.
 If the target Hermes runtime requires a separate plugin enable command, follow
 that runtime's plugin enable/reload step.
 

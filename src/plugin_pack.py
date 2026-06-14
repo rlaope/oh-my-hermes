@@ -264,7 +264,7 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
         if not callable(register):
             return {"import_smoke": True, "register_smoke": False, "error": "register(ctx) is missing"}
         register(ctx)
-        required_tools = {"omh_hud", "omh_role", "omh_status"}
+        required_tools = {"omh_gather_evidence", "omh_hud", "omh_role", "omh_status"}
         required_hooks = {"on_session_end", "pre_llm_call", "pre_tool_call"}
         return {
             "import_smoke": True,

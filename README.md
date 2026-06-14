@@ -203,7 +203,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
-| Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_hud`, `omh_role`, `omh_status`, role marker validation, and session checkpoint support. |
+| Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_hud`, `omh_role`, `omh_status`, bounded `omh_gather_evidence`, role marker validation, and session checkpoint support. |
 | Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it; `omh probe` separates `mcp_preference` from `mcp_host_config`. |
 | Parity verifier | `omh probe --parity` maps common oh-my runtime capability axes to OMH surfaces, gaps, and evidence boundaries. |
 | Operating models | `omh setup --operating-model <id>` records the default Hermes collaboration posture: solo operator, small team, research ops, or coding runtime team. |
@@ -255,8 +255,8 @@ Profile packs write OMH-prefixed role files under `~/.hermes/agents`. The
 is not installed by default.
 
 The plugin bridge installs `~/.hermes/plugins/omh` and registers metadata-only
-HUD/status support. `omh hud` prints the same compact line a Hermes TUI or
-status surface can render, for example
+HUD/status support plus a bounded local evidence probe. `omh hud` prints the
+same compact line a Hermes TUI or status surface can render, for example
 `[omh] v1.0.0 | plugin:ready | target:single | coding-agent:idle(ask)`.
 
 For coding runtime handoffs, wrappers can record observed steps without claiming
@@ -302,6 +302,10 @@ Skill inventory and deep diagnostics belong in `omh doctor`,
 `omh_status`, or machine-readable setup output, not the status line. Local
 plugin install or import/register smoke is not proof that Hermes loaded the
 plugin, executed code, reviewed a PR, passed CI, or merged.
+`omh_gather_evidence` can run only allowlisted local verification probes and
+returns truncated structured output. It is verification evidence for that
+specific command, not executor dispatch, implementation, review, CI, merge, or
+live Hermes plugin-load evidence.
 
 The installer can also pass these advanced setup choices directly:
 
