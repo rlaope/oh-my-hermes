@@ -386,7 +386,8 @@ observable local evidence for:
 - external skill directory registration
 - managed skill installation
 - hook-like files
-- plugin, app, and MCP-like paths
+- plugin and app paths
+- MCP setup preference and MCP host config paths as separate capabilities
 - wrapper observation artifacts
 - native skill metadata readiness
 
@@ -394,6 +395,9 @@ Probe results use `available`, `missing`, `unknown`, or `unverified`. A file or
 directory probe marked `unverified` is not a native integration claim. Deeper
 Hermes integration requires both a stable Hermes extension contract and runtime
 evidence that the extension ran.
+`mcp_preference` is OMH setup state only; `mcp_host_config` is a host-file probe
+only. Keeping them separate prevents a requested bridge preference from being
+mistaken for observed MCP host load or tool execution.
 
 For terminal operators, `omh probe` prints a compact status summary by default.
 Wrappers and automation should request the full capability payload with

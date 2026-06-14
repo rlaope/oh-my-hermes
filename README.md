@@ -204,7 +204,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
 | Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_hud` and `omh_status` support. |
-| Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it. |
+| Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it; `omh probe` separates `mcp_preference` from `mcp_host_config`. |
 | Operating models | `omh setup --operating-model <id>` records the default Hermes collaboration posture: solo operator, small team, research ops, or coding runtime team. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |
 

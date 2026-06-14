@@ -6,6 +6,7 @@ from pathlib import Path
 from .config_adapter import external_dirs, read_config
 from .paths import OmhPaths
 from .plugin_pack import inspect_plugin_bundle
+from .runtime.artifacts import read_state_result
 from .targets import summarize_target_registry
 
 PROBE_STATUSES = ("available", "missing", "unknown", "unverified")
@@ -52,6 +53,58 @@ def _marker_capability(name: str, markers: list[Path], found_message: str, missi
         "unverified" if found else "unknown",
         ", ".join(str(path) for path in markers),
         found_message if found else missing_message,
+    )
+
+
+def _mcp_preference_capability(paths: OmhPaths) -> Capability:
+    state, error = read_state_result(paths)
+    evidence = str(paths.runtime_state_path)
+    if error:
+        return Capability(
+            "mcp_preference",
+            "unknown",
+            evidence,
+            f"Could not read OMH setup state for MCP preference: {error}",
+        )
+    if not isinstance(state, dict):
+        return Capability(
+            "mcp_preference",
+            "unknown",
+            evidence,
+            "No OMH setup state has recorded an MCP bridge preference",
+        )
+    last_setup = state.get("last_setup")
+    mcp_setup = last_setup.get("mcp_setup") if isinstance(last_setup, dict) else None
+    if not isinstance(mcp_setup, dict):
+        return Capability(
+            "mcp_preference",
+            "unknown",
+            evidence,
+            "No OMH setup state has recorded an MCP bridge preference",
+        )
+
+    mode = str(mcp_setup.get("mode", "none"))
+    requested = bool(mcp_setup.get("requested", False))
+    observed = bool(mcp_setup.get("observed", False))
+    if not requested or mode == "none":
+        return Capability(
+            "mcp_preference",
+            "unknown",
+            evidence,
+            "OMH setup state says no optional MCP bridge preference was requested",
+        )
+    if observed:
+        return Capability(
+            "mcp_preference",
+            "available",
+            evidence,
+            f"OMH MCP bridge preference was requested and observed by setup state (mode={mode})",
+        )
+    return Capability(
+        "mcp_preference",
+        "unverified",
+        evidence,
+        f"OMH MCP bridge preference was requested (mode={mode}), but no MCP host load or tool-call evidence is recorded",
     )
 
 
@@ -114,12 +167,13 @@ def probe_capabilities(paths: OmhPaths) -> dict:
         )
     )
     mcp_markers = [paths.hermes_home / ".mcp.json", paths.hermes_home / "mcp.json"]
+    capabilities.append(_mcp_preference_capability(paths))
     capabilities.append(
         _marker_capability(
-            "mcp",
+            "mcp_host_config",
             mcp_markers,
-            "MCP-like config exists, but omh has not verified a Hermes MCP extension contract",
-            "No Hermes MCP config detected by file probe",
+            "MCP host config exists, but OMH has not verified a Hermes MCP extension contract or host load event",
+            "No Hermes MCP host config detected by file probe",
         )
     )
     capabilities.append(
