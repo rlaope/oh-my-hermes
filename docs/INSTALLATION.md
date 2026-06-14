@@ -244,6 +244,11 @@ surface.
 `omh runtime status` should show the local runtime artifact directory and the
 latest install/apply/doctor state when those commands have run. `omh probe`
 reports observable Hermes capability surfaces without mutating Hermes internals.
+For MCP, `omh probe` reports the setup preference and host config separately:
+`mcp_preference` means `omh setup --with-mcp` was requested in OMH local state,
+while `mcp_host_config` only means a Hermes MCP config file such as `.mcp.json`
+or `mcp.json` exists. Neither field proves an MCP host loaded OMH or called a
+tool unless separate runtime evidence records that event.
 After `omh setup` has run, `omh doctor` also checks the managed plugin manifest
 plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so

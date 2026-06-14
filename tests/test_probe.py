@@ -21,6 +21,8 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(caps["external_skill_dirs"]["status"], "unknown")
             self.assertEqual(caps["managed_skills"]["status"], "missing")
             self.assertEqual(caps["native_hooks"]["status"], "unknown")
+            self.assertEqual(caps["mcp_preference"]["status"], "unknown")
+            self.assertEqual(caps["mcp_host_config"]["status"], "unknown")
             self.assertEqual(caps["omh_plugin_bundle"]["status"], "missing")
             self.assertEqual(caps["plugin_import_smoke"]["status"], "unknown")
             self.assertEqual(caps["target_registry"]["status"], "missing")
@@ -72,6 +74,38 @@ class ProbeCliTests(unittest.TestCase):
             caps = {capability["name"]: capability for capability in payload["capabilities"]}
             self.assertEqual(caps["target_registry"]["status"], "available")
             self.assertEqual(payload["target_topology"]["mode"], "single_agent_target")
+
+    def test_probe_separates_mcp_preference_from_host_config(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-mcp"])[0], 0)
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "probe"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            caps = {capability["name"]: capability for capability in payload["capabilities"]}
+            self.assertEqual(caps["mcp_preference"]["status"], "unverified")
+            self.assertIn("bridge preference was requested", caps["mcp_preference"]["message"])
+            self.assertIn("runtime/state.json", caps["mcp_preference"]["evidence"])
+            self.assertEqual(caps["mcp_host_config"]["status"], "unknown")
+            self.assertIn("No Hermes MCP host config", caps["mcp_host_config"]["message"])
+            self.assertFalse(payload["native_integration_claim_ready"])
+
+            (hermes_home / ".mcp.json").write_text("{}", encoding="utf-8")
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "probe"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            caps = {capability["name"]: capability for capability in json.loads(stdout)["capabilities"]}
+            self.assertEqual(caps["mcp_preference"]["status"], "unverified")
+            self.assertEqual(caps["mcp_host_config"]["status"], "unverified")
+            self.assertIn("MCP host config exists", caps["mcp_host_config"]["message"])
+            self.assertNotIn("mcp", {capability["name"] for capability in json.loads(stdout)["capabilities"]})
 
     def test_probe_reports_plugin_distribution_without_native_runtime_claim(self) -> None:
         with TemporaryDirectory() as tmp:
