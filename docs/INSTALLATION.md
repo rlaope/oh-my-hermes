@@ -213,6 +213,7 @@ omh doctor
 omh list
 omh runtime status
 omh probe
+omh probe --parity
 ```
 
 `omh setup` should report a human-readable setup summary by default, including
@@ -256,6 +257,12 @@ plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so
 operators do not mistake local install readiness for observed Hermes runtime
 use.
+Use `omh probe --parity` when an operator wants the broader comparison against
+common oh-my runtime capability axes. It returns `omh_parity_matrix/v1` with
+available and partial rows for skills/plugins, roles, team/swarm workers,
+worktree isolation, HUD/session status, MCP/tool bridge preference, loop
+autopilot, and release maintenance. Partial rows are intentional evidence
+boundaries, not failures.
 
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see

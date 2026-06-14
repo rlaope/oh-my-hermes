@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config_adapter import external_dirs, read_config
+from .parity import build_parity_matrix
 from .paths import OmhPaths
 from .plugin_pack import inspect_plugin_bundle
 from .runtime.artifacts import read_state_result
@@ -118,7 +119,7 @@ def _dir_capability(name: str, path: Path, found_message: str, missing_message: 
     )
 
 
-def probe_capabilities(paths: OmhPaths) -> dict:
+def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict:
     config_text = read_config(paths.hermes_config_path)
     configured_dirs = external_dirs(config_text)
     skills_registered = str(paths.skills_dir) in configured_dirs
@@ -255,7 +256,7 @@ def probe_capabilities(paths: OmhPaths) -> dict:
         ]
     )
 
-    return {
+    payload = {
         "schema_version": 1,
         "omh_home": str(paths.omh_home),
         "hermes_home": str(paths.hermes_home),
@@ -265,3 +266,6 @@ def probe_capabilities(paths: OmhPaths) -> dict:
         "native_integration_claim_ready": False,
         "claim_boundary": "Prompt-level routing is the default unless a future stable Hermes extension surface and runtime evidence prove deeper integration.",
     }
+    if include_parity:
+        payload["parity_matrix"] = build_parity_matrix(payload)
+    return payload

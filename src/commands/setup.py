@@ -1723,7 +1723,40 @@ def _print_probe_summary(payload: dict[str, object]) -> None:
     if boundary:
         print(_color("Boundary", "1;32", use_color))
         print(f"  {boundary}")
+    parity = payload.get("parity_matrix")
+    if isinstance(parity, dict):
+        _print_probe_parity_summary(parity, use_color=use_color)
     print(f"  {tr('en', 'machine_readable')}")
+
+
+def _print_probe_parity_summary(payload: dict[str, object], *, use_color: bool) -> None:
+    summary = payload.get("summary", {})
+    if not isinstance(summary, dict):
+        summary = {}
+    print(_color("Parity matrix", "1;32", use_color))
+    print(
+        "  Common oh-my runtime axes: "
+        f"{summary.get('available', 0)} available, "
+        f"{summary.get('partial', 0)} partial, "
+        f"{summary.get('planned', 0)} planned, "
+        f"{summary.get('deferred', 0)} deferred"
+    )
+    capabilities = payload.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        capabilities = []
+    for capability in capabilities:
+        if not isinstance(capability, dict):
+            continue
+        title = str(capability.get("title", "unknown"))
+        status = str(capability.get("status", "unknown"))
+        missing = _short_summary(str(capability.get("missing_piece", "")), limit=108)
+        print(f"  - {title}: {status}")
+        if missing:
+            print(f"    Gap: {missing}")
+    boundary = str(payload.get("claim_boundary", "")).strip()
+    if boundary:
+        print(_color("Parity boundary", "1;32", use_color))
+        print(f"  {_short_summary(boundary, limit=132)}")
 
 
 def _short_summary(value: str, *, limit: int) -> str:
@@ -1882,7 +1915,7 @@ def cmd_snippet(args: argparse.Namespace) -> int:
 
 
 def cmd_probe(args: argparse.Namespace) -> int:
-    payload = probe_capabilities(_paths(args))
+    payload = probe_capabilities(_paths(args), include_parity=bool(getattr(args, "parity", False)))
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -2009,6 +2042,11 @@ def _add_top_level_commands(sub) -> None:
     snippet.set_defaults(func=cmd_snippet)
 
     probe = sub.add_parser("probe", help="Inspect observable OMH/Hermes capability surfaces.")
+    probe.add_argument(
+        "--parity",
+        action="store_true",
+        help="Include the OMH parity matrix for common oh-my agent runtime capability axes.",
+    )
     probe.add_argument("--json", action="store_true", help="Print the full machine-readable capability payload.")
     probe.set_defaults(func=cmd_probe)
 

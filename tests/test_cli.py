@@ -197,6 +197,46 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(json.loads(stdout)["written"], str(output.resolve()))
 
+    def test_probe_parity_matrix_maps_common_agent_runtime_gaps(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, _, stderr = run_cli(base + ["setup", "--with-plugin"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+
+            status, stdout, stderr = run_cli(base + ["probe", "--parity", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            matrix = payload["parity_matrix"]
+            self.assertEqual(matrix["schema_version"], "omh_parity_matrix/v1")
+            self.assertGreaterEqual(matrix["summary"]["available"], 3)
+            self.assertGreaterEqual(matrix["summary"]["partial"], 3)
+            capabilities = {item["id"]: item for item in matrix["capabilities"]}
+            self.assertEqual(capabilities["skill_plugin_distribution"]["status"], "available")
+            self.assertEqual(capabilities["team_swarm_workers"]["status"], "partial")
+            self.assertEqual(capabilities["worktree_isolation"]["status"], "partial")
+            self.assertEqual(capabilities["mcp_tool_bridge"]["status"], "partial")
+            self.assertIn("not worker dispatch", capabilities["team_swarm_workers"]["claim_boundary"])
+            self.assertIn("not a created worktree", capabilities["worktree_isolation"]["claim_boundary"])
+            self.assertEqual(matrix["probe_alignment"]["managed_skills"], "available")
+            self.assertEqual(matrix["probe_alignment"]["omh_plugin_bundle"], "available")
+            self.assertIn("does not claim hidden worker launch", matrix["claim_boundary"])
+
+            status, stdout, stderr = run_cli(base + ["probe", "--parity"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH capability probe", stdout)
+            self.assertIn("Parity matrix", stdout)
+            self.assertIn("Team, swarm, and worker protocol: partial", stdout)
+            self.assertIn("Worktree and project-session isolation: partial", stdout)
+            self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
     def test_setup_interactive_wizard_records_user_choices(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

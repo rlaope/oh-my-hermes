@@ -13,6 +13,7 @@ repo-local contract for Codex agents working here.
 | --- | --- |
 | Understand what OMH is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
+| Compare common oh-my runtime axes and OMH gaps | [Parity Matrix](PARITY.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Review stale local context and executor handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |
 | Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
@@ -109,6 +110,9 @@ selected.
   install evidence.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
+- Parity docs should map common oh-my runtime capability axes to OMH's
+  Hermes-native evidence model instead of promising hidden workers, worktrees,
+  MCP tools, or plugin runtime load without observation.
 - Goal execution docs should describe `.omh/goals` metadata-only ledgers,
   `goal_completion_gate/v1`, `goal_status_card/v1`, and
   `goal_continuation/v1` as wrapper contracts that name the next action before
@@ -130,6 +134,7 @@ When changing docs, check whether the same claim needs to be updated in:
 - [README](../README.md)
 - [Direction](DIRECTION.md)
 - [Architecture](ARCHITECTURE.md)
+- [Parity Matrix](PARITY.md)
 - [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md)
 - [Memory Context Review](MEMORY_CONTEXT.md)
 - [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md)

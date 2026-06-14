@@ -403,6 +403,16 @@ For terminal operators, `omh probe` prints a compact status summary by default.
 Wrappers and automation should request the full capability payload with
 `omh probe --json` or `OMH_OUTPUT=json`.
 
+`omh probe --parity` adds `omh_parity_matrix/v1`. That matrix compares common
+oh-my runtime capability axes with OMH's actual surfaces: skill/plugin
+distribution, specialist roles, team/swarm workers, worktree isolation, HUD and
+session observability, MCP/tool bridge preference, loop/autopilot workflow, and
+release maintenance. It is a product and operator contract, not a hidden runtime
+claim. A `partial` row means OMH has deterministic guidance, handoff metadata,
+or observation records for that axis, while the live worker, worktree, MCP tool,
+or plugin runtime event still belongs to Hermes, the selected executor, or a
+future observed integration.
+
 ## Harness Contract
 
 Representative harnesses are preview metadata for generated prompt guidance.

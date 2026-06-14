@@ -205,6 +205,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
 | Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_hud` and `omh_status` support. |
 | Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it; `omh probe` separates `mcp_preference` from `mcp_host_config`. |
+| Parity verifier | `omh probe --parity` maps common oh-my runtime capability axes to OMH surfaces, gaps, and evidence boundaries. |
 | Operating models | `omh setup --operating-model <id>` records the default Hermes collaboration posture: solo operator, small team, research ops, or coding runtime team. |
 | Optional team profile packs | CTO/PM-style or delivery/research role files can be installed only when selected. |
 
@@ -317,6 +318,7 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 | AI-agent pasteable install protocol | [Agent Install](INSTALL_FOR_AGENTS.md) |
 | Product direction and boundaries | [Direction](docs/DIRECTION.md) |
 | Architecture and module ownership | [Architecture](docs/ARCHITECTURE.md) |
+| Common oh-my runtime parity and gaps | [Parity Matrix](docs/PARITY.md) |
 | Situation playbooks | [Playbooks](docs/PLAYBOOKS.md) |
 | Role surfaces and profile packs | [Roles](docs/ROLES.md) |
 | Memory/context review and handoff packs | [Memory Context Review](docs/MEMORY_CONTEXT.md) |
