@@ -58,6 +58,7 @@ python3 -m unittest discover -s tests
 python3 -m compileall src
 python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
+python3 -m omh.cli release checklist --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
@@ -72,6 +73,18 @@ python3 -m venv /tmp/omh-wheel-smoke
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.0
 OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
 ```
+
+The checklist command renders the same release gates as a deterministic
+`release_readiness_checklist/v1` contract:
+
+```sh
+omh release checklist --version 1.0.0
+omh release checklist --version 1.0.0 --json
+```
+
+It is plan-only: it does not run checks, mutate Hermes, create tags, or publish
+GitHub releases. Treat it as the operator-facing index of the evidence that must
+be attached before a stable tag.
 
 ## Hermes CLI Install Smoke
 

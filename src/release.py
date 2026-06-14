@@ -3,15 +3,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
+import shlex
 import shutil
 import subprocess
 from typing import Callable, Mapping, Sequence
 
+from . import __version__
+
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
 HERMES_SMOKE_SCHEMA = "hermes_release_smoke/v1"
+RELEASE_CHECKLIST_SCHEMA = "release_readiness_checklist/v1"
 INSTALLED_COMMAND_SMOKE_SCHEMA = "installed_omh_command_smoke/v1"
 FIRST_USE_STATUS_SMOKE_SCHEMA = "first_use_status_smoke/v1"
+RELEASE_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*(?:[-_+.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$")
 DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
 DEFAULT_HERMES_SKILL = "oh-my-hermes"
 DEFAULT_FIRST_USE_MESSAGE = "I want to safely add a feature to this repo"
@@ -62,6 +68,33 @@ class HermesSmokeStep:
 
 
 @dataclass(frozen=True)
+class ReleaseChecklistItem:
+    item_id: str
+    title: str
+    command: str
+    phase: str
+    required: bool
+    mutates_profile: bool
+    evidence_required: str
+    proof_boundary: str
+    requires_release_authority: bool = False
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "id": self.item_id,
+            "title": self.title,
+            "command": self.command,
+            "phase": self.phase,
+            "required": self.required,
+            "observed": False,
+            "mutates_profile": self.mutates_profile,
+            "requires_release_authority": self.requires_release_authority,
+            "evidence_required": self.evidence_required,
+            "proof_boundary": self.proof_boundary,
+        }
+
+
+@dataclass(frozen=True)
 class CommandResult:
     command: Sequence[str]
     returncode: int
@@ -70,6 +103,233 @@ class CommandResult:
 
 
 Runner = Callable[[Sequence[str], int, Mapping[str, str] | None], CommandResult]
+
+
+def release_readiness_checklist(
+    *,
+    version: str = __version__,
+    omh_command: str = "omh",
+) -> dict[str, object]:
+    release_version = _normalize_release_version(version)
+    tag = f"v{release_version}"
+    wheel = f"dist/oh_my_hermes-{release_version}-py3-none-any.whl"
+    omh_display = _shell_word(omh_command or "omh")
+    items = [
+        ReleaseChecklistItem(
+            "unit_tests",
+            "Run the full unittest suite",
+            "PYTHONPATH=tests uv run python -m unittest discover -s tests -v",
+            "local-quality",
+            True,
+            False,
+            "All tests pass locally or in CI.",
+            "Unit tests prove local contracts only; they do not prove Hermes loaded the installed skills.",
+        ),
+        ReleaseChecklistItem(
+            "compileall",
+            "Compile Python sources",
+            "uv run python -m compileall -q src tests",
+            "local-quality",
+            True,
+            False,
+            "compileall exits successfully.",
+            "Syntax/import compilation is local source evidence only.",
+        ),
+        ReleaseChecklistItem(
+            "docs_workflows_check",
+            "Check generated workflow docs",
+            "uv run python -m src.cli docs workflows --check",
+            "contract-quality",
+            True,
+            False,
+            "Generated workflow docs match catalog data.",
+            "This proves generated references are in sync, not that Hermes selected a workflow in chat.",
+        ),
+        ReleaseChecklistItem(
+            "harness_validate",
+            "Validate harness catalog contracts",
+            "uv run python -m src.cli harness validate",
+            "contract-quality",
+            True,
+            False,
+            "Harness catalog validation exits successfully.",
+            "Harness validation proves local schemas and metadata, not runtime execution.",
+        ),
+        ReleaseChecklistItem(
+            "stable_install_dry_run",
+            "Dry-run stable install metadata",
+            (
+                "uv run python -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
+                f"install --dry-run --channel stable --version {release_version}"
+            ),
+            "install-plan",
+            True,
+            False,
+            "Dry-run payload names the stable channel, version, source ref, and package URL.",
+            "Dry-run install is not evidence that files were written or Hermes reloaded.",
+        ),
+        ReleaseChecklistItem(
+            "stable_setup_dry_run",
+            "Dry-run stable setup metadata",
+            (
+                "uv run python -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
+                f"setup --dry-run --channel stable --version {release_version}"
+            ),
+            "install-plan",
+            True,
+            False,
+            "Dry-run setup shows the managed skill and Hermes registration plan.",
+            "Dry-run setup does not mutate Hermes and is not native runtime-load evidence.",
+        ),
+        ReleaseChecklistItem(
+            "probe_smoke",
+            "Run local capability probe",
+            "uv run python -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe",
+            "local-quality",
+            True,
+            False,
+            "Capability probe exits successfully.",
+            "Probe output is local capability evidence, not observed Hermes chat behavior.",
+        ),
+        ReleaseChecklistItem(
+            "release_smoke_plan",
+            "Render Hermes release smoke plan",
+            "uv run python -m src.cli release hermes-smoke",
+            "release-smoke",
+            True,
+            False,
+            "Release smoke plan renders with plan-only evidence boundaries.",
+            "Plan mode does not touch the current Hermes profile.",
+        ),
+        ReleaseChecklistItem(
+            "installed_command_help",
+            "Check installed omh command help",
+            f"{omh_display} --help",
+            "installed-command",
+            True,
+            False,
+            "Installed command prints help successfully.",
+            "This proves console-script importability only.",
+        ),
+        ReleaseChecklistItem(
+            "installed_command_smoke",
+            "Observe installed command smoke without Hermes mutation",
+            (
+                f"{omh_display} --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
+                f"release hermes-smoke --install-path setup --omh-command {omh_display} --include-command-smoke"
+            ),
+            "installed-command",
+            True,
+            False,
+            "Nested installed_command_smoke is mode=live, observed=true, and ok=true.",
+            "This observes the installed OMH command path while keeping the outer Hermes profile smoke plan-only.",
+        ),
+        ReleaseChecklistItem(
+            "build_artifacts",
+            "Build sdist and wheel",
+            "uv build",
+            "package-build",
+            True,
+            False,
+            "sdist and wheel are built without packaging warnings or errors.",
+            "Build output proves package construction, not install success.",
+        ),
+        ReleaseChecklistItem(
+            "wheel_install",
+            "Install the built wheel into an isolated venv",
+            (
+                "python3 -m venv /tmp/omh-wheel-smoke && "
+                f"/tmp/omh-wheel-smoke/bin/python -m pip install --upgrade {wheel}"
+            ),
+            "package-build",
+            True,
+            False,
+            "The isolated venv installs the built wheel successfully.",
+            "Wheel install is isolated package evidence, not target Hermes profile evidence.",
+        ),
+        ReleaseChecklistItem(
+            "wheel_command_smoke",
+            "Run the wheel-installed command smoke",
+            (
+                "/tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home "
+                "release hermes-smoke --install-path setup --omh-command /tmp/omh-wheel-smoke/bin/omh --include-command-smoke"
+            ),
+            "package-build",
+            True,
+            False,
+            "Wheel-installed command smoke reports nested installed_command_smoke ok=true.",
+            "This still does not mutate a real Hermes profile.",
+        ),
+        ReleaseChecklistItem(
+            "wheel_setup_dry_run",
+            "Run wheel-installed setup dry-run for the stable release",
+            (
+                "/tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home "
+                f"setup --dry-run --channel stable --version {release_version}"
+            ),
+            "package-build",
+            True,
+            False,
+            "Wheel-installed setup dry-run renders the stable bootstrap plan successfully.",
+            "The setup dry-run does not install skills, reload Hermes, or mutate a target profile.",
+        ),
+        ReleaseChecklistItem(
+            "installer_smoke",
+            "Run install.sh against the built package in dry-run setup mode",
+            (
+                "OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python "
+                f"OMH_PACKAGE_URL=file://$PWD/{wheel} "
+                'OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin '
+                'OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh'
+            ),
+            "installer",
+            True,
+            False,
+            "install.sh installs the command package and runs setup dry-run without touching system Python packages.",
+            "Installer dry-run setup is bootstrap evidence, not Hermes runtime-use evidence.",
+        ),
+        ReleaseChecklistItem(
+            "live_tap_smoke",
+            "Run exactly one live Hermes tap smoke before tagging",
+            f"{omh_display} release hermes-smoke --live --install-path tap --target-confirmed",
+            "manual-release-candidate",
+            True,
+            True,
+            "Hermes CLI install/list/check/inspect commands succeed for the target profile.",
+            "This mutates the target Hermes profile and still does not prove later chat selection without wrapper evidence.",
+            True,
+        ),
+        ReleaseChecklistItem(
+            "tag_and_publish",
+            "Tag and publish only after all required evidence is attached",
+            f'git tag -a {tag} -m "Release {tag}" && git push origin {tag}',
+            "release-authority",
+            False,
+            False,
+            "Maintainer explicitly approves tag/release publication after local and live evidence are recorded.",
+            "This checklist does not create tags, GitHub releases, or production artifacts by itself.",
+            True,
+        ),
+    ]
+    return {
+        "schema_version": RELEASE_CHECKLIST_SCHEMA,
+        "mode": "plan",
+        "ok": True,
+        "observed": False,
+        "version": release_version,
+        "tag": tag,
+        "proof_boundary": (
+            "This checklist is a deterministic release plan. It does not run commands, create tags, publish GitHub releases, "
+            "or prove Hermes runtime use until the listed evidence is observed separately."
+        ),
+        "items": [item.to_payload() for item in items],
+        "required_item_count": sum(1 for item in items if item.required),
+        "manual_authority_item_count": sum(1 for item in items if item.requires_release_authority),
+        "recommended_next_action": (
+            "Run the required local gates, record one live Hermes smoke from the target profile, then request explicit "
+            "release authority before tagging or publishing."
+        ),
+    }
 
 
 def hermes_release_smoke_steps(
@@ -183,6 +443,24 @@ def hermes_release_smoke_steps(
 
 def _skill_name_for_hermes(skill: str) -> str:
     return skill.rstrip("/").split("/")[-1]
+
+
+def _normalize_release_version(version: str) -> str:
+    value = str(version or "").strip()
+    if value.startswith("v"):
+        value = value[1:]
+    if not value:
+        raise ValueError("release checklist version must not be empty")
+    if not RELEASE_VERSION_RE.fullmatch(value):
+        raise ValueError("release checklist version must be a tag-safe version like 1.0.0")
+    return value
+
+
+def _shell_word(value: str) -> str:
+    stripped = str(value or "").strip()
+    if not stripped:
+        raise ValueError("release checklist omh command must not be empty")
+    return shlex.quote(stripped)
 
 
 def _tap_skill_identifier(*, tap: str, skill: str) -> str:

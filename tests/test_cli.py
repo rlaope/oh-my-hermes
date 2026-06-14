@@ -40,8 +40,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("chat", help_text)
         self.assertIn("wrapper chat events", help_text)
         self.assertIn("omh ops list", help_text)
-        self.assertIn("Human-facing maintenance and catalog commands print summaries", help_text)
+        self.assertIn("Human-facing maintenance, catalog, and operator checklist commands print summaries", help_text)
         self.assertIn("Backend/control-plane commands", help_text)
+        self.assertIn("release smoke", help_text)
         self.assertIn("memory, ops, state", help_text)
 
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
@@ -537,6 +538,39 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["first_use_status_smoke"]["schema_version"], "first_use_status_smoke/v1")
         self.assertFalse(payload["first_use_status_smoke"]["observed"])
         self.assertFalse(payload["first_use_status_smoke"]["expected_status_boundary"]["before_handoff"]["executor_actions_visible"])
+
+    def test_release_checklist_defaults_to_human_summary_with_json_escape_hatch(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["release", "checklist", "--version", "v1.0.0", "--omh-command", "/tmp/omh"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn("OMH release checklist for 1.0.0 (v1.0.0)", stdout)
+        self.assertIn("Required gates:", stdout)
+        self.assertIn("installed_command_smoke", stdout)
+        self.assertIn("/tmp/omh --help", stdout)
+        self.assertIn("live_tap_smoke", stdout)
+        self.assertIn("profile-mutating", stdout)
+        self.assertIn("Manual release-authority actions", stdout)
+        self.assertIn("tag_and_publish [release-authority; release authority]", stdout)
+        self.assertIn("For machine-readable output", stdout)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
+        status, stdout, stderr = run_cli(["release", "checklist", "--version", "1.0.0", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "release_readiness_checklist/v1")
+        self.assertEqual(payload["version"], "1.0.0")
+        self.assertFalse(payload["observed"])
+        items = {item["id"]: item for item in payload["items"]}
+        self.assertIn("uv build", items["build_artifacts"]["command"])
+        self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
+        self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
 
     def test_release_hermes_smoke_cli_can_observe_installed_command_without_live_profile_mutation(self) -> None:
         with TemporaryDirectory() as tmp:

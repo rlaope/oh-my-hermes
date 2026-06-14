@@ -32,6 +32,8 @@ jobs:
         run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
       - name: Hermes release smoke plan
         run: python -m omh.cli release hermes-smoke
+      - name: Release readiness checklist
+        run: python -m omh.cli release checklist --json
       - name: Installed OMH command smoke
         run: |
           omh --help
