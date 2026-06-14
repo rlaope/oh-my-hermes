@@ -72,7 +72,7 @@ def build_executor_session_status(
         "schema_version": EXECUTOR_SESSION_STATUS_SCHEMA_VERSION,
         "session_id": session_id,
         "selected_executor_profile": executor,
-        "executor_label": executor_label(executor),
+        "executor_label": _surface_executor_label(executor, handoff_state=_handoff_state(session)),
         "session_kind": _session_kind(session),
         "coding_agent": f"{agent_state}({executor})",
         "executor_session": "attached" if attached else "not_attached",
@@ -147,9 +147,19 @@ def build_executor_session_actions(
         "schema_version": "executor_session_action/v1",
         "session_id": session_id,
         "selected_executor_profile": executor,
-        "executor_label": executor_label(executor),
+        "executor_label": _surface_executor_label(executor, handoff_state=_handoff_state(session)),
         "claim_boundary": "The wrapper must call the backend action after it observes the corresponding user or executor event.",
     }
+    if _handoff_state(session) != "prepared":
+        return [
+            _action(
+                "refresh_executor_status",
+                "Refresh status",
+                "secondary",
+                enabled=True,
+                payload={**base_payload, "backend_action": "status"},
+            )
+        ]
     return [
         _action(
             "open_executor_session",
@@ -379,9 +389,7 @@ def enhance_chat_response_with_executor_session(
     updated["state"] = state
     actions = [action for action in updated.get("actions", []) if isinstance(action, dict)]
     action_ids = {str(action.get("id", "")) for action in actions}
-    for action in executor_status.get("actions", []):
-        if not isinstance(action, dict):
-            continue
+    for action in _executor_surface_actions(executor_status):
         action_id = str(action.get("id", ""))
         if action_id in action_ids:
             continue
@@ -410,7 +418,7 @@ def enhance_status_card_with_executor_session(
     executor_next_action = _next_executor_action(executor_status)
     updated["executor_next_action"] = executor_next_action
     updated["executor_next_action_label"] = _executor_action_label(executor_status, executor_next_action)
-    updated["executor_actions"] = [action for action in executor_status.get("actions", []) if isinstance(action, dict)]
+    updated["executor_actions"] = _executor_surface_actions(executor_status)
     return updated
 
 
@@ -471,6 +479,12 @@ def _default_executor_session(session: dict[str, Any]) -> dict[str, Any]:
         "summary": "",
         "claim_boundary": _claim_boundary(),
     }
+
+
+def _executor_surface_actions(executor_status: dict[str, object]) -> list[dict[str, object]]:
+    if str(executor_status.get("handoff", "")) != "prepared":
+        return []
+    return [action for action in executor_status.get("actions", []) if isinstance(action, dict)]
 
 
 def _merge_executor_session(paths: OmhPaths, session: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
@@ -779,8 +793,13 @@ def _display_status_lines(
     verification_status: str,
     status_blocker: str,
 ) -> list[str]:
+    coding_agent_line = (
+        "Coding agent is not selected yet."
+        if executor == "choose" and handoff_state != "prepared"
+        else f"Coding agent is {agent_state} in {executor_label(executor)}."
+    )
     lines = [
-        f"Coding agent is {agent_state} in {executor_label(executor)}.",
+        coding_agent_line,
         "Executor session is attached." if attached else "Executor session is not attached yet.",
         "Handoff is ready." if handoff_state == "prepared" else "Handoff is not ready yet.",
         "Dispatch/open has been observed." if dispatch_observed else "Dispatch/open has not been observed yet.",
@@ -790,6 +809,12 @@ def _display_status_lines(
     if status_blocker:
         lines.append(f"Action is blocked until OMH can read valid evidence: {status_blocker}")
     return lines
+
+
+def _surface_executor_label(executor: str, *, handoff_state: str) -> str:
+    if executor == "choose" and handoff_state != "prepared":
+        return "Coding agent not selected"
+    return executor_label(executor)
 
 
 def _result_display_line(result_status: str) -> str:
@@ -842,6 +867,8 @@ def _executor_status_summary(executor_status: dict[str, object]) -> dict[str, ob
 
 
 def _next_executor_action(executor_status: dict[str, object]) -> str:
+    if str(executor_status.get("handoff", "")) != "prepared":
+        return "show_status"
     dispatch = str(executor_status.get("dispatch", "not_observed"))
     result = str(executor_status.get("result", "not_observed"))
     verification = str(executor_status.get("verification", "not_requested"))

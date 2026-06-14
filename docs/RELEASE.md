@@ -60,13 +60,15 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
-python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 python3 -m omh.cli release hermes-smoke
+omh --help
+omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 uv build
 python3 -m venv /tmp/omh-wheel-smoke
 /tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes-1.0.0-py3-none-any.whl
 /tmp/omh-wheel-smoke/bin/omh --help
+/tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home release hermes-smoke --install-path setup --omh-command /tmp/omh-wheel-smoke/bin/omh --include-command-smoke
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.0
 OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
 ```
@@ -79,6 +81,21 @@ profile:
 
 ```sh
 python3 -m omh.cli release hermes-smoke
+```
+
+The plan includes two release-contract subchecks:
+
+- `installed_command_smoke`: proves the installed `omh` console script can run
+  `omh --help` and render the setup-path smoke plan.
+- `first_use_status_smoke`: documents the first Hermes chat/status path and
+  locks that pre-handoff status cards do not expose executor open/result
+  actions.
+
+Run the installed command smoke in CI or a release shell after installing OMH:
+
+```sh
+omh --help
+omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 
 For release candidates, run exactly one live smoke against the target Hermes

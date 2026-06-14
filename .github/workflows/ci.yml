@@ -32,6 +32,10 @@ jobs:
         run: python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
       - name: Hermes release smoke plan
         run: python -m omh.cli release hermes-smoke
+      - name: Installed OMH command smoke
+        run: |
+          omh --help
+          omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
       - name: Runtime artifact smoke
         run: |
           run_json="$(python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke runtime record --skill oh-my-hermes --harness coding-handling --status started)"

@@ -120,7 +120,9 @@ omh chat session prepare-handoff "$SESSION_ID" "risky refactor"
 omh chat session status "$SESSION_ID"
 ```
 
-After a handoff is prepared, render the returned `chat_response.actions` as
+Before a handoff is prepared, the status card should explain the plan or
+executor-choice state without showing executor open/result buttons. After a
+handoff is prepared, render the returned `chat_response.actions` as
 Hermes-native buttons. A normal user should see actions such as Open in Codex,
 Open in Claude Code, Attach session, Refresh status, Record completed, Record
 blocked, or Ask Hermes to verify. The wrapper process maps those buttons back
