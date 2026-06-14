@@ -516,6 +516,70 @@ class CliTests(unittest.TestCase):
         self.assertIn(["hermes", "skills", "check", "oh-my-hermes"], commands)
         self.assertIn(["omh-dev", "--omh-home", str(omh_home.resolve()), "--hermes-home", str(hermes_home.resolve()), "doctor"], commands)
         self.assertNotIn(["hermes", "skills", "inspect", "oh-my-hermes"], commands)
+        installed_commands = [step["command"] for step in payload["installed_command_smoke"]["steps"]]
+        self.assertEqual(installed_commands[0], ["omh-dev", "--help"])
+        self.assertIn(
+            [
+                "omh-dev",
+                "--omh-home",
+                str(omh_home.resolve()),
+                "--hermes-home",
+                str(hermes_home.resolve()),
+                "release",
+                "hermes-smoke",
+                "--install-path",
+                "setup",
+                "--omh-command",
+                "omh-dev",
+            ],
+            installed_commands,
+        )
+        self.assertEqual(payload["first_use_status_smoke"]["schema_version"], "first_use_status_smoke/v1")
+        self.assertFalse(payload["first_use_status_smoke"]["observed"])
+        self.assertFalse(payload["first_use_status_smoke"]["expected_status_boundary"]["before_handoff"]["executor_actions_visible"])
+
+    def test_release_hermes_smoke_cli_can_observe_installed_command_without_live_profile_mutation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            fake_omh = root / "fake-omh"
+            fake_omh.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "if '--help' in sys.argv:\n"
+                "    print('fake omh help')\n"
+                "else:\n"
+                "    print('{\"schema_version\":\"fake_release_plan/v1\",\"ok\":true}')\n",
+                encoding="utf-8",
+            )
+            fake_omh.chmod(0o755)
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "release",
+                    "hermes-smoke",
+                    "--install-path",
+                    "setup",
+                    "--omh-command",
+                    str(fake_omh),
+                    "--include-command-smoke",
+                ]
+            )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["mode"], "plan")
+        self.assertFalse(payload["observed"])
+        self.assertTrue(payload["installed_command_smoke"]["observed"])
+        self.assertEqual(payload["installed_command_smoke"]["mode"], "live")
+        self.assertTrue(payload["installed_command_smoke"]["ok"])
+        self.assertEqual(payload["installed_command_smoke"]["results"][0]["command"], [str(fake_omh), "--help"])
+        self.assertFalse(payload["first_use_status_smoke"]["observed"])
 
     def test_release_hermes_smoke_live_requires_target_confirmation(self) -> None:
         status, _stdout, stderr = run_cli(["release", "hermes-smoke", "--live"])

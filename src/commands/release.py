@@ -3,7 +3,14 @@ from __future__ import annotations
 import argparse
 
 from ..installer import OmhError
-from ..release import DEFAULT_HERMES_SKILL, DEFAULT_HERMES_TAP, INSTALL_PATHS, hermes_release_smoke_plan, run_hermes_release_smoke
+from ..release import (
+    DEFAULT_HERMES_SKILL,
+    DEFAULT_HERMES_TAP,
+    INSTALL_PATHS,
+    hermes_release_smoke_plan,
+    run_hermes_release_smoke,
+    run_installed_command_smoke,
+)
 from .common import _print_json
 
 
@@ -24,20 +31,31 @@ def cmd_release_hermes_smoke(args: argparse.Namespace) -> int:
             omh_home=args.omh_home,
             hermes_home=args.hermes_home,
             timeout_seconds=args.timeout,
+            include_command_smoke=args.include_command_smoke,
         )
         _print_json(payload)
         return 0 if payload["ok"] else 1
-    _print_json(
-        hermes_release_smoke_plan(
-            install_path=args.install_path,
-            skill=args.skill,
-            tap=args.tap,
+    installed_command_smoke = (
+        run_installed_command_smoke(
             omh_command=args.omh_command,
             omh_home=args.omh_home,
             hermes_home=args.hermes_home,
+            timeout_seconds=args.timeout,
         )
+        if args.include_command_smoke
+        else None
     )
-    return 0
+    payload = hermes_release_smoke_plan(
+        install_path=args.install_path,
+        skill=args.skill,
+        tap=args.tap,
+        omh_command=args.omh_command,
+        omh_home=args.omh_home,
+        hermes_home=args.hermes_home,
+        installed_command_smoke=installed_command_smoke,
+    )
+    _print_json(payload)
+    return 0 if payload["ok"] else 1
 
 
 def _add_release_commands(sub) -> None:
@@ -63,5 +81,10 @@ def _add_release_commands(sub) -> None:
     smoke.add_argument("--skill", default=DEFAULT_HERMES_SKILL, help="Hermes skill identifier to install/check.")
     smoke.add_argument("--tap", default=DEFAULT_HERMES_TAP, help="Hermes skill tap repository to add for tap installs.")
     smoke.add_argument("--omh-command", default="omh", help="OMH executable to use for the setup install path.")
-    smoke.add_argument("--timeout", type=int, default=30, help="Per-command timeout in seconds for --live mode.")
+    smoke.add_argument(
+        "--include-command-smoke",
+        action="store_true",
+        help="Also execute installed `omh --help` and installed setup-path plan rendering without mutating Hermes.",
+    )
+    smoke.add_argument("--timeout", type=int, default=30, help="Per-command timeout in seconds for --live or --include-command-smoke.")
     smoke.set_defaults(func=cmd_release_hermes_smoke)

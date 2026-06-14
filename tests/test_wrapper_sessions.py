@@ -447,6 +447,34 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(len(status["runtime_status"]["runtime_validation"]["wrapper_sessions"]), 1)
             self.assertTrue(status["runtime_status"]["runtime_validation"]["wrapper_sessions"][0]["ok"])
 
+    def test_pre_handoff_status_does_not_surface_executor_buttons(self) -> None:
+        forbidden_action_ids = {
+            "open_executor_session",
+            "attach_executor_session",
+            "record_executor_completed",
+            "record_executor_blocked",
+            "record_executor_failed",
+            "ask_hermes_verify",
+        }
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "risky refactor", source="discord")
+            session_id = str(started["session"]["session_id"])
+
+            started_status = build_wrapper_session_status(paths, session_id)
+            accepted = record_plan_decision(paths, session_id, "accept")
+            accepted_status = accepted["status"]
+
+            for status in (started_status, accepted_status):
+                card = status["status_card"]
+                chat_response = status["chat_response"]
+                self.assertEqual(card["executor_next_action"], "show_status")
+                self.assertEqual(card["executor_next_action_label"], "Show status")
+                self.assertEqual(card["executor_actions"], [])
+                self.assertTrue(forbidden_action_ids.isdisjoint({action["id"] for action in chat_response["actions"]}))
+                self.assertTrue(forbidden_action_ids.isdisjoint({action["id"] for action in status["executor_session_status"]["actions"]}))
+                self.assertNotIn("Open Unselected executor", json.dumps(status))
+
     def test_codex_wrapper_session_exposes_open_attach_record_actions(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

@@ -118,6 +118,18 @@ in CI without touching the current Hermes profile:
 omh release hermes-smoke
 ```
 
+The plan also reports `installed_command_smoke` and
+`first_use_status_smoke`. The first checks that the installed `omh` console
+script can run; the second locks the first Hermes chat/status boundary so
+pre-handoff status does not show executor open/result actions.
+
+After installing OMH into the target runtime, verify the command path too:
+
+```sh
+omh --help
+omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
+```
+
 When an operator explicitly wants live evidence from the target Hermes profile,
 run one of these:
 
