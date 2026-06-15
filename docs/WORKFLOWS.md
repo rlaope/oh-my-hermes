@@ -146,17 +146,19 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### loop
 
-[omh] Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
+[omh] Hermes Loop workflow: loopability assessment, goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
 
 - Category: `goal-loop`
 - Phase: `continuous-goal-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `loop-gated`
 - Handoff policy: Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/runtime/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
-- Why this exists: `loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.
-- Use when: Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+- Why this exists: `loop` exists for goals whose correct implementation cannot be known upfront but can be discovered through bounded cycles of definition, action, verification, and revision without confusing planned cycles with observed progress.
+- Use when: Use when the user explicitly starts a high-level goal that is concrete enough to verify, open-ended enough to require iterative discovery, and should be shaped from task/project/ambition into a bounded loop before cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 - Do not use when:
   - The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.
+  - The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.
+  - The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.
   - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
   - The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
 - Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
@@ -169,8 +171,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
   - Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
 - Quality bar:
-  - Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
-  - Reframe the north-star goal into implementable internal work without shrinking its ambition.
+  - Start with direct user intent such as `./loop` or an explicit long-horizon goal request, then classify it as task, project, ambition, external-wait, or unclear before cycling.
+  - Route tiny direct tasks to one-cycle delivery surfaces instead of forcing loop overhead.
+  - Reframe a north-star ambition into a bounded arena, observable problem, next loop goal, and next verification without shrinking its ambition.
   - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
   - Expose a permission profile before executor/runtime dispatch, repository mutation, PR, merge, or external publishing.
   - Expose the automation, worktree, skill, connector, and subagent building-block states without treating planned blocks as observed work.
@@ -181,12 +184,17 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
   - Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
 - Required inputs:
-  - north-star goal summary
+  - loopability assessment
+  - north-star goal summary when present
+  - bounded arena
+  - observable problem
+  - next verification
   - goal reframe
   - success criteria
   - permission profile
   - feedback or wait signal
 - Expected outputs:
+  - loopability_assessment/v1 task/project/ambition classification
   - loop_start_card/v1 setup prompt
   - loop_cycle/v1 state
   - loop_engineering/v1 pipeline/building-block snapshot
@@ -199,11 +207,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - executor-neutral handoff only when permitted
   - external-wait or checkpoint boundary
 - Artifact expectations:
-  - metadata-only .omh/loops loop_cycle/v1 artifact
+  - metadata-only .omh/loops loop_cycle/v1 artifact with loopability_assessment/v1
   - loop_engineering/v1 status over automation, worktree, skill, connector, subagent, verification policy, and failure modes
   - loop_runtime/v1 queue entries with context_policy_ref, cost_policy_ref, and verification_plan
   - loop_subagent_result_contract/v1 for prepared subagent handoffs
-  - loop_status_card/v1 wrapper payload with failure_mode_summary and small_loop_guidance
+  - loop_status_card/v1 wrapper payload with loopability_assessment, failure_mode_summary, and small_loop_guidance
   - loop_start_card/v1 wrapper setup card
   - linked goal_ledger/v1 only when completion evidence is required
 - Safety rules:
@@ -2130,12 +2138,14 @@ Run complete app operation loops from idea through decision, handoff, release, d
 
 ### goal-loop
 
-Run ambitious goal loops through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
+Run loopable goal projects through task/project/ambition classification, bounded goal shaping, task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
 
-- Use when: Use when a direct loop invocation or explicit long-horizon goal needs repeated cycles over automation, worktree, skill, connector, subagent, and verification building blocks until evidence, authority, context, or external waiting stops the next step.
+- Use when: Use when a direct loop invocation or explicit long-horizon goal needs to decide whether it is too small, too large, or truly loopable before repeated cycles over automation, worktree, skill, connector, subagent, and verification building blocks.
 - Quality tier: `loop-gated`
 - Quality bar:
-  - Confirm the direct loop trigger, north-star goal, reframe, success criteria, and permission profile before cycling.
+  - Confirm the direct loop trigger and classify whether the goal is a task, project, ambition, external-wait outcome, or unclear request before cycling.
+  - Route direct tasks away from loop overhead and convert ambitions into a north star plus one bounded current loop goal.
+  - Confirm north-star goal, bounded arena, observable problem, next verification, reframe, success criteria, and permission profile before cycling.
   - Separate implementable internal work from external outcomes such as stars, market reaction, adoption, or social distribution.
   - Continue automatically only inside the selected authority envelope; otherwise surface a permission action.
   - Use runtime ticks with deterministic queue shapes to prepare automation, worktree, skill, connector, subagent, and verification states, but require separate observed evidence before claiming those steps ran.
@@ -2148,12 +2158,17 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - Treat feedback as a gate: clear internal actionable gaps continue the loop; external waiting records a wait state.
   - Never report goal completion from loop state unless linked goal_ledger/v1 completion evidence is ready.
 - Inputs:
-  - north-star goal summary
+  - loopability assessment
+  - north-star goal summary when present
+  - bounded arena
+  - observable problem
+  - next verification
   - reframed implementable target
   - success criteria
   - permission profile
   - feedback or wait signal
 - Outputs:
+  - loopability_assessment/v1
   - loop_start_card/v1 setup card
   - loop_cycle/v1 artifact
   - loop_engineering/v1 pipeline/building-block snapshot
@@ -2166,6 +2181,7 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - permission envelope
   - linked goal or runtime evidence references when available
 - Stop conditions:
+  - goal is classified as task/project/ambition/external-wait/unclear
   - next loop step is clear
   - runtime tick queue is prepared, observed, or blocked with a reason
   - automation/worktree/skill/connector/subagent block states are visible
@@ -2175,6 +2191,7 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - external waiting and context exhaustion are recorded
   - goal completion claims are delegated to goal_ledger/v1
 - Verification:
+  - validate loopability_assessment/v1
   - validate loop_cycle/v1
   - inspect loop_engineering/v1 snapshot
   - inspect loop_runtime/v1 queue verification_plan
@@ -2183,6 +2200,7 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - check linked goal_completion_gate/v1 before completion copy
 - Evidence ladder:
   - `loop_triggered`
+  - `loopability_assessed`
   - `goal_reframed`
   - `permission_profile_recorded`
   - `runtime_tick_queued`
@@ -2192,6 +2210,9 @@ Run ambitious goal loops through task discovery, distribution, execution, verifi
   - `failure_modes_checked`
   - `wait_or_resume_boundary_recorded`
 - Wrapper actions:
+  - `assess_loopability`
+  - `convert_to_loop_goal`
+  - `route_direct_task`
   - `choose_permission_profile`
   - `start_loop`
   - `run_loop_once`

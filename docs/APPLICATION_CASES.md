@@ -427,7 +427,7 @@ CI, or merge work.
 | Idea-to-deploy product loop | `take this product idea from plan to deploy and monitor safely` | `idea-to-deploy` / `present_app_delivery_loop` | `idea-to-deploy` | Hermes presents the product loop without claiming implementation, deploy, or monitoring. | `10/10` |
 | CTO loop | `run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness` | `cto-loop` / `run_cto_loop` | `cto-loop` | Hermes keeps leadership decisions separate from accepted implementation follow-ups. | `10/10` |
 | Deploy and monitor | `deploy and monitor this release with rollback and health checks` | `deploy-and-monitor` / `prepare_deploy_monitor_plan` | `deploy-and-monitor` | Hermes prepares release operation gates without claiming infrastructure execution. | `10/10` |
-| Direct ambitious goal loop | `./loop make this project a 10k star OSS` | `loop` / `start_goal_loop` | Direct skill invocation | Loop state is orchestration only until linked evidence exists. | `10/10` |
+| Loopability-gated goal cycle | `./loop make this project a 10k star OSS` | `loop` / `reframe_north_star` | Direct skill invocation | The star goal is a north star; the current loop goal must name a bounded arena, observable problem, and verification before linked evidence can advance it. | `10/10` |
 | Direct one-cycle ultraprocess | `$ultraprocess research the repo, plan, implement, code-review, sync docs, and prepare a PR` | `ultraprocess` / `start_ultraprocess` | Direct skill invocation | One cycle is prepared without claiming implementation, review, docs sync, CI, PR, or merge evidence. | `10/10` |
 
 User-facing effect:

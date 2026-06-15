@@ -179,16 +179,29 @@ class WrapperContractTests(unittest.TestCase):
 
         serialized = json.dumps(payload)
         self.assertEqual(payload["mode"], "route")
-        self.assertEqual(payload["next_action"], "start_goal_loop")
+        self.assertEqual(payload["next_action"], "reframe_north_star")
         self.assertEqual(payload["chat_response"]["kind"], "loop")
         self.assertEqual(payload["loop_start_card"]["schema_version"], "loop_start_card/v1")
         self.assertEqual(payload["loop_start_card"]["goal_summary"], "{message}")
+        self.assertEqual(payload["loop_start_card"]["loopability_assessment"]["loopability"], "needs_reframe")
         self.assertEqual(payload["chat_response"]["state"]["loop_start_card"]["schema_version"], "loop_start_card/v1")
+        self.assertEqual(payload["chat_response"]["state"]["loopability_assessment"]["goal_kind"], "ambition")
         action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
-        self.assertIn("choose_permission_profile", action_ids)
+        self.assertIn("convert_to_loop_goal", action_ids)
         self.assertIn("start_loop", action_ids)
         self.assertIn("show_loop_queue", action_ids)
         self.assertNotIn("10k-star quality", serialized)
+
+    def test_loop_interaction_routes_tiny_goal_to_direct_task_action(self) -> None:
+        payload = build_chat_interaction_payload("./loop change the button color", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "route_direct_task")
+        self.assertEqual(payload["chat_response"]["kind"], "loop")
+        self.assertEqual(payload["loop_start_card"]["loopability_assessment"]["goal_kind"], "task")
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertTrue(actions["route_direct_task"]["enabled"])
+        self.assertFalse(actions["start_loop"]["enabled"])
 
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
         message = "research the repo, plan, implement, code-review, sync docs, and prepare a PR"

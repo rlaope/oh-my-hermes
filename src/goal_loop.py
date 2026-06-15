@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from .goal_ledger import build_goal_completion_gate, read_goal_ledger
 from .hashutil import sha256_text
 from .local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
+from .loopability import LOOPABILITY_ASSESSMENT_SCHEMA, assess_loopability, validate_loopability_assessment
 from .paths import OmhPaths
 
 
@@ -158,6 +159,7 @@ def create_loop_cycle(
     linked_goal_id: str = "",
     source: str = "omh",
     loop_id: str | None = None,
+    allow_unloopable: bool = False,
 ) -> dict[str, Any]:
     if not goal_summary.strip():
         raise ValueError("goal summary is required")
@@ -167,6 +169,9 @@ def create_loop_cycle(
     loop_id = _storage_id(loop_id or new_loop_id(goal_summary), "loop_id")
     if linked_goal_id:
         read_goal_ledger(paths, linked_goal_id)
+    loopability = assess_loopability(goal_summary, expose_goal=True)
+    _enforce_loopability_start(loopability, allow_unloopable=allow_unloopable)
+    loopability = _started_loopability_assessment(loopability, goal_reframe)
     now = utc_now()
     cycle = {
         "schema_version": LOOP_CYCLE_SCHEMA,
@@ -181,7 +186,10 @@ def create_loop_cycle(
             "summary_hash": sha256_text(goal_summary),
             "reframe": _safe_summary(goal_reframe, limit=360),
             "reframe_hash": sha256_text(goal_reframe),
+            "north_star": str(loopability.get("north_star", "")),
+            "current_loop_goal": _safe_summary(goal_reframe, limit=360),
         },
+        "loopability_assessment": loopability,
         "success_criteria": criteria,
         "authority_envelope": build_authority_envelope(
             permission_profile=permission_profile,
@@ -205,6 +213,54 @@ def create_loop_cycle(
     ensure_dir(_loop_dir(paths, loop_id), private=True)
     atomic_write_json(loop_cycle_path(paths, loop_id), cycle, private=True)
     return cycle
+
+
+def _enforce_loopability_start(assessment: dict[str, Any], *, allow_unloopable: bool) -> None:
+    if allow_unloopable:
+        return
+    loopability = str(assessment.get("loopability", ""))
+    if loopability == "direct_task":
+        raise ValueError(
+            "loop start rejected direct_task; use a direct delivery workflow or rerun with --allow-unloopable"
+        )
+    if loopability == "needs_clarification":
+        raise ValueError(
+            "loop start rejected unclear goal; run loop assess or deep-interview before starting a loop"
+        )
+
+
+def _started_loopability_assessment(assessment: dict[str, Any], goal_reframe: str) -> dict[str, Any]:
+    reframe = _safe_summary(goal_reframe, limit=360)
+    if not reframe:
+        return assessment
+    updated = {
+        **assessment,
+        "current_loop_goal": reframe,
+        "next_loop_goal": reframe,
+    }
+    if updated.get("loopability") in {"needs_reframe", "north_star_only", "external_wait_only"}:
+        updated.update(
+            {
+                "goal_kind": "project",
+                "loopability": "loopable",
+                "recommended_surface": "loop_runtime",
+                "recommended_next_action": "continue_loop",
+                "required_inputs": [],
+                "reason": (
+                    "A bounded loop goal reframe has been accepted; preserve the north star "
+                    "while continuing with verification."
+                ),
+            }
+        )
+        if not str(updated.get("bounded_arena", "")).strip():
+            updated["bounded_arena"] = "accepted loop reframe"
+        if not str(updated.get("observable_problem", "")).strip():
+            updated["observable_problem"] = "the accepted loop target defines the current observable gap"
+        if not str(updated.get("next_verification", "")).strip():
+            updated["next_verification"] = "The current loop step records a pass/fail evidence signal before the next tick."
+        if not str(updated.get("stop_condition", "")).strip():
+            updated["stop_condition"] = "The accepted loop goal passes its named verification signal or records a blocker."
+    return updated
 
 
 def read_loop_cycle(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
@@ -243,6 +299,7 @@ def build_loop_start_card(
         raise ValueError(f"unsupported permission profile: {default_permission_profile}")
     if default_executor not in LOOP_EXECUTOR_OPTION_IDS:
         raise ValueError(f"unsupported loop default executor: {default_executor}")
+    assessment = assess_loopability(goal_summary, expose_goal=include_goal)
     return {
         "schema_version": LOOP_START_CARD_SCHEMA,
         "source": _safe_summary(source, limit=120),
@@ -250,7 +307,8 @@ def build_loop_start_card(
         "goal_summary": summary if include_goal else "{message}",
         "goal_summary_hash": sha256_text(goal_summary),
         "goal_length": len(goal_summary),
-        "next_action": "choose_permission_profile",
+        "next_action": assessment["recommended_next_action"],
+        "loopability_assessment": assessment,
         "default_permission_profile": default_permission_profile,
         "default_executor": _safe_summary(default_executor, limit=120),
         "permission_profiles": [_permission_profile_option(profile) for profile in PERMISSION_PROFILES if profile != "custom"],
@@ -280,8 +338,9 @@ def build_loop_start_card(
         "backend_contract": {
             "operation": "loop.start",
             "required_fields": ["goal_summary", "goal_reframe", "success_criteria", "permission_profile"],
-            "optional_fields": ["allowed_executors", "linked_goal_id", "source"],
+            "optional_fields": ["allowed_executors", "linked_goal_id", "source", "loopability_assessment"],
             "creates_artifact": "loop_cycle/v1",
+            "assessment_schema": LOOPABILITY_ASSESSMENT_SCHEMA,
         },
         "loop_engineering": _loop_engineering_template(),
         "verification_policy": _loop_verification_policy(),
@@ -289,6 +348,9 @@ def build_loop_start_card(
         "small_loop_guidance": _small_loop_guidance(),
         "actions": [
             "choose_permission_profile",
+            "assess_loopability",
+            "convert_to_loop_goal",
+            "route_direct_task",
             "start_loop",
             "show_loop_status",
             "cancel",
@@ -615,6 +677,7 @@ def block_loop_queue_item(
 def build_loop_status_card(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
     cycle = read_loop_cycle(paths, loop_id)
     envelope = _dict_value(cycle, "authority_envelope")
+    loopability = _loopability_for_cycle(cycle)
     linked_goal_id = str(cycle.get("linked_goal_id", ""))
     linked_gate: dict[str, Any] | None = None
     if linked_goal_id:
@@ -630,6 +693,9 @@ def build_loop_status_card(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
         "blocked_actions": list(envelope.get("blocked_actions", [])),
         "approval_required_for": list(envelope.get("blocked_actions", [])),
         "allowed_executors": list(envelope.get("allowed_executors", [])),
+        "loopability_assessment": loopability,
+        "north_star": loopability.get("north_star", ""),
+        "current_loop_goal": loopability.get("current_loop_goal", ""),
         "feedback_gate": cycle.get("feedback_gate", _feedback_gate()),
         "runtime_summary": _runtime_summary(cycle),
         "loop_engineering": _loop_engineering_status(cycle),
@@ -722,6 +788,9 @@ def validate_loop_cycle(cycle: dict[str, Any]) -> dict[str, Any]:
         errors.extend(_validate_runtime(runtime))
     if cycle.get("completion_claim_allowed") is not False:
         errors.append("loop_cycle cannot directly allow goal completion claims")
+    assessment = cycle.get("loopability_assessment")
+    if assessment is not None:
+        errors.extend(validate_loopability_assessment(assessment))
     return {"ok": not errors, "errors": errors}
 
 
@@ -799,6 +868,22 @@ def _string_list(values: object) -> list[str]:
     if not isinstance(values, list):
         return []
     return [str(value) for value in values if str(value).strip()]
+
+
+def _loopability_for_cycle(cycle: dict[str, Any]) -> dict[str, Any]:
+    assessment = cycle.get("loopability_assessment")
+    if isinstance(assessment, dict) and assessment.get("schema_version") == LOOPABILITY_ASSESSMENT_SCHEMA:
+        goal = _dict_value(cycle, "goal")
+        if str(goal.get("reframe", "")).strip():
+            assessment = {
+                **assessment,
+                "current_loop_goal": str(goal.get("reframe", "")),
+                "next_loop_goal": str(goal.get("reframe", "")),
+            }
+        return assessment
+    goal = _dict_value(cycle, "goal")
+    summary = str(goal.get("summary", ""))
+    return assess_loopability(summary or str(cycle.get("loop_id", "loop")), expose_goal=True)
 
 
 def _valid_actions(values: Iterable[str]) -> set[str]:
@@ -1995,12 +2080,18 @@ def _authority_summary(envelope: dict[str, Any]) -> str:
 def _safe_status_copy(cycle: dict[str, Any], envelope: dict[str, Any]) -> dict[str, str]:
     phase = str(cycle.get("phase", "interview"))
     wait_reason = str(cycle.get("wait_reason", "none"))
+    assessment = _loopability_for_cycle(cycle)
+    loopability = str(assessment.get("loopability", ""))
     if wait_reason == "waiting_external_observation":
         next_step = "Record external evidence when it arrives; continue internal work only when a new gap is available."
     elif wait_reason in {"context_exhausted", "budget_exhausted"}:
         next_step = "Checkpoint this loop and resume from the recorded status when context or budget is available."
     elif cycle.get("next_action") == "observe_runtime_queue":
         next_step = "Review the prepared runtime queue item, then record observed worktree, subagent, connector, or executor evidence separately."
+    elif loopability == "direct_task":
+        next_step = "This looks like a direct task; use a single delivery workflow unless the user wants repeated discovery."
+    elif loopability == "needs_reframe":
+        next_step = "Treat the request as a north star, then confirm a bounded arena, observable problem, and next verification before cycling."
     elif "executor_dispatch" in envelope.get("allowed_actions", []):
         next_step = "Continue the next research, plan, handoff, or gated executor step within the authority envelope."
     else:

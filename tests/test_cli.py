@@ -1175,9 +1175,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         top = json.loads(stdout)["recommendations"][0]
         self.assertEqual(top["skill"], "loop")
-        self.assertEqual(top["next_action"], "start_goal_loop")
+        self.assertEqual(top["next_action"], "assess_loopability")
         self.assertIn("not implementation", top["evidence_boundary"])
-        self.assertIn("permission profile", top["wrapper_guidance"])
+        self.assertIn("assess whether", top["wrapper_guidance"].lower())
 
     def test_recommend_ultraprocess_routes_plan_to_pr_process(self) -> None:
         message = "research the codebase, make a plan, implement, code-review, sync docs, and open a PR"
@@ -1550,7 +1550,7 @@ class CliTests(unittest.TestCase):
             ("take this product idea from plan to deploy and monitor safely", "idea-to-deploy", "ack", "present_app_delivery_loop"),
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "ack", "run_cto_loop"),
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
-            ("./loop make this project a 10k star OSS", "loop", "loop", "start_goal_loop"),
+            ("./loop make this project a 10k star OSS", "loop", "loop", "reframe_north_star"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
         )
 
@@ -1628,11 +1628,42 @@ class CliTests(unittest.TestCase):
             start_card = json.loads(stdout)["loop_start_card"]
             self.assertEqual(start_card["schema_version"], "loop_start_card/v1")
             self.assertEqual(start_card["goal_summary"], "{message}")
-            self.assertEqual(start_card["next_action"], "choose_permission_profile")
+            self.assertEqual(start_card["next_action"], "reframe_north_star")
+            self.assertEqual(start_card["loopability_assessment"]["schema_version"], "loopability_assessment/v1")
+            self.assertEqual(start_card["loopability_assessment"]["goal_kind"], "ambition")
+            self.assertEqual(start_card["loopability_assessment"]["loopability"], "needs_reframe")
             self.assertIn("syntax_or_parse_check", start_card["verification_policy"]["inner_loop_checks"])
             self.assertIn("verification_gap", {mode["id"] for mode in start_card["failure_modes"]})
             self.assertIn("test_as_stop_signal", {item["id"] for item in start_card["small_loop_guidance"]["principles"]})
             self.assertNotIn("10k-star quality", stdout)
+
+            status, stdout, stderr = run_cli(home + ["loop", "assess", "./loop", "change", "the", "button", "color"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            assessment = json.loads(stdout)["loopability_assessment"]
+            self.assertEqual(assessment["schema_version"], "loopability_assessment/v1")
+            self.assertEqual(assessment["goal_kind"], "task")
+            self.assertEqual(assessment["loopability"], "direct_task")
+            self.assertEqual(assessment["recommended_next_action"], "route_direct_task")
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "start",
+                    "--loop-id",
+                    "direct-task-loop",
+                    "--goal-summary",
+                    "./loop change the button color",
+                    "--goal-reframe",
+                    "Change the button color.",
+                    "--criterion",
+                    "Targeted UI check passes",
+                ]
+            )
+            self.assertNotEqual(status, 0)
+            self.assertEqual(stdout, "")
+            self.assertIn("loop start rejected direct_task", stderr)
 
             status, stdout, stderr = run_cli(
                 home

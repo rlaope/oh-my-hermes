@@ -6,7 +6,7 @@
     <title>OMH Loop - Loop Engineering for Hermes</title>
     <meta
       name="description"
-      content="Loop Engineering docs for OMH: direct ambitious goal loops for Hermes Agent with interview, research, plan, runtime tick queue, handoff, feedback, and evidence boundaries."
+      content="Loop Engineering docs for OMH: loopability-gated goal cycles for Hermes Agent with interview, research, plan, runtime tick queue, handoff, feedback, and evidence boundaries."
     >
     <link rel="stylesheet" href="../../styles.css">
   </head>
@@ -35,10 +35,12 @@
         <h1>Loop!</h1>
         <p>
           OMH Loop lets Hermes Agent treat a high-level goal as a repeating
-          system: clarify the goal, research the gap, plan the next move, queue
-          a runtime tick, prepare handoff when allowed, evaluate feedback, and
-          continue until evidence, authority, context, or external waiting says
-          to stop.
+          system only after it decides whether the request is a direct task, a
+          loopable project, a north-star ambition, external waiting, or too
+          unclear to start. Loopable goals then clarify the arena, research the
+          gap, plan the next move, queue a runtime tick, prepare handoff when
+          allowed, evaluate feedback, and continue until evidence, authority,
+          context, or external waiting says to stop.
         </p>
         <div class="feature-actions">
           <a class="button button--primary" href="../">Back to docs</a>
@@ -56,16 +58,16 @@
         <div class="feature-copy">
           <h2>Loop Engineering</h2>
           <p>
-            In the AI ecosystem, after harness engineering, Loop Engineering is
-            emerging as the next practical layer. The point is no longer just
-            prompting. The point is giving a clear goal and designing the system
-            that decides what to find, how to process it, when to hand off work,
-            when to wait, and when to stop.
+            In OMH, Loop Engineering is the Hermes-facing control plane for
+            work whose right implementation cannot be known upfront. The point is
+            no longer just prompting. The point is giving a clear goal and
+            designing the system that decides what to find, how to process it,
+            when to hand off work, when to wait, and when to stop.
           </p>
           <blockquote class="loop-post">
             <p>
-              After harness engineering, Loop Engineering becomes the next
-              operating surface for AI systems.
+              In OMH, Loop Engineering is the operating surface for goals that
+              need bounded discovery, action, verification, and revision.
             </p>
             <p>
               The goal is not to write a longer prompt. The goal is to define a
@@ -78,6 +80,12 @@
               contract for skills, plugins, connectors, subagents, worktrees,
               and external memory without pretending unobserved work already
               happened.
+            </p>
+            <p>
+              Loop Engineering is not for goals that are merely large. It is
+              for goals whose correct implementation cannot be known upfront
+              but can be discovered through bounded cycles of definition,
+              action, verification, and revision.
             </p>
           </blockquote>
         </div>
@@ -94,13 +102,44 @@
       </section>
 
       <section class="feature-section feature-section--split">
+        <div class="feature-copy">
+          <h2>The Loop Goal Dilemma</h2>
+          <p>
+            If the goal is too large, the loop becomes fantasy planning. If the
+            goal is too small, the loop becomes overhead. OMH adds
+            <code>loopability_assessment/v1</code> so Hermes can preserve the
+            ambition while converting it into a current loop goal that has a
+            bounded arena, observable problem, next verification, and stop
+            condition.
+          </p>
+        </div>
+        <div class="usecase-grid">
+          <article class="case-card">
+            <span>Task</span>
+            <h3>Change the button color.</h3>
+            <p>Route to a direct task or one-cycle delivery workflow. A persistent loop is unnecessary.</p>
+          </article>
+          <article class="case-card">
+            <span>Project</span>
+            <h3>Reduce install-to-first-value friction.</h3>
+            <p>Start a loop because the next correct implementation must be discovered and verified.</p>
+          </article>
+          <article class="case-card">
+            <span>Ambition</span>
+            <h3>Make this a 100k-star OSS.</h3>
+            <p>Keep this as the north star, then propose the first bounded loop goal before any tick advances.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="feature-section feature-section--split">
         <div>
           <h2>When to use it</h2>
           <div class="usecase-grid">
             <article class="case-card">
               <span>Open source ambition</span>
               <h3>Make this a 10k-star quality OSS.</h3>
-              <p>Hermes reframes the large goal into research, product, docs, QA, release, and distribution loops without pretending market response was observed.</p>
+              <p>Hermes treats the phrase as a north star, then proposes a first loop goal such as reducing first-run friction without pretending market response was observed.</p>
             </article>
             <article class="case-card">
               <span>Long refactor</span>
@@ -224,13 +263,13 @@
               <div class="route-lens">
                 <span>workflow: loop</span>
                 <span>phase: interview</span>
-                <span>next: choose permission profile</span>
+                <span>next: reframe north star</span>
               </div>
-              <h3>I can start this as a Loop.</h3>
+              <h3>This is a north star; I will shape the first loop goal.</h3>
               <p>
-                I will keep the ambition large, separate implementable work from
-                external adoption waiting, and queue the next runtime step only
-                inside the permission profile you choose.
+                I will keep the ambition large, pick a bounded arena, name an
+                observable problem, choose the next verification signal, and
+                queue runtime steps only after the current loop goal is clear.
               </p>
               <div class="button-row">
                 <button type="button">Observe only</button>

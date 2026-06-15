@@ -7,6 +7,7 @@ from ..goal_loop import (
     LOOP_EXECUTOR_OPTION_IDS,
     LOOP_WORKFLOW_PATTERNS,
     PERMISSION_PROFILES,
+    assess_loopability,
     block_loop_queue_item,
     build_loop_queue_handoff,
     build_loop_start_card,
@@ -46,6 +47,21 @@ def cmd_loop_start_card(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_assess(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            {
+                "loopability_assessment": assess_loopability(
+                    _chat_message(args),
+                    expose_goal=args.include_goal,
+                )
+            }
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def cmd_loop_start(args: argparse.Namespace) -> int:
     try:
         cycle = create_loop_cycle(
@@ -60,6 +76,7 @@ def cmd_loop_start(args: argparse.Namespace) -> int:
             linked_goal_id=args.linked_goal or "",
             source=args.source,
             loop_id=args.loop_id or None,
+            allow_unloopable=args.allow_unloopable,
         )
         _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), str(cycle["loop_id"]))})
     except (FileNotFoundError, ValueError) as exc:
@@ -233,7 +250,7 @@ def cmd_loop_queue_block(args: argparse.Namespace) -> int:
 
 
 def _add_loop_commands(sub) -> None:
-    loop = sub.add_parser("loop", help="Start, inspect, and advance ambitious goal loop control-plane records.")
+    loop = sub.add_parser("loop", help="Assess, start, inspect, and advance loopable goal control-plane records.")
     loop_sub = loop.add_subparsers(dest="loop_command", required=True)
 
     start = loop_sub.add_parser("start")
@@ -247,6 +264,11 @@ def _add_loop_commands(sub) -> None:
     start.add_argument("--forbid-action", choices=LOOP_ACTIONS, action="append")
     start.add_argument("--linked-goal", default="")
     start.add_argument("--source", default="omh")
+    start.add_argument(
+        "--allow-unloopable",
+        action="store_true",
+        help="Operator escape hatch: create loop state even when loopability assessment recommends another surface.",
+    )
     start.set_defaults(func=cmd_loop_start)
 
     start_card = loop_sub.add_parser("start-card")
@@ -262,6 +284,17 @@ def _add_loop_commands(sub) -> None:
     start_card.add_argument("--permission-profile", choices=PERMISSION_PROFILES, default="handoff_only")
     start_card.add_argument("--default-executor", choices=LOOP_EXECUTOR_OPTION_IDS, default="choose")
     start_card.set_defaults(func=cmd_loop_start_card)
+
+    assess = loop_sub.add_parser("assess")
+    assess.add_argument("message", nargs="*", help="Goal text to classify before starting a loop.")
+    assess.add_argument("--stdin", action="store_true", help="Read the goal text from stdin.")
+    assess.add_argument(
+        "--event-json",
+        default=None,
+        help="Read a Hermes-like JSON event from this path, or '-' for stdin.",
+    )
+    assess.add_argument("--include-goal", action="store_true", help="Include the raw goal text in stdout.")
+    assess.set_defaults(func=cmd_loop_assess)
 
     status = loop_sub.add_parser("status")
     status.add_argument("--loop", dest="loop_id", default="")

@@ -1,6 +1,6 @@
 ---
 name: loop
-description: [omh] Hermes Loop workflow: ambitious goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
+description: [omh] Hermes Loop workflow: loopability assessment, goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, goal-loop]
@@ -16,11 +16,13 @@ This is a Hermes-native `loop` workflow skill.
 
 ## Why This Exists
 
-`loop` exists for ambitious work where Hermes must repeatedly discover tasks, decide the next action, and resume from state without confusing planned cycles with observed progress.
+`loop` exists for goals whose correct implementation cannot be known upfront but can be discovered through bounded cycles of definition, action, verification, and revision without confusing planned cycles with observed progress.
 
 ## Do Not Use When
 
 - The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.
+- The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.
+- The goal is too vague to name an observable problem, next artifact, verification signal, or stop condition.
 - The goal depends mainly on external waiting, adoption, revenue, or community response without observable local next actions.
 - The permission profile does not allow repeated research, handoff, queue, or feedback cycles.
 
@@ -40,7 +42,7 @@ Bad example:
 
 ## Use When
 
-Use when the user explicitly starts a high-level, long-horizon goal loop that should refine the goal, separate implementable work from external waiting, and keep cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+Use when the user explicitly starts a high-level goal that is concrete enough to verify, open-ended enough to require iterative discovery, and should be shaped from task/project/ambition into a bounded loop before cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
 
     Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
 
@@ -53,8 +55,9 @@ Quality tier: `loop-gated`
 
 Quality bar:
 
-- Start with direct user intent such as `./loop` or an explicit ambitious goal loop request.
-- Reframe the north-star goal into implementable internal work without shrinking its ambition.
+- Start with direct user intent such as `./loop` or an explicit long-horizon goal request, then classify it as task, project, ambition, external-wait, or unclear before cycling.
+- Route tiny direct tasks to one-cycle delivery surfaces instead of forcing loop overhead.
+- Reframe a north-star ambition into a bounded arena, observable problem, next loop goal, and next verification without shrinking its ambition.
 - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
 - Expose a permission profile before executor/runtime dispatch, repository mutation, PR, merge, or external publishing.
 - Expose the automation, worktree, skill, connector, and subagent building-block states without treating planned blocks as observed work.
@@ -71,7 +74,11 @@ Keep loop orchestration, interviews, research, planning, verification-tier selec
 
 Required inputs:
 
-- north-star goal summary
+- loopability assessment
+- north-star goal summary when present
+- bounded arena
+- observable problem
+- next verification
 - goal reframe
 - success criteria
 - permission profile
@@ -79,6 +86,7 @@ Required inputs:
 
 Expected outputs:
 
+- loopability_assessment/v1 task/project/ambition classification
 - loop_start_card/v1 setup prompt
 - loop_cycle/v1 state
 - loop_engineering/v1 pipeline/building-block snapshot
@@ -93,11 +101,11 @@ Expected outputs:
 
 Artifact expectations:
 
-- metadata-only .omh/loops loop_cycle/v1 artifact
+- metadata-only .omh/loops loop_cycle/v1 artifact with loopability_assessment/v1
 - loop_engineering/v1 status over automation, worktree, skill, connector, subagent, verification policy, and failure modes
 - loop_runtime/v1 queue entries with context_policy_ref, cost_policy_ref, and verification_plan
 - loop_subagent_result_contract/v1 for prepared subagent handoffs
-- loop_status_card/v1 wrapper payload with failure_mode_summary and small_loop_guidance
+- loop_status_card/v1 wrapper payload with loopability_assessment, failure_mode_summary, and small_loop_guidance
 - loop_start_card/v1 wrapper setup card
 - linked goal_ledger/v1 only when completion evidence is required
 

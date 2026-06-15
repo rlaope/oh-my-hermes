@@ -11,6 +11,7 @@ from omh.goal_loop import (
     LOOP_CYCLE_SCHEMA,
     LOOP_START_CARD_SCHEMA,
     LOOP_STATUS_CARD_SCHEMA,
+    assess_loopability,
     block_loop_queue_item,
     build_loop_queue_handoff,
     build_loop_start_card,
@@ -40,7 +41,12 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(card["schema_version"], LOOP_START_CARD_SCHEMA)
         self.assertEqual(card["status"], "interview_required")
         self.assertEqual(card["goal_summary"], "{message}")
-        self.assertEqual(card["next_action"], "choose_permission_profile")
+        self.assertEqual(card["next_action"], "reframe_north_star")
+        self.assertEqual(card["loopability_assessment"]["schema_version"], "loopability_assessment/v1")
+        self.assertEqual(card["loopability_assessment"]["goal_kind"], "ambition")
+        self.assertEqual(card["loopability_assessment"]["loopability"], "needs_reframe")
+        self.assertEqual(card["loopability_assessment"]["north_star"], "{message}")
+        self.assertIn("first-run experience", card["loopability_assessment"]["next_loop_goal"])
         self.assertEqual(card["backend_contract"]["operation"], "loop.start")
         self.assertIn("goal_reframe", card["backend_contract"]["required_fields"])
         self.assertIn("handoff_only", {option["id"] for option in card["permission_profiles"]})
@@ -66,6 +72,37 @@ class GoalLoopTests(unittest.TestCase):
         visible = build_loop_start_card("Make OMH public launch-ready", include_goal=True)
         self.assertEqual(visible["goal_summary"], "Make OMH public launch-ready")
 
+    def test_loopability_assessment_classifies_task_project_and_ambition(self) -> None:
+        direct = assess_loopability("./loop change the button color", expose_goal=True)
+        self.assertEqual(direct["goal_kind"], "task")
+        self.assertEqual(direct["loopability"], "direct_task")
+        self.assertEqual(direct["recommended_next_action"], "route_direct_task")
+
+        start_server = assess_loopability("./loop start the dev server", expose_goal=True)
+        self.assertNotEqual(start_server["goal_kind"], "ambition")
+        self.assertEqual(start_server["loopability"], "direct_task")
+
+        restart_server = assess_loopability("./loop restart the dev server", expose_goal=True)
+        self.assertNotEqual(restart_server["goal_kind"], "ambition")
+        self.assertEqual(restart_server["loopability"], "direct_task")
+
+        ambition = assess_loopability("Make this a 100k-star OSS", expose_goal=False)
+        self.assertEqual(ambition["goal_kind"], "ambition")
+        self.assertEqual(ambition["loopability"], "needs_reframe")
+        self.assertEqual(ambition["north_star"], "{message}")
+        self.assertIn("bounded_arena", ambition["required_inputs"])
+        self.assertIn("first-run experience", ambition["next_loop_goal"])
+
+        project = assess_loopability(
+            "Long-term star-worthy OSS: in this loop, reduce install-to-first-value friction and verify with a clean smoke test.",
+            expose_goal=True,
+        )
+        self.assertEqual(project["goal_kind"], "project")
+        self.assertEqual(project["loopability"], "loopable")
+        self.assertEqual(project["recommended_next_action"], "choose_permission_profile")
+        self.assertEqual(project["required_inputs"], [])
+        self.assertIn("first value", project["next_verification"])
+
     def test_loop_cycle_records_permission_profile_without_completion_claim(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -82,6 +119,13 @@ class GoalLoopTests(unittest.TestCase):
 
         self.assertEqual(cycle["schema_version"], LOOP_CYCLE_SCHEMA)
         self.assertEqual(card["schema_version"], LOOP_STATUS_CARD_SCHEMA)
+        self.assertEqual(cycle["loopability_assessment"]["schema_version"], "loopability_assessment/v1")
+        self.assertEqual(cycle["loopability_assessment"]["loopability"], "loopable")
+        self.assertEqual(cycle["loopability_assessment"]["recommended_next_action"], "continue_loop")
+        self.assertEqual(cycle["loopability_assessment"]["required_inputs"], [])
+        self.assertEqual(card["loopability_assessment"]["schema_version"], "loopability_assessment/v1")
+        self.assertEqual(card["loopability_assessment"]["loopability"], "loopable")
+        self.assertEqual(card["current_loop_goal"], "Analyze strong projects, implement missing local workflows, verify them, and prepare launch material.")
         self.assertEqual(cycle["authority_envelope"]["permission_profile"], "handoff_only")
         self.assertIn("executor_handoff", cycle["authority_envelope"]["allowed_actions"])
         self.assertIn("executor_dispatch", cycle["authority_envelope"]["blocked_actions"])
