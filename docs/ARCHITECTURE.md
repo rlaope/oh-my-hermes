@@ -99,6 +99,7 @@ src/
   roles.py                   # compatibility adapter to catalogs/roles.py
   routing/
     chat.py
+    localization.py
     policy.py
     recommend.py
   runtime_artifacts.py        # compatibility adapter to runtime/artifacts.py
@@ -177,6 +178,10 @@ as setup evidence rather than runtime execution proof.
 `routing/chat.py` owns deterministic pre-dispatch routing decisions for chat
 wrappers. It consumes plain messages or platform-shaped event payloads and
 returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
+`routing/localization.py` owns deterministic locale phrase expansion for common
+non-English operator requests. It preserves the raw message, adds only canonical
+scoring hints, and makes locale-match metadata available to scored
+recommendations without calling translation services.
 `routing/policy.py` owns shared confidence and ambiguity policy, and
 `routing/recommend.py` owns local catalog recommendation scoring.
 

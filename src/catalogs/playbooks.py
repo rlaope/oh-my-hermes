@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import re
+
+from ..routing.localization import normalized_phrase, prepare_routing_text, routing_terms, routing_tokens
 
 
 PLAYBOOK_CATALOG_SCHEMA_VERSION = "playbook_catalog/v1"
 PLAYBOOK_RECOMMENDATION_SCHEMA_VERSION = "playbook_recommendation/v1"
-_TOKEN_RE = re.compile(r"[a-z0-9가-힣][a-z0-9가-힣-]*")
 _STOPWORDS = {
     "the",
     "and",
+    "are",
+    "as",
     "for",
+    "in",
+    "is",
+    "of",
+    "or",
+    "to",
     "with",
     "that",
     "this",
@@ -1655,7 +1662,11 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
     task = query.strip()
     if not task:
         raise ValueError("playbook recommend requires a task description")
-    scored = [_score_playbook(playbook, task) for playbook in _PLAYBOOKS]
+    routing_text = prepare_routing_text(task)
+    scored = [
+        _score_playbook(playbook, routing_text.scoring_text, routing_text.locale_matches)
+        for playbook in _PLAYBOOKS
+    ]
     scored.sort(key=lambda item: (-int(item["score"]), str(item["id"])))
     matches = [item for item in scored if int(item["score"]) > 0] or [_fallback_playbook(task)]
     return {
@@ -1672,7 +1683,7 @@ def _playbook_by_id(playbook_id: str) -> Playbook:
     raise KeyError(playbook_id)
 
 
-def _score_playbook(playbook: Playbook, query: str) -> dict[str, object]:
+def _score_playbook(playbook: Playbook, query: str, locale_matches: tuple[str, ...] = ()) -> dict[str, object]:
     query_tokens = _tokens(query)
     query_terms = _terms(query)
     score = 0
@@ -1703,6 +1714,9 @@ def _score_playbook(playbook: Playbook, query: str) -> dict[str, object]:
         if not playbook.delegated_to_executor:
             score += 2
             matched.add("boundary:hermes")
+
+    if score > 0:
+        matched.update(f"locale:{match}" for match in locale_matches)
 
     return _recommendation_payload(playbook, score=score, matched=tuple(sorted(matched)))
 
@@ -1737,24 +1751,15 @@ def _recommendation_payload(playbook: Playbook, *, score: int, matched: tuple[st
 
 
 def _tokens(value: str) -> set[str]:
-    tokens: set[str] = set()
-    for raw_token in _terms(value):
-        for token in (raw_token, *raw_token.split("-")):
-            if len(token) >= 3 and token not in _STOPWORDS:
-                tokens.add(token)
-    return tokens
+    return routing_tokens(value, stopwords=_STOPWORDS)
 
 
 def _terms(value: str) -> set[str]:
-    terms: set[str] = set()
-    for raw_token in _TOKEN_RE.findall(value.lower()):
-        terms.add(raw_token)
-        terms.update(raw_token.split("-"))
-    return terms
+    return routing_terms(value)
 
 
 def _matches_term(term: str, query_terms: set[str]) -> bool:
-    term_tokens = tuple(_terms(term))
+    term_tokens = tuple(_terms(normalized_phrase(term)))
     if not term_tokens:
         return False
     return all(token in query_terms for token in term_tokens)

@@ -76,6 +76,12 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 omh setup --language ko
 ```
 
+Setup language controls terminal copy only. Chat routing also has deterministic
+phrase packs for common Japanese, Chinese, Spanish, French, and German operator
+requests such as payment failures, risky refactors, safe feature work, and
+issue-to-PR preparation. OMH does not call a translation API; unsupported
+phrasing falls back to the normal clarify or planning path.
+
 The installer normally runs setup for you. Keep `omh setup` in the quick start
 because it is the repeatable repair step that installs generated skills under
 `~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
@@ -140,7 +146,8 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   <img src="assets/omh-flagship-workflows-poster.png" alt="OMH flagship command sets poster" width="920">
 </p>
 
-- **Natural-language first** - users in chat do not need to know `omh` commands.
+- **Natural-language first** - users in chat do not need to know `omh` commands,
+  and common non-English operator requests get deterministic routing hints.
 - **Install-first, not dashboard-first** - get Hermes-visible skills without
   adopting a separate dashboard or app.
 - **Hermes-native boundary** - OMH extends Hermes Agent with skills,

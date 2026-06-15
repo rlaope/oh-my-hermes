@@ -200,6 +200,14 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 omh setup --language ko
 ```
 
+Installer localization is separate from routing localization. Backend routing
+surfaces such as `omh recommend`, `omh playbook recommend`, and
+`omh chat interact` use a deterministic local phrase layer for tested Japanese,
+Chinese, Spanish, French, and German operator requests. The layer expands known
+phrases into canonical routing signals, includes `locale:<code>:<label>` in the
+matched evidence for scored recommendations, and never calls external
+translation services.
+
 From the user's point of view, the intended final state matches the Hermes tap
 path: Hermes can discover OMH skills and the user talks to Hermes. `omh setup`
 is the bootstrap/maintenance route that produces that state through generated
@@ -486,6 +494,12 @@ Before calling the bot integration ready, verify these points:
 - `omh chat interact --source discord "<message>"` or
   `omh chat interact --source slack "<message>"` returns a
   `chat_interaction/v1` envelope with a renderable `chat_response/v1`.
+- Common non-English requests should preserve the user's original text while
+  routing through deterministic locale hints when a tested phrase matches. For
+  example, Japanese or Chinese payment-failure reports route to
+  `feedback-triage`, French safe-feature requests route to a plan surface, and
+  Spanish issue-to-PR requests route to a request-to-handoff playbook without
+  claiming machine translation happened.
 - The rendered `chat_response` does not expose `omh`, argv arrays, or shell
   command text to the end user.
 - Clarification and fallback interactions do not expose `send_to_executor` or

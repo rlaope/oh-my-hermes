@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-import re
 
 from ..skills.catalog import SkillDefinition, builtin_definitions
+from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 
 
-_TOKEN_RE = re.compile(r"[a-z0-9가-힣][a-z0-9가-힣-]*")
 _STOPWORDS = {
     "the",
     "and",
+    "are",
+    "as",
     "for",
+    "in",
+    "is",
+    "of",
+    "or",
+    "to",
     "with",
     "that",
     "this",
@@ -220,10 +226,14 @@ def recommend_skills(query: str, *, limit: int = 5) -> list[dict[str, object]]:
     if limit < 1:
         raise ValueError("recommend --limit must be at least 1")
 
-    normalized_query = query.strip().lower()
+    routing_text = prepare_routing_text(query)
+    normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
     definitions = list(builtin_definitions())
-    scored = [_score_definition(definition, normalized_query, query_tokens, query) for definition in definitions]
+    scored = [
+        _score_definition(definition, normalized_query, query_tokens, query, routing_text.locale_matches)
+        for definition in definitions
+    ]
     matches = [recommendation for recommendation in scored if recommendation.score > 0]
     if not matches:
         matches = _fallback_recommendations(definitions, query)
@@ -237,33 +247,34 @@ def _score_definition(
     normalized_query: str,
     query_tokens: set[str],
     original_query: str,
+    locale_matches: tuple[str, ...],
 ) -> Recommendation:
     score = 0
     matched: set[str] = set()
 
     for trigger in definition.triggers:
-        trigger_normalized = trigger.lower()
+        trigger_normalized = normalized_phrase(trigger)
         if _phrase_match(normalized_query, trigger_normalized):
             score += 6
             matched.add(f"trigger:{trigger_normalized}")
 
-    name_normalized = definition.name.lower()
+    name_normalized = normalized_phrase(definition.name)
     if _phrase_match(normalized_query, name_normalized):
         score += 5
         matched.add(f"name:{name_normalized}")
 
-    description_normalized = definition.description.lower()
+    description_normalized = normalized_phrase(definition.description)
     if _phrase_match(normalized_query, description_normalized):
         score += 3
         matched.add("description:phrase")
 
-    use_when_normalized = definition.use_when.lower()
+    use_when_normalized = normalized_phrase(definition.use_when)
     if _phrase_match(normalized_query, use_when_normalized):
         score += 3
         matched.add("use_when:phrase")
 
     for field_name, value in (("category", definition.category), ("phase", definition.phase)):
-        normalized_value = value.lower()
+        normalized_value = normalized_phrase(value)
         if _phrase_match(normalized_query, normalized_value):
             score += 2
             matched.add(f"{field_name}:{normalized_value}")
@@ -277,6 +288,9 @@ def _score_definition(
     for token in sorted(query_tokens & metadata_tokens):
         score += 1
         matched.add(f"metadata:{token}")
+
+    if score > 0:
+        matched.update(f"locale:{match}" for match in locale_matches)
 
     matched_tuple = tuple(sorted(matched))
     return Recommendation(
@@ -326,12 +340,7 @@ def _fallback_recommendations(definitions: list[SkillDefinition], query: str) ->
 
 
 def _tokens(value: str) -> set[str]:
-    tokens: set[str] = set()
-    for raw_token in _TOKEN_RE.findall(value.lower()):
-        for token in (raw_token, *raw_token.split("-")):
-            if len(token) >= 3 and token not in _STOPWORDS:
-                tokens.add(token)
-    return tokens
+    return routing_tokens(value, stopwords=_STOPWORDS)
 
 
 def _phrase_match(query: str, value: str) -> bool:
