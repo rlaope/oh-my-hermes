@@ -203,7 +203,7 @@ class RuntimeArtifactTests(unittest.TestCase):
                 routing_record_payload(decision, message, source_event_id="m1"),
             )
 
-            self.assertEqual(routing["selected_skill"], "ai-slop-cleaner")
+            self.assertEqual(routing["selected_skill"], "ralplan")
             self.assertEqual(routing["source_event_id"], "m1")
             self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
             shown = show_run(paths, run["run_id"])

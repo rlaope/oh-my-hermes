@@ -4,6 +4,12 @@ import argparse
 import sys
 
 from ..installer import OmhError
+from .capabilities import (
+    _add_capabilities_commands,
+    cmd_capabilities_export,
+    cmd_capabilities_inspect,
+    cmd_capabilities_list,
+)
 from .chat import (
     _add_chat_commands,
     cmd_chat_interact,
@@ -147,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_release_commands(sub)
     _add_demo_commands(sub)
     _add_chat_commands(sub)
+    _add_capabilities_commands(sub)
     _add_coding_commands(sub)
     _add_hermes_commands(sub)
     _add_hud_commands(sub)

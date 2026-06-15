@@ -1072,6 +1072,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["query"], "risky refactor")
         recommendations = payload["recommendations"]
         self.assertTrue(recommendations)
+        self.assertEqual(recommendations[0]["skill"], "ralplan")
+        self.assertIn("guard:risky_refactor_before_cleanup", recommendations[0]["matched"])
+        self.assertEqual(recommendations[0]["next_action"], "present_plan")
         self.assertIn("ai-slop-cleaner", {recommendation["skill"] for recommendation in recommendations[:3]})
         self.assertTrue(any(recommendation["why"] and recommendation["suggested_prompt"] for recommendation in recommendations))
         cleanup = next(recommendation for recommendation in recommendations if recommendation["skill"] == "ai-slop-cleaner")
@@ -1634,7 +1637,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         route = json.loads(stdout)["route"]
         self.assertEqual(route["action"], "dispatch")
-        self.assertEqual(route["selected_skill"], "ai-slop-cleaner")
+        self.assertEqual(route["selected_skill"], "ralplan")
+        self.assertIn("guard:risky_refactor_before_cleanup", route["recommendations"][0]["matched"])
         self.assertIn("routing_prompt_template", route)
         self.assertIn("{message}", route["routing_prompt_template"])
         self.assertNotIn("risky refactor", json.dumps(route))
@@ -2186,7 +2190,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             run_id = payload["runtime"]["run"]["run_id"]
-            self.assertEqual(payload["runtime"]["routing"]["selected_skill"], "ai-slop-cleaner")
+            self.assertEqual(payload["runtime"]["routing"]["selected_skill"], "ralplan")
 
             status, stdout, stderr = run_cli(["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "runtime", "show", run_id])
 

@@ -46,6 +46,7 @@ user says a plain request in Hermes
 [Website](https://rlaope.github.io/oh-my-hermes/) -
 [Documentation](docs/README.md) -
 [Installation](docs/INSTALLATION.md) -
+[Capabilities](docs/CAPABILITIES.md) -
 [Agent Install](INSTALL_FOR_AGENTS.md) -
 [Roles](docs/ROLES.md) -
 [Application Cases](docs/APPLICATION_CASES.md) -
@@ -214,7 +215,8 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
 | Strict goal progress | `.omh/goals` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, and `goal_continuation/v1` keep long-running goals from being treated as done before evidence is ready. |
 | Hermes chat contracts | `chat_interaction/v1`, status cards, action ids, and local runtime artifacts for Hermes Agent chat surfaces. |
-| Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_hud`, `omh_role`, `omh_status`, bounded `omh_gather_evidence`, role marker validation, and session checkpoint support. |
+| Capability manifests | `omh capabilities export --json` and the plugin `omh_capabilities` tool expose installed roles, skills, hooks, keyword policy, orchestration patterns, tool derivation status, and evidence boundaries for Hermes/wrapper use. |
+| Hermes plugin bridge | `omh setup` installs `~/.hermes/plugins/omh` with metadata-only `omh_capabilities`, `omh_hud`, `omh_role`, `omh_status`, bounded `omh_gather_evidence`, role marker validation, and session checkpoint support. |
 | Optional MCP bridge preference | `omh setup --with-mcp` records MCP bridge intent without claiming a host loaded or called it; `omh probe` separates `mcp_preference` from `mcp_host_config`. |
 | Parity verifier | `omh probe --parity` maps common oh-my runtime capability axes to OMH surfaces, gaps, and evidence boundaries. |
 | Operating models | `omh setup --operating-model <id>` records the default Hermes collaboration posture: solo operator, small team, research ops, or coding runtime team. |
@@ -335,6 +337,8 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 | AI-agent pasteable install protocol | [Agent Install](INSTALL_FOR_AGENTS.md) |
 | Product direction and boundaries | [Direction](docs/DIRECTION.md) |
 | Architecture and module ownership | [Architecture](docs/ARCHITECTURE.md) |
+| Capability manifests for Hermes/plugin/wrapper use | [Capabilities](docs/CAPABILITIES.md) |
+| Orchestration pattern contracts | [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md) |
 | Common oh-my runtime parity and gaps | [Parity Matrix](docs/PARITY.md) |
 | Situation playbooks | [Playbooks](docs/PLAYBOOKS.md) |
 | Role surfaces and profile packs | [Roles](docs/ROLES.md) |

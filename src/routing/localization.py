@@ -241,6 +241,10 @@ _ALIASES: tuple[LocaleAlias, ...] = (
 )
 
 
+def locale_aliases() -> tuple[LocaleAlias, ...]:
+    return _ALIASES
+
+
 def prepare_routing_text(value: str) -> RoutingText:
     original = value.strip()
     folded = _fold_for_match(original)

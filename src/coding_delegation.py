@@ -82,7 +82,7 @@ def build_coding_delegation_payload(
     if limit < 1:
         raise ValueError("coding delegate --limit must be at least 1")
 
-    full_recommendations = recommend_skills(message, limit=max(limit, 5))
+    full_recommendations = recommend_skills(message, limit=max(limit, 5), apply_guardrails=False)
     recommendations = _compact_recommendations(full_recommendations[:limit])
     top = full_recommendations[0]
     workflow = str(top["skill"])

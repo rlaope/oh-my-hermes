@@ -16,6 +16,7 @@ load_local_package()
 
 from omh.paths import resolve_paths
 from omh.plugin_pack import inspect_plugin_bundle
+from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS
 
 
 class FakeHermesContext:
@@ -64,6 +65,19 @@ class PluginDistributionTests(unittest.TestCase):
             pyproject["tool"]["setuptools"]["package-data"]["omh.plugin_bundle.omh.references"],
         )
 
+    def test_plugin_yaml_advertises_metadata_tools_and_hooks(self) -> None:
+        root = resources.files("omh.plugin_bundle.omh")
+        text = root.joinpath("plugin.yaml").read_text(encoding="utf-8")
+
+        for tool in PROVIDED_TOOLS:
+            self.assertIn(f"  - {tool}", text)
+            self.assertTrue(
+                root.joinpath("tools", f"{TOOL_FILE_STEMS[tool]}.py").is_file(),
+                f"{tool} must have a bundled tool file declared by metadata.py",
+            )
+        for hook in PROVIDED_HOOKS:
+            self.assertIn(f"  - {hook}", text)
+
     def test_setup_default_installs_plugin(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -98,7 +112,10 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(plugin["requires_hermes_plugin_enable"])
             self.assertTrue((plugin_dir / "plugin.yaml").exists())
             self.assertTrue((plugin_dir / ".omh-plugin-manifest.json").exists())
-            self.assertEqual(plugin["registered_tools"], ["omh_gather_evidence", "omh_hud", "omh_role", "omh_status"])
+            self.assertEqual(
+                plugin["registered_tools"],
+                ["omh_capabilities", "omh_gather_evidence", "omh_hud", "omh_role", "omh_status"],
+            )
             self.assertEqual(plugin["registered_hooks"], ["on_session_end", "pre_llm_call", "pre_tool_call"])
 
             inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
@@ -185,6 +202,7 @@ class PluginDistributionTests(unittest.TestCase):
             module = load_installed_plugin(hermes_home / "plugins" / "omh")
             ctx = FakeHermesContext()
             module.register(ctx)
+            self.assertIn("omh_capabilities", ctx.tools)
             self.assertIn("omh_gather_evidence", ctx.tools)
             self.assertIn("omh_hud", ctx.tools)
             self.assertIn("omh_role", ctx.tools)

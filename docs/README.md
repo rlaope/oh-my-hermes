@@ -14,6 +14,8 @@ repo-local contract for Codex agents working here.
 | Understand what OMH is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
 | Compare common oh-my runtime axes and OMH gaps | [Parity Matrix](PARITY.md) |
+| Inspect runtime-readable OMH capability manifests | [Capabilities](CAPABILITIES.md) |
+| Understand safe orchestration pattern contracts | [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Review stale local context and executor handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |
 | Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |

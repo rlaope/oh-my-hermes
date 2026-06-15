@@ -32,6 +32,7 @@ Repository = "https://github.com/rlaope/oh-my-hermes"
 [tool.setuptools]
 packages = [
   "omh",
+  "omh.capabilities",
   "omh.catalogs",
   "omh.commands",
   "omh.core",
@@ -51,6 +52,7 @@ packages = [
 omh = "src"
 "omh.catalogs" = "src/catalogs"
 "omh.commands" = "src/commands"
+"omh.capabilities" = "src/capabilities"
 "omh.core" = "src/core"
 "omh.profiles" = "src/profiles"
 "omh.routing" = "src/routing"
