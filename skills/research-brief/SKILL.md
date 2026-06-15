@@ -53,7 +53,7 @@ Quality tier: `source-gated`
 Quality bar:
 
 - State the research question, source boundaries, and recency assumptions before synthesis.
-- Separate observed sources from inferred trends and unresolved uncertainty.
+- Separate observed sources, source quality, source diversity, inferred trends, and unresolved uncertainty.
 - Use the brief to feed strategy or meeting work without calling it execution evidence.
 
 Handoff policy:
@@ -79,7 +79,7 @@ Artifact expectations:
 Safety rules:
 
 - Do not claim sources were fetched unless Hermes or the wrapper observed them.
-- Separate evidence, inference, confidence, and missing-source gaps.
+- Separate evidence, inference, confidence, source diversity, and missing-source gaps.
 - Route later implementation separately through an accepted plan and coding handoff.
 
 ## Harness Discipline

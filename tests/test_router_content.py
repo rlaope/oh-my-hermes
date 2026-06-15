@@ -194,6 +194,17 @@ class RouterContentTests(unittest.TestCase):
         self.assertNotIn("Inputs:", router.content)
         self.assertNotIn("Quality Bar:", router.content)
 
+    def test_research_harness_exposes_source_quality_ladder(self) -> None:
+        contract = harness_quality_contract("research")
+
+        self.assertEqual(contract["quality_tier"], "source-gated")
+        self.assertIn("source_boundaries_recorded", contract["evidence_ladder"])
+        self.assertIn("source_diversity_checked", contract["evidence_ladder"])
+        self.assertIn("record_source", contract["wrapper_actions"])
+        self.assertTrue(
+            any("source plan is not observed source retrieval" in guard for guard in contract["overclaim_guards"])
+        )
+
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
         for definition in builtin_definitions():
             self.assertTrue(definition.description.startswith("[omh] "), definition.name)

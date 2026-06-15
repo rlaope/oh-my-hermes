@@ -29,6 +29,11 @@ _STOPWORDS = {
     "skill",
     "agent",
     "hermes",
+    "해줘",
+    "해주세요",
+    "줘",
+    "부탁",
+    "정리해줘",
 }
 _FALLBACK_SKILLS = ("oh-my-hermes", "plan", "deep-interview")
 _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/planning guidance."
@@ -78,6 +83,18 @@ _SKILL_POLICIES = {
         evidence_boundary="A reliability review is not SLO pass, healthy error-budget, incident closure, remediation completion, verification, review, CI, or merge evidence.",
         wrapper_guidance="Collect service, SLO, incident, metric, and reference boundaries; create remediation handoffs only after an accepted fix direction exists.",
     ),
+    "web-research": RecommendationPolicy(
+        next_action="run_hermes_research",
+        evidence_boundary=(
+            "A web research route is not observed source retrieval, implementation, verification, "
+            "or coding handoff evidence."
+        ),
+        wrapper_guidance=(
+            "Keep this in Hermes as a source-backed research lane: ask for source boundaries, freshness, "
+            "jurisdiction or version scope, source diversity, and citation confidence; report retrieval gaps "
+            "before any later plan or handoff."
+        ),
+    ),
 }
 _CATEGORY_POLICIES = {
     "planning": RecommendationPolicy(
@@ -92,8 +109,11 @@ _CATEGORY_POLICIES = {
     ),
     "research": RecommendationPolicy(
         next_action="run_hermes_research",
-        evidence_boundary="Research guidance is not implementation or verification evidence.",
-        wrapper_guidance="Keep this in Hermes as source-backed research and summarize evidence before any later handoff.",
+        evidence_boundary="Research guidance is not observed source retrieval, implementation, or verification evidence.",
+        wrapper_guidance=(
+            "Keep this in Hermes as source-backed research, name source boundaries and freshness, summarize "
+            "observed evidence with citations, and report retrieval gaps before any later handoff."
+        ),
     ),
     "strategy": RecommendationPolicy(
         next_action="prepare_strategy_brief",

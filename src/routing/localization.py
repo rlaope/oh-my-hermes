@@ -39,6 +39,10 @@ _CANONICAL_RISKY_REFACTOR = (
 )
 _CANONICAL_SAFE_FEATURE = "safely add a feature to this repo feature add safe plan"
 _CANONICAL_ISSUE_TO_PR = "issue to pr pr-ready issue plan acceptance criteria coding handoff request-to-handoff"
+_CANONICAL_WEB_RESEARCH = (
+    "web research web search search the web current sources source-backed research "
+    "citations links freshness source diversity retrieval gap"
+)
 
 
 @dataclass(frozen=True)
@@ -237,6 +241,76 @@ _ALIASES: tuple[LocaleAlias, ...] = (
         "issue_to_pr",
         ("issue in einen pr", "dieses issue für einen pr vorbereiten", "dieses issue fuer einen pr vorbereiten"),
         _CANONICAL_ISSUE_TO_PR,
+    ),
+    LocaleAlias(
+        "ja",
+        "web_research",
+        (
+            "ウェブ検索",
+            "web検索",
+            "ネット検索",
+            "検索して",
+            "最新の出典",
+            "出典をまとめ",
+            "情報源を探",
+        ),
+        _CANONICAL_WEB_RESEARCH,
+    ),
+    LocaleAlias(
+        "zh",
+        "web_research",
+        (
+            "网页搜索",
+            "網頁搜尋",
+            "网络搜索",
+            "網路搜尋",
+            "网上搜索",
+            "網上搜尋",
+            "查一下",
+            "找资料",
+            "找資料",
+            "最新来源",
+            "最新來源",
+        ),
+        _CANONICAL_WEB_RESEARCH,
+    ),
+    LocaleAlias(
+        "es",
+        "web_research",
+        (
+            "buscar en la web",
+            "busca en la web",
+            "investigar en internet",
+            "fuentes actuales",
+            "fuentes recientes",
+            "citas actuales",
+        ),
+        _CANONICAL_WEB_RESEARCH,
+    ),
+    LocaleAlias(
+        "fr",
+        "web_research",
+        (
+            "rechercher sur le web",
+            "cherche sur le web",
+            "recherche internet",
+            "sources actuelles",
+            "sources recentes",
+            "sources récentes",
+        ),
+        _CANONICAL_WEB_RESEARCH,
+    ),
+    LocaleAlias(
+        "de",
+        "web_research",
+        (
+            "im web suchen",
+            "websuche",
+            "internetrecherche",
+            "aktuelle quellen",
+            "neueste quellen",
+        ),
+        _CANONICAL_WEB_RESEARCH,
     ),
 )
 
