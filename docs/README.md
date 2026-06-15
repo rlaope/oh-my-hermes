@@ -36,12 +36,12 @@ OMH is a Hermes-native wrapper orchestration layer.
 
 The product should make chat surfaces feel capable without hiding who did what.
 Hermes should own intake, clarification, research, business briefs, meeting
-prep, feedback triage, operating records, report packages, reliability reviews,
-app operation loops, planning, status narration, and handoff UX. The selected
-coding executor should own main coding work when work leaves Hermes. OMH should
-own the deterministic local contract between those worlds: generated skill
-guidance, playbooks, wrapper sessions, prepared handoff payloads, and evidence
-records.
+prep, feedback triage, operating records, report packages, material packages,
+reliability reviews, app operation loops, planning, status narration, and
+handoff UX. The selected coding executor should own main coding work when work
+leaves Hermes. OMH should own the deterministic local contract between those
+worlds: generated skill guidance, playbooks, wrapper sessions, prepared handoff
+payloads, and evidence records.
 
 The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a
@@ -69,6 +69,7 @@ selected.
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, or loopability-gated project cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |
+| `materials-package` / `report-package` | Prepare decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready materials while keeping binary export, render QA, formula checks, approval, and delivery observed-only. | "Turn the revenue spreadsheet into an Excel and PDF package with render QA." |
 | `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, another runtime, or Hermes coding skills while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## Documentation Contracts
@@ -89,8 +90,9 @@ selected.
 - Playbook docs should describe situation-level pipelines for company work, app
   operation loops such as idea-to-deploy / CTO loop / deploy-and-monitor,
   operations artifacts such as operating-rhythm / report-package /
-  reliability-review, and coding handoffs, plus ownership boundaries, rather
-  than becoming a second skill catalog.
+  reliability-review, material package flows such as decks / PDFs /
+  spreadsheets / documents / HWP, and coding handoffs, plus ownership
+  boundaries, rather than becoming a second skill catalog.
 - Role docs should describe responsibility lanes, not runtime agents. A role can
   explain the next action, but it cannot prove execution without matching
   observed evidence.
@@ -117,6 +119,10 @@ selected.
   `goal_completion_gate/v1`, `goal_status_card/v1`, and
   `goal_continuation/v1` as wrapper contracts that name the next action before
   completion is claimed.
+- Material processing docs should describe `.omh/materials`
+  `material_artifact/v1` records, target-format QA ladders, generation
+  handoffs, and observed file evidence without implying OMH rendered PPTX, PDF,
+  Keynote, DOCX, XLSX, HWP, or uploaded files itself.
 - Loop docs should describe `loopability_assessment/v1`,
   `.omh/loops` metadata-only `loop_cycle/v1` state, `loop_runtime/v1` tick
   queues, `verification_plan` metadata, `failure_mode_summary` warnings,

@@ -95,6 +95,7 @@ class RouterContentTests(unittest.TestCase):
             "ops-review",
             "operating-rhythm",
             "report-package",
+            "materials-package",
             "reliability-review",
             "idea-to-deploy",
             "cto-loop",
@@ -121,6 +122,7 @@ class RouterContentTests(unittest.TestCase):
             "monitoring": "prepare_deploy_monitor_plan",
             "goal-loop": "assess_loopability",
             "process": "start_ultraprocess",
+            "materials": "prepare_material_package",
         }
 
         for category, next_action in expected.items():
@@ -130,6 +132,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["cancel"].next_action, "cancel")
         self.assertEqual(recommend_module._SKILL_POLICIES["operating-rhythm"].next_action, "prepare_operating_record")
         self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
+        self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
 
         for helper in (
@@ -168,6 +171,7 @@ class RouterContentTests(unittest.TestCase):
                 "ops-review",
                 "operating-rhythm",
                 "report-package",
+                "materials-package",
                 "reliability-review",
                 "app-delivery-loop",
                 "goal-loop",
@@ -286,6 +290,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("ops-review"), "ops-review")
         self.assertEqual(primary_harness_for_skill("operating-rhythm"), "operating-rhythm")
         self.assertEqual(primary_harness_for_skill("report-package"), "report-package")
+        self.assertEqual(primary_harness_for_skill("materials-package"), "materials-package")
         self.assertEqual(primary_harness_for_skill("reliability-review"), "reliability-review")
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
@@ -308,6 +313,7 @@ class RouterContentTests(unittest.TestCase):
                 "ops-review",
                 "operating-rhythm",
                 "report-package",
+                "materials-package",
                 "reliability-review",
                 "idea-to-deploy",
                 "cto-loop",
@@ -820,6 +826,7 @@ class RouterContentTests(unittest.TestCase):
             "ops-review",
             "operating-rhythm",
             "report-package",
+            "materials-package",
             "reliability-review",
             "strategy-synthesis",
             "meeting-facilitation",

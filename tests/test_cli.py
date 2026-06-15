@@ -40,10 +40,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("chat", help_text)
         self.assertIn("wrapper chat events", help_text)
         self.assertIn("omh ops list", help_text)
+        self.assertIn("omh materials list", help_text)
         self.assertIn("Human-facing maintenance, catalog, and operator checklist commands print summaries", help_text)
         self.assertIn("Backend/control-plane commands", help_text)
         self.assertIn("release smoke", help_text)
-        self.assertIn("memory, ops, state", help_text)
+        self.assertIn("memory, ops, materials, state", help_text)
 
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -964,6 +965,104 @@ class CliTests(unittest.TestCase):
             self.assertEqual(reliability["surface"], "reliability-review")
             self.assertEqual(reliability["observation_status"], "observed")
 
+    def test_materials_cli_records_generation_handoff_and_observed_export_boundaries(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "materials"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "plan",
+                    "--kind",
+                    "spreadsheet",
+                    "--title",
+                    "Sales report package",
+                    "--target-format",
+                    "xlsx",
+                    "--target-format",
+                    "pdf",
+                    "--source-input",
+                    "revenue.csv",
+                    "--section",
+                    "Revenue trend",
+                    "--missing-input",
+                    "approved revenue numbers",
+                    "--handoff-prepared",
+                    "--handoff-target",
+                    "document generator",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            artifact = payload["artifact"]
+            self.assertEqual(artifact["schema_version"], "omh_material_artifact/v1")
+            self.assertEqual(artifact["kind"], "spreadsheet")
+            self.assertEqual(artifact["target_formats"], ["xlsx", "pdf"])
+            self.assertEqual(artifact["export_status"], "handoff_prepared")
+            self.assertTrue(payload["boundary"]["prepared_is_not_observed"])
+            self.assertFalse(payload["boundary"]["binary_export_observed"])
+            self.assertIn("formula_recalculation", {check["check"] for check in artifact["qa_checks"]})
+            material_id = artifact["material_id"]
+
+            status, stdout, stderr = run_cli(base + ["show", material_id])
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(json.loads(stdout)["artifact"]["title"], "Sales report package")
+
+            status, stdout, stderr = run_cli(base + ["export", "--format", "markdown", "--all"])
+            self.assertEqual(status, 0, stderr)
+            exported = json.loads(stdout)
+            self.assertIn("# Sales report package", exported["export"])
+            self.assertIn("binary_export", exported["export"])
+
+            status, _, stderr = run_cli(
+                base
+                + [
+                    "plan",
+                    "--kind",
+                    "deck",
+                    "--title",
+                    "Observed deck",
+                    "--target-format",
+                    "pptx",
+                    "--observed",
+                    "--observed-file",
+                    "/tmp/deck.pptx",
+                ]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("observed material export requires at least one observed QA check", stderr)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "plan",
+                    "--kind",
+                    "deck",
+                    "--title",
+                    "Observed deck",
+                    "--target-format",
+                    "pptx",
+                    "--observed",
+                    "--observed-file",
+                    "/tmp/deck.pptx",
+                    "--qa-observed",
+                    "pptx:render_screenshot:/tmp/deck.png",
+                ]
+            )
+            self.assertEqual(status, 0, stderr)
+            observed = json.loads(stdout)
+            self.assertTrue(observed["boundary"]["binary_export_observed"])
+            self.assertTrue(observed["boundary"]["qa_observed"])
+
+            status, stdout, stderr = run_cli(base + ["qa-ladder", "--format", "xlsx", "--format", "hwp"])
+            self.assertEqual(status, 0, stderr)
+            ladder = json.loads(stdout)
+            self.assertIn("formula_recalculation", ladder["formats"]["xlsx"]["checks"])
+            self.assertIn("locale_font_check", ladder["formats"]["hwp"]["checks"])
+
     def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
 
@@ -1168,6 +1267,27 @@ class CliTests(unittest.TestCase):
                 self.assertIn(boundary_fragment, top["evidence_boundary"])
                 self.assertIn(wrapper_fragment, top["wrapper_guidance"].lower())
 
+    def test_recommend_material_processing_routes_to_materials_package(self) -> None:
+        cases = (
+            "엑셀로 매출 리포트 만들고 PDF로 공유해줘",
+            "HWP 제안서 문서를 만들어줘",
+            "Keynote 발표자료 만들어줘",
+            "prepare a docx proposal and export a PDF with render QA",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], "materials-package")
+                self.assertEqual(top["hermes_role"], "retained-cognition")
+                self.assertEqual(top["next_action"], "prepare_material_package")
+                self.assertIn("binary export", top["evidence_boundary"])
+                self.assertIn("material_artifact/v1", top["wrapper_guidance"])
+
     def test_recommend_direct_loop_routes_to_goal_loop_policy(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "./loop", "build", "a", "10k", "star", "open", "source", "project", "--limit", "2"])
 
@@ -1300,6 +1420,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("weekly-ops-review", playbooks)
         self.assertIn("operating-rhythm-history", playbooks)
         self.assertIn("report-package", playbooks)
+        self.assertIn("materials-processing", playbooks)
         self.assertIn("reliability-incident-review", playbooks)
         self.assertIn("market-scan-to-strategy", playbooks)
         self.assertIn("local-pipeline-buildout", playbooks)
@@ -1313,6 +1434,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("postdeploy_record", playbooks["deploy-and-monitor"]["pipeline"])
         self.assertIn("capture_decisions", playbooks["operating-rhythm-history"]["pipeline"])
         self.assertIn("export_outline", playbooks["report-package"]["pipeline"])
+        self.assertIn("record_export_qa", playbooks["materials-processing"]["pipeline"])
         self.assertIn("track_remediation", playbooks["reliability-incident-review"]["pipeline"])
 
     def test_playbook_inspect_shows_owners_and_evidence_boundaries(self) -> None:
@@ -1442,6 +1564,12 @@ class CliTests(unittest.TestCase):
                 "reliability-incident-review",
                 "scope_incident_or_service",
                 "error_budget_healthy",
+            ),
+            (
+                "엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘",
+                "materials-processing",
+                "scope_material",
+                "binary_export",
             ),
         )
 
@@ -2219,7 +2347,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(payload["summary"]["scenario_count"], 19)
+        self.assertEqual(payload["summary"]["scenario_count"], 20)
         self.assertTrue(payload["summary"]["all_10"])
         self.assertEqual(payload["summary"]["minimum_score"], 10)
         self.assertEqual(payload["summary"]["maximum_score"], 10)
@@ -4549,6 +4677,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("decisions_actions_recorded", harnesses["operating-rhythm"]["evidence_ladder"])
         self.assertEqual(harnesses["report-package"]["quality_tier"], "report-gated")
         self.assertIn("package_outline_prepared", harnesses["report-package"]["evidence_ladder"])
+        self.assertEqual(harnesses["materials-package"]["quality_tier"], "material-gated")
+        self.assertIn("format_qa_ladder_prepared", harnesses["materials-package"]["evidence_ladder"])
+        self.assertIn("record_export", harnesses["materials-package"]["wrapper_actions"])
         self.assertEqual(harnesses["reliability-review"]["quality_tier"], "reliability-gated")
         self.assertIn("remediation_boundary_recorded", harnesses["reliability-review"]["evidence_ladder"])
         self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
@@ -4580,6 +4711,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("ops-review", harnesses)
         self.assertIn("operating-rhythm", harnesses)
         self.assertIn("report-package", harnesses)
+        self.assertIn("materials-package", harnesses)
         self.assertIn("reliability-review", harnesses)
         self.assertIn("app-delivery-loop", harnesses)
         self.assertIn("blocking_question_asked", harnesses["deep-interview"]["evidence_ladder"])
@@ -4587,6 +4719,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("feedback-triage", harnesses["customer-insight-triage"]["primary_skills"])
         self.assertIn("operating-rhythm", harnesses["operating-rhythm"]["primary_skills"])
         self.assertIn("report-package", harnesses["report-package"]["primary_skills"])
+        self.assertIn("materials-package", harnesses["materials-package"]["primary_skills"])
         self.assertIn("reliability-review", harnesses["reliability-review"]["primary_skills"])
         self.assertIn("idea-to-deploy", harnesses["app-delivery-loop"]["primary_skills"])
 

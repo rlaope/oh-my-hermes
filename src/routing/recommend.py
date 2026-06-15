@@ -61,6 +61,17 @@ _SKILL_POLICIES = {
         evidence_boundary="A report package or PPT-ready outline is not source-review completion, stakeholder approval, presentation delivery, or binary PPTX export evidence.",
         wrapper_guidance="Prepare a Markdown/JSON report outline from supplied inputs; keep missing numbers and approvals explicit.",
     ),
+    "materials-package": RecommendationPolicy(
+        next_action="prepare_material_package",
+        evidence_boundary=(
+            "A material package is not binary export, render QA, formula recalculation, stakeholder approval, "
+            "delivery, or external upload evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare a material_artifact/v1 plan with target formats, source inputs, assumptions, missing inputs, "
+            "QA ladder, and an executor-neutral generation handoff when a binary file is needed."
+        ),
+    ),
     "reliability-review": RecommendationPolicy(
         next_action="prepare_reliability_review",
         evidence_boundary="A reliability review is not SLO pass, healthy error-budget, incident closure, remediation completion, verification, review, CI, or merge evidence.",
@@ -111,6 +122,17 @@ _CATEGORY_POLICIES = {
         next_action="prepare_ops_review",
         evidence_boundary="An ops review is not implementation, release, CI, review, or merge evidence.",
         wrapper_guidance="Summarize observed status, risks, blockers, and follow-ups; keep unknowns explicit.",
+    ),
+    "materials": RecommendationPolicy(
+        next_action="prepare_material_package",
+        evidence_boundary=(
+            "Material packaging guidance is not binary file generation, render QA, formula recalculation, "
+            "approval, delivery, or upload evidence."
+        ),
+        wrapper_guidance=(
+            "Route the request into a material plan first; keep Hermes chat as the normal surface and use CLI "
+            "artifacts only as backend/verifier state."
+        ),
     ),
     "delivery": RecommendationPolicy(
         next_action="present_app_delivery_loop",

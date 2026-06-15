@@ -43,6 +43,14 @@ class OmhPaths:
         return self.operations_dir / "index.json"
 
     @property
+    def materials_dir(self) -> Path:
+        return self.omh_home / "materials"
+
+    @property
+    def materials_index_path(self) -> Path:
+        return self.materials_dir / "index.json"
+
+    @property
     def memory_dir(self) -> Path:
         return self.omh_home / "memory"
 

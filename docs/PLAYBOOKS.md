@@ -20,6 +20,7 @@ omh playbook recommend "research latest official sources"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
 omh playbook recommend "organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions"
 omh playbook recommend "create a monthly leadership PPT report package from current status and risks"
+omh playbook recommend "turn the revenue spreadsheet into an Excel and PDF package with render QA"
 omh playbook recommend "run an incident postmortem with SLO, error budget, remediation, and service reliability evidence"
 omh playbook recommend "take this product idea from plan to deploy and monitor safely"
 omh playbook recommend "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness"
@@ -43,6 +44,7 @@ files.
 | `weekly-ops-review` | A user wants a recurring status, risk, blocker, and priority review. | Scope -> observed status -> risks/blockers -> priorities -> follow-ups. |
 | `operating-rhythm-history` | A user wants meeting history, scrum, sprint, retrospective, decision, or follow-up records. | Scope cadence -> capture record -> capture decisions -> assign follow-ups -> export outline. |
 | `report-package` | A user wants a report, status package, executive brief, or PPT-ready outline independent of reliability review. | Scope audience -> gather inputs -> shape sections -> export outline -> record approval boundary. |
+| `materials-processing` | A user wants decks, PDFs, spreadsheets, documents, HWP, Markdown, or upload-ready files prepared and QA-tracked. | Scope material -> organize sources -> choose formats -> prepare generation handoff -> record export QA. |
 | `reliability-incident-review` | A user wants postmortem, SLO, error-budget, incident follow-up, or service reliability review. | Scope service -> gather evidence -> assess reliability -> track remediation -> record unresolved gaps. |
 | `market-scan-to-strategy` | A user wants competitor or market evidence shaped into strategy. | Scope scan -> evidence matrix -> implications -> strategy brief. |
 | `deep-interview-to-plan` | A broad goal lacks scope, non-goals, or acceptance criteria. | One question -> clarified brief -> plan -> decision gate. |
@@ -117,6 +119,7 @@ For operations artifacts, prompts can route to three independent surfaces:
 ```text
 organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions
 create a monthly leadership PPT report package from current status and risks
+turn the revenue spreadsheet into an Excel and PDF package with render QA
 run an incident postmortem with SLO, error budget, remediation, and service reliability evidence
 ```
 
@@ -124,6 +127,11 @@ run an incident postmortem with SLO, error budget, remediation, and service reli
 durable without claiming the meeting happened unless notes are observed.
 `report-package` prepares report and slide outlines without requiring SRE
 links; binary PPTX export and stakeholder approval remain separate evidence.
+`materials-processing` prepares a `material_artifact/v1` plan for target
+formats such as PPTX, PDF, Keynote, DOCX, XLSX, HWP, Markdown, or CSV. It can
+prepare an executor-neutral generation handoff, but observed files, render
+screenshots, formula checks, approvals, uploads, and delivery remain separate
+evidence.
 `reliability-incident-review` is strict about metric, incident, source, and
 remediation evidence before reliability claims advance.
 

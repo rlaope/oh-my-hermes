@@ -755,6 +755,52 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not claim stakeholder approval or presentation delivery without observed evidence.
   - Do not couple report packages to SLO, incident, or error-budget evidence by default.
 
+### materials-package
+
+[omh] Hermes Materials Package workflow: decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary export handoffs.
+
+- Category: `materials`
+- Phase: `material-plan`
+- Hermes role: `retained-cognition`
+- Quality tier: `material-gated`
+- Handoff policy: Keep source organization, outline planning, target-format selection, QA ladder, and missing-input review in Hermes; prepare an executor-neutral document-generation handoff only when a binary file is needed.
+- Why this exists: `materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Keynote, HWP, and Markdown work as a first-class material-processing workflow without becoming a hidden file generator.
+- Use when: Use when Hermes should turn source inputs into a material plan for decks, PDFs, spreadsheets, documents, HWP, Markdown, or binary export handoff without claiming file generation.
+- Do not use when:
+  - The user only needs a weekly/monthly report outline; use `report-package`.
+  - The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.
+  - The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.
+- Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `PDF`, `한글 문서`, `HWP`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`
+- Good example:
+  - Prompt: materials-package 엑셀 매출 리포트를 PDF로 공유할 수 있게 준비해줘.
+  - Expected behavior: Create a material plan with xlsx/pdf target formats, source inputs, missing metrics, QA checks, and a generation handoff boundary.
+  - Why: The request is about material processing and binary export evidence, not just a text report outline.
+- Bad example:
+  - Prompt: materials-package prove the PDF was sent to leadership.
+  - Expected behavior: Ask for observed delivery evidence or record the delivery as not_observed instead of claiming it happened.
+  - Why: A prepared material artifact cannot prove export, approval, or delivery.
+- Quality bar:
+  - Name audience, source inputs, target formats, outline sections, assumptions, missing inputs, and output owner.
+  - Attach format-specific QA expectations before preparing a binary-generation handoff.
+  - Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.
+- Required inputs:
+  - audience or recipient
+  - source inputs
+  - target format(s)
+  - deadline or delivery context
+  - missing data or assumptions
+- Expected outputs:
+  - material_artifact/v1 plan
+  - format-specific QA ladder
+  - executor-neutral generation handoff when needed
+  - observed export boundary
+- Artifact expectations:
+  - material_artifact/v1 under .omh/materials when a wrapper or CLI records it
+- Safety rules:
+  - Do not claim PPTX, PDF, Keynote, DOCX, XLSX, HWP, or upload output without observed file evidence.
+  - Do not claim render QA, formula recalculation, approval, or delivery from a prepared material plan.
+  - Keep source facts, assumptions, missing inputs, and generated output evidence separate.
+
 ### reliability-review
 
 [omh] Hermes Reliability Review workflow: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence.
@@ -2029,6 +2075,63 @@ Package supplied inputs into reports, executive briefs, and PPT-ready Markdown/J
   - A PPT-ready outline is not a binary PPTX export.
   - Report packaging does not require reliability evidence unless the user asks for reliability review.
 - Fallback: If inputs are missing, produce a report scaffold and missing-data list instead of fabricating numbers.
+
+### materials-package
+
+Plan, hand off, and verify material-processing work across decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary exports.
+
+- Use when: Use when a Hermes request needs target-format selection, source-input packaging, document-generation handoff, export tracking, or render/formula QA.
+- Quality tier: `material-gated`
+- Quality bar:
+  - Name audience, source inputs, target formats, outline sections, missing inputs, assumptions, and output owner.
+  - Represent Markdown/JSON outline, binary export, render QA, spreadsheet formula checks, approval, and delivery as separate stages.
+  - Keep PPTX, PDF, Keynote, DOCX, XLSX, HWP, upload, and delivery claims unavailable until observed file or wrapper evidence exists.
+- Inputs:
+  - audience or recipient
+  - source inputs
+  - target format(s)
+  - outline sections
+  - missing inputs or assumptions
+- Outputs:
+  - material_artifact/v1 plan
+  - format-specific QA ladder
+  - generation handoff when needed
+  - observed export boundary
+- Stop conditions:
+  - target formats are explicit
+  - missing inputs are recorded
+  - binary export and QA stay observed-only
+- Verification:
+  - validate material_artifact/v1
+  - check target format QA ladder
+  - record binary export only from observed files
+  - record approval or delivery only from observed evidence
+- Evidence ladder:
+  - `material_scope_recorded`
+  - `source_inputs_organized`
+  - `format_qa_ladder_prepared`
+  - `generation_handoff_prepared_if_needed`
+  - `export_qa_observed_when_available`
+- Wrapper actions:
+  - `show_material_plan`
+  - `choose_target_format`
+  - `prepare_generation_handoff`
+  - `record_export`
+  - `record_qa`
+  - `record_approval`
+  - `show_status`
+- Artifact events:
+  - `material_scope_recorded`
+  - `source_inputs_organized`
+  - `format_qa_ladder_prepared`
+  - `generation_handoff_prepared_if_needed`
+  - `export_qa_observed_when_available`
+- Delegation expectation: Record material packaging as Hermes-retained planning work; record file generation, QA, approval, upload, or delivery only when a wrapper/operator observes evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A material_artifact/v1 plan is not binary PPTX, PDF, Keynote, DOCX, XLSX, HWP, or upload evidence.
+  - Planned QA checks are not render QA, formula recalculation, approval, or delivery evidence.
+- Fallback: If source data or target format is missing, create a material scaffold and ask for the smallest missing input before generation.
 
 ### reliability-review
 
