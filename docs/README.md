@@ -66,7 +66,7 @@ selected.
 
 | Family | What Hermes owns | Plain request |
 | --- | --- | --- |
-| `deep-interview` / `ralplan` / `ultragoal` / `loop` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, or direct ambitious goal loop. | "Make onboarding feel smoother." |
+| `deep-interview` / `ralplan` / `ultragoal` / `loop` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, or loopability-gated project cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |
 | `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, another runtime, or Hermes coding skills while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
@@ -117,11 +117,12 @@ selected.
   `goal_completion_gate/v1`, `goal_status_card/v1`, and
   `goal_continuation/v1` as wrapper contracts that name the next action before
   completion is claimed.
-- Loop docs should describe `.omh/loops` metadata-only `loop_cycle/v1` state,
-  `loop_runtime/v1` tick queues, `verification_plan` metadata,
-  `failure_mode_summary` warnings, small-loop guidance, and
-  `loop_status_card/v1` next actions as orchestration evidence only; goal
-  completion still belongs to linked `goal_ledger/v1` evidence.
+- Loop docs should describe `loopability_assessment/v1`,
+  `.omh/loops` metadata-only `loop_cycle/v1` state, `loop_runtime/v1` tick
+  queues, `verification_plan` metadata, `failure_mode_summary` warnings,
+  small-loop guidance, and `loop_status_card/v1` next actions as
+  orchestration evidence only; goal completion still belongs to linked
+  `goal_ledger/v1` evidence.
 - Memory/context docs should state that OMH reviews local or wrapper-supplied
   context only; it does not read or mutate opaque Hermes internal memory.
 - The GitHub Pages site should stay a short public entry point that links back

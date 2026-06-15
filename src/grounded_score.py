@@ -219,11 +219,11 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
     ),
     GroundedScenario(
         "direct-goal-loop",
-        "Direct ambitious goal loop",
+        "Loopability-gated goal cycle",
         "./loop make this project a 10k star OSS",
         "loop",
         "loop",
-        "start_goal_loop",
+        "reframe_north_star",
         "clarify",
         False,
         invocation_mode="direct_skill",

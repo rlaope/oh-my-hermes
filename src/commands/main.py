@@ -170,7 +170,7 @@ Useful operator commands:
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
-  omh loop status        Show ambitious goal loop state
+  omh loop status        Show loopable goal cycle state
   omh ops list           List local operations artifacts
   omh runtime status     Show local evidence artifacts
 

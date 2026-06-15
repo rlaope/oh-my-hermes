@@ -43,6 +43,9 @@ VISIBLE_ACTIONS = (
     "show_target_status",
     "apply_target_change",
     "choose_permission_profile",
+    "assess_loopability",
+    "convert_to_loop_goal",
+    "route_direct_task",
     "start_ultraprocess",
     "start_loop",
     "run_loop_tick",
@@ -332,27 +335,53 @@ def build_chat_response_from_route(
                 include_goal=include_message,
                 source=str(decision.get("source", "generic")),
             )
-            return _chat_response(
-                kind="loop",
-                headline="I can start a goal loop for this.",
-                body=body,
-                phase="loop_setup",
-                next_action="start_goal_loop",
-                thread_key=thread_key,
-                actions=[
-                    _action("choose_permission_profile", "Choose permission profile", "primary"),
-                    _action("start_loop", "Start loop", "primary", enabled=False),
+            assessment = loop_start_card.get("loopability_assessment", {})
+            loop_next_action = str(assessment.get("recommended_next_action", "start_goal_loop"))
+            loopability = str(assessment.get("loopability", "loopable"))
+            if loopability == "direct_task":
+                headline = "This looks like a direct task, not a loop."
+                body = "I can route it to a one-cycle delivery workflow unless you explicitly want repeated discovery."
+                primary_action = "route_direct_task"
+            elif loopability in {"needs_reframe", "north_star_only"}:
+                headline = "This is a north star; I will shape the first loop goal."
+                body = "I will keep the ambition, then ask for or propose a bounded arena, observable problem, and next verification before cycling."
+                primary_action = "convert_to_loop_goal"
+            elif loopability == "external_wait_only":
+                headline = "This depends on external evidence."
+                body = "I can record the external wait or help choose a local proxy loop goal before continuing."
+                primary_action = "assess_loopability"
+            else:
+                headline = "I can start a goal loop for this."
+                primary_action = "choose_permission_profile"
+            loop_actions = [_action(primary_action, primary_action.replace("_", " "), "primary")]
+            if primary_action != "choose_permission_profile":
+                loop_actions.append(
+                    _action("choose_permission_profile", "Choose permission profile", "secondary", enabled=loopability == "loopable")
+                )
+            loop_actions.extend(
+                [
+                    _action("start_loop", "Start loop", "primary", enabled=loopability == "loopable"),
                     _action("run_loop_tick", "Run loop tick", "secondary", enabled=False),
                     _action("show_loop_queue", "Show loop queue", "secondary", enabled=False),
                     _action("show_loop_status", "Show loop status", "secondary"),
                     _action("cancel", "Cancel", "secondary"),
-                ],
+                ]
+            )
+            return _chat_response(
+                kind="loop",
+                headline=headline,
+                body=body,
+                phase="loop_setup",
+                next_action=loop_next_action if loop_next_action else "start_goal_loop",
+                thread_key=thread_key,
+                actions=loop_actions,
                 claim_boundary=evidence_boundary,
                 extra_state={
                     "route_action": action,
                     "confidence": decision.get("confidence", "low"),
                     "selected_workflow": selected,
                     "policy_next_action": policy_next_action,
+                    "loopability_assessment": assessment,
                     "permission_profile_required": True,
                     "loop_start_card": loop_start_card,
                     "evidence_not_observed": [

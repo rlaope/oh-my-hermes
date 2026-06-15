@@ -119,7 +119,7 @@ class RouterContentTests(unittest.TestCase):
             "delivery": "present_app_delivery_loop",
             "leadership": "run_cto_loop",
             "monitoring": "prepare_deploy_monitor_plan",
-            "goal-loop": "start_goal_loop",
+            "goal-loop": "assess_loopability",
             "process": "start_ultraprocess",
         }
 
@@ -707,7 +707,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="product-ops/"', site_docs)
         self.assertIn('href="executor-handoff/"', site_docs)
         self.assertIn("Loop Engineering", site_loop)
-        self.assertIn("After harness engineering, Loop Engineering becomes the next", site_loop)
+        self.assertIn("In OMH, Loop Engineering is the operating surface", site_loop)
         self.assertNotIn("하네스 엔지니어링", site_loop)
         self.assertIn("../../assets/omh-loop-engineering.png", site_loop)
         self.assertIn("loop_runtime/v1", site_loop)

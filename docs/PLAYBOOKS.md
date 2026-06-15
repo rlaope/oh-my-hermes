@@ -46,7 +46,7 @@ files.
 | `reliability-incident-review` | A user wants postmortem, SLO, error-budget, incident follow-up, or service reliability review. | Scope service -> gather evidence -> assess reliability -> track remediation -> record unresolved gaps. |
 | `market-scan-to-strategy` | A user wants competitor or market evidence shaped into strategy. | Scope scan -> evidence matrix -> implications -> strategy brief. |
 | `deep-interview-to-plan` | A broad goal lacks scope, non-goals, or acceptance criteria. | One question -> clarified brief -> plan -> decision gate. |
-| `ambitious-goal-loop` | A user directly starts a long-horizon goal such as `./loop make this a 10k-star quality OSS`. | Interview -> reframe -> research -> plan -> handoff -> feedback -> wait or resume. |
+| `loopable-goal-cycle` | A user directly starts a long-horizon goal such as `./loop make this a 10k-star quality OSS`. | Classify task/project/ambition -> preserve the north star -> reframe into a bounded first loop goal -> research -> plan -> handoff -> feedback -> wait or resume. |
 | `local-pipeline-buildout` | A maintainer wants a repeatable local process for recurring work. | Catalog route -> wrapper contract -> plan gate -> lifecycle status. |
 | `idea-to-deploy` | A user wants a product or app idea to feel like a full delivery loop. | Idea -> decision -> plan -> handoff -> verification/release -> deploy/monitor status. |
 | `cto-loop` | A user wants CTO/PM-style operating cadence and decision quality. | Signals -> risks -> architecture tradeoffs -> decision -> follow-up handoffs -> status. |

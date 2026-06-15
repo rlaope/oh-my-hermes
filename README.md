@@ -171,10 +171,12 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 - **Durable goal mode contracts** - long work can stay tied to `.omh/goals`
   ledgers, completion gates, and explicit "continue/checkpoint/block/complete"
   next actions instead of ending with a vague summary.
-- **Loop runtime ticks** - ambitious `./loop` goals can be advanced by a local
-  tick or `omh loop run-once` with a deterministic queue shape for worktree,
-  subagent, connector, handoff, and `verification_plan` metadata plus a
-  `loop_engineering/v1` snapshot over automation, worktree, skill, connector,
+- **Loopability-gated runtime ticks** - `./loop` first decides whether the
+  goal is a direct task, a loopable project, a north-star ambition, external
+  waiting, or too unclear to start. Loopable goals can then be advanced by a
+  local tick or `omh loop run-once` with a deterministic queue shape for
+  worktree, subagent, connector, handoff, and `verification_plan` metadata plus
+  a `loop_engineering/v1` snapshot over automation, worktree, skill, connector,
   subagent, inner-loop checks, outer-loop checks, and verifier policy. Hermes
   can show the queue, prepare the next handoff, warn about verification gaps,
   comprehension debt, or cognitive surrender, then mark the item observed or
@@ -188,7 +190,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 
 | Representative workflow | Boundary | Plain request |
 | --- | --- | --- |
-| `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Hermes turns ambiguous intent into a concrete goal, plan, execution-ready path, direct ambitious goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
+| `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Hermes turns ambiguous intent into a concrete goal, plan, execution-ready path, loopable project cycle, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Hermes keeps non-coding company and product operations inside brief, evidence, and decision workflows. | "Payment failures keep coming up." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Hermes records operating cadence, report packages, and reliability reviews as separate local artifacts with strict evidence boundaries. | "Turn the sprint retro, monthly report, and incident review into durable records." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Hermes prepares work for Codex, Claude Code, another coding agent, an oh-my runtime, or Hermes coding skills without hiding unobserved execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
@@ -201,7 +203,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs` in user or project scope. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
-| Ambitious goal loops | `loop` lets Hermes run a direct high-level goal cycle across task discovery, distribution, execution, verification, next-task decisions, runtime tick queueing, handoff, feedback, waiting, and resume states inside an explicit permission profile. Start cards, `loop_engineering/v1` snapshots, `loop_status_card/v1` failure-mode warnings, and queue lifecycle actions help wrappers show what can start, what is only prepared, what verification is cheap or expensive, and what was later observed or blocked. |
+| Loopable goal cycles | `loop` lets Hermes classify a request as task, project, ambition, external waiting, or unclear before cycling. North-star ambitions stay visible, but the current loop goal must name a bounded arena, observable problem, next verification, and stop condition. Start cards, `loopability_assessment/v1`, `loop_engineering/v1` snapshots, `loop_status_card/v1` failure-mode warnings, and queue lifecycle actions help wrappers show what can start, what is only prepared, what verification is cheap or expensive, and what was later observed or blocked. |
 | PR-ready delivery process | `ultraprocess` is Ultra Process: Research -> Ralplan -> Ultragoal -> Code Review -> Sync Circle, one PR-ready delivery cycle without claiming unobserved executor work. Use `loop` instead when the goal should keep repeating after feedback. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Operations artifacts | `omh ops rhythm`, `omh ops report`, and `omh ops reliability` create schema-versioned local records under `.omh/operations`. `omh ops list` is summary-only and bounded by default; `omh ops export` returns Markdown or JSON outlines for wrapper/report use; binary PPTX export is intentionally a separate observed step. |
@@ -228,7 +230,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | "Run a postmortem, SLO, and error-budget reliability review." | Use `reliability-review` to require metric, incident, or source references before reliability claims advance. |
 | "Take this idea from plan to deploy and monitor it safely." | Shape the idea, record decision gates, prepare an executor handoff only if code is accepted, then track release/deploy/monitor status separately. |
 | "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
-| "./loop make this a 10k-star quality OSS." | Show a start card for permission and executor choice, preserve the large goal, expose the loop pipeline and automation/worktree/skill/connector/subagent/verification state, queue one prepared step with inner or outer verification intent, warn on verification gaps or comprehension debt, then record whether each item was observed or blocked. |
+| "./loop make this a 10k-star quality OSS." | Treat the phrase as a north star, propose a first loop goal such as reducing install-to-first-value friction, ask for the bounded arena and verification signal, then expose the loop pipeline and automation/worktree/skill/connector/subagent/verification state without claiming market response. |
 | "Deploy and monitor this release with rollback checks." | Show release scope, go/no-go, health signals, rollback gate, and post-deploy status without claiming infrastructure execution. |
 | "This refactor feels risky." | Produce a bounded plan, risk notes, review expectations, and a selected-runtime coding handoff only after acceptance. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
