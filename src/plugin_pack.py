@@ -12,6 +12,7 @@ from . import __version__
 from .hashutil import sha256_file, sha256_text
 from .local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
 from .paths import OmhPaths
+from .plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 
 PLUGIN_NAME = "omh"
 PLUGIN_SCHEMA_VERSION = "plugin_distribution/v1"
@@ -264,8 +265,8 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
         if not callable(register):
             return {"import_smoke": True, "register_smoke": False, "error": "register(ctx) is missing"}
         register(ctx)
-        required_tools = {"omh_gather_evidence", "omh_hud", "omh_role", "omh_status"}
-        required_hooks = {"on_session_end", "pre_llm_call", "pre_tool_call"}
+        required_tools = set(PROVIDED_TOOLS)
+        required_hooks = set(PROVIDED_HOOKS)
         return {
             "import_smoke": True,
             "register_smoke": required_tools.issubset(set(ctx.tools)) and required_hooks.issubset(set(ctx.hooks)),

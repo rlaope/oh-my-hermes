@@ -20,8 +20,8 @@ class ChatRouterTests(unittest.TestCase):
         decision = route_chat_message("risky refactor", source="discord")
 
         self.assertEqual(decision["action"], "dispatch")
-        self.assertEqual(decision["selected_skill"], "ai-slop-cleaner")
-        self.assertEqual(decision["selected_harness"], "coding-handling")
+        self.assertEqual(decision["selected_skill"], "ralplan")
+        self.assertEqual(decision["selected_harness"], "planning")
         self.assertEqual(decision["confidence"], "high")
         self.assertIn("User message:\nrisky refactor", decision["routing_prompt"])
 

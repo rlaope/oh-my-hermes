@@ -5,11 +5,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS, TOOLS_REQUIRING_ROLE_CATALOG
+
 STATUS_SCHEMA_VERSION = "omh_status/v1"
 HUD_SCHEMA_VERSION = "omh_hud/v1"
 HUD_PRESETS = {"minimal", "focused", "full"}
-HUD_REQUIRED_TOOLS = ("omh_gather_evidence", "omh_hud", "omh_role", "omh_status")
-HUD_REQUIRED_HOOKS = ("on_session_end", "pre_llm_call", "pre_tool_call")
+HUD_REQUIRED_TOOLS = PROVIDED_TOOLS
+HUD_REQUIRED_HOOKS = PROVIDED_HOOKS
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -174,13 +176,15 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
     files = {
         "plugin_yaml": (plugin_dir / "plugin.yaml").is_file(),
         "init_py": (plugin_dir / "__init__.py").is_file(),
-        "evidence_tool": (plugin_dir / "tools" / "evidence_tool.py").is_file(),
-        "hud_tool": (plugin_dir / "tools" / "hud_tool.py").is_file(),
-        "role_tool": (plugin_dir / "tools" / "role_tool.py").is_file(),
-        "status_tool": (plugin_dir / "tools" / "status_tool.py").is_file(),
         "role_catalog": any((plugin_dir / "references").glob("role-*.md")) if (plugin_dir / "references").is_dir() else False,
         "managed_manifest": (plugin_dir / ".omh-plugin-manifest.json").is_file(),
     }
+    files.update(
+        {
+            stem: (plugin_dir / "tools" / f"{stem}.py").is_file()
+            for stem in sorted(set(TOOL_FILE_STEMS.values()))
+        }
+    )
     yaml_text = _read_text(plugin_dir / "plugin.yaml")
     advertised_tools = set(_yaml_list_values(yaml_text, "provides_tools"))
     advertised_hooks = set(_yaml_list_values(yaml_text, "provides_hooks"))
@@ -190,20 +194,21 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
     hook_sources = advertised_hooks | registered_hooks
     return {
         "files": files,
-        "tools": {
-            "omh_gather_evidence": files["evidence_tool"] and "omh_gather_evidence" in tool_sources,
-            "omh_hud": files["hud_tool"] and "omh_hud" in tool_sources,
-            "omh_role": files["role_tool"] and files["role_catalog"] and "omh_role" in tool_sources,
-            "omh_status": files["status_tool"] and "omh_status" in tool_sources,
-        },
-        "hooks": {
-            "on_session_end": "on_session_end" in hook_sources,
-            "pre_llm_call": "pre_llm_call" in hook_sources,
-            "pre_tool_call": "pre_tool_call" in hook_sources,
-        },
+        "tools": _plugin_tool_capabilities(files, tool_sources),
+        "hooks": {hook: hook in hook_sources for hook in HUD_REQUIRED_HOOKS},
         "advertised_tools": sorted(advertised_tools),
         "advertised_hooks": sorted(advertised_hooks),
     }
+
+
+def _plugin_tool_capabilities(files: dict[str, bool], tool_sources: set[str]) -> dict[str, bool]:
+    capabilities = {}
+    for tool in HUD_REQUIRED_TOOLS:
+        file_ready = files[TOOL_FILE_STEMS[tool]]
+        if tool in TOOLS_REQUIRING_ROLE_CATALOG:
+            file_ready = file_ready and files["role_catalog"]
+        capabilities[tool] = file_ready and tool in tool_sources
+    return capabilities
 
 
 def _read_text(path: Path) -> str:

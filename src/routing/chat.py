@@ -5,7 +5,13 @@ import hashlib
 from typing import Any
 
 from ..ingress import CHAT_SOURCES, extract_message_text
-from .policy import CONFIDENCE_LEVELS, ROUTE_ACTIONS, is_ambiguous_scores, meets_confidence_threshold
+from .policy import (
+    CONFIDENCE_LEVELS,
+    ROUTE_ACTIONS,
+    explicit_skill_invocation as explicit_skill_name,
+    is_ambiguous_scores,
+    meets_confidence_threshold,
+)
 from .recommend import recommend_skills
 from ..skills.catalog import SkillDefinition, builtin_definitions, primary_harness_for_skill
 
@@ -143,14 +149,7 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
 
 def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] | None = None) -> str | None:
     definitions = definitions or builtin_definitions()
-    names = {definition.name for definition in definitions}
-    first = message.strip().split(maxsplit=1)[0].strip(":,")
-    for prefix in ("./", "/", "$", "@"):
-        if first.startswith(prefix):
-            first = first[len(prefix) :]
-            break
-    first = first.lower().strip(":,")
-    return first if first in names else None
+    return explicit_skill_name(message, {definition.name for definition in definitions})
 
 
 def routing_record_payload(

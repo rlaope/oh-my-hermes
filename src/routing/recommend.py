@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 from ..skills.catalog import SkillDefinition, builtin_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .policy import RoutingGuardRule, active_routing_guard_rules, explicit_skill_invocation
 
 
 _STOPWORDS = {
@@ -244,7 +245,7 @@ class Recommendation:
         return data
 
 
-def recommend_skills(query: str, *, limit: int = 5) -> list[dict[str, object]]:
+def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = True) -> list[dict[str, object]]:
     if limit < 1:
         raise ValueError("recommend --limit must be at least 1")
 
@@ -260,6 +261,13 @@ def recommend_skills(query: str, *, limit: int = 5) -> list[dict[str, object]]:
     if not matches:
         matches = _fallback_recommendations(definitions, query)
         return [recommendation.to_dict() for recommendation in matches[:limit]]
+    if apply_guardrails:
+        matches = _apply_guardrail_reranking(
+            matches,
+            normalized_query=normalized_query,
+            query_tokens=query_tokens,
+            explicit_skill=explicit_skill_invocation(query, {definition.name for definition in definitions}),
+        )
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
     return [recommendation.to_dict() for recommendation in matches[:limit]]
 
@@ -359,6 +367,40 @@ def _fallback_recommendations(definitions: list[SkillDefinition], query: str) ->
             )
         )
     return recommendations
+
+
+def _apply_guardrail_reranking(
+    recommendations: list[Recommendation],
+    *,
+    normalized_query: str,
+    query_tokens: set[str],
+    explicit_skill: str | None,
+) -> list[Recommendation]:
+    guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
+    if not guards:
+        return recommendations
+    reranked = []
+    for recommendation in recommendations:
+        reranked.append(_apply_guard_rules_to_recommendation(recommendation, guards))
+    return reranked
+
+
+def _apply_guard_rules_to_recommendation(
+    recommendation: Recommendation,
+    guards: tuple[RoutingGuardRule, ...],
+) -> Recommendation:
+    updated = recommendation
+    for guard in guards:
+        if updated.skill in guard.preferred_skills:
+            score = updated.score + guard.score_boost
+            updated = replace(
+                updated,
+                score=score,
+                confidence=_confidence(score),
+                matched=tuple(sorted({*updated.matched, guard.matched_label})),
+                why=guard.why,
+            )
+    return updated
 
 
 def _tokens(value: str) -> set[str]:

@@ -129,6 +129,51 @@ class HudCliTests(unittest.TestCase):
             self.assertTrue(payload["plugin"]["capabilities"]["tools"]["omh_status"])
             self.assertIn("plugin:update-needed", payload["display"]["line"])
 
+    def test_hud_marks_legacy_complete_plugin_without_capabilities_tool_as_stale(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            plugin_dir = hermes_home / "plugins" / "omh"
+            tools_dir = plugin_dir / "tools"
+            refs_dir = plugin_dir / "references"
+            tools_dir.mkdir(parents=True)
+            refs_dir.mkdir()
+            (plugin_dir / "__init__.py").write_text("def register(ctx):\n    pass\n", encoding="utf-8")
+            (plugin_dir / "plugin.yaml").write_text(
+                "\n".join(
+                    [
+                        "name: omh",
+                        'version: "0.9.0"',
+                        "provides_tools:",
+                        "  - omh_gather_evidence",
+                        "  - omh_hud",
+                        "  - omh_role",
+                        "  - omh_status",
+                        "provides_hooks:",
+                        "  - on_session_end",
+                        "  - pre_llm_call",
+                        "  - pre_tool_call",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            for stem in ("evidence_tool", "hud_tool", "role_tool", "status_tool"):
+                (tools_dir / f"{stem}.py").write_text("SCHEMA = {}\n", encoding="utf-8")
+            (refs_dir / "role-planning-lead.md").write_text("# Planning Lead\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "hud", "--json"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["plugin"]["status"], "stale")
+            self.assertFalse(payload["plugin"]["capabilities"]["tools"]["omh_capabilities"])
+            self.assertTrue(payload["plugin"]["capabilities"]["tools"]["omh_status"])
+            self.assertIn("plugin:update-needed", payload["display"]["line"])
+
     def test_hud_plugin_tool_tolerates_untrusted_limit_argument(self) -> None:
         from omh.plugin_bundle.omh.tools.hud_tool import omh_hud_handler
 
