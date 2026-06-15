@@ -238,7 +238,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user wants an open-ended feedback loop or long-horizon campaign; use `loop` instead.
   - The task is still ambiguous enough that a deep interview is required before planning.
   - No repo, product, or delivery surface is available to support a plan-to-PR cycle.
-- Strong routing signals: `ultraprocess`, `$ultraprocess`, `./ultraprocess`, `/ultraprocess`, `single-cycle delivery`, `one-cycle delivery`, `end-to-end process`, `delivery process`, `research plan implement review docs pr`, `plan implement review docs pr`, `ralplan ultragoal code-review`, `codebase research web research planning implementation review docs sync pr`, `docs sync`, `pr-ready`, `prepare a pr`, `sync docs and prepare a pr`, `code-review sync docs and prepare a pr`, `make a pr`, `open a pr`, `끝까지 해줘`, `PR까지`, `계획 구현 리뷰 문서 PR`, `기획 구현 리뷰 문서 PR`, `코드베이스 조사 웹리서치 계획 구현 리뷰 문서 최신화 PR`, `문서 최신화 PR`
+- Strong routing signals: `ultraprocess`, `$ultraprocess`, `./ultraprocess`, `/ultraprocess`, `single-cycle delivery`, `one-cycle delivery`, `end-to-end process`, `delivery process`, `research plan implement review docs pr`, `plan implement review docs pr`, `ralplan ultragoal code-review`, `codebase source research planning implementation review docs sync pr`, `docs sync`, `pr-ready`, `prepare a pr`, `sync docs and prepare a pr`, `code-review sync docs and prepare a pr`, `make a pr`, `open a pr`, `끝까지 해줘`, `PR까지`, `계획 구현 리뷰 문서 PR`, `기획 구현 리뷰 문서 PR`, `코드베이스 조사 웹리서치 계획 구현 리뷰 문서 최신화 PR`, `문서 최신화 PR`
 - Good example:
   - Prompt: $ultraprocess research this setup bug, plan the fix, implement, review, sync docs, and prepare a PR.
   - Expected behavior: Run exactly one delivery cycle and report which stages are observed, prepared, or blocked.
@@ -414,38 +414,43 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
 - Handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
-- Why this exists: `web-research` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
-- Use when: Use when the user needs current web evidence, links, citations, or source comparison before planning or handoff.
+- Why this exists: `web-research` exists to make Hermes a careful source-backed research operator: it routes web/current-source requests to evidence gathering, keeps retrieval gaps visible, and prevents search plans from being reported as observed facts.
+- Use when: Use when the user needs current web evidence, links, citations, source diversity, or source comparison before planning or handoff.
 - Do not use when:
-  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- Strong routing signals: `web-research`, `web research`, `latest`, `current sources`, `source-backed research`, `investigate`, `research plan`, `조사`, `근거`, `출처`, `고객 피드백`
+  - The user asks for a full plan-to-PR delivery cycle; use `ultraprocess` or a planning workflow after research instead.
+  - The request is purely local repo inspection with no external, current, citation, or source-comparison need.
+  - The user needs coding execution, review, CI, or merge evidence rather than research synthesis.
+- Strong routing signals: `web-research`, `web research`, `web search`, `search the web`, `internet search`, `latest`, `fresh sources`, `current sources`, `current web evidence`, `source-backed research`, `source search`, `find sources`, `find citations`, `citation check`, `evidence scan`, `source diversity`, `retrieval gap`, `look up`, `lookup`, `investigate`, `research plan`, `웹서치`, `웹 서치`, `웹 검색`, `인터넷 검색`, `검색해줘`, `검색해서`, `최신 자료`, `최신 출처`, `자료 찾아`, `조사`, `근거`, `출처`, `고객 피드백`
 - Good example:
-  - Prompt: web-research: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `web-research` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: 웹서치해서 최신 자료와 출처를 정리해줘.
+  - Expected behavior: Run the Hermes web-research lane, ask for or state source boundaries and freshness, then summarize citations, confidence, and retrieval gaps.
+  - Why: The request explicitly asks for web search, current material, and sources without asking for implementation.
 - Bad example:
-  - Prompt: web-research: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `web-research`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: 웹리서치부터 계획, 구현, 리뷰, 문서, PR까지 한 사이클로 끝내줘.
+  - Expected behavior: Route to `ultraprocess` because the user asked for a bounded delivery cycle, not a research-only lane.
+  - Why: Research is only one stage of the requested delivery process.
 - Quality bar:
-  - Use official or primary sources first when current or external facts matter.
-  - Separate direct evidence, inference, confidence, and residual uncertainty.
+  - Ask for the research question, source boundaries, freshness, jurisdiction, and version assumptions before retrieval.
+  - Use official or primary sources first when current or external facts matter, then add source diversity when the topic is contested.
+  - Separate direct evidence, citation links, retrieval dates, inference, confidence, and residual uncertainty.
+  - Name retrieval gaps when Hermes or the wrapper cannot access the web.
   - Summarize research before any coding handoff; research is not implementation evidence.
 - Required inputs:
   - research question
   - source boundaries
-  - recency or jurisdiction constraints
+  - freshness, jurisdiction, or version constraints
 - Expected outputs:
   - source-backed synthesis
   - links or citations
+  - source-quality notes
   - confidence and residual uncertainty
 - Artifact expectations:
-  - research notes with source URLs when the wrapper captures them
+  - research notes with source URLs, retrieval dates, and source-quality notes when the wrapper captures them
 - Safety rules:
   - Prefer official or primary sources when they can answer the question.
+  - Check source diversity and conflicts before summarizing contested or unstable topics.
   - Separate quoted evidence from inference.
-  - State retrieval limits and dates for unstable facts.
+  - State retrieval limits, dates, and missing-source gaps for unstable facts.
 
 ### research-brief
 
@@ -472,7 +477,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 - Quality bar:
   - State the research question, source boundaries, and recency assumptions before synthesis.
-  - Separate observed sources from inferred trends and unresolved uncertainty.
+  - Separate observed sources, source quality, source diversity, inferred trends, and unresolved uncertainty.
   - Use the brief to feed strategy or meeting work without calling it execution evidence.
 - Required inputs:
   - business question
@@ -486,7 +491,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - research brief or source ledger when the wrapper captures observed sources
 - Safety rules:
   - Do not claim sources were fetched unless Hermes or the wrapper observed them.
-  - Separate evidence, inference, confidence, and missing-source gaps.
+  - Separate evidence, inference, confidence, source diversity, and missing-source gaps.
   - Route later implementation separately through an accepted plan and coding handoff.
 
 ### strategy-brief
@@ -1690,35 +1695,42 @@ Gather current or source-backed evidence before planning or coding handoff.
 - Quality bar:
   - Scope the research question, source boundaries, recency, and jurisdiction or version assumptions before retrieval.
   - Use official or primary sources first when they can answer the question.
-  - Record source quality, conflicting evidence, and retrieval gaps before synthesis.
-  - Separate source evidence, inference, confidence, and retrieval limits.
+  - Record source quality, source diversity, conflicting evidence, and retrieval gaps before synthesis.
+  - Separate source evidence, citation links, inference, confidence, and retrieval limits.
   - Record dates or version boundaries for unstable facts.
 - Inputs:
   - research question
   - source boundaries
-  - recency or environment constraints
+  - freshness, jurisdiction, version, or environment constraints
 - Outputs:
   - source-backed synthesis
   - links or citations
+  - source-quality notes
   - confidence and residual uncertainty
 - Stop conditions:
   - claims are source-backed
+  - source diversity is checked when relevant
   - retrieval limits and dates are explicit
 - Verification:
   - prefer official or primary sources
+  - check source diversity and conflicts
   - separate evidence from inference
 - Evidence ladder:
   - `research_question_scoped`
+  - `source_boundaries_recorded`
   - `primary_sources_checked`
+  - `source_diversity_checked`
   - `conflicts_checked`
   - `evidence_synthesized`
   - `uncertainty_recorded`
 - Wrapper actions:
   - `show_sources`
   - `ask_followup`
+  - `record_source`
   - `prepare_plan`
 - Artifact events:
   - `research_started`
+  - `source_boundary_recorded`
   - `source_checked`
   - `synthesis_recorded`
 - Delegation expectation: Record a research lane only when Hermes or the wrapper exposes source/research evidence; otherwise summarize retrieval limits explicitly.
@@ -1726,6 +1738,7 @@ Gather current or source-backed evidence before planning or coding handoff.
 - Overclaim guards:
   - Research synthesis is not implementation evidence.
   - Unavailable web access must be reported as a retrieval gap.
+  - A source plan is not observed source retrieval until URLs, citations, or supplied source notes are recorded.
 - Fallback: If web access is unavailable, state the retrieval gap and fall back to best available local evidence.
 
 ### business-research
@@ -1736,7 +1749,7 @@ Prepare source-backed business research briefs with evidence and inference bound
 - Quality tier: `source-gated`
 - Quality bar:
   - Scope the business question and source boundary before synthesis.
-  - Separate observed sources, inferred trends, confidence, and uncertainty.
+  - Separate observed sources, source quality, source diversity, inferred trends, confidence, and uncertainty.
   - Feed strategy or meeting work without treating the research brief as execution evidence.
 - Inputs:
   - business question
@@ -1757,6 +1770,7 @@ Prepare source-backed business research briefs with evidence and inference bound
 - Evidence ladder:
   - `business_question_scoped`
   - `source_boundary_recorded`
+  - `source_quality_recorded`
   - `source_evidence_recorded`
   - `business_synthesis_recorded`
   - `uncertainty_recorded`

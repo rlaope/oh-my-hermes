@@ -50,15 +50,17 @@
         "quality_tier": "source-gated",
         "evidence_ladder": [
           "research_question_scoped",
+          "source_boundaries_recorded",
           "primary_sources_checked",
+          "source_diversity_checked",
           "conflicts_checked",
           "evidence_synthesized",
           "uncertainty_recorded"
         ],
-        "wrapper_actions": ["show_sources", "ask_followup", "prepare_plan"]
+        "wrapper_actions": ["show_sources", "ask_followup", "record_source", "prepare_plan"]
       },
-      "user_visible_upgrade": "The wrapper can keep research as a first-class Hermes lane and avoid turning every source-backed answer into a coding handoff.",
-      "claim_boundary": "Research synthesis is not implementation evidence."
+      "user_visible_upgrade": "The wrapper can keep research as a first-class Hermes lane, request source boundaries, record source quality, and avoid turning every source-backed answer into a coding handoff.",
+      "claim_boundary": "A source plan is not observed source retrieval or implementation evidence."
     },
     {
       "scenario": "clarification_quality",

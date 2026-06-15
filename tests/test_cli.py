@@ -1156,14 +1156,28 @@ class CliTests(unittest.TestCase):
                 self.assertIn("draft plan", recommendations[0]["evidence_boundary"])
 
     def test_recommend_web_research_stays_hermes_owned(self) -> None:
-        status, stdout, stderr = run_cli(["recommend", "latest", "web", "research", "official", "sources"])
+        cases = (
+            ["latest", "web", "research", "official", "sources"],
+            ["웹서치", "해줘"],
+            ["검색해서", "최신", "자료와", "출처", "정리해줘"],
+            ["search", "the", "web", "for", "current", "sources", "and", "citations"],
+            ["ウェブ検索して最新の出典をまとめて"],
+            ["查一下最新资料和来源"],
+            ["buscar", "en", "la", "web", "fuentes", "actuales"],
+        )
 
-        self.assertEqual(stderr, "")
-        self.assertEqual(status, 0)
-        recommendations = json.loads(stdout)["recommendations"]
-        self.assertEqual(recommendations[0]["skill"], "web-research")
-        self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
-        self.assertIn("source-backed", recommendations[0]["description"].lower())
+        for args in cases:
+            with self.subTest(args=args):
+                status, stdout, stderr = run_cli(["recommend", *args, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "web-research")
+                self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
+                self.assertIn("source-backed", recommendations[0]["description"].lower())
+                self.assertIn("retrieval", recommendations[0]["evidence_boundary"].lower())
+                self.assertIn("freshness", recommendations[0]["wrapper_guidance"].lower())
 
     def test_recommend_business_workflows_stay_hermes_owned(self) -> None:
         cases = (
@@ -1303,16 +1317,22 @@ class CliTests(unittest.TestCase):
         self.assertIn("assess whether", top["wrapper_guidance"].lower())
 
     def test_recommend_ultraprocess_routes_plan_to_pr_process(self) -> None:
-        message = "research the codebase, make a plan, implement, code-review, sync docs, and open a PR"
-        status, stdout, stderr = run_cli(["recommend", message, "--limit", "2"])
+        cases = (
+            "research the codebase, make a plan, implement, code-review, sync docs, and open a PR",
+            "web research and source scan, then prepare a PR",
+        )
 
-        self.assertEqual(stderr, "")
-        self.assertEqual(status, 0)
-        top = json.loads(stdout)["recommendations"][0]
-        self.assertEqual(top["skill"], "ultraprocess")
-        self.assertEqual(top["next_action"], "start_ultraprocess")
-        self.assertIn("process orchestration", top["evidence_boundary"])
-        self.assertIn("prepared_not_observed", top["wrapper_guidance"])
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "2"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], "ultraprocess")
+                self.assertEqual(top["next_action"], "start_ultraprocess")
+                self.assertIn("process orchestration", top["evidence_boundary"])
+                self.assertIn("prepared_not_observed", top["wrapper_guidance"])
 
     def test_chat_interact_multilingual_feature_request_uses_plan_surface(self) -> None:
         status, stdout, stderr = run_cli(
