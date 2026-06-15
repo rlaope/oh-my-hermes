@@ -263,6 +263,8 @@ The playbook layer picks a situation-level path above individual skills:
   decision, and follow-up records
 - `report-package` for report, status package, executive brief, and PPT-ready
   outlines that are independent from reliability review
+- `materials-processing` for decks, PDFs, spreadsheets, documents, HWP,
+  Markdown, and upload-ready files with export and QA evidence boundaries
 - `reliability-incident-review` for postmortem, SLO, error-budget, service
   review, incident follow-up, and remediation evidence
 - `market-scan-to-strategy` for competitor evidence into strategic options
@@ -289,6 +291,7 @@ omh playbook list
 omh playbook inspect safe-feature-change
 omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "take this product idea from plan to deploy and monitor safely"
+omh playbook recommend "turn the revenue spreadsheet into an Excel and PDF package with render QA"
 omh playbook recommend "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness"
 omh playbook recommend "deploy and monitor this release with rollback and health checks"
 ```
@@ -330,6 +333,8 @@ Use this flow for non-coding company work such as:
 - weekly operating review
 - meeting history, scrum, sprint, retrospective, and decision records
 - report packages, executive briefs, and PPT-ready outlines
+- material packages such as decks, PDFs, spreadsheets, documents, HWP,
+  Markdown, and upload-ready files
 - postmortems, SLO review, error-budget review, and service reliability checks
 
 Example prompts:
@@ -340,6 +345,7 @@ prepare weekly ops review from customer feedback and release risks
 we need a competitor market scan and strategy memo for next week's leadership meeting
 organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions
 create a monthly leadership PPT report package from current status and risks
+엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘
 run an incident postmortem with SLO, error budget, remediation, and service reliability evidence
 ```
 
@@ -354,10 +360,13 @@ Hermes should use the business workflow skills:
 - `ops-review` for evidence-bound status, risks, blockers, and follow-ups
 - `operating-rhythm` for durable cadence records and action history
 - `report-package` for report and slide outlines without SRE dependency
+- `materials-package` for target-format selection, source organization,
+  generation handoffs, export QA ladders, and observed file boundaries
 - `reliability-review` for incident, SLO, error-budget, and remediation review
 
 These skills stay Hermes-retained by default. They should not create coding
-handoffs, product roadmaps, release claims, report approvals, binary deck export
+handoffs, product roadmaps, release claims, report approvals, binary deck or
+document export claims, render/formula QA claims, upload claims, delivery
 claims, or meeting outcomes unless a later accepted artifact provides the
 missing evidence.
 
@@ -402,7 +411,7 @@ omh demo grounded-score
 The purpose of the matrix is to keep Hermes users command-agnostic while giving
 wrapper operators a concrete contract result to render.
 
-`omh demo grounded-score` is a deterministic contract-compliance demo over 19
+`omh demo grounded-score` is a deterministic contract-compliance demo over 20
 representative messages. The score is 10/10 only when the expected chat route,
 response kind, next action, playbook confidence, and coding-delegation evidence
 boundary all match. It does not award points for unobserved execution, review,
@@ -423,6 +432,7 @@ CI, or merge work.
 | Consulting/agency operating template | `고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해` | `plan` / `present_plan` | `local-pipeline-buildout` | Handoff is available only after the operator accepts the recurring workflow plan. | `10/10` |
 | Operating rhythm history | `회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘` | `operating-rhythm` / `prepare_operating_record` | `operating-rhythm-history` | Hermes prepares or records cadence artifacts; meeting outcomes and action completion need observed notes. | `10/10` |
 | Leadership report package | `create a PPT report package for a monthly leadership status deck` | `report-package` / `prepare_report_package` | `report-package` | Hermes prepares a report outline; binary deck export and stakeholder approval remain separate evidence. | `10/10` |
+| Materials processing package | `엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘` | `materials-package` / `prepare_material_package` | `materials-processing` | Hermes prepares a material plan and generation handoff; binary export, render QA, formula checks, approval, upload, and delivery remain separate evidence. | `10/10` |
 | Reliability incident review | `run an incident postmortem SLO error budget service reliability review` | `reliability-review` / `prepare_reliability_review` | `reliability-incident-review` | Reliability claims require metric, incident, source, and remediation evidence before status advances. | `10/10` |
 | Idea-to-deploy product loop | `take this product idea from plan to deploy and monitor safely` | `idea-to-deploy` / `present_app_delivery_loop` | `idea-to-deploy` | Hermes presents the product loop without claiming implementation, deploy, or monitoring. | `10/10` |
 | CTO loop | `run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness` | `cto-loop` / `run_cto_loop` | `cto-loop` | Hermes keeps leadership decisions separate from accepted implementation follow-ups. | `10/10` |
@@ -459,8 +469,8 @@ Before using these cases as public release evidence, verify:
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
   triage, ops review, operating rhythm history, report packages, reliability
-  incident review, app operation loops, local pipeline buildout, and
-  release-readiness review.
+  incident review, material packages, app operation loops, local pipeline
+  buildout, and release-readiness review.
 - The grounded cases above match actual generated skill and playbook behavior.
 - Runtime-backed cases above can create `.omh/runtime/runs/<run-id>/`
   artifacts.

@@ -193,6 +193,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Hermes turns ambiguous intent into a concrete goal, plan, execution-ready path, loopable project cycle, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Hermes keeps non-coding company and product operations inside brief, evidence, and decision workflows. | "Payment failures keep coming up." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Hermes records operating cadence, report packages, and reliability reviews as separate local artifacts with strict evidence boundaries. | "Turn the sprint retro, monthly report, and incident review into durable records." |
+| `materials-package` / `report-package` | Hermes shapes decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages while keeping binary export and render QA observed-only. | "Turn the revenue spreadsheet into an Excel and PDF package with render QA." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Hermes prepares work for Codex, Claude Code, another coding agent, an oh-my runtime, or Hermes coding skills without hiding unobserved execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## What You Get
@@ -207,6 +208,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | PR-ready delivery process | `ultraprocess` is Ultra Process: Research -> Ralplan -> Ultragoal -> Code Review -> Sync Circle, one PR-ready delivery cycle without claiming unobserved executor work. Use `loop` instead when the goal should keep repeating after feedback. |
 | Business workflows | Research briefs, strategy briefs, meeting briefs, feedback triage, and ops review for non-coding company work. |
 | Operations artifacts | `omh ops rhythm`, `omh ops report`, and `omh ops reliability` create schema-versioned local records under `.omh/operations`. `omh ops list` is summary-only and bounded by default; `omh ops export` returns Markdown or JSON outlines for wrapper/report use; binary PPTX export is intentionally a separate observed step. |
+| Material packages | `omh materials plan`, `omh materials list`, `omh materials export`, and `omh materials qa-ladder` create `material_artifact/v1` records under `.omh/materials` for decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload packages. Binary export, render QA, formula recalculation, approval, delivery, and external upload stay unobserved until file and QA evidence are recorded. |
 | Coding handoffs | Executor/runtime-neutral handoff payloads with acceptance, review, verification, team/swarm, worker-protocol, and worktree expectations. |
 | Runtime observation ledger | `omh runtime observe` records what a wrapper or operator actually observed for Hermes/OMX/OMO/OMC runtime handoffs without upgrading missing steps into evidence. |
 | Memory context review | Review OMH-local and wrapper-supplied context, flag stale assumptions, and attach conflict-free summaries to executor handoffs. |
@@ -227,6 +229,7 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
 | "Keep meeting minutes, scrum notes, sprint plans, and retros in one history." | Use `operating-rhythm` to prepare or record a durable cadence artifact with decisions and follow-up actions separated from unobserved outcomes. |
 | "Create a monthly leadership PPT report package." | Use `report-package` to prepare a clean report or slide outline without requiring SRE evidence or claiming a binary deck was exported. |
+| "Turn the revenue spreadsheet into an Excel and PDF package with render QA." | Use `materials-package` to scope audience, source inputs, target formats, missing data, QA ladder, and generation handoff without claiming files, screenshots, formulas, approval, or delivery were observed. |
 | "Run a postmortem, SLO, and error-budget reliability review." | Use `reliability-review` to require metric, incident, or source references before reliability claims advance. |
 | "Take this idea from plan to deploy and monitor it safely." | Shape the idea, record decision gates, prepare an executor handoff only if code is accepted, then track release/deploy/monitor status separately. |
 | "Run a CTO loop for roadmap and release readiness." | Structure PM, architecture, delivery risk, release readiness, and follow-up decisions without forcing hidden role agents. |
@@ -238,7 +241,8 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 For company and app operation work, OMH can help Hermes classify, brief, record,
 decide, handoff, and track the next workflow without pretending data was
 fetched, a meeting happened, code was implemented, a report was approved, a
-binary deck was exported, or a deployment was observed.
+binary deck or document was exported, render/formula QA passed, a file was
+uploaded, or a deployment was observed.
 
 ## Profiles And Plugin
 

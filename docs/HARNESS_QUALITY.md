@@ -23,6 +23,9 @@ state:
   unobserved" for cadence lanes.
 - "A report package outline is ready, but approval and binary PPTX export are
   not observed yet" for report lanes.
+- "A material package plan is ready, but binary export, render QA, formula
+  recalculation, approval, delivery, and upload are not observed yet" for
+  material lanes.
 - "A reliability review is drafted, but SLO, incident, and error-budget claims
   require metric or source evidence" for reliability lanes.
 - "A coding handoff is prepared, but execution is not observed yet" for coding
@@ -106,9 +109,11 @@ covering coding handoff, planning, research, and clarification lanes.
 The business workflow pack adds non-coding harnesses such as
 `business-research`, `strategy-synthesis`, `meeting-facilitation`,
 `customer-insight-triage`, `ops-review`, `operating-rhythm`, `report-package`,
-and `reliability-review`. These give wrappers the same evidence discipline for
-company work: research briefs are not fetched data, strategy briefs are not
-accepted decisions, meeting briefs are not meeting minutes, feedback triage is
-not a roadmap, ops review is not release or CI evidence, report packages are
-not binary decks or approvals, and reliability reviews are not proof that SLOs
-passed without metric or source evidence.
+`materials-package`, and `reliability-review`. These give wrappers the same
+evidence discipline for company work: research briefs are not fetched data,
+strategy briefs are not accepted decisions, meeting briefs are not meeting
+minutes, feedback triage is not a roadmap, ops review is not release or CI
+evidence, report packages are not binary decks or approvals, material packages
+are not binary exports, render/formula QA, uploads, approvals, or delivery, and
+reliability reviews are not proof that SLOs passed without metric or source
+evidence.

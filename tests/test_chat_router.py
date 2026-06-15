@@ -67,6 +67,11 @@ class ChatRouterTests(unittest.TestCase):
                 "reliability-review",
                 "reliability-review",
             ),
+            (
+                "엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘",
+                "materials-package",
+                "materials-package",
+            ),
         )
 
         for message, skill, harness in cases:

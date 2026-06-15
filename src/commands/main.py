@@ -46,6 +46,15 @@ from .goal import (
 from .hermes import _add_hermes_commands, cmd_hermes_plan
 from .hud import _add_hud_commands, cmd_hud
 from .loop import _add_loop_commands, cmd_loop_feedback, cmd_loop_permit, cmd_loop_run_once, cmd_loop_start, cmd_loop_status
+from .materials import (
+    _add_materials_commands,
+    cmd_materials_export,
+    cmd_materials_list,
+    cmd_materials_plan,
+    cmd_materials_qa_ladder,
+    cmd_materials_show,
+    cmd_materials_validate,
+)
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .ops import (
     _add_ops_commands,
@@ -112,11 +121,12 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh hud\n"
             "  omh loop status\n"
             "  omh ops list\n"
+            "  omh materials list\n"
             "  omh runtime status\n\n"
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
             "Backend/control-plane commands such as chat, coding, runtime, goal, loop,\n"
-            "memory, ops, state, harness, release smoke, and demo print JSON by design."
+            "memory, ops, materials, state, harness, release smoke, and demo print JSON by design."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -143,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_loop_commands(sub)
     _add_memory_commands(sub)
     _add_ops_commands(sub)
+    _add_materials_commands(sub)
     _add_runtime_commands(sub)
     _add_goal_commands(sub)
     _add_state_commands(sub)
@@ -172,6 +183,7 @@ Useful operator commands:
   omh hud                Show the compact OMH status line
   omh loop status        Show loopable goal cycle state
   omh ops list           List local operations artifacts
+  omh materials list     List material-processing artifacts
   omh runtime status     Show local evidence artifacts
 
 After setup, restart or reload Hermes Agent and try:

@@ -174,6 +174,17 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         expected_playbook="report-package",
     ),
     GroundedScenario(
+        "materials-processing-package",
+        "Materials processing package",
+        "엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘",
+        "materials-package",
+        "ack",
+        "prepare_material_package",
+        "clarify",
+        False,
+        expected_playbook="materials-processing",
+    ),
+    GroundedScenario(
         "reliability-incident-review",
         "Reliability incident review",
         "run an incident postmortem SLO error budget service reliability review",
