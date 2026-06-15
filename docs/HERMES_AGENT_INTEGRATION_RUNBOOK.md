@@ -148,6 +148,14 @@ Executor result has not been observed yet.
 Hermes verification has not been requested yet.
 ```
 
+When the user asks “what is happening with that coding task?”, prefer the
+`coding_briefing/v1` object from `omh chat session status`. Render
+`coding_briefing.user_facing_lines[]` for a readable answer, and use
+`coding_briefing.progress[]`, `pending_gaps[]`, and `evidence_summary` for
+expanded status. Keep `status_card/v1` compact; do not treat the briefing as
+proof of execution, verification, review, CI, or merge unless the matching
+observed evidence appears in the briefing.
+
 For prompt-only Claude Code or generic agents, the same wrapper session action
 records attached/result metadata without creating a Codex lifecycle run. For
 Hermes/OMX/OMO/OMC runtime handoffs, an observed open also records the

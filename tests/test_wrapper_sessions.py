@@ -10,9 +10,17 @@ from tempfile import TemporaryDirectory
 from _local_package import load_local_package
 
 load_local_package()
-from omh.coding_lifecycle import record_codex_dispatch, record_codex_result, start_codex_delegation_lifecycle
+from omh.coding_lifecycle import record_codex_dispatch, record_codex_result, record_codex_verification, start_codex_delegation_lifecycle
 from omh.paths import resolve_paths
-from omh.runtime_artifacts import create_run, export_runtime, validate_runtime, write_runtime_observation
+from omh.runtime_artifacts import (
+    create_run,
+    export_runtime,
+    validate_runtime,
+    write_ci_record,
+    write_merge_record,
+    write_review_record,
+    write_runtime_observation,
+)
 from omh.runtime_records import validate_wrapper_session_record
 from omh.wrapper.executor_sessions import (
     ExecutorSessionError,
@@ -170,6 +178,106 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertTrue(validate_runtime(paths)["ok"])
             session_path = paths.runtime_wrapper_sessions_dir / session_id / "session.json"
             self.assertNotIn(message, session_path.read_text(encoding="utf-8"))
+
+    def test_coding_briefing_is_metadata_only_and_keeps_cards_compact(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor with private-token-123"
+            started = create_or_resume_wrapper_session(
+                paths,
+                message,
+                source="discord",
+                source_metadata={"source_event_id": "m1", "channel_ref": "c1"},
+            )
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            context_pack = {
+                "schema_version": "handoff_context_pack/v1",
+                "executor_target": "codex",
+                "session_id": session_id,
+                "scope": {"kind": "project", "ref": "default"},
+                "source_refs": [{"source": "omh_memory", "truth_level": "approved_context", "precedence": 60, "item_count": 1}],
+                "included_context": [
+                    {
+                        "item_id": "ctx-1",
+                        "key": "default_executor",
+                        "summary": "Use Codex by default for coding work.",
+                        "source": "omh_memory",
+                        "truth_level": "approved_context",
+                        "scope": {"kind": "project", "ref": "default"},
+                    }
+                ],
+                "excluded_context": [],
+                "blocked_by_conflicts": [],
+                "redaction_policy": "metadata_only",
+                "claim_boundary": "Context pack is metadata only.",
+            }
+
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message, context_pack=context_pack)
+            status = prepared["status"]
+            briefing = status["coding_briefing"]
+
+            self.assertEqual(briefing["schema_version"], "coding_briefing/v1")
+            self.assertEqual(
+                set(briefing),
+                {
+                    "schema_version",
+                    "session_id",
+                    "run_id",
+                    "thread_key",
+                    "headline",
+                    "narrative",
+                    "current_state",
+                    "original_context",
+                    "work_summary",
+                    "progress",
+                    "evidence_summary",
+                    "pending_gaps",
+                    "next_action",
+                    "user_facing_lines",
+                    "claim_boundary",
+                },
+            )
+            self.assertEqual(briefing["original_context"]["message"]["sha256"], hashlib.sha256(message.encode("utf-8")).hexdigest())
+            self.assertEqual(briefing["original_context"]["message"]["length"], len(message))
+            self.assertFalse(briefing["original_context"]["message"]["raw_text_persisted"])
+            self.assertFalse(briefing["original_context"]["deep_interview"]["persisted"])
+            self.assertIn("execution_brief", briefing["work_summary"]["handoff_contract"])
+            self.assertIn("evidence_contract", briefing["work_summary"]["handoff_contract"])
+            self.assertEqual(briefing["work_summary"]["handoff_contract"]["context_pack"]["included_context_count"], 1)
+            self.assertNotIn("included_context", briefing["work_summary"]["handoff_contract"]["context_pack"])
+            self.assertNotIn(message, json.dumps(briefing))
+            self.assertNotIn("private-token-123", json.dumps(briefing))
+            self.assertIn("coding_briefing", status["chat_response"])
+            self.assertEqual(status["chat_response"]["coding_briefing"]["schema_version"], "coding_briefing/v1")
+            self.assertEqual(
+                set(status["chat_response"]["coding_briefing"]),
+                {"schema_version", "headline", "lines", "next_action", "pending_gaps", "claim_boundary"},
+            )
+            self.assertNotIn("progress", status["chat_response"]["coding_briefing"])
+            self.assertNotIn("coding_briefing", status["status_card"])
+
+    def test_prompt_only_coding_briefing_reports_prepared_not_dispatched(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "claude-code")
+
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message)
+            briefing = prepared["status"]["coding_briefing"]
+            states = {step["id"]: step["state"] for step in briefing["progress"]}
+
+            self.assertEqual(briefing["run_id"], "")
+            self.assertEqual(briefing["current_state"]["selected_executor_profile"], "claude-code")
+            self.assertEqual(briefing["work_summary"]["handoff_schema_version"], "coding_prompt_handoff/v1")
+            self.assertEqual(states["handoff"], "complete")
+            self.assertEqual(states["dispatch"], "pending")
+            self.assertIn("dispatch", briefing["pending_gaps"])
+            self.assertIn("prompt-only handoff", json.dumps(briefing["user_facing_lines"]))
 
     def test_revision_and_cancel_do_not_create_run_evidence(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -537,7 +645,119 @@ class WrapperSessionTests(unittest.TestCase):
             verify_request = request_executor_session_verification(paths, session_id)
 
             self.assertEqual(verify_request["status"]["verification"], "requested")
+            status_after_verify_request = build_wrapper_session_status(paths, session_id)
+            briefing = status_after_verify_request["coding_briefing"]
+            states = {step["id"]: step["state"] for step in briefing["progress"]}
+            self.assertEqual(states["executor_result"], "complete")
+            self.assertEqual(states["verification"], "in_progress")
+            self.assertIn("verification", briefing["pending_gaps"])
+            self.assertIn("verification evidence is still needed", briefing["headline"])
             self.assertEqual(validate_runtime(paths)["ok"], True)
+
+    def test_coding_briefing_omits_optional_merge_gaps_when_merge_not_required(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "diagnose installation health"
+            lifecycle = start_codex_delegation_lifecycle(paths, message, source="discord")
+            coding = lifecycle["coding_delegation"]
+            run_id = str(lifecycle["run"]["run_id"])
+            thread_key = "discord:c1:m1"
+            session_id = session_id_for_thread_key(thread_key)
+            write_wrapper_session(
+                paths,
+                {
+                    "session_id": session_id,
+                    "thread_key": thread_key,
+                    "source": "discord",
+                    "source_metadata": {"source_event_id": "m1", "channel_ref": "c1"},
+                    "message_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest(),
+                    "message_length": len(message),
+                    "created_at": "2026-06-15T00:00:00Z",
+                    "updated_at": "2026-06-15T00:00:00Z",
+                    "status": "handoff_prepared",
+                    "decision": "plan_accepted",
+                    "route": {
+                        "action": "route",
+                        "selected_skill": str(coding["recommended_workflow"]),
+                        "selected_harness": str(coding["recommended_harness"]),
+                        "confidence": "high",
+                        "score": 10,
+                    },
+                    "plan": {
+                        "status": "ready",
+                        "recommended_workflow": str(coding["recommended_workflow"]),
+                        "recommended_harness": str(coding["recommended_harness"]),
+                        "coding_delegate_available": "true",
+                    },
+                    "work_owner_mode": "external_executor",
+                    "selected_executor_profile": "codex",
+                    "dispatch_policy": "ask_before_dispatch",
+                    "prompt_handoff": {},
+                    "runtime_handoff": {},
+                    "current_run_id": run_id,
+                },
+            )
+
+            record_codex_dispatch(paths, run_id)
+            record_codex_result(paths, run_id, result="completed", evidence_refs=["codex-summary"])
+            record_codex_verification(paths, run_id)
+
+            status = build_wrapper_session_status(paths, session_id)
+            briefing = status["coding_briefing"]
+            states = {step["id"]: step["state"] for step in briefing["progress"]}
+
+            self.assertEqual(status["runtime_status"]["next_action"], "report_completion_with_evidence")
+            self.assertEqual(states["review"], "not_required")
+            self.assertEqual(states["ci"], "not_required")
+            self.assertEqual(states["merge_ready"], "not_required")
+            self.assertEqual(states["merged"], "not_required")
+            self.assertNotIn("merge_ready", briefing["pending_gaps"])
+            self.assertNotIn("merged", briefing["pending_gaps"])
+
+    def test_coding_briefing_separates_merge_ready_from_merged(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            handoff = prepare_wrapper_session_handoff(paths, session_id, message)
+            run_id = str(handoff["session"]["current_run_id"])
+            run_dir = paths.runtime_runs_dir / run_id
+
+            record_codex_dispatch(paths, run_id)
+            record_codex_result(paths, run_id, result="completed", evidence_refs=["codex-summary"])
+            record_codex_verification(paths, run_id)
+            write_review_record(run_dir, {"status": "passed", "reviewer": "code-review", "evidence_refs": ["review"]})
+            write_ci_record(run_dir, {"status": "passed", "provider": "local", "checks": ["unit:passed"]})
+            write_merge_record(run_dir, {"status": "ready", "target_branch": "main", "evidence_refs": ["ci"], "summary": "ready"})
+
+            ready_status = build_wrapper_session_status(paths, session_id)
+            ready_states = {step["id"]: step["state"] for step in ready_status["coding_briefing"]["progress"]}
+
+            self.assertEqual(ready_status["runtime_status"]["next_action"], "report_merge_ready")
+            self.assertEqual(ready_states["merge_ready"], "complete")
+            self.assertEqual(ready_states["merged"], "pending")
+            self.assertIn("merged", ready_status["coding_briefing"]["pending_gaps"])
+
+            write_merge_record(
+                run_dir,
+                {
+                    "status": "merged",
+                    "target_branch": "main",
+                    "merge_commit": "abc123",
+                    "evidence_refs": ["https://github.example/repo/pull/1"],
+                    "summary": "merged",
+                },
+            )
+            merged_status = build_wrapper_session_status(paths, session_id)
+            merged_states = {step["id"]: step["state"] for step in merged_status["coding_briefing"]["progress"]}
+
+            self.assertEqual(merged_status["runtime_status"]["next_action"], "report_merged")
+            self.assertEqual(merged_states["merge_ready"], "complete")
+            self.assertEqual(merged_states["merged"], "complete")
+            self.assertNotIn("merged", merged_status["coding_briefing"]["pending_gaps"])
 
     def test_codex_lifecycle_result_allows_executor_session_verification_request(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -724,6 +944,57 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(status["runtime_observation"]["next_action"], "record_runtime_observation:worktree_creation")
             self.assertEqual(status["executor_session_status"]["result"], "not_observed")
             self.assertTrue(validate_runtime(paths)["ok"])
+
+    def test_runtime_handoff_coding_briefing_uses_observed_ladder_events(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "risky refactor", source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "omx-runtime")
+            prepare_wrapper_session_handoff(paths, session_id, "risky refactor")
+            session_dir = paths.runtime_wrapper_sessions_dir / session_id
+
+            for event_type in (
+                "runtime_start",
+                "worktree_creation",
+                "worker_dispatch",
+                "worker_result",
+                "verification",
+                "review",
+                "ci",
+                "merge_readiness",
+                "merge",
+            ):
+                payload = {
+                    "target_type": "wrapper_session",
+                    "target_id": session_id,
+                    "runtime_profile": "omx-runtime",
+                    "event_type": event_type,
+                    "status": "observed",
+                    "summary": f"{event_type} observed",
+                }
+                if event_type == "worktree_creation":
+                    payload["worktree_ref"] = "worktree-1"
+                if event_type in {"worker_dispatch", "worker_result"}:
+                    payload["worker_ref"] = "worker-1"
+                write_runtime_observation(session_dir, payload)
+
+            status = build_wrapper_session_status(paths, session_id)
+            briefing = status["coding_briefing"]
+            states = {step["id"]: step["state"] for step in briefing["progress"]}
+
+            self.assertEqual(status["runtime_observation"]["next_action"], "report_runtime_observed")
+            self.assertEqual(states["dispatch"], "complete")
+            self.assertEqual(states["executor_result"], "complete")
+            self.assertEqual(states["verification"], "complete")
+            self.assertEqual(states["review"], "complete")
+            self.assertEqual(states["ci"], "complete")
+            self.assertEqual(states["merge_ready"], "complete")
+            self.assertEqual(states["merged"], "complete")
+            self.assertEqual(briefing["current_state"]["coding_agent"], "completed(omx-runtime)")
+            self.assertEqual(briefing["headline"], "OMX runtime work is recorded as merged.")
+            self.assertEqual(briefing["pending_gaps"], [])
 
     def test_non_runtime_session_reports_runtime_observation_not_applicable(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -27,6 +27,7 @@ from ..runtime.artifacts import (
     validate_runtime_observations_for_wrapper_session,
 )
 from .contract import build_chat_interaction_payload, build_chat_status_interaction
+from .briefing import build_coding_briefing, chat_response_briefing
 from .executor_sessions import (
     build_executor_session_status,
     build_executor_session_status_card,
@@ -472,6 +473,12 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
             interaction["status_card"],
             executor_status,
         )
+        coding_briefing = build_coding_briefing(
+            session,
+            runtime_status=runtime_status,
+            executor_status=executor_status,
+        )
+        chat_response["coding_briefing"] = chat_response_briefing(coding_briefing)
         return {
             "schema_version": WRAPPER_SESSION_RESULT_SCHEMA_VERSION,
             "session_id": session_id,
@@ -480,6 +487,7 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
             "session_status": session["status"],
             "runtime_status": runtime_status,
             "executor_session_status": executor_status,
+            "coding_briefing": coding_briefing,
             "status_card": status_card,
             "chat_response": chat_response,
             "claim_boundary": "Execution claims come from the linked runtime run ledger, not the wrapper session.",
@@ -498,6 +506,12 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
         executor_status,
     )
     status_card = build_executor_session_status_card(executor_status)
+    coding_briefing = build_coding_briefing(
+        session,
+        executor_status=executor_status,
+        runtime_observation=runtime_observation,
+    )
+    chat_response["coding_briefing"] = chat_response_briefing(coding_briefing)
     return {
         "schema_version": WRAPPER_SESSION_RESULT_SCHEMA_VERSION,
         "session_id": session_id,
@@ -512,6 +526,7 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
         "runtime_observation": runtime_observation,
         "runtime_observation_errors": observation_errors,
         "executor_session_status": executor_status,
+        "coding_briefing": coding_briefing,
         "status_card": status_card,
         "next_action": _next_action_for_session(session),
         "chat_response": chat_response,

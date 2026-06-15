@@ -214,6 +214,9 @@ What gets better for the team:
 | Primary status action id | `status_card.primary_action` |
 | Primary status button label | `status_card.primary_action_label`, `status_card.executor_next_action_label`, or the matching `executor_actions[].label` |
 | User-facing executor status | `status_card.executor_display_status_lines[]` |
+| Coding work briefing | `coding_briefing.user_facing_lines[]` |
+| Coding progress ladder | `coding_briefing.progress[]` |
+| Missing coding evidence | `coding_briefing.pending_gaps[]` |
 
 Hermes Agent surfaces should render these fields natively and keep OMH focused
 on the routing, handoff, status, and evidence contract.
