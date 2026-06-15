@@ -2265,6 +2265,10 @@ class CliTests(unittest.TestCase):
             session_status = json.loads(stdout)
             self.assertEqual(session_status["current_run_id"], run_id)
             self.assertEqual(session_status["runtime_status"]["next_action"], "dispatch_to_executor")
+            self.assertEqual(session_status["coding_briefing"]["schema_version"], "coding_briefing/v1")
+            self.assertEqual(session_status["chat_response"]["coding_briefing"]["next_action"], "dispatch_to_executor")
+            self.assertNotIn("progress", session_status["chat_response"]["coding_briefing"])
+            self.assertNotIn("coding_briefing", session_status["status_card"])
             self.assertNotIn("omh ", json.dumps(session_status["chat_response"]).lower())
 
             status, stdout, stderr = run_cli(home_args + ["runtime", "validate"])
@@ -2707,6 +2711,8 @@ class CliTests(unittest.TestCase):
             prepared_status = json.loads(stdout)
             self.assertEqual(prepared_status["executor_session_status"]["coding_agent"], "prepared(codex)")
             self.assertEqual(prepared_status["status_card"]["executor_session_status"]["coding_agent"], "prepared(codex)")
+            self.assertEqual(prepared_status["coding_briefing"]["current_state"]["coding_agent"], "prepared(codex)")
+            self.assertIn("dispatch", prepared_status["coding_briefing"]["pending_gaps"])
             action_ids = {action["id"] for action in prepared_status["chat_response"]["actions"]}
             self.assertIn("open_executor_session", action_ids)
             self.assertIn("record_executor_completed", action_ids)

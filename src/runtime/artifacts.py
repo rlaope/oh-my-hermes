@@ -480,6 +480,7 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
             "handoff_available": handoff_available,
             "handoff_schema_version": handoff.get("schema_version"),
         },
+        "handoff_contract": _handoff_contract_summary(handoff),
         "harness_quality": harness_quality,
         "harness_progress": harness_progress,
         "execution": {
@@ -762,6 +763,56 @@ def _downstream_gate_progress_state(
 
 def _object_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def _handoff_contract_summary(handoff: dict[str, Any]) -> dict[str, Any]:
+    if not handoff:
+        return {}
+    summary: dict[str, Any] = {
+        "schema_version": handoff.get("schema_version", ""),
+        "selected_executor_profile": handoff.get("selected_executor_profile", handoff.get("executor_target", "")),
+        "execution_brief": _object_or_empty(handoff.get("execution_brief")),
+        "runtime_brief": _object_or_empty(handoff.get("runtime_brief")),
+        "report_contract": _object_or_empty(handoff.get("report_contract")),
+        "evidence_contract": _object_or_empty(handoff.get("evidence_contract")),
+        "acceptance_criteria": _string_list(handoff.get("acceptance_criteria")),
+        "verification": _string_list(handoff.get("verification")),
+    }
+    context_pack = _object_or_empty(handoff.get("context_pack"))
+    if context_pack:
+        summary["context_pack"] = _context_pack_summary(context_pack)
+    context_pack_blocked = _object_or_empty(handoff.get("context_pack_blocked"))
+    if context_pack_blocked:
+        summary["context_pack_blocked"] = _context_pack_blocked_summary(context_pack_blocked)
+    return summary
+
+
+def _context_pack_summary(context_pack: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": context_pack.get("schema_version", ""),
+        "executor_target": context_pack.get("executor_target", ""),
+        "session_id": context_pack.get("session_id", ""),
+        "source_ref_count": len(_list_or_empty(context_pack.get("source_refs"))),
+        "included_context_count": len(_list_or_empty(context_pack.get("included_context"))),
+        "excluded_context_count": len(_list_or_empty(context_pack.get("excluded_context"))),
+        "blocked_by_conflicts_count": len(_list_or_empty(context_pack.get("blocked_by_conflicts"))),
+        "redaction_policy": context_pack.get("redaction_policy", ""),
+        "claim_boundary": context_pack.get("claim_boundary", ""),
+    }
+
+
+def _context_pack_blocked_summary(context_pack_blocked: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": context_pack_blocked.get("schema_version", ""),
+        "blocked_by_conflicts_count": len(_list_or_empty(context_pack_blocked.get("blocked_by_conflicts"))),
+        "claim_boundary": context_pack_blocked.get("claim_boundary", ""),
+    }
 
 
 def _list_or_empty(value: Any) -> list[dict[str, Any]]:

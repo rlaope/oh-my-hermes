@@ -537,6 +537,14 @@ observed evidence, and keep review or verification gaps visible in
 verification, review, CI, merge-ready, and merged steps. Wrappers can render
 that card directly instead of inferring progress from prose.
 
+`omh chat session status` also exposes `coding_briefing/v1` as a sibling to the
+compact status card. The briefing is the richer Hermes-facing report surface for
+delegated coding work: it combines persisted route/plan metadata, compact handoff
+contracts, executor-session state, runtime evidence, review/CI/merge status,
+pending evidence gaps, and `user_facing_lines[]`. It remains metadata-only: raw
+prompts and full interview transcripts are not reconstructed, and merge-ready is
+kept distinct from observed merge evidence.
+
 ## Hermes Planning Artifacts
 
 Hermes-facing plans live under the configured Hermes home:
