@@ -1013,6 +1013,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["next_action"], "triage_feedback")
         self.assertIn("Feedback triage", recommendations[0]["evidence_boundary"])
 
+    def test_recommend_multilingual_signals_route_without_external_translation(self) -> None:
+        cases = (
+            ("支払い失敗がよく起きています", "feedback-triage", "locale:ja:payment_failure"),
+            ("支付失败问题经常出现", "feedback-triage", "locale:zh:payment_failure"),
+            ("危険なリファクタリングだと思います", "ralplan", "locale:ja:risky_refactor"),
+            ("这个重构很危险", "ralplan", "locale:zh:risky_refactor"),
+            ("Quiero convertir este issue en un PR", "plan", "locale:es:issue_to_pr"),
+            ("Je veux transformer cette issue en PR", "plan", "locale:fr:issue_to_pr"),
+            ("Ich möchte dieses Issue für einen PR vorbereiten", "plan", "locale:de:issue_to_pr"),
+        )
+
+        for message, expected_skill, locale_match in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], expected_skill)
+                self.assertIn(locale_match, top["matched"])
+                self.assertNotEqual(top["confidence"], "low")
+
     def test_recommend_dangerous_refactor_routes_to_reviewed_plan_first(self) -> None:
         cases = (
             "이거 위험한 리팩터링 같아",
@@ -1169,6 +1191,73 @@ class CliTests(unittest.TestCase):
         self.assertIn("process orchestration", top["evidence_boundary"])
         self.assertIn("prepared_not_observed", top["wrapper_guidance"])
 
+    def test_chat_interact_multilingual_feature_request_uses_plan_surface(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "hermes", "Ajoute une fonctionnalité en toute sécurité à ce dépôt"]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["mode"], "plan")
+        self.assertEqual(payload["chat_response"]["kind"], "plan")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "plan")
+        self.assertIn("Accept plan", {action["label"] for action in payload["chat_response"]["actions"]})
+
+    def test_plain_multilingual_feature_request_does_not_invent_safety_signal(self) -> None:
+        cases = (
+            "agregar una función",
+            "ajoute une fonctionnalité",
+            "新增功能",
+            "このリポジトリに機能を追加",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "5"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                matched = {
+                    item
+                    for recommendation in json.loads(stdout)["recommendations"]
+                    for item in recommendation["matched"]
+                }
+                self.assertFalse(any(item.endswith(":safe_feature") for item in matched))
+                self.assertNotIn("metadata:safe", matched)
+                self.assertNotIn("metadata:safely", matched)
+                self.assertNotIn("trigger:safe", matched)
+                self.assertNotIn("trigger:safely", matched)
+
+    def test_unsupported_multilingual_text_keeps_fallback_boundary(self) -> None:
+        cases = (
+            ("今日はチームの雑談を整理して", "recommend"),
+            ("今天想整理一下团队闲聊", "playbook"),
+        )
+
+        for message, surface in cases:
+            with self.subTest(surface=surface, message=message):
+                args = ["recommend", message, "--limit", "3"]
+                if surface == "playbook":
+                    args = ["playbook", "recommend", message, "--limit", "3"]
+                status, stdout, stderr = run_cli(args)
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                matched = {item for recommendation in recommendations for item in recommendation["matched"]}
+                self.assertFalse(any(item.startswith("locale:") for item in matched))
+                self.assertTrue(all(recommendation["confidence"] == "low" for recommendation in recommendations[:3]))
+
+    def test_short_tokens_do_not_drive_recommendation_scoring(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "pr ai ux", "--limit", "5"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertTrue(all(recommendation["score"] == 0 for recommendation in recommendations))
+        self.assertTrue(all(recommendation["confidence"] == "low" for recommendation in recommendations))
+
     def test_recommend_diagnose_installation_health_includes_doctor(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "diagnose", "installation", "health"])
 
@@ -1283,6 +1372,24 @@ class CliTests(unittest.TestCase):
                 recommendation_ids = [item["id"] for item in json.loads(stdout)["recommendations"]]
                 self.assertEqual(recommendation_ids[0], "source-backed-research")
                 self.assertNotEqual(recommendation_ids[0], "release-readiness-review")
+
+    def test_playbook_recommend_routes_multilingual_operator_requests(self) -> None:
+        cases = (
+            ("Quiero convertir este issue en un PR", "request-to-handoff", "locale:es:issue_to_pr"),
+            ("このissueをPRにできるように整理して", "request-to-handoff", "locale:ja:issue_to_pr"),
+            ("支付失败问题经常出现", "feedback-triage", "locale:zh:payment_failure"),
+        )
+
+        for message, expected_id, locale_match in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["playbook", "recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["id"], expected_id)
+                self.assertIn(locale_match, top["matched"])
+                self.assertNotEqual(top["confidence"], "low")
 
     def test_playbook_recommend_routes_business_workflows_without_coding_defaults(self) -> None:
         cases = (
