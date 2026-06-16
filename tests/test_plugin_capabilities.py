@@ -18,6 +18,14 @@ from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 from test_plugin_distribution import FakeHermesContext, load_installed_plugin
 
 
+LEGACY_ROLE_ALIASES = {
+    "coding-handoff": "handoff-guide",
+    "planning-lead": "planner",
+    "research-lead": "researcher",
+    "review-gate": "reviewer",
+}
+
+
 class PluginCapabilitiesTests(unittest.TestCase):
     def test_installed_plugin_registers_capabilities_tool_and_returns_bounded_json(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -46,6 +54,16 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(legacy_inspected["requested_id"], "coding-handoff")
             self.assertEqual(legacy_inspected["resolved_id"], "handoff-guide")
             self.assertEqual(legacy_inspected["capability"]["id"], "handoff-guide")
+            for alias, expected_role in LEGACY_ROLE_ALIASES.items():
+                with self.subTest(alias=alias):
+                    legacy = json.loads(handler({"action": "inspect", "id": alias, "section": "agent_roles"}))
+                    self.assertEqual(legacy["section"], "agent_roles")
+                    self.assertEqual(legacy["requested_id"], alias)
+                    self.assertEqual(legacy["resolved_id"], expected_role)
+                    self.assertEqual(legacy["capability"]["id"], expected_role)
+
+            retained = json.loads(handler({"action": "inspect", "id": "retained-cognition", "section": "agent_roles"}))
+            self.assertIn("capability not found: retained-cognition", retained["error"])
 
     def test_installed_plugin_capabilities_tool_loads_without_installed_omh_package(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -88,7 +106,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 listed_tools = json.loads(handler({{"action": "list", "section": "tool_requirements"}}))
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
                 inspected = json.loads(handler({{"action": "inspect", "id": "handoff-guide"}}))
-                legacy_inspected = json.loads(handler({{"action": "inspect", "id": "coding-handoff"}}))
+                alias_results = {{}}
+                for alias in {LEGACY_ROLE_ALIASES!r}:
+                    alias_results[alias] = json.loads(
+                        handler({{"action": "inspect", "id": alias, "section": "agent_roles"}})
+                    )
+                retained = json.loads(
+                    handler({{"action": "inspect", "id": "retained-cognition", "section": "agent_roles"}})
+                )
                 inspected_loop = json.loads(handler({{"action": "inspect", "section": "skills", "id": "loop"}}))
                 inspected_boundary = json.loads(
                     handler({{"action": "inspect", "section": "evidence_boundaries", "id": "prepared_is_not"}})
@@ -106,7 +131,11 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "evidence_section": evidence["section"],
                     "prepared_boundary": inspected_boundary["capability"],
                     "inspect_section": inspected["section"],
-                    "legacy_resolved_id": legacy_inspected["resolved_id"],
+                    "alias_results": {{
+                        alias: result["resolved_id"]
+                        for alias, result in alias_results.items()
+                    }},
+                    "retained_error": retained["error"],
                     "loop_section": inspected_loop["section"],
                     "loop_runtime_claim": inspected_loop["capability"]["runtime_claim"],
                     "runtime_claim": inspected["capability"]["runtime_claim"],
@@ -137,7 +166,8 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["evidence_section"], "evidence_boundaries")
             self.assertIn("Prepared OMH capability", payload["prepared_boundary"])
             self.assertEqual(payload["inspect_section"], "agent_roles")
-            self.assertEqual(payload["legacy_resolved_id"], "handoff-guide")
+            self.assertEqual(payload["alias_results"], LEGACY_ROLE_ALIASES)
+            self.assertIn("unknown capability id: retained-cognition", payload["retained_error"])
             self.assertEqual(payload["loop_section"], "skills")
             self.assertEqual(payload["loop_runtime_claim"], "skill_guidance_not_execution")
             self.assertEqual(payload["runtime_claim"], "descriptor_not_runtime_agent")

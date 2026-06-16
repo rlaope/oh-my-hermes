@@ -13,6 +13,14 @@ load_local_package()
 from omh.capabilities.registry import capability_snapshot, inspect_capability, list_capabilities
 
 
+LEGACY_ROLE_ALIASES = {
+    "coding-handoff": "handoff-guide",
+    "planning-lead": "planner",
+    "research-lead": "researcher",
+    "review-gate": "reviewer",
+}
+
+
 class CapabilityManifestTests(unittest.TestCase):
     def test_capability_snapshot_is_deterministic_and_boundary_safe(self) -> None:
         first = capability_snapshot()
@@ -56,6 +64,16 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(legacy_role["resolved_id"], "handoff-guide")
         self.assertEqual(legacy_role["capability"]["id"], "handoff-guide")
 
+        for alias, expected_role in LEGACY_ROLE_ALIASES.items():
+            with self.subTest(alias=alias):
+                inspected = inspect_capability(alias, section="agent_roles")
+                self.assertEqual(inspected["requested_id"], alias)
+                self.assertEqual(inspected["resolved_id"], expected_role)
+                self.assertEqual(inspected["capability"]["id"], expected_role)
+
+        with self.assertRaisesRegex(ValueError, "capability not found"):
+            inspect_capability("retained-cognition", section="agent_roles")
+
     def test_cli_export_list_and_inspect(self) -> None:
         status, stdout, stderr = run_cli(["capabilities", "export", "--json"], output_json=False)
 
@@ -77,13 +95,26 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(inspected["section"], "orchestration_patterns")
         self.assertEqual(inspected["capability"]["owner_role"], "handoff-guide")
 
-        status, stdout, stderr = run_cli(["capabilities", "inspect", "planning-lead", "--section", "agent_roles", "--json"], output_json=False)
+        for alias, expected_role in LEGACY_ROLE_ALIASES.items():
+            with self.subTest(alias=alias):
+                status, stdout, stderr = run_cli(
+                    ["capabilities", "inspect", alias, "--section", "agent_roles", "--json"],
+                    output_json=False,
+                )
 
-        self.assertEqual(status, 0, stderr)
-        legacy = json.loads(stdout)
-        self.assertEqual(legacy["requested_id"], "planning-lead")
-        self.assertEqual(legacy["resolved_id"], "planner")
-        self.assertEqual(legacy["capability"]["id"], "planner")
+                self.assertEqual(status, 0, stderr)
+                legacy = json.loads(stdout)
+                self.assertEqual(legacy["requested_id"], alias)
+                self.assertEqual(legacy["resolved_id"], expected_role)
+                self.assertEqual(legacy["capability"]["id"], expected_role)
+
+        status, stdout, stderr = run_cli(
+            ["capabilities", "inspect", "retained-cognition", "--section", "agent_roles", "--json"],
+            output_json=False,
+        )
+
+        self.assertNotEqual(status, 0)
+        self.assertIn("capability not found: retained-cognition", stderr)
 
     def test_package_metadata_includes_capabilities_package(self) -> None:
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
