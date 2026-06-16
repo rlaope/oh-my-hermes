@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, operator]
     category: operator
     phase: diagnostics
-    role: retained-operator
+    role: tracker
     quality_tier: evidence-gated
 ---
 
@@ -48,7 +48,7 @@ Use to diagnose OMH installation and Hermes config registration.
 
 Category: `operator`
 Phase: `diagnostics`
-Hermes role: `retained-operator`
+Hermes role: `tracker`
 Quality tier: `evidence-gated`
 
 Quality bar:

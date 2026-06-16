@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, operations]
     category: operations
     phase: status-review
-    role: retained-cognition
+    role: operator
     quality_tier: status-gated
 ---
 
@@ -47,7 +47,7 @@ Use when Hermes should summarize observed status, risks, blockers, priorities, a
 
 Category: `operations`
 Phase: `status-review`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `status-gated`
 
 Quality bar:

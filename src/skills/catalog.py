@@ -16,6 +16,70 @@ def omh_description(description: str) -> str:
     return f"{OMH_DESCRIPTION_PREFIX}{text}"
 
 
+_ROLE_BY_CATEGORY = {
+    "accessibility": "guide",
+    "agent-coordination": "tracker",
+    "clarification": "planner",
+    "deliverables": "operator",
+    "delivery": "operator",
+    "execution": "handoff-guide",
+    "executor-readiness": "handoff-guide",
+    "gateway": "guide",
+    "github-ops": "operator",
+    "goal-loop": "planner",
+    "knowledge": "memory-keeper",
+    "leadership": "operator",
+    "maintenance": "handoff-guide",
+    "materials": "operator",
+    "meeting": "operator",
+    "memory": "memory-keeper",
+    "monitoring": "operator",
+    "observability": "tracker",
+    "operations": "operator",
+    "operator": "tracker",
+    "optimization": "tracker",
+    "planning": "planner",
+    "process": "handoff-guide",
+    "reliability": "operator",
+    "reporting": "operator",
+    "research": "researcher",
+    "review": "reviewer",
+    "router": "guide",
+    "strategy": "operator",
+    "tools": "tracker",
+    "triage": "operator",
+    "verification": "reviewer",
+}
+
+_ROLE_ALIASES = {
+    "coding-handoff": "handoff-guide",
+    "codex-handoff-guidance": "handoff-guide",
+    "hybrid-guidance": "guide",
+    "hybrid-measurement": "tracker",
+    "hybrid-review": "reviewer",
+    "hybrid-verification": "reviewer",
+    "planning-lead": "planner",
+    "research-lead": "researcher",
+    "retained-cognition": "",
+    "retained-knowledge": "memory-keeper",
+    "retained-operator": "",
+    "review-gate": "reviewer",
+    "retained-router": "guide",
+    "runtime-handoff-guidance": "handoff-guide",
+}
+
+
+def canonical_hermes_role(name: str, category: str, requested: str) -> str:
+    """Return the user-facing OMH responsibility role for a skill."""
+    if requested in _ROLE_ALIASES and _ROLE_ALIASES[requested]:
+        return _ROLE_ALIASES[requested]
+    if category in _ROLE_BY_CATEGORY:
+        return _ROLE_BY_CATEGORY[category]
+    if requested in _ROLE_ALIASES:
+        return "guide"
+    return requested or "guide"
+
+
 @dataclass(frozen=True)
 class SkillExample:
     prompt: str
@@ -53,6 +117,7 @@ class SkillDefinition:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "description", omh_description(self.description))
+        object.__setattr__(self, "hermes_role", canonical_hermes_role(self.name, self.category, self.hermes_role))
         routing_hint = self.triggers[0] if self.triggers else self.name
         if not self.why_this_exists:
             object.__setattr__(

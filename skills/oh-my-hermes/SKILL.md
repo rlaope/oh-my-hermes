@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, router]
     category: router
     phase: routing
-    role: retained-router
+    role: guide
     quality_tier: routing-gated
 ---
 
@@ -61,14 +61,14 @@ Priority:
 
 Use installed primary workflow skills plus compatibility surfaces in this registry as advisory wrapper guidance to decide what Hermes should own:
 
-- `hybrid-measurement`: `performance-goal`
-- `hybrid-review`: `code-review`, `ask`
-- `hybrid-verification`: `ultraqa`
-- `retained-cognition`: `loop`, `ultraprocess`, `deep-interview`, `web-research`, `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `plan`, `ralplan`, `best-practice-research`, `autoresearch-goal`
-- `retained-knowledge`: `wiki`
-- `retained-operator`: `cancel`, `skill`, `doctor`, `github-event-ops`, `agent-board`, `memory-curation-review`, `gateway-intent-card`, `executor-runtime-readiness`, `deliverable-package`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`
-- `retained-router`: `oh-my-hermes`
-- `runtime-handoff-guidance`: `ralph`, `ultragoal`, `team`, `ultrawork`, `ai-slop-cleaner`
+- `guide`: `oh-my-hermes`, `gateway-intent-card`, `voice-operator`
+- `handoff-guide`: `ralph`, `ultragoal`, `ultraprocess`, `team`, `ultrawork`, `ai-slop-cleaner`, `executor-runtime-readiness`
+- `memory-keeper`: `wiki`, `memory-curation-review`
+- `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`
+- `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
+- `researcher`: `web-research`, `research-brief`, `best-practice-research`, `autoresearch-goal`
+- `reviewer`: `ultraqa`, `code-review`, `ask`
+- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor/runtime profile, prepare the matching handoff, and track only evidence it actually observes instead of implying code ran secretly.

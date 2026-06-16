@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, deliverables]
     category: deliverables
     phase: package-status
-    role: retained-operator
+    role: operator
     quality_tier: workflow-surface-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should prepare, request generation, QA, and report attachment st
 
 Category: `deliverables`
 Phase: `package-status`
-Hermes role: `retained-operator`
+Hermes role: `operator`
 Quality tier: `workflow-surface-gated`
 
 Quality bar:

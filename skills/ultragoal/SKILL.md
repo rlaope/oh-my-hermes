@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: durable-goals
-    role: runtime-handoff-guidance
+    role: handoff-guide
     quality_tier: checkpoint-gated
 ---
 
@@ -48,7 +48,7 @@ Use when work needs durable goal artifacts, checkpointed progress, and final qua
 
 Category: `execution`
 Phase: `durable-goals`
-Hermes role: `runtime-handoff-guidance`
+Hermes role: `handoff-guide`
 Quality tier: `checkpoint-gated`
 
 Quality bar:

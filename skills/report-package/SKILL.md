@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, reporting]
     category: reporting
     phase: package-outline
-    role: retained-cognition
+    role: operator
     quality_tier: report-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should turn supplied inputs into a report, executive brief, PPT-
 
 Category: `reporting`
 Phase: `package-outline`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `report-gated`
 
 Quality bar:

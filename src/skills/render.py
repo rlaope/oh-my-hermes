@@ -118,7 +118,7 @@ def _frontmatter(name: str, description: str) -> str:
         f"---\nname: {name}\ndescription: {description}\nmetadata:\n"
         f"  hermes:\n    tags: [workflow, oh-my-hermes, {category}]\n"
         f"    category: {category}\n    phase: {phase}\n"
-        f"    role: {definition.hermes_role if definition else 'hybrid-guidance'}\n"
+        f"    role: {definition.hermes_role if definition else 'guide'}\n"
         f"    quality_tier: {definition.quality_tier if definition else 'evidence-gated'}\n---\n"
     )
 

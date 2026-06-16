@@ -25,10 +25,27 @@ Hermes.
 
 ## Roles
 
-### Research Lead
+### Guide
 
-- ID: `research-lead`
-- Purpose: Own source-backed discovery and keep evidence, inference, confidence, and unknowns separate.
+- ID: `guide`
+- Display name: Guide
+- Legacy aliases: `hybrid-guidance`, `retained-router`
+- Purpose: Own first-touch routing, workflow selection, concise clarification, and the next visible Hermes action.
+- Owns:
+  - Plain request intake and route explanation
+  - Skill or playbook recommendation
+  - One focused clarification when routing signals conflict
+- Primary skills: `oh-my-hermes`, `voice-operator`, `gateway-intent-card`
+- Primary harnesses: `routing`, `chat-wrapper`
+- Wrapper actions: `ask_followup`, `show_status`, `route_request`
+- Evidence boundary: A guide role can choose or explain a route; it is not plan acceptance, dispatch, execution, review, CI, or merge evidence.
+
+### Researcher
+
+- ID: `researcher`
+- Display name: Researcher
+- Legacy aliases: `research-lead`
+- Purpose: Own source-backed discovery and keep evidence, inference, confidence, freshness, and unknowns separate.
 - Owns:
   - Research question and source boundary
   - Observed evidence versus inferred trend
@@ -36,37 +53,58 @@ Hermes.
 - Primary skills: `web-research`, `best-practice-research`, `research-brief`, `autoresearch-goal`
 - Primary harnesses: `research`, `business-research`
 - Wrapper actions: `ask_followup`, `show_sources`, `show_status`
-- Evidence boundary: A research role can prepare or summarize evidence; it is not implementation, review, CI, or merge evidence.
+- Evidence boundary: A researcher role can prepare or summarize evidence; it is not implementation, review, CI, or merge evidence.
 
-### Planning Lead
+### Planner
 
-- ID: `planning-lead`
-- Purpose: Own clarification, non-goals, acceptance criteria, tradeoffs, and verification strategy.
+- ID: `planner`
+- Display name: Planner
+- Legacy aliases: `planning-lead`
+- Purpose: Own clarification, non-goals, acceptance criteria, tradeoffs, loopability, and verification strategy.
 - Owns:
   - One-question clarification when scope is ambiguous
   - Plan artifact with goals, non-goals, risks, and verification
   - Decision gate before handoff or execution
-- Primary skills: `deep-interview`, `plan`, `ralplan`, `strategy-brief`
-- Primary harnesses: `deep-interview`, `planning`, `strategy-synthesis`
+- Primary skills: `deep-interview`, `plan`, `ralplan`, `loop`
+- Primary harnesses: `deep-interview`, `planning`, `strategy-synthesis`, `goal-loop`
 - Wrapper actions: `ask_followup`, `accept_plan`, `revise_plan`, `show_status`
-- Evidence boundary: A planning role can make work reviewable; it is not proof that the work was accepted or executed.
+- Evidence boundary: A planner role can make work reviewable; it is not proof that the work was accepted or executed.
 
-### Review Gate
+### Operator
 
-- ID: `review-gate`
-- Purpose: Own claim checking, release/readiness review, QA framing, and evidence requirements.
+- ID: `operator`
+- Display name: Operator
+- Legacy aliases: `retained-operator`
+- Purpose: Own non-coding company, product, delivery, meeting, material, and scheduled operations workflows.
 - Owns:
-  - Findings and risks
-  - Verification, CI, and release-readiness status
-  - Follow-up handoff only when fixes are accepted
-- Primary skills: `code-review`, `ultraqa`, `ops-review`
-- Primary harnesses: `code-review`, `qa`, `ops-review`
-- Wrapper actions: `show_findings`, `prepare_fix_handoff`, `refresh_status`
-- Evidence boundary: Review findings are not fix evidence; merge-ready is not merged.
+  - Business workflow cards and operating records
+  - Meeting, strategy, feedback, reliability, report, and material package preparation
+  - Delivery or automation state only when observed by a wrapper or host
+- Primary skills: `feedback-triage`, `meeting-brief`, `strategy-brief`, `automation-blueprint`, `materials-package`, `report-package`, `reliability-review`, `idea-to-deploy`, `deploy-and-monitor`, `cto-loop`, `operating-rhythm`, `ops-review`, `deliverable-package`, `github-event-ops`
+- Primary harnesses: `business-research`, `customer-insight-triage`, `meeting-facilitation`, `materials-package`, `operations`
+- Wrapper actions: `show_status`, `prepare_handoff`, `refresh_status`
+- Evidence boundary: An operator role can prepare operational workflow guidance; it is not meeting completion, file export, delivery, deploy, monitoring, or external platform evidence.
 
-### Coding Handoff
+### Memory Keeper
 
-- ID: `coding-handoff`
+- ID: `memory-keeper`
+- Display name: Memory Keeper
+- Legacy aliases: `retained-knowledge`
+- Purpose: Own durable context review, project knowledge capture, stale memory warnings, and safe memory update handoffs.
+- Owns:
+  - Memory and wiki context review
+  - Stale, duplicate, or conflicting context candidates
+  - Human-approved context pack preparation
+- Primary skills: `wiki`, `memory-curation-review`
+- Primary harnesses: `knowledge`, `memory-context-review`
+- Wrapper actions: `ask_followup`, `show_status`, `prepare_handoff`
+- Evidence boundary: A memory keeper role can prepare context changes; it is not proof that Hermes internal memory, USER.md, MEMORY.md, wiki, or skill files were changed.
+
+### Handoff Guide
+
+- ID: `handoff-guide`
+- Display name: Handoff Guide
+- Legacy aliases: `coding-handoff`, `runtime-handoff-guidance`, `codex-handoff-guidance`
 - Purpose: Own executor/runtime selection, prepared handoff payloads, and status narration while the chosen coding agent or runtime owns code changes.
 - Owns:
   - Executor, runtime, or Hermes coding-skill choice
@@ -76,6 +114,36 @@ Hermes.
 - Primary harnesses: `goal-execution`, `parallel-delivery`, `coding-handling`
 - Wrapper actions: `choose_executor`, `show_prompt_handoff`, `show_runtime_handoff`, `start_team`, `start_swarm`, `prepare_worktree`, `send_to_executor`, `show_status`
 - Evidence boundary: A prepared coding handoff is not executor/runtime dispatch, worker start, worktree creation, result, verification, review, CI, merge readiness, or merge evidence. Hermes/OMX/OMO/OMC runtime handoffs must record separate `runtime_observation/v1` events before the status can move from prepared to observed.
+
+### Tracker
+
+- ID: `tracker`
+- Display name: Tracker
+- Legacy aliases: `hybrid-measurement`
+- Purpose: Own runtime status, target topology, executor session, measurement, tool readiness, and observability narration.
+- Owns:
+  - Observed runtime, target, executor, and status-card state
+  - Tool, MCP, credential, token, cost, latency, and run-history readiness gaps
+  - Progress narration without upgrading missing evidence
+- Primary skills: `performance-goal`, `agent-board`, `executor-runtime-readiness`, `toolbelt-readiness`, `ops-observability-card`, `doctor`, `skill`, `cancel`
+- Primary harnesses: `measurement`, `status`, `tool-readiness`, `operator-health`
+- Wrapper actions: `show_status`, `refresh_status`, `choose_executor`
+- Evidence boundary: A tracker role can report status and missing evidence; it is not proof that an executor, worker, tool, MCP server, CI job, or platform action ran.
+
+### Reviewer
+
+- ID: `reviewer`
+- Display name: Reviewer
+- Legacy aliases: `review-gate`, `hybrid-review`, `hybrid-verification`
+- Purpose: Own claim checking, review findings, QA framing, release/readiness review, and evidence requirements.
+- Owns:
+  - Findings and risks
+  - Verification, CI, and release-readiness status
+  - Follow-up handoff only when fixes are accepted
+- Primary skills: `code-review`, `ultraqa`, `ask`
+- Primary harnesses: `code-review`, `qa`, `ops-review`
+- Wrapper actions: `show_findings`, `prepare_fix_handoff`, `refresh_status`
+- Evidence boundary: Review findings are not fix evidence; merge-ready is not merged.
 
 ## Public Claim Rule
 

@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, materials]
     category: materials
     phase: material-plan
-    role: retained-cognition
+    role: operator
     quality_tier: material-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should turn source inputs into a material plan for decks, PDFs, 
 
 Category: `materials`
 Phase: `material-plan`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `material-gated`
 
 Quality bar:

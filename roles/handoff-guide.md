@@ -1,8 +1,14 @@
-# Coding Handoff
+# Handoff Guide
 
 This OMH role is a responsibility descriptor, not a runtime agent.
 
 Own executor/runtime selection, prepared handoff payloads, and status narration while the chosen coding agent or runtime owns code changes.
+
+## Legacy Aliases
+
+- `coding-handoff`
+- `runtime-handoff-guidance`
+- `codex-handoff-guidance`
 
 ## Owns
 

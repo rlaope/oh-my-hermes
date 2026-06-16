@@ -38,9 +38,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["section"], "keywords")
             self.assertIn("explicit_invocation_prefixes", payload["keywords"])
 
-            inspected = json.loads(handler({"action": "inspect", "id": "coding-handoff"}))
+            inspected = json.loads(handler({"action": "inspect", "id": "handoff-guide"}))
+            legacy_inspected = json.loads(handler({"action": "inspect", "id": "coding-handoff"}))
             self.assertEqual(inspected["section"], "agent_roles")
             self.assertEqual(inspected["capability"]["runtime_claim"], "descriptor_not_runtime_agent")
+            self.assertEqual(legacy_inspected["section"], "agent_roles")
+            self.assertEqual(legacy_inspected["requested_id"], "coding-handoff")
+            self.assertEqual(legacy_inspected["resolved_id"], "handoff-guide")
+            self.assertEqual(legacy_inspected["capability"]["id"], "handoff-guide")
 
     def test_installed_plugin_capabilities_tool_loads_without_installed_omh_package(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -82,7 +87,8 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 exported = json.loads(handler({{"action": "export"}}))
                 listed_tools = json.loads(handler({{"action": "list", "section": "tool_requirements"}}))
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
-                inspected = json.loads(handler({{"action": "inspect", "id": "coding-handoff"}}))
+                inspected = json.loads(handler({{"action": "inspect", "id": "handoff-guide"}}))
+                legacy_inspected = json.loads(handler({{"action": "inspect", "id": "coding-handoff"}}))
                 inspected_loop = json.loads(handler({{"action": "inspect", "section": "skills", "id": "loop"}}))
                 inspected_boundary = json.loads(
                     handler({{"action": "inspect", "section": "evidence_boundaries", "id": "prepared_is_not"}})
@@ -100,6 +106,7 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "evidence_section": evidence["section"],
                     "prepared_boundary": inspected_boundary["capability"],
                     "inspect_section": inspected["section"],
+                    "legacy_resolved_id": legacy_inspected["resolved_id"],
                     "loop_section": inspected_loop["section"],
                     "loop_runtime_claim": inspected_loop["capability"]["runtime_claim"],
                     "runtime_claim": inspected["capability"]["runtime_claim"],
@@ -130,6 +137,7 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["evidence_section"], "evidence_boundaries")
             self.assertIn("Prepared OMH capability", payload["prepared_boundary"])
             self.assertEqual(payload["inspect_section"], "agent_roles")
+            self.assertEqual(payload["legacy_resolved_id"], "handoff-guide")
             self.assertEqual(payload["loop_section"], "skills")
             self.assertEqual(payload["loop_runtime_claim"], "skill_guidance_not_execution")
             self.assertEqual(payload["runtime_claim"], "descriptor_not_runtime_agent")

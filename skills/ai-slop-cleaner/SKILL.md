@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, maintenance]
     category: maintenance
     phase: cleanup
-    role: runtime-handoff-guidance
+    role: handoff-guide
     quality_tier: regression-gated
 ---
 
@@ -47,7 +47,7 @@ Use for behavior-preserving cleanup with tests before and after edits.
 
 Category: `maintenance`
 Phase: `cleanup`
-Hermes role: `runtime-handoff-guidance`
+Hermes role: `handoff-guide`
 Quality tier: `regression-gated`
 
 Quality bar:

@@ -1236,7 +1236,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("ai-slop-cleaner", {recommendation["skill"] for recommendation in recommendations[:3]})
         self.assertTrue(any(recommendation["why"] and recommendation["suggested_prompt"] for recommendation in recommendations))
         cleanup = next(recommendation for recommendation in recommendations if recommendation["skill"] == "ai-slop-cleaner")
-        self.assertEqual(cleanup["hermes_role"], "runtime-handoff-guidance")
+        self.assertEqual(cleanup["hermes_role"], "handoff-guide")
         self.assertIn("selected coding runtime", cleanup["handoff_policy"])
 
     def test_recommend_implementation_plan_includes_planning_workflow(self) -> None:
@@ -1247,7 +1247,7 @@ class CliTests(unittest.TestCase):
         recommendations = json.loads(stdout)["recommendations"]
         top_names = {recommendation["skill"] for recommendation in recommendations[:3]}
         self.assertTrue({"plan", "ralplan"} & top_names)
-        self.assertTrue(any(recommendation["hermes_role"] == "retained-cognition" for recommendation in recommendations))
+        self.assertTrue(any(recommendation["hermes_role"] == "planner" for recommendation in recommendations))
 
     def test_recommend_safe_feature_routes_to_plan_with_wrapper_copy(self) -> None:
         message = "I want to safely add a feature to this repo"
@@ -1332,7 +1332,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 recommendations = json.loads(stdout)["recommendations"]
                 self.assertEqual(recommendations[0]["skill"], "web-research")
-                self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
+                self.assertEqual(recommendations[0]["hermes_role"], "researcher")
                 self.assertIn("source-backed", recommendations[0]["description"].lower())
                 self.assertIn("retrieval", recommendations[0]["evidence_boundary"].lower())
                 self.assertIn("freshness", recommendations[0]["wrapper_guidance"].lower())
@@ -1364,7 +1364,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 recommendations = json.loads(stdout)["recommendations"]
                 self.assertIn(recommendations[0]["skill"], expected_top_names)
-                self.assertEqual(recommendations[0]["hermes_role"], "retained-cognition")
+                self.assertEqual(recommendations[0]["hermes_role"], "operator")
                 self.assertIn(boundary_fragment, recommendations[0]["evidence_boundary"].lower())
                 self.assertNotEqual(recommendations[0]["skill"], "code-review")
                 self.assertNotEqual(recommendations[0]["skill"], "ai-slop-cleaner")
@@ -1437,7 +1437,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 top = json.loads(stdout)["recommendations"][0]
                 self.assertEqual(top["skill"], skill)
-                self.assertEqual(top["hermes_role"], "retained-cognition")
+                self.assertEqual(top["hermes_role"], "operator")
                 self.assertEqual(top["next_action"], next_action)
                 self.assertIn(boundary_fragment, top["evidence_boundary"])
                 self.assertIn("observ", top["wrapper_guidance"].lower())
@@ -1475,7 +1475,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 top = json.loads(stdout)["recommendations"][0]
                 self.assertEqual(top["skill"], skill)
-                self.assertEqual(top["hermes_role"], "retained-cognition")
+                self.assertEqual(top["hermes_role"], "operator")
                 self.assertEqual(top["next_action"], next_action)
                 self.assertIn(boundary_fragment, top["evidence_boundary"])
                 self.assertIn(wrapper_fragment, top["wrapper_guidance"].lower())
@@ -1496,7 +1496,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 top = json.loads(stdout)["recommendations"][0]
                 self.assertEqual(top["skill"], "materials-package")
-                self.assertEqual(top["hermes_role"], "retained-cognition")
+                self.assertEqual(top["hermes_role"], "operator")
                 self.assertEqual(top["next_action"], "prepare_material_package")
                 self.assertIn("binary export", top["evidence_boundary"])
                 self.assertIn("material_artifact/v1", top["wrapper_guidance"])
@@ -4301,7 +4301,7 @@ class CliTests(unittest.TestCase):
             written_profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
             self.assertEqual(written_profile["operating_model_id"], "coding-runtime-team")
             self.assertNotIn("operating_model", written_profile)
-            self.assertFalse((hermes_home / "agents" / "omh-engineering-delivery-planning-lead.md").exists())
+            self.assertFalse((hermes_home / "agents" / "omh-engineering-delivery-planner.md").exists())
 
     def test_setup_default_executor_records_human_executor_choice(self) -> None:
         with TemporaryDirectory() as tmp:

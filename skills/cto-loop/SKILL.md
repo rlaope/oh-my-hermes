@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, leadership]
     category: leadership
     phase: operating-loop
-    role: retained-cognition
+    role: operator
     quality_tier: decision-gated
 ---
 
@@ -47,7 +47,7 @@ Use when Hermes should run a leadership-style operating loop that turns signals 
 
 Category: `leadership`
 Phase: `operating-loop`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `decision-gated`
 
 Quality bar:

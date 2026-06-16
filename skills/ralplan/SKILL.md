@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, planning]
     category: planning
     phase: reviewed-plan
-    role: retained-cognition
+    role: planner
     quality_tier: reviewed-plan-gated
 ---
 
@@ -47,7 +47,7 @@ Use when requirements are clear enough for planning but architecture, risks, or 
 
 Category: `planning`
 Phase: `reviewed-plan`
-Hermes role: `retained-cognition`
+Hermes role: `planner`
 Quality tier: `reviewed-plan-gated`
 
 Quality bar:

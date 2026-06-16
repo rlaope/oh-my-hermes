@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: parallel-delivery
-    role: runtime-handoff-guidance
+    role: handoff-guide
     quality_tier: handoff-gated
 ---
 
@@ -48,7 +48,7 @@ Use when an accepted implementation plan can be split into independent, reviewab
 
 Category: `execution`
 Phase: `parallel-delivery`
-Hermes role: `runtime-handoff-guidance`
+Hermes role: `handoff-guide`
 Quality tier: `handoff-gated`
 
 Quality bar:

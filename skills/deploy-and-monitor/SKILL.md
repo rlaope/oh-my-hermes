@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, monitoring]
     category: monitoring
     phase: release-ops
-    role: retained-cognition
+    role: operator
     quality_tier: release-gated
 ---
 
@@ -47,7 +47,7 @@ Use when Hermes should prepare or narrate a release operation with deploy checkl
 
 Category: `monitoring`
 Phase: `release-ops`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `release-gated`
 
 Quality bar:

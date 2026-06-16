@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, reliability]
     category: reliability
     phase: incident-and-slo-review
-    role: retained-cognition
+    role: operator
     quality_tier: reliability-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should review incident notes, SLOs, error budgets, or service re
 
 Category: `reliability`
 Phase: `incident-and-slo-review`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `reliability-gated`
 
 Quality bar:

@@ -250,7 +250,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "plan_or_prepare",
                 "Plan before handoff",
-                "planning-lead",
+                "planner",
                 "Clarify scope, non-goals, acceptance criteria, and verification before any coding handoff is prepared.",
                 "hermes_plan/v1",
                 ("accept_plan", "revise_plan", "prepare_handoff"),
@@ -260,7 +260,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "handoff_or_retain",
                 "Prepare handoff or retain in Hermes",
-                "coding-handoff",
+                "handoff-guide",
                 "Prepare a selected executor/runtime handoff only when accepted work requires code; otherwise keep research, planning, review, or status in Hermes.",
                 "coding_delegation/v1",
                 ("choose_executor", "show_prompt_handoff", "show_runtime_handoff", "send_to_executor", "show_status"),
@@ -270,7 +270,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "status_card",
                 "Render status card",
-                "review-gate",
+                "reviewer",
                 "Report prepared, observed, missing, and blocked evidence separately.",
                 "status_card/v1",
                 ("refresh_status",),
@@ -1216,7 +1216,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "track_remediation",
                 "Track remediation follow-up",
-                "coding-handoff",
+                "handoff-guide",
                 "Prepare remediation handoffs only after an accepted fix direction exists.",
                 "coding_delegation/v1",
                 ("prepare_handoff", "show_status"),
@@ -1547,7 +1547,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "executor_handoff",
                 "Prepare executor handoff if code is needed",
-                "coding-handoff",
+                "handoff-guide",
                 "Use the selected executor/runtime profile for accepted code work; otherwise keep the loop in Hermes.",
                 "coding_delegation/v1",
                 ("choose_executor", "show_prompt_handoff", "show_runtime_handoff", "send_to_executor"),
@@ -1557,7 +1557,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "verification_release_gate",
                 "Check verification and release gate",
-                "review-gate",
+                "reviewer",
                 "Separate observed verification, review, CI, and release-readiness facts from missing evidence.",
                 "harness_quality/v1",
                 ("record_checkpoint", "show_status"),
@@ -1666,7 +1666,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "architecture_tradeoffs",
                 "Frame architecture tradeoffs",
-                "planning-lead",
+                "planner",
                 "Make architecture options, rejected alternatives, and delivery consequences explicit.",
                 "strategy_brief/v1",
                 ("show_brief", "revise_plan"),
@@ -1686,7 +1686,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "followup_handoffs",
                 "Prepare follow-up handoffs",
-                "coding-handoff",
+                "handoff-guide",
                 "Convert accepted implementation follow-ups into executor-neutral handoffs; keep non-code follow-ups in Hermes.",
                 "coding_delegation/v1",
                 ("choose_executor", "prepare_handoff", "show_status"),
@@ -1772,7 +1772,7 @@ _PLAYBOOKS = (
             PlaybookStage(
                 "predeploy_checks",
                 "Prepare pre-deploy checks",
-                "review-gate",
+                "reviewer",
                 "List checks, required evidence, missing blockers, and rollback prerequisites.",
                 "harness_quality/v1",
                 ("record_checkpoint", "show_status"),

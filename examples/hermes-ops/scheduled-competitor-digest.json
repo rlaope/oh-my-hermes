@@ -103,25 +103,25 @@
   },
   "skill_suggestions": [
     {
-      "hermes_role": "retained-cognition",
+      "hermes_role": "operator",
       "phase": "scheduled-ops-blueprint",
       "reason": "scheduled ops blueprint owner",
       "skill": "automation-blueprint"
     },
     {
-      "hermes_role": "retained-cognition",
+      "hermes_role": "researcher",
       "phase": "current-evidence",
       "reason": "fresh source retrieval lane when observed browsing is needed",
       "skill": "web-research"
     },
     {
-      "hermes_role": "retained-cognition",
+      "hermes_role": "researcher",
       "phase": "business-brief",
       "reason": "source-backed synthesis lane",
       "skill": "research-brief"
     },
     {
-      "hermes_role": "retained-cognition",
+      "hermes_role": "operator",
       "phase": "package-outline",
       "reason": "report outline and delivery package lane",
       "skill": "report-package"

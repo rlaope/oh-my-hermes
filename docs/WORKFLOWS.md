@@ -20,7 +20,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `router`
 - Phase: `routing`
-- Hermes role: `retained-router`
+- Hermes role: `guide`
 - Quality tier: `routing-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -68,7 +68,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `completion`
-- Hermes role: `runtime-handoff-guidance`
+- Hermes role: `handoff-guide`
 - Quality tier: `handoff-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -115,7 +115,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `durable-goals`
-- Hermes role: `runtime-handoff-guidance`
+- Hermes role: `handoff-guide`
 - Quality tier: `checkpoint-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -167,7 +167,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `goal-loop`
 - Phase: `continuous-goal-loop`
-- Hermes role: `retained-cognition`
+- Hermes role: `planner`
 - Quality tier: `loop-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -251,7 +251,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `process`
 - Phase: `single-cycle-plan-to-pr`
-- Hermes role: `retained-cognition`
+- Hermes role: `handoff-guide`
 - Quality tier: `process-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -309,7 +309,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `clarification`
 - Phase: `discovery`
-- Hermes role: `retained-cognition`
+- Hermes role: `planner`
 - Quality tier: `clarity-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -357,7 +357,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `coordination`
-- Hermes role: `runtime-handoff-guidance`
+- Hermes role: `handoff-guide`
 - Quality tier: `coordination-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -404,7 +404,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `execution`
 - Phase: `parallel-delivery`
-- Hermes role: `runtime-handoff-guidance`
+- Hermes role: `handoff-guide`
 - Quality tier: `handoff-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -453,7 +453,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `research`
 - Phase: `current-evidence`
-- Hermes role: `retained-cognition`
+- Hermes role: `researcher`
 - Quality tier: `source-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -505,7 +505,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `research`
 - Phase: `business-brief`
-- Hermes role: `retained-cognition`
+- Hermes role: `researcher`
 - Quality tier: `source-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -552,7 +552,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `strategy`
 - Phase: `brief`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `decision-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -601,7 +601,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `meeting`
 - Phase: `preparation`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `facilitation-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -651,7 +651,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `triage`
 - Phase: `feedback`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `triage-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -699,7 +699,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `operations`
 - Phase: `status-review`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `status-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -749,7 +749,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `operations`
 - Phase: `rhythm-history`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `operations-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -799,7 +799,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `reporting`
 - Phase: `package-outline`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `report-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -848,7 +848,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `materials`
 - Phase: `material-plan`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `material-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -899,7 +899,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `operations`
 - Phase: `scheduled-ops-blueprint`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `ops-blueprint-gated`
 - Exposure: `workflow_skill`
 - Install visibility: `true`
@@ -949,7 +949,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `reliability`
 - Phase: `incident-and-slo-review`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `reliability-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -998,7 +998,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `delivery`
 - Phase: `app-delivery-loop`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `delivery-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1048,7 +1048,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `leadership`
 - Phase: `operating-loop`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `decision-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1099,7 +1099,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `monitoring`
 - Phase: `release-ops`
-- Hermes role: `retained-cognition`
+- Hermes role: `operator`
 - Quality tier: `release-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1150,7 +1150,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `verification`
 - Phase: `qa`
-- Hermes role: `hybrid-verification`
+- Hermes role: `reviewer`
 - Quality tier: `scenario-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1197,7 +1197,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `planning`
 - Phase: `plan`
-- Hermes role: `retained-cognition`
+- Hermes role: `planner`
 - Quality tier: `acceptance-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1244,7 +1244,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `planning`
 - Phase: `reviewed-plan`
-- Hermes role: `retained-cognition`
+- Hermes role: `planner`
 - Quality tier: `reviewed-plan-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1292,7 +1292,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `review`
 - Phase: `critique`
-- Hermes role: `hybrid-review`
+- Hermes role: `reviewer`
 - Quality tier: `finding-evidence-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1340,7 +1340,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `maintenance`
 - Phase: `cleanup`
-- Hermes role: `runtime-handoff-guidance`
+- Hermes role: `handoff-guide`
 - Quality tier: `regression-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1387,7 +1387,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `research`
 - Phase: `evidence`
-- Hermes role: `retained-cognition`
+- Hermes role: `researcher`
 - Quality tier: `source-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1433,7 +1433,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `research`
 - Phase: `durable-research`
-- Hermes role: `retained-cognition`
+- Hermes role: `researcher`
 - Quality tier: `validator-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1479,7 +1479,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `optimization`
 - Phase: `measurement`
-- Hermes role: `hybrid-measurement`
+- Hermes role: `tracker`
 - Quality tier: `measurement-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1526,7 +1526,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `knowledge`
 - Phase: `capture`
-- Hermes role: `retained-knowledge`
+- Hermes role: `memory-keeper`
 - Quality tier: `knowledge-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1572,7 +1572,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `review`
 - Phase: `external-advice`
-- Hermes role: `hybrid-review`
+- Hermes role: `reviewer`
 - Quality tier: `evidence-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1618,7 +1618,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `operator`
 - Phase: `state-cleanup`
-- Hermes role: `retained-operator`
+- Hermes role: `tracker`
 - Quality tier: `evidence-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1661,7 +1661,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `operator`
 - Phase: `skill-management`
-- Hermes role: `retained-operator`
+- Hermes role: `tracker`
 - Quality tier: `evidence-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1704,7 +1704,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `operator`
 - Phase: `diagnostics`
-- Hermes role: `retained-operator`
+- Hermes role: `tracker`
 - Quality tier: `evidence-gated`
 - Exposure: `direct_skill`
 - Install visibility: `true`
@@ -1750,7 +1750,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `github-ops`
 - Phase: `event-routing`
-- Hermes role: `retained-operator`
+- Hermes role: `operator`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `router_only`
 - Install visibility: `false`
@@ -1798,7 +1798,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `agent-coordination`
 - Phase: `board-status`
-- Hermes role: `retained-operator`
+- Hermes role: `tracker`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `agent_context`
 - Install visibility: `false`
@@ -1846,7 +1846,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `memory`
 - Phase: `curation-review`
-- Hermes role: `retained-operator`
+- Hermes role: `memory-keeper`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `workflow_skill`
 - Install visibility: `true`
@@ -1894,7 +1894,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `gateway`
 - Phase: `intent-card`
-- Hermes role: `retained-operator`
+- Hermes role: `guide`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `router_only`
 - Install visibility: `false`
@@ -1942,7 +1942,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `executor-readiness`
 - Phase: `runtime-selection`
-- Hermes role: `retained-operator`
+- Hermes role: `handoff-guide`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `harness_only`
 - Install visibility: `false`
@@ -1990,7 +1990,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `deliverables`
 - Phase: `package-status`
-- Hermes role: `retained-operator`
+- Hermes role: `operator`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `workflow_skill`
 - Install visibility: `true`
@@ -2038,7 +2038,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `accessibility`
 - Phase: `voice-routing`
-- Hermes role: `retained-operator`
+- Hermes role: `guide`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `agent_context`
 - Install visibility: `false`
@@ -2086,7 +2086,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `tools`
 - Phase: `readiness-check`
-- Hermes role: `retained-operator`
+- Hermes role: `tracker`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `harness_only`
 - Install visibility: `false`
@@ -2134,7 +2134,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 - Category: `observability`
 - Phase: `telemetry-card`
-- Hermes role: `retained-operator`
+- Hermes role: `tracker`
 - Quality tier: `workflow-surface-gated`
 - Exposure: `harness_only`
 - Install visibility: `false`

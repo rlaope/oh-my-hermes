@@ -114,6 +114,8 @@ def inspect_capability(identifier: str, section: str | None = None) -> dict[str,
                 "schema_version": "omh_capability_inspect/v1",
                 "section": name,
                 "id": identifier,
+                "requested_id": identifier,
+                "resolved_id": _capability_id(found, identifier),
                 "capability": found,
             }
     raise ValueError(f"capability not found: {identifier}")
@@ -141,7 +143,7 @@ def _section_ids(section: str, payload: object) -> list[str]:
 def _find_in_section(identifier: str, payload: object) -> object | None:
     if isinstance(payload, list):
         for item in payload:
-            if isinstance(item, dict) and identifier in {str(item.get("id", "")), str(item.get("name", ""))}:
+            if isinstance(item, dict) and _matches_identifier(identifier, item):
                 return item
     if isinstance(payload, dict):
         for key in ("plugin_tools", "plugin_hooks", "items", "natural_language_rules"):
@@ -153,3 +155,21 @@ def _find_in_section(identifier: str, payload: object) -> object | None:
         if identifier in payload:
             return payload[identifier]
     return None
+
+
+def _matches_identifier(identifier: str, item: dict[str, object]) -> bool:
+    aliases = item.get("legacy_ids", ())
+    legacy_ids = aliases if isinstance(aliases, list) else ()
+    values = {
+        str(item.get("id", "")),
+        str(item.get("name", "")),
+        str(item.get("skill", "")),
+        *[str(alias) for alias in legacy_ids],
+    }
+    return identifier in values
+
+
+def _capability_id(item: object, fallback: str) -> str:
+    if isinstance(item, dict):
+        return str(item.get("id") or item.get("name") or item.get("skill") or fallback)
+    return fallback

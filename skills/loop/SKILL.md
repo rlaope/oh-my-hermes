@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, goal-loop]
     category: goal-loop
     phase: continuous-goal-loop
-    role: retained-cognition
+    role: planner
     quality_tier: loop-gated
 ---
 
@@ -50,7 +50,7 @@ Use when the user explicitly starts a high-level goal that is concrete enough to
 
 Category: `goal-loop`
 Phase: `continuous-goal-loop`
-Hermes role: `retained-cognition`
+Hermes role: `planner`
 Quality tier: `loop-gated`
 
 Quality bar:

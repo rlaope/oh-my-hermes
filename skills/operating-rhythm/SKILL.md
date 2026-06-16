@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, operations]
     category: operations
     phase: rhythm-history
-    role: retained-cognition
+    role: operator
     quality_tier: operations-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should prepare or maintain recurring operating records such as m
 
 Category: `operations`
 Phase: `rhythm-history`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `operations-gated`
 
 Quality bar:

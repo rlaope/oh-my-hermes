@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, meeting]
     category: meeting
     phase: preparation
-    role: retained-cognition
+    role: operator
     quality_tier: facilitation-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should prepare a meeting agenda, discussion prompts, decision po
 
 Category: `meeting`
 Phase: `preparation`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `facilitation-gated`
 
 Quality bar:

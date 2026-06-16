@@ -160,7 +160,7 @@ class HudCliTests(unittest.TestCase):
             )
             for stem in ("evidence_tool", "hud_tool", "role_tool", "status_tool"):
                 (tools_dir / f"{stem}.py").write_text("SCHEMA = {}\n", encoding="utf-8")
-            (refs_dir / "role-planning-lead.md").write_text("# Planning Lead\n", encoding="utf-8")
+            (refs_dir / "role-planner.md").write_text("# Planner\n", encoding="utf-8")
 
             status, stdout, stderr = run_cli(
                 ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "hud", "--json"]

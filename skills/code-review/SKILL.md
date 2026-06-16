@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, review]
     category: review
     phase: critique
-    role: hybrid-review
+    role: reviewer
     quality_tier: finding-evidence-gated
 ---
 
@@ -48,7 +48,7 @@ Use for review-shaped requests; findings come first and must cite concrete evide
 
 Category: `review`
 Phase: `critique`
-Hermes role: `hybrid-review`
+Hermes role: `reviewer`
 Quality tier: `finding-evidence-gated`
 
 Quality bar:

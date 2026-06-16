@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, process]
     category: process
     phase: single-cycle-plan-to-pr
-    role: retained-cognition
+    role: handoff-guide
     quality_tier: process-gated
 ---
 
@@ -48,7 +48,7 @@ Use when the user asks Hermes to take a concrete task through one full delivery 
 
 Category: `process`
 Phase: `single-cycle-plan-to-pr`
-Hermes role: `retained-cognition`
+Hermes role: `handoff-guide`
 Quality tier: `process-gated`
 
 Quality bar:

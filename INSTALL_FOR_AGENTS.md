@@ -123,8 +123,8 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 Expected behavior:
 
 - Hermes explains why `request-to-handoff` is the right first workflow;
-- Hermes names the responsible role such as `planning-lead` or
-  `coding-handoff`;
+- Hermes names the responsible role such as `planner` or
+  `handoff-guide`;
 - Hermes gives the next action, such as clarify, accept plan, choose executor,
   or show status;
 - Hermes keeps prepared handoff separate from observed execution evidence.

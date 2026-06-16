@@ -351,7 +351,7 @@ the bridge between "prepared" and "observed". A wrapper can record
 Hermes planning writes Markdown plans under the configured Hermes home rather
 than runtime JSON under `.omh/runtime/`. The artifact is user-facing: it includes
 the task statement, goals, non-goals, options, risks, acceptance criteria,
-verification, execution handoff guidance, and review-gate status. Review gates
+verification, execution handoff guidance, and reviewer status. Review gates
 default to `not_observed` unless wrapper metadata proves a separate review ran.
 Weak requests create a companion `.hermes/context/` artifact and keep the plan
 `blocked` until Hermes asks the smallest blocking clarification.

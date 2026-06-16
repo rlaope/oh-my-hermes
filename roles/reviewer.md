@@ -1,8 +1,14 @@
-# Review Gate
+# Reviewer
 
 This OMH role is a responsibility descriptor, not a runtime agent.
 
-Own claim checking, release/readiness review, QA framing, and evidence requirements.
+Own claim checking, review findings, QA framing, release/readiness review, and evidence requirements.
+
+## Legacy Aliases
+
+- `review-gate`
+- `hybrid-review`
+- `hybrid-verification`
 
 ## Owns
 
@@ -14,7 +20,7 @@ Own claim checking, release/readiness review, QA framing, and evidence requireme
 
 - `code-review`
 - `ultraqa`
-- `ops-review`
+- `ask`
 
 ## Primary Harnesses
 

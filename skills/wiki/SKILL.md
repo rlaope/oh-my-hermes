@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, knowledge]
     category: knowledge
     phase: capture
-    role: retained-knowledge
+    role: memory-keeper
     quality_tier: knowledge-gated
 ---
 
@@ -47,7 +47,7 @@ Use to capture durable project knowledge in markdown artifacts.
 
 Category: `knowledge`
 Phase: `capture`
-Hermes role: `retained-knowledge`
+Hermes role: `memory-keeper`
 Quality tier: `knowledge-gated`
 
 Quality bar:

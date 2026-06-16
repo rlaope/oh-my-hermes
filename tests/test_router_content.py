@@ -99,7 +99,7 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn("responsibility descriptor, not a runtime agent", text)
             self.assertIn(role.evidence_boundary, text)
             self.assertNotIn("secretly", text.lower())
-            if role.id == "coding-handoff":
+            if role.id == "handoff-guide":
                 self.assertIn("not executor/runtime dispatch", text)
 
     def test_core_skill_set_contains_major_installed_workflows(self) -> None:
@@ -405,16 +405,16 @@ class RouterContentTests(unittest.TestCase):
         retained = set(retained_delegation_skill_names())
         catalog_intent_retained = set(catalog_intent_delegation_skill_names())
 
-        self.assertEqual(definitions["deep-interview"].hermes_role, "retained-cognition")
-        self.assertEqual(definitions["web-research"].hermes_role, "retained-cognition")
-        self.assertEqual(definitions["ralplan"].hermes_role, "retained-cognition")
-        self.assertEqual(definitions["ultraprocess"].hermes_role, "retained-cognition")
+        self.assertEqual(definitions["deep-interview"].hermes_role, "planner")
+        self.assertEqual(definitions["web-research"].hermes_role, "researcher")
+        self.assertEqual(definitions["ralplan"].hermes_role, "planner")
+        self.assertEqual(definitions["ultraprocess"].hermes_role, "handoff-guide")
         self.assertEqual(
             definitions["ultraprocess"].description,
             "[omh] Ultra Process - Research - Ralplan - Ultragoal - Code Review - Sync Circle: one PR-ready delivery cycle.",
         )
-        self.assertEqual(definitions["ultrawork"].hermes_role, "runtime-handoff-guidance")
-        self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "runtime-handoff-guidance")
+        self.assertEqual(definitions["ultrawork"].hermes_role, "handoff-guide")
+        self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "handoff-guide")
         self.assertIn("selected runtime", definitions["ultrawork"].handoff_policy)
         self.assertIn("selected executor/runtime handoff", definitions["ultraprocess"].handoff_policy)
         self.assertEqual(primary_harness_for_skill("web-research"), "research")
@@ -458,6 +458,33 @@ class RouterContentTests(unittest.TestCase):
             }.issubset(catalog_intent_retained)
         )
 
+    def test_skill_definition_canonicalizes_legacy_role_names(self) -> None:
+        cases = {
+            "research-lead": "researcher",
+            "planning-lead": "planner",
+            "retained-cognition": "planner",
+            "retained-operator": "operator",
+            "retained-knowledge": "memory-keeper",
+            "coding-handoff": "handoff-guide",
+            "runtime-handoff-guidance": "handoff-guide",
+            "codex-handoff-guidance": "handoff-guide",
+            "hybrid-measurement": "tracker",
+            "review-gate": "reviewer",
+            "hybrid-review": "reviewer",
+            "hybrid-verification": "reviewer",
+        }
+        for legacy_role, canonical_role in cases.items():
+            with self.subTest(legacy_role=legacy_role):
+                definition = SkillDefinition(
+                    name=f"fixture-{legacy_role}",
+                    description="Fixture skill.",
+                    triggers=("fixture",),
+                    use_when="Testing legacy role canonicalization.",
+                    category="planning" if legacy_role == "retained-cognition" else "operations",
+                    hermes_role=legacy_role,
+                )
+                self.assertEqual(definition.hermes_role, canonical_role)
+
     def test_workflow_skills_refer_to_harness_discipline(self) -> None:
         skills = {skill.name: skill for skill in builtin_skill_templates()}
 
@@ -465,7 +492,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Catalog Metadata", skills["ultragoal"].content)
         self.assertIn("Category: `execution`", skills["ultragoal"].content)
         self.assertIn("Phase: `durable-goals`", skills["ultragoal"].content)
-        self.assertIn("Hermes role: `runtime-handoff-guidance`", skills["ultragoal"].content)
+        self.assertIn("Hermes role: `handoff-guide`", skills["ultragoal"].content)
         self.assertIn("Handoff policy:", skills["ultragoal"].content)
         self.assertIn("Runtime Evidence", skills["ultragoal"].content)
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
@@ -631,10 +658,14 @@ class RouterContentTests(unittest.TestCase):
             Path("docs/ROLES.md"),
             Path("docs/APPLICATION_CASES.md"),
             Path("docs/PLAYBOOKS.md"),
-            Path("roles/research-lead.md"),
-            Path("roles/planning-lead.md"),
-            Path("roles/review-gate.md"),
-            Path("roles/coding-handoff.md"),
+            Path("roles/guide.md"),
+            Path("roles/researcher.md"),
+            Path("roles/planner.md"),
+            Path("roles/operator.md"),
+            Path("roles/memory-keeper.md"),
+            Path("roles/handoff-guide.md"),
+            Path("roles/tracker.md"),
+            Path("roles/reviewer.md"),
             Path("docs/RELEASE.md"),
             Path("install.sh"),
             Path("CONTRIBUTING.md"),
@@ -835,7 +866,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("First Hermes prompt", site)
         self.assertIn("Use OMH request-to-handoff for: I want to safely add a feature to this repo.", site)
         self.assertIn("request-to-handoff", site)
-        self.assertIn("planning-lead", site)
+        self.assertIn("planner", site)
         self.assertIn("Prepared is not observed", site)
         self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site)
         self.assertIn("Loop is now a flagship OMH lane.", site)
@@ -851,7 +882,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("docs/ROLES.md", site_docs)
         self.assertIn("INSTALL_FOR_AGENTS.md", site_docs)
         self.assertIn("request-to-handoff", site_docs)
-        self.assertIn("planning-lead", site_docs)
+        self.assertIn("planner", site_docs)
         self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site_docs)
         self.assertIn('<a class="loop-spotlight loop-spotlight--docs" href="loop/"', site_docs)
         self.assertIn('<span class="button button--primary" aria-hidden="true">Open Loop docs</span>', site_docs)

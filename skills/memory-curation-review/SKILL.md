@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, memory]
     category: memory
     phase: curation-review
-    role: retained-operator
+    role: memory-keeper
     quality_tier: workflow-surface-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs h
 
 Category: `memory`
 Phase: `curation-review`
-Hermes role: `retained-operator`
+Hermes role: `memory-keeper`
 Quality tier: `workflow-surface-gated`
 
 Quality bar:

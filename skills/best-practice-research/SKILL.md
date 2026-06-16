@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, research]
     category: research
     phase: evidence
-    role: retained-cognition
+    role: researcher
     quality_tier: source-gated
 ---
 
@@ -47,7 +47,7 @@ Use when correctness depends on current official or upstream guidance.
 
 Category: `research`
 Phase: `evidence`
-Hermes role: `retained-cognition`
+Hermes role: `researcher`
 Quality tier: `source-gated`
 
 Quality bar:

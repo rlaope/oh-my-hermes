@@ -28,7 +28,7 @@ class OrchestrationPatternTests(unittest.TestCase):
             self.assertIn(expected, patterns)
 
         handoff = patterns["executor_session_handoff"]
-        self.assertEqual(handoff["owner_role"], "coding-handoff")
+        self.assertEqual(handoff["owner_role"], "handoff-guide")
         self.assertIn("choose_executor", handoff["wrapper_actions"])
         self.assertIn("dispatch_observed", handoff["observed_evidence_required"])
         self.assertIn("not execution", handoff["prepared_is_not"])

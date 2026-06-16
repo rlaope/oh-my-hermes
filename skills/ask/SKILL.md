@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, review]
     category: review
     phase: external-advice
-    role: hybrid-review
+    role: reviewer
     quality_tier: evidence-gated
 ---
 
@@ -47,7 +47,7 @@ Use only when an external advisor is configured and would materially improve the
 
 Category: `review`
 Phase: `external-advice`
-Hermes role: `hybrid-review`
+Hermes role: `reviewer`
 Quality tier: `evidence-gated`
 
 Quality bar:
