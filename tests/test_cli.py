@@ -177,6 +177,9 @@ class CliTests(unittest.TestCase):
         inspected = json.loads(stdout)["use_case"]
         self.assertEqual(inspected["id"], "ops-observability-card")
         self.assertEqual(inspected["primary_skill"], "ops-observability-card")
+        self.assertEqual(inspected["exposure"], "harness_only")
+        self.assertFalse(inspected["install_visibility"])
+        self.assertTrue(inspected["compatibility_alias"])
         self.assertIn("$ops-observability-card", inspected["direct_skill_invocation"])
         self.assertIn("Use OMH ops-observability-card", inspected["hermes_chat_prompt"])
         self.assertIn("not billing truth", inspected["evidence_boundary"])
@@ -207,6 +210,10 @@ class CliTests(unittest.TestCase):
             with self.subTest(validated=item["id"]):
                 self.assertTrue(item["checks"]["proof_surfaces_present"])
                 self.assertTrue(item["checks"]["proof_surfaces_valid"])
+                self.assertTrue(item["checks"]["surface_routable"])
+                self.assertTrue(item["checks"]["exposure_valid"])
+                self.assertTrue(item["checks"]["installed_skill_visible"])
+                self.assertTrue(item["checks"]["install_visibility_matches"])
                 self.assertTrue(item["checks"]["boundary_has_evidence_guard"])
                 self.assertGreaterEqual(len(item["proof_surfaces"]), 3)
                 self.assertIn("not", item["evidence_boundary"].lower())

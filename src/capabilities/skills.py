@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from ..skills.catalog import SkillDefinition, builtin_definitions, primary_harness_for_skill
+from ..skills.catalog import (
+    SkillDefinition,
+    capability_definitions,
+    primary_harness_for_skill,
+    skill_exposure_payload,
+)
 from .schema import PREPARED_NOT_OBSERVED, SKILL_CAPABILITY_SCHEMA_VERSION
 
 
 def skill_capabilities() -> list[dict[str, object]]:
-    return [_skill_capability(definition) for definition in sorted(builtin_definitions(), key=lambda item: item.name)]
+    return [_skill_capability(definition) for definition in sorted(capability_definitions(), key=lambda item: item.name)]
 
 
 def _skill_capability(definition: SkillDefinition) -> dict[str, object]:
     harness = primary_harness_for_skill(definition.name)
+    exposure = skill_exposure_payload(definition.name)
     return {
         "schema_version": SKILL_CAPABILITY_SCHEMA_VERSION,
         "id": definition.name,
@@ -19,6 +25,13 @@ def _skill_capability(definition: SkillDefinition) -> dict[str, object]:
         "phase": definition.phase,
         "hermes_role": definition.hermes_role,
         "primary_harness": harness,
+        "surface_exposure": exposure["exposure"],
+        "exposure": exposure["exposure"],
+        "install_visibility": exposure["install_visibility"],
+        "docs_visibility": exposure["docs_visibility"],
+        "preferred_usage": exposure["preferred_usage"],
+        "compatibility_alias": exposure["compatibility_alias"],
+        "projections": exposure["projections"],
         "triggers": list(definition.triggers),
         "required_inputs": list(definition.required_inputs),
         "expected_outputs": list(definition.expected_outputs),

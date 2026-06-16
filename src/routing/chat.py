@@ -13,7 +13,7 @@ from .policy import (
     meets_confidence_threshold,
 )
 from .recommend import recommend_skills
-from ..skills.catalog import SkillDefinition, builtin_definitions, primary_harness_for_skill
+from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
 
 
@@ -60,7 +60,7 @@ def route_chat_message(
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
 
-    definitions = builtin_definitions()
+    definitions = routable_definitions()
     full_recommendations = recommend_skills(message, limit=len(definitions))
     recommendations = tuple(full_recommendations[:limit])
     top = full_recommendations[0]
@@ -148,7 +148,7 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
 
 
 def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] | None = None) -> str | None:
-    definitions = definitions or builtin_definitions()
+    definitions = definitions or routable_definitions()
     return explicit_skill_name(message, {definition.name for definition in definitions})
 
 

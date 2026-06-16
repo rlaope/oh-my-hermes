@@ -6,6 +6,8 @@ The reference describes prompt-level Hermes workflow guidance and local evidence
 
 Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor/runtime profile, or prepare a coding handoff for coding-heavy execution.
 
+Exposure is the install contract: `install_visibility: true` surfaces generate `skills/<name>/SKILL.md`; router-only, harness-only, and agent-context surfaces stay routable references unless this document explicitly promotes them.
+
 When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow state to the current Hermes target/thread, adapt only the steps that benefit from multiple targets, and fall back to single-target behavior when the active agent count is one.
 `memory_review_card/v1` is separate from `status_card/v1`; `handoff_context_pack/v1` may be attached to executor handoffs only when unresolved conflicts are absent.
 `goal_status_card/v1` and `goal_continuation/v1` are goal-execution payloads separate from generic `status_card/v1`; they must name the next action instead of merely summarizing work.
@@ -20,6 +22,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `routing`
 - Hermes role: `retained-router`
 - Quality tier: `routing-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Classify requests into Hermes-retained planning/research/interview lanes, executor choice, or prepared coding handoffs; do not execute code.
 - Why this exists: `oh-my-hermes` exists to keep Hermes chat routing conservative: it maps plain requests to the right workflow, explains evidence boundaries, and avoids making every keyword look like hidden implementation.
 - Use when: Use as the top-level router when a request references oh-my-hermes, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.
@@ -63,6 +70,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `completion`
 - Hermes role: `runtime-handoff-guidance`
 - Quality tier: `handoff-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep as compatibility guidance; for implementation, ask the wrapper to prepare/track the selected coding runtime path instead of hiding execution inside chat narration.
 - Why this exists: `ralph` exists to keep `execution` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use after scope is concrete and the user wants one owner to continue through implementation and verification.
@@ -105,6 +117,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `durable-goals`
 - Hermes role: `runtime-handoff-guidance`
 - Quality tier: `checkpoint-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Use Hermes to maintain .omh/goals goal_ledger/v1 state, show goal_status_card/v1 / goal_continuation/v1 next actions, and route coding milestones to the selected runtime profile with only observed runtime evidence.
 - Why this exists: `ultragoal` exists for work that can outlive one chat turn: it turns ambition into durable stories, checkpoints, and completion gates so progress can resume without pretending a summary is evidence.
 - Use when: Use when work needs durable goal artifacts, checkpointed progress, and final quality gates.
@@ -152,6 +169,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `continuous-goal-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `loop-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/runtime/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
 - Why this exists: `loop` exists for goals whose correct implementation cannot be known upfront but can be discovered through bounded cycles of definition, action, verification, and revision without confusing planned cycles with observed progress.
 - Use when: Use when the user explicitly starts a high-level goal that is concrete enough to verify, open-ended enough to require iterative discovery, and should be shaped from task/project/ambition into a bounded loop before cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
@@ -231,6 +253,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `single-cycle-plan-to-pr`
 - Hermes role: `retained-cognition`
 - Quality tier: `process-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor/runtime handoff such as Codex, Claude Code, OMX/OMO/OMC, another coding agent, or explicit Hermes coding runtime only when the user accepts that owner.
 - Why this exists: `ultraprocess` exists to give Hermes one clean plan-to-PR operating cycle: research, reviewed plan, selected implementation handoff, review gate, docs sync, and PR-ready evidence.
 - Use when: Use when the user asks Hermes to take a concrete task through one full delivery cycle: research/codebase context, reviewed plan, selected implementation handoff, code review, docs sync when needed, and PR preparation.
@@ -284,6 +311,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `discovery`
 - Hermes role: `retained-cognition`
 - Quality tier: `clarity-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run directly in Hermes or the chat wrapper; produce a clarified brief before any coding handoff is prepared.
 - Why this exists: `deep-interview` exists to stop Hermes from guessing through ambiguous product, workflow, or implementation intent; it converts uncertainty into a clarified brief before planning or handoff.
 - Use when: Use before planning or execution when requirements are materially ambiguous.
@@ -327,6 +359,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `coordination`
 - Hermes role: `runtime-handoff-guidance`
 - Quality tier: `coordination-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Use Hermes for lane framing and status; implementation lanes should become selected runtime handoff tasks, including Hermes-owned coding when the user chooses that runtime.
 - Why this exists: `team` exists to keep `execution` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when multiple independent lanes materially improve throughput or verification.
@@ -369,6 +406,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `parallel-delivery`
 - Hermes role: `runtime-handoff-guidance`
 - Quality tier: `handoff-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep the workflow name for compatibility, but convert coding lanes into explicit selected runtime handoffs with disjoint scope, verification, review evidence, worker protocol, and worktree guidance.
 - Why this exists: `ultrawork` exists to split an accepted implementation plan into independent lanes without letting parallelism blur ownership, verification, worker protocol, worktree isolation, or observed runtime evidence.
 - Use when: Use when an accepted implementation plan can be split into independent, reviewable work lanes.
@@ -413,6 +455,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `current-evidence`
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
 - Why this exists: `web-research` exists to make Hermes a careful source-backed research operator: it routes web/current-source requests to evidence gathering, keeps retrieval gaps visible, and prevents search plans from being reported as observed facts.
 - Use when: Use when the user needs current web evidence, links, citations, source diversity, or source comparison before planning or handoff.
@@ -460,6 +507,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `business-brief`
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep business research in Hermes; prepare a selected executor/runtime handoff only after a later accepted plan requires code changes.
 - Why this exists: `research-brief` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should scope a business question, gather or summarize source-backed evidence, and preserve evidence/inference boundaries before strategy or handoff.
@@ -502,6 +554,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `brief`
 - Hermes role: `retained-cognition`
 - Quality tier: `decision-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep strategy synthesis in Hermes; do not create implementation handoff until a decision is accepted and code work is explicit.
 - Why this exists: `strategy-brief` exists to keep `strategy` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.
@@ -546,6 +603,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `preparation`
 - Hermes role: `retained-cognition`
 - Quality tier: `facilitation-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run meeting preparation in Hermes; only create follow-up coding handoff from observed decisions or accepted plans.
 - Why this exists: `meeting-brief` exists to turn scattered context into a focused agenda, discussion prompts, decision points, and a record template without pretending the meeting already happened.
 - Use when: Use when Hermes should prepare a meeting agenda, discussion prompts, decision points, and a record template.
@@ -591,6 +653,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `feedback`
 - Hermes role: `retained-cognition`
 - Quality tier: `triage-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep feedback triage in Hermes; recommend the next workflow and prepare a selected executor/runtime handoff only after explicit coding intent or accepted plan evidence.
 - Why this exists: `feedback-triage` exists to keep customer and community signals from jumping straight into roadmap or coding; it clusters evidence, ranks signals, and chooses the next workflow.
 - Use when: Use when Hermes should classify feedback, bug reports, and feature asks before deciding whether research, planning, or coding handoff is needed.
@@ -634,6 +701,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `status-review`
 - Hermes role: `retained-cognition`
 - Quality tier: `status-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep operating review and status narration in Hermes; delegate code fixes only from explicit accepted follow-up items.
 - Why this exists: `ops-review` exists to keep `operations` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should summarize observed status, risks, blockers, priorities, and follow-up actions for recurring operating work.
@@ -679,6 +751,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `rhythm-history`
 - Hermes role: `retained-cognition`
 - Quality tier: `operations-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep cadence records, minutes scaffolds, decisions, and follow-up history in Hermes; delegate implementation only from separately accepted action items.
 - Why this exists: `operating-rhythm` exists so recurring operating work has durable minutes, decisions, and follow-up history without pretending a meeting outcome was observed.
 - Use when: Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.
@@ -724,6 +801,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `package-outline`
 - Hermes role: `retained-cognition`
 - Quality tier: `report-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep report narrative, sectioning, and Markdown/JSON outline packaging in Hermes; do not require reliability evidence unless the user asks for a reliability review.
 - Why this exists: `report-package` exists to make reporting a first-class operations surface: Hermes can produce clean report and slide outlines while keeping approvals, delivery, and binary deck export as separate evidence.
 - Use when: Use when Hermes should turn supplied inputs into a report, executive brief, PPT-ready outline, or upload package without claiming presentation delivery.
@@ -768,6 +850,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `material-plan`
 - Hermes role: `retained-cognition`
 - Quality tier: `material-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep source organization, outline planning, target-format selection, QA ladder, and missing-input review in Hermes; prepare an executor-neutral document-generation handoff only when a binary file is needed.
 - Why this exists: `materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Keynote, HWP, and Markdown work as a first-class material-processing workflow without becoming a hidden file generator.
 - Use when: Use when Hermes should turn source inputs into a material plan for decks, PDFs, spreadsheets, documents, HWP, Markdown, or binary export handoff without claiming file generation.
@@ -814,6 +901,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `scheduled-ops-blueprint`
 - Hermes role: `retained-cognition`
 - Quality tier: `ops-blueprint-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when the user asks for recurring automation or scheduled ops planning.
 - Handoff policy: Keep schedule intent, delivery policy, silence rules, context-chain selection, and status narration in Hermes; prepare host automation or no-agent follow-up only after an operator/wrapper records observed runtime evidence.
 - Why this exists: `automation-blueprint` exists so Hermes can make recurring operational work feel native and scheduled without OMH becoming a hidden cron runner, transport bot, source retriever, or executor.
 - Use when: Use when Hermes should turn a natural recurring/cron-like request into a scheduled ops blueprint without claiming host automation, platform delivery, source retrieval, or no-agent execution.
@@ -859,6 +951,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `incident-and-slo-review`
 - Hermes role: `retained-cognition`
 - Quality tier: `reliability-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep incident/SLO/error-budget review in Hermes; prepare remediation handoffs only after an accepted fix direction exists and record closure only from observed evidence.
 - Why this exists: `reliability-review` exists to make SRE-style review strict: service reliability claims must point to metrics or references, and remediation remains separate from the review narrative.
 - Use when: Use when Hermes should review incident notes, SLOs, error budgets, or service reliability evidence while keeping remediation and closure claims observed.
@@ -903,6 +1000,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `app-delivery-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `delivery-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep idea shaping, decision gates, planning, release narration, and status in Hermes; prepare selected executor/runtime handoffs only for accepted code work and record deploy/monitoring only from observed operator or wrapper evidence.
 - Why this exists: `idea-to-deploy` exists to keep `delivery` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should carry a product or app idea through shaping, decision gates, plan acceptance, executor handoff, verification, release readiness, deploy, and monitoring boundaries.
@@ -948,6 +1050,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `operating-loop`
 - Hermes role: `retained-cognition`
 - Quality tier: `decision-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep CTO/PM-style synthesis, tradeoffs, risk ranking, decision notes, and status in Hermes; convert accepted implementation follow-ups into executor-neutral handoffs.
 - Why this exists: `cto-loop` exists to keep `leadership` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should run a leadership-style operating loop that turns signals into roadmap decisions, technical tradeoffs, delivery risk, release readiness, and explicit follow-up handoffs.
@@ -994,6 +1101,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `release-ops`
 - Hermes role: `retained-cognition`
 - Quality tier: `release-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep release checklist, health criteria, rollback gates, and status narration in Hermes; record deploy, monitor, incident, or rollback evidence only when the wrapper or operator observes it.
 - Why this exists: `deploy-and-monitor` exists to keep `monitoring` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when Hermes should prepare or narrate a release operation with deploy checklist, health signals, rollback criteria, and post-deploy status without pretending to run infrastructure.
@@ -1040,6 +1152,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `qa`
 - Hermes role: `hybrid-verification`
 - Quality tier: `scenario-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor/runtime handoffs.
 - Why this exists: `ultraqa` exists to keep `verification` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the task needs adversarial test scenarios, verification, and fix loops.
@@ -1082,6 +1199,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `plan`
 - Hermes role: `retained-cognition`
 - Quality tier: `acceptance-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor/runtime handoff after acceptance.
 - Why this exists: `plan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
@@ -1124,6 +1246,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `reviewed-plan`
 - Hermes role: `retained-cognition`
 - Quality tier: `reviewed-plan-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep consensus planning and review in Hermes; produce explicit selected executor/runtime handoff guidance only after the plan is accepted.
 - Why this exists: `ralplan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when requirements are clear enough for planning but architecture, risks, or tests need review.
@@ -1167,6 +1294,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `critique`
 - Hermes role: `hybrid-review`
 - Quality tier: `finding-evidence-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Hermes may frame and summarize review evidence; fixes or code mutations found during review should be delegated to the selected coding executor.
 - Why this exists: `code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.
 - Use when: Use for review-shaped requests; findings come first and must cite concrete evidence.
@@ -1210,6 +1342,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `cleanup`
 - Hermes role: `runtime-handoff-guidance`
 - Quality tier: `regression-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Use Hermes to define cleanup scope and regression checks; route behavior-preserving edits to the selected coding runtime once tests are clear.
 - Why this exists: `ai-slop-cleaner` exists to keep `maintenance` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for behavior-preserving cleanup with tests before and after edits.
@@ -1252,6 +1389,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `evidence`
 - Hermes role: `retained-cognition`
 - Quality tier: `source-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run as Hermes-side evidence gathering; hand coding to the selected executor/runtime only after source-backed guidance is summarized.
 - Why this exists: `best-practice-research` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when correctness depends on current official or upstream guidance.
@@ -1293,6 +1435,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `durable-research`
 - Hermes role: `retained-cognition`
 - Quality tier: `validator-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep durable research in Hermes-managed artifacts; do not convert to executor handoff unless the research produces an accepted coding task.
 - Why this exists: `autoresearch-goal` exists to keep `research` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for validator-gated research that needs durable artifacts.
@@ -1334,6 +1481,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `measurement`
 - Hermes role: `hybrid-measurement`
 - Quality tier: `measurement-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Hermes can own baselines, benchmark plans, and status; optimization code changes should be selected executor/runtime handoffs.
 - Why this exists: `performance-goal` exists to keep `optimization` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use when the goal is measurable performance improvement with evaluator evidence.
@@ -1376,6 +1528,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `capture`
 - Hermes role: `retained-knowledge`
 - Quality tier: `knowledge-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run directly in Hermes as knowledge capture unless the note reveals a separate coding task.
 - Why this exists: `wiki` exists to keep `knowledge` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use to capture durable project knowledge in markdown artifacts.
@@ -1417,6 +1574,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `external-advice`
 - Hermes role: `hybrid-review`
 - Quality tier: `evidence-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Use as optional advice gathering; evaluate the advice in Hermes and delegate coding changes separately.
 - Why this exists: `ask` exists to keep `review` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use only when an external advisor is configured and would materially improve the answer.
@@ -1458,6 +1620,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `state-cleanup`
 - Hermes role: `retained-operator`
 - Quality tier: `evidence-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run directly in Hermes/runtime state; never delegate cancellation to a coding executor.
 - Why this exists: `cancel` exists to keep `operator` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use to cleanly end active adapted workflow state.
@@ -1496,6 +1663,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `skill-management`
 - Hermes role: `retained-operator`
 - Quality tier: `evidence-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Use Hermes for inventory and guidance; delegate only repository code changes to the selected coding executor.
 - Why this exists: `skill` exists to keep `operator` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
 - Use when: Use for local skill listing, search, add, remove, or edit tasks.
@@ -1534,6 +1706,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `diagnostics`
 - Hermes role: `retained-operator`
 - Quality tier: `evidence-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run directly as local health inspection; propose executor work only when a repo fix is required.
 - Why this exists: `doctor` exists to turn confusing install/setup states into grouped, local health evidence and the next repair action without treating a check as a fix.
 - Use when: Use to diagnose OMH installation and Hermes config registration.
@@ -1575,6 +1752,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `event-routing`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `router_only`
+- Install visibility: `false`
+- Docs visibility: `compatibility_reference`
+- Compatibility alias: `true`
+- Preferred usage: Prefer natural-language Hermes routing into the GitHub event ops playbook/harness instead of showing this as a primary skill picker item.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `github-event-ops` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when Hermes receives or is asked to reason about GitHub PR, issue, review, or CI events and must choose review, triage, or fix-handoff without claiming a bot ran.
@@ -1618,6 +1800,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `board-status`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `agent_context`
+- Install visibility: `false`
+- Docs visibility: `agent_context_reference`
+- Compatibility alias: `true`
+- Preferred usage: Use as Hermes agent/context guidance for board-shaped collaboration; keep direct invocation compatibility only for existing references.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `agent-board` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when multiple Hermes profiles, agents, or targets need a board-shaped status contract for collaborative work.
@@ -1661,6 +1848,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `curation-review`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when the user asks to review stale, duplicate, or conflicting memory and skill context.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `memory-curation-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
@@ -1704,6 +1896,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `intent-card`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `router_only`
+- Install visibility: `false`
+- Docs visibility: `compatibility_reference`
+- Compatibility alias: `true`
+- Preferred usage: Prefer wrapper or Hermes natural-language routing into gateway intent policy instead of exposing this as a primary user skill.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `gateway-intent-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when Hermes needs platform-neutral gateway policy for a chat session, thread, delivery target, attachment, or status update.
@@ -1747,6 +1944,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `runtime-selection`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `harness_only`
+- Install visibility: `false`
+- Docs visibility: `harness_reference`
+- Compatibility alias: `true`
+- Preferred usage: Use as a readiness harness/status surface when Hermes needs to compare executor/runtime options before handoff.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `executor-runtime-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when a user may choose Codex, Claude Code, Hermes coding, or another runtime and needs tool/credential gaps before handoff.
@@ -1790,6 +1992,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `package-status`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when the user asks for file deliverable packaging and attachment lifecycle status.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `deliverable-package` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when Hermes should prepare, request generation, QA, and report attachment status for user-visible file deliverables.
@@ -1833,6 +2040,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `voice-routing`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `agent_context`
+- Install visibility: `false`
+- Docs visibility: `agent_context_reference`
+- Compatibility alias: `true`
+- Preferred usage: Use as Hermes voice/mobile context guidance that normalizes short commands before choosing a concrete workflow.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `voice-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when Hermes receives terse voice/mobile-style requests and should produce concise clarification, plan, or status UX.
@@ -1876,6 +2088,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `readiness-check`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `harness_only`
+- Install visibility: `false`
+- Docs visibility: `harness_reference`
+- Compatibility alias: `true`
+- Preferred usage: Use as a readiness harness when Hermes needs to show missing MCP, CLI, API, credential, or connector requirements.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `toolbelt-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when a workflow depends on MCP, CLI, API credentials, or connectors and Hermes must show installed, missing, optional, and unsafe tools.
@@ -1919,6 +2136,11 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Phase: `telemetry-card`
 - Hermes role: `retained-operator`
 - Quality tier: `workflow-surface-gated`
+- Exposure: `harness_only`
+- Install visibility: `false`
+- Docs visibility: `harness_reference`
+- Compatibility alias: `true`
+- Preferred usage: Use as a telemetry/status harness for token, cost, latency, run history, and failure-mode boundaries.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `ops-observability-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 - Use when: Use when automation, loops, gateway work, or executor handoffs need a safe status card for cost, latency, token, history, and failure-mode visibility.

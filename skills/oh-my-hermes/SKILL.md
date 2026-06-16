@@ -59,7 +59,7 @@ Priority:
 
 ## Skill Role Classification
 
-Keep compatible workflow names installed, but use this advisory wrapper guidance to decide what Hermes should own:
+Use installed primary workflow skills plus compatibility surfaces in this registry as advisory wrapper guidance to decide what Hermes should own:
 
 - `hybrid-measurement`: `performance-goal`
 - `hybrid-review`: `code-review`, `ask`
@@ -69,7 +69,7 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 - `retained-operator`: `cancel`, `skill`, `doctor`, `github-event-ops`, `agent-board`, `memory-curation-review`, `gateway-intent-card`, `executor-runtime-readiness`, `deliverable-package`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`
 - `retained-router`: `oh-my-hermes`
 - `runtime-handoff-guidance`: `ralph`, `ultragoal`, `team`, `ultrawork`, `ai-slop-cleaner`
-- Full per-skill handoff policies live in generated workflow skills and `docs/WORKFLOWS.md`.
+- Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor/runtime profile, prepare the matching handoff, and track only evidence it actually observes instead of implying code ran secretly.
 

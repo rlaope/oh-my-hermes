@@ -9,7 +9,14 @@ from _local_package import load_local_package
 load_local_package()
 from omh.routing import recommend as recommend_module
 from omh.roles import role_definitions, role_file_markdown, roles_reference_markdown
-from omh.skill_pack import builtin_definitions, builtin_harnesses, builtin_skill_templates
+from omh.skill_pack import (
+    builtin_definitions,
+    builtin_harnesses,
+    builtin_skill_templates,
+    installable_skill_definitions,
+    routable_definitions,
+    skill_exposure_payload,
+)
 from omh.playbooks import list_playbooks
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
@@ -36,6 +43,19 @@ FLAGSHIP_SKILLS = {
     "doctor",
 }
 
+FEATURE_SURFACE_EXPOSURES = {
+    "automation-blueprint": ("workflow_skill", True),
+    "github-event-ops": ("router_only", False),
+    "agent-board": ("agent_context", False),
+    "memory-curation-review": ("workflow_skill", True),
+    "gateway-intent-card": ("router_only", False),
+    "executor-runtime-readiness": ("harness_only", False),
+    "deliverable-package": ("workflow_skill", True),
+    "voice-operator": ("agent_context", False),
+    "toolbelt-readiness": ("harness_only", False),
+    "ops-observability-card": ("harness_only", False),
+}
+
 
 class RouterContentTests(unittest.TestCase):
     def test_router_documents_best_effort_and_recovery(self) -> None:
@@ -54,7 +74,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("This role metadata is advisory", router.content)
         self.assertIn("Responsibility Roles", router.content)
         self.assertIn("Responsibility role details are generated in `docs/WORKFLOWS.md`", router.content)
-        self.assertIn("Full per-skill handoff policies live in generated workflow skills", router.content)
+        self.assertIn("Installed workflow skill policies live in generated workflow skills", router.content)
+        self.assertIn("compatibility/reference-only surface policies live in `docs/WORKFLOWS.md`", router.content)
         self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
         self.assertIn("selected executor/runtime profile", router.content)
         self.assertIn("prepared_not_observed", router.content)
@@ -81,8 +102,9 @@ class RouterContentTests(unittest.TestCase):
             if role.id == "coding-handoff":
                 self.assertIn("not executor/runtime dispatch", text)
 
-    def test_core_skill_set_contains_major_workflows(self) -> None:
+    def test_core_skill_set_contains_major_installed_workflows(self) -> None:
         names = {skill.name for skill in builtin_skill_templates()}
+        installable_names = {definition.name for definition in installable_skill_definitions()}
 
         for expected in {
             "ralph",
@@ -110,17 +132,45 @@ class RouterContentTests(unittest.TestCase):
             "plan",
             "ralplan",
             "code-review",
-            "github-event-ops",
-            "agent-board",
             "memory-curation-review",
-            "gateway-intent-card",
-            "executor-runtime-readiness",
             "deliverable-package",
-            "voice-operator",
-            "toolbelt-readiness",
-            "ops-observability-card",
         }:
             self.assertIn(expected, names)
+        self.assertEqual(names, installable_names)
+
+    def test_feature_surface_exposure_projection_is_explicit(self) -> None:
+        installable_names = {definition.name for definition in installable_skill_definitions()}
+        routable_names = {definition.name for definition in routable_definitions()}
+        template_names = {skill.name for skill in builtin_skill_templates()}
+
+        for name, (exposure, installable) in FEATURE_SURFACE_EXPOSURES.items():
+            with self.subTest(name=name):
+                payload = skill_exposure_payload(name)
+                self.assertEqual(payload["exposure"], exposure)
+                self.assertEqual(payload["install_visibility"], installable)
+                self.assertIn(name, routable_names)
+                self.assertEqual(name in installable_names, installable)
+                self.assertEqual(name in template_names, installable)
+                self.assertIn("preferred_usage", payload)
+                if installable:
+                    self.assertIn("installable", payload["projections"])
+                    self.assertFalse(payload["compatibility_alias"])
+                else:
+                    self.assertNotIn("installable", payload["projections"])
+                    self.assertTrue(payload["compatibility_alias"])
+
+    def test_feature_surface_exposure_contract_is_explicit_for_every_generated_surface(self) -> None:
+        feature_surface_names = {
+            definition.name
+            for definition in builtin_definitions()
+            if definition.quality_tier == "workflow-surface-gated"
+        }
+        generated_surface_exposures = set(FEATURE_SURFACE_EXPOSURES) - {"automation-blueprint"}
+
+        self.assertEqual(feature_surface_names, generated_surface_exposures)
+        for name in feature_surface_names:
+            with self.subTest(name=name):
+                self.assertNotEqual(skill_exposure_payload(name)["exposure"], "direct_skill")
 
     def test_g1_to_g10_use_case_catalog_is_complete_and_boundary_safe(self) -> None:
         payload = list_use_cases()
@@ -128,14 +178,17 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], "omh_use_case_catalog/v1")
         self.assertEqual(payload["count"], 10)
         self.assertEqual([case.goal for case in USE_CASES], [f"G{index}" for index in range(1, 11)])
-        names = {skill.name for skill in builtin_skill_templates()}
+        installable_names = {skill.name for skill in builtin_skill_templates()}
+        routable_names = {definition.name for definition in routable_definitions()}
         harnesses = {harness.name for harness in builtin_harnesses()}
         playbooks = {playbook["id"] for playbook in list_playbooks()["playbooks"]}
         playbook_doc = Path("docs/APPLICATION_CASES.md").read_text(encoding="utf-8")
         readme = Path("README.md").read_text(encoding="utf-8")
         for case in USE_CASES:
             with self.subTest(case=case.id):
-                self.assertIn(case.primary_skill, names)
+                exposure = skill_exposure_payload(case.primary_skill)
+                self.assertIn(case.primary_skill, routable_names)
+                self.assertEqual(case.primary_skill in installable_names, exposure["install_visibility"])
                 self.assertIn(case.harness, harnesses)
                 self.assertIn(case.playbook, playbooks)
                 self.assertTrue(case.feature_surface.startswith(f"{case.primary_skill} "))
@@ -210,6 +263,10 @@ class RouterContentTests(unittest.TestCase):
             self.assertEqual(path.read_text(encoding="utf-8"), template.content)
 
         self.assertEqual({path.parent.name for path in Path("skills").glob("*/SKILL.md")}, set(templates))
+        hidden = {name for name, (_, installable) in FEATURE_SURFACE_EXPOSURES.items() if not installable}
+        self.assertTrue(hidden)
+        for name in hidden:
+            self.assertFalse((Path("skills") / name / "SKILL.md").exists(), f"{name} should stay routable only")
 
     def test_router_renders_representative_harness_registry(self) -> None:
         router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
@@ -451,6 +508,12 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("bad_example", skills["oh-my-hermes"])
         self.assertIn("routing conservative", skills["oh-my-hermes"]["why_this_exists"])
         self.assertIn("Use OMH request-to-handoff", skills["oh-my-hermes"]["good_example"]["prompt"])
+        for name, (exposure, installable) in FEATURE_SURFACE_EXPOSURES.items():
+            self.assertIn(name, skills)
+            self.assertEqual(skills[name]["exposure"], exposure)
+            self.assertEqual(skills[name]["surface_exposure"], exposure)
+            self.assertEqual(skills[name]["install_visibility"], installable)
+            self.assertIn("preferred_usage", skills[name])
         self.assertEqual(harnesses["coding-handling"]["quality_tier"], "handoff-gated")
         self.assertIn("coding_delegation_prepared", harnesses["coding-handling"]["evidence_ladder"])
         self.assertIn("send_to_codex", harnesses["coding-handling"]["wrapper_actions"])
@@ -487,12 +550,18 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(reference, workflow_reference_markdown())
         self.assertIn("This file is generated from `src/skills/catalog.py`", reference)
         self.assertIn("omh_target_topology/v1", reference)
+        self.assertIn("Exposure is the install contract", reference)
+        self.assertIn("router-only, harness-only, and agent-context surfaces stay routable references", reference)
         for definition in builtin_definitions():
+            exposure = skill_exposure_payload(definition.name)
             self.assertIn(f"### {definition.name}", reference)
             self.assertIn(f"- Category: `{definition.category}`", reference)
             self.assertIn(f"- Phase: `{definition.phase}`", reference)
             self.assertIn(f"- Hermes role: `{definition.hermes_role}`", reference)
             self.assertIn(f"- Quality tier: `{definition.quality_tier}`", reference)
+            self.assertIn(f"- Exposure: `{exposure['exposure']}`", reference)
+            self.assertIn(f"- Install visibility: `{str(exposure['install_visibility']).lower()}`", reference)
+            self.assertIn(f"- Preferred usage: {exposure['preferred_usage']}", reference)
             self.assertIn(f"- Handoff policy: {definition.handoff_policy}", reference)
             self.assertIn(f"- Why this exists: {definition.why_this_exists}", reference)
             self.assertIn("- Do not use when:", reference)

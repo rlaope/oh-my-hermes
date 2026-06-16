@@ -35,3 +35,6 @@ class KeywordManifestTests(unittest.TestCase):
         self.assertEqual(catalog["feedback_before_coding"]["activation_status"], "cataloged")
         self.assertIn("ultragoal", skills)
         self.assertIn("$ultragoal", skills["ultragoal"]["triggers"])
+        self.assertEqual(skills["ops-observability-card"]["exposure"], "harness_only")
+        self.assertFalse(skills["ops-observability-card"]["install_visibility"])
+        self.assertTrue(skills["ops-observability-card"]["compatibility_alias"])
