@@ -859,6 +859,60 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exported["exported_count"], 1)
             self.assertIn("# Sprint retro", exported["export"])
 
+    def test_ops_blueprint_cli_prepares_scheduled_ops_without_runtime_claims(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            base = ["--omh-home", str(omh_home), "ops"]
+            request = "every morning check competitor news and send a Slack digest only if something changed"
+
+            status, stdout, stderr = run_cli(base + ["blueprint", request, "--dry-run"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            dry = json.loads(stdout)
+            self.assertFalse(dry["store"]["written"])
+            self.assertFalse((omh_home / "hermes-ops").exists())
+            blueprint = dry["blueprint"]
+            self.assertEqual(blueprint["schema_version"], "hermes_ops_blueprint/v1")
+            self.assertEqual(blueprint["kind"], "scheduled-ops-blueprint")
+            self.assertEqual(blueprint["schedule_intent"]["cadence"], "daily")
+            self.assertEqual(blueprint["delivery_intent"]["surfaces"], ["slack"])
+            self.assertEqual(blueprint["silence_policy"]["mode"], "only_report_changes")
+            self.assertTrue(dry["boundary"]["prepared_is_not_observed"])
+            self.assertFalse(dry["boundary"]["runtime_execution_observed"])
+            self.assertFalse(dry["boundary"]["gateway_delivery_observed"])
+
+            status, stdout, stderr = run_cli(base + ["blueprint", request])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            written = json.loads(stdout)
+            self.assertTrue(written["store"]["written"])
+            blueprint_id = written["blueprint"]["blueprint_id"]
+            self.assertTrue((omh_home / "hermes-ops" / "blueprints" / f"{blueprint_id}.json").exists())
+
+            status, stdout, stderr = run_cli(base + ["blueprint-list"])
+            self.assertEqual(status, 0, stderr)
+            listing = json.loads(stdout)
+            self.assertEqual(listing["schema_version"], "omh_ops_blueprint_list/v1")
+            self.assertEqual(listing["blueprints"][0]["blueprint_id"], blueprint_id)
+
+            status, stdout, stderr = run_cli(base + ["blueprint-show", blueprint_id])
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(json.loads(stdout)["schema_version"], "omh_ops_blueprint_show/v1")
+            self.assertEqual(json.loads(stdout)["blueprint"]["blueprint_id"], blueprint_id)
+
+            status, _stdout, stderr = run_cli(base + ["show", blueprint_id])
+            self.assertNotEqual(status, 0)
+            self.assertIn(blueprint_id, stderr)
+
+            status, stdout, stderr = run_cli(base + ["validate"])
+            self.assertEqual(status, 0, stderr)
+            validation = json.loads(stdout)
+            self.assertTrue(validation["ok"])
+            self.assertEqual(validation["hermes_ops_blueprints"]["blueprint_count"], 1)
+
     def test_ops_cli_lists_and_exports_are_bounded_by_default(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1211,6 +1265,39 @@ class CliTests(unittest.TestCase):
                 self.assertNotEqual(recommendations[0]["skill"], "code-review")
                 self.assertNotEqual(recommendations[0]["skill"], "ai-slop-cleaner")
 
+    def test_recommend_scheduled_ops_blueprint_beats_slack_sla_false_positive(self) -> None:
+        positive_cases = (
+            "every morning check competitor news and send a Slack digest only if something changed",
+            "매일 아침 경쟁사 뉴스를 조사해서 변화 있으면 슬랙으로 보내줘",
+        )
+
+        for message in positive_cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "automation-blueprint")
+                self.assertEqual(recommendations[0]["next_action"], "prepare_scheduled_ops_blueprint")
+                self.assertIn("host cron", recommendations[0]["evidence_boundary"])
+                self.assertIn("schedule", recommendations[0]["wrapper_guidance"])
+                self.assertNotEqual(recommendations[0]["skill"], "reliability-review")
+
+        negative_cases = (
+            "Slack SLA alerts are delayed; prepare reliability review",
+            "investigate Slack SLA alert failures",
+        )
+        for message in negative_cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "5"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "reliability-review")
+                self.assertNotEqual(recommendations[0]["skill"], "automation-blueprint")
+
     def test_recommend_app_operation_loops_feel_end_to_end_without_overclaiming(self) -> None:
         cases = (
             (
@@ -1441,6 +1528,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("meeting-prep-to-record", playbooks)
         self.assertIn("feedback-triage", playbooks)
         self.assertIn("weekly-ops-review", playbooks)
+        self.assertIn("scheduled-ops-blueprint", playbooks)
         self.assertIn("operating-rhythm-history", playbooks)
         self.assertIn("report-package", playbooks)
         self.assertIn("materials-processing", playbooks)
@@ -1455,6 +1543,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("deploy_monitor_status", playbooks["idea-to-deploy"]["pipeline"])
         self.assertIn("status_review", playbooks["cto-loop"]["pipeline"])
         self.assertIn("postdeploy_record", playbooks["deploy-and-monitor"]["pipeline"])
+        self.assertIn("delivery_silence_policy", playbooks["scheduled-ops-blueprint"]["pipeline"])
         self.assertIn("capture_decisions", playbooks["operating-rhythm-history"]["pipeline"])
         self.assertIn("export_outline", playbooks["report-package"]["pipeline"])
         self.assertIn("record_export_qa", playbooks["materials-processing"]["pipeline"])
@@ -1551,6 +1640,10 @@ class CliTests(unittest.TestCase):
                 {"weekly-ops-review"},
             ),
             (
+                "every morning check competitor news and send a Slack digest only if something changed",
+                {"scheduled-ops-blueprint"},
+            ),
+            (
                 "we need a competitor market scan and strategy memo for next week's leadership meeting",
                 {"market-scan-to-strategy", "research-to-strategy-brief"},
             ),
@@ -1593,6 +1686,12 @@ class CliTests(unittest.TestCase):
                 "materials-processing",
                 "scope_material",
                 "binary_export",
+            ),
+            (
+                "매일 아침 경쟁사 뉴스를 조사해서 변화 있으면 슬랙으로 보내줘",
+                "scheduled-ops-blueprint",
+                "scope_schedule",
+                "host_cron_created",
             ),
         )
 
@@ -4710,6 +4809,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(harnesses["materials-package"]["quality_tier"], "material-gated")
         self.assertIn("format_qa_ladder_prepared", harnesses["materials-package"]["evidence_ladder"])
         self.assertIn("record_export", harnesses["materials-package"]["wrapper_actions"])
+        self.assertEqual(harnesses["scheduled-ops-blueprint"]["quality_tier"], "ops-blueprint-gated")
+        self.assertIn("delivery_policy_prepared", harnesses["scheduled-ops-blueprint"]["evidence_ladder"])
         self.assertEqual(harnesses["reliability-review"]["quality_tier"], "reliability-gated")
         self.assertIn("remediation_boundary_recorded", harnesses["reliability-review"]["evidence_ladder"])
         self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
@@ -4742,6 +4843,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("operating-rhythm", harnesses)
         self.assertIn("report-package", harnesses)
         self.assertIn("materials-package", harnesses)
+        self.assertIn("scheduled-ops-blueprint", harnesses)
         self.assertIn("reliability-review", harnesses)
         self.assertIn("app-delivery-loop", harnesses)
         self.assertIn("blocking_question_asked", harnesses["deep-interview"]["evidence_ladder"])
@@ -4750,6 +4852,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("operating-rhythm", harnesses["operating-rhythm"]["primary_skills"])
         self.assertIn("report-package", harnesses["report-package"]["primary_skills"])
         self.assertIn("materials-package", harnesses["materials-package"]["primary_skills"])
+        self.assertIn("automation-blueprint", harnesses["scheduled-ops-blueprint"]["primary_skills"])
         self.assertIn("reliability-review", harnesses["reliability-review"]["primary_skills"])
         self.assertIn("idea-to-deploy", harnesses["app-delivery-loop"]["primary_skills"])
 

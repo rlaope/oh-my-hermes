@@ -64,6 +64,9 @@ from .materials import (
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .ops import (
     _add_ops_commands,
+    cmd_ops_blueprint,
+    cmd_ops_blueprint_list,
+    cmd_ops_blueprint_show,
     cmd_ops_export,
     cmd_ops_list,
     cmd_ops_show,

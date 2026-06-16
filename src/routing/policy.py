@@ -57,9 +57,19 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; PR or delivery-cycle requests need the one-cycle process lane rather than research-only routing.",
     activation_status="active",
 )
+SCHEDULED_OPS_BLUEPRINT_GUARD = RoutingGuardRule(
+    id="scheduled_ops_blueprint_before_reliability_or_research",
+    rule="Recurring schedule, delivery, or silence-policy requests should route to the scheduled ops blueprint lane before one-off review/research lanes.",
+    matched_label="guard:scheduled_ops_blueprint",
+    preferred_skills=("automation-blueprint",),
+    score_boost=24,
+    why="Matched guard/trigger metadata; recurring schedule or delivery requests should prepare a Hermes ops blueprint first.",
+    activation_status="active",
+)
 ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
+    SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     DELIVERY_CYCLE_GUARD,
 )
@@ -93,6 +103,8 @@ def active_routing_guard_rules(
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
     if _delivery_cycle_guard_applies(normalized_query, query_tokens):
@@ -118,7 +130,64 @@ def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str])
     )
 
 
+def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if {
+        "cron",
+        "schedule",
+        "scheduled",
+        "recurring",
+        "repeat",
+        "daily",
+        "weekly",
+        "monthly",
+        "스케줄",
+        "예약",
+        "정기",
+        "반복",
+        "매일",
+        "매주",
+    } & query_tokens:
+        return True
+    return any(
+        phrase in normalized_query
+        for phrase in (
+            "every morning",
+            "every day",
+            "every week",
+            "every month",
+            "send to slack",
+            "send a slack",
+            "slack digest",
+            "send to discord",
+            "discord digest",
+            "post to telegram",
+            "telegram digest",
+            "notify if",
+            "only if changed",
+            "only if something changed",
+            "silent if nothing changed",
+            "if nothing changed",
+            "매일 아침",
+            "매주",
+            "매월",
+            "슬랙으로",
+            "슬랙에 보내",
+            "슬랙으로 보내",
+            "디스코드로",
+            "디스코드에 보내",
+            "텔레그램으로",
+            "텔레그램에 보내",
+            "변화 있으면",
+            "변화 없으면",
+            "바뀐 게 없으면",
+            "조용히",
+        )
+    )
+
+
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        return False
     if _delivery_cycle_terms(normalized_query, query_tokens):
         return False
     if {

@@ -78,6 +78,17 @@ _SKILL_POLICIES = {
             "QA ladder, and an executor-neutral generation handoff when a binary file is needed."
         ),
     ),
+    "automation-blueprint": RecommendationPolicy(
+        next_action="prepare_scheduled_ops_blueprint",
+        evidence_boundary=(
+            "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, "
+            "source retrieval, no-agent execution, plugin load, connector invocation, review, CI, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare hermes_ops_blueprint/v1 with schedule, delivery, silence, skill/context chain, and status-card "
+            "copy; ask for missing runtime/delivery decisions and record observed evidence only when Hermes or the host runtime provides it."
+        ),
+    ),
     "reliability-review": RecommendationPolicy(
         next_action="prepare_reliability_review",
         evidence_boundary="A reliability review is not SLO pass, healthy error-budget, incident closure, remediation completion, verification, review, CI, or merge evidence.",

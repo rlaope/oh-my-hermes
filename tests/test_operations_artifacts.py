@@ -18,10 +18,86 @@ from omh.operations import (
     validate_operations_store,
     write_operation_artifact,
 )
+from omh.hermes_ops import (
+    build_scheduled_ops_blueprint,
+    list_hermes_ops_blueprints,
+    show_hermes_ops_blueprint,
+    validate_hermes_ops_blueprint,
+    validate_hermes_ops_store,
+    write_hermes_ops_blueprint,
+)
 from omh.paths import OmhPaths
 
 
 class OperationsArtifactTests(unittest.TestCase):
+    def test_scheduled_ops_blueprint_is_projection_not_runtime_evidence(self) -> None:
+        blueprint = build_scheduled_ops_blueprint(
+            "every morning check competitor news and send a Slack digest only if something changed",
+            created_at="2026-06-16T00:00:00Z",
+        )
+
+        self.assertEqual(blueprint["schema_version"], "hermes_ops_blueprint/v1")
+        self.assertEqual(blueprint["kind"], "scheduled-ops-blueprint")
+        self.assertEqual(blueprint["observation_status"], "prepared")
+        self.assertEqual(blueprint["projection"]["authority"], "projection_only")
+        self.assertEqual(blueprint["schedule_intent"]["cadence"], "daily")
+        self.assertEqual(blueprint["delivery_intent"]["surfaces"], ["slack"])
+        self.assertEqual(blueprint["silence_policy"]["mode"], "only_report_changes")
+        self.assertIn("automation-blueprint", {item["skill"] for item in blueprint["skill_suggestions"]})
+        self.assertIn("web-research", {item["skill"] for item in blueprint["skill_suggestions"]})
+        self.assertIn("host_cron_created", blueprint["not_evidence_until_observed"])
+        self.assertIn("gateway_delivery_sent", blueprint["not_evidence_until_observed"])
+        self.assertIn("source_retrieval_observed", blueprint["not_evidence_until_observed"])
+        self.assertIn("not host cron creation", blueprint["prepared_is_not"])
+        self.assertEqual(validate_hermes_ops_blueprint(blueprint), [])
+
+    def test_scheduled_ops_blueprint_store_round_trips_and_validates(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths_from_tmp(tmp)
+            blueprint = build_scheduled_ops_blueprint(
+                "매일 아침 경쟁사 뉴스를 조사해서 변화 있으면 슬랙으로 보내줘",
+                created_at="2026-06-16T00:00:00Z",
+            )
+
+            written = write_hermes_ops_blueprint(paths, blueprint)
+
+            self.assertEqual(show_hermes_ops_blueprint(paths, written["blueprint_id"])["title"], written["title"])
+            self.assertEqual(len(list_hermes_ops_blueprints(paths)), 1)
+            self.assertTrue(paths.hermes_ops_index_path.exists())
+            validation = validate_hermes_ops_store(paths)
+            self.assertTrue(validation["ok"])
+            self.assertEqual(validation["blueprint_count"], 1)
+
+            with self.assertRaises(ValueError):
+                write_hermes_ops_blueprint(paths, blueprint)
+
+    def test_scheduled_ops_blueprint_rejects_observed_runtime_claims(self) -> None:
+        blueprint = build_scheduled_ops_blueprint("daily status digest", created_at="2026-06-16T00:00:00Z")
+        blueprint["runtime_status"] = "observed"
+
+        errors = validate_hermes_ops_blueprint(blueprint)
+
+        self.assertIn("must not claim observed runtime or delivery status", "; ".join(errors))
+
+    def test_scheduled_ops_blueprint_rejects_nested_observed_claims(self) -> None:
+        blueprint = build_scheduled_ops_blueprint("daily status digest", created_at="2026-06-16T00:00:00Z")
+        blueprint["schedule_intent"]["status"] = "observed"
+        blueprint["delivery_intent"]["delivery_status"] = "delivered"
+
+        errors = validate_hermes_ops_blueprint(blueprint)
+
+        rendered = "; ".join(errors)
+        self.assertIn("$.schedule_intent.status must remain prepared or not_observed", rendered)
+        self.assertIn("$.delivery_intent.delivery_status must not claim observed runtime", rendered)
+
+    def test_scheduled_ops_example_fixture_matches_blueprint_schema(self) -> None:
+        fixture = Path("examples/hermes-ops/scheduled-competitor-digest.json")
+        payload = json.loads(fixture.read_text(encoding="utf-8"))
+
+        self.assertEqual(validate_hermes_ops_blueprint(payload), [])
+        self.assertEqual(payload["schema_version"], "hermes_ops_blueprint/v1")
+        self.assertIn("gateway_delivery_sent", payload["not_evidence_until_observed"])
+
     def test_prepared_operating_rhythm_artifact_round_trips(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _paths_from_tmp(tmp)

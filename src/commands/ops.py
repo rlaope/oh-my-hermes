@@ -3,6 +3,14 @@ from __future__ import annotations
 import argparse
 
 from ..installer import OmhError
+from ..hermes_ops import (
+    build_scheduled_ops_blueprint,
+    list_hermes_ops_blueprints,
+    show_hermes_ops_blueprint,
+    summarize_hermes_ops_blueprint,
+    validate_hermes_ops_store,
+    write_hermes_ops_blueprint,
+)
 from ..operations import (
     ARTIFACT_STATUSES,
     KINDS_BY_SURFACE,
@@ -20,6 +28,7 @@ from .common import _paths, _print_json
 
 DEFAULT_OPS_LIST_LIMIT = 20
 DEFAULT_OPS_EXPORT_LIMIT = 20
+DEFAULT_BLUEPRINT_LIST_LIMIT = 20
 
 
 def cmd_ops_write(args: argparse.Namespace) -> int:
@@ -63,6 +72,43 @@ def cmd_ops_write(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ops_blueprint(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        blueprint = build_scheduled_ops_blueprint(
+            " ".join(args.request),
+            title=args.title,
+            schedule=args.schedule,
+            delivery=args.delivery,
+            silence=args.silence,
+            source=args.source,
+        )
+        written = blueprint if args.dry_run else write_hermes_ops_blueprint(paths, blueprint)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "omh_ops_blueprint_result/v1",
+            "blueprint": written,
+            "store": {
+                "omh_home": str(paths.omh_home),
+                "hermes_ops_dir": str(paths.hermes_ops_dir),
+                "blueprints_dir": str(paths.hermes_ops_blueprints_dir),
+                "index_path": str(paths.hermes_ops_index_path),
+                "index_authority": "cache_only",
+                "written": not args.dry_run,
+            },
+            "boundary": {
+                "prepared_is_not_observed": True,
+                "runtime_execution_observed": False,
+                "gateway_delivery_observed": False,
+                "source_retrieval_observed": False,
+            },
+        }
+    )
+    return 0
+
+
 def cmd_ops_list(args: argparse.Namespace) -> int:
     try:
         paths = _paths(args)
@@ -90,17 +136,55 @@ def cmd_ops_list(args: argparse.Namespace) -> int:
 
 def cmd_ops_show(args: argparse.Namespace) -> int:
     try:
-        artifact = show_operation_artifact(_paths(args), args.artifact_id)
+        paths = _paths(args)
+        artifact = show_operation_artifact(paths, args.artifact_id)
     except (FileNotFoundError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json({"schema_version": "omh_ops_show/v1", "artifact": artifact})
     return 0
 
 
+def cmd_ops_blueprint_show(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        blueprint = show_hermes_ops_blueprint(paths, args.blueprint_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"schema_version": "omh_ops_blueprint_show/v1", "blueprint": blueprint})
+    return 0
+
+
 def cmd_ops_validate(args: argparse.Namespace) -> int:
-    result = validate_operations_store(_paths(args))
+    paths = _paths(args)
+    result = validate_operations_store(paths)
+    blueprint_result = validate_hermes_ops_store(paths)
+    result["hermes_ops_blueprints"] = blueprint_result
+    result["ok"] = bool(result["ok"]) and bool(blueprint_result["ok"])
     _print_json(result)
     return 0 if result["ok"] else 1
+
+
+def cmd_ops_blueprint_list(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    try:
+        limit = _limit_from_args(args, default=DEFAULT_BLUEPRINT_LIST_LIMIT)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    all_records = list_hermes_ops_blueprints(paths)
+    records = all_records if limit is None else all_records[-limit:]
+    _print_json(
+        {
+            "schema_version": "omh_ops_blueprint_list/v1",
+            "count": len(records),
+            "total_count": len(all_records),
+            "limit": limit if limit is not None else "all",
+            "truncated": limit is not None and len(all_records) > len(records),
+            "summary_only": True,
+            "index_authority": "cache_only",
+            "blueprints": [summarize_hermes_ops_blueprint(record) for record in records],
+        }
+    )
+    return 0
 
 
 def cmd_ops_export(args: argparse.Namespace) -> int:
@@ -185,6 +269,25 @@ def _add_ops_commands(sub) -> None:
 
     reliability = ops_sub.add_parser("reliability", help="Create a reliability review artifact such as an SLO or postmortem review.")
     _add_artifact_args(reliability, surface="reliability-review", default_kind="service-review")
+
+    blueprint = ops_sub.add_parser("blueprint", help="Prepare a Hermes scheduled ops blueprint without creating runtime automation.")
+    blueprint.add_argument("request", nargs="+", help="Natural-language scheduled ops request.")
+    blueprint.add_argument("--title", default="")
+    blueprint.add_argument("--schedule", default="", help="Explicit schedule/cadence hint.")
+    blueprint.add_argument("--delivery", default="", help="Explicit delivery target hint.")
+    blueprint.add_argument("--silence", default="", help="Explicit silence/no-change policy hint.")
+    blueprint.add_argument("--source", default="", help="Optional metadata source label.")
+    blueprint.add_argument("--dry-run", action="store_true", help="Print the prepared blueprint without writing it.")
+    blueprint.set_defaults(func=cmd_ops_blueprint)
+
+    blueprint_list = ops_sub.add_parser("blueprint-list", help="List prepared Hermes scheduled ops blueprints.")
+    blueprint_list.add_argument("--limit", type=int, default=None)
+    blueprint_list.add_argument("--all", action="store_true", help="Return all blueprint summaries instead of the default bounded window.")
+    blueprint_list.set_defaults(func=cmd_ops_blueprint_list)
+
+    blueprint_show = ops_sub.add_parser("blueprint-show", help="Show one prepared Hermes scheduled ops blueprint by id.")
+    blueprint_show.add_argument("blueprint_id")
+    blueprint_show.set_defaults(func=cmd_ops_blueprint_show)
 
     list_cmd = ops_sub.add_parser("list", help="List operations artifacts from local storage.")
     list_cmd.add_argument("--surface", choices=SURFACES, default="")

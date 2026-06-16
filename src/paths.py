@@ -43,6 +43,18 @@ class OmhPaths:
         return self.operations_dir / "index.json"
 
     @property
+    def hermes_ops_dir(self) -> Path:
+        return self.omh_home / "hermes-ops"
+
+    @property
+    def hermes_ops_blueprints_dir(self) -> Path:
+        return self.hermes_ops_dir / "blueprints"
+
+    @property
+    def hermes_ops_index_path(self) -> Path:
+        return self.hermes_ops_dir / "index.json"
+
+    @property
     def materials_dir(self) -> Path:
         return self.omh_home / "materials"
 

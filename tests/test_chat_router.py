@@ -72,6 +72,11 @@ class ChatRouterTests(unittest.TestCase):
                 "materials-package",
                 "materials-package",
             ),
+            (
+                "every morning check competitor news and send a Slack digest only if something changed",
+                "automation-blueprint",
+                "scheduled-ops-blueprint",
+            ),
         )
 
         for message, skill, harness in cases:
