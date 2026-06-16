@@ -7,18 +7,23 @@ from typing import Any
 
 USE_CASE_CATALOG_SCHEMA_VERSION = "omh_use_case_catalog/v1"
 USE_CASE_RECOMMENDATION_SCHEMA_VERSION = "omh_use_case_recommendation/v1"
+USE_CASE_VALIDATION_SCHEMA_VERSION = "omh_use_case_validation/v1"
 
 
 @dataclass(frozen=True)
 class UseCase:
     goal: str
+    priority: int
     id: str
     title: str
-    situation: str
-    example_request: str
+    hermes_use_case: str
+    current_gap: str
     primary_skill: str
     playbook: str
     harness: str
+    feature_surface: str
+    direct_skill_invocation: str
+    hermes_chat_prompt: str
     next_action: str
     user_value: str
     evidence_boundary: str
@@ -29,153 +34,193 @@ class UseCase:
 USE_CASES: tuple[UseCase, ...] = (
     UseCase(
         goal="G1",
-        id="startup-product-triage",
-        title="Startup product triage",
-        situation="A small SaaS team receives customer feedback, bugs, and feature asks in Hermes chat.",
-        example_request="Payment failures keep showing up from customers.",
-        primary_skill="feedback-triage",
-        playbook="feedback-triage",
-        harness="customer-insight-triage",
-        next_action="triage_feedback",
-        user_value="Hermes separates investigate, reproduce, handoff, and verification instead of pretending the bug is already fixed.",
-        evidence_boundary="A triage record is not reproduction, code execution, customer confirmation, or incident closure.",
-        proof_surfaces=("omh recommend", "omh chat interact", "omh runtime status"),
-        keywords=("payment", "결제", "failure", "feedback", "customer", "triage", "bug", "repro"),
-    ),
-    UseCase(
-        goal="G2",
-        id="issue-to-pr-readiness",
-        title="Issue to PR readiness",
-        situation="An open-source maintainer wants Hermes to turn a loose issue into a reviewable PR unit.",
-        example_request="Turn this issue into a PR-ready implementation plan.",
-        primary_skill="ultraprocess",
-        playbook="request-to-handoff",
-        harness="goal-execution",
-        next_action="start_ultraprocess",
-        user_value="Hermes produces acceptance criteria, verification commands, and executor-ready handoff instead of a vague coding prompt.",
-        evidence_boundary="A prepared handoff is not executor dispatch, code result, review, CI, or merge evidence.",
-        proof_surfaces=("omh playbook recommend", "omh chat interact", "omh coding delegate"),
-        keywords=("issue", "PR", "pull request", "implementation", "acceptance", "handoff", "이슈"),
-    ),
-    UseCase(
-        goal="G3",
-        id="agent-product-qa",
-        title="Real-world agent product QA",
-        situation="A team validates whether an AI agent product handles realistic user scenarios safely.",
-        example_request="Check whether our agent handles a Kubernetes outage diagnosis scenario well.",
-        primary_skill="ultraqa",
-        playbook="reliability-incident-review",
-        harness="qa-specialist",
-        next_action="prepare_adversarial_qa",
-        user_value="Hermes shapes scenarios, expected behavior, checks, and observed gaps without mixing expectations with evidence.",
-        evidence_boundary="A QA scenario is not a passed test, production diagnosis, or verified remediation until observed results are recorded.",
-        proof_surfaces=("omh recommend", "omh ops reliability", "omh runtime record"),
-        keywords=("QA", "scenario", "test", "outage", "kubernetes", "diagnosis", "검증", "장애"),
-    ),
-    UseCase(
-        goal="G4",
-        id="chat-to-workflow-routing",
-        title="Chat to workflow routing",
-        situation="A development organization works in Hermes chat and expects natural messages to become the right workflow.",
-        example_request="This feels like a risky refactor before release.",
-        primary_skill="oh-my-hermes",
-        playbook="safe-feature-change",
-        harness="planning",
-        next_action="route_or_clarify",
-        user_value="Hermes routes to clarify, plan, research, handoff, review, or status without making users memorize commands.",
-        evidence_boundary="A routing decision is advisory wrapper guidance, not an accepted plan or execution result.",
-        proof_surfaces=("omh chat route", "omh recommend", "omh playbook recommend"),
-        keywords=("route", "workflow", "risky", "refactor", "release", "chat", "라우팅", "위험"),
-    ),
-    UseCase(
-        goal="G5",
-        id="ai-coding-safety",
-        title="AI coding safety boundary",
-        situation="A company adopts Codex, Claude Code, or another coding executor but needs clear evidence boundaries.",
-        example_request="Prepare this for a coding agent, but show what is only prepared versus observed.",
-        primary_skill="code-review",
-        playbook="request-to-handoff",
-        harness="coding-handling",
-        next_action="prepare_executor_handoff",
-        user_value="Hermes keeps prepared handoff, dispatch, result, verification, review, CI, and merge status separate.",
-        evidence_boundary="Prepared coding context is not dispatch, execution, verification, review, CI, merge readiness, or merge.",
-        proof_surfaces=("omh coding delegate", "omh runtime delegation-status", "omh coding lifecycle report"),
-        keywords=("coding agent", "codex", "claude", "executor", "observed", "evidence", "코딩", "검증"),
-    ),
-    UseCase(
-        goal="G6",
-        id="feature-shaping",
-        title="Product feature shaping",
-        situation="A product person describes a fuzzy improvement that should not go straight to implementation.",
-        example_request="I want onboarding to feel smoother.",
-        primary_skill="deep-interview",
-        playbook="deep-interview-to-plan",
-        harness="deep-interview",
-        next_action="ask_one_clarifying_question",
-        user_value="Hermes turns fuzzy intent into goals, non-goals, user value, acceptance criteria, and then handoff only when ready.",
-        evidence_boundary="A shaped feature brief is not user validation, implementation, or release evidence.",
-        proof_surfaces=("omh chat interact", "omh hermes plan", "omh recommend"),
-        keywords=("feature", "onboarding", "smooth", "product", "shape", "clarify", "기획", "온보딩"),
-    ),
-    UseCase(
-        goal="G7",
-        id="release-gate",
-        title="Release gate and README claim check",
-        situation="A maintainer wants Hermes to verify release readiness and public claims before shipping.",
-        example_request="Before release, check that README claims match commands and tests.",
-        primary_skill="deploy-and-monitor",
-        playbook="deploy-and-monitor",
-        harness="app-delivery-loop",
-        next_action="prepare_release_gate",
-        user_value="Hermes separates checklist, observed tests, docs claims, review status, and release readiness.",
-        evidence_boundary="A release checklist is not a published release, deployment, monitoring result, or user adoption signal.",
-        proof_surfaces=("omh release checklist", "omh doctor", "omh runtime status"),
-        keywords=("release", "README", "claim", "doctor", "checklist", "deploy", "릴리즈", "배포"),
-    ),
-    UseCase(
-        goal="G8",
-        id="refactor-standardization",
-        title="Repeatable refactor workflow",
-        situation="A team repeatedly refactors legacy code and wants a standard safety loop.",
-        example_request="This risky refactor needs plan, implementation, review, and docs sync.",
-        primary_skill="ultraprocess",
-        playbook="safe-feature-change",
-        harness="goal-execution",
-        next_action="start_single_cycle_plan_to_pr",
-        user_value="Hermes applies research, plan, implementation handoff, code review, docs sync, and PR discipline as one cycle.",
-        evidence_boundary="A refactor plan is not behavior preservation, test pass, code review approval, or merge evidence.",
-        proof_surfaces=("omh recommend", "omh chat interact", "omh runtime status"),
-        keywords=("refactor", "legacy", "plan", "review", "docs", "sync", "리팩터링", "레거시"),
-    ),
-    UseCase(
-        goal="G9",
-        id="multi-agent-work-hub",
-        title="Multi-agent work hub",
-        situation="A power user coordinates Hermes, Codex-like executors, plugin runtimes, reviews, and PR status.",
-        example_request="What is the current coding-agent status and what did we decide in the interview?",
-        primary_skill="team",
-        playbook="local-pipeline-buildout",
-        harness="goal-execution",
-        next_action="summarize_work_hub_status",
-        user_value="Hermes reports current plan context, attached executor session, evidence ladder, and next action without forcing CLI spelunking.",
-        evidence_boundary="A hub status card is not new execution, dispatch, review, CI, or merge evidence.",
-        proof_surfaces=("omh capabilities inspect", "omh runtime delegation-status", "omh chat session status"),
-        keywords=("multi-agent", "status", "session", "team", "executor", "interview", "에이전트", "상태"),
-    ),
-    UseCase(
-        goal="G10",
-        id="scheduled-ops-blueprint",
-        title="Scheduled ops blueprint",
-        situation="An operator wants Hermes to prepare recurring research, monitoring, digest, or reporting work.",
-        example_request="Every morning, check competitor news and send a Slack digest only if something changed.",
+        priority=1,
+        id="natural-automation-blueprint",
+        title="Natural-language scheduled automation",
+        hermes_use_case="Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
+        current_gap="Loop had automation metadata, but the Hermes cron-ready blueprint surface was the only partially implemented member of this pack.",
         primary_skill="automation-blueprint",
         playbook="scheduled-ops-blueprint",
         harness="scheduled-ops-blueprint",
+        feature_surface="automation-blueprint skill: schedule intent, skill list, delivery target, silence policy, and confirmation/status card.",
+        direct_skill_invocation="$automation-blueprint Every morning, research competitor updates and send a digest only if something changed.",
+        hermes_chat_prompt="Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed.",
         next_action="prepare_scheduled_ops_blueprint",
-        user_value="Hermes prepares schedule, delivery, silence policy, skill chain, and missing evidence before any host automation claim.",
-        evidence_boundary="A scheduled ops blueprint is not cron creation, source retrieval, gateway delivery, plugin load, or no-agent execution.",
-        proof_surfaces=("omh ops blueprint", "omh ops blueprint-list", "omh ops validate"),
-        keywords=("every morning", "daily", "weekly", "digest", "slack", "competitor", "scheduled", "매일", "정기"),
+        user_value="Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened.",
+        evidence_boundary="A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence.",
+        proof_surfaces=("omh ops blueprint", "omh playbook inspect scheduled-ops-blueprint", "omh harness inspect scheduled-ops-blueprint"),
+        keywords=("cron", "automation", "every morning", "daily", "digest", "slack", "discord", "telegram", "매일", "정기", "자동화"),
+    ),
+    UseCase(
+        goal="G2",
+        priority=2,
+        id="github-event-ops",
+        title="GitHub PR/Issue event operations",
+        hermes_use_case="Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards.",
+        current_gap="OMH had handoff/status strength, but GitHub event recipes were not first-class.",
+        primary_skill="github-event-ops",
+        playbook="github-event-ops",
+        harness="github-event-ops",
+        feature_surface="github-event-ops skill: PR/issue/CI event classification with label/review/fix-handoff actions.",
+        direct_skill_invocation="$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
+        hermes_chat_prompt="Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
+        next_action="prepare_github_event_ops_card",
+        user_value="Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub.",
+        evidence_boundary="A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect github-event-ops", "omh harness inspect github-event-ops"),
+        keywords=("github", "webhook", "pr opened", "ci failed", "issue opened", "label", "review", "깃허브", "이슈", "ci"),
+    ),
+    UseCase(
+        goal="G3",
+        priority=3,
+        id="agent-board",
+        title="Multi-agent Kanban board",
+        hermes_use_case="Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states.",
+        current_gap="OMH had target topology and team profiles, but not a Hermes board contract.",
+        primary_skill="agent-board",
+        playbook="agent-board",
+        harness="agent-board",
+        feature_surface="agent-board contract: task/handoff/heartbeat/block/complete cards connected to OMH status.",
+        direct_skill_invocation="$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
+        hermes_chat_prompt="Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist.",
+        next_action="prepare_agent_board_card",
+        user_value="Teams see who owns each lane and which states are only prepared versus observed.",
+        evidence_boundary="An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.",
+        proof_surfaces=("omh recommend", "omh playbook inspect agent-board", "omh harness inspect agent-board"),
+        keywords=("agent board", "kanban", "multi agent", "heartbeat", "blocker", "handoff", "profile", "칸반", "여러 에이전트"),
+    ),
+    UseCase(
+        goal="G4",
+        priority=4,
+        id="memory-curation-review",
+        title="Memory and skill curation review",
+        hermes_use_case="Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions.",
+        current_gap="OMH had memory inspect, but not a deep Hermes MEMORY.md/USER.md/curator flow.",
+        primary_skill="memory-curation-review",
+        playbook="memory-curation-review",
+        harness="memory-curation-review",
+        feature_surface="memory-curation-review skill: candidate cleanup list, conflict detection, and human approval gates.",
+        direct_skill_invocation="$memory-curation-review Inspect stale project memories and ask me what to keep.",
+        hermes_chat_prompt="Use OMH memory-curation-review for: Inspect stale project memories and ask me what to keep.",
+        next_action="prepare_memory_curation_review",
+        user_value="Users can clean memory and skill drift without a silent destructive edit.",
+        evidence_boundary="A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect memory-curation-review", "omh harness inspect memory-curation-review"),
+        keywords=("memory", "curation", "stale", "conflict", "duplicate", "MEMORY.md", "USER.md", "기억", "메모리", "중복"),
+    ),
+    UseCase(
+        goal="G5",
+        priority=5,
+        id="gateway-intent-card",
+        title="Gateway-native intent card",
+        hermes_use_case="Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy.",
+        current_gap="OMH had wrapper contracts, but gateway-native target and delivery models were shallow.",
+        primary_skill="gateway-intent-card",
+        playbook="gateway-intent-card",
+        harness="gateway-intent-card",
+        feature_surface="gateway-intent-card skill: origin, thread, delivery, silence, attachment, and status-update policy.",
+        direct_skill_invocation="$gateway-intent-card Route this Discord thread update silently unless action is needed.",
+        hermes_chat_prompt="Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed.",
+        next_action="prepare_gateway_intent_card",
+        user_value="Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH.",
+        evidence_boundary="A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect gateway-intent-card", "omh harness inspect gateway-intent-card"),
+        keywords=("gateway", "discord", "slack", "telegram", "thread", "delivery", "attachment", "silent", "게이트웨이", "디스코드", "슬랙"),
+    ),
+    UseCase(
+        goal="G6",
+        priority=6,
+        id="executor-runtime-readiness",
+        title="Executor runtime readiness",
+        hermes_use_case="Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed.",
+        current_gap="OMH had executor-neutral handoff, but runtime migration readiness was weak.",
+        primary_skill="executor-runtime-readiness",
+        playbook="executor-runtime-readiness",
+        harness="executor-runtime-readiness",
+        feature_surface="executor-runtime-readiness skill: runtime matrix, missing tools, and handoff mode.",
+        direct_skill_invocation="$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
+        hermes_chat_prompt="Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?",
+        next_action="prepare_executor_runtime_readiness",
+        user_value="Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities.",
+        evidence_boundary="Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect executor-runtime-readiness", "omh harness inspect executor-runtime-readiness"),
+        keywords=("codex", "claude code", "runtime", "executor", "missing tools", "handoff mode", "omx", "omc", "omo", "코덱스", "클로드"),
+    ),
+    UseCase(
+        goal="G7",
+        priority=7,
+        id="deliverable-package",
+        title="Deliverable file package",
+        hermes_use_case="Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states.",
+        current_gap="OMH had materials-package, but not a Hermes deliverable attachment UX lane.",
+        primary_skill="deliverable-package",
+        playbook="deliverable-package",
+        harness="deliverable-package",
+        feature_surface="deliverable-package skill: file deliverable plan and prepared/generated/attached status card.",
+        direct_skill_invocation="$deliverable-package Turn this research into PPT and PDF with attachment status.",
+        hermes_chat_prompt="Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status.",
+        next_action="prepare_deliverable_package",
+        user_value="Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached.",
+        evidence_boundary="A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect deliverable-package", "omh harness inspect deliverable-package"),
+        keywords=("deliverable", "file", "attachment", "ppt", "pdf", "xlsx", "docx", "hwp", "keynote", "자료", "첨부", "파일"),
+    ),
+    UseCase(
+        goal="G8",
+        priority=8,
+        id="voice-operator",
+        title="Voice and mobile operator",
+        hermes_use_case="Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions.",
+        current_gap="OMH had setup language UX, but no voice-first workflow guidance.",
+        primary_skill="voice-operator",
+        playbook="voice-operator",
+        harness="voice-operator",
+        feature_surface="voice-operator skill: short command normalization, ambiguity check, and safe confirmation card.",
+        direct_skill_invocation="$voice-operator 'release before lunch, check risky parts' from mobile.",
+        hermes_chat_prompt="Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile.",
+        next_action="prepare_voice_operator_card",
+        user_value="Voice and mobile users get concise, safe routing instead of long CLI-like responses.",
+        evidence_boundary="A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect voice-operator", "omh harness inspect voice-operator"),
+        keywords=("voice", "mobile", "accessibility", "short command", "spoken", "hands free", "음성", "모바일", "접근성"),
+    ),
+    UseCase(
+        goal="G9",
+        priority=9,
+        id="toolbelt-readiness",
+        title="MCP and external toolbelt readiness",
+        hermes_use_case="Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
+        current_gap="OMH setup had MCP preference, but workflow-specific MCP/tool recommendation and verification was weak.",
+        primary_skill="toolbelt-readiness",
+        playbook="toolbelt-readiness",
+        harness="toolbelt-readiness",
+        feature_surface="toolbelt-readiness skill: workflow tool requirements, installed/missing/credential matrix, and next setup action.",
+        direct_skill_invocation="$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
+        hermes_chat_prompt="Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
+        next_action="prepare_toolbelt_readiness",
+        user_value="Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness.",
+        evidence_boundary="A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect toolbelt-readiness", "omh harness inspect toolbelt-readiness"),
+        keywords=("mcp", "toolbelt", "tools", "connector", "credential", "cli", "api", "missing tool", "커넥터", "외부 도구"),
+    ),
+    UseCase(
+        goal="G10",
+        priority=10,
+        id="ops-observability-card",
+        title="Ops observability and cost card",
+        hermes_use_case="Keep automation and loop work from failing silently by showing token/cost/latency/run-history/failure-mode telemetry boundaries.",
+        current_gap="OMH evidence boundaries were strong, but runtime cost/latency telemetry contract was weak.",
+        primary_skill="ops-observability-card",
+        playbook="ops-observability-card",
+        harness="ops-observability-card",
+        feature_surface="ops-observability-card skill: wrapper-safe token, cost, latency, run history, queue, and failure-mode status card.",
+        direct_skill_invocation="$ops-observability-card Show token, cost, latency, and last run status for this loop.",
+        hermes_chat_prompt="Use OMH ops-observability-card for: Show token, cost, latency, and last run status for this loop.",
+        next_action="prepare_ops_observability_card",
+        user_value="Operators can see health/cost signals without confusing estimates with provider truth or completion evidence.",
+        evidence_boundary="An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+        proof_surfaces=("omh recommend", "omh playbook inspect ops-observability-card", "omh harness inspect ops-observability-card"),
+        keywords=("observability", "cost", "latency", "token", "run history", "telemetry", "failure mode", "비용", "토큰", "관측성"),
     ),
 )
 
@@ -209,9 +254,9 @@ def recommend_use_cases(query: str, *, limit: int = 3) -> dict[str, Any]:
     for case in USE_CASES:
         score = _score_case(case, tokens, clean_query)
         if score:
-            scored.append((score, int(case.goal[1:]), case))
+            scored.append((score, case.priority, case))
     if not scored:
-        scored = [(1, index, case) for index, case in enumerate((USE_CASES[3], USE_CASES[5], USE_CASES[1]))]
+        scored = [(1, case.priority, case) for case in (USE_CASES[4], USE_CASES[5], USE_CASES[8])]
     scored.sort(key=lambda item: (-item[0], item[1]))
     recommendations = []
     for score, _, case in scored[:limit]:
@@ -223,8 +268,83 @@ def recommend_use_cases(query: str, *, limit: int = 3) -> dict[str, Any]:
         "schema_version": USE_CASE_RECOMMENDATION_SCHEMA_VERSION,
         "query": clean_query,
         "recommendations": recommendations,
-        "boundary": "Use-case recommendations are routing and product-fit guidance, not accepted plans, runtime execution, or observed evidence.",
+        "boundary": "Use-case recommendations prove only routing/product-fit guidance; they are not runtime, connector, delivery, file, memory, or execution evidence.",
     }
+
+
+def validate_use_cases() -> dict[str, Any]:
+    from .playbooks import list_playbooks
+    from .skill_pack import builtin_harnesses, builtin_skill_templates
+
+    skill_names = {skill.name for skill in builtin_skill_templates()}
+    harness_names = {harness.name for harness in builtin_harnesses()}
+    playbook_ids = {str(playbook["id"]) for playbook in list_playbooks()["playbooks"]}
+    validations = []
+    errors = []
+    for case in USE_CASES:
+        checks = {
+            "skill_exists": case.primary_skill in skill_names,
+            "playbook_exists": case.playbook in playbook_ids,
+            "harness_exists": case.harness in harness_names,
+            "direct_skill_invocation_present": case.direct_skill_invocation.startswith(f"${case.primary_skill} "),
+            "hermes_chat_prompt_present": case.primary_skill in case.hermes_chat_prompt,
+            "feature_surface_present": case.primary_skill in case.feature_surface,
+            "proof_surfaces_present": len(case.proof_surfaces) >= 3,
+            "proof_surfaces_valid": all(
+                _proof_surface_supported(surface, playbook_ids=playbook_ids, harness_names=harness_names)
+                for surface in case.proof_surfaces
+            ),
+            "boundary_has_evidence_guard": _boundary_has_evidence_guard(case.evidence_boundary),
+            "next_action_present": bool(case.next_action.strip()),
+            "user_value_present": bool(case.user_value.strip()),
+        }
+        missing = [name for name, ok in checks.items() if not ok]
+        if missing:
+            errors.append({"goal": case.goal, "id": case.id, "missing": missing})
+        validations.append(
+            {
+                "goal": case.goal,
+                "priority": case.priority,
+                "id": case.id,
+                "title": case.title,
+                "primary_skill": case.primary_skill,
+                "playbook": case.playbook,
+                "harness": case.harness,
+                "feature_surface": case.feature_surface,
+                "direct_skill_invocation": case.direct_skill_invocation,
+                "hermes_chat_prompt": case.hermes_chat_prompt,
+                "proof_surfaces": list(case.proof_surfaces),
+                "evidence_boundary": case.evidence_boundary,
+                "checks": checks,
+                "ok": not missing,
+            }
+        )
+    return {
+        "schema_version": USE_CASE_VALIDATION_SCHEMA_VERSION,
+        "ok": not errors,
+        "count": len(USE_CASES),
+        "validated": validations,
+        "errors": errors,
+        "boundary": "Validation proves the 10 OMH feature surfaces are registered as skills, playbooks, harnesses, and invocation examples; it is not proof that any external runtime action happened.",
+    }
+
+
+def _proof_surface_supported(surface: str, *, playbook_ids: set[str], harness_names: set[str]) -> bool:
+    clean = " ".join(surface.split())
+    if clean in {"omh recommend", "omh ops blueprint"}:
+        return True
+    if clean.startswith("omh playbook inspect "):
+        return clean.removeprefix("omh playbook inspect ") in playbook_ids
+    if clean.startswith("omh harness inspect "):
+        return clean.removeprefix("omh harness inspect ") in harness_names
+    if clean.startswith("omh cases inspect "):
+        return _find_case(clean.removeprefix("omh cases inspect ")) is not None
+    return False
+
+
+def _boundary_has_evidence_guard(boundary: str) -> bool:
+    lowered = boundary.casefold()
+    return "not " in lowered and "evidence" in lowered
 
 
 def _public_case(case: UseCase) -> dict[str, Any]:

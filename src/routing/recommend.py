@@ -112,6 +112,55 @@ _SKILL_POLICIES = {
         ),
     ),
 }
+_SKILL_POLICIES.update(
+    {
+        "github-event-ops": RecommendationPolicy(
+            next_action="prepare_github_event_ops_card",
+            evidence_boundary="A GitHub event ops card is not webhook delivery, API mutation, label application, review completion, CI rerun, or fix execution evidence.",
+            wrapper_guidance="Classify PR, issue, review, and CI events into triage/review/label/fix-handoff actions; record GitHub mutations only when observed.",
+        ),
+        "agent-board": RecommendationPolicy(
+            next_action="prepare_agent_board_card",
+            evidence_boundary="An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed.",
+            wrapper_guidance="Show task, handoff, heartbeat, blocker, and completion states per target/thread; require target-specific evidence before advancing.",
+        ),
+        "memory-curation-review": RecommendationPolicy(
+            next_action="prepare_memory_curation_review",
+            evidence_boundary="A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
+            wrapper_guidance="Present stale/conflicting/duplicate memory candidates with approve/reject/update actions; write only after observed approval.",
+        ),
+        "gateway-intent-card": RecommendationPolicy(
+            next_action="prepare_gateway_intent_card",
+            evidence_boundary="A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
+            wrapper_guidance="Normalize origin, thread, delivery, silent-update, attachment, and status-update policy before any gateway action is claimed.",
+        ),
+        "executor-runtime-readiness": RecommendationPolicy(
+            next_action="prepare_executor_runtime_readiness",
+            evidence_boundary="Runtime readiness is not executor dispatch, plugin load, tool invocation, execution, review, CI, or merge evidence.",
+            wrapper_guidance="Compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools, missing capabilities, credentials, and handoff mode.",
+        ),
+        "deliverable-package": RecommendationPolicy(
+            next_action="prepare_deliverable_package",
+            evidence_boundary="A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
+            wrapper_guidance="Track prepared, generated, QA, approved, attached, and delivered states separately for PPT/PDF/XLSX/DOCX/HWP/Markdown outputs.",
+        ),
+        "voice-operator": RecommendationPolicy(
+            next_action="prepare_voice_operator_card",
+            evidence_boundary="A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
+            wrapper_guidance="Turn terse voice/mobile requests into concise clarify, plan, status, handoff, or confirmation cards; require confirmation for risky actions.",
+        ),
+        "toolbelt-readiness": RecommendationPolicy(
+            next_action="prepare_toolbelt_readiness",
+            evidence_boundary="A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
+            wrapper_guidance="List required MCP/CLI/API/credential/connectors, observed availability, missing pieces, and setup or handoff next action.",
+        ),
+        "ops-observability-card": RecommendationPolicy(
+            next_action="prepare_ops_observability_card",
+            evidence_boundary="An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+            wrapper_guidance="Report token/cost/latency/run-history telemetry as wrapper-safe status with clear local-estimate vs provider-observed boundaries.",
+        ),
+    }
+)
 _CATEGORY_POLICIES = {
     "planning": RecommendationPolicy(
         next_action="present_plan",

@@ -106,6 +106,80 @@ _COMMON_NOT_EVIDENCE = (
 )
 
 
+def _surface_playbook(
+    playbook_id: str,
+    title: str,
+    summary: str,
+    use_when: str,
+    keywords: tuple[str, ...],
+    *,
+    owner: str,
+    contract: str,
+    pipeline: tuple[str, ...],
+    first_action: str,
+    evidence_boundary: str,
+    retained: tuple[str, ...] = ("chat intake", "workflow shaping", "status narration"),
+    delegated: tuple[str, ...] = (),
+) -> Playbook:
+    return Playbook(
+        id=playbook_id,
+        title=title,
+        summary=summary,
+        use_when=use_when,
+        keywords=(playbook_id, *keywords),
+        intent_tags=(playbook_id.replace("-", " "), owner, contract),
+        pipeline=pipeline,
+        retained_by_hermes=retained,
+        delegated_to_executor=delegated,
+        stages=(
+            PlaybookStage(
+                first_action,
+                "Scope the request",
+                "hermes",
+                "Capture target, missing context, authority, and the evidence boundary before proposing an action.",
+                contract,
+                ("ask_followup", "show_status"),
+                ("request summary", "target boundary", "missing evidence"),
+                evidence_boundary,
+            ),
+            PlaybookStage(
+                "prepare_card",
+                "Prepare workflow card",
+                owner,
+                "Create the platform-neutral card, matrix, board, package, or readiness output.",
+                contract,
+                ("show_status", "revise_plan", "prepare_handoff"),
+                ("card payload", "next action", "not-evidence list"),
+                "Prepared workflow cards are not external runtime, connector, delivery, file, memory, or platform evidence.",
+            ),
+            PlaybookStage(
+                "record_observation",
+                "Record observation when available",
+                "wrapper",
+                "Advance the status only when a wrapper, operator, runtime, or artifact provides observed evidence.",
+                "status_card/v1",
+                ("record_observation", "show_status"),
+                ("observed event or explicit not_observed gap",),
+                "Status stays prepared or blocked until matching observed evidence exists.",
+            ),
+        ),
+        acceptance_criteria=(
+            "The user sees why this workflow was chosen and what the next action is.",
+            "The card names prepared, observed, blocked, and missing evidence separately.",
+            "External execution, mutation, delivery, generation, or memory-write claims require separate observations.",
+        ),
+        not_evidence_until_observed=(
+            "runtime_dispatch",
+            "connector_invocation",
+            "platform_delivery",
+            "file_generation",
+            "memory_mutation",
+            "external_api_mutation",
+            *_COMMON_NOT_EVIDENCE,
+        ),
+    )
+
+
 _PLAYBOOKS = (
     Playbook(
         id="request-to-handoff",
@@ -1856,10 +1930,139 @@ _PLAYBOOKS = (
 )
 
 
+_SURFACE_PLAYBOOKS = (
+    _surface_playbook(
+        "github-event-ops",
+        "GitHub event ops",
+        "Route GitHub PR, issue, CI, and review events into Hermes review, triage, label, or fix-handoff cards.",
+        "Use when a copied or wrapped GitHub event should become a reviewable Hermes workflow.",
+        ("github", "webhook", "pr opened", "ci failed", "issue opened", "label", "review", "깃허브", "이슈", "pr", "ci"),
+        owner="github-event-ops",
+        contract="github_event_ops/v1",
+        pipeline=("scope_event", "classify_event", "prepare_card", "record_observation"),
+        first_action="scope_event",
+        evidence_boundary="Event routing is not webhook delivery, GitHub mutation, review completion, CI rerun, or fix execution evidence.",
+        delegated=("fix implementation", "test repair", "code review fixes"),
+    ),
+    _surface_playbook(
+        "agent-board",
+        "Agent board",
+        "Coordinate multiple Hermes profiles or agents with task, handoff, heartbeat, blocker, and completion cards.",
+        "Use when multi-agent work needs a board/status contract instead of one chat summary.",
+        ("agent board", "kanban", "multi agent", "heartbeat", "blocker", "handoff", "칸반", "여러 에이전트"),
+        owner="agent-board",
+        contract="agent_board/v1",
+        pipeline=("scope_board", "prepare_cards", "record_heartbeat", "record_completion"),
+        first_action="scope_board",
+        evidence_boundary="Board cards are not proof that another Hermes target accepted, worked, heartbeat-ed, or completed.",
+    ),
+    _surface_playbook(
+        "memory-curation-review",
+        "Memory curation review",
+        "Review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.",
+        "Use when accumulated Hermes memory or skill guidance needs human-approved cleanup.",
+        ("memory", "curation", "stale", "conflict", "duplicate", "MEMORY.md", "USER.md", "기억", "메모리"),
+        owner="memory-curation-review",
+        contract="memory_curation_review/v1",
+        pipeline=("collect_candidates", "rank_conflicts", "prepare_review", "record_approved_write"),
+        first_action="collect_candidates",
+        evidence_boundary="Memory curation is not Hermes internal memory or file-change evidence.",
+    ),
+    _surface_playbook(
+        "gateway-intent-card",
+        "Gateway intent card",
+        "Normalize Discord, Slack, Telegram, and other gateway sessions into delivery, silence, attachment, and status-update policy.",
+        "Use when chat gateway handling needs a platform-neutral intent card.",
+        ("gateway", "discord", "slack", "telegram", "thread", "delivery", "attachment", "silent", "게이트웨이", "디스코드", "슬랙"),
+        owner="gateway-intent-card",
+        contract="gateway_intent_card/v1",
+        pipeline=("scope_origin", "prepare_policy", "confirm_delivery", "record_delivery"),
+        first_action="scope_origin",
+        evidence_boundary="Gateway intent is not login, send, thread mutation, attachment upload, or delivery evidence.",
+    ),
+    _surface_playbook(
+        "executor-runtime-readiness",
+        "Executor runtime readiness",
+        "Compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools, missing capabilities, credentials, and handoff mode.",
+        "Use before selecting an executor or runtime for coding or tool-backed work.",
+        ("codex", "claude code", "runtime", "executor", "missing tools", "handoff mode", "omx", "omc", "omo", "코덱스", "클로드"),
+        owner="executor-runtime-readiness",
+        contract="executor_runtime_readiness/v1",
+        pipeline=("scope_task", "compare_runtimes", "select_handoff_mode", "record_dispatch"),
+        first_action="scope_task",
+        evidence_boundary="Runtime readiness is not executor dispatch, plugin load, tool invocation, execution, review, CI, or merge evidence.",
+        delegated=("selected executor work after explicit handoff",),
+    ),
+    _surface_playbook(
+        "deliverable-package",
+        "Deliverable package",
+        "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachment work through prepared, generated, QA, approved, and attached states.",
+        "Use when a chat request should result in a file deliverable or attachment status card.",
+        (
+            "deliverable",
+            "file attachment",
+            "attachment status",
+            "file delivery",
+            "file deliverable status",
+            "generated file",
+            "첨부",
+            "첨부 상태",
+            "전달 상태",
+        ),
+        owner="deliverable-package",
+        contract="deliverable_package/v1",
+        pipeline=("scope_deliverable", "prepare_format_plan", "prepare_generation_handoff", "record_file_or_attachment"),
+        first_action="scope_deliverable",
+        evidence_boundary="Deliverable planning is not binary generation, render QA, approval, upload, attachment, or delivery evidence.",
+        delegated=("binary file generation", "render QA", "spreadsheet recalculation"),
+    ),
+    _surface_playbook(
+        "voice-operator",
+        "Voice operator",
+        "Turn short voice or mobile commands into safe clarify, plan, status, handoff, or confirmation actions.",
+        "Use for terse, ambiguous, voice-first, mobile, or accessibility-sensitive requests.",
+        ("voice", "mobile", "accessibility", "short command", "spoken", "hands free", "음성", "모바일", "접근성"),
+        owner="voice-operator",
+        contract="voice_operator/v1",
+        pipeline=("scope_voice_intent", "check_ambiguity", "prepare_safe_action", "record_confirmation"),
+        first_action="scope_voice_intent",
+        evidence_boundary="Voice operator guidance is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
+    ),
+    _surface_playbook(
+        "toolbelt-readiness",
+        "Toolbelt readiness",
+        "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
+        "Use when workflow execution depends on external tools or credentials.",
+        ("mcp", "toolbelt", "tools", "connector", "credential", "cli", "api", "missing tool", "커넥터", "외부 도구"),
+        owner="toolbelt-readiness",
+        contract="toolbelt_readiness/v1",
+        pipeline=("scope_workflow_tools", "list_requirements", "check_observed_tools", "prepare_setup_or_handoff"),
+        first_action="scope_workflow_tools",
+        evidence_boundary="Toolbelt readiness is not MCP install, credential validation, API access, connector invocation, or workflow execution evidence.",
+    ),
+    _surface_playbook(
+        "ops-observability-card",
+        "Ops observability card",
+        "Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries.",
+        "Use when loops, automations, gateway work, or executor sessions need safe operational status.",
+        ("observability", "cost", "latency", "token", "run history", "telemetry", "failure mode", "비용", "토큰", "관측성"),
+        owner="ops-observability-card",
+        contract="ops_observability_card/v1",
+        pipeline=("scope_telemetry", "summarize_metrics", "check_failure_modes", "record_observation"),
+        first_action="scope_telemetry",
+        evidence_boundary="Observability cards are not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+    ),
+)
+
+
+def _all_playbooks() -> tuple[Playbook, ...]:
+    return (*_PLAYBOOKS, *_SURFACE_PLAYBOOKS)
+
+
 def list_playbooks() -> dict[str, object]:
     return {
         "schema_version": PLAYBOOK_CATALOG_SCHEMA_VERSION,
-        "playbooks": [playbook.summary_dict() for playbook in _PLAYBOOKS],
+        "playbooks": [playbook.summary_dict() for playbook in _all_playbooks()],
     }
 
 
@@ -1880,7 +2083,7 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
     routing_text = prepare_routing_text(task)
     scored = [
         _score_playbook(playbook, routing_text.scoring_text, routing_text.locale_matches)
-        for playbook in _PLAYBOOKS
+        for playbook in _all_playbooks()
     ]
     scored.sort(key=lambda item: (-int(item["score"]), str(item["id"])))
     matches = [item for item in scored if int(item["score"]) > 0] or [_fallback_playbook(task)]
@@ -1892,7 +2095,7 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
 
 
 def _playbook_by_id(playbook_id: str) -> Playbook:
-    for playbook in _PLAYBOOKS:
+    for playbook in _all_playbooks():
         if playbook.id == playbook_id:
             return playbook
     raise KeyError(playbook_id)

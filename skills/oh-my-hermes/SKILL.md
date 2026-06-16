@@ -66,7 +66,7 @@ Keep compatible workflow names installed, but use this advisory wrapper guidance
 - `hybrid-verification`: `ultraqa`
 - `retained-cognition`: `loop`, `ultraprocess`, `deep-interview`, `web-research`, `research-brief`, `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `plan`, `ralplan`, `best-practice-research`, `autoresearch-goal`
 - `retained-knowledge`: `wiki`
-- `retained-operator`: `cancel`, `skill`, `doctor`
+- `retained-operator`: `cancel`, `skill`, `doctor`, `github-event-ops`, `agent-board`, `memory-curation-review`, `gateway-intent-card`, `executor-runtime-readiness`, `deliverable-package`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`
 - `retained-router`: `oh-my-hermes`
 - `runtime-handoff-guidance`: `ralph`, `ultragoal`, `team`, `ultrawork`, `ai-slop-cleaner`
 - Full per-skill handoff policies live in generated workflow skills and `docs/WORKFLOWS.md`.
@@ -161,6 +161,15 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `cancel`: `cancel`, `$cancel`, `stop`, `abort`
 - `skill`: `skill`, `$skill`, `skills`, `manage skills`
 - `doctor`: `doctor`, `$doctor`, `diagnose omh`, `installation health`
+- `github-event-ops`: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`
+- `agent-board`: `agent-board`, `agent board`, `kanban`, `multi agent board`, `hermes profiles`
+- `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `curate memory`
+- `gateway-intent-card`: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`
+- `executor-runtime-readiness`: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`
+- `deliverable-package`: `deliverable-package`, `deliverable mode`, `file attachment`, `attach file`, `attachment status`
+- `voice-operator`: `voice-operator`, `voice operator`, `voice-first`, `mobile command`, `short command`
+- `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`
+- `ops-observability-card`: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.
 
@@ -189,6 +198,15 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `critic`: Challenge plan consistency, quality criteria, and missing verification. Tier `finding-gated`. Ladder: `review_scope_loaded` -> `findings_recorded` -> `verdict_recorded` -> `residual_risk_recorded`. Actions: `show_findings`, `request_changes`, `approve_plan`. Privacy `metadata_only`.
 - `qa-specialist`: Design adversarial scenarios and verify user-visible behavior before completion. Tier `scenario-gated`. Ladder: `scenario_matrix_defined` -> `checks_run` -> `pass_fail_recorded` -> `fix_followup_recorded_if_needed`. Actions: `show_status`, `record_check`, `record_blocker`. Privacy `metadata_only`.
 - `docs-specialist`: Keep public docs accurate, installable, and aligned with actual behavior. Tier `claim-gated`. Ladder: `claims_scoped` -> `docs_updated` -> `generated_docs_checked` -> `public_claims_verified`. Actions: `show_docs`, `record_claim_check`, `show_status`. Privacy `metadata_only`.
+- `github-event-ops`: Route GitHub PR, issue, CI, and review events into triage, review, labeling, or fix-handoff guidance. Tier `event-gated`. Ladder: `event_received` -> `event_classified` -> `route_card_prepared` -> `mutation_observed_when_available`. Actions: `show_event_card`, `prepare_review`, `prepare_label`, `prepare_fix_handoff`, `record_github_observation`. Privacy `metadata_only`.
+- `agent-board`: Coordinate multi-Hermes-agent or profile work as board cards with task, handoff, heartbeat, blocker, and completion states. Tier `board-gated`. Ladder: `board_scoped` -> `cards_prepared` -> `heartbeat_recorded_when_available` -> `completion_recorded_when_available`. Actions: `show_board`, `move_card`, `record_heartbeat`, `record_blocker`, `record_completion`. Privacy `metadata_only`.
+- `memory-curation-review`: Review stale, conflicting, duplicate, or risky memory and skill guidance with explicit approve/reject/update actions. Tier `curation-gated`. Ladder: `memory_candidates_scoped` -> `conflicts_ranked` -> `review_actions_prepared` -> `approved_write_observed_when_available`. Actions: `show_memory_review`, `approve_update`, `reject_update`, `record_memory_write`, `show_status`. Privacy `metadata_only`.
+- `gateway-intent-card`: Normalize gateway session policy for origin, thread, delivery, silent updates, attachments, and status updates. Tier `gateway-gated`. Ladder: `origin_scoped` -> `thread_policy_prepared` -> `delivery_policy_prepared` -> `delivery_observed_when_available`. Actions: `show_gateway_card`, `confirm_delivery`, `record_delivery`, `record_attachment`, `show_status`. Privacy `metadata_only`.
+- `executor-runtime-readiness`: Compare executor/runtime options by available tools, missing tools, credentials, authority, and handoff mode. Tier `runtime-readiness-gated`. Ladder: `task_runtime_scoped` -> `tool_matrix_prepared` -> `handoff_mode_selected` -> `runtime_dispatch_observed_when_available`. Actions: `show_runtime_matrix`, `choose_executor`, `prepare_handoff`, `record_dispatch`, `show_status`. Privacy `metadata_only`.
+- `deliverable-package`: Track file deliverables through prepared, generated, QA, approved, attached, and delivered states. Tier `deliverable-gated`. Ladder: `deliverable_scoped` -> `format_plan_prepared` -> `generation_handoff_prepared` -> `file_observed_when_available`. Actions: `show_deliverable_card`, `choose_format`, `prepare_generation_handoff`, `record_file`, `record_attachment`. Privacy `metadata_only`.
+- `voice-operator`: Convert terse voice/mobile requests into safe clarify, plan, status, handoff, or confirmation actions. Tier `accessibility-gated`. Ladder: `voice_request_received` -> `ambiguity_checked` -> `safe_action_prepared` -> `confirmation_observed_when_required`. Actions: `ask_clarification`, `confirm_action`, `show_status`, `prepare_handoff`. Privacy `metadata_only`.
+- `toolbelt-readiness`: Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools for a workflow. Tier `tool-readiness-gated`. Ladder: `workflow_tools_scoped` -> `tool_requirements_listed` -> `installed_state_recorded_when_available` -> `credential_gaps_recorded`. Actions: `show_toolbelt`, `open_setup`, `record_tool_check`, `prepare_handoff`, `show_status`. Privacy `metadata_only`.
+- `ops-observability-card`: Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries. Tier `observability-gated`. Ladder: `telemetry_scope_recorded` -> `local_metrics_summarized` -> `failure_modes_checked` -> `provider_truth_observed_when_available`. Actions: `show_observability`, `record_metric`, `record_failure_mode`, `show_status`. Privacy `metadata_only`.
 
 Harness priority:
 
