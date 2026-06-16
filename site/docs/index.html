@@ -174,6 +174,14 @@
                 frame strategic options without defaulting to coding.
               </p>
             </a>
+            <a class="flagship-item flagship-item--docs" href="#playbooks">
+              <span>Scheduled ops</span>
+              <h3><code>automation-blueprint</code> / <code>web-research</code> / <code>report-package</code></h3>
+              <p>
+                Prepare recurring checks, delivery targets, silence rules, and
+                status-card boundaries while runtime proof stays observed-only.
+              </p>
+            </a>
             <a class="flagship-item flagship-item--docs" href="product-ops/">
               <span>Materials processing</span>
               <h3><code>materials-package</code> / <code>report-package</code></h3>
@@ -354,13 +362,15 @@ uv run python examples/slack-adapter-shim.py</code>
             wrappers and maintainers can inspect situation-level
             pipelines for source-backed research, research-to-strategy briefs,
             meeting prep, feedback triage, weekly ops review, deep interview to plan,
-            safe coding handoff, local pipeline buildout, and release-readiness review.
+            scheduled ops blueprints, safe coding handoff, local pipeline buildout,
+            and release-readiness review.
           </p>
           <div class="command" role="region" aria-label="Playbook commands" tabindex="0">
             <code>omh playbook list
 omh playbook inspect request-to-handoff
 omh playbook recommend "I want to safely add a feature to this repo"
-omh playbook recommend "prepare weekly ops review from customer feedback and release risks"</code>
+omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
+omh playbook recommend "every morning check competitor news and send a Slack digest only if something changed"</code>
           </div>
           <p>
             Use playbooks when wrappers need to know which stages stay with

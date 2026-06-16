@@ -21,6 +21,7 @@ class OrchestrationPatternTests(unittest.TestCase):
             "swarm_batch",
             "worktree_isolated_workers",
             "loop_run_once",
+            "scheduled_ops_blueprint",
             "executor_session_handoff",
             "materials_generation_handoff",
         }:
@@ -35,3 +36,8 @@ class OrchestrationPatternTests(unittest.TestCase):
         worktree = patterns["worktree_isolated_workers"]
         self.assertIn("worktree_creation_observed", worktree["observed_evidence_required"])
         self.assertIn("Do not claim worktrees exist", worktree["do_not_use_when"])
+
+        scheduled = patterns["scheduled_ops_blueprint"]
+        self.assertIn("automation-blueprint", scheduled["compatible_skills"])
+        self.assertIn("host_schedule_observed", scheduled["observed_evidence_required"])
+        self.assertIn("Do not claim host cron", scheduled["do_not_use_when"])

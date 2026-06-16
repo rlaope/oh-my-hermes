@@ -18,6 +18,7 @@ omh playbook inspect request-to-handoff
 omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "research latest official sources"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
+omh playbook recommend "every morning check competitor news and send a Slack digest only if something changed"
 omh playbook recommend "organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions"
 omh playbook recommend "create a monthly leadership PPT report package from current status and risks"
 omh playbook recommend "turn the revenue spreadsheet into an Excel and PDF package with render QA"
@@ -42,6 +43,7 @@ files.
 | `meeting-prep-to-record` | A user wants context turned into a meeting agenda and record template. | Context -> agenda -> prompts -> decisions needed -> record template. |
 | `feedback-triage` | A user brings customer feedback, bug signals, or feature asks. | Source boundary -> clusters -> severity/opportunity -> next workflow. |
 | `weekly-ops-review` | A user wants a recurring status, risk, blocker, and priority review. | Scope -> observed status -> risks/blockers -> priorities -> follow-ups. |
+| `scheduled-ops-blueprint` | A user wants a recurring digest, scheduled check, no-change silence rule, or platform delivery plan. | Scope schedule -> select skills -> prepare prompt -> delivery/silence policy -> status card. |
 | `operating-rhythm-history` | A user wants meeting history, scrum, sprint, retrospective, decision, or follow-up records. | Scope cadence -> capture record -> capture decisions -> assign follow-ups -> export outline. |
 | `report-package` | A user wants a report, status package, executive brief, or PPT-ready outline independent of reliability review. | Scope audience -> gather inputs -> shape sections -> export outline -> record approval boundary. |
 | `materials-processing` | A user wants decks, PDFs, spreadsheets, documents, HWP, Markdown, or upload-ready files prepared and QA-tracked. | Scope material -> organize sources -> choose formats -> prepare generation handoff -> record export QA. |
@@ -114,7 +116,7 @@ that Hermes will classify feedback, rank severity or opportunity, and recommend
 the next workflow. It should not show executor actions unless the user later
 accepts a plan with explicit code work.
 
-For operations artifacts, prompts can route to three independent surfaces:
+For operations and artifacts, prompts can route to independent surfaces:
 
 ```text
 organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions
@@ -122,6 +124,19 @@ create a monthly leadership PPT report package from current status and risks
 turn the revenue spreadsheet into an Excel and PDF package with render QA
 run an incident postmortem with SLO, error budget, remediation, and service reliability evidence
 ```
+
+For scheduled operations, a prompt like:
+
+```text
+every morning check competitor news and send a Slack digest only if something changed
+```
+
+routes to `scheduled-ops-blueprint`. The wrapper can show cadence, delivery
+surface, silence policy, selected skills, context chain, and missing runtime
+evidence. The blueprint can prepare `hermes_ops_blueprint/v1`; it cannot prove
+host cron creation, Hermes automation enablement, source retrieval, Slack
+delivery, no-agent execution, plugin load, connector invocation, review, CI, or
+merge evidence.
 
 `operating-rhythm-history` keeps cadence records, decisions, and action items
 durable without claiming the meeting happened unless notes are observed.

@@ -806,6 +806,51 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not claim render QA, formula recalculation, approval, or delivery from a prepared material plan.
   - Keep source facts, assumptions, missing inputs, and generated output evidence separate.
 
+### automation-blueprint
+
+[omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
+
+- Category: `operations`
+- Phase: `scheduled-ops-blueprint`
+- Hermes role: `retained-cognition`
+- Quality tier: `ops-blueprint-gated`
+- Handoff policy: Keep schedule intent, delivery policy, silence rules, context-chain selection, and status narration in Hermes; prepare host automation or no-agent follow-up only after an operator/wrapper records observed runtime evidence.
+- Why this exists: `automation-blueprint` exists so Hermes can make recurring operational work feel native and scheduled without OMH becoming a hidden cron runner, transport bot, source retriever, or executor.
+- Use when: Use when Hermes should turn a natural recurring/cron-like request into a scheduled ops blueprint without claiming host automation, platform delivery, source retrieval, or no-agent execution.
+- Do not use when:
+  - The user needs a one-off report or deck; use `report-package` or `materials-package`.
+  - The user asks to review incident metrics once; use `reliability-review`.
+  - The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.
+- Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `every morning`, `every day`, `daily digest`, `weekly digest`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `매일`, `매주`, `정기`, `예약`, `반복`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`
+- Good example:
+  - Prompt: automation-blueprint every morning check competitor news and send a Slack digest only if something changed.
+  - Expected behavior: Prepare hermes_ops_blueprint/v1 with schedule intent, Slack delivery policy, silence rule, research/report skills, missing evidence, and next confirmation.
+  - Why: The request is recurring, delivery-shaped, and must stay prepared until host automation and gateway delivery are observed.
+- Bad example:
+  - Prompt: automation-blueprint prove the Slack digest was delivered this morning.
+  - Expected behavior: Ask for observed Hermes/gateway delivery evidence or report the delivery as not_observed instead of claiming it happened.
+  - Why: A blueprint can prepare the scheduled operation, but it cannot prove runtime execution or delivery.
+- Quality bar:
+  - Name cadence/timezone uncertainty, delivery target, silence/no-change rule, selected skills, and context chain.
+  - Expose whether a no-agent watchdog is a candidate without claiming it exists or ran.
+  - List host automation, gateway delivery, source retrieval, and no-agent execution as not evidence until observed.
+- Required inputs:
+  - recurring request
+  - schedule or cadence hint
+  - delivery target or current-thread default
+  - silence/no-change preference
+- Expected outputs:
+  - hermes_ops_blueprint/v1 projection
+  - schedule/delivery/silence confirmation needs
+  - status-card boundary
+  - not-evidence list
+- Artifact expectations:
+  - hermes_ops_blueprint/v1 under .omh/hermes-ops/blueprints when a wrapper or CLI records it
+- Safety rules:
+  - Do not claim host cron, Hermes automation, gateway delivery, source retrieval, no-agent execution, plugin load, or connector work from a prepared blueprint.
+  - Keep scheduled operations as projection metadata until the host runtime supplies observed evidence.
+  - Route later coding, material generation, or report delivery into separate accepted handoffs when needed.
+
 ### reliability-review
 
 [omh] Hermes Reliability Review workflow: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence.
@@ -2146,6 +2191,62 @@ Plan, hand off, and verify material-processing work across decks, PDFs, spreadsh
   - A material_artifact/v1 plan is not binary PPTX, PDF, Keynote, DOCX, XLSX, HWP, or upload evidence.
   - Planned QA checks are not render QA, formula recalculation, approval, or delivery evidence.
 - Fallback: If source data or target format is missing, create a material scaffold and ask for the smallest missing input before generation.
+
+### scheduled-ops-blueprint
+
+Prepare recurring Hermes operations as schedule/delivery/silence blueprints without claiming runtime execution.
+
+- Use when: Use when recurring, cron-like, digest, monitoring, or platform-delivery requests need a Hermes-native setup plan and status card.
+- Quality tier: `ops-blueprint-gated`
+- Quality bar:
+  - Name cadence, timezone uncertainty, delivery target, silence policy, selected skills, context chain, and missing decisions.
+  - Separate prepared host schedule guidance from observed Hermes automation or cron evidence.
+  - Separate delivery intent from gateway/platform delivery proof.
+  - Expose no-agent suitability only as a candidate classification unless no-agent runtime evidence is observed.
+- Inputs:
+  - recurring request
+  - cadence or schedule hint
+  - delivery target
+  - silence/no-change policy
+- Outputs:
+  - hermes_ops_blueprint/v1
+  - schedule/delivery/silence policy
+  - skill context chain
+  - not-evidence boundary
+- Stop conditions:
+  - blueprint is prepared
+  - missing schedule/delivery decisions are explicit
+  - runtime and delivery claims remain observed-only
+- Verification:
+  - validate hermes_ops_blueprint/v1
+  - check schedule/delivery/silence fields
+  - verify not_evidence_until_observed lists runtime and gateway claims
+- Evidence ladder:
+  - `blueprint_scope_recorded`
+  - `schedule_policy_prepared`
+  - `delivery_policy_prepared`
+  - `silence_policy_prepared`
+  - `context_chain_prepared`
+  - `runtime_observed_when_available`
+- Wrapper actions:
+  - `show_blueprint`
+  - `revise_schedule`
+  - `confirm_delivery_policy`
+  - `prepare_host_schedule`
+  - `record_observed_runtime`
+  - `show_status`
+- Artifact events:
+  - `blueprint_scope_recorded`
+  - `schedule_policy_prepared`
+  - `delivery_policy_prepared`
+  - `status_boundary_recorded`
+- Delegation expectation: Record scheduled ops blueprints as Hermes-retained projection metadata; record host automation, delivery, retrieval, or no-agent execution only from observed runtime evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A hermes_ops_blueprint/v1 artifact is not host cron creation, Hermes automation, gateway delivery, source retrieval, no-agent execution, plugin load, or connector evidence.
+  - A silence policy is not proof that a run happened or that there were no changes.
+  - No-agent suitability is only a design hint until a no-agent runtime record exists.
+- Fallback: If cadence, delivery, or silence policy is missing, prepare the blueprint and ask for the smallest missing confirmation.
 
 ### reliability-review
 

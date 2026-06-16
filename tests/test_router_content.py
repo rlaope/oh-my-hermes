@@ -96,6 +96,7 @@ class RouterContentTests(unittest.TestCase):
             "operating-rhythm",
             "report-package",
             "materials-package",
+            "automation-blueprint",
             "reliability-review",
             "idea-to-deploy",
             "cto-loop",
@@ -133,6 +134,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["operating-rhythm"].next_action, "prepare_operating_record")
         self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
+        self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
 
         for helper in (
@@ -172,6 +174,7 @@ class RouterContentTests(unittest.TestCase):
                 "operating-rhythm",
                 "report-package",
                 "materials-package",
+                "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
                 "goal-loop",
@@ -872,6 +875,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
         self.assertIn("operating-rhythm-history", playbooks)
+        self.assertIn("scheduled-ops-blueprint", playbooks)
         self.assertIn("report-package", playbooks)
         self.assertIn("reliability-incident-review", playbooks)
         self.assertIn("binary PPTX export", playbooks)

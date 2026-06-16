@@ -1,0 +1,223 @@
+{
+  "blueprint_id": "20260616T000000Z-scheduled-ops-competitor-digest-example",
+  "context_chain": [
+    "schedule_intent",
+    "delivery_policy",
+    "silence_policy",
+    "source_boundaries",
+    "report_outline",
+    "not_evidence_boundary",
+    "status_card"
+  ],
+  "created_at": "2026-06-16T00:00:00Z",
+  "delivery_intent": {
+    "explicit_delivery": "Slack digest",
+    "requires_observed_gateway_evidence": true,
+    "status": "prepared",
+    "surfaces": [
+      "slack"
+    ]
+  },
+  "kind": "scheduled-ops-blueprint",
+  "next_action": "Present the blueprint in Hermes, ask for schedule/delivery confirmation, then create host automation only outside this prepared artifact.",
+  "no_agent_suitability": {
+    "classification": "not_recommended",
+    "prepared_is_not_no_agent_execution": true,
+    "reason": "The request needs Hermes interpretation, source-backed synthesis, or status narration."
+  },
+  "not_evidence_until_observed": [
+    "host_cron_created",
+    "hermes_automation_enabled",
+    "gateway_delivery_sent",
+    "source_retrieval_observed",
+    "no_agent_script_written",
+    "no_agent_execution",
+    "plugin_loaded_by_hermes",
+    "connector_invoked",
+    "review",
+    "ci",
+    "merge_readiness",
+    "merge"
+  ],
+  "observation_status": "prepared",
+  "observed_evidence_required": [
+    "Hermes host automation or cron listing that references the configured schedule.",
+    "Gateway or Hermes message delivery record when delivery is claimed.",
+    "Observed source retrieval or supplied source artifacts when research/report content is claimed.",
+    "No-agent script/file/run evidence if a no-agent lane is later implemented."
+  ],
+  "optional_runtime_capabilities": [
+    "No-agent watchdog runner for simple threshold checks",
+    "Plugin hook status card if OMH plugin is installed and observed by Hermes",
+    "Executor-neutral handoff if scheduled follow-up turns into coding work"
+  ],
+  "prepared_is_not": "A Hermes ops blueprint is projection metadata only. It is not host cron creation, gateway delivery, source retrieval, no-agent execution, plugin load, review, CI, merge-readiness, or merge evidence.",
+  "projection": {
+    "authority": "projection_only",
+    "derived_from": [
+      "catalog skill metadata",
+      "playbook metadata",
+      "routing policy metadata",
+      "capability pattern metadata",
+      "operations artifact boundaries"
+    ],
+    "source_refs": [
+      "src/skills/catalog.py",
+      "src/catalogs/playbooks.py",
+      "src/routing/recommend.py",
+      "src/capabilities/orchestration.py",
+      "src/operations.py"
+    ]
+  },
+  "prompt_outline": {
+    "missing_decisions": [
+      "confirm exact schedule/timezone",
+      "confirm Hermes/gateway delivery target and evidence source"
+    ],
+    "operator_prompt": "Prepare scheduled ops for: every morning check competitor news and send a Slack digest only if something changed. Use skills: automation-blueprint, web-research, research-brief, report-package. Cadence: daily. Delivery: slack. Silence mode: only_report_changes. Keep prepared-vs-observed boundaries explicit.",
+    "system_intent": "Hermes should prepare a scheduled operation blueprint, not execute the schedule."
+  },
+  "request_summary": "every morning check competitor news and send a Slack digest only if something changed",
+  "required_runtime_capabilities": [
+    "Hermes automation or cron surface for recurring wakeups",
+    "Hermes message/gateway surface when delivery outside the current chat is desired",
+    "Observed source retrieval or supplied source artifacts for any report content"
+  ],
+  "schedule_intent": {
+    "cadence": "daily",
+    "explicit_schedule": "every morning",
+    "matched_terms": [
+      "daily",
+      "morning"
+    ],
+    "requires_confirmation": true,
+    "status": "prepared",
+    "time_hint": ""
+  },
+  "schema_version": "hermes_ops_blueprint/v1",
+  "silence_policy": {
+    "explicit_policy": "only if something changed",
+    "mode": "only_report_changes",
+    "requires_confirmation": false,
+    "status": "prepared"
+  },
+  "skill_suggestions": [
+    {
+      "hermes_role": "retained-cognition",
+      "phase": "scheduled-ops-blueprint",
+      "reason": "scheduled ops blueprint owner",
+      "skill": "automation-blueprint"
+    },
+    {
+      "hermes_role": "retained-cognition",
+      "phase": "current-evidence",
+      "reason": "fresh source retrieval lane when observed browsing is needed",
+      "skill": "web-research"
+    },
+    {
+      "hermes_role": "retained-cognition",
+      "phase": "business-brief",
+      "reason": "source-backed synthesis lane",
+      "skill": "research-brief"
+    },
+    {
+      "hermes_role": "retained-cognition",
+      "phase": "package-outline",
+      "reason": "report outline and delivery package lane",
+      "skill": "report-package"
+    }
+  ],
+  "source": "example fixture",
+  "staged_gap_map": [
+    {
+      "gap": "automation_blueprints",
+      "scope": "scheduled-ops-blueprint projection for schedule, delivery, silence, and status-card guidance",
+      "stage": "implemented"
+    },
+    {
+      "gap": "github_pr_issue_event_ops",
+      "scope": "future projection over issue/PR event intake and review status",
+      "stage": "planned"
+    },
+    {
+      "gap": "durable_agent_board",
+      "scope": "future board projection over multi-agent ownership and work lanes",
+      "stage": "planned"
+    },
+    {
+      "gap": "memory_curation",
+      "scope": "future memory/skill curation review projection",
+      "stage": "planned"
+    },
+    {
+      "gap": "gateway_delivery_intent",
+      "scope": "delivery policy is prepared here; actual platform delivery requires observed Hermes/gateway evidence",
+      "stage": "prepared_only"
+    },
+    {
+      "gap": "executor_runtime_readiness",
+      "scope": "executor-neutral handoff and lifecycle artifacts remain separate from scheduled ops blueprints",
+      "stage": "supported_elsewhere"
+    },
+    {
+      "gap": "deliverable_packages",
+      "scope": "materials-package and report-package own binary/deliverable QA boundaries",
+      "stage": "supported_elsewhere"
+    },
+    {
+      "gap": "voice_operator_guidance",
+      "scope": "future chat/voice concise status card copy",
+      "stage": "planned"
+    },
+    {
+      "gap": "toolbelt_mcp_readiness",
+      "scope": "MCP/tool readiness remains setup and probe metadata, not hidden tool execution",
+      "stage": "supported_elsewhere"
+    },
+    {
+      "gap": "observability_cost_latency_evidence",
+      "scope": "status card lists missing evidence; full run/cost telemetry remains runtime-owned",
+      "stage": "partial"
+    }
+  ],
+  "status": "prepared",
+  "status_card": {
+    "headline": "Scheduled ops blueprint prepared",
+    "next": [
+      "confirm exact schedule/timezone",
+      "confirm Hermes/gateway delivery target and evidence source"
+    ],
+    "no_agent_suitability": "not_recommended",
+    "not_observed": [
+      "host_cron_created",
+      "hermes_automation_enabled",
+      "gateway_delivery_sent",
+      "source_retrieval_observed",
+      "no_agent_script_written",
+      "no_agent_execution",
+      "plugin_loaded_by_hermes",
+      "connector_invoked",
+      "review",
+      "ci",
+      "merge_readiness",
+      "merge"
+    ],
+    "prepared": [
+      "schedule intent",
+      "delivery policy",
+      "silence policy",
+      "skill/context chain",
+      "evidence boundary"
+    ],
+    "schema_version": "hermes_ops_status_card/v1"
+  },
+  "title": "Scheduled ops: competitor digest",
+  "updated_at": "2026-06-16T00:00:00Z",
+  "wrapper_actions": [
+    "show_blueprint",
+    "revise_schedule",
+    "confirm_delivery_policy",
+    "prepare_host_schedule",
+    "record_observed_runtime"
+  ]
+}

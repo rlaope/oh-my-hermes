@@ -98,6 +98,16 @@ def orchestration_patterns() -> list[dict[str, object]]:
             ("tick_prepared", "queue_item_prepared", "feedback_or_evidence_required"),
         ),
         _pattern(
+            "scheduled_ops_blueprint",
+            "Use when Hermes should prepare a recurring schedule, delivery, silence policy, and status card for an ops workflow.",
+            "Do not claim host cron, Hermes automation, gateway delivery, source retrieval, no-agent execution, or plugin load from the blueprint.",
+            "planning-lead",
+            ("automation-blueprint", "web-research", "research-brief", "report-package", "reliability-review"),
+            ("show_status",),
+            actions,
+            ("blueprint_prepared", "host_schedule_observed", "delivery_observed", "source_retrieval_observed"),
+        ),
+        _pattern(
             "executor_session_handoff",
             "Use when Hermes prepares work for Codex, Claude Code, Hermes coding skills, or oh-my runtimes.",
             "Do not report completion before dispatch/result/verification evidence is recorded.",
@@ -161,6 +171,7 @@ def _prepared_artifacts(pattern_id: str) -> list[str]:
     mapping = {
         "executor_session_handoff": ["coding_delegation/v1", "wrapper_session/v1"],
         "loop_run_once": ["loop_runtime/v1", "loop_status_card/v1"],
+        "scheduled_ops_blueprint": ["hermes_ops_blueprint/v1"],
         "materials_generation_handoff": ["material_artifact/v1"],
         "worktree_isolated_workers": ["runtime_observation/v1 when observed"],
     }

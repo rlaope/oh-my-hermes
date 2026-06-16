@@ -8,6 +8,113 @@ CONFIDENCE_LEVELS = ("low", "medium", "high")
 EXPLICIT_INVOCATION_PREFIXES = ("$", "/", "./", "@")
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
+_SCHEDULED_OPS_STRONG_TOKENS = frozenset(
+    {
+        "cron",
+        "recurring",
+        "repeat",
+        "정기",
+        "반복",
+    }
+)
+_SCHEDULED_OPS_CADENCE_TOKENS = frozenset(
+    {
+        "daily",
+        "weekly",
+        "monthly",
+        "매일",
+        "매주",
+        "매월",
+    }
+)
+_SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
+    {
+        "check",
+        "checks",
+        "monitor",
+        "monitoring",
+        "watch",
+        "watchdog",
+        "digest",
+        "report",
+        "reports",
+        "notify",
+        "notification",
+        "deliver",
+        "delivery",
+        "slack",
+        "discord",
+        "telegram",
+        "email",
+        "competitor",
+        "news",
+        "source",
+        "sources",
+        "changed",
+        "changes",
+        "silent",
+        "silently",
+        "헬스체크",
+        "감시",
+        "확인",
+        "보고",
+        "리포트",
+        "요약",
+        "알림",
+        "슬랙",
+        "디스코드",
+        "텔레그램",
+        "이메일",
+        "경쟁사",
+        "뉴스",
+        "변화",
+        "조용히",
+    }
+)
+_SCHEDULED_OPS_PHRASES = (
+    "every morning",
+    "every day",
+    "every week",
+    "every month",
+    "notify if",
+    "only if changed",
+    "only if something changed",
+    "silent if nothing changed",
+    "if nothing changed",
+    "매일 아침",
+    "매주",
+    "매월",
+    "변화 있으면",
+    "변화 없으면",
+    "바뀐 게 없으면",
+    "조용히",
+)
+_ONE_OFF_TOKENS = frozenset(
+    {
+        "once",
+        "일회성",
+        "한번만",
+    }
+)
+_ONE_OFF_PHRASES = (
+    "one-off",
+    "one off",
+    "one-time",
+    "one time",
+    "single run",
+    "single-use",
+    "non-recurring",
+    "non recurring",
+    "do not repeat",
+    "dont repeat",
+    "no recurrence",
+    "just once",
+    "only once",
+    "이번만",
+    "한 번만",
+    "한번만",
+    "일회성",
+)
 
 
 @dataclass(frozen=True)
@@ -57,9 +164,19 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; PR or delivery-cycle requests need the one-cycle process lane rather than research-only routing.",
     activation_status="active",
 )
+SCHEDULED_OPS_BLUEPRINT_GUARD = RoutingGuardRule(
+    id="scheduled_ops_blueprint_before_reliability_or_research",
+    rule="Recurring schedule, delivery, or silence-policy requests should route to the scheduled ops blueprint lane before one-off review/research lanes.",
+    matched_label="guard:scheduled_ops_blueprint",
+    preferred_skills=("automation-blueprint",),
+    score_boost=24,
+    why="Matched guard/trigger metadata; recurring schedule or delivery requests should prepare a Hermes ops blueprint first.",
+    activation_status="active",
+)
 ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
+    SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     DELIVERY_CYCLE_GUARD,
 )
@@ -93,6 +210,8 @@ def active_routing_guard_rules(
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
     if _delivery_cycle_guard_applies(normalized_query, query_tokens):
@@ -118,7 +237,25 @@ def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str])
     )
 
 
+def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if is_explicit_one_off_request(normalized_query, query_tokens):
+        return False
+    if _SCHEDULED_OPS_STRONG_TOKENS & query_tokens:
+        return True
+    if _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens and _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens:
+        return True
+    return any(phrase in normalized_query for phrase in _SCHEDULED_OPS_PHRASES)
+
+
+def is_explicit_one_off_request(normalized_query: str, query_tokens: set[str]) -> bool:
+    return bool(_ONE_OFF_TOKENS & query_tokens) or any(
+        phrase in normalized_query for phrase in _ONE_OFF_PHRASES
+    )
+
+
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        return False
     if _delivery_cycle_terms(normalized_query, query_tokens):
         return False
     if {
