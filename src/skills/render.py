@@ -13,6 +13,9 @@ from .catalog import (
     memory_context_policy_for_skill,
     omh_description,
     primary_harness_for_skill,
+    skill_exposure_payload,
+    surface_exposure_for_skill,
+    workflow_reference_definitions,
 )
 
 
@@ -152,7 +155,11 @@ def _role_registry(definitions: list[SkillDefinition]) -> str:
         f"- `{role}`: {', '.join(f'`{name}`' for name in names)}"
         for role, names in sorted(grouped.items())
     ]
-    lines.append("- Full per-skill handoff policies live in generated workflow skills and `docs/WORKFLOWS.md`.")
+    lines.append(
+        "- Installed workflow skill policies live in generated workflow skills; "
+        "compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` "
+        "and are not guaranteed to have `skills/<name>/SKILL.md` files."
+    )
     return "\n".join(lines)
 
 
@@ -255,7 +262,7 @@ Priority:
 
 ## Skill Role Classification
 
-Keep compatible workflow names installed, but use this advisory wrapper guidance to decide what Hermes should own:
+Use installed primary workflow skills plus compatibility surfaces in this registry as advisory wrapper guidance to decide what Hermes should own:
 
 {_role_registry(definitions)}
 
@@ -436,7 +443,7 @@ def workflow_reference_markdown() -> str:
 
 @lru_cache(maxsize=1)
 def _workflow_reference_markdown_cached() -> str:
-    definitions = builtin_definitions()
+    definitions = workflow_reference_definitions()
     harnesses = builtin_harnesses()
     lines = [
         "# Workflow Reference",
@@ -447,6 +454,8 @@ def _workflow_reference_markdown_cached() -> str:
         "",
         "Workflow names are kept for compatibility, but each skill declares advisory wrapper guidance for whether Hermes should retain the work directly, ask the user to choose an executor/runtime profile, or prepare a coding handoff for coding-heavy execution.",
         "",
+        "Exposure is the install contract: `install_visibility: true` surfaces generate `skills/<name>/SKILL.md`; router-only, harness-only, and agent-context surfaces stay routable references unless this document explicitly promotes them.",
+        "",
         TARGET_TOPOLOGY_REFERENCE_CONTEXT,
         MEMORY_CONTEXT_REFERENCE_CONTEXT,
         GOAL_STATUS_REFERENCE_CONTEXT,
@@ -455,6 +464,7 @@ def _workflow_reference_markdown_cached() -> str:
         "",
     ]
     for definition in definitions:
+        exposure = surface_exposure_for_skill(definition.name)
         triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers)
         lines.extend(
             [
@@ -466,6 +476,11 @@ def _workflow_reference_markdown_cached() -> str:
                 f"- Phase: `{definition.phase}`",
                 f"- Hermes role: `{definition.hermes_role}`",
                 f"- Quality tier: `{definition.quality_tier}`",
+                f"- Exposure: `{exposure.exposure}`",
+                f"- Install visibility: `{str(exposure.install_visibility).lower()}`",
+                f"- Docs visibility: `{exposure.docs_visibility}`",
+                f"- Compatibility alias: `{str(exposure.compatibility_alias).lower()}`",
+                f"- Preferred usage: {exposure.preferred_usage}",
                 f"- Handoff policy: {definition.handoff_policy}",
                 f"- Why this exists: {definition.why_this_exists}",
                 f"- Use when: {definition.use_when}",
@@ -542,7 +557,7 @@ def _workflow_reference_payload_cached() -> dict[str, object]:
             "Deterministic Hermes-native skill and harness metadata. This payload is local guidance, "
             "not proof of hidden Hermes runtime behavior."
         ),
-        "skills": [_skill_payload(definition) for definition in builtin_definitions()],
+        "skills": [_skill_payload(definition) for definition in workflow_reference_definitions()],
         "harnesses": [_harness_payload(harness) for harness in builtin_harnesses()],
     }
 
@@ -566,6 +581,7 @@ def _copy_skill_payload(payload: dict[str, object]) -> dict[str, object]:
         "expected_outputs",
         "artifact_expectations",
         "safety_rules",
+        "projections",
     ):
         copied[key] = list(payload[key])
     copied["good_example"] = dict(payload["good_example"])
@@ -599,6 +615,7 @@ def _copy_harness_quality_payload(payload: dict[str, object]) -> dict[str, objec
 
 
 def _skill_payload(definition: SkillDefinition) -> dict[str, object]:
+    exposure = skill_exposure_payload(definition.name)
     return {
         "name": definition.name,
         "description": definition.description,
@@ -607,6 +624,13 @@ def _skill_payload(definition: SkillDefinition) -> dict[str, object]:
         "phase": definition.phase,
         "triggers": list(definition.triggers),
         "primary_harness": primary_harness_for_skill(definition.name),
+        "surface_exposure": exposure["exposure"],
+        "exposure": exposure["exposure"],
+        "projections": exposure["projections"],
+        "install_visibility": exposure["install_visibility"],
+        "docs_visibility": exposure["docs_visibility"],
+        "preferred_usage": exposure["preferred_usage"],
+        "compatibility_alias": exposure["compatibility_alias"],
         "hermes_role": definition.hermes_role,
         "handoff_policy": definition.handoff_policy,
         "why_this_exists": definition.why_this_exists,

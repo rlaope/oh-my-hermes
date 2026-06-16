@@ -61,7 +61,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="github-event-ops",
         playbook="github-event-ops",
         harness="github-event-ops",
-        feature_surface="github-event-ops skill: PR/issue/CI event classification with label/review/fix-handoff actions.",
+        feature_surface="github-event-ops router surface: PR/issue/CI event classification with label/review/fix-handoff actions.",
         direct_skill_invocation="$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
         hermes_chat_prompt="Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
         next_action="prepare_github_event_ops_card",
@@ -80,7 +80,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="agent-board",
         playbook="agent-board",
         harness="agent-board",
-        feature_surface="agent-board contract: task/handoff/heartbeat/block/complete cards connected to OMH status.",
+        feature_surface="agent-board agent context: task/handoff/heartbeat/block/complete cards connected to OMH status.",
         direct_skill_invocation="$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
         hermes_chat_prompt="Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist.",
         next_action="prepare_agent_board_card",
@@ -118,7 +118,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="gateway-intent-card",
         playbook="gateway-intent-card",
         harness="gateway-intent-card",
-        feature_surface="gateway-intent-card skill: origin, thread, delivery, silence, attachment, and status-update policy.",
+        feature_surface="gateway-intent-card router surface: origin, thread, delivery, silence, attachment, and status-update policy.",
         direct_skill_invocation="$gateway-intent-card Route this Discord thread update silently unless action is needed.",
         hermes_chat_prompt="Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed.",
         next_action="prepare_gateway_intent_card",
@@ -137,7 +137,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="executor-runtime-readiness",
         playbook="executor-runtime-readiness",
         harness="executor-runtime-readiness",
-        feature_surface="executor-runtime-readiness skill: runtime matrix, missing tools, and handoff mode.",
+        feature_surface="executor-runtime-readiness harness surface: runtime matrix, missing tools, and handoff mode.",
         direct_skill_invocation="$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
         hermes_chat_prompt="Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?",
         next_action="prepare_executor_runtime_readiness",
@@ -175,7 +175,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="voice-operator",
         playbook="voice-operator",
         harness="voice-operator",
-        feature_surface="voice-operator skill: short command normalization, ambiguity check, and safe confirmation card.",
+        feature_surface="voice-operator agent context: short command normalization, ambiguity check, and safe confirmation card.",
         direct_skill_invocation="$voice-operator 'release before lunch, check risky parts' from mobile.",
         hermes_chat_prompt="Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile.",
         next_action="prepare_voice_operator_card",
@@ -194,7 +194,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="toolbelt-readiness",
         playbook="toolbelt-readiness",
         harness="toolbelt-readiness",
-        feature_surface="toolbelt-readiness skill: workflow tool requirements, installed/missing/credential matrix, and next setup action.",
+        feature_surface="toolbelt-readiness harness surface: workflow tool requirements, installed/missing/credential matrix, and next setup action.",
         direct_skill_invocation="$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
         hermes_chat_prompt="Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
         next_action="prepare_toolbelt_readiness",
@@ -213,7 +213,7 @@ USE_CASES: tuple[UseCase, ...] = (
         primary_skill="ops-observability-card",
         playbook="ops-observability-card",
         harness="ops-observability-card",
-        feature_surface="ops-observability-card skill: wrapper-safe token, cost, latency, run history, queue, and failure-mode status card.",
+        feature_surface="ops-observability-card harness surface: wrapper-safe token, cost, latency, run history, queue, and failure-mode status card.",
         direct_skill_invocation="$ops-observability-card Show token, cost, latency, and last run status for this loop.",
         hermes_chat_prompt="Use OMH ops-observability-card for: Show token, cost, latency, and last run status for this loop.",
         next_action="prepare_ops_observability_card",
@@ -274,16 +274,31 @@ def recommend_use_cases(query: str, *, limit: int = 3) -> dict[str, Any]:
 
 def validate_use_cases() -> dict[str, Any]:
     from .playbooks import list_playbooks
-    from .skill_pack import builtin_harnesses, builtin_skill_templates
+    from .skill_pack import (
+        builtin_harnesses,
+        installable_skill_definitions,
+        routable_definitions,
+        skill_exposure_payload,
+    )
 
-    skill_names = {skill.name for skill in builtin_skill_templates()}
+    routable_names = {skill.name for skill in routable_definitions()}
+    installable_names = {skill.name for skill in installable_skill_definitions()}
     harness_names = {harness.name for harness in builtin_harnesses()}
     playbook_ids = {str(playbook["id"]) for playbook in list_playbooks()["playbooks"]}
     validations = []
     errors = []
     for case in USE_CASES:
+        exposure = skill_exposure_payload(case.primary_skill)
+        install_visibility = bool(exposure["install_visibility"])
         checks = {
-            "skill_exists": case.primary_skill in skill_names,
+            "skill_exists": case.primary_skill in routable_names,
+            "surface_routable": case.primary_skill in routable_names,
+            "exposure_valid": exposure["exposure"]
+            in {"direct_skill", "workflow_skill", "router_only", "harness_only", "agent_context"},
+            "install_visibility_matches": (case.primary_skill in installable_names) == install_visibility,
+            "installed_skill_visible": (case.primary_skill in installable_names)
+            if install_visibility
+            else case.primary_skill not in installable_names,
             "playbook_exists": case.playbook in playbook_ids,
             "harness_exists": case.harness in harness_names,
             "direct_skill_invocation_present": case.direct_skill_invocation.startswith(f"${case.primary_skill} "),
@@ -311,6 +326,7 @@ def validate_use_cases() -> dict[str, Any]:
                 "playbook": case.playbook,
                 "harness": case.harness,
                 "feature_surface": case.feature_surface,
+                **exposure,
                 "direct_skill_invocation": case.direct_skill_invocation,
                 "hermes_chat_prompt": case.hermes_chat_prompt,
                 "proof_surfaces": list(case.proof_surfaces),
@@ -325,7 +341,7 @@ def validate_use_cases() -> dict[str, Any]:
         "count": len(USE_CASES),
         "validated": validations,
         "errors": errors,
-        "boundary": "Validation proves the 10 OMH feature surfaces are registered as skills, playbooks, harnesses, and invocation examples; it is not proof that any external runtime action happened.",
+        "boundary": "Validation proves the 10 OMH feature surfaces are routable and registered with the right exposure, playbook, harness, and invocation metadata; it is not proof that any external runtime action happened.",
     }
 
 
@@ -348,7 +364,10 @@ def _boundary_has_evidence_guard(boundary: str) -> bool:
 
 
 def _public_case(case: UseCase) -> dict[str, Any]:
+    from .skill_pack import skill_exposure_payload
+
     payload = asdict(case)
+    payload.update(skill_exposure_payload(case.primary_skill))
     payload["proof_surfaces"] = list(case.proof_surfaces)
     payload["keywords"] = list(case.keywords)
     return payload

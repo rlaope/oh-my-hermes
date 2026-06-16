@@ -28,12 +28,12 @@ from ..runtime.artifacts import (
 )
 from ..executors import CODING_RUNTIME_HANDOFF_TARGETS
 from ..local_store import read_json_object
-from ..skill_pack import builtin_definitions, builtin_harnesses
+from ..skill_pack import builtin_harnesses, routable_definitions
 from .common import _paths, _print_json
 
 
 def _valid_skill_names() -> set[str]:
-    return {definition.name for definition in builtin_definitions()}
+    return {definition.name for definition in routable_definitions()}
 
 
 def _valid_harness_names() -> set[str]:

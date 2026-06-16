@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 
-from ..skills.catalog import SkillDefinition, builtin_definitions
+from ..skills.catalog import SkillDefinition, routable_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 from .policy import (
     RoutingGuardRule,
@@ -337,7 +337,7 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     routing_text = prepare_routing_text(query)
     normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
-    definitions = list(builtin_definitions())
+    definitions = list(routable_definitions())
     explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
     scored = [
         _score_definition(definition, normalized_query, query_tokens, query, routing_text.locale_matches)

@@ -60,7 +60,10 @@ def _print_cases_list_summary(payload: dict[str, object]) -> None:
     for case in cases:
         if not isinstance(case, dict):
             continue
-        print(f"  - {case.get('goal')}: {case.get('title')} ({case.get('primary_skill')})")
+        print(
+            f"  - {case.get('goal')}: {case.get('title')} "
+            f"({case.get('primary_skill')} | {case.get('exposure')})"
+        )
     print("Boundary")
     print("  These are implemented OMH feature surfaces, not runtime execution evidence.")
     print("Next")
@@ -76,13 +79,17 @@ def _print_case_summary(case: dict[str, object]) -> None:
     print("Current gap")
     print(f"  {case.get('current_gap')}")
     print("Route")
-    print(f"  Skill: {case.get('primary_skill')}")
+    print(f"  Surface: {case.get('primary_skill')}")
+    print(f"  Exposure: {case.get('exposure')}")
+    print(f"  Install visibility: {case.get('install_visibility')}")
+    print(f"  Preferred usage: {case.get('preferred_usage')}")
+    print(f"  Compatibility alias: {case.get('compatibility_alias')}")
     print(f"  Playbook: {case.get('playbook')}")
     print(f"  Harness: {case.get('harness')}")
     print(f"  Next action: {case.get('next_action')}")
     print("Use it")
-    print(f"  Direct skill: {case.get('direct_skill_invocation')}")
     print(f"  Hermes chat: {case.get('hermes_chat_prompt')}")
+    print(f"  Compatibility alias: {case.get('direct_skill_invocation')}")
     print("Feature surface")
     print(f"  {case.get('feature_surface')}")
     print("User value")
@@ -104,7 +111,10 @@ def _print_cases_recommend_summary(payload: dict[str, object]) -> None:
         if not isinstance(case, dict):
             continue
         print(f"{index}. {case.get('goal')} {case.get('id')} [{case.get('confidence')}]")
-        print(f"   Skill: {case.get('primary_skill')} | playbook: {case.get('playbook')}")
+        print(
+            f"   Surface: {case.get('primary_skill')} | exposure: {case.get('exposure')} "
+            f"| playbook: {case.get('playbook')}"
+        )
         print(f"   Next action: {case.get('next_action')}")
         print(f"   Boundary: {case.get('evidence_boundary')}")
     print("Boundary")
@@ -126,7 +136,7 @@ def _print_cases_validate_summary(payload: dict[str, object]) -> None:
         marker = "ok" if item.get("ok") else "missing"
         print(
             f"  - {item.get('goal')}: {item.get('primary_skill')} "
-            f"/ {item.get('playbook')} / {item.get('harness')} [{marker}]"
+            f"({item.get('exposure')}) / {item.get('playbook')} / {item.get('harness')} [{marker}]"
         )
     print("Boundary")
     print("  Validation proves catalog registration only, not external runtime execution.")

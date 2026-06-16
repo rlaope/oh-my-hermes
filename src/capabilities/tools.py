@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from ..skills.catalog import builtin_definitions
+from ..skills.catalog import capability_definitions, skill_exposure_payload
 from .schema import TOOL_REQUIREMENT_SCHEMA_VERSION
 
 
 def tool_requirements_manifest() -> dict[str, object]:
     items = []
-    for definition in sorted(builtin_definitions(), key=lambda item: item.name):
+    for definition in sorted(capability_definitions(), key=lambda item: item.name):
+        exposure = skill_exposure_payload(definition.name)
         items.append(
             {
                 "skill": definition.name,
+                "surface_exposure": exposure["exposure"],
+                "exposure": exposure["exposure"],
+                "install_visibility": exposure["install_visibility"],
+                "preferred_usage": exposure["preferred_usage"],
+                "compatibility_alias": exposure["compatibility_alias"],
                 "derivation_status": "partial",
                 "required_tools": [],
                 "required_mcps": [],

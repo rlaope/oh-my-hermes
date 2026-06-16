@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from ..routing.policy import EXPLICIT_INVOCATION_PREFIXES, ROUTING_GUARD_RULES
 from ..routing.localization import locale_aliases
-from ..skills.catalog import builtin_definitions
+from ..skills.catalog import capability_definitions, skill_exposure_payload
 from .schema import KEYWORD_DETECTOR_SCHEMA_VERSION, PREPARED_NOT_OBSERVED
 
 
 def keyword_detector_manifest() -> dict[str, object]:
-    definitions = sorted(builtin_definitions(), key=lambda item: item.name)
+    definitions = sorted(capability_definitions(), key=lambda item: item.name)
     aliases = locale_aliases()
     return {
         "schema_version": KEYWORD_DETECTOR_SCHEMA_VERSION,
@@ -22,6 +22,7 @@ def keyword_detector_manifest() -> dict[str, object]:
                 "triggers": list(definition.triggers),
                 "category": definition.category,
                 "phase": definition.phase,
+                **skill_exposure_payload(definition.name),
             }
             for definition in definitions
         ],

@@ -39,11 +39,16 @@ class CapabilityManifestTests(unittest.TestCase):
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]
+        hidden_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
         role = inspect_capability("coding-handoff", section="agent_roles")["capability"]
 
         self.assertEqual(skill["schema_version"], "skill_capability/v1")
         self.assertEqual(skill["tool_requirements"]["derivation_status"], "partial")
         self.assertIn("prepared_not_observed", skill["evidence_boundary"])
+        self.assertEqual(hidden_surface["exposure"], "harness_only")
+        self.assertFalse(hidden_surface["install_visibility"])
+        self.assertTrue(hidden_surface["compatibility_alias"])
+        self.assertIn("preferred_usage", hidden_surface)
         self.assertEqual(role["runtime_claim"], "descriptor_not_runtime_agent")
         self.assertIn("executor_session_handoff", role["default_orchestration_patterns"])
 

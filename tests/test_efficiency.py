@@ -39,7 +39,9 @@ class EfficiencyContractTests(unittest.TestCase):
         retained_low_handoff_skills = {
             name
             for name, definition in definitions.items()
-            if name != "oh-my-hermes" and memory_context_policy_for_skill(definition.name) == "compact"
+            if name != "oh-my-hermes"
+            and name in templates
+            and memory_context_policy_for_skill(definition.name) == "compact"
         }
         self.assertTrue(retained_low_handoff_skills)
         for name in retained_low_handoff_skills:

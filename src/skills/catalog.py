@@ -101,6 +101,17 @@ class SkillDefinition:
 
 
 @dataclass(frozen=True)
+class SurfaceExposure:
+    name: str
+    exposure: str
+    projections: tuple[str, ...]
+    install_visibility: bool
+    docs_visibility: str
+    preferred_usage: str
+    compatibility_alias: bool = False
+
+
+@dataclass(frozen=True)
 class HarnessDefinition:
     name: str
     purpose: str
@@ -2131,6 +2142,98 @@ _FEATURE_SURFACE_SKILLS = (
 _DEFINITIONS.extend(_FEATURE_SURFACE_SKILLS)
 
 
+_DEFAULT_SURFACE_PROJECTIONS = ("routable", "installable", "workflow_reference", "capability")
+_SURFACE_EXPOSURES = (
+    SurfaceExposure(
+        "automation-blueprint",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user asks for recurring automation or scheduled ops planning.",
+    ),
+    SurfaceExposure(
+        "github-event-ops",
+        "router_only",
+        ("routable", "playbook", "harness", "workflow_reference", "capability"),
+        False,
+        "compatibility_reference",
+        "Prefer natural-language Hermes routing into the GitHub event ops playbook/harness instead of showing this as a primary skill picker item.",
+        True,
+    ),
+    SurfaceExposure(
+        "agent-board",
+        "agent_context",
+        ("routable", "playbook", "harness", "workflow_reference", "capability"),
+        False,
+        "agent_context_reference",
+        "Use as Hermes agent/context guidance for board-shaped collaboration; keep direct invocation compatibility only for existing references.",
+        True,
+    ),
+    SurfaceExposure(
+        "memory-curation-review",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user asks to review stale, duplicate, or conflicting memory and skill context.",
+    ),
+    SurfaceExposure(
+        "gateway-intent-card",
+        "router_only",
+        ("routable", "playbook", "harness", "workflow_reference", "capability"),
+        False,
+        "compatibility_reference",
+        "Prefer wrapper or Hermes natural-language routing into gateway intent policy instead of exposing this as a primary user skill.",
+        True,
+    ),
+    SurfaceExposure(
+        "executor-runtime-readiness",
+        "harness_only",
+        ("routable", "playbook", "harness", "workflow_reference", "capability"),
+        False,
+        "harness_reference",
+        "Use as a readiness harness/status surface when Hermes needs to compare executor/runtime options before handoff.",
+        True,
+    ),
+    SurfaceExposure(
+        "deliverable-package",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user asks for file deliverable packaging and attachment lifecycle status.",
+    ),
+    SurfaceExposure(
+        "voice-operator",
+        "agent_context",
+        ("routable", "harness", "workflow_reference", "capability"),
+        False,
+        "agent_context_reference",
+        "Use as Hermes voice/mobile context guidance that normalizes short commands before choosing a concrete workflow.",
+        True,
+    ),
+    SurfaceExposure(
+        "toolbelt-readiness",
+        "harness_only",
+        ("routable", "playbook", "harness", "workflow_reference", "capability"),
+        False,
+        "harness_reference",
+        "Use as a readiness harness when Hermes needs to show missing MCP, CLI, API, credential, or connector requirements.",
+        True,
+    ),
+    SurfaceExposure(
+        "ops-observability-card",
+        "harness_only",
+        ("routable", "playbook", "harness", "workflow_reference", "capability"),
+        False,
+        "harness_reference",
+        "Use as a telemetry/status harness for token, cost, latency, run history, and failure-mode boundaries.",
+        True,
+    ),
+)
+
+
 def _feature_surface_harness(
     name: str,
     purpose: str,
@@ -3044,6 +3147,50 @@ def builtin_definitions() -> list[SkillDefinition]:
     return list(_builtin_definitions_cached())
 
 
+def routable_definitions() -> list[SkillDefinition]:
+    return _projected_definitions("routable")
+
+
+def installable_skill_definitions() -> list[SkillDefinition]:
+    return [
+        definition
+        for definition in _builtin_definitions_cached()
+        if surface_exposure_for_skill(definition.name).install_visibility
+    ]
+
+
+def capability_definitions() -> list[SkillDefinition]:
+    return _projected_definitions("capability")
+
+
+def workflow_reference_definitions() -> list[SkillDefinition]:
+    return _projected_definitions("workflow_reference")
+
+
+def routable_skill_names() -> tuple[str, ...]:
+    return tuple(definition.name for definition in routable_definitions())
+
+
+def installable_skill_names() -> tuple[str, ...]:
+    return tuple(definition.name for definition in installable_skill_definitions())
+
+
+def surface_exposure_for_skill(name: str) -> SurfaceExposure:
+    return _surface_exposure_by_name().get(name, _default_surface_exposure(name))
+
+
+def skill_exposure_payload(name: str) -> dict[str, object]:
+    exposure = surface_exposure_for_skill(name)
+    return {
+        "exposure": exposure.exposure,
+        "projections": list(exposure.projections),
+        "install_visibility": exposure.install_visibility,
+        "docs_visibility": exposure.docs_visibility,
+        "preferred_usage": exposure.preferred_usage,
+        "compatibility_alias": exposure.compatibility_alias,
+    }
+
+
 def builtin_harnesses() -> list[HarnessDefinition]:
     return list(_builtin_harnesses_cached())
 
@@ -3051,6 +3198,30 @@ def builtin_harnesses() -> list[HarnessDefinition]:
 @lru_cache(maxsize=1)
 def _builtin_definitions_cached() -> tuple[SkillDefinition, ...]:
     return tuple(_DEFINITIONS)
+
+
+@lru_cache(maxsize=1)
+def _surface_exposure_by_name() -> dict[str, SurfaceExposure]:
+    return {exposure.name: exposure for exposure in _SURFACE_EXPOSURES}
+
+
+def _default_surface_exposure(name: str) -> SurfaceExposure:
+    return SurfaceExposure(
+        name,
+        "direct_skill",
+        _DEFAULT_SURFACE_PROJECTIONS,
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.",
+    )
+
+
+def _projected_definitions(projection: str) -> list[SkillDefinition]:
+    return [
+        definition
+        for definition in _builtin_definitions_cached()
+        if projection in surface_exposure_for_skill(definition.name).projections
+    ]
 
 
 @lru_cache(maxsize=1)
@@ -3165,5 +3336,5 @@ def explicit_memory_context_skill_names() -> tuple[str, ...]:
     return _EXPLICIT_MEMORY_CONTEXT_SKILLS
 
 
-CORE_SKILLS = [definition.name for definition in _DEFINITIONS]
+CORE_SKILLS = list(installable_skill_names())
 DESCRIPTIONS = {definition.name: definition.description for definition in _DEFINITIONS}

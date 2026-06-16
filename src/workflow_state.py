@@ -6,7 +6,7 @@ from typing import Any
 
 from .local_store import atomic_write_json, read_json_object, utc_now
 from .paths import OmhPaths
-from .skill_pack import CORE_SKILLS
+from .skill_pack import routable_skill_names
 
 SCHEMA_VERSION = 1
 LIFECYCLE_OUTCOMES = ("finished", "blocked", "failed", "user_interlude", "question_pending")
@@ -23,7 +23,7 @@ class WorkflowStateError(ValueError):
 
 
 def validate_workflow_name(workflow: str) -> None:
-    if workflow not in CORE_SKILLS:
+    if workflow not in routable_skill_names():
         raise WorkflowStateError(f"unknown workflow: {workflow}")
 
 

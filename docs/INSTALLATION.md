@@ -625,8 +625,8 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 ```
 
 Install one or more optional Hermes agent/profile packs during bootstrap. These
-are visible team role preset files only; all OMH workflows are installed either
-way:
+are visible team role preset files only; core workflow skills are installed and
+compatibility surfaces remain routable either way:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh

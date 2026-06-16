@@ -8,7 +8,7 @@ from typing import Any
 
 from .local_store import atomic_write_json, ensure_dir, read_json_object, read_json_object_result, utc_now
 from .paths import OmhPaths
-from .skills.catalog import builtin_definitions
+from .skills.catalog import installable_skill_definitions
 
 
 HERMES_OPS_BLUEPRINT_SCHEMA_VERSION = "hermes_ops_blueprint/v1"
@@ -512,7 +512,7 @@ def _no_agent_suitability(text: str) -> dict[str, object]:
 
 
 def _skill_suggestions(text: str) -> list[dict[str, str]]:
-    available = {definition.name: definition for definition in builtin_definitions()}
+    available = {definition.name: definition for definition in installable_skill_definitions()}
     folded = text.casefold()
     candidates: list[tuple[str, str]] = [("automation-blueprint", "scheduled ops blueprint owner")]
     if any(term in folded for term in ("source", "sources", "research", "competitor", "news", "market", "조사", "리서치", "경쟁")):
