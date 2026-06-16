@@ -161,7 +161,11 @@
       "no_agent_script_written",
       "no_agent_execution",
       "plugin_loaded_by_hermes",
-      "connector_invoked"
+      "connector_invoked",
+      "review",
+      "ci",
+      "merge_readiness",
+      "merge"
     ],
     "prepared": [
       "schedule intent",

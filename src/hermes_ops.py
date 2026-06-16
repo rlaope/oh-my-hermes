@@ -66,7 +66,14 @@ PROJECTION_SOURCE_REFS = (
 
 _BLUEPRINT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
-_TIME_RE = re.compile(r"\b(?:at\s+)?([01]?\d|2[0-3])(?::([0-5]\d))?\s*(am|pm)?\b", re.IGNORECASE)
+_TIME_RE = re.compile(
+    r"\b(?:"
+    r"at\s+(?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:am|pm)?"
+    r"|(?:[01]?\d|2[0-3])(?::[0-5]\d)\s*(?:am|pm)?"
+    r"|(?:[01]?\d|2[0-3])\s*(?:am|pm)"
+    r")\b",
+    re.IGNORECASE,
+)
 _EVERY_RE = re.compile(r"\b(every|each)\s+([a-z0-9 -]{1,40})", re.IGNORECASE)
 
 _SCHEDULE_TERMS = {
@@ -277,6 +284,11 @@ def validate_hermes_ops_blueprint(record: dict[str, Any]) -> list[str]:
     not_evidence = set(_string_list(record.get("not_evidence_until_observed", [])))
     if not set(DEFAULT_NOT_EVIDENCE).issubset(not_evidence):
         errors.append("not_evidence_until_observed must include the default prepared-vs-observed guard list")
+    status_card = record.get("status_card")
+    if isinstance(status_card, dict):
+        status_not_observed = set(_string_list(status_card.get("not_observed", [])))
+        if not set(DEFAULT_NOT_EVIDENCE).issubset(status_not_observed):
+            errors.append("status_card.not_observed must include the default prepared-vs-observed guard list")
     if any(str(record.get(key, "")).lower() in {"observed", "complete", "ready"} for key in ("runtime_status", "delivery_status")):
         errors.append("blueprints must not claim observed runtime or delivery status")
     errors.extend(_nested_status_boundary_errors(record))
@@ -598,7 +610,7 @@ def _status_card(
             "skill/context chain",
             "evidence boundary",
         ],
-        "not_observed": list(DEFAULT_NOT_EVIDENCE[:8]),
+        "not_observed": list(DEFAULT_NOT_EVIDENCE),
         "next": _missing_decisions(schedule_intent, delivery_intent, silence_policy)
         or ["record observed host automation only after Hermes/runtime evidence exists"],
         "no_agent_suitability": no_agent_suitability["classification"],

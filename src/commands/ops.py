@@ -103,6 +103,8 @@ def cmd_ops_blueprint(args: argparse.Namespace) -> int:
                 "runtime_execution_observed": False,
                 "gateway_delivery_observed": False,
                 "source_retrieval_observed": False,
+                "not_evidence_until_observed": list(written["not_evidence_until_observed"]),
+                "observed_evidence_required": list(written["observed_evidence_required"]),
             },
         }
     )

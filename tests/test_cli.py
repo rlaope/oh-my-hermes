@@ -882,6 +882,13 @@ class CliTests(unittest.TestCase):
             self.assertTrue(dry["boundary"]["prepared_is_not_observed"])
             self.assertFalse(dry["boundary"]["runtime_execution_observed"])
             self.assertFalse(dry["boundary"]["gateway_delivery_observed"])
+            self.assertIn("review", dry["boundary"]["not_evidence_until_observed"])
+            self.assertIn("ci", dry["boundary"]["not_evidence_until_observed"])
+            self.assertIn("merge", dry["boundary"]["not_evidence_until_observed"])
+            self.assertEqual(
+                dry["boundary"]["not_evidence_until_observed"],
+                blueprint["not_evidence_until_observed"],
+            )
 
             status, stdout, stderr = run_cli(base + ["blueprint", request])
 
@@ -1287,6 +1294,8 @@ class CliTests(unittest.TestCase):
         negative_cases = (
             "Slack SLA alerts are delayed; prepare reliability review",
             "investigate Slack SLA alert failures",
+            "daily standup meeting notes",
+            "one-off Slack digest for this incident",
         )
         for message in negative_cases:
             with self.subTest(message=message):
@@ -1295,8 +1304,9 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(stderr, "")
                 self.assertEqual(status, 0)
                 recommendations = json.loads(stdout)["recommendations"]
-                self.assertEqual(recommendations[0]["skill"], "reliability-review")
                 self.assertNotEqual(recommendations[0]["skill"], "automation-blueprint")
+                if "slack" in message.lower() and "sla" in message.lower():
+                    self.assertEqual(recommendations[0]["skill"], "reliability-review")
 
     def test_recommend_app_operation_loops_feel_end_to_end_without_overclaiming(self) -> None:
         cases = (
@@ -1544,6 +1554,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("status_review", playbooks["cto-loop"]["pipeline"])
         self.assertIn("postdeploy_record", playbooks["deploy-and-monitor"]["pipeline"])
         self.assertIn("delivery_silence_policy", playbooks["scheduled-ops-blueprint"]["pipeline"])
+        self.assertIn("prepare_prompt", playbooks["scheduled-ops-blueprint"]["pipeline"])
+        self.assertIn("review", playbooks["scheduled-ops-blueprint"]["not_evidence_until_observed"])
+        self.assertIn("ci", playbooks["scheduled-ops-blueprint"]["not_evidence_until_observed"])
+        self.assertIn("merge", playbooks["scheduled-ops-blueprint"]["not_evidence_until_observed"])
         self.assertIn("capture_decisions", playbooks["operating-rhythm-history"]["pipeline"])
         self.assertIn("export_outline", playbooks["report-package"]["pipeline"])
         self.assertIn("record_export_qa", playbooks["materials-processing"]["pipeline"])
@@ -1575,6 +1589,16 @@ class CliTests(unittest.TestCase):
             stages["handoff_or_retain"]["evidence_required"],
             ["prepared handoff or Hermes-owned result"],
         )
+
+        status, stdout, stderr = run_cli(["playbook", "inspect", "scheduled-ops-blueprint"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        scheduled = json.loads(stdout)["playbook"]
+        self.assertEqual(scheduled["pipeline"], [stage["id"] for stage in scheduled["stages"]])
+        self.assertIn("review", scheduled["not_evidence_until_observed"])
+        self.assertIn("ci", scheduled["not_evidence_until_observed"])
+        self.assertIn("merge", scheduled["not_evidence_until_observed"])
 
     def test_playbook_recommend_routes_feature_and_research_situations(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo"])

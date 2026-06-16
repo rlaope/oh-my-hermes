@@ -48,8 +48,34 @@ class OperationsArtifactTests(unittest.TestCase):
         self.assertIn("host_cron_created", blueprint["not_evidence_until_observed"])
         self.assertIn("gateway_delivery_sent", blueprint["not_evidence_until_observed"])
         self.assertIn("source_retrieval_observed", blueprint["not_evidence_until_observed"])
+        self.assertIn("review", blueprint["not_evidence_until_observed"])
+        self.assertIn("ci", blueprint["not_evidence_until_observed"])
+        self.assertIn("merge", blueprint["not_evidence_until_observed"])
+        self.assertEqual(blueprint["status_card"]["not_observed"], blueprint["not_evidence_until_observed"])
         self.assertIn("not host cron creation", blueprint["prepared_is_not"])
         self.assertEqual(validate_hermes_ops_blueprint(blueprint), [])
+
+    def test_scheduled_ops_blueprint_does_not_treat_content_numbers_as_time(self) -> None:
+        for request in (
+            "every week summarize top 10 competitors",
+            "daily check 3 services",
+        ):
+            with self.subTest(request=request):
+                blueprint = build_scheduled_ops_blueprint(request, created_at="2026-06-16T00:00:00Z")
+
+                self.assertEqual(blueprint["schedule_intent"]["time_hint"], "")
+                self.assertTrue(blueprint["schedule_intent"]["requires_confirmation"])
+
+        for request, expected in (
+            ("daily check services at 9am", "at 9am"),
+            ("daily check services at 09:30", "at 09:30"),
+            ("daily check services 09:30", "09:30"),
+        ):
+            with self.subTest(request=request):
+                blueprint = build_scheduled_ops_blueprint(request, created_at="2026-06-16T00:00:00Z")
+
+                self.assertEqual(blueprint["schedule_intent"]["time_hint"], expected)
+                self.assertFalse(blueprint["schedule_intent"]["requires_confirmation"])
 
     def test_scheduled_ops_blueprint_store_round_trips_and_validates(self) -> None:
         with TemporaryDirectory() as tmp:

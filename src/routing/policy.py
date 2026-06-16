@@ -8,6 +8,91 @@ CONFIDENCE_LEVELS = ("low", "medium", "high")
 EXPLICIT_INVOCATION_PREFIXES = ("$", "/", "./", "@")
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
+_SCHEDULED_OPS_STRONG_TOKENS = frozenset(
+    {
+        "cron",
+        "schedule",
+        "scheduled",
+        "recurring",
+        "repeat",
+        "스케줄",
+        "예약",
+        "정기",
+        "반복",
+    }
+)
+_SCHEDULED_OPS_CADENCE_TOKENS = frozenset(
+    {
+        "daily",
+        "weekly",
+        "monthly",
+        "매일",
+        "매주",
+        "매월",
+    }
+)
+_SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
+    {
+        "check",
+        "checks",
+        "monitor",
+        "monitoring",
+        "watch",
+        "watchdog",
+        "digest",
+        "report",
+        "reports",
+        "notify",
+        "notification",
+        "deliver",
+        "delivery",
+        "slack",
+        "discord",
+        "telegram",
+        "email",
+        "competitor",
+        "news",
+        "source",
+        "sources",
+        "changed",
+        "changes",
+        "silent",
+        "silently",
+        "헬스체크",
+        "감시",
+        "확인",
+        "보고",
+        "리포트",
+        "요약",
+        "알림",
+        "슬랙",
+        "디스코드",
+        "텔레그램",
+        "이메일",
+        "경쟁사",
+        "뉴스",
+        "변화",
+        "조용히",
+    }
+)
+_SCHEDULED_OPS_PHRASES = (
+    "every morning",
+    "every day",
+    "every week",
+    "every month",
+    "notify if",
+    "only if changed",
+    "only if something changed",
+    "silent if nothing changed",
+    "if nothing changed",
+    "매일 아침",
+    "매주",
+    "매월",
+    "변화 있으면",
+    "변화 없으면",
+    "바뀐 게 없으면",
+    "조용히",
+)
 
 
 @dataclass(frozen=True)
@@ -131,58 +216,11 @@ def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if {
-        "cron",
-        "schedule",
-        "scheduled",
-        "recurring",
-        "repeat",
-        "daily",
-        "weekly",
-        "monthly",
-        "스케줄",
-        "예약",
-        "정기",
-        "반복",
-        "매일",
-        "매주",
-    } & query_tokens:
+    if _SCHEDULED_OPS_STRONG_TOKENS & query_tokens:
         return True
-    return any(
-        phrase in normalized_query
-        for phrase in (
-            "every morning",
-            "every day",
-            "every week",
-            "every month",
-            "send to slack",
-            "send a slack",
-            "slack digest",
-            "send to discord",
-            "discord digest",
-            "post to telegram",
-            "telegram digest",
-            "notify if",
-            "only if changed",
-            "only if something changed",
-            "silent if nothing changed",
-            "if nothing changed",
-            "매일 아침",
-            "매주",
-            "매월",
-            "슬랙으로",
-            "슬랙에 보내",
-            "슬랙으로 보내",
-            "디스코드로",
-            "디스코드에 보내",
-            "텔레그램으로",
-            "텔레그램에 보내",
-            "변화 있으면",
-            "변화 없으면",
-            "바뀐 게 없으면",
-            "조용히",
-        )
-    )
+    if _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens and _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens:
+        return True
+    return any(phrase in normalized_query for phrase in _SCHEDULED_OPS_PHRASES)
 
 
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
