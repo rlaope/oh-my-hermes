@@ -1,35 +1,50 @@
 # Application Cases
 
-This guide documents the representative ways OMH makes Hermes Agent feel more
-capable without claiming hidden Hermes runtime behavior. The first section is
-the G1-G10 use-case map that wrappers and operators can inspect through
-`omh cases`; the later sections keep the original deeper proof cases.
+This guide documents the G1-G10 OMH feature surfaces that make Hermes Agent
+feel more capable without claiming hidden Hermes runtime behavior. These are
+the deterministic skill, playbook, harness, and evidence contracts that
+wrappers and operators can inspect through `omh cases`.
 
 ## G1-G10 Hermes Use-Case Map
 
-These are product-facing situations, not new hidden runtimes. Each case maps a
-natural Hermes chat request to a skill, playbook, harness, and evidence
-boundary.
+These are implemented OMH feature surfaces, not just example situations. Each
+case maps a natural Hermes chat request to a skill, playbook, harness, direct
+skill invocation, and evidence boundary.
 
-| Goal | Situation | Primary OMH surface | Example request | Boundary |
+| Goal | Feature surface | Primary OMH surface | Example request | Boundary |
 | --- | --- | --- | --- | --- |
-| G1 | Startup product triage | `feedback-triage` / `feedback-triage` | "Payment failures keep showing up from customers." | Triage is not reproduction, a fix, or customer confirmation. |
-| G2 | Issue-to-PR readiness | `ultraprocess` / `request-to-handoff` | "Turn this issue into a PR-ready implementation plan." | Handoff is not dispatch, code result, review, CI, or merge. |
-| G3 | Real-world agent product QA | `ultraqa` / `reliability-incident-review` | "Check whether our agent handles a Kubernetes outage diagnosis scenario well." | Scenario design is not a passed test or verified remediation. |
-| G4 | Chat-to-workflow routing | `oh-my-hermes` / `safe-feature-change` | "This feels like a risky refactor before release." | Routing is advisory guidance, not an accepted plan. |
-| G5 | AI coding safety boundary | `code-review` / `request-to-handoff` | "Prepare this for a coding agent, but show what is only prepared versus observed." | Prepared coding context is not dispatch, execution, verification, review, CI, or merge. |
-| G6 | Product feature shaping | `deep-interview` / `deep-interview-to-plan` | "I want onboarding to feel smoother." | A shaped brief is not user validation, implementation, or release evidence. |
-| G7 | Release gate and README claim check | `deploy-and-monitor` / `deploy-and-monitor` | "Before release, check that README claims match commands and tests." | A checklist is not a published release, deployment, or monitoring result. |
-| G8 | Repeatable refactor workflow | `ultraprocess` / `safe-feature-change` | "This risky refactor needs plan, implementation, review, and docs sync." | A refactor plan is not behavior preservation, test pass, review approval, or merge. |
-| G9 | Multi-agent work hub | `team` / `local-pipeline-buildout` | "What is the current coding-agent status and what did we decide in the interview?" | A status card is not new execution, dispatch, review, CI, or merge evidence. |
-| G10 | Scheduled ops blueprint | `automation-blueprint` / `scheduled-ops-blueprint` | "Every morning, check competitor news and send a Slack digest only if something changed." | A blueprint is not cron creation, source retrieval, gateway delivery, plugin load, or no-agent execution. |
+| G1 | Natural-language scheduled automation | `automation-blueprint` / `scheduled-ops-blueprint` | "Every morning, research competitor updates and send a digest only if something changed." | A blueprint is not host cron creation, Hermes automation enablement, source retrieval, gateway delivery, or no-agent execution evidence. |
+| G2 | GitHub PR/Issue event operations | `github-event-ops` / `github-event-ops` | "PR opened with failing CI; decide whether to review, label, or prepare a fix handoff." | A GitHub event card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence. |
+| G3 | Multi-agent Kanban board | `agent-board` / `agent-board` | "Coordinate CTO, PM, QA, and release agents on this launch checklist." | A board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists. |
+| G4 | Memory and skill curation review | `memory-curation-review` / `memory-curation-review` | "Inspect stale project memories and ask me what to keep." | A curation review is not Hermes internal memory, `MEMORY.md`, `USER.md`, or skill-file modification evidence. |
+| G5 | Gateway-native intent card | `gateway-intent-card` / `gateway-intent-card` | "Route this Discord thread update silently unless action is needed." | A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence. |
+| G6 | Executor runtime readiness | `executor-runtime-readiness` / `executor-runtime-readiness` | "Can this task run in Codex, Claude Code, or Hermes coding?" | Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence. |
+| G7 | Deliverable file package | `deliverable-package` / `deliverable-package` | "Turn this research into PPT and PDF with attachment status." | A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence. |
+| G8 | Voice and mobile operator | `voice-operator` / `voice-operator` | "Release before lunch, check risky parts." | A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence. |
+| G9 | MCP and external toolbelt readiness | `toolbelt-readiness` / `toolbelt-readiness` | "What MCP or CLI tools do I need for weekly Linear and GitHub triage?" | A toolbelt card is not MCP install, credential validation, API access, connector invocation, or successful workflow execution evidence. |
+| G10 | Ops observability and cost card | `ops-observability-card` / `ops-observability-card` | "Show token, cost, latency, and last run status for this loop." | An observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence. |
+
+Direct skill prompts are also part of the contract. For example:
+
+```text
+$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.
+$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.
+$memory-curation-review Inspect stale project memories and ask me what to keep.
+$gateway-intent-card Route this Discord thread update silently unless action is needed.
+$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?
+$deliverable-package Turn this research into PPT and PDF with attachment status.
+$voice-operator 'release before lunch, check risky parts' from mobile.
+$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?
+$ops-observability-card Show token, cost, latency, and last run status for this loop.
+```
 
 Machine-readable operator checks:
 
 ```sh
 omh cases list --json
 omh cases inspect G10 --json
-omh cases recommend "daily competitor digest" --json
+omh cases recommend "PR opened with failing CI" --json
+omh cases validate --json
 ```
 
 Normal users should not need those commands. They exist so Hermes wrappers,

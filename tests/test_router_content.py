@@ -110,6 +110,15 @@ class RouterContentTests(unittest.TestCase):
             "plan",
             "ralplan",
             "code-review",
+            "github-event-ops",
+            "agent-board",
+            "memory-curation-review",
+            "gateway-intent-card",
+            "executor-runtime-readiness",
+            "deliverable-package",
+            "voice-operator",
+            "toolbelt-readiness",
+            "ops-observability-card",
         }:
             self.assertIn(expected, names)
 
@@ -129,6 +138,9 @@ class RouterContentTests(unittest.TestCase):
                 self.assertIn(case.primary_skill, names)
                 self.assertIn(case.harness, harnesses)
                 self.assertIn(case.playbook, playbooks)
+                self.assertTrue(case.feature_surface.startswith(f"{case.primary_skill} "))
+                self.assertTrue(case.direct_skill_invocation.startswith(f"${case.primary_skill} "))
+                self.assertIn(case.primary_skill, case.hermes_chat_prompt)
                 self.assertNotIn("secret", case.evidence_boundary.lower())
                 self.assertNotIn("hidden", case.evidence_boundary.lower())
                 self.assertIn(case.goal, playbook_doc)
@@ -161,6 +173,24 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
+        self.assertEqual(recommend_module._SKILL_POLICIES["github-event-ops"].next_action, "prepare_github_event_ops_card")
+        self.assertEqual(recommend_module._SKILL_POLICIES["agent-board"].next_action, "prepare_agent_board_card")
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["memory-curation-review"].next_action,
+            "prepare_memory_curation_review",
+        )
+        self.assertEqual(recommend_module._SKILL_POLICIES["gateway-intent-card"].next_action, "prepare_gateway_intent_card")
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["executor-runtime-readiness"].next_action,
+            "prepare_executor_runtime_readiness",
+        )
+        self.assertEqual(recommend_module._SKILL_POLICIES["deliverable-package"].next_action, "prepare_deliverable_package")
+        self.assertEqual(recommend_module._SKILL_POLICIES["voice-operator"].next_action, "prepare_voice_operator_card")
+        self.assertEqual(recommend_module._SKILL_POLICIES["toolbelt-readiness"].next_action, "prepare_toolbelt_readiness")
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["ops-observability-card"].next_action,
+            "prepare_ops_observability_card",
+        )
 
         for helper in (
             recommend_module._next_action,
@@ -208,6 +238,15 @@ class RouterContentTests(unittest.TestCase):
                 "critic",
                 "qa-specialist",
                 "docs-specialist",
+                "github-event-ops",
+                "agent-board",
+                "memory-curation-review",
+                "gateway-intent-card",
+                "executor-runtime-readiness",
+                "deliverable-package",
+                "voice-operator",
+                "toolbelt-readiness",
+                "ops-observability-card",
             },
             harnesses,
         )

@@ -135,6 +135,7 @@ class CliTests(unittest.TestCase):
             (["cases", "recommend", "daily", "competitor", "digest"], "OMH use-case recommendation", "recommendations"),
             (["cases", "list"], "OMH Hermes use cases", "use_cases"),
             (["cases", "inspect", "G10"], "OMH use case:", "use_case"),
+            (["cases", "validate"], "OMH G1-G10 feature surface validation", "validated"),
             (["playbook", "list"], "OMH playbooks", "playbooks"),
             (["playbook", "inspect", "safe-feature-change"], "OMH playbook:", "playbook"),
             (["profile", "list"], "OMH profile packs", "packs"),
@@ -174,21 +175,53 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         inspected = json.loads(stdout)["use_case"]
-        self.assertEqual(inspected["id"], "scheduled-ops-blueprint")
-        self.assertEqual(inspected["primary_skill"], "automation-blueprint")
-        self.assertIn("not cron creation", inspected["evidence_boundary"])
+        self.assertEqual(inspected["id"], "ops-observability-card")
+        self.assertEqual(inspected["primary_skill"], "ops-observability-card")
+        self.assertIn("$ops-observability-card", inspected["direct_skill_invocation"])
+        self.assertIn("Use OMH ops-observability-card", inspected["hermes_chat_prompt"])
+        self.assertIn("not billing truth", inspected["evidence_boundary"])
+
+        status, stdout, stderr = run_cli(["cases", "validate", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        validation = json.loads(stdout)
+        self.assertTrue(validation["ok"])
+        self.assertEqual(validation["count"], 10)
+        self.assertEqual(
+            {item["primary_skill"] for item in validation["validated"]},
+            {
+                "automation-blueprint",
+                "github-event-ops",
+                "agent-board",
+                "memory-curation-review",
+                "gateway-intent-card",
+                "executor-runtime-readiness",
+                "deliverable-package",
+                "voice-operator",
+                "toolbelt-readiness",
+                "ops-observability-card",
+            },
+        )
+        for item in validation["validated"]:
+            with self.subTest(validated=item["id"]):
+                self.assertTrue(item["checks"]["proof_surfaces_present"])
+                self.assertTrue(item["checks"]["proof_surfaces_valid"])
+                self.assertTrue(item["checks"]["boundary_has_evidence_guard"])
+                self.assertGreaterEqual(len(item["proof_surfaces"]), 3)
+                self.assertIn("not", item["evidence_boundary"].lower())
 
         examples = (
-            ("Payment failures keep showing up from customers", "G1", "feedback-triage"),
-            ("Turn this issue into a PR-ready implementation plan", "G2", "ultraprocess"),
-            ("Check whether our agent handles a Kubernetes outage diagnosis scenario well", "G3", "ultraqa"),
-            ("This feels like a risky refactor before release", "G4", "oh-my-hermes"),
-            ("Prepare this for Codex but show prepared versus observed evidence", "G5", "code-review"),
-            ("I want onboarding to feel smoother", "G6", "deep-interview"),
-            ("Before release check README claims and commands", "G7", "deploy-and-monitor"),
-            ("Risky refactor needs plan implementation review and docs sync", "G8", "ultraprocess"),
-            ("What is the current executor session status", "G9", "team"),
-            ("Every morning send a competitor digest only if changed", "G10", "automation-blueprint"),
+            ("Every morning send a competitor digest to Slack only if changed", "G1", "automation-blueprint"),
+            ("PR opened with failing CI and needs review label or fix handoff", "G2", "github-event-ops"),
+            ("Coordinate multiple Hermes profiles on a Kanban board with blockers", "G3", "agent-board"),
+            ("Review stale MEMORY.md facts and duplicate skills before cleanup", "G4", "memory-curation-review"),
+            ("Discord gateway thread should send silent attachment status updates", "G5", "gateway-intent-card"),
+            ("Can this run in Codex Claude Code or Hermes coding with missing tools", "G6", "executor-runtime-readiness"),
+            ("Prepare a PPT PDF XLSX deliverable and show attachment status", "G7", "deliverable-package"),
+            ("Voice mobile request release before lunch check risky parts", "G8", "voice-operator"),
+            ("Which MCP CLI API credentials are needed for Linear GitHub triage", "G9", "toolbelt-readiness"),
+            ("Show token cost latency run history and loop failure modes", "G10", "ops-observability-card"),
         )
         for query, goal, skill in examples:
             with self.subTest(query=query):
@@ -204,7 +237,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
-        self.assertEqual(json.loads(stdout)["recommendations"][0]["goal"], "G4")
+        self.assertEqual(json.loads(stdout)["recommendations"][0]["goal"], "G5")
 
         status, stdout, stderr = run_cli(["cases", "recommend", "", "--json"], output_json=False)
 
@@ -1460,6 +1493,33 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(top["next_action"], "prepare_material_package")
                 self.assertIn("binary export", top["evidence_boundary"])
                 self.assertIn("material_artifact/v1", top["wrapper_guidance"])
+
+    def test_recommend_delivery_status_overlap_rules_are_explicit(self) -> None:
+        cases = (
+            (
+                "show attachment status for the generated PDF",
+                "deliverable-package",
+                "prepare_deliverable_package",
+                "not binary generation",
+            ),
+            (
+                "Discord gateway thread should send silent attachment status updates",
+                "gateway-intent-card",
+                "prepare_gateway_intent_card",
+                "not platform login",
+            ),
+        )
+
+        for message, skill, next_action, boundary_fragment in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], skill)
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(boundary_fragment, top["evidence_boundary"])
 
     def test_recommend_direct_loop_routes_to_goal_loop_policy(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "./loop", "build", "a", "10k", "star", "open", "source", "project", "--limit", "2"])

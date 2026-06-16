@@ -1567,6 +1567,393 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not imply hidden Hermes runtime behavior.
   - Use the smallest verification that can prove the claim.
 
+### github-event-ops
+
+[omh] Hermes GitHub event operations workflow: route PR, issue, CI, and review webhook events into triage, review, or fix handoff cards.
+
+- Category: `github-ops`
+- Phase: `event-routing`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `github-event-ops` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes receives or is asked to reason about GitHub PR, issue, review, or CI events and must choose review, triage, or fix-handoff without claiming a bot ran.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`, `pull request webhook`, `github webhook`, `auto review pr`, `label issue`, `ci analysis`, `깃허브`, `이슈 라벨`, `pr 리뷰`, `ci 실패`
+- Good example:
+  - Prompt: github-event-ops PR opened with failing CI; triage whether this needs review or fix handoff.
+  - Expected behavior: Produce `prepare_github_event_ops_card` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: github-event-ops prove the issue was labelled and CI was rerun.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - github-event-ops/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - github-event-ops/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - A GitHub event ops card is not webhook delivery, GitHub API mutation, review completion, label application, CI rerun, or fix execution evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### agent-board
+
+[omh] Hermes agent board workflow: coordinate multiple Hermes profiles or agents with task, handoff, heartbeat, blocker, and completion states.
+
+- Category: `agent-coordination`
+- Phase: `board-status`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `agent-board` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when multiple Hermes profiles, agents, or targets need a board-shaped status contract for collaborative work.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `agent-board`, `agent board`, `kanban`, `multi agent board`, `hermes profiles`, `task board`, `heartbeat`, `blocker`, `handoff board`, `칸반`, `여러 에이전트`, `작업 보드`
+- Good example:
+  - Prompt: agent-board coordinate PM, CTO, QA, and release agents on this launch checklist.
+  - Expected behavior: Produce `prepare_agent_board_card` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: agent-board mark the other agent complete without an observed heartbeat or result.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - agent-board/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - agent-board/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - An agent board card is not proof that another Hermes agent accepted, executed, heartbeat-ed, or completed work unless target-specific evidence exists.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### memory-curation-review
+
+[omh] Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.
+
+- Category: `memory`
+- Phase: `curation-review`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `memory-curation-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `curate memory`, `stale memory`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억 정리`, `메모리 정리`, `중복 스킬`
+- Good example:
+  - Prompt: memory-curation-review inspect stale project memories and ask me what to keep.
+  - Expected behavior: Produce `prepare_memory_curation_review` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: memory-curation-review silently delete all conflicting memories.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - memory-curation-review/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - memory-curation-review/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence until an approved write is observed.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### gateway-intent-card
+
+[omh] Hermes gateway intent workflow: normalize Discord, Slack, Telegram, and other gateway sessions into origin, thread, delivery, silent, attachment, and status-update policy.
+
+- Category: `gateway`
+- Phase: `intent-card`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `gateway-intent-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes needs platform-neutral gateway policy for a chat session, thread, delivery target, attachment, or status update.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`, `session delivery`, `silent update`, `attachment policy`, `status update policy`, `게이트웨이`, `디스코드`, `슬랙`, `텔레그램`
+- Good example:
+  - Prompt: gateway-intent-card route this Discord thread update silently unless action is needed.
+  - Expected behavior: Produce `prepare_gateway_intent_card` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: gateway-intent-card prove the Telegram attachment was sent.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - gateway-intent-card/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - gateway-intent-card/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### executor-runtime-readiness
+
+[omh] Hermes executor runtime readiness workflow: compare Codex, Claude Code, Hermes coding, and oh-my runtimes by available tools, missing tools, and handoff mode.
+
+- Category: `executor-readiness`
+- Phase: `runtime-selection`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `executor-runtime-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when a user may choose Codex, Claude Code, Hermes coding, or another runtime and needs tool/credential gaps before handoff.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`, `missing tools`, `handoff mode`, `runtime migration`, `omx`, `omc`, `omo`, `코덱스`, `클로드 코드`, `실행 런타임`
+- Good example:
+  - Prompt: executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?
+  - Expected behavior: Produce `prepare_executor_runtime_readiness` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: executor-runtime-readiness claim Codex already started the session.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - executor-runtime-readiness/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - executor-runtime-readiness/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - Runtime readiness is not executor dispatch, plugin load, tool invocation, repository mutation, review, CI, or merge evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### deliverable-package
+
+[omh] Hermes deliverable package workflow: track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared, generated, QA, approved, and attached states.
+
+- Category: `deliverables`
+- Phase: `package-status`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `deliverable-package` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes should prepare, request generation, QA, and report attachment status for user-visible file deliverables.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `deliverable-package`, `deliverable mode`, `file attachment`, `attach file`, `attachment status`, `file delivery`, `file deliverable status`, `generated file`, `자료`, `첨부`, `첨부 상태`, `전달 상태`
+- Good example:
+  - Prompt: deliverable-package turn this research into PPT and PDF with attachment status.
+  - Expected behavior: Produce `prepare_deliverable_package` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: deliverable-package claim the PDF was attached without observed file evidence.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - deliverable-package/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - deliverable-package/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### voice-operator
+
+[omh] Hermes voice operator workflow: turn short voice or mobile commands into clarify, plan, status, handoff, or confirmation actions.
+
+- Category: `accessibility`
+- Phase: `voice-routing`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `voice-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes receives terse voice/mobile-style requests and should produce concise clarification, plan, or status UX.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `voice-operator`, `voice operator`, `voice-first`, `mobile command`, `short command`, `spoken request`, `accessibility`, `hands free`, `음성`, `모바일`, `접근성`, `짧은 명령`
+- Good example:
+  - Prompt: voice-operator 'release before lunch, check risky parts' from mobile.
+  - Expected behavior: Produce `prepare_voice_operator_card` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: voice-operator assume the user approved a destructive action from a vague voice note.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - voice-operator/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - voice-operator/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - A voice operator card is not speech recognition, mobile notification delivery, platform action, or accepted execution evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### toolbelt-readiness
+
+[omh] Hermes toolbelt readiness workflow: check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.
+
+- Category: `tools`
+- Phase: `readiness-check`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `toolbelt-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when a workflow depends on MCP, CLI, API credentials, or connectors and Hermes must show installed, missing, optional, and unsafe tools.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`, `api credential`, `missing cli`, `toolbelt`, `외부 도구`, `mcp`, `커넥터`, `credential`
+- Good example:
+  - Prompt: toolbelt-readiness what MCP or CLI tools do I need for weekly Linear and GitHub triage?
+  - Expected behavior: Produce `prepare_toolbelt_readiness` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: toolbelt-readiness claim Gmail access works without an observed credential check.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - toolbelt-readiness/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - toolbelt-readiness/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+### ops-observability-card
+
+[omh] Hermes ops observability workflow: report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries.
+
+- Category: `observability`
+- Phase: `telemetry-card`
+- Hermes role: `retained-operator`
+- Quality tier: `workflow-surface-gated`
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `ops-observability-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when automation, loops, gateway work, or executor handoffs need a safe status card for cost, latency, token, history, and failure-mode visibility.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`, `failure mode`, `monitor tokens`, `비용`, `토큰`, `지연시간`, `관측성`
+- Good example:
+  - Prompt: ops-observability-card show token, cost, latency, and last run status for this loop.
+  - Expected behavior: Produce `prepare_ops_observability_card` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: ops-observability-card claim exact provider billing from local estimates.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - ops-observability-card/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - ops-observability-card/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or successful workflow completion evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ## Representative Harnesses
 
 ### coding-handling
@@ -2683,3 +3070,434 @@ Keep public docs accurate, installable, and aligned with actual behavior.
   - Documentation of a future surface is not proof that evidence was observed.
   - Generated docs must match catalog data before release claims are made.
 - Fallback: If behavior is not implemented yet, label it as roadmap instead of current capability.
+
+### github-event-ops
+
+Route GitHub PR, issue, CI, and review events into triage, review, labeling, or fix-handoff guidance.
+
+- Use when: Use when a GitHub event payload or copied event summary should become a Hermes workflow card.
+- Quality tier: `event-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - event type
+  - repository or project
+  - event summary
+  - desired automation boundary
+- Outputs:
+  - github_event_ops/v1
+  - route decision
+  - label/review/fix-handoff candidates
+  - not-evidence list
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `event_received`
+  - `event_classified`
+  - `route_card_prepared`
+  - `mutation_observed_when_available`
+- Wrapper actions:
+  - `show_event_card`
+  - `prepare_review`
+  - `prepare_label`
+  - `prepare_fix_handoff`
+  - `record_github_observation`
+- Artifact events:
+  - `github-event-ops_scoped`
+  - `github-event-ops_card_prepared`
+  - `github-event-ops_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A GitHub event card is not webhook delivery, API mutation, label application, review completion, CI rerun, or fix execution evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### agent-board
+
+Coordinate multi-Hermes-agent or profile work as board cards with task, handoff, heartbeat, blocker, and completion states.
+
+- Use when: Use when target topology or team profile work needs board-style status rather than plain chat summaries.
+- Quality tier: `board-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - board scope
+  - known agents or profiles
+  - task cards
+  - current target/thread
+- Outputs:
+  - agent_board/v1
+  - card states
+  - target-scoped status
+  - blocked or complete evidence boundary
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `board_scoped`
+  - `cards_prepared`
+  - `heartbeat_recorded_when_available`
+  - `completion_recorded_when_available`
+- Wrapper actions:
+  - `show_board`
+  - `move_card`
+  - `record_heartbeat`
+  - `record_blocker`
+  - `record_completion`
+- Artifact events:
+  - `agent-board_scoped`
+  - `agent-board_card_prepared`
+  - `agent-board_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A board state is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### memory-curation-review
+
+Review stale, conflicting, duplicate, or risky memory and skill guidance with explicit approve/reject/update actions.
+
+- Use when: Use when accumulated memory, USER/MEMORY files, or skill notes need human-approved cleanup.
+- Quality tier: `curation-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - memory source summary
+  - candidate memories or skills
+  - staleness/conflict signal
+  - review owner
+- Outputs:
+  - memory_curation_review/v1
+  - approve/reject/update candidates
+  - conflicts
+  - write boundary
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `memory_candidates_scoped`
+  - `conflicts_ranked`
+  - `review_actions_prepared`
+  - `approved_write_observed_when_available`
+- Wrapper actions:
+  - `show_memory_review`
+  - `approve_update`
+  - `reject_update`
+  - `record_memory_write`
+  - `show_status`
+- Artifact events:
+  - `memory-curation-review_scoped`
+  - `memory-curation-review_card_prepared`
+  - `memory-curation-review_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A memory review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### gateway-intent-card
+
+Normalize gateway session policy for origin, thread, delivery, silent updates, attachments, and status updates.
+
+- Use when: Use when Discord, Slack, Telegram, or another gateway wrapper needs platform-neutral intent before delivery.
+- Quality tier: `gateway-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - origin platform
+  - thread/session id or boundary
+  - delivery target
+  - silence and attachment policy
+- Outputs:
+  - gateway_intent_card/v1
+  - delivery policy
+  - status-update policy
+  - not-evidence list
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `origin_scoped`
+  - `thread_policy_prepared`
+  - `delivery_policy_prepared`
+  - `delivery_observed_when_available`
+- Wrapper actions:
+  - `show_gateway_card`
+  - `confirm_delivery`
+  - `record_delivery`
+  - `record_attachment`
+  - `show_status`
+- Artifact events:
+  - `gateway-intent-card_scoped`
+  - `gateway-intent-card_card_prepared`
+  - `gateway-intent-card_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A gateway intent card is not login, platform send, thread mutation, attachment upload, or delivery evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### executor-runtime-readiness
+
+Compare executor/runtime options by available tools, missing tools, credentials, authority, and handoff mode.
+
+- Use when: Use before choosing Codex, Claude Code, Hermes coding, or an oh-my runtime for coding or tool-backed work.
+- Quality tier: `runtime-readiness-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - task shape
+  - candidate runtime
+  - available tools
+  - missing credentials or authority
+- Outputs:
+  - executor_runtime_readiness/v1
+  - runtime matrix
+  - handoff mode
+  - missing tool list
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `task_runtime_scoped`
+  - `tool_matrix_prepared`
+  - `handoff_mode_selected`
+  - `runtime_dispatch_observed_when_available`
+- Wrapper actions:
+  - `show_runtime_matrix`
+  - `choose_executor`
+  - `prepare_handoff`
+  - `record_dispatch`
+  - `show_status`
+- Artifact events:
+  - `executor-runtime-readiness_scoped`
+  - `executor-runtime-readiness_card_prepared`
+  - `executor-runtime-readiness_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### deliverable-package
+
+Track file deliverables through prepared, generated, QA, approved, attached, and delivered states.
+
+- Use when: Use when Hermes should prepare or status a PPT/PDF/XLSX/DOCX/HWP/Markdown deliverable in chat.
+- Quality tier: `deliverable-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - source inputs
+  - target formats
+  - audience
+  - delivery or attachment target
+- Outputs:
+  - deliverable_package/v1
+  - format plan
+  - QA ladder
+  - attachment/delivery state
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `deliverable_scoped`
+  - `format_plan_prepared`
+  - `generation_handoff_prepared`
+  - `file_observed_when_available`
+  - `attachment_observed_when_available`
+- Wrapper actions:
+  - `show_deliverable_card`
+  - `choose_format`
+  - `prepare_generation_handoff`
+  - `record_file`
+  - `record_attachment`
+- Artifact events:
+  - `deliverable-package_scoped`
+  - `deliverable-package_card_prepared`
+  - `deliverable-package_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### voice-operator
+
+Convert terse voice/mobile requests into safe clarify, plan, status, handoff, or confirmation actions.
+
+- Use when: Use when the input is short, ambiguous, mobile, voice-like, or accessibility-sensitive.
+- Quality tier: `accessibility-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - voice/mobile transcript
+  - confidence or ambiguity
+  - current thread context
+  - risk level
+- Outputs:
+  - voice_operator/v1
+  - clarification or action card
+  - confirmation requirement
+  - status copy
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `voice_request_received`
+  - `ambiguity_checked`
+  - `safe_action_prepared`
+  - `confirmation_observed_when_required`
+- Wrapper actions:
+  - `ask_clarification`
+  - `confirm_action`
+  - `show_status`
+  - `prepare_handoff`
+- Artifact events:
+  - `voice-operator_scoped`
+  - `voice-operator_card_prepared`
+  - `voice-operator_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### toolbelt-readiness
+
+Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools for a workflow.
+
+- Use when: Use when a workflow may require external tools and the user needs installed, missing, optional, and unsafe tool state.
+- Quality tier: `tool-readiness-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - workflow goal
+  - required tools
+  - known environment
+  - credential policy
+- Outputs:
+  - toolbelt_readiness/v1
+  - tool matrix
+  - missing credentials
+  - safe next action
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `workflow_tools_scoped`
+  - `tool_requirements_listed`
+  - `installed_state_recorded_when_available`
+  - `credential_gaps_recorded`
+- Wrapper actions:
+  - `show_toolbelt`
+  - `open_setup`
+  - `record_tool_check`
+  - `prepare_handoff`
+  - `show_status`
+- Artifact events:
+  - `toolbelt-readiness_scoped`
+  - `toolbelt-readiness_card_prepared`
+  - `toolbelt-readiness_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A toolbelt readiness card is not MCP installation, credential validation, API access, connector invocation, or successful workflow execution evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### ops-observability-card
+
+Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries.
+
+- Use when: Use when automation, loops, gateway work, or executor sessions need safe observability and cost/status narration.
+- Quality tier: `observability-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - workflow/run id
+  - available telemetry
+  - cost/token policy
+  - history window
+- Outputs:
+  - ops_observability_card/v1
+  - telemetry summary
+  - cost/latency boundary
+  - failure-mode warnings
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `telemetry_scope_recorded`
+  - `local_metrics_summarized`
+  - `failure_modes_checked`
+  - `provider_truth_observed_when_available`
+- Wrapper actions:
+  - `show_observability`
+  - `record_metric`
+  - `record_failure_mode`
+  - `show_status`
+- Artifact events:
+  - `ops-observability-card_scoped`
+  - `ops-observability-card_card_prepared`
+  - `ops-observability-card_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
