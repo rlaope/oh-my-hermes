@@ -198,12 +198,20 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
 | `materials-package` / `report-package` | Hermes shapes decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages while keeping binary export and render QA observed-only. | "Turn the revenue spreadsheet into an Excel and PDF package with render QA." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Hermes prepares work for Codex, Claude Code, another coding agent, an oh-my runtime, or Hermes coding skills without hiding unobserved execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
+OMH also keeps a deterministic G1-G10 Hermes use-case map for release checks
+and wrapper routing. It covers startup triage, issue-to-PR readiness,
+real-world agent QA, chat-to-workflow routing, AI coding safety, feature
+shaping, release gates, refactor standardization, multi-agent work hubs, and
+scheduled ops blueprints. Normal users still talk to Hermes; wrappers and
+operators can inspect the map with `omh cases list --json`.
+
 ## What You Get
 
 | Surface | What it provides |
 | --- | --- |
 | Hermes skill tap | Tap-compatible skills under `skills/<name>/SKILL.md`. |
 | Bootstrap setup | `omh setup` installs generated skills and registers `skills.external_dirs` in user or project scope. |
+| G1-G10 use-case catalog | `omh cases list/inspect/recommend` maps real Hermes situations to the right skill, playbook, harness, next action, and evidence boundary without claiming runtime execution. |
 | Flagship playbook | `request-to-handoff` turns a plain Hermes message into a role-owned next action with an evidence boundary. |
 | App operation loops | `idea-to-deploy`, `cto-loop`, and `deploy-and-monitor` make Hermes feel like an app delivery operator while keeping evidence boundaries strict. |
 | Loopable goal cycles | `loop` lets Hermes classify a request as task, project, ambition, external waiting, or unclear before cycling. North-star ambitions stay visible, but the current loop goal must name a bounded arena, observable problem, next verification, and stop condition. Start cards, `loopability_assessment/v1`, `loop_engineering/v1` snapshots, `loop_status_card/v1` failure-mode warnings, and queue lifecycle actions help wrappers show what can start, what is only prepared, what verification is cheap or expensive, and what was later observed or blocked. |
