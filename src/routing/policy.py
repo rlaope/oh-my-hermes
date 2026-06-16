@@ -11,12 +11,8 @@ _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, 
 _SCHEDULED_OPS_STRONG_TOKENS = frozenset(
     {
         "cron",
-        "schedule",
-        "scheduled",
         "recurring",
         "repeat",
-        "스케줄",
-        "예약",
         "정기",
         "반복",
     }
@@ -92,6 +88,32 @@ _SCHEDULED_OPS_PHRASES = (
     "변화 없으면",
     "바뀐 게 없으면",
     "조용히",
+)
+_ONE_OFF_TOKENS = frozenset(
+    {
+        "once",
+        "일회성",
+        "한번만",
+    }
+)
+_ONE_OFF_PHRASES = (
+    "one-off",
+    "one off",
+    "one-time",
+    "one time",
+    "single run",
+    "single-use",
+    "non-recurring",
+    "non recurring",
+    "do not repeat",
+    "dont repeat",
+    "no recurrence",
+    "just once",
+    "only once",
+    "이번만",
+    "한 번만",
+    "한번만",
+    "일회성",
 )
 
 
@@ -216,11 +238,19 @@ def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if is_explicit_one_off_request(normalized_query, query_tokens):
+        return False
     if _SCHEDULED_OPS_STRONG_TOKENS & query_tokens:
         return True
     if _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens and _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens:
         return True
     return any(phrase in normalized_query for phrase in _SCHEDULED_OPS_PHRASES)
+
+
+def is_explicit_one_off_request(normalized_query: str, query_tokens: set[str]) -> bool:
+    return bool(_ONE_OFF_TOKENS & query_tokens) or any(
+        phrase in normalized_query for phrase in _ONE_OFF_PHRASES
+    )
 
 
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

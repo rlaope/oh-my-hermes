@@ -122,7 +122,7 @@
     },
     {
       "hermes_role": "retained-cognition",
-      "phase": "report-outline",
+      "phase": "package-outline",
       "reason": "report outline and delivery package lane",
       "skill": "report-package"
     }
@@ -135,9 +135,44 @@
       "stage": "implemented"
     },
     {
+      "gap": "github_pr_issue_event_ops",
+      "scope": "future projection over issue/PR event intake and review status",
+      "stage": "planned"
+    },
+    {
+      "gap": "durable_agent_board",
+      "scope": "future board projection over multi-agent ownership and work lanes",
+      "stage": "planned"
+    },
+    {
+      "gap": "memory_curation",
+      "scope": "future memory/skill curation review projection",
+      "stage": "planned"
+    },
+    {
       "gap": "gateway_delivery_intent",
       "scope": "delivery policy is prepared here; actual platform delivery requires observed Hermes/gateway evidence",
       "stage": "prepared_only"
+    },
+    {
+      "gap": "executor_runtime_readiness",
+      "scope": "executor-neutral handoff and lifecycle artifacts remain separate from scheduled ops blueprints",
+      "stage": "supported_elsewhere"
+    },
+    {
+      "gap": "deliverable_packages",
+      "scope": "materials-package and report-package own binary/deliverable QA boundaries",
+      "stage": "supported_elsewhere"
+    },
+    {
+      "gap": "voice_operator_guidance",
+      "scope": "future chat/voice concise status card copy",
+      "stage": "planned"
+    },
+    {
+      "gap": "toolbelt_mcp_readiness",
+      "scope": "MCP/tool readiness remains setup and probe metadata, not hidden tool execution",
+      "stage": "supported_elsewhere"
     },
     {
       "gap": "observability_cost_latency_evidence",

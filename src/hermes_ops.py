@@ -522,7 +522,7 @@ def _skill_suggestions(text: str) -> list[dict[str, str]]:
                 ("research-brief", "source-backed synthesis lane"),
             ]
         )
-    if any(term in folded for term in ("report", "brief", "deck", "weekly", "monthly", "리포트", "보고", "자료")):
+    if any(term in folded for term in ("report", "brief", "deck", "digest", "weekly", "monthly", "리포트", "보고", "자료")):
         candidates.append(("report-package", "report outline and delivery package lane"))
     if any(term in folded for term in ("incident", "slo", "error budget", "reliability", "장애", "에러버짓", "신뢰성")):
         candidates.append(("reliability-review", "incident/SLO evidence review lane"))

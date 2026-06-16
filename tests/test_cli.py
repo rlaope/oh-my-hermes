@@ -1296,6 +1296,8 @@ class CliTests(unittest.TestCase):
             "investigate Slack SLA alert failures",
             "daily standup meeting notes",
             "one-off Slack digest for this incident",
+            "one-off Slack digest only if something changed for this incident",
+            "schedule a one-off meeting with product",
         )
         for message in negative_cases:
             with self.subTest(message=message):

@@ -4,7 +4,12 @@ from dataclasses import asdict, dataclass, replace
 
 from ..skills.catalog import SkillDefinition, builtin_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
-from .policy import RoutingGuardRule, active_routing_guard_rules, explicit_skill_invocation
+from .policy import (
+    RoutingGuardRule,
+    active_routing_guard_rules,
+    explicit_skill_invocation,
+    is_explicit_one_off_request,
+)
 
 
 _STOPWORDS = {
@@ -284,10 +289,13 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
     definitions = list(builtin_definitions())
+    explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
     scored = [
         _score_definition(definition, normalized_query, query_tokens, query, routing_text.locale_matches)
         for definition in definitions
     ]
+    if explicit_skill != "automation-blueprint" and is_explicit_one_off_request(normalized_query, query_tokens):
+        scored = [recommendation for recommendation in scored if recommendation.skill != "automation-blueprint"]
     matches = [recommendation for recommendation in scored if recommendation.score > 0]
     if not matches:
         matches = _fallback_recommendations(definitions, query)
@@ -297,7 +305,7 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
             matches,
             normalized_query=normalized_query,
             query_tokens=query_tokens,
-            explicit_skill=explicit_skill_invocation(query, {definition.name for definition in definitions}),
+            explicit_skill=explicit_skill,
         )
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
     return [recommendation.to_dict() for recommendation in matches[:limit]]

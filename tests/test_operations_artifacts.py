@@ -119,10 +119,21 @@ class OperationsArtifactTests(unittest.TestCase):
     def test_scheduled_ops_example_fixture_matches_blueprint_schema(self) -> None:
         fixture = Path("examples/hermes-ops/scheduled-competitor-digest.json")
         payload = json.loads(fixture.read_text(encoding="utf-8"))
+        generated = build_scheduled_ops_blueprint(
+            "every morning check competitor news and send a Slack digest only if something changed",
+            title="Scheduled ops: competitor digest",
+            schedule="every morning",
+            delivery="Slack digest",
+            silence="only if something changed",
+            source="example fixture",
+            blueprint_id="20260616T000000Z-scheduled-ops-competitor-digest-example",
+            created_at="2026-06-16T00:00:00Z",
+        )
 
         self.assertEqual(validate_hermes_ops_blueprint(payload), [])
         self.assertEqual(payload["schema_version"], "hermes_ops_blueprint/v1")
         self.assertIn("gateway_delivery_sent", payload["not_evidence_until_observed"])
+        self.assertEqual(payload, generated)
 
     def test_prepared_operating_rhythm_artifact_round_trips(self) -> None:
         with TemporaryDirectory() as tmp:
