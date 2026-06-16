@@ -26,7 +26,7 @@ repo-local contract for Codex agents working here.
 | Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
 | Install Hermes-native skills or bootstrap managed skills | [Installation](INSTALLATION.md) |
 | Run deterministic backend demos | [`omh demo orchestration`](../README.md#backend--operator-surface) and [fixture shims](../examples) |
-| See realistic user-facing flows | [Application Cases](APPLICATION_CASES.md) |
+| See realistic G1-G10 user-facing flows | [Application Cases](APPLICATION_CASES.md) |
 | Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
 | Prepare or verify a release | [Release](RELEASE.md) |
 | Track public sequencing | [Roadmap](ROADMAP.md) |

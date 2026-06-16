@@ -39,6 +39,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Install managed skills and connect them", help_text)
         self.assertIn("chat", help_text)
         self.assertIn("wrapper chat events", help_text)
+        self.assertIn("omh cases recommend", help_text)
         self.assertIn("omh ops list", help_text)
         self.assertIn("omh materials list", help_text)
         self.assertIn("Human-facing maintenance, catalog, and operator checklist commands print summaries", help_text)
@@ -131,6 +132,9 @@ class CliTests(unittest.TestCase):
                 "OMH playbook recommendation",
                 "recommendations",
             ),
+            (["cases", "recommend", "daily", "competitor", "digest"], "OMH use-case recommendation", "recommendations"),
+            (["cases", "list"], "OMH Hermes use cases", "use_cases"),
+            (["cases", "inspect", "G10"], "OMH use case:", "use_case"),
             (["playbook", "list"], "OMH playbooks", "playbooks"),
             (["playbook", "inspect", "safe-feature-change"], "OMH playbook:", "playbook"),
             (["profile", "list"], "OMH profile packs", "packs"),
@@ -154,6 +158,59 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(stderr, "")
                 self.assertEqual(status, 0)
                 self.assertIn(json_key, json.loads(stdout))
+
+    def test_cases_catalog_exposes_g1_to_g10_and_recommends_real_situations(self) -> None:
+        status, stdout, stderr = run_cli(["cases", "list", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "omh_use_case_catalog/v1")
+        self.assertEqual(payload["count"], 10)
+        self.assertEqual([case["goal"] for case in payload["use_cases"]], [f"G{index}" for index in range(1, 11)])
+
+        status, stdout, stderr = run_cli(["cases", "inspect", "G10", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        inspected = json.loads(stdout)["use_case"]
+        self.assertEqual(inspected["id"], "scheduled-ops-blueprint")
+        self.assertEqual(inspected["primary_skill"], "automation-blueprint")
+        self.assertIn("not cron creation", inspected["evidence_boundary"])
+
+        examples = (
+            ("Payment failures keep showing up from customers", "G1", "feedback-triage"),
+            ("Turn this issue into a PR-ready implementation plan", "G2", "ultraprocess"),
+            ("Check whether our agent handles a Kubernetes outage diagnosis scenario well", "G3", "ultraqa"),
+            ("This feels like a risky refactor before release", "G4", "oh-my-hermes"),
+            ("Prepare this for Codex but show prepared versus observed evidence", "G5", "code-review"),
+            ("I want onboarding to feel smoother", "G6", "deep-interview"),
+            ("Before release check README claims and commands", "G7", "deploy-and-monitor"),
+            ("Risky refactor needs plan implementation review and docs sync", "G8", "ultraprocess"),
+            ("What is the current executor session status", "G9", "team"),
+            ("Every morning send a competitor digest only if changed", "G10", "automation-blueprint"),
+        )
+        for query, goal, skill in examples:
+            with self.subTest(query=query):
+                status, stdout, stderr = run_cli(["cases", "recommend", *query.split(), "--limit", "1", "--json"], output_json=False)
+
+                self.assertEqual(status, 0, stderr)
+                self.assertEqual(stderr, "")
+                recommendation = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(recommendation["goal"], goal)
+                self.assertEqual(recommendation["primary_skill"], skill)
+
+        status, stdout, stderr = run_cli(["cases", "recommend", "zzzzzz", "--limit", "1", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertEqual(json.loads(stdout)["recommendations"][0]["goal"], "G4")
+
+        status, stdout, stderr = run_cli(["cases", "recommend", "", "--json"], output_json=False)
+
+        self.assertEqual(status, 2)
+        self.assertEqual(stdout, "")
+        self.assertIn("task description must not be empty", stderr)
 
     def test_local_operator_commands_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:

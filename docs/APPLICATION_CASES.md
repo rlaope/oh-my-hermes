@@ -1,8 +1,40 @@
 # Application Cases
 
-This guide documents the first three proof cases for `oh-my-hermes`.
-Each case is designed to show visible skill impact without claiming hidden
-Hermes runtime behavior.
+This guide documents the representative ways OMH makes Hermes Agent feel more
+capable without claiming hidden Hermes runtime behavior. The first section is
+the G1-G10 use-case map that wrappers and operators can inspect through
+`omh cases`; the later sections keep the original deeper proof cases.
+
+## G1-G10 Hermes Use-Case Map
+
+These are product-facing situations, not new hidden runtimes. Each case maps a
+natural Hermes chat request to a skill, playbook, harness, and evidence
+boundary.
+
+| Goal | Situation | Primary OMH surface | Example request | Boundary |
+| --- | --- | --- | --- | --- |
+| G1 | Startup product triage | `feedback-triage` / `feedback-triage` | "Payment failures keep showing up from customers." | Triage is not reproduction, a fix, or customer confirmation. |
+| G2 | Issue-to-PR readiness | `ultraprocess` / `request-to-handoff` | "Turn this issue into a PR-ready implementation plan." | Handoff is not dispatch, code result, review, CI, or merge. |
+| G3 | Real-world agent product QA | `ultraqa` / `reliability-incident-review` | "Check whether our agent handles a Kubernetes outage diagnosis scenario well." | Scenario design is not a passed test or verified remediation. |
+| G4 | Chat-to-workflow routing | `oh-my-hermes` / `safe-feature-change` | "This feels like a risky refactor before release." | Routing is advisory guidance, not an accepted plan. |
+| G5 | AI coding safety boundary | `code-review` / `request-to-handoff` | "Prepare this for a coding agent, but show what is only prepared versus observed." | Prepared coding context is not dispatch, execution, verification, review, CI, or merge. |
+| G6 | Product feature shaping | `deep-interview` / `deep-interview-to-plan` | "I want onboarding to feel smoother." | A shaped brief is not user validation, implementation, or release evidence. |
+| G7 | Release gate and README claim check | `deploy-and-monitor` / `deploy-and-monitor` | "Before release, check that README claims match commands and tests." | A checklist is not a published release, deployment, or monitoring result. |
+| G8 | Repeatable refactor workflow | `ultraprocess` / `safe-feature-change` | "This risky refactor needs plan, implementation, review, and docs sync." | A refactor plan is not behavior preservation, test pass, review approval, or merge. |
+| G9 | Multi-agent work hub | `team` / `local-pipeline-buildout` | "What is the current coding-agent status and what did we decide in the interview?" | A status card is not new execution, dispatch, review, CI, or merge evidence. |
+| G10 | Scheduled ops blueprint | `automation-blueprint` / `scheduled-ops-blueprint` | "Every morning, check competitor news and send a Slack digest only if something changed." | A blueprint is not cron creation, source retrieval, gateway delivery, plugin load, or no-agent execution. |
+
+Machine-readable operator checks:
+
+```sh
+omh cases list --json
+omh cases inspect G10 --json
+omh cases recommend "daily competitor digest" --json
+```
+
+Normal users should not need those commands. They exist so Hermes wrappers,
+tests, and release checks can verify that the chat-first story has deterministic
+local backing.
 
 ## Case 1: Coding Request Handling
 

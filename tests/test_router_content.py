@@ -10,6 +10,7 @@ load_local_package()
 from omh.routing import recommend as recommend_module
 from omh.roles import role_definitions, role_file_markdown, roles_reference_markdown
 from omh.skill_pack import builtin_definitions, builtin_harnesses, builtin_skill_templates
+from omh.playbooks import list_playbooks
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
     SkillDefinition,
@@ -19,6 +20,7 @@ from omh.skills.catalog import (
     retained_delegation_skill_names,
 )
 from omh.skills.render import workflow_reference_markdown, workflow_reference_payload
+from omh.use_cases import USE_CASES, list_use_cases
 
 
 FLAGSHIP_SKILLS = {
@@ -110,6 +112,29 @@ class RouterContentTests(unittest.TestCase):
             "code-review",
         }:
             self.assertIn(expected, names)
+
+    def test_g1_to_g10_use_case_catalog_is_complete_and_boundary_safe(self) -> None:
+        payload = list_use_cases()
+
+        self.assertEqual(payload["schema_version"], "omh_use_case_catalog/v1")
+        self.assertEqual(payload["count"], 10)
+        self.assertEqual([case.goal for case in USE_CASES], [f"G{index}" for index in range(1, 11)])
+        names = {skill.name for skill in builtin_skill_templates()}
+        harnesses = {harness.name for harness in builtin_harnesses()}
+        playbooks = {playbook["id"] for playbook in list_playbooks()["playbooks"]}
+        playbook_doc = Path("docs/APPLICATION_CASES.md").read_text(encoding="utf-8")
+        readme = Path("README.md").read_text(encoding="utf-8")
+        for case in USE_CASES:
+            with self.subTest(case=case.id):
+                self.assertIn(case.primary_skill, names)
+                self.assertIn(case.harness, harnesses)
+                self.assertIn(case.playbook, playbooks)
+                self.assertNotIn("secret", case.evidence_boundary.lower())
+                self.assertNotIn("hidden", case.evidence_boundary.lower())
+                self.assertIn(case.goal, playbook_doc)
+                self.assertIn(case.primary_skill, playbook_doc)
+        self.assertIn("G1-G10", readme)
+        self.assertIn("omh cases list --json", readme)
 
     def test_recommendation_policies_are_data_driven_for_business_categories(self) -> None:
         expected = {

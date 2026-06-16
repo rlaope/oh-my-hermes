@@ -107,6 +107,7 @@ from .setup import (
     cmd_update,
 )
 from .state import _add_state_commands, cmd_state_clear, cmd_state_finish, cmd_state_start, cmd_state_status
+from .use_cases import _add_cases_commands, cmd_cases_inspect, cmd_cases_list, cmd_cases_recommend
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,6 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  Use OMH request-to-handoff for: I want to safely add a feature to this repo.\n\n"
             "Operator examples:\n"
             "  omh recommend \"risky refactor\"\n"
+            "  omh cases recommend \"daily competitor digest\"\n"
             "  omh playbook recommend \"turn this issue into a PR\"\n"
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
             "  omh hud\n"
@@ -152,6 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_top_level_commands(sub)
     _add_docs_commands(sub)
     _add_harness_commands(sub)
+    _add_cases_commands(sub)
     _add_playbook_commands(sub)
     _add_release_commands(sub)
     _add_demo_commands(sub)
@@ -188,6 +191,7 @@ Start:
 
 Useful operator commands:
   omh recommend "risky refactor"
+  omh cases recommend "daily competitor digest"
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
