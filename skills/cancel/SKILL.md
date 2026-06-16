@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, operator]
     category: operator
     phase: state-cleanup
-    role: retained-operator
+    role: tracker
     quality_tier: evidence-gated
 ---
 
@@ -47,7 +47,7 @@ Use to cleanly end active adapted workflow state.
 
 Category: `operator`
 Phase: `state-cleanup`
-Hermes role: `retained-operator`
+Hermes role: `tracker`
 Quality tier: `evidence-gated`
 
 Quality bar:

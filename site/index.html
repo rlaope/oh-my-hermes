@@ -75,7 +75,7 @@ omh setup</code>
               </div>
               <div class="console-route">
                 <span>owner</span>
-                <strong>planning-lead</strong>
+                <strong>planner</strong>
               </div>
               <div class="console-route">
                 <span>next action</span>
@@ -383,7 +383,7 @@ omh setup</code>
             </div>
             <div>
               <span>Likely route</span>
-              <strong><code>request-to-handoff</code> -> <code>planning-lead</code></strong>
+              <strong><code>request-to-handoff</code> -> <code>planner</code></strong>
             </div>
             <p>
               Hermes presents the safe plan first. Handoff and executor choice
@@ -449,24 +449,44 @@ omh setup</code>
         </div>
         <div class="role-grid" aria-label="OMH responsibility roles">
           <article class="role-card">
-            <span>research-lead</span>
+            <span>guide</span>
+            <strong>Route plain requests</strong>
+            <p>Explains the next visible Hermes action without claiming hidden work.</p>
+          </article>
+          <article class="role-card">
+            <span>researcher</span>
             <strong>Evidence and sources</strong>
             <p>Separates source-backed facts, inference, and uncertainty.</p>
           </article>
           <article class="role-card">
-            <span>planning-lead</span>
+            <span>planner</span>
             <strong>Clarify, plan, acceptance criteria</strong>
             <p>Owns the shape of the work before handoff is available.</p>
           </article>
           <article class="role-card">
-            <span>review-gate</span>
-            <strong>Findings, QA, release readiness</strong>
-            <p>Looks for gaps before the page claims the work is done.</p>
+            <span>operator</span>
+            <strong>Product and company workflows</strong>
+            <p>Runs non-coding operating loops without pretending delivery happened.</p>
           </article>
           <article class="role-card">
-            <span>coding-handoff</span>
+            <span>memory-keeper</span>
+            <strong>Context and memory review</strong>
+            <p>Prepares safe memory updates while the user owns final approval.</p>
+          </article>
+          <article class="role-card">
+            <span>handoff-guide</span>
             <strong>Executor choice and prepared handoff</strong>
             <p>Prepares the payload while the executor owns implementation evidence.</p>
+          </article>
+          <article class="role-card">
+            <span>tracker</span>
+            <strong>Runtime and status</strong>
+            <p>Reports observed progress and keeps missing evidence visible.</p>
+          </article>
+          <article class="role-card">
+            <span>reviewer</span>
+            <strong>Findings, QA, release readiness</strong>
+            <p>Looks for gaps before the page claims the work is done.</p>
           </article>
         </div>
       </section>
@@ -495,10 +515,10 @@ omh setup</code>
                 <div class="message-meta"><strong>Hermes Agent</strong> <span>BOT</span></div>
                 <div class="route-lens" aria-label="Routing summary">
                   <span>playbook: request-to-handoff</span>
-                  <span>role: planning-lead</span>
+                  <span>role: planner</span>
                   <span>next: present_plan</span>
                 </div>
-                <h3>I routed this through <code>request-to-handoff</code>; Planning Lead should present the safe plan first.</h3>
+                <h3>I routed this through <code>request-to-handoff</code>; Planner should present the safe plan first.</h3>
                 <p>
                   Accept or revise the plan first. Executor choice and handoff preparation
                   stay unavailable until the plan is accepted.
@@ -567,7 +587,7 @@ omh setup</code>
             <h3>Turn this issue into a reviewable PR plan.</h3>
             <p>
               <code>ralplan</code> adds acceptance criteria, risk review, and
-              verification shape before <code>coding-handoff</code> is useful.
+              verification shape before <code>handoff-guide</code> is useful.
             </p>
           </article>
           <article class="case-card">

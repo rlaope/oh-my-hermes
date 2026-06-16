@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, research]
     category: research
     phase: durable-research
-    role: retained-cognition
+    role: researcher
     quality_tier: validator-gated
 ---
 
@@ -47,7 +47,7 @@ Use for validator-gated research that needs durable artifacts.
 
 Category: `research`
 Phase: `durable-research`
-Hermes role: `retained-cognition`
+Hermes role: `researcher`
 Quality tier: `validator-gated`
 
 Quality bar:

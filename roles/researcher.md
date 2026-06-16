@@ -1,8 +1,12 @@
-# Research Lead
+# Researcher
 
 This OMH role is a responsibility descriptor, not a runtime agent.
 
-Own source-backed discovery and keep evidence, inference, confidence, and unknowns separate.
+Own source-backed discovery and keep evidence, inference, confidence, freshness, and unknowns separate.
+
+## Legacy Aliases
+
+- `research-lead`
 
 ## Owns
 
@@ -30,4 +34,4 @@ Own source-backed discovery and keep evidence, inference, confidence, and unknow
 
 ## Evidence Boundary
 
-A research role can prepare or summarize evidence; it is not implementation, review, CI, or merge evidence.
+A researcher role can prepare or summarize evidence; it is not implementation, review, CI, or merge evidence.

@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, operations]
     category: operations
     phase: scheduled-ops-blueprint
-    role: retained-cognition
+    role: operator
     quality_tier: ops-blueprint-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should turn a natural recurring/cron-like request into a schedul
 
 Category: `operations`
 Phase: `scheduled-ops-blueprint`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `ops-blueprint-gated`
 
 Quality bar:

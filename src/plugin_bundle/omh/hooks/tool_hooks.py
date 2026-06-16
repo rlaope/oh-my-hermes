@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ..omh_roles import extract_role_marker, role_names
+from ..omh_roles import extract_role_marker, resolve_role_name, role_aliases, role_names
 
 
 def pre_tool_call(**kwargs) -> dict[str, str] | None:
@@ -22,12 +22,14 @@ def pre_tool_call(**kwargs) -> dict[str, str] | None:
     if not marker:
         return None
     available = role_names()
-    if marker in available:
+    aliases = role_aliases()
+    if marker in available or resolve_role_name(marker) in available:
         return None
     return {
         "context": (
             f"[OMH Role Warning] Unknown role '{marker}' in delegate_task goal. "
             f"Available roles: {', '.join(available) or '(none)'}. "
+            f"Legacy aliases: {', '.join(sorted(aliases)) or '(none)'}. "
             "No OMH role context will be injected for that subagent."
         )
     }

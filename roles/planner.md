@@ -1,8 +1,12 @@
-# Planning Lead
+# Planner
 
 This OMH role is a responsibility descriptor, not a runtime agent.
 
-Own clarification, non-goals, acceptance criteria, tradeoffs, and verification strategy.
+Own clarification, non-goals, acceptance criteria, tradeoffs, loopability, and verification strategy.
+
+## Legacy Aliases
+
+- `planning-lead`
 
 ## Owns
 
@@ -15,13 +19,14 @@ Own clarification, non-goals, acceptance criteria, tradeoffs, and verification s
 - `deep-interview`
 - `plan`
 - `ralplan`
-- `strategy-brief`
+- `loop`
 
 ## Primary Harnesses
 
 - `deep-interview`
 - `planning`
 - `strategy-synthesis`
+- `goal-loop`
 
 ## Wrapper Actions
 
@@ -32,4 +37,4 @@ Own clarification, non-goals, acceptance criteria, tradeoffs, and verification s
 
 ## Evidence Boundary
 
-A planning role can make work reviewable; it is not proof that the work was accepted or executed.
+A planner role can make work reviewable; it is not proof that the work was accepted or executed.

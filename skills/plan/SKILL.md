@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, planning]
     category: planning
     phase: plan
-    role: retained-cognition
+    role: planner
     quality_tier: acceptance-gated
 ---
 
@@ -47,7 +47,7 @@ Use for structured planning when implementation is not ready to start safely, in
 
 Category: `planning`
 Phase: `plan`
-Hermes role: `retained-cognition`
+Hermes role: `planner`
 Quality tier: `acceptance-gated`
 
 Quality bar:

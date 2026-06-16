@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: completion
-    role: runtime-handoff-guidance
+    role: handoff-guide
     quality_tier: handoff-gated
 ---
 
@@ -47,7 +47,7 @@ Use after scope is concrete and the user wants one owner to continue through imp
 
 Category: `execution`
 Phase: `completion`
-Hermes role: `runtime-handoff-guidance`
+Hermes role: `handoff-guide`
 Quality tier: `handoff-gated`
 
 Quality bar:

@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, verification]
     category: verification
     phase: qa
-    role: hybrid-verification
+    role: reviewer
     quality_tier: scenario-gated
 ---
 
@@ -47,7 +47,7 @@ Use when the task needs adversarial test scenarios, verification, and fix loops.
 
 Category: `verification`
 Phase: `qa`
-Hermes role: `hybrid-verification`
+Hermes role: `reviewer`
 Quality tier: `scenario-gated`
 
 Quality bar:

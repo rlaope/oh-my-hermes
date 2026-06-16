@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, strategy]
     category: strategy
     phase: brief
-    role: retained-cognition
+    role: operator
     quality_tier: decision-gated
 ---
 
@@ -47,7 +47,7 @@ Use when Hermes should turn goals and evidence into options, tradeoffs, recommen
 
 Category: `strategy`
 Phase: `brief`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `decision-gated`
 
 Quality bar:

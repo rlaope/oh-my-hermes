@@ -433,7 +433,7 @@ def _goals(coding_shaped: bool, review_shaped: bool) -> tuple[str, ...]:
     if coding_shaped:
         goals.append("Prepare a later coding delegation handoff instead of treating Hermes as the implementer.")
     if review_shaped:
-        goals.append("Require review-gate evidence before calling the plan approved.")
+        goals.append("Require reviewer evidence before calling the plan approved.")
     return tuple(goals)
 
 

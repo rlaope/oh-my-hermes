@@ -111,6 +111,11 @@ _SKILL_POLICIES = {
             "before any later plan or handoff."
         ),
     ),
+    "ultraqa": RecommendationPolicy(
+        next_action="dispatch_to_workflow",
+        evidence_boundary="A QA workflow route is not observed scenario execution, verification, fix evidence, CI, or release readiness evidence.",
+        wrapper_guidance="Run the QA workflow as a Hermes-owned review lane; report scenarios, observed checks, gaps, and any follow-up handoff separately.",
+    ),
 }
 _SKILL_POLICIES.update(
     {
@@ -283,6 +288,52 @@ _CATEGORY_POLICIES = {
     ),
 }
 _HERMES_ROLE_POLICIES = {
+    "guide": RecommendationPolicy(
+        next_action="clarify_or_route",
+        evidence_boundary="Routing guidance is not plan acceptance, dispatch, execution, review, CI, or merge evidence.",
+        wrapper_guidance="Route conservatively, show why the workflow was selected, and ask one focused question when confidence is low.",
+    ),
+    "researcher": RecommendationPolicy(
+        next_action="run_hermes_research",
+        evidence_boundary="Research guidance is not observed source retrieval, implementation, or verification evidence.",
+        wrapper_guidance="Keep evidence, inference, freshness, and unknowns separate before moving to planning or handoff.",
+    ),
+    "planner": RecommendationPolicy(
+        next_action="present_plan",
+        evidence_boundary="A recommendation or draft plan is not execution evidence.",
+        wrapper_guidance="Show an Accept plan / Revise plan choice; keep handoff disabled until the plan is accepted.",
+    ),
+    "operator": RecommendationPolicy(
+        next_action="prepare_operating_workflow",
+        evidence_boundary="Operational workflow guidance is not meeting, delivery, file export, deploy, monitoring, or platform evidence.",
+        wrapper_guidance="Prepare the business or product workflow card and keep missing observations visible.",
+    ),
+    "memory-keeper": RecommendationPolicy(
+        next_action="prepare_memory_review",
+        evidence_boundary="Memory guidance is not proof that Hermes internal memory, wiki, USER.md, MEMORY.md, or skill files changed.",
+        wrapper_guidance="Present context candidates and require observed approval before applying memory or knowledge changes.",
+    ),
+    "handoff-guide": RecommendationPolicy(
+        next_action="prepare_coding_runtime_handoff",
+        evidence_boundary=(
+            "A prepared coding runtime handoff is not runtime start, worker dispatch, worktree creation, execution, "
+            "review, CI, merge-readiness, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Ask for or apply the selected runtime profile, expose runtime/team/worktree/status actions, "
+            "and mark prepared work as prepared_not_observed until observed runtime evidence exists."
+        ),
+    ),
+    "tracker": RecommendationPolicy(
+        next_action="refresh_status",
+        evidence_boundary="Status guidance is not proof that a runtime, tool, MCP server, CI job, or platform action ran.",
+        wrapper_guidance="Report only observed status, show missing evidence, and keep estimates separate from provider or runtime truth.",
+    ),
+    "reviewer": RecommendationPolicy(
+        next_action="prepare_review_or_followup_handoff",
+        evidence_boundary="A review recommendation is not a completed review or fix evidence.",
+        wrapper_guidance="Surface findings separately from any code changes; fixes need their own executor evidence.",
+    ),
     "codex-handoff-guidance": RecommendationPolicy(
         next_action="prepare_coding_handoff",
         evidence_boundary=(

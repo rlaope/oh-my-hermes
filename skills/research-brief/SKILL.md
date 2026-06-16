@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, research]
     category: research
     phase: business-brief
-    role: retained-cognition
+    role: researcher
     quality_tier: source-gated
 ---
 
@@ -47,7 +47,7 @@ Use when Hermes should scope a business question, gather or summarize source-bac
 
 Category: `research`
 Phase: `business-brief`
-Hermes role: `retained-cognition`
+Hermes role: `researcher`
 Quality tier: `source-gated`
 
 Quality bar:

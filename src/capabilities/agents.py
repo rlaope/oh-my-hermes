@@ -5,10 +5,14 @@ from .schema import AGENT_ROLE_CAPABILITY_SCHEMA_VERSION, PREPARED_NOT_OBSERVED
 
 
 _TEAM_ELIGIBILITY = {
-    "research-lead": "member",
-    "planning-lead": "lead",
-    "review-gate": "verifier",
-    "coding-handoff": "lead",
+    "guide": "lead",
+    "researcher": "member",
+    "planner": "lead",
+    "operator": "member",
+    "memory-keeper": "member",
+    "handoff-guide": "lead",
+    "tracker": "member",
+    "reviewer": "verifier",
 }
 
 
@@ -21,6 +25,7 @@ def _role_capability(role: RoleDefinition) -> dict[str, object]:
         "schema_version": AGENT_ROLE_CAPABILITY_SCHEMA_VERSION,
         "id": role.id,
         "display_name": role.title,
+        "legacy_ids": list(role.legacy_ids),
         "mode": "descriptor",
         "runtime_claim": "descriptor_not_runtime_agent",
         "owns": list(role.owns),
@@ -53,12 +58,20 @@ def _role_capability(role: RoleDefinition) -> dict[str, object]:
 
 
 def _default_patterns(role: RoleDefinition) -> list[str]:
-    if role.id == "research-lead":
+    if role.id == "guide":
+        return ["single_lane", "clarify_then_plan"]
+    if role.id == "researcher":
         return ["clarify_then_plan", "fanout_synthesize"]
-    if role.id == "planning-lead":
+    if role.id == "planner":
         return ["clarify_then_plan", "plan_execute_verify"]
-    if role.id == "review-gate":
+    if role.id == "operator":
+        return ["single_lane", "scheduled_ops_blueprint", "materials_generation_handoff"]
+    if role.id == "memory-keeper":
+        return ["single_lane"]
+    if role.id == "reviewer":
         return ["adversarial_review", "plan_execute_verify"]
-    if role.id == "coding-handoff":
+    if role.id == "handoff-guide":
         return ["executor_session_handoff", "team_staged_pipeline", "worktree_isolated_workers"]
+    if role.id == "tracker":
+        return ["single_lane", "executor_session_handoff"]
     return ["single_lane"]

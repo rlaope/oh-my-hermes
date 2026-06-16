@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, optimization]
     category: optimization
     phase: measurement
-    role: hybrid-measurement
+    role: tracker
     quality_tier: measurement-gated
 ---
 
@@ -47,7 +47,7 @@ Use when the goal is measurable performance improvement with evaluator evidence.
 
 Category: `optimization`
 Phase: `measurement`
-Hermes role: `hybrid-measurement`
+Hermes role: `tracker`
 Quality tier: `measurement-gated`
 
 Quality bar:

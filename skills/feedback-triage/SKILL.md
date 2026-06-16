@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, triage]
     category: triage
     phase: feedback
-    role: retained-cognition
+    role: operator
     quality_tier: triage-gated
 ---
 
@@ -48,7 +48,7 @@ Use when Hermes should classify feedback, bug reports, and feature asks before d
 
 Category: `triage`
 Phase: `feedback`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `triage-gated`
 
 Quality bar:

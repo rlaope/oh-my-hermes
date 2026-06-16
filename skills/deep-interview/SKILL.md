@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, clarification]
     category: clarification
     phase: discovery
-    role: retained-cognition
+    role: planner
     quality_tier: clarity-gated
 ---
 
@@ -48,7 +48,7 @@ Use before planning or execution when requirements are materially ambiguous.
 
 Category: `clarification`
 Phase: `discovery`
-Hermes role: `retained-cognition`
+Hermes role: `planner`
 Quality tier: `clarity-gated`
 
 Quality bar:

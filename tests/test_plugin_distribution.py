@@ -54,7 +54,7 @@ class PluginDistributionTests(unittest.TestCase):
         root = resources.files("omh.plugin_bundle.omh")
         self.assertTrue(root.joinpath("plugin.yaml").is_file())
         self.assertTrue(root.joinpath("config.yaml").is_file())
-        self.assertTrue(root.joinpath("references", "role-planning-lead.md").is_file())
+        self.assertTrue(root.joinpath("references", "role-planner.md").is_file())
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
         packages = set(pyproject["tool"]["setuptools"]["packages"])
         self.assertIn("omh.plugin_bundle.omh", packages)
@@ -272,12 +272,27 @@ class PluginDistributionTests(unittest.TestCase):
             role_handler = ctx.tools["omh_role"]["args"][2]
             roles = json.loads(role_handler({"action": "list"}))
             self.assertEqual(roles["schema_version"], "omh_role_catalog/v1")
-            self.assertIn("planning-lead", roles["roles"])
-            role_payload = json.loads(role_handler({"action": "read", "role": "planning-lead"}))
+            self.assertIn("planner", roles["roles"])
+            self.assertEqual(roles["aliases"]["planning-lead"], "planner")
+            self.assertEqual(roles["aliases"]["retained-router"], "guide")
+            self.assertNotIn("retained-cognition", roles["aliases"])
+            role_payload = json.loads(role_handler({"action": "read", "role": "planner"}))
             self.assertEqual(role_payload["schema_version"], "omh_role_context/v1")
             self.assertEqual(role_payload["status"], "available")
-            self.assertIn("Planning Lead", role_payload["context"])
+            self.assertEqual(role_payload["role"], "planner")
+            self.assertEqual(role_payload["resolved_role"], "planner")
+            self.assertIn("Planner", role_payload["context"])
             self.assertIn("not runtime delegation", role_payload["claim_boundary"])
+            legacy_role_payload = json.loads(role_handler({"action": "read", "role": "planning-lead"}))
+            self.assertEqual(legacy_role_payload["status"], "available")
+            self.assertEqual(legacy_role_payload["role"], "planner")
+            self.assertEqual(legacy_role_payload["requested_role"], "planning-lead")
+            self.assertEqual(legacy_role_payload["resolved_role"], "planner")
+            guide_role_payload = json.loads(role_handler({"action": "read", "role": "retained-router"}))
+            self.assertEqual(guide_role_payload["status"], "available")
+            self.assertEqual(guide_role_payload["resolved_role"], "guide")
+            category_seed_payload = json.loads(role_handler({"action": "read", "role": "retained-cognition"}))
+            self.assertEqual(category_seed_payload["status"], "unknown_role")
 
             role_hook_payload = ctx.hooks["pre_llm_call"](
                 omh_home=str(omh_home),
@@ -286,8 +301,8 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(role_hook_payload)
             role_context = role_hook_payload["context"]
-            self.assertIn("[OMH Role: planning-lead]", role_context)
-            self.assertIn("Planning Lead", role_context)
+            self.assertIn("[OMH Role: planner]", role_context)
+            self.assertIn("Planner", role_context)
             self.assertNotIn("do not leak this exact sentence", role_context)
 
             self.assertIsNone(
@@ -302,7 +317,7 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(tool_warning)
             self.assertIn("Unknown role 'nope'", tool_warning["context"])
-            self.assertIn("planning-lead", tool_warning["context"])
+            self.assertIn("planner", tool_warning["context"])
 
             session_checkpoint = ctx.hooks["on_session_end"](omh_home=str(omh_home))
             self.assertEqual(session_checkpoint["status"], "checkpoint_written")

@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, execution]
     category: execution
     phase: coordination
-    role: runtime-handoff-guidance
+    role: handoff-guide
     quality_tier: coordination-gated
 ---
 
@@ -47,7 +47,7 @@ Use when multiple independent lanes materially improve throughput or verificatio
 
 Category: `execution`
 Phase: `coordination`
-Hermes role: `runtime-handoff-guidance`
+Hermes role: `handoff-guide`
 Quality tier: `coordination-gated`
 
 Quality bar:

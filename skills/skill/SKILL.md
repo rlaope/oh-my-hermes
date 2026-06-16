@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, operator]
     category: operator
     phase: skill-management
-    role: retained-operator
+    role: tracker
     quality_tier: evidence-gated
 ---
 
@@ -47,7 +47,7 @@ Use for local skill listing, search, add, remove, or edit tasks.
 
 Category: `operator`
 Phase: `skill-management`
-Hermes role: `retained-operator`
+Hermes role: `tracker`
 Quality tier: `evidence-gated`
 
 Quality bar:

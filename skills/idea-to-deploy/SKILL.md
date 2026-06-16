@@ -6,7 +6,7 @@ metadata:
     tags: [workflow, oh-my-hermes, delivery]
     category: delivery
     phase: app-delivery-loop
-    role: retained-cognition
+    role: operator
     quality_tier: delivery-gated
 ---
 
@@ -47,7 +47,7 @@ Use when Hermes should carry a product or app idea through shaping, decision gat
 
 Category: `delivery`
 Phase: `app-delivery-loop`
-Hermes role: `retained-cognition`
+Hermes role: `operator`
 Quality tier: `delivery-gated`
 
 Quality bar:

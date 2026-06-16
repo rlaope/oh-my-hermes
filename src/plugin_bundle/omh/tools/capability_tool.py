@@ -138,11 +138,13 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
     search = {section: sections[section]} if section else sections
     for section_name, values in search.items():
         for item in _standalone_items(values):
-            if str(item.get("id") or item.get("name") or item.get("skill") or "") == wanted:
+            if _standalone_matches(wanted, item):
                 return {
                     "schema_version": "omh_capability_inspect/v1",
                     "section": section_name,
                     "id": wanted,
+                    "requested_id": wanted,
+                    "resolved_id": _standalone_item_id(item, wanted),
                     "capability": item,
                     "degraded": True,
                 }
@@ -151,6 +153,8 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
                 "schema_version": "omh_capability_inspect/v1",
                 "section": section_name,
                 "id": wanted,
+                "requested_id": wanted,
+                "resolved_id": wanted,
                 "capability": values[wanted],
                 "degraded": True,
             }
@@ -162,32 +166,72 @@ def _standalone_sections() -> dict[str, object]:
         "agent_roles": [
             {
                 "schema_version": "agent_role_capability/v1",
-                "id": "coding-handoff",
-                "display_name": "Coding Handoff",
+                "id": "guide",
+                "display_name": "Guide",
+                "legacy_ids": ["hybrid-guidance", "retained-router"],
+                "runtime_claim": "descriptor_not_runtime_agent",
+                "owns": ["plain request routing", "workflow recommendation"],
+                "does_not_own": ["plan acceptance", "dispatch", "execution", "review", "CI", "merge"],
+            },
+            {
+                "schema_version": "agent_role_capability/v1",
+                "id": "researcher",
+                "display_name": "Researcher",
+                "legacy_ids": ["research-lead"],
+                "runtime_claim": "descriptor_not_runtime_agent",
+                "owns": ["source-backed research guidance"],
+                "does_not_own": ["implementation evidence", "review", "CI", "merge"],
+            },
+            {
+                "schema_version": "agent_role_capability/v1",
+                "id": "planner",
+                "display_name": "Planner",
+                "legacy_ids": ["planning-lead"],
+                "runtime_claim": "descriptor_not_runtime_agent",
+                "owns": ["plan shaping", "acceptance criteria", "verification strategy"],
+                "does_not_own": ["executor dispatch", "implementation evidence"],
+            },
+            {
+                "schema_version": "agent_role_capability/v1",
+                "id": "operator",
+                "display_name": "Operator",
+                "legacy_ids": ["retained-operator"],
+                "runtime_claim": "descriptor_not_runtime_agent",
+                "owns": ["business and product workflow guidance", "materials and operations cards"],
+                "does_not_own": ["external delivery", "file export", "deploy", "platform evidence"],
+            },
+            {
+                "schema_version": "agent_role_capability/v1",
+                "id": "memory-keeper",
+                "display_name": "Memory Keeper",
+                "legacy_ids": ["retained-knowledge"],
+                "runtime_claim": "descriptor_not_runtime_agent",
+                "owns": ["memory and wiki context review"],
+                "does_not_own": ["unobserved memory mutation"],
+            },
+            {
+                "schema_version": "agent_role_capability/v1",
+                "id": "handoff-guide",
+                "display_name": "Handoff Guide",
+                "legacy_ids": ["coding-handoff", "runtime-handoff-guidance", "codex-handoff-guidance"],
                 "runtime_claim": "descriptor_not_runtime_agent",
                 "owns": ["executor-neutral handoff guidance", "prepared-vs-observed status narration"],
                 "does_not_own": ["hidden coding execution", "review", "CI", "merge"],
             },
             {
                 "schema_version": "agent_role_capability/v1",
-                "id": "planning-lead",
-                "display_name": "Planning Lead",
+                "id": "tracker",
+                "display_name": "Tracker",
+                "legacy_ids": ["hybrid-measurement"],
                 "runtime_claim": "descriptor_not_runtime_agent",
-                "owns": ["plan shaping", "acceptance criteria"],
-                "does_not_own": ["executor dispatch", "implementation evidence"],
+                "owns": ["runtime status", "tool readiness", "observability narration"],
+                "does_not_own": ["unobserved runtime or platform action"],
             },
             {
                 "schema_version": "agent_role_capability/v1",
-                "id": "research-lead",
-                "display_name": "Research Lead",
-                "runtime_claim": "descriptor_not_runtime_agent",
-                "owns": ["source-backed research guidance"],
-                "does_not_own": ["implementation evidence"],
-            },
-            {
-                "schema_version": "agent_role_capability/v1",
-                "id": "review-gate",
-                "display_name": "Review Gate",
+                "id": "reviewer",
+                "display_name": "Reviewer",
+                "legacy_ids": ["review-gate", "hybrid-review", "hybrid-verification"],
                 "runtime_claim": "descriptor_not_runtime_agent",
                 "owns": ["review evidence interpretation"],
                 "does_not_own": ["unobserved review claims"],
@@ -242,7 +286,7 @@ def _standalone_sections() -> dict[str, object]:
             {
                 "schema_version": "orchestration_pattern/v1",
                 "id": "executor_session_handoff",
-                "owner_role": "coding-handoff",
+                "owner_role": "handoff-guide",
                 "observed_evidence_required": [
                     "handoff_prepared",
                     "dispatch_observed",
@@ -254,7 +298,7 @@ def _standalone_sections() -> dict[str, object]:
             {
                 "schema_version": "orchestration_pattern/v1",
                 "id": "plan_execute_verify",
-                "owner_role": "planning-lead",
+                "owner_role": "planner",
                 "observed_evidence_required": ["plan_accepted", "execution_observed", "verification_observed"],
                 "prepared_is_not": _standalone_evidence_boundaries()["prepared_is_not"],
             },
@@ -264,6 +308,22 @@ def _standalone_sections() -> dict[str, object]:
     }
 
 
+def _standalone_matches(wanted: str, item: dict[str, object]) -> bool:
+    aliases = item.get("legacy_ids", ())
+    legacy_ids = aliases if isinstance(aliases, list) else ()
+    values = {
+        str(item.get("id") or ""),
+        str(item.get("name") or ""),
+        str(item.get("skill") or ""),
+        *[str(alias) for alias in legacy_ids],
+    }
+    return wanted in values
+
+
+def _standalone_item_id(item: dict[str, object], fallback: str) -> str:
+    return str(item.get("id") or item.get("name") or item.get("skill") or fallback)
+
+
 def _standalone_skill_capabilities() -> list[dict[str, object]]:
     return [
         {
@@ -271,7 +331,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
             "id": "deep-interview",
             "display_name": "Deep Interview",
             "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planning-lead",
+            "primary_owner_role": "planner",
             "degraded": True,
         },
         {
@@ -279,7 +339,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
             "id": "ralplan",
             "display_name": "Ralplan",
             "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planning-lead",
+            "primary_owner_role": "planner",
             "degraded": True,
         },
         {
@@ -287,7 +347,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
             "id": "ultragoal",
             "display_name": "Ultragoal",
             "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "coding-handoff",
+            "primary_owner_role": "handoff-guide",
             "degraded": True,
         },
         {
@@ -295,7 +355,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
             "id": "loop",
             "display_name": "Loop",
             "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planning-lead",
+            "primary_owner_role": "planner",
             "degraded": True,
         },
         {
@@ -303,7 +363,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
             "id": "code-review",
             "display_name": "Code Review",
             "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "review-gate",
+            "primary_owner_role": "reviewer",
             "degraded": True,
         },
         {
@@ -311,7 +371,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
             "id": "feedback-triage",
             "display_name": "Feedback Triage",
             "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "research-lead",
+            "primary_owner_role": "operator",
             "degraded": True,
         },
     ]
