@@ -40,7 +40,7 @@ easier to start, easier to trust, and more natural to apply in real work.
 
 ## Quick Start
 
-Install OMH and apply the Hermes setup:
+Install the `omh` command, then explicitly connect it to Hermes:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
@@ -67,9 +67,10 @@ The first five minutes should feel simple:
 2. Restart or reload Hermes Agent.
 3. Ask Hermes the prompt below.
 
-The installer normally runs setup for you. Keep `omh setup` in the quick start
-because it is the repeatable repair step that installs OMH workflows under
-`~/.omh/skills` and connects that workflow folder to Hermes.
+The curl installer intentionally stops before setup. It only prepares the
+isolated command package and `omh` executable. `omh setup` is the explicit,
+repeatable step that installs OMH workflows under `~/.omh/skills` and connects
+that workflow folder to Hermes.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
 language, install location, Hermes connection, and the default coding request
 preference. First installs can press Enter through the recommended choices.
@@ -361,10 +362,10 @@ returns truncated structured output. It is verification evidence for that
 specific command, not executor dispatch, implementation, review, CI, merge, or
 live Hermes plugin-load evidence.
 
-The installer can also pass these advanced setup choices directly:
+Advanced setup choices belong on the setup command:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SCOPE=project OMH_WITH_MCP=1 OMH_PROFILE_PACKS=cto-loop sh
+omh setup --scope project --with-mcp --profile-pack cto-loop
 ```
 
 ## Documentation

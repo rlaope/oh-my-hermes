@@ -74,7 +74,7 @@ def cmd_release_hermes_smoke(args: argparse.Namespace) -> int:
 
 
 def cmd_release_install_smoke(args: argparse.Namespace) -> int:
-    setup_args = tuple(args.setup_args or ["--no-interactive"])
+    setup_args = tuple(args.setup_args or (["--no-interactive"] if args.run_setup else []))
     try:
         if args.live:
             payload = run_install_script_smoke(
@@ -83,6 +83,7 @@ def cmd_release_install_smoke(args: argparse.Namespace) -> int:
                 package_url=args.package_url,
                 python_command=args.python,
                 setup_args=setup_args,
+                run_setup=args.run_setup,
                 run_doctor=not args.skip_doctor,
                 timeout_seconds=args.timeout,
                 work_dir=args.work_dir,
@@ -95,6 +96,7 @@ def cmd_release_install_smoke(args: argparse.Namespace) -> int:
                 package_url=args.package_url,
                 python_command=args.python,
                 setup_args=setup_args,
+                run_setup=args.run_setup,
                 run_doctor=not args.skip_doctor,
                 work_dir=args.work_dir,
             )
@@ -156,8 +158,22 @@ def _add_release_commands(sub) -> None:
     install_smoke.add_argument("--install-script", default=None, help="Path to install.sh; defaults to <repo-root>/install.sh.")
     install_smoke.add_argument("--package-url", default=None, help="Package URL/path passed to install.sh; defaults to the repo root.")
     install_smoke.add_argument("--python", default="", help="Python executable passed as OMH_PYTHON; defaults to this Python.")
-    install_smoke.add_argument("--setup-args", nargs="*", default=["--no-interactive"], help="Extra OMH_SETUP_ARGS passed to setup.")
-    install_smoke.add_argument("--skip-doctor", action="store_true", help="Set OMH_RUN_DOCTOR=0 for the installer step.")
+    install_smoke.add_argument(
+        "--run-setup",
+        action="store_true",
+        help="Set OMH_RUN_SETUP=1 for an advanced one-shot installer/setup compatibility smoke.",
+    )
+    install_smoke.add_argument(
+        "--setup-args",
+        nargs="*",
+        default=None,
+        help="Extra OMH_SETUP_ARGS passed only when --run-setup is used.",
+    )
+    install_smoke.add_argument(
+        "--skip-doctor",
+        action="store_true",
+        help="Set OMH_RUN_DOCTOR=0 when --run-setup is used.",
+    )
     install_smoke.add_argument("--work-dir", default=None, help="Use this work directory instead of a temporary one.")
     install_smoke.add_argument("--keep-work-dir", action="store_true", help="Keep the generated temporary work directory after --live.")
     install_smoke.add_argument("--timeout", type=int, default=120, help="Per-command timeout in seconds for --live.")

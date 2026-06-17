@@ -283,7 +283,7 @@ def release_readiness_checklist(
             "installer",
             True,
             False,
-            "install_script_smoke reports ok=true after install.sh creates a temp venv/bin command, runs setup, runs doctor, and proves the installed command can render release smoke.",
+            "install_script_smoke reports ok=true after install.sh creates a temp venv/bin command without running setup or doctor, then proves the installed command can render release smoke.",
             "Install script smoke mutates only its isolated temp HOME/venv/bin unless --work-dir points elsewhere; it is not live Hermes runtime-use evidence.",
         ),
         ReleaseChecklistItem(

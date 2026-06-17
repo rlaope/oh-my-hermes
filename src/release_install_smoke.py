@@ -22,7 +22,8 @@ def install_script_smoke_plan(
     install_script: str | Path | None = None,
     package_url: str | Path | None = None,
     python_command: str = "",
-    setup_args: Sequence[str] = ("--no-interactive",),
+    setup_args: Sequence[str] = (),
+    run_setup: bool = False,
     run_doctor: bool = True,
     work_dir: str | Path | None = None,
 ) -> dict[str, object]:
@@ -39,6 +40,7 @@ def install_script_smoke_plan(
         package_url=package,
         python_command=python_command or sys.executable,
         setup_args=setup_args,
+        run_setup=run_setup,
         run_doctor=run_doctor,
     )
     first_use_status = first_use_status_smoke_plan(
@@ -67,17 +69,9 @@ def install_script_smoke_plan(
                 "mutates_profile": False,
                 "required": True,
                 "proof_boundary": (
-                    "Runs install.sh with isolated HOME, OMH_VENV_DIR, and OMH_BIN_DIR. It installs from the local package URL "
-                    "and does not mutate the operator's real Hermes profile."
+                    "Runs install.sh with isolated HOME, OMH_VENV_DIR, and OMH_BIN_DIR. The default installer path "
+                    "installs the omh command only and does not run setup, doctor, or mutate the operator's real Hermes profile."
                 ),
-            },
-            {
-                "name": "post_install_doctor",
-                "command": [command_under_test, "doctor", "--json"],
-                "phase": "verify",
-                "mutates_profile": False,
-                "required": True,
-                "proof_boundary": "Runs doctor through the installed command inside the isolated smoke home.",
             },
             {
                 "name": "installed_command_smoke",
@@ -107,7 +101,7 @@ def install_script_smoke_plan(
             else "Run from the OMH source checkout or pass --install-script pointing at install.sh."
         ),
         "proof_boundary": (
-            "Plan mode is deterministic and local. It does not download over curl, run pip, mutate Hermes, or prove runtime chat use."
+            "Plan mode is deterministic and local. It does not download over curl, run pip, run setup, mutate Hermes, or prove runtime chat use."
         ),
     }
 
@@ -118,7 +112,8 @@ def run_install_script_smoke(
     install_script: str | Path | None = None,
     package_url: str | Path | None = None,
     python_command: str = "",
-    setup_args: Sequence[str] = ("--no-interactive",),
+    setup_args: Sequence[str] = (),
+    run_setup: bool = False,
     run_doctor: bool = True,
     timeout_seconds: int = 120,
     work_dir: str | Path | None = None,
@@ -134,6 +129,7 @@ def run_install_script_smoke(
             package_url=package_url,
             python_command=python_command,
             setup_args=setup_args,
+            run_setup=run_setup,
             run_doctor=run_doctor,
             timeout_seconds=timeout_seconds,
             work_dir=Path(work_dir).expanduser().resolve(),
@@ -148,6 +144,7 @@ def run_install_script_smoke(
             package_url=package_url,
             python_command=python_command,
             setup_args=setup_args,
+            run_setup=run_setup,
             run_doctor=run_doctor,
             timeout_seconds=timeout_seconds,
             work_dir=tmp,
@@ -161,6 +158,7 @@ def run_install_script_smoke(
             package_url=package_url,
             python_command=python_command,
             setup_args=setup_args,
+            run_setup=run_setup,
             run_doctor=run_doctor,
             timeout_seconds=timeout_seconds,
             work_dir=Path(tmp).resolve(),
@@ -176,6 +174,7 @@ def _run_install_script_smoke_in_dir(
     package_url: str | Path | None,
     python_command: str,
     setup_args: Sequence[str],
+    run_setup: bool,
     run_doctor: bool,
     timeout_seconds: int,
     work_dir: Path,
@@ -188,6 +187,7 @@ def _run_install_script_smoke_in_dir(
         package_url=package_url,
         python_command=python_command,
         setup_args=setup_args,
+        run_setup=run_setup,
         run_doctor=run_doctor,
         work_dir=work_dir,
     )
@@ -212,6 +212,7 @@ def _run_install_script_smoke_in_dir(
         package_url=str(plan["package_url"]),
         python_command=python_command or sys.executable,
         setup_args=setup_args,
+        run_setup=run_setup,
         run_doctor=run_doctor,
     )
     results: list[dict[str, object]] = []
@@ -226,23 +227,7 @@ def _run_install_script_smoke_in_dir(
     if not installer_ok:
         failed_step = "install_script"
 
-    doctor_result_payload: dict[str, object] | None = None
     command_smoke: dict[str, object] | None = None
-    if ok:
-        doctor_step = dict(plan["steps"][1])
-        doctor_result = execute(doctor_step["command"], timeout_seconds, env)
-        doctor_ok = doctor_result.returncode == 0
-        ok = ok and doctor_ok
-        results.append(_smoke_step_result(doctor_step, doctor_result, env))
-        doctor_result_payload = {
-            "returncode": doctor_result.returncode,
-            "ok": doctor_ok,
-            "stdout_excerpt": bounded_text(doctor_result.stdout),
-            "stderr_excerpt": bounded_text(doctor_result.stderr),
-        }
-        if not doctor_ok:
-            failed_step = "post_install_doctor"
-
     if ok:
         def smoke_runner(
             command: Sequence[str],
@@ -262,7 +247,7 @@ def _run_install_script_smoke_in_dir(
             runner=smoke_runner,
         )
         ok = bool(command_smoke["ok"])
-        command_step = dict(plan["steps"][2])
+        command_step = dict(plan["steps"][1])
         results.append(
             {
                 **command_step,
@@ -283,7 +268,6 @@ def _run_install_script_smoke_in_dir(
         "observed": bool(results),
         "retained_work_dir": bool(keep_work_dir),
         "results": results,
-        "doctor": doctor_result_payload or {},
         "installed_command_smoke": command_smoke or installed_command_smoke_plan(
             omh_command=str(plan["command_under_test"]),
             omh_home=paths["home"] / ".omh",
@@ -292,9 +276,9 @@ def _run_install_script_smoke_in_dir(
         "failed_step": failed_step,
         "recommended_next_action": _install_script_smoke_next_action(ok, failed_step),
         "proof_boundary": (
-            "Live install smoke observes install.sh, setup, doctor, and installed-command smoke inside an isolated "
-            "temp home with an explicit smoke environment only. It does not mutate the operator's Hermes profile, "
-            "inherit operator OMH installer controls, or prove live Hermes chat selected OMH."
+            "Live install smoke observes install.sh and installed-command smoke inside an isolated temp home with an "
+            "explicit smoke environment only. The default path installs the command only; it does not run setup, mutate "
+            "the operator's Hermes profile, inherit operator OMH installer controls, or prove live Hermes chat selected OMH."
         ),
     }
 
@@ -343,6 +327,7 @@ def _install_smoke_env(
     package_url: str,
     python_command: str,
     setup_args: Sequence[str],
+    run_setup: bool,
     run_doctor: bool,
 ) -> dict[str, str]:
     path = os.environ.get("PATH", "")
@@ -361,6 +346,7 @@ def _install_smoke_env(
         "OMH_BIN_DIR": str(bin_dir),
         "OMH_LINK_COMMAND": "1",
         "OMH_FORCE_LINK": "1",
+        "OMH_RUN_SETUP": "1" if run_setup else "0",
         "OMH_AUTO_APPLY": "1",
         "OMH_RUN_DOCTOR": "1" if run_doctor else "0",
         "OMH_LANG": "en",
@@ -380,6 +366,7 @@ def _public_install_smoke_env(env: Mapping[str, str]) -> dict[str, str]:
         "OMH_INSTALL_MODE",
         "OMH_VENV_DIR",
         "OMH_BIN_DIR",
+        "OMH_RUN_SETUP",
         "OMH_AUTO_APPLY",
         "OMH_RUN_DOCTOR",
         "OMH_SETUP_ARGS",
@@ -401,15 +388,13 @@ def _smoke_step_result(step: Mapping[str, object], result: CommandResult, env: M
 def _install_script_smoke_next_action(ok: bool, failed_step: str) -> str:
     if ok:
         return (
-            "Restart or reload the target Hermes Agent, then ask the first OMH Hermes prompt and record the observed "
-            "chat/status response separately."
+            "Run the smoke-installed `omh setup` explicitly if you want profile registration evidence, then restart or "
+            "reload the target Hermes Agent and record the observed chat/status response separately."
         )
     if failed_step == "install_script_missing":
         return "Run from the OMH source checkout or pass --install-script pointing at install.sh."
     if failed_step == "install_script":
         return "Inspect the install.sh stdout/stderr excerpt, then rerun with --keep-work-dir to preserve the temp venv and homes."
-    if failed_step == "post_install_doctor":
-        return "Run the smoke-installed `omh doctor --json` from the retained work dir and repair the reported setup issue."
     if failed_step == "installed_command_smoke":
         return "Repair the smoke-installed `omh` command path or setup-plan rendering, then rerun release install-smoke."
     return "Inspect the failed install smoke step and rerun after repair."

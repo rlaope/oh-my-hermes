@@ -23,8 +23,9 @@ readiness until the target Hermes runtime or wrapper has been checked.
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
-The installer prepares the local `omh` command and normally runs setup. Re-run
-setup explicitly because it is the repairable, repeatable step:
+The installer prepares the local `omh` command only. It does not run setup,
+register Hermes skill directories, install profile packs, or run doctor by
+default. Run setup explicitly because it is the repairable, repeatable step:
 
 ```sh
 omh setup
@@ -112,11 +113,11 @@ manifest, import, and register smoke checks. It does not patch Hermes core,
 implement Discord or Slack transports, start a network service, or prove Hermes
 loaded the plugin. Runtime plugin use must be observed separately.
 
-The one-command installer can still include profile packs when the operator
-explicitly wants them:
+Profile packs are setup choices, not curl-download choices. Add them when setup
+runs:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop sh
+omh setup --profile-pack cto-loop
 ```
 
 ## First Hermes Prompt
