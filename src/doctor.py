@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .command_path import inspect_omh_command_path
 from .config_adapter import external_dirs, read_config
 from .hashutil import sha256_file
 from .local_store import can_write_dir
@@ -13,6 +14,14 @@ from .runtime.artifacts import read_state, read_state_error
 from .skill_pack import CORE_SKILLS
 from .targets import read_target_registry_result, summarize_target_registry
 from .workflow_state import list_workflow_states
+
+WARNING_NEXT_ACTION_PRIORITY = {
+    # These warnings often block first-run usability even when the local OMH
+    # health checks are otherwise OK. Lower-priority warnings stay visible in
+    # the check list without replacing the beginner next action.
+    "command_path": 100,
+    "target_topology": 80,
+}
 
 
 @dataclass(frozen=True)
@@ -36,6 +45,17 @@ class Check:
 
 def run_doctor(paths: OmhPaths) -> list[Check]:
     checks: list[Check] = []
+    command_path = inspect_omh_command_path()
+    checks.append(
+        Check(
+            "command_path",
+            True,
+            str(command_path["message"]),
+            severity="ok" if command_path["found"] else "warning",
+            next_action=str(command_path["next_action"]),
+            observed=bool(command_path["observed"]),
+        )
+    )
     manifest = read_manifest(paths.manifest_path)
     state_error = read_state_error(paths)
     state = None if state_error else read_state(paths)
@@ -208,9 +228,17 @@ def recommended_next_action(checks: list[Check]) -> str:
     for check in checks:
         if not check.ok and check.severity == "blocking":
             return check.next_action or check.remediation
-    for check in checks:
-        if check.severity == "warning" and check.next_action:
-            return check.next_action
+    prioritized_warnings = sorted(
+        (
+            check
+            for check in checks
+            if check.severity == "warning" and check.next_action and WARNING_NEXT_ACTION_PRIORITY.get(check.name, 0) > 0
+        ),
+        key=lambda check: WARNING_NEXT_ACTION_PRIORITY[check.name],
+        reverse=True,
+    )
+    if prioritized_warnings:
+        return prioritized_warnings[0].next_action
     return "Open Hermes Agent and try: Use OMH request-to-handoff for: I want to safely add a feature to this repo."
 
 
