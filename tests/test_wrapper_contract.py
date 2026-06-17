@@ -95,6 +95,9 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(apply_action["payload"]["target_observation"]["source_metadata"]["agent_ref"], "agent-b")
         self.assertNotIn("message", json.dumps(apply_action["payload"]))
         self.assertIn("Target topology is setup evidence only", payload["chat_response"]["claim_boundary"])
+        rendering = payload["chat_response"]["messenger_rendering"]
+        self.assertIn("multiple Hermes agent targets", rendering["body_preview"])
+        self.assertIn("Target topology is setup evidence only", rendering["claim_boundary"])
 
     def test_clarify_mode_has_no_handoff_actions(self) -> None:
         payload = build_chat_interaction_payload("fix maybe", mode="delegate")

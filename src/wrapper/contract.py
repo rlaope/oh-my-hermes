@@ -897,6 +897,15 @@ def _chat_response_with_target_notice(response: dict[str, object], target_notice
         )
     updated["actions"] = actions
     updated["claim_boundary"] = f"{updated.get('claim_boundary', '')} {target_notice.get('claim_boundary', '')}".strip()
+    trace = updated.get("usage_trace")
+    visible_prefix = str(trace.get("visible_prefix", "")) if isinstance(trace, dict) else ""
+    if visible_prefix:
+        updated["messenger_rendering"] = messenger_rendering_contract(
+            visible_prefix=visible_prefix,
+            first_line=str(updated.get("headline", "")),
+            body=str(updated.get("body", "")),
+            claim_boundary=str(updated.get("claim_boundary", "")),
+        )
     return updated
 
 
@@ -1021,6 +1030,8 @@ def _is_skill_catalog_question(message: str) -> bool:
     if not has_catalog_word:
         return False
     if any(phrase in lowered for phrase in explicit_catalog_phrases):
+        return True
+    if any(marker in lowered for marker in ("뭐 있어", "뭐 있", "있나요", "가능", "목록", "리스트")):
         return True
     availability_markers = (
         "available",
