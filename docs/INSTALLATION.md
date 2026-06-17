@@ -31,14 +31,15 @@ The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
-selects user or project scope, detects the Hermes config path, confirms skill
-registration, asks for the default coding handoff style, installs the Hermes
-plugin bridge, and can opt into an MCP bridge preference or a visible team role
-preset. Those choices do not add or remove OMH workflows; they only save
-defaults for how Hermes should present handoff and role surfaces. For a first
-install, pressing Enter through the recommended choices is the intended path.
-In non-interactive shells it uses safe defaults and prints a concise
-step-by-step summary. Use
+chooses the setup language, connects OMH to the target Hermes profile, saves the
+default coding request preference, installs the OMH status helper, and then
+prints a human-readable summary. For a first install, pressing Enter through
+the recommended choices is the intended path. Advanced options such as MCP
+bridge preferences and visible team role presets are shown only when the user
+asks for advanced setup or passes explicit flags. Those choices do not add or
+remove OMH workflows; they only save defaults for how Hermes should present
+handoff and role surfaces. In non-interactive shells it uses safe defaults and
+prints a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
 
@@ -260,14 +261,16 @@ omh probe --parity
 ```
 
 `omh setup` should report a human-readable setup summary by default, including
-the setup scope, install mode, MCP mode, setup state, managed skill path,
-Hermes registration path, target topology, and the `last_setup` state-log entry
-when it writes local state. In a real terminal it first asks for setup language,
-then only asks for optional defaults that change how handoffs or visible role
-presets are presented. The same command with `--json` should include install
-and apply steps, an `operator_summary` block, and a `hermes_native_setup/v1`
-block that names the equivalent Hermes skill install path, managed skill
-directory, and `skills.external_dirs` registration key.
+the setup location, overall readiness, terminal command availability, OMH
+workflow path, Hermes connection path, coding request preference, profile
+check, and OMH status helper state. It should not require first-time users to
+understand internal config keys, topology names, MCP state, state-log entries,
+or plugin manifests. In a real terminal it first asks for setup language, then
+only asks for optional defaults that change how handoffs or visible role presets
+are presented. The same command with `--json` should include install and apply
+steps, an `operator_summary` block, and a `hermes_native_setup/v1` block that
+names the equivalent Hermes skill install path, managed skill directory, and
+`skills.external_dirs` registration key.
 `hermes_native.observed` means the local bootstrap/apply step actually ran; it
 does not prove Hermes has reloaded or used the skill yet.
 `discovery_status: config_registered_reload_required` means restart or refresh

@@ -157,7 +157,8 @@ class PluginDistributionTests(unittest.TestCase):
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-plugin"])
 
             self.assertEqual(status, 2)
-            self.assertIn("managed plugin files changed", stderr)
+            self.assertIn("OMH status helper files were changed outside OMH", stderr)
+            self.assertIn("omh setup --force", stderr)
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-plugin", "--force"])[0], 0)
 
     def test_doctor_fails_for_malformed_installed_plugin(self) -> None:
