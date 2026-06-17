@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <strong>Install once. Talk to Hermes. Let OMH shape the work.</strong>
+  <strong>Install once. Keep your Hermes workflow. Let OMH make the next step safe.</strong>
   <br>
-  <em>Hermes-native skills, workflow contracts, evidence-aware status, and executor-ready handoffs.</em>
+  <em>Chat-first skills, workflow contracts, status cards, and handoffs that fit existing Hermes setups without breaking them.</em>
 </p>
 
 <p align="center">
@@ -16,15 +16,14 @@
   <img alt="Status" src="https://img.shields.io/badge/status-1.0.0%20stable-blue">
 </p>
 
-**oh-my-hermes** makes Hermes Agent feel more capable after install. OMH
-adds workflow skills, optional profiles, wrapper-facing contracts, local
-evidence records, and coding/runtime handoff preparation while keeping normal
-users in Hermes chat.
+Most people skip the docs. **oh-my-hermes** is built for that reality: install
+it, keep working in Hermes, and let the added skills, contracts, and status
+cards make the next action obvious without replacing your existing setup.
 
-The product is not "more CLI commands." The `omh` command is bootstrap,
+The product is not "more CLI commands." The `omh` command is setup, repair,
 doctor, verifier, and wrapper/backend infrastructure. For Hermes wrappers and
 routers, that CLI contract is a first-class backend surface; for normal users,
-the main experience is:
+the main experience is still chat:
 
 ```text
 user says a plain request in Hermes
@@ -33,33 +32,11 @@ user says a plain request in Hermes
   -> coding is handed off to the selected runtime only when the user or wrapper accepts that path
 ```
 
-> Have you ever felt that Hermes Agent is powerful, but still has a high
-> barrier to entry? OMH exists for that gap between installation and real use:
-> setup, config checks, verification, workflow choice, and the first useful
-> task. The engine is already strong across Skills, Gateway, Profiles, and
-> Cron; OMH adds a thin practical layer of ready-to-use workflows such as
-> `web-research`, `doctor`, `idea-to-deploy`, `ultragoal`, `loop`, and
-> `ultraprocess` so Hermes can
-> feel easier to start, easier to trust, and more natural to apply in real
-> work.
-
-[Website](https://rlaope.github.io/oh-my-hermes/) -
-[Documentation](docs/README.md) -
-[Installation](docs/INSTALLATION.md) -
-[Capabilities](docs/CAPABILITIES.md) -
-[Agent Install](INSTALL_FOR_AGENTS.md) -
-[Roles](docs/ROLES.md) -
-[Application Cases](docs/APPLICATION_CASES.md) -
-[GitHub Pages site](site/index.html)
-
-> [!NOTE]
-> **GitHub Follow**
-> Follow [@rlaope](https://github.com/rlaope) on GitHub for OMH updates and
-> related Hermes-native workflow projects.
-> Explore [ArtEngine Lab](https://rlaope.github.io/artengine-lab/) for the
-> Art & Engineering studio behind OMH.
-
----
+OMH exists for the gap between installation and real use: config checks,
+workflow choice, evidence boundaries, and the first useful task. It adds a thin
+practical layer of ready-to-use workflows such as `web-research`, `doctor`,
+`idea-to-deploy`, `ultragoal`, `loop`, and `ultraprocess` so Hermes can feel
+easier to start, easier to trust, and more natural to apply in real work.
 
 ## Quick Start
 
@@ -149,6 +126,30 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 For preview updates before the next release, rerun the same installer. If your
 release automation knows the commit SHA, pass it as `OMH_SOURCE_REF=main@<sha>`
 so OMH can display and record `main@old -> main@new` instead of only `main`.
+
+What OMH changes is intentionally small:
+
+- It installs managed Hermes-visible skills and records local status contracts.
+- It can repair or reapply `skills.external_dirs` when a Hermes profile drifts.
+- It keeps CLI output for setup, doctor, update, and wrapper backends.
+- It does not patch Hermes core, run hidden coding work, or turn a prepared
+  handoff into observed execution.
+
+[Website](https://rlaope.github.io/oh-my-hermes/) -
+[Documentation](docs/README.md) -
+[Installation](docs/INSTALLATION.md) -
+[Capabilities](docs/CAPABILITIES.md) -
+[Agent Install](INSTALL_FOR_AGENTS.md) -
+[Roles](docs/ROLES.md) -
+[Application Cases](docs/APPLICATION_CASES.md) -
+[GitHub Pages site](site/index.html)
+
+> [!NOTE]
+> **GitHub Follow**
+> Follow [@rlaope](https://github.com/rlaope) on GitHub for OMH updates and
+> related Hermes-native workflow projects.
+> Explore [ArtEngine Lab](https://rlaope.github.io/artengine-lab/) for the
+> Art & Engineering studio behind OMH.
 
 ## Why OMH
 
