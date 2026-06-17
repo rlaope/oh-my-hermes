@@ -26,7 +26,14 @@ from ..runtime.artifacts import (
     summarize_runtime_observation_status,
     validate_runtime_observations_for_wrapper_session,
 )
-from .contract import build_chat_interaction_payload, build_chat_status_interaction
+from .contract import (
+    CHAT_RESPONSE_SCHEMA_VERSION,
+    build_chat_interaction_payload,
+    build_chat_status_interaction,
+    headline_with_usage_prefix,
+    messenger_rendering_contract,
+    usage_trace_payload,
+)
 from .briefing import build_coding_briefing, chat_response_briefing
 from .hermes_runtime import (
     hermes_coding_team_body,
@@ -1057,13 +1064,24 @@ def _chat_response(
     actions: list[dict[str, object]],
     claim_boundary: str,
 ) -> dict[str, object]:
+    state = {"phase": phase, "next_action": next_action, "thread_key": thread_key}
+    usage_trace = usage_trace_payload(kind=kind, phase=phase, next_action=next_action, state=state)
+    headline_with_prefix = headline_with_usage_prefix(headline, str(usage_trace["visible_prefix"]))
     return {
-        "schema_version": "chat_response/v1",
+        "schema_version": CHAT_RESPONSE_SCHEMA_VERSION,
         "kind": kind,
         "visibility": "thread",
-        "headline": headline,
+        "headline": headline_with_prefix,
+        "plain_headline": headline,
         "body": body,
-        "state": {"phase": phase, "next_action": next_action, "thread_key": thread_key},
+        "state": state,
+        "usage_trace": usage_trace,
+        "messenger_rendering": messenger_rendering_contract(
+            visible_prefix=str(usage_trace["visible_prefix"]),
+            first_line=headline_with_prefix,
+            body=body,
+            claim_boundary=claim_boundary,
+        ),
         "actions": actions,
         "claim_boundary": claim_boundary,
     }

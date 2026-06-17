@@ -156,6 +156,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "review",
     "report_contract",
     "evidence_contract",
+    "executor_readiness",
     "harness_quality",
     "context_pack",
     "context_pack_blocked",
@@ -176,6 +177,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "verification",
     "review",
     "evidence_contract",
+    "executor_readiness",
     "harness_quality",
     "context_pack",
     "context_pack_blocked",
@@ -202,6 +204,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "verification",
     "review",
     "evidence_contract",
+    "executor_readiness",
     "harness_quality",
     "hermes_coding_team_path",
     "context_pack",
@@ -235,6 +238,8 @@ CODING_RUNTIME_OBSERVATION_CONTRACT_KEYS = (
     "status_ladder",
     "claim_boundary",
 )
+EXECUTOR_READINESS_SCHEMA_VERSION = "executor_readiness/v1"
+EXECUTOR_READINESS_STATUSES = ("choice_required", "not_observed", "not_applicable", "missing", "blocked", "ready")
 CODING_RUNTIME_EVIDENCE_CONTRACT_KEYS = ("prepared_is_not", "observed_required_for")
 CODING_RUNTIME_PREPARED_BOUNDARIES = (
     "runtime_start",
@@ -806,6 +811,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
+    readiness = _compact_executor_readiness(value.get("executor_readiness"))
+    if readiness:
+        compact["executor_readiness"] = readiness
     review = value.get("review")
     if isinstance(review, dict):
         compact["review"] = {
@@ -844,6 +852,9 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
+    readiness = _compact_executor_readiness(value.get("executor_readiness"))
+    if readiness:
+        compact["executor_readiness"] = readiness
     review = value.get("review")
     if isinstance(review, dict):
         compact["review"] = {
@@ -888,6 +899,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
+    readiness = _compact_executor_readiness(value.get("executor_readiness"))
+    if readiness:
+        compact["executor_readiness"] = readiness
     review = value.get("review")
     if isinstance(review, dict):
         compact["review"] = {
@@ -904,6 +918,54 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     team_path = _compact_hermes_coding_team_path(value.get("hermes_coding_team_path"))
     if team_path:
         compact["hermes_coding_team_path"] = team_path
+    return compact
+
+
+def _compact_executor_readiness(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or not value:
+        return {}
+    compact: dict[str, Any] = {
+        "schema_version": str(value.get("schema_version", "")),
+        "profile": str(value.get("profile", "")),
+        "status": str(value.get("status", "")),
+        "first_use_only": bool(value.get("first_use_only", False)),
+        "cache_key": str(value.get("cache_key", "")),
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+    for key in ("label", "ready_action", "next_action", "cache_status", "summary", "command_path", "state_error"):
+        if key in value:
+            compact[key] = str(value.get(key, ""))
+    for key in ("available", "observed_once", "first_use_skipped"):
+        if key in value:
+            compact[key] = bool(value.get(key, False))
+    if "exit_code" in value:
+        try:
+            compact["exit_code"] = int(value.get("exit_code", 0))
+        except (TypeError, ValueError):
+            compact["exit_code"] = 0
+    probe = value.get("probe")
+    if isinstance(probe, dict):
+        compact["probe"] = {
+            "kind": str(probe.get("kind", "")),
+            "command": str(probe.get("command", "")),
+            "args": _compact_string_list(probe.get("args", [])),
+            "timeout_seconds": int(probe.get("timeout_seconds", 0) or 0),
+            "captures": _compact_string_list(probe.get("captures", [])),
+        }
+    fallback = value.get("fallback_policy")
+    if isinstance(fallback, dict):
+        compact["fallback_policy"] = {
+            "when_missing": str(fallback.get("when_missing", "")),
+            "retry_after_state_change": bool(fallback.get("retry_after_state_change", False)),
+            "retry_limit": int(fallback.get("retry_limit", 0) or 0),
+        }
+        if "suggested_actions" in fallback:
+            compact["fallback_policy"]["suggested_actions"] = _compact_string_list(fallback.get("suggested_actions", []))
+    if "not_evidence" in value:
+        compact["not_evidence"] = _compact_string_list(value.get("not_evidence", []))
+    profiles = value.get("profiles")
+    if isinstance(profiles, list):
+        compact["profiles"] = [_compact_executor_readiness(profile) for profile in profiles if isinstance(profile, dict)]
     return compact
 
 
@@ -1700,6 +1762,14 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
                         _require(isinstance(item, str), errors, f"coding_delegation executor_handoff {key}.{nested_key}[{index}] must be a string")
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation executor_handoff harness_quality"))
+    if "executor_readiness" in handoff:
+        errors.extend(
+            validate_executor_readiness(
+                handoff["executor_readiness"],
+                "coding_delegation executor_handoff executor_readiness",
+                expected_profile=str(handoff.get("selected_executor_profile", "")),
+            )
+        )
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation executor_handoff"))
     return errors
 
@@ -1718,11 +1788,19 @@ def validate_executor_selection(selection: Any, label: str) -> list[str]:
         _require(isinstance(option, dict), errors, f"{label} options[{index}] must be an object")
         if not isinstance(option, dict):
             continue
-        expected = {"profile", "label", "work_owner_mode", "dispatchable", "recommended_for"}
+        expected = {"profile", "label", "work_owner_mode", "dispatchable", "recommended_for", "readiness_probe"}
         _require(not (set(option) - expected), errors, f"{label} options[{index}] has unsupported keys: {sorted(set(option) - expected)}")
         _require(option.get("profile") in (*CODING_SELECTED_EXECUTOR_PROFILES, "hermes"), errors, f"{label} options[{index}].profile is invalid: {option.get('profile')!r}")
         _require(option.get("work_owner_mode") in CODING_WORK_OWNER_MODES, errors, f"{label} options[{index}].work_owner_mode is invalid")
         _require(isinstance(option.get("dispatchable"), bool), errors, f"{label} options[{index}].dispatchable must be boolean")
+        if "readiness_probe" in option:
+            errors.extend(
+                validate_executor_readiness(
+                    option["readiness_probe"],
+                    f"{label} options[{index}].readiness_probe",
+                    expected_profile=str(option.get("profile", "")),
+                )
+            )
     return errors
 
 
@@ -1914,6 +1992,14 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         errors.extend(validate_hermes_coding_team_path(handoff["hermes_coding_team_path"], selected=str(handoff.get("selected_executor_profile", ""))))
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation runtime_handoff harness_quality"))
+    if "executor_readiness" in handoff:
+        errors.extend(
+            validate_executor_readiness(
+                handoff["executor_readiness"],
+                "coding_delegation runtime_handoff executor_readiness",
+                expected_profile=str(handoff.get("selected_executor_profile", "")),
+            )
+        )
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation runtime_handoff"))
     return errors
 
@@ -2063,7 +2149,92 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
                     _require(isinstance(item, str), errors, f"coding_delegation prompt_handoff evidence_contract.{nested_key}[{index}] must be a string")
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation prompt_handoff harness_quality"))
+    if "executor_readiness" in handoff:
+        errors.extend(
+            validate_executor_readiness(
+                handoff["executor_readiness"],
+                "coding_delegation prompt_handoff executor_readiness",
+                expected_profile=str(handoff.get("selected_executor_profile", "")),
+            )
+        )
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation prompt_handoff"))
+    return errors
+
+
+def validate_executor_readiness(value: Any, label: str, *, expected_profile: str = "") -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(value, dict), errors, f"{label} must be an object")
+    if not isinstance(value, dict):
+        return errors
+    allowed_keys = {
+        "schema_version",
+        "profile",
+        "label",
+        "status",
+        "first_use_only",
+        "cache_key",
+        "probe",
+        "ready_action",
+        "fallback_policy",
+        "not_evidence",
+        "claim_boundary",
+        "profiles",
+        "next_action",
+        "cache_status",
+        "first_use_skipped",
+        "state_error",
+        "available",
+        "observed_once",
+        "exit_code",
+        "command_path",
+        "summary",
+    }
+    extra_keys = sorted(set(value) - allowed_keys)
+    _require(not extra_keys, errors, f"{label} has unsupported keys: {extra_keys}")
+    _require(value.get("schema_version") == EXECUTOR_READINESS_SCHEMA_VERSION, errors, f"{label} schema_version is invalid")
+    profile = str(value.get("profile", ""))
+    _require(profile in ("choose", *CODING_SELECTED_EXECUTOR_PROFILES), errors, f"{label} profile is invalid: {profile!r}")
+    if expected_profile:
+        _require(profile == expected_profile, errors, f"{label} profile must match selected executor")
+    _require(value.get("status") in EXECUTOR_READINESS_STATUSES, errors, f"{label} status is invalid")
+    _require(isinstance(value.get("first_use_only"), bool), errors, f"{label} first_use_only must be boolean")
+    for key in ("cache_key", "claim_boundary"):
+        _require(isinstance(value.get(key), str), errors, f"{label} {key} must be a string")
+    _require("not dispatch" in str(value.get("claim_boundary", "")).lower(), errors, f"{label} claim_boundary must preserve dispatch boundary")
+    if "probe" in value:
+        probe = value.get("probe")
+        _require(isinstance(probe, dict), errors, f"{label} probe must be an object")
+        if isinstance(probe, dict):
+            expected_probe_keys = {"kind", "command", "args", "timeout_seconds", "captures"}
+            _require(not (set(probe) - expected_probe_keys), errors, f"{label} probe has unsupported keys: {sorted(set(probe) - expected_probe_keys)}")
+            for key in ("kind", "command"):
+                _require(isinstance(probe.get(key), str), errors, f"{label} probe.{key} must be a string")
+            _require(isinstance(probe.get("timeout_seconds"), int), errors, f"{label} probe.timeout_seconds must be an integer")
+            for key in ("args", "captures"):
+                _require(isinstance(probe.get(key), list), errors, f"{label} probe.{key} must be a list")
+                if isinstance(probe.get(key), list):
+                    for index, item in enumerate(probe[key]):
+                        _require(isinstance(item, str), errors, f"{label} probe.{key}[{index}] must be a string")
+    fallback = value.get("fallback_policy")
+    _require(isinstance(fallback, dict), errors, f"{label} fallback_policy must be an object")
+    if isinstance(fallback, dict):
+        expected_fallback_keys = {"when_missing", "retry_after_state_change", "retry_limit", "suggested_actions"}
+        _require(not (set(fallback) - expected_fallback_keys), errors, f"{label} fallback_policy has unsupported keys: {sorted(set(fallback) - expected_fallback_keys)}")
+        _require(isinstance(fallback.get("when_missing"), str), errors, f"{label} fallback_policy.when_missing must be a string")
+        _require(isinstance(fallback.get("retry_after_state_change"), bool), errors, f"{label} fallback_policy.retry_after_state_change must be boolean")
+        _require(isinstance(fallback.get("retry_limit"), int), errors, f"{label} fallback_policy.retry_limit must be an integer")
+        if "suggested_actions" in fallback:
+            _require(isinstance(fallback.get("suggested_actions"), list), errors, f"{label} fallback_policy.suggested_actions must be a list")
+    if "not_evidence" in value:
+        _require(isinstance(value.get("not_evidence"), list), errors, f"{label} not_evidence must be a list")
+        not_evidence = value.get("not_evidence") if isinstance(value.get("not_evidence"), list) else []
+        _require("execution" in not_evidence and "merge" in not_evidence, errors, f"{label} not_evidence must include execution and merge")
+    profiles = value.get("profiles")
+    if profiles is not None:
+        _require(isinstance(profiles, list), errors, f"{label} profiles must be a list")
+        if isinstance(profiles, list):
+            for index, profile_value in enumerate(profiles):
+                errors.extend(validate_executor_readiness(profile_value, f"{label} profiles[{index}]"))
     return errors
 
 

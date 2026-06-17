@@ -9,7 +9,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "clarification",
-        "headline": "I need one clarification before routing this.",
+        "headline": "[omh] clarification - I need one clarification before routing this.",
         "body": "The request is not specific enough for a safe workflow handoff.",
         "action_ids": ["answer:clarify", "cancel"]
       },
@@ -32,7 +32,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "plan",
-        "headline": "I drafted a plan for this request.",
+        "headline": "[omh] plan - I drafted a plan for this request.",
         "body": "The user can accept or revise the plan before any handoff is prepared.",
         "action_ids": ["accept_plan", "revise_plan"]
       },
@@ -55,7 +55,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "clarification",
-        "headline": "I need one answer before I can plan this.",
+        "headline": "[omh] deep-interview - I need one answer before I can plan this.",
         "body": "The user sees one blocking question instead of a guessed plan.",
         "action_ids": ["answer:clarify", "cancel"]
       },
@@ -84,7 +84,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "handoff",
-        "headline": "A coding-agent handoff is ready.",
+        "headline": "[omh] handoff - A coding-agent handoff is ready.",
         "body": "The handoff is prepared, but executor dispatch is not observed yet.",
         "action_ids": ["send_to_executor", "show_status"]
       },
@@ -107,7 +107,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "The handoff was dispatched.",
+        "headline": "[omh] status - The handoff was dispatched.",
         "body": "Executor completion is not observed yet.",
         "action_ids": ["show_status"]
       },
@@ -129,7 +129,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "Executor completion needs review evidence.",
+        "headline": "[omh] status - Executor completion needs review evidence.",
         "body": "Review evidence is required before completion is reported.",
         "action_ids": ["show_status"]
       },
@@ -151,7 +151,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "Executor completion needs review evidence.",
+        "headline": "[omh] status - Executor completion needs review evidence.",
         "body": "The wrapper can render a platform-neutral progress card without parsing prose.",
         "action_ids": ["show_status"]
       },
@@ -187,7 +187,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "Review passed; CI evidence is still missing.",
+        "headline": "[omh] status - Review passed; CI evidence is still missing.",
         "body": "Merge readiness is not reported until CI evidence is observed.",
         "action_ids": ["show_status"]
       },
@@ -208,7 +208,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "blocker",
-        "headline": "CI is blocking completion.",
+        "headline": "[omh] status - CI is blocking completion.",
         "body": "The failing or blocked CI checks are surfaced instead of claiming merge readiness.",
         "action_ids": ["show_status"]
       },
@@ -229,7 +229,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "This is ready to merge.",
+        "headline": "[omh] status - This is ready to merge.",
         "body": "Execution, verification, review, CI, and merge-readiness evidence are observed.",
         "action_ids": ["show_status"]
       },
@@ -252,7 +252,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "This has been merged.",
+        "headline": "[omh] status - This has been merged.",
         "body": "Merge evidence is observed in the runtime ledger.",
         "action_ids": ["show_status"]
       },
@@ -271,7 +271,7 @@
       "expected_response": {
         "schema_version": "chat_response/v1",
         "kind": "status",
-        "headline": "Review passed; CI evidence is still missing.",
+        "headline": "[omh] status - Review passed; CI evidence is still missing.",
         "body": "A later merge-ready artifact cannot override the missing CI gate.",
         "action_ids": ["show_status"]
       },

@@ -60,6 +60,12 @@ Handoff policy:
 
 Use Hermes to define cleanup scope and regression checks; route behavior-preserving edits to the selected coding runtime once tests are clear.
 
+Executor readiness:
+
+- When accepted work mutates code, check `executor_readiness/v1` for the selected Codex, Claude Code, Hermes, or oh-my runtime path before first dispatch.
+- If readiness is `missing` or `blocked`, ask the user to choose another coding agent, configure PATH, continue in Hermes, or keep a prompt/runtime handoff; retry only after that state changes.
+- A readiness probe is not dispatch, implementation, verification, review, CI, merge-readiness, or merge evidence.
+
 Required inputs:
 
 - target smell

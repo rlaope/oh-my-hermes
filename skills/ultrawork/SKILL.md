@@ -61,6 +61,12 @@ Handoff policy:
 
 Keep the workflow name for compatibility, but convert coding lanes into explicit selected runtime handoffs with disjoint scope, verification, review evidence, worker protocol, and worktree guidance.
 
+Executor readiness:
+
+- When accepted work mutates code, check `executor_readiness/v1` for the selected Codex, Claude Code, Hermes, or oh-my runtime path before first dispatch.
+- If readiness is `missing` or `blocked`, ask the user to choose another coding agent, configure PATH, continue in Hermes, or keep a prompt/runtime handoff; retry only after that state changes.
+- A readiness probe is not dispatch, implementation, verification, review, CI, merge-readiness, or merge evidence.
+
 Required inputs:
 
 - accepted plan

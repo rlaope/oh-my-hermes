@@ -2168,6 +2168,38 @@ class CliTests(unittest.TestCase):
                 self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
                 self.assertIn("choose_skill", {action["id"] for action in payload["chat_response"]["actions"]})
 
+    def test_chat_interact_catalog_questions_open_picker_without_shell(self) -> None:
+        for message in ("OMH 명령어 뭐 있어?", "skill들은 뭐 있어?", "what OMH workflows are available?"):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "choose_skill")
+                self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+                self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
+                self.assertIn("shell command", payload["chat_response"]["body"])
+                self.assertNotIn("run_local_operator_check", json.dumps(payload))
+
+    def test_chat_interact_non_catalog_command_questions_do_not_open_picker(self) -> None:
+        for message in (
+            "show me the command to install OMH",
+            "what command should I run to verify installation?",
+            "what skills are needed to debug this Python error?",
+            "list files that mention command injection",
+        ):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
+                self.assertNotEqual(payload["next_action"], "choose_skill")
+                self.assertNotIn("catalog_question", payload["chat_response"]["state"])
+
     def test_chat_interact_partial_prefix_preview_shows_only_omh(self) -> None:
         cases = {
             "./": "./omh",
@@ -2934,6 +2966,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(handoff["codex_invocation"]["dispatch_text_template"], "$ai-slop-cleaner {message}")
         self.assertEqual(handoff["status"], "prepared_not_observed")
         self.assertEqual(handoff["recording_contract"], "prepared_not_observed")
+        self.assertEqual(payload["executor_readiness"]["schema_version"], "executor_readiness/v1")
+        self.assertEqual(payload["executor_readiness"]["profile"], "codex")
+        self.assertEqual(payload["executor_readiness"]["probe"]["command"], "codex")
+        self.assertEqual(handoff["executor_readiness"]["profile"], "codex")
         self.assertEqual(handoff["execution_brief"]["recommended_workflow"], "ai-slop-cleaner")
         self.assertIn("{message}", handoff["prompt_template"])
         self.assertIn("Use Codex skill: `$ai-slop-cleaner`", handoff["prompt_template"])
@@ -3052,7 +3088,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["runtime"]["run_created"], False)
             self.assertEqual(payload["work_owner_mode"], "runtime_handoff")
             self.assertEqual(payload["selected_executor_profile"], "omx-runtime")
+            self.assertEqual(payload["executor_readiness"]["schema_version"], "executor_readiness/v1")
+            self.assertEqual(payload["executor_readiness"]["profile"], "omx-runtime")
+            self.assertEqual(payload["executor_readiness"]["probe"]["command"], "omx")
             self.assertEqual(payload["runtime_handoff"]["schema_version"], "coding_runtime_handoff/v1")
+            self.assertEqual(payload["runtime_handoff"]["executor_readiness"]["profile"], "omx-runtime")
             self.assertEqual(payload["runtime_handoff"]["runtime_profile"]["runtime_family"], "omx")
             self.assertTrue(payload["runtime_handoff"]["runtime_profile"]["supports_tmux_workers"])
             self.assertIn("show_runtime_handoff", payload["harness_quality"]["wrapper_actions"])
@@ -3371,12 +3411,50 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["runtime"]["record_status"], "record_skipped_until_executor_selected")
             self.assertIn("skipped until executor selected", payload["runtime"]["record_notice"])
             self.assertEqual(payload["runtime"]["next_action"], "select_executor_then_record")
+            self.assertEqual(payload["executor_readiness"]["schema_version"], "executor_readiness/v1")
+            self.assertEqual(payload["executor_readiness"]["status"], "choice_required")
+            self.assertTrue(payload["executor_readiness"]["first_use_only"])
+            options = {option["profile"]: option for option in payload["executor_selection"]["options"]}
+            self.assertEqual(options["codex"]["readiness_probe"]["probe"]["command"], "codex")
+            self.assertEqual(options["claude-code"]["readiness_probe"]["probe"]["command"], "claude")
             self.assertFalse((omh_home / "runtime" / "runs").exists())
 
             status, stdout, stderr = run_cli(base + ["runtime", "validate"])
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             self.assertTrue(json.loads(stdout)["ok"])
+
+    def test_coding_executor_readiness_dry_run_is_first_use_contract(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "executor-readiness",
+                    "--executor",
+                    "codex",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "executor_readiness/v1")
+            self.assertEqual(payload["profile"], "codex")
+            self.assertEqual(payload["status"], "not_observed")
+            self.assertEqual(payload["cache_status"], "would_probe")
+            self.assertFalse(payload["first_use_skipped"])
+            self.assertEqual(payload["probe"]["command"], "codex")
+            self.assertTrue(payload["fallback_policy"]["retry_after_state_change"])
+            self.assertIn("not dispatch", payload["claim_boundary"])
+            self.assertFalse((omh_home / "runtime" / "executor-readiness.json").exists())
 
     def test_coding_delegate_records_codex_executor_handoff_without_raw_message(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -3626,7 +3704,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             chat = json.loads(stdout)
             self.assertEqual(chat["chat_response"]["state"]["merge_status"], "ready")
-            self.assertEqual(chat["chat_response"]["headline"], "This is ready to merge.")
+            self.assertEqual(chat["chat_response"]["plain_headline"], "This is ready to merge.")
+            self.assertTrue(chat["chat_response"]["headline"].startswith("[omh] status - "))
             self.assertNotIn("omh ", json.dumps(chat["chat_response"]).lower())
 
             status, stdout, stderr = run_cli(base + ["runtime", "merge", "--run", run_id, "--merged", "--merge-commit", "abc123"])

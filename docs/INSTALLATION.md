@@ -351,32 +351,51 @@ The backend flow is:
    select menu, button list, or Hermes TUI command list. Selecting an option
    forwards the original request to that skill. This keeps installed skill
    names clean; the skills do not need an `omh-` prefix.
-7. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
-   `status_card` when present in the original channel or thread. The user does
-   not need to know any `omh` command names.
-8. If the interaction asks for clarification, the wrapper keeps the answer in
+7. If the user asks what OMH commands, skills, or workflows are available, the
+   wrapper still renders `chat_response.kind == skill_picker`. Do not ask the
+   user to approve `omh list` for a catalog question; `omh_skill_picker/v1`
+   already contains the workflow labels, direct invocation text, and
+   routing-only claim boundary.
+8. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
+   `status_card` when present in the original channel or thread. The headline
+   already starts with the visible OMH marker, such as `[omh] web-research`;
+   adapters can read `chat_response.usage_trace` for the selected workflow,
+   harness, executor, and evidence boundary without parsing prose.
+9. Discord, Slack, Telegram, and similar adapters apply
+   `chat_response.messenger_rendering`: start with the visible prefix, prefer
+   short paragraphs or bullets, and convert wide Markdown tables into
+   messenger-safe lists or split chunks. The prefix appears once per response;
+   repeat it only if the adapter splits a long answer into separate posted
+   chunks.
+10. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.
-9. If the interaction presents a plan, the wrapper waits for the user to accept
+11. If the interaction presents a plan, the wrapper waits for the user to accept
    or revise it before preparing any coding handoff.
-10. If the accepted interaction exposes executor or runtime selection, the
+12. If the accepted interaction exposes executor or runtime selection, the
    wrapper uses the chosen profile. Codex can use the run-backed lifecycle path;
    Claude Code and generic agents use prompt-only handoffs; Hermes, OMX, OMO,
    and OMC use runtime handoffs with team/swarm, worker-protocol, and worktree
    guidance. The wrapper records only what it actually observes.
-11. If the wrapper observes Hermes target metadata such as `agent_ref`,
+13. For a coding profile that has not been observed before, the wrapper can run
+   `omh coding executor-readiness --executor <profile>` once and cache
+   `executor_readiness/v1`. If the probe reports `missing` or `blocked`, ask the
+   user to choose another coding agent, configure PATH, continue in Hermes, or
+   keep a prompt/runtime handoff. Retry only after that state changes. Readiness
+   is not dispatch, implementation, review, CI, or merge evidence.
+14. If the wrapper observes Hermes target metadata such as `agent_ref`,
    `agent_count`, or `hermes_home`, `chat_interaction/v1` may include
    `target_notice` and `target_topology`. Render the concise notice or
    `apply_target_change` action before treating single-to-multi or
    multi-to-single target changes as persistent setup state. When target
    identity metadata is present, `thread_key` is scoped by that target so two
    Hermes agents in the same channel do not share wrapper session state.
-12. If the wrapper has local memory-like context candidates, it can run
+15. If the wrapper has local memory-like context candidates, it can run
    `omh memory inspect` and attach a conflict-free `handoff_context_pack/v1` to
    the later handoff. Conflicting or stale assumptions must be shown as memory
    review, not silently reused.
-13. Status updates use `omh coding lifecycle report` or
+16. Status updates use `omh coding lifecycle report` or
    `omh chat interact --run <run-id>` and stay in the same thread.
-14. Hermes still starts with its normal config and reads `skills.external_dirs`;
+17. Hermes still starts with its normal config and reads `skills.external_dirs`;
    `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
 
 `omh` provides deterministic local contracts for command registration, fallback
@@ -428,6 +447,19 @@ omh chat session select-executor "$session_id" codex
 omh chat session select-executor "$session_id" claude-code
 omh chat session select-executor "$session_id" generic
 ```
+
+Check the selected coding agent once before first dispatch:
+
+```sh
+omh coding executor-readiness --executor codex
+omh coding executor-readiness --executor claude-code
+omh coding executor-readiness --executor omx-runtime
+```
+
+If the result is `missing` or `blocked`, keep the handoff prepared and ask the
+operator whether to choose a different coding agent, configure PATH, continue in
+Hermes, or use a prompt/runtime handoff. Do not treat this probe as proof that
+the coding agent ran.
 
 Review stale local context before a handoff:
 

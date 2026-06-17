@@ -103,6 +103,8 @@ omh chat route --source discord --record "risky refactor"
 
 Use `route.routing_prompt_template` with `{message}` replaced by the received chat message as the prompt forwarded to Hermes. If the wrapper does not log stdout and wants a pre-expanded prompt, pass `--include-message` and forward `route.routing_prompt`. A `dispatch` action targets the selected workflow skill; `clarify` and `fallback` target this router so Hermes can ask one concise follow-up instead of guessing.
 
+If the user asks what OMH commands, skills, or workflows are available, use `omh chat interact` and render `chat_response.kind == skill_picker`. Do not make the user approve `omh list` just to see the catalog; the picker response carries `omh_skill_picker/v1` options, direct invocation text, and a claim boundary that selection is routing intent only.
+
 This is a deterministic wrapper-side decision layer. By default, stdout and runtime artifacts avoid duplicating the raw prompt body. It does not patch Hermes core or require platform network access from `omh`.
 
 ## Wrapper Backend Coding Delegation
@@ -114,6 +116,8 @@ omh coding delegate --source discord --executor codex --record "risky refactor"
 ```
 
 The command returns a `coding_delegation/v1` payload with a recommended workflow, harness, executor/runtime profile, acceptance criteria, verification expectations, and a `delegation_prompt_template` that the wrapper can forward with the user message substituted. It is deterministic and uses only local catalog metadata. Without an explicit executor, wrappers can receive an executor-choice response; Codex receives a lifecycle handoff, Claude Code and generic agents receive portable prompt handoffs, and Hermes/OMX/OMO/OMC receive `coding_runtime_handoff/v1` contracts with team/swarm, worker-protocol, and worktree guidance.
+
+The same payload includes `executor_readiness/v1`. Wrappers can run `omh coding executor-readiness --executor <profile>` on first use of Codex, Claude Code, or an oh-my runtime profile, then cache the result. If the probe reports `missing` or `blocked`, ask the user to choose another coding agent, configure PATH, continue in Hermes, or use a prompt/runtime handoff; after that state change, retry at most once. A readiness probe is not dispatch, execution, verification, review, CI, or merge evidence.
 
 With `--record`, `omh` creates a `.omh/runtime/runs/<run-id>/` prepared runtime run only for a Codex-selected delegate payload that contains a real `executor_handoff`. Executor-choice, prompt-only, runtime-handoff, clarify, and fallback responses return `runtime.recorded=false` and must stay wrapper/session state rather than prepared run evidence. For Codex runs, `coding_delegation.json` is paired with `run.json` marked `status: prepared`, `artifact_kind: prepared_coding_delegation`, `phase: prepared`, and `observation_status: prepared_not_observed`. These artifacts store only allowlisted metadata, acceptance criteria, verification expectations, recommendation evidence, source references, `message_sha256`, and `message_length`. They mean a coding handoff was prepared; they do not mean Hermes executed the work or that a specialist lane was observed.
 

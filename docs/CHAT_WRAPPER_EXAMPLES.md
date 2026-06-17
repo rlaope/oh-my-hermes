@@ -70,6 +70,26 @@ User-facing effect:
   `Open omh` card in the same Hermes conversation.
 - The card only opens the picker; it does not claim that a workflow started.
 
+## Catalog Questions Without Shell Approval
+
+If the user asks "what OMH commands are available?" or "skill들은 뭐 있어?",
+wrappers should call `omh chat interact` and render
+`chat_response.kind == skill_picker`:
+
+```text
+Hermes Agent  BOT
+[omh] oh-my-hermes - Here are the OMH workflows.
+
+You do not need to run a shell command for this. Pick a workflow here, or choose
+Route for me and Hermes will select the safest next step.
+
+[ Choose workflow ] [ Search workflows ] [ Show status ]
+```
+
+The wrapper should not ask the user to approve `omh list` merely to show the
+catalog. `omh_skill_picker/v1` already carries the workflow labels, direct
+invocation text, harness names, and routing-only claim boundary.
+
 ## Discord-Style Plan Response
 
 ```text
@@ -79,7 +99,7 @@ maintainer-1
 I want to safely add a feature to this repo
 
 Hermes Agent  BOT
-I routed this to `plan` because it needs a safe plan first.
+[omh] plan - I routed this to `plan` because it needs a safe plan first.
 
 Accept or revise the plan first; the handoff button stays disabled until
 acceptance. A draft plan is still only planning evidence.
@@ -95,11 +115,49 @@ State
 User-facing effect:
 
 - The user does not need to know an `omh` command.
-- Hermes Agent explains why the request became a plan-first workflow.
+- Hermes Agent explains why the request became a plan-first workflow and shows
+  the visible OMH trace prefix on the first line.
 - The wrapper can show `Accept plan` and `Revise plan` immediately.
 - `Prepare handoff` is visible but disabled until the plan is accepted.
 - The response names what is not evidence yet instead of sounding like coding
   already happened.
+
+## Visible OMH Trace And Messenger Formatting
+
+Every wrapper-facing `chat_response/v1` can render a first-line usage marker
+from `chat_response.usage_trace.visible_prefix`, for example:
+
+```text
+[omh] web-research - I know which workflow should handle this.
+```
+
+That marker is product status, not a command the user has to learn. The same
+response includes `chat_response.messenger_rendering`, which tells Discord,
+Slack, Telegram, and Hermes-style adapters to start with the visible prefix,
+prefer short paragraphs or bullets, and convert wide Markdown tables into
+messenger-safe lists or split chunks.
+
+Apply the prefix once at the first line of one rendered response. Do not repeat
+`[omh] <workflow>` on every paragraph or every line. If an adapter splits a
+long answer into separate Discord/Slack messages, it can repeat the same prefix
+once at the start of each chunk.
+
+## First-Use Coding Agent Readiness
+
+Coding handoff responses include `executor_readiness/v1` so the wrapper can
+check Codex, Claude Code, Hermes coding, or oh-my runtime availability once per
+profile instead of discovering it after the user presses a handoff button.
+
+```sh
+omh coding executor-readiness --executor codex
+omh coding executor-readiness --executor claude-code
+```
+
+If readiness is `missing` or `blocked`, show a human choice instead of failing
+silently: choose another coding agent, configure the command path, continue in
+Hermes, or keep a prompt/runtime handoff. After the user changes that state,
+retry the readiness check once. The probe only proves local availability; it is
+not dispatch, implementation, review, CI, or merge evidence.
 
 ## Discord-Style Handoff Status Card
 
@@ -108,7 +166,7 @@ a progress block in the same thread:
 
 ```text
 Hermes Agent  BOT
-A coding-runtime handoff is ready.
+[omh] status - A coding-runtime handoff is ready.
 
 I have prepared the handoff, but runtime start or executor/runtime dispatch is not
 observed yet.
@@ -153,7 +211,7 @@ operator
 결제 실패 이슈가 자주 나와
 
 Hermes Agent  BOT
-I know which workflow should handle this.
+[omh] feedback-triage - I know which workflow should handle this.
 
 Cluster feedback and recommend the next workflow; do not create a coding handoff
 unless code work is explicit.
@@ -179,7 +237,7 @@ operator
 쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?
 
 Hermes Agent  BOT
-I know which workflow should handle this.
+[omh] ultraqa - I know which workflow should handle this.
 
 I will prepare a safe next step for `ultraqa` before claiming any work happened.
 
@@ -205,7 +263,7 @@ pm
 온보딩을 더 부드럽게 만들고 싶어
 
 Hermes Agent  BOT
-This needs a clarification workflow before planning.
+[omh] deep-interview - This needs a clarification workflow before planning.
 
 I will ask one blocking question in the same thread before any plan or handoff
 is treated as ready.
@@ -231,7 +289,7 @@ maintainer
 릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘
 
 Hermes Agent  BOT
-I know which workflow should handle this.
+[omh] code-review - I know which workflow should handle this.
 
 Surface findings separately from any code changes; fixes need their own executor evidence.
 
@@ -251,7 +309,11 @@ What gets better for the team:
 | Rendered UI | Source field |
 | --- | --- |
 | Bot headline | `chat_response.headline` |
+| Bot headline without prefix | `chat_response.plain_headline` |
 | Bot body | `chat_response.body` |
+| Visible OMH workflow marker | `chat_response.usage_trace.visible_prefix` |
+| Selected workflow/harness | `chat_response.usage_trace.selected_workflow`, `chat_response.usage_trace.selected_harness` |
+| Messenger-safe body hints | `chat_response.messenger_rendering.preferred_blocks`, `chat_response.messenger_rendering.avoid_blocks`, `chat_response.messenger_rendering.table_policy`, `chat_response.messenger_rendering.prefix_policy` |
 | Button ids | `chat_response.actions[].id` |
 | Thread key | `thread_key` |
 | Current phase | `chat_response.state.phase` |

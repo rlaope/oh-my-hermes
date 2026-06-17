@@ -109,10 +109,18 @@ class WrapperContractTests(unittest.TestCase):
         payload = build_chat_interaction_payload("risky refactor", mode="delegate", source="discord", executor_target="codex")
 
         actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
+        readiness = payload["delegation"]["executor_readiness"]
         self.assertEqual(payload["next_action"], "send_to_executor")
         self.assertEqual(payload["delegation"]["executor_handoff"]["schema_version"], "coding_executor_handoff/v1")
         self.assertEqual(payload["delegation"]["executor_handoff"]["send_action"], "send_to_executor")
         self.assertTrue(payload["delegation"]["executor_handoff"]["codex_skill"].startswith("$"))
+        self.assertEqual(readiness["schema_version"], "executor_readiness/v1")
+        self.assertEqual(readiness["profile"], "codex")
+        self.assertEqual(readiness["probe"]["command"], "codex")
+        self.assertTrue(readiness["first_use_only"])
+        self.assertTrue(readiness["fallback_policy"]["retry_after_state_change"])
+        self.assertEqual(payload["delegation"]["executor_handoff"]["executor_readiness"]["profile"], "codex")
+        self.assertEqual(payload["chat_response"]["state"]["executor_readiness"]["profile"], "codex")
         self.assertIn("send_to_executor", actions)
         self.assertIn("send_to_codex", actions)
 
@@ -120,9 +128,19 @@ class WrapperContractTests(unittest.TestCase):
         payload = build_chat_interaction_payload("risky refactor", mode="delegate", source="discord")
 
         actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
+        readiness = payload["delegation"]["executor_readiness"]
+        option_profiles = {option["profile"]: option for option in payload["delegation"]["executor_selection"]["options"]}
         self.assertEqual(payload["next_action"], "choose_executor")
         self.assertEqual(payload["delegation"]["executor_selection"]["status"], "executor_choice_required")
         self.assertTrue(payload["delegation"]["executor_selection"]["choice_required"])
+        self.assertEqual(readiness["schema_version"], "executor_readiness/v1")
+        self.assertEqual(readiness["status"], "choice_required")
+        self.assertTrue(readiness["first_use_only"])
+        self.assertIn("profiles", readiness)
+        self.assertEqual(option_profiles["codex"]["readiness_probe"]["probe"]["command"], "codex")
+        self.assertEqual(option_profiles["claude-code"]["readiness_probe"]["probe"]["command"], "claude")
+        self.assertTrue(option_profiles["codex"]["readiness_probe"]["fallback_policy"]["retry_after_state_change"])
+        self.assertEqual(payload["chat_response"]["state"]["executor_readiness"]["status"], "choice_required")
         self.assertNotIn("executor_handoff", payload["delegation"])
         self.assertIn("choose_executor", actions)
 
@@ -130,10 +148,14 @@ class WrapperContractTests(unittest.TestCase):
         payload = build_chat_interaction_payload("risky refactor", mode="delegate", source="discord", executor_target="claude-code")
 
         actions = {action["id"] for action in payload["chat_response"]["actions"] if action["enabled"]}
+        readiness = payload["delegation"]["executor_readiness"]
         self.assertEqual(payload["next_action"], "show_prompt_handoff")
         self.assertEqual(payload["delegation"]["work_owner_mode"], "prompt_only_handoff")
         self.assertFalse(payload["delegation"]["dispatchable"])
         self.assertEqual(payload["delegation"]["prompt_handoff"]["schema_version"], "coding_prompt_handoff/v1")
+        self.assertEqual(readiness["profile"], "claude-code")
+        self.assertEqual(readiness["probe"]["command"], "claude")
+        self.assertEqual(payload["delegation"]["prompt_handoff"]["executor_readiness"]["profile"], "claude-code")
         self.assertNotIn("executor_handoff", payload["delegation"])
         self.assertIn("show_prompt_handoff", actions)
         self.assertIn("copy_prompt_handoff", actions)
@@ -143,11 +165,15 @@ class WrapperContractTests(unittest.TestCase):
 
         actions = {action["id"] for action in payload["chat_response"]["actions"]}
         runtime = payload["delegation"]["runtime_handoff"]
+        readiness = payload["delegation"]["executor_readiness"]
         self.assertEqual(payload["next_action"], "show_runtime_handoff")
         self.assertEqual(payload["delegation"]["work_owner_mode"], "runtime_handoff")
         self.assertFalse(payload["delegation"]["dispatchable"])
         self.assertEqual(runtime["schema_version"], "coding_runtime_handoff/v1")
         self.assertEqual(runtime["runtime_profile"]["runtime_family"], "omx")
+        self.assertEqual(readiness["profile"], "omx-runtime")
+        self.assertEqual(readiness["probe"]["command"], "omx")
+        self.assertEqual(runtime["executor_readiness"]["profile"], "omx-runtime")
         self.assertTrue(runtime["runtime_profile"]["supports_team_swarm"])
         self.assertTrue(runtime["runtime_profile"]["supports_tmux_workers"])
         self.assertTrue(runtime["runtime_profile"]["supports_worker_protocol"])
@@ -197,6 +223,53 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("observed status", payload["chat_response"]["body"])
         self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
+    def test_route_mode_exposes_visible_omh_usage_trace_for_web_research(self) -> None:
+        payload = build_chat_interaction_payload(
+            "web-research로 Hermes Agent와 Oh My Codex/OpenCode 계열을 비교해서 OMHM 포지셔닝 근거를 찾아줘.",
+            source="discord",
+        )
+
+        response = payload["chat_response"]
+        trace = response["usage_trace"]
+        rendering = response["messenger_rendering"]
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "web-research")
+        self.assertEqual(trace["schema_version"], "omh_usage_trace/v1")
+        self.assertEqual(trace["visible_prefix"], "[omh] web-research")
+        self.assertEqual(trace["selected_harness"], "research")
+        self.assertEqual(trace["evidence_state"], "routing_not_execution")
+        self.assertTrue(response["headline"].startswith("[omh] web-research - "))
+        self.assertEqual(response["plain_headline"], "I know which workflow should handle this.")
+        self.assertEqual(rendering["schema_version"], "omh_messenger_rendering/v1")
+        self.assertIn("markdown_table", rendering["avoid_blocks"])
+        self.assertEqual(rendering["table_policy"], "convert_tables_to_bullets_for_messenger")
+        self.assertEqual(rendering["prefix_policy"]["default"], "once_per_response_first_line")
+        self.assertEqual(rendering["prefix_policy"]["repeat_when"], "adapter_splits_response_across_separate_messages_or_chunks")
+        self.assertIn("not execution evidence", trace["claim_boundary"])
+
+    def test_route_mode_exposes_visible_omh_usage_trace_for_multiple_workflows(self) -> None:
+        cases = (
+            ("릴리즈 전에 README claim이 실제 코드와 맞는가 봐줘", "code-review"),
+            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa"),
+            ("결제 실패 이슈가 자주 나와", "feedback-triage"),
+        )
+
+        for message, workflow in cases:
+            with self.subTest(workflow=workflow):
+                response = build_chat_interaction_payload(message, source="discord")["chat_response"]
+
+                self.assertEqual(response["usage_trace"]["visible_prefix"], f"[omh] {workflow}")
+                self.assertTrue(response["headline"].startswith(f"[omh] {workflow} - "))
+                self.assertNotIn("[omh]", response["body"])
+
+    def test_blocker_status_uses_status_usage_trace_label(self) -> None:
+        response = build_chat_response_from_status({"next_action": "surface_ci_blocker"})
+
+        self.assertEqual(response["kind"], "blocker")
+        self.assertTrue(response["headline"].startswith("[omh] status - "))
+        self.assertEqual(response["usage_trace"]["visible_prefix"], "[omh] status")
+        self.assertEqual(response["usage_trace"]["evidence_state"], "observed_partial")
+
     def test_direct_omh_invocation_exposes_skill_picker(self) -> None:
         payload = build_chat_interaction_payload("./omh", source="discord")
 
@@ -214,6 +287,35 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("search_skills", actions)
         self.assertEqual(actions["choose_skill"]["payload"]["schema_version"], "omh_skill_picker/v1")
         self.assertIn("routing intent only", payload["chat_response"]["claim_boundary"])
+
+    def test_natural_catalog_questions_open_picker_without_shell(self) -> None:
+        for message in ("OMH 명령어 뭐 있어?", "skill들은 뭐 있어?", "what OMH workflows are available?"):
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "choose_skill")
+                self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+                self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
+                self.assertIn("shell command", payload["chat_response"]["body"])
+                picker = payload["chat_response"]["state"]["skill_picker"]
+                option_ids = {option["id"] for option in picker["options"]}
+                self.assertTrue({"oh-my-hermes", "loop", "ultraprocess"} <= option_ids)
+                self.assertNotIn("run_local_operator_check", json.dumps(payload))
+
+    def test_non_catalog_command_and_skill_questions_do_not_open_picker(self) -> None:
+        for message in (
+            "show me the command to install OMH",
+            "what command should I run to verify installation?",
+            "what skills are needed to debug this Python error?",
+            "list files that mention command injection",
+        ):
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
+                self.assertNotEqual(payload["next_action"], "choose_skill")
+                self.assertNotIn("catalog_question", payload["chat_response"]["state"])
 
     def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
         cases = {
@@ -271,6 +373,8 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(rendered["schema_version"], "omh_native_command_render/v1")
         self.assertEqual(rendered["source"], "discord")
         self.assertEqual(rendered["response_kind"], "command_preview")
+        self.assertEqual(rendered["usage_trace"]["schema_version"], "omh_usage_trace/v1")
+        self.assertEqual(rendered["messenger_rendering"]["schema_version"], "omh_messenger_rendering/v1")
         self.assertEqual(rendered["render_kind"], "fallback_card")
         self.assertEqual(rendered["card"]["primary_action"]["submit_text"], "./omh")
         self.assertEqual(rendered["component"]["kind"], "discord_message_components")
