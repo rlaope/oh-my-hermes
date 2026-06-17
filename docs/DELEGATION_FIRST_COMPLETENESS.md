@@ -60,8 +60,10 @@ The strongest existing path is:
    runtime-specific templates and a `runtime_observation/v1` contract so
    wrappers know exactly which events must be observed later.
 6. The wrapper renders executor-session buttons instead of asking the user to
-   type backend commands. When it observes Open in Codex, Attach session, Record
-   completed, Record blocked, or Ask Hermes to verify, it writes
+   type backend commands. Open buttons carry `executor_launch/v1` with
+   copyable Codex and Claude Code command templates, while attach/record
+   buttons stay metadata-only. When the wrapper observes Open in Codex, Attach
+   session, Record completed, Record blocked, or Ask Hermes to verify, it writes
    `executor_session/v1` metadata and derives status lines such as
    `coding-agent: running(codex)`, `dispatch: observed`, and
    `verification: requested`.

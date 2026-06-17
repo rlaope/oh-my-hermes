@@ -673,6 +673,14 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(prepared_status["result"], "not_observed")
             self.assertTrue(prepared_actions["open_executor_session"]["enabled"])
             self.assertEqual(prepared_actions["open_executor_session"]["label"], "Open in Codex")
+            codex_launch = prepared_actions["open_executor_session"]["payload"]["launch"]
+            self.assertEqual(codex_launch["schema_version"], "executor_launch/v1")
+            self.assertEqual(codex_launch["command_templates"][0]["argv_template"], ["codex", "{executor_prompt}"])
+            self.assertEqual(codex_launch["command_templates"][0]["shell_command_template"], "codex {executor_prompt_shell_quoted}")
+            self.assertEqual(codex_launch["command_templates"][1]["argv_template"], ["codex", "--cd", "{workspace_path}", "{executor_prompt}"])
+            self.assertEqual(codex_launch["command_templates"][1]["shell_command_template"], "codex --cd {workspace_path_shell_quoted} {executor_prompt_shell_quoted}")
+            self.assertEqual(codex_launch["after_launch_backend_action"], "open-executor")
+            self.assertIn("not execution evidence", codex_launch["claim_boundary"])
             self.assertEqual(prepared_actions["attach_executor_session"]["label"], "Attach existing session")
             self.assertEqual(prepared_actions["attach_executor_session"]["payload"]["input_schema"]["required"], ["external_session_ref"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["chat_response"]["actions"]})
@@ -966,6 +974,14 @@ class WrapperSessionTests(unittest.TestCase):
 
             self.assertEqual(prepared["status"]["executor_session_status"]["coding_agent"], "prepared(claude-code)")
             self.assertNotIn("runtime_status", prepared["status"])
+            actions = {action["id"]: action for action in prepared["status"]["executor_session_status"]["actions"]}
+            claude_launch = actions["open_executor_session"]["payload"]["launch"]
+            self.assertEqual(actions["open_executor_session"]["label"], "Open in Claude Code")
+            self.assertEqual(claude_launch["schema_version"], "executor_launch/v1")
+            self.assertEqual(claude_launch["command_templates"][0]["argv_template"], ["claude", "{executor_prompt}"])
+            self.assertEqual(claude_launch["command_templates"][0]["shell_command_template"], "claude {executor_prompt_shell_quoted}")
+            self.assertEqual(claude_launch["command_templates"][1]["argv_template"], ["claude", "--add-dir", "{workspace_path}", "{executor_prompt}"])
+            self.assertEqual(claude_launch["command_templates"][1]["shell_command_template"], "claude --add-dir {workspace_path_shell_quoted} {executor_prompt_shell_quoted}")
 
             opened = open_executor_session(
                 paths,

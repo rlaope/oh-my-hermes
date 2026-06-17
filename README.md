@@ -192,7 +192,9 @@ What OMH changes is intentionally small:
 - **Wrapper-native executor sessions** - after a handoff is ready, Hermes chat
   surfaces can render buttons such as Open in Codex, Open in Claude Code,
   Attach session, Refresh status, Record completed, Record blocked, and Ask
-  Hermes to verify. The user does not need to type backend commands.
+  Hermes to verify. Open buttons include copyable Codex or Claude Code launch
+  commands, while backend tracking remains wrapper-owned. The user does not
+  need to type OMH backend commands.
 - **Visible OMH workflow trace** - wrapper responses can start once with
   markers like `[omh] plan`, `[omh] web-research`, or `[omh] status` and carry
   `omh_usage_trace/v1` plus messenger-safe rendering hints, so

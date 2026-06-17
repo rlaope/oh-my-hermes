@@ -25,6 +25,7 @@ from .lifecycle import (
 
 EXECUTOR_SESSION_SCHEMA_VERSION = "executor_session/v1"
 EXECUTOR_SESSION_STATUS_SCHEMA_VERSION = "executor_session_status/v1"
+EXECUTOR_LAUNCH_SCHEMA_VERSION = "executor_launch/v1"
 EXECUTOR_SESSION_RECORD_TYPE = "executor_session"
 EXECUTOR_SESSION_STATUSES = ("not_started", "prepared", "running", "completed", "blocked", "failed")
 EXECUTOR_SESSION_RESULTS = ("not_observed", "completed", "blocked", "failed")
@@ -172,7 +173,12 @@ def build_executor_session_actions(
                 and not attached
                 and not dispatch_observed
             ),
-            payload={**base_payload, "backend_action": "open-executor", "disabled_reason": status_blocker},
+            payload={
+                **base_payload,
+                "backend_action": "open-executor",
+                "disabled_reason": status_blocker,
+                "launch": _executor_launch_contract(executor, session),
+            },
         ),
         _action(
             "attach_executor_session",
@@ -774,6 +780,99 @@ def _open_label(executor: str) -> str:
     if executor == "hermes":
         return "Open Hermes coding"
     return f"Open {executor_label(executor)}"
+
+
+def _executor_launch_contract(executor: str, session: dict[str, Any]) -> dict[str, object]:
+    label = _surface_executor_label(executor, handoff_state=_handoff_state(session))
+    prompt_placeholder = "{executor_prompt}"
+    shell_placeholder = "{executor_prompt_shell_quoted}"
+    workspace_placeholder = "{workspace_path}"
+    workspace_shell_placeholder = "{workspace_path_shell_quoted}"
+    templates = _launch_command_templates(
+        executor,
+        prompt_placeholder,
+        shell_placeholder,
+        workspace_placeholder,
+        workspace_shell_placeholder,
+    )
+    return {
+        "schema_version": EXECUTOR_LAUNCH_SCHEMA_VERSION,
+        "selected_executor_profile": executor,
+        "executor_label": label,
+        "mode": "interactive_terminal_or_app",
+        "prompt_placeholder": prompt_placeholder,
+        "prompt_source": "prepared handoff prompt or original chat message held by the wrapper at click time",
+        "workspace_placeholder": workspace_placeholder,
+        "workspace_shell_placeholder": workspace_shell_placeholder,
+        "command_templates": templates,
+        "copy_blocks": [
+            {
+                "id": "copy_prompt",
+                "label": f"Copy prompt for {label}",
+                "text_template": prompt_placeholder,
+            },
+            {
+                "id": "copy_terminal_command",
+                "label": f"Copy {label} terminal command",
+                "text_template": templates[0]["shell_command_template"] if templates else prompt_placeholder,
+            },
+        ],
+        "after_launch_backend_action": "open-executor",
+        "observed_transition": "dispatch/open observed",
+        "claim_boundary": "Launch instructions are not execution evidence; record observed dispatch/open only after the wrapper sees the user or platform open the executor.",
+    }
+
+
+def _launch_command_templates(
+    executor: str,
+    prompt_placeholder: str,
+    shell_placeholder: str,
+    workspace_placeholder: str,
+    workspace_shell_placeholder: str,
+) -> list[dict[str, object]]:
+    if executor == "codex":
+        return [
+            {
+                "id": "codex_interactive_prompt",
+                "label": "Open Codex with this prompt",
+                "argv_template": ["codex", prompt_placeholder],
+                "shell_command_template": f"codex {shell_placeholder}",
+                "when_to_use": "Use when the current terminal is already in the target repository.",
+            },
+            {
+                "id": "codex_interactive_workspace",
+                "label": "Open Codex in a specific workspace",
+                "argv_template": ["codex", "--cd", workspace_placeholder, prompt_placeholder],
+                "shell_command_template": f"codex --cd {workspace_shell_placeholder} {shell_placeholder}",
+                "when_to_use": "Use when the wrapper knows the repository path and wants Codex rooted there.",
+            },
+        ]
+    if executor == "claude-code":
+        return [
+            {
+                "id": "claude_code_interactive_prompt",
+                "label": "Open Claude Code with this prompt",
+                "argv_template": ["claude", prompt_placeholder],
+                "shell_command_template": f"claude {shell_placeholder}",
+                "when_to_use": "Use when the current terminal is already in the target repository.",
+            },
+            {
+                "id": "claude_code_interactive_workspace",
+                "label": "Open Claude Code with workspace access",
+                "argv_template": ["claude", "--add-dir", workspace_placeholder, prompt_placeholder],
+                "shell_command_template": f"claude --add-dir {workspace_shell_placeholder} {shell_placeholder}",
+                "when_to_use": "Use when the wrapper knows the repository path and should grant Claude Code explicit workspace access.",
+            },
+        ]
+    return [
+        {
+            "id": "copy_prompt_to_executor",
+            "label": f"Copy prompt for {executor_label(executor)}",
+            "argv_template": [prompt_placeholder],
+            "shell_command_template": prompt_placeholder,
+            "when_to_use": "Use when this executor does not have a deterministic local launch command in OMH.",
+        }
+    ]
 
 
 def _open_summary(session: dict[str, Any], *, observed: bool) -> str:

@@ -66,6 +66,14 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _render(source: str, interaction: dict[str, object]) -> dict[str, object]:
     response = _nested(interaction, "chat_response")
     state = _nested(response, "state")
+    rendering = _nested(response, "messenger_rendering")
+    body_text = rendering.get("body_text")
+    if isinstance(body_text, str):
+        rendered_body_text = body_text
+        body_text_source = "messenger_rendering.body_text"
+    else:
+        rendered_body_text = ""
+        body_text_source = "missing_messenger_rendering.body_text"
     status_card = response.get("status_card") or interaction.get("status_card")
     return {
         "schema_version": SCHEMA_VERSION,
@@ -80,11 +88,13 @@ def _render(source: str, interaction: dict[str, object]) -> dict[str, object]:
             "headline": response.get("headline", ""),
             "plain_headline": response.get("plain_headline", ""),
             "body": response.get("body", ""),
+            "body_text": rendered_body_text,
+            "body_text_source": body_text_source,
             "phase": state.get("phase", ""),
             "claim_boundary": response.get("claim_boundary", ""),
         },
         "usage_trace": response.get("usage_trace", {}),
-        "messenger_rendering": response.get("messenger_rendering", {}),
+        "messenger_rendering": rendering,
         "actions": [
             {
                 "id": action.get("id", ""),

@@ -104,11 +104,24 @@ def render_native_command_response(interaction: dict[str, object], *, source: st
             }
         )
         return payload
+    rendering = _nested(response, "messenger_rendering")
+    body_text = rendering.get("body_text")
+    if isinstance(body_text, str):
+        rendered_body_text = body_text
+        body_text_source = "messenger_rendering.body_text"
+        render_warnings: list[str] = []
+    else:
+        rendered_body_text = ""
+        body_text_source = "missing_messenger_rendering.body_text"
+        render_warnings = ["missing_messenger_safe_body"]
     payload.update(
         {
             "render_kind": "chat_response",
             "headline": response.get("headline", ""),
             "body": response.get("body", ""),
+            "body_text": rendered_body_text,
+            "body_text_source": body_text_source,
+            "render_warnings": render_warnings,
             "actions": response.get("actions", []),
         }
     )

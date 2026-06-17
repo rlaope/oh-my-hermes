@@ -362,11 +362,13 @@ The backend flow is:
    adapters can read `chat_response.usage_trace` for the selected workflow,
    harness, executor, and evidence boundary without parsing prose.
 9. Discord, Slack, Telegram, and similar adapters apply
-   `chat_response.messenger_rendering`: start with the visible prefix, prefer
-   short paragraphs or bullets, and convert wide Markdown tables into
-   messenger-safe lists or split chunks. The prefix appears once per response;
-   repeat it only if the adapter splits a long answer into separate posted
-   chunks.
+   `chat_response.messenger_rendering`: start with the visible prefix and
+   render `chat_response.messenger_rendering.body_text` instead of raw
+   `chat_response.body`. OMH converts wide Markdown tables into
+   messenger-safe bullets when possible; block-based adapters can use
+   `chat_response.messenger_rendering.body_blocks`. The prefix appears once
+   per response; repeat it only if the adapter splits a long answer into
+   separate posted chunks.
 10. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.
 11. If the interaction presents a plan, the wrapper waits for the user to accept
