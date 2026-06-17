@@ -666,7 +666,7 @@ compatibility surfaces remain routable either way:
 omh setup --profile-pack cto-loop --profile-pack startup-delivery
 ```
 
-Record a default coding handoff style during setup:
+Record a default coding agent during setup:
 
 ```sh
 omh setup --default-executor claude-code
@@ -674,9 +674,9 @@ omh setup --default-executor claude-code
 
 Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
 `omx-runtime`, `omo-runtime`, and `omc-runtime`. The recommended default is
-`choose`, which asks before dispatch. Legacy `OMH_SETUP_PROFILES=1,3` still maps
-to setup profile categories for automation that already uses it, but new scripts
-should prefer `OMH_DEFAULT_EXECUTOR`.
+`choose`, which asks before choosing a coding agent. Legacy
+`OMH_SETUP_PROFILES=1,3` still maps to setup profile categories for automation
+that already uses it, but new scripts should prefer `OMH_DEFAULT_EXECUTOR`.
 
 Record a Hermes-facing operating model during setup:
 

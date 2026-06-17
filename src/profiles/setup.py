@@ -21,30 +21,30 @@ SETUP_PROFILE_CATEGORIES = (
     {
         "id": "prompt-only-coding",
         "choice": "2",
-        "label": "Portable executor prompts",
+        "label": "Other coding agent",
         "default_executor": "generic",
-        "description": "Prepare copy-ready prompts for Claude Code, generic agents, or other tools without claiming execution.",
+        "description": "Prepare copy-ready prompts for Claude Code, generic agents, or other tools.",
     },
     {
         "id": "codex-lifecycle",
         "choice": "3",
-        "label": "Codex tracked handoffs",
+        "label": "Codex",
         "default_executor": "codex",
-        "description": "Prepare Codex handoffs and track dispatch, result, review, CI, and merge evidence when selected.",
+        "description": "Use Codex as the default coding agent and track dispatch, result, review, CI, and merge evidence when selected.",
     },
     {
         "id": "plugin-runtime",
         "choice": "4",
-        "label": "Plugin/runtime handoffs",
+        "label": "Oh-my runtime",
         "default_executor": "omx-runtime",
-        "description": "Prepare OMX/OMO/OMC-style runtime prompts without running those runtimes secretly.",
+        "description": "Use an oh-my runtime profile when the user has one.",
     },
     {
         "id": "safety-first",
         "choice": "5",
-        "label": "Ask before choosing executor",
+        "label": "Ask every time",
         "default_executor": "choose",
-        "description": "Ask the user before dispatch and preserve prepared-vs-observed boundaries.",
+        "description": "Ask the user before choosing a coding agent and preserve prepared-vs-observed boundaries.",
     },
 )
 

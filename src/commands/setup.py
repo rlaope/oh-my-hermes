@@ -1146,9 +1146,8 @@ def _choice_menu_lines(
     for index, option in enumerate(options):
         active = index == cursor
         pointer = ">" if active else " "
-        marker = "[x]" if active else "[ ]"
         suffix = f" ({tr(language, 'recommended')})" if option["choice"] == default_choice else ""
-        label = f"  {pointer} {marker} {option['choice']}) {option['label']}{suffix}"
+        label = f"  {pointer} {option['choice']}) {option['label']}{suffix}"
         if active:
             label = _color(label, "1;36", use_color)
         lines.append(label)
@@ -1781,44 +1780,44 @@ def _config_change_label(language: str, message: str) -> str:
 def _executor_summary(language: str, executor: str) -> str:
     labels = {
         "en": {
-            "choose": "Hermes will ask before choosing a coding agent",
-            "codex": "Hermes will prepare Codex handoffs when coding is selected",
-            "claude-code": "Hermes will prepare Claude Code prompts",
-            "generic": "Hermes will prepare portable prompts for any coding agent",
-            "hermes": "Hermes will keep small coding-like work inside Hermes first",
-            "omx-runtime": "Hermes will prepare oh-my runtime handoffs",
-            "omo-runtime": "Hermes will prepare oh-my runtime handoffs",
-            "omc-runtime": "Hermes will prepare oh-my runtime handoffs",
+            "choose": "Ask every time",
+            "codex": "Codex",
+            "claude-code": "Claude Code",
+            "generic": "Other coding agent",
+            "hermes": "Hermes",
+            "omx-runtime": "Oh-my runtime",
+            "omo-runtime": "Oh-my runtime",
+            "omc-runtime": "Oh-my runtime",
         },
         "ko": {
-            "choose": "코딩 에이전트를 고르기 전에 Hermes가 먼저 물어봅니다",
-            "codex": "코딩이 선택되면 Hermes가 Codex용 작업을 준비합니다",
-            "claude-code": "Hermes가 Claude Code에 줄 프롬프트를 준비합니다",
-            "generic": "Hermes가 어떤 코딩 에이전트에도 줄 수 있는 프롬프트를 준비합니다",
-            "hermes": "작은 코딩 유사 작업은 먼저 Hermes 안에서 다룹니다",
-            "omx-runtime": "Hermes가 oh-my 런타임용 작업을 준비합니다",
-            "omo-runtime": "Hermes가 oh-my 런타임용 작업을 준비합니다",
-            "omc-runtime": "Hermes가 oh-my 런타임용 작업을 준비합니다",
+            "choose": "매번 물어보기",
+            "codex": "Codex",
+            "claude-code": "Claude Code",
+            "generic": "기타 코딩 에이전트",
+            "hermes": "Hermes",
+            "omx-runtime": "Oh-my 런타임",
+            "omo-runtime": "Oh-my 런타임",
+            "omc-runtime": "Oh-my 런타임",
         },
         "ja": {
-            "choose": "コーディングエージェントを選ぶ前に Hermes が確認します",
-            "codex": "コーディングが選ばれたら Hermes が Codex 向け作業を準備します",
-            "claude-code": "Hermes が Claude Code 用プロンプトを準備します",
-            "generic": "Hermes が任意のコーディングエージェント向けプロンプトを準備します",
-            "hermes": "小さなコーディングに近い作業はまず Hermes 内で扱います",
-            "omx-runtime": "Hermes が oh-my ランタイム向け作業を準備します",
-            "omo-runtime": "Hermes が oh-my ランタイム向け作業を準備します",
-            "omc-runtime": "Hermes が oh-my ランタイム向け作業を準備します",
+            "choose": "毎回確認",
+            "codex": "Codex",
+            "claude-code": "Claude Code",
+            "generic": "その他のコーディングエージェント",
+            "hermes": "Hermes",
+            "omx-runtime": "Oh-my ランタイム",
+            "omo-runtime": "Oh-my ランタイム",
+            "omc-runtime": "Oh-my ランタイム",
         },
         "zh": {
-            "choose": "Hermes 会先询问，再选择编码代理",
-            "codex": "选择编码后，Hermes 会准备 Codex 交接",
-            "claude-code": "Hermes 会准备 Claude Code 提示词",
-            "generic": "Hermes 会准备可交给任意编码代理的提示词",
-            "hermes": "小型类似编码的工作会先留在 Hermes 内处理",
-            "omx-runtime": "Hermes 会准备 oh-my 运行时交接",
-            "omo-runtime": "Hermes 会准备 oh-my 运行时交接",
-            "omc-runtime": "Hermes 会准备 oh-my 运行时交接",
+            "choose": "每次询问",
+            "codex": "Codex",
+            "claude-code": "Claude Code",
+            "generic": "其他编码代理",
+            "hermes": "Hermes",
+            "omx-runtime": "Oh-my 运行时",
+            "omo-runtime": "Oh-my 运行时",
+            "omc-runtime": "Oh-my 运行时",
         },
     }
     code = normalize_language(language)
@@ -2024,7 +2023,7 @@ def _add_top_level_commands(sub) -> None:
         "--default-executor",
         choices=CODING_EXECUTOR_TARGETS,
         default=None,
-        help="Default executor preference for coding-shaped handoffs. Use 'choose' to ask each time.",
+        help="Default coding agent preference. Use 'choose' to ask each time.",
     )
     setup.add_argument(
         "--operating-model",
