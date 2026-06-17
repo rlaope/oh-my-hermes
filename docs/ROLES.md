@@ -24,10 +24,11 @@ Use `omh setup --operating-model <id>` for these defaults. Use
 Hermes.
 
 The setup choice is an organization pattern for Hermes chat, not proof that
-any worker or executor ran:
+any worker or executor ran. The map below shows where roles shape chat
+routing, prepared handoffs, and observed evidence:
 
 <p align="center">
-  <img src="../assets/omh-profile-interaction-map.svg" alt="OMH organization pattern map" width="920">
+  <img src="../assets/omh-profile-interaction-map.svg" alt="OMH request-to-handoff role interaction map" width="920">
 </p>
 
 ## Roles

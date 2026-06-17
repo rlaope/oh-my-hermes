@@ -27,6 +27,18 @@ First-run expectation:
 3. You restart or reload Hermes Agent.
 4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
+## What Setup Changes
+
+OMH's setup footprint is intentionally bounded:
+
+- It installs managed Hermes-visible skills and records local status contracts.
+- It can repair or reapply managed `skills.external_dirs` when a Hermes
+  profile drifts.
+- It keeps CLI output available for setup, doctor, update, and wrapper
+  backends.
+- It does not patch Hermes core, run hidden coding work, or turn a prepared
+  handoff into observed execution.
+
 The curl installer intentionally stops before setup. It installs the isolated
 command package and `omh` executable only. `omh setup` is the explicit,
 repairable step that installs generated managed skills and registers them with
