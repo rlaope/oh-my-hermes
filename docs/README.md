@@ -25,7 +25,7 @@ repo-local contract for Codex agents working here.
 | See Discord-style wrapper responses | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
 | Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
 | Install Hermes-native skills or bootstrap managed skills | [Installation](INSTALLATION.md) |
-| Run deterministic backend demos | [`omh demo orchestration`](../README.md#backend--operator-surface) and [fixture shims](../examples) |
+| Run deterministic backend demos | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md#commands-used) and [fixture shims](../examples) |
 | See the G1-G10 implemented feature surfaces | [Application Cases](APPLICATION_CASES.md) |
 | Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
 | Prepare or verify a release | [Release](RELEASE.md) |
@@ -44,6 +44,11 @@ handoff UX. The selected coding executor should own main coding work when work
 leaves Hermes. OMH should own the deterministic local contract between those
 worlds: generated skill guidance, playbooks, wrapper sessions, prepared handoff
 payloads, and evidence records.
+
+Assume most users will try the product before reading the full docs. The public
+surface should therefore make the first install, first Hermes prompt, repair
+path, and evidence boundary obvious without forcing users into a CLI-first
+workflow.
 
 The most important boundary is prepared versus observed evidence. A prepared
 handoff is useful, but it is not execution, review, CI, merge readiness, or a

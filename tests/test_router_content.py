@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 import unittest
 
@@ -58,6 +59,17 @@ FEATURE_SURFACE_EXPOSURES = {
 
 
 class RouterContentTests(unittest.TestCase):
+    def test_docs_readme_does_not_reference_removed_readme_anchors(self) -> None:
+        docs_index = Path("docs/README.md").read_text(encoding="utf-8")
+        root_readme = Path("README.md").read_text(encoding="utf-8")
+        headings = {
+            re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
+            for heading in re.findall(r"^#{1,6}\s+(.+)$", root_readme, flags=re.MULTILINE)
+        }
+
+        for anchor in re.findall(r"\]\(\.\./README\.md#([^)]+)\)", docs_index):
+            self.assertIn(anchor, headings, f"docs/README.md links to missing README anchor #{anchor}")
+
     def test_router_documents_best_effort_and_recovery(self) -> None:
         router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
 
@@ -723,9 +735,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("[Roles](docs/ROLES.md)", readme)
         self.assertIn("[Application Cases](docs/APPLICATION_CASES.md)", readme)
         self.assertIn("[GitHub Pages site](site/index.html)", readme)
-        self.assertIn("Have you ever felt that Hermes Agent is powerful", readme)
+        self.assertIn("Most people skip the docs.", readme)
+        self.assertIn("without replacing your existing setup", readme)
         self.assertIn("ready-to-use workflows such as", readme)
-        self.assertIn("`web-research`, `doctor`, `idea-to-deploy`, `ultragoal`, `loop`, and", readme)
+        self.assertIn("`web-research`, `doctor`", readme)
+        self.assertIn("`idea-to-deploy`, `ultragoal`, `loop`, and `ultraprocess`", readme)
         self.assertIn("`ultraprocess`", readme)
         self.assertIn("Optional team profile packs", readme)
         self.assertIn("omh profile list", readme)
@@ -857,7 +871,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="docs/">Read docs</a>', site)
         self.assertIn('id="real-use"', site)
         self.assertIn("From install to real use", site)
-        self.assertIn("high barrier to entry", site)
+        self.assertIn("Most people skip the docs.", site)
+        self.assertIn("Fits existing Hermes setup", site)
+        self.assertIn("high barrier", site)
+        self.assertIn("entry: installation", site)
         self.assertIn("web-research", site)
         self.assertIn("doctor", site)
         self.assertIn("idea-to-deploy", site)
@@ -877,6 +894,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="docs/product-ops/"', site)
         self.assertIn('href="docs/executor-handoff/"', site)
         self.assertIn("Hermes Agent Integration Runbook", site_docs)
+        self.assertIn("Install once, then keep working in Hermes.", site_docs)
+        self.assertIn("Most people will not study every page before trying the tool.", site_docs)
         self.assertIn("examples/wrapper-golden/hermes-agent-integration.json", site_docs)
         self.assertIn("Role surface", site_docs)
         self.assertIn("docs/ROLES.md", site_docs)

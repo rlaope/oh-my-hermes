@@ -10,6 +10,11 @@ runtime. It borrows the discipline of staged workflows, local state, and
 evidence gates, then translates that discipline into Hermes-native chat,
 planning, status, and handoff contracts.
 
+The product should feel like a safe fit for an existing Hermes workflow, not a
+separate CLI-first tool that users must learn before they get value. Assume many
+users will skip most docs at first; the install path, first Hermes prompt,
+status language, and repair commands must make the safe path obvious.
+
 ## Design Philosophy
 
 Raise the product's capability level by strengthening contracts, not by hiding
