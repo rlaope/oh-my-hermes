@@ -59,16 +59,19 @@ runtime run exists and the wrapper needs a compact progress card.
 1. Receive the platform event and store only the metadata needed by the wrapper.
 2. Ask OMH for a platform-neutral interaction envelope.
 3. Render `chat_response.headline`, `chat_response.body`,
-   `chat_response.actions`, and `chat_response.claim_boundary`. The headline
-   already includes the visible OMH usage marker, such as `[omh] web-research`;
-   use `chat_response.plain_headline` only when a compact surface needs the
+   `chat_response.actions`, and `chat_response.claim_boundary` on rich or web
+   surfaces that can handle the original Markdown body. The headline already
+   includes the visible OMH usage marker, such as `[omh] web-research`; use
+   `chat_response.plain_headline` only when a compact surface needs the
    unprefixed text.
 4. Apply `chat_response.messenger_rendering` when the target is Discord, Slack,
-   Telegram, or another narrow chat surface. Prefer short paragraphs, bullets,
-   numbered lists, and status lines; convert wide Markdown tables into bullets
-   or split chunks before posting. Render the prefix once per response, not on
-   every paragraph; repeat it only when the adapter posts a long response as
-   separate message chunks.
+   Telegram, or another narrow chat surface. Render
+   `chat_response.messenger_rendering.body_text` instead of raw
+   `chat_response.body`; OMH has already converted Markdown tables into
+   messenger-safe bullets when possible. Adapters that need structured blocks
+   can use `chat_response.messenger_rendering.body_blocks`. Render the prefix
+   once per response, not on every paragraph; repeat it only when the adapter
+   posts a long response as separate message chunks.
 5. If `target_notice.action` is `ask_to_apply_target_change`, render a short
    setup-change comment and an apply action. Until accepted or auto-applied,
    keep the workflow scoped to the current thread target. The
@@ -142,6 +145,16 @@ Hermes-native buttons. A normal user should see actions such as Open in Codex,
 Open in Claude Code, Attach session, Refresh status, Record completed, Record
 blocked, or Ask Hermes to verify. The wrapper process maps those buttons back
 to backend calls; the user does not need to know the command names.
+
+Open buttons include `executor_launch/v1` under
+`executor_actions[].payload.launch`. Render it as a copyable command/prompt UI.
+Codex command templates use `codex` and optional `codex --cd`; Claude Code
+command templates use `claude` and optional `claude --add-dir`. Prompt
+placeholders use `{executor_prompt_shell_quoted}`, and workspace command
+templates use `{workspace_path_shell_quoted}` for shell-safe paths. The wrapper
+substitutes `{executor_prompt}` from the prepared handoff prompt or original
+chat message it already holds, then calls `open-executor --observed` only after
+it sees the user/platform open the executor.
 
 For a Codex handoff, the wrapper can record an observed open and later result:
 

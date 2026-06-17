@@ -770,10 +770,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
 
 def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_key: str = "") -> dict[str, object]:
     next_action = str(status_payload.get("next_action", "show_status"))
-    kind, headline, body, claim_boundary = _STATUS_COPY.get(
-        next_action,
-        ("status", "I have a conservative status update.", str(status_payload.get("safe_summary", "")), "Only observed evidence can support completion claims."),
-    )
+    kind, headline, body, claim_boundary = _status_copy(status_payload, next_action)
     actions = [_action("show_status", "Show status", "secondary")]
     if next_action == "dispatch_to_executor":
         actions.insert(0, _action("send_to_executor", "Send to executor", "primary"))
@@ -803,10 +800,7 @@ def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_ke
 
 def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, object]:
     next_action = str(status_payload.get("next_action", "show_status"))
-    kind, headline, body, claim_boundary = _STATUS_COPY.get(
-        next_action,
-        ("status", "I have a conservative status update.", str(status_payload.get("safe_summary", "")), "Only observed evidence can support completion claims."),
-    )
+    kind, headline, body, claim_boundary = _status_copy(status_payload, next_action)
     card: dict[str, object] = {
         "schema_version": STATUS_CARD_SCHEMA_VERSION,
         "run_id": str(status_payload.get("run_id", "")),
@@ -823,6 +817,48 @@ def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, o
     if isinstance(harness_progress, dict) and harness_progress:
         card["harness_progress"] = harness_progress
     return card
+
+
+def _status_copy(status_payload: dict[str, Any], next_action: str) -> tuple[str, str, str, str]:
+    fallback = (
+        "status",
+        "I have a conservative status update.",
+        str(status_payload.get("safe_summary", "")),
+        "Only observed evidence can support completion claims.",
+    )
+    kind, headline, body, claim_boundary = _STATUS_COPY.get(next_action, fallback)
+    if next_action == "wait_for_executor_evidence":
+        label = _status_executor_label(status_payload)
+        suffix = f" ({label})" if label else ""
+        return (
+            kind,
+            f"The coding handoff{suffix} was dispatched.",
+            f"I am waiting for {label + ' ' if label else ''}executor evidence before reporting completion.",
+            claim_boundary,
+        )
+    if next_action == "dispatch_to_executor":
+        label = _status_executor_label(status_payload)
+        suffix = f" ({label})" if label else ""
+        return (
+            kind,
+            f"The coding handoff{suffix} is ready.",
+            "I have prepared the coding handoff, but executor/runtime dispatch is not observed yet.",
+            claim_boundary,
+        )
+    return kind, headline, body, claim_boundary
+
+
+def _status_executor_label(status_payload: dict[str, Any]) -> str:
+    for value in (
+        _nested(status_payload, "prepared").get("executor_target", ""),
+        _nested(status_payload, "prepared").get("selected_executor_profile", ""),
+        _nested(status_payload, "executor_session_status").get("selected_executor_profile", ""),
+        status_payload.get("selected_executor_profile", ""),
+    ):
+        profile = str(value or "").strip()
+        if profile:
+            return executor_label(profile)
+    return ""
 
 
 def _base_interaction(
@@ -1521,17 +1557,21 @@ def messenger_rendering_contract(
     body: str,
     claim_boundary: str,
 ) -> dict[str, object]:
+    body_text, transforms = _messenger_safe_body(body)
     return {
         "schema_version": MESSENGER_RENDERING_SCHEMA_VERSION,
         "visible_prefix": visible_prefix,
         "first_line": first_line,
         "body_format": "messenger_safe_markdown",
+        "body_text": body_text,
+        "body_blocks": _messenger_body_blocks(body_text),
         "preferred_blocks": ["short_paragraph", "bulleted_list", "numbered_list", "status_lines"],
         "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
         "chunking": {
             "max_recommended_chars": 1800,
             "split_on": ["headings", "bullets", "paragraphs"],
         },
+        "transforms_applied": transforms,
         "prefix_policy": {
             "default": "once_per_response_first_line",
             "repeat_when": "adapter_splits_response_across_separate_messages_or_chunks",
@@ -1544,9 +1584,211 @@ def messenger_rendering_contract(
             "hermes": "Render the visible prefix as a compact workflow/status marker before the body.",
         },
         "table_policy": "convert_tables_to_bullets_for_messenger",
-        "body_preview": _short_text(body, limit=180),
+        "body_preview": _short_text(body_text, limit=180),
         "claim_boundary": claim_boundary,
     }
+
+
+def _messenger_safe_body(body: str) -> tuple[str, list[str]]:
+    lines = body.splitlines()
+    if not lines:
+        return body, []
+    output: list[str] = []
+    transforms: list[str] = []
+    index = 0
+    in_code_fence = False
+    while index < len(lines):
+        if _is_code_fence_line(lines[index]):
+            in_code_fence = not in_code_fence
+            output.append(lines[index])
+            index += 1
+            continue
+        if in_code_fence:
+            output.append(lines[index])
+            index += 1
+            continue
+        if not _is_markdown_table_start(lines, index):
+            output.append(lines[index])
+            index += 1
+            continue
+        block: list[str] = []
+        while index < len(lines) and _is_markdown_table_line(lines[index]):
+            block.append(lines[index])
+            index += 1
+        converted = _markdown_table_to_bullets(block)
+        if not converted:
+            output.extend(block)
+            continue
+        if output and output[-1].strip():
+            output.append("")
+        output.extend(converted)
+        transforms.append("markdown_table_to_bullets")
+    return "\n".join(output), sorted(set(transforms))
+
+
+def _is_code_fence_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("```") or stripped.startswith("~~~")
+
+
+def _is_markdown_table_start(lines: list[str], index: int) -> bool:
+    if index + 1 >= len(lines):
+        return False
+    return _is_markdown_table_line(lines[index]) and _is_markdown_separator_line(lines[index + 1])
+
+
+def _is_markdown_table_line(line: str) -> bool:
+    stripped = line.strip()
+    return "|" in stripped and len(_split_markdown_table_row(stripped)) >= 2
+
+
+def _is_markdown_separator_line(line: str) -> bool:
+    cells = _split_markdown_table_row(line)
+    if not cells:
+        return False
+    for cell in cells:
+        marker = cell.replace(":", "").replace("-", "").strip()
+        if marker:
+            return False
+        if cell.count("-") < 3:
+            return False
+    return True
+
+
+def _markdown_table_to_bullets(lines: list[str]) -> list[str]:
+    if len(lines) < 3 or not _is_markdown_separator_line(lines[1]):
+        return []
+    headers = _split_markdown_table_row(lines[0])
+    if not headers:
+        return []
+    bullets: list[str] = []
+    for row in lines[2:]:
+        if _is_markdown_separator_line(row):
+            continue
+        cells = _split_markdown_table_row(row)
+        if not any(cells):
+            continue
+        while len(cells) < len(headers):
+            cells.append("")
+        first = cells[0].strip()
+        details = [
+            f"{header}: {cell}"
+            for header, cell in zip(headers[1:], cells[1:])
+            if header.strip() and cell.strip()
+        ]
+        if first and details:
+            bullets.append(f"- {first}: {'; '.join(details)}")
+        elif first:
+            bullets.append(f"- {headers[0]}: {first}")
+        elif details:
+            bullets.append(f"- {'; '.join(details)}")
+    return bullets
+
+
+def _split_markdown_table_row(line: str) -> list[str]:
+    stripped = line.strip()
+    cells: list[str] = []
+    current: list[str] = []
+    code_tick_length = 0
+    index = 0
+    while index < len(stripped):
+        character = stripped[index]
+        if character == "`" and not _is_escaped(stripped, index):
+            run_end = index
+            while run_end < len(stripped) and stripped[run_end] == "`":
+                run_end += 1
+            run_length = run_end - index
+            if code_tick_length == 0:
+                code_tick_length = run_length
+            elif code_tick_length == run_length:
+                code_tick_length = 0
+            current.append(stripped[index:run_end])
+            index = run_end
+            continue
+        if character == "|" and code_tick_length == 0 and not _is_escaped(stripped, index):
+            cells.append(_normalize_table_cell("".join(current)))
+            current = []
+            index += 1
+            continue
+        current.append(character)
+        index += 1
+    cells.append(_normalize_table_cell("".join(current)))
+    if cells and not cells[0]:
+        cells = cells[1:]
+    if cells and not cells[-1]:
+        cells = cells[:-1]
+    return cells
+
+
+def _is_escaped(value: str, index: int) -> bool:
+    slash_count = 0
+    cursor = index - 1
+    while cursor >= 0 and value[cursor] == "\\":
+        slash_count += 1
+        cursor -= 1
+    return slash_count % 2 == 1
+
+
+def _normalize_table_cell(value: str) -> str:
+    return _unescape_table_pipes(value.strip())
+
+
+def _unescape_table_pipes(value: str) -> str:
+    output: list[str] = []
+    index = 0
+    while index < len(value):
+        if value[index] == "\\" and index + 1 < len(value) and value[index + 1] == "|":
+            output.append("|")
+            index += 2
+            continue
+        output.append(value[index])
+        index += 1
+    return "".join(output)
+
+
+def _messenger_body_blocks(body: str) -> list[dict[str, object]]:
+    blocks: list[dict[str, object]] = []
+    current: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                blocks.append({"type": "paragraph", "text": " ".join(current)})
+                current = []
+            continue
+        if stripped.startswith(("- ", "* ")):
+            if current:
+                blocks.append({"type": "paragraph", "text": " ".join(current)})
+                current = []
+            blocks.append({"type": "bullet", "text": stripped[2:].strip()})
+            continue
+        numbered_text = _numbered_list_text(stripped)
+        if numbered_text:
+            if current:
+                blocks.append({"type": "paragraph", "text": " ".join(current)})
+                current = []
+            blocks.append({"type": "numbered", "text": numbered_text})
+            continue
+        current.append(stripped)
+    if current:
+        blocks.append({"type": "paragraph", "text": " ".join(current)})
+    return blocks
+
+
+def _numbered_list_text(stripped: str) -> str:
+    marker = ""
+    for index, character in enumerate(stripped):
+        if character.isdigit():
+            continue
+        if character in {".", ")"} and index > 0:
+            marker = stripped[: index + 1]
+        break
+    if not marker:
+        return ""
+    if len(stripped) <= len(marker) or not stripped[len(marker)].isspace():
+        return ""
+    rest = stripped[len(marker) :].strip()
+    return rest
 
 
 def _short_text(value: str, *, limit: int) -> str:

@@ -6,7 +6,12 @@ import unittest
 from _local_package import load_local_package
 
 load_local_package()
-from omh.wrapper_contract import build_chat_interaction_payload, build_chat_response_from_status, build_status_card_from_status
+from omh.wrapper_contract import (
+    build_chat_interaction_payload,
+    build_chat_response_from_status,
+    build_status_card_from_status,
+    messenger_rendering_contract,
+)
 from omh.wrapper.native_commands import build_native_command_surface, render_native_command_response
 
 
@@ -249,6 +254,159 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(rendering["prefix_policy"]["default"], "once_per_response_first_line")
         self.assertEqual(rendering["prefix_policy"]["repeat_when"], "adapter_splits_response_across_separate_messages_or_chunks")
         self.assertIn("not execution evidence", trace["claim_boundary"])
+
+    def test_messenger_rendering_converts_markdown_tables_to_bullets(self) -> None:
+        body = "\n".join(
+            [
+                "비교는 이렇게 보면 됩니다.",
+                "",
+                "| 계열 | 강점 | OMH 포지션 |",
+                "| --- | --- | --- |",
+                "| Hermes Agent | Skills, memory, gateway | Workflow layer |",
+                "| OpenCode | TUI coding loop | Handoff target |",
+                "",
+                "표 이후 문단입니다.",
+            ]
+        )
+
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] web-research",
+            first_line="[omh] web-research - 비교 결과입니다.",
+            body=body,
+            claim_boundary="Research summary is not execution evidence.",
+        )
+
+        self.assertIn("markdown_table_to_bullets", rendering["transforms_applied"])
+        self.assertIn("- Hermes Agent: 강점: Skills, memory, gateway; OMH 포지션: Workflow layer", rendering["body_text"])
+        self.assertIn("- OpenCode: 강점: TUI coding loop; OMH 포지션: Handoff target", rendering["body_text"])
+        self.assertNotIn("| --- |", rendering["body_text"])
+        self.assertIn("Hermes Agent", rendering["body_preview"])
+        self.assertTrue(any(block["type"] == "bullet" and "Hermes Agent" in block["text"] for block in rendering["body_blocks"]))
+
+    def test_messenger_rendering_converts_tables_without_outer_pipes(self) -> None:
+        body = "\n".join(
+            [
+                "계열 | 강점",
+                "--- | ---",
+                "Hermes | Gateway",
+            ]
+        )
+
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] web-research",
+            first_line="[omh] web-research - 비교 결과입니다.",
+            body=body,
+            claim_boundary="Research summary is not execution evidence.",
+        )
+
+        self.assertEqual(rendering["body_text"], "- Hermes: 강점: Gateway")
+        self.assertIn("markdown_table_to_bullets", rendering["transforms_applied"])
+
+    def test_messenger_rendering_preserves_pipe_characters_inside_cells(self) -> None:
+        body = "\n".join(
+            [
+                "| Case | Example | Notes |",
+                "| --- | --- | --- |",
+                "| Escaped | `a\\|b` | keeps escaped \\| text |",
+                "| Code span | `x|y` | keeps inline code pipe |",
+            ]
+        )
+
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] web-research",
+            first_line="[omh] web-research - 비교 결과입니다.",
+            body=body,
+            claim_boundary="Research summary is not execution evidence.",
+        )
+
+        self.assertIn("- Escaped: Example: `a|b`; Notes: keeps escaped | text", rendering["body_text"])
+        self.assertIn("- Code span: Example: `x|y`; Notes: keeps inline code pipe", rendering["body_text"])
+        self.assertIn("markdown_table_to_bullets", rendering["transforms_applied"])
+
+    def test_messenger_rendering_keeps_tables_inside_code_fences(self) -> None:
+        body = "\n".join(
+            [
+                "예제는 그대로 보여줘야 합니다.",
+                "",
+                "```markdown",
+                "| key | value |",
+                "| --- | --- |",
+                "| a | b |",
+                "```",
+            ]
+        )
+
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] web-research",
+            first_line="[omh] web-research - 예제입니다.",
+            body=body,
+            claim_boundary="Research summary is not execution evidence.",
+        )
+
+        self.assertEqual(rendering["transforms_applied"], [])
+        self.assertIn("| --- | --- |", rendering["body_text"])
+
+    def test_native_render_uses_messenger_safe_body_for_tables(self) -> None:
+        body = "\n".join(
+            [
+                "| 계열 | 강점 |",
+                "| --- | --- |",
+                "| Hermes | Gateway |",
+            ]
+        )
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] web-research",
+            first_line="[omh] web-research - 비교 결과입니다.",
+            body=body,
+            claim_boundary="Not execution evidence.",
+        )
+        rendered = render_native_command_response(
+            {
+                "thread_key": "discord:c1:m1",
+                "chat_response": {
+                    "kind": "plan",
+                    "headline": "[omh] web-research - 비교 결과입니다.",
+                    "body": body,
+                    "state": {"phase": "planning"},
+                    "messenger_rendering": rendering,
+                    "actions": [],
+                },
+            },
+            source="discord",
+        )
+
+        self.assertEqual(rendered["body"], body)
+        self.assertEqual(rendered["body_text"], "- Hermes: 강점: Gateway")
+        self.assertEqual(rendered["body_text_source"], "messenger_rendering.body_text")
+        self.assertEqual(rendered["render_warnings"], [])
+
+    def test_native_render_warns_when_messenger_safe_body_is_missing(self) -> None:
+        body = "\n".join(
+            [
+                "| 계열 | 강점 |",
+                "| --- | --- |",
+                "| Hermes | Gateway |",
+            ]
+        )
+        rendered = render_native_command_response(
+            {
+                "thread_key": "discord:c1:m1",
+                "chat_response": {
+                    "kind": "plan",
+                    "headline": "[omh] web-research - 비교 결과입니다.",
+                    "body": body,
+                    "state": {"phase": "planning"},
+                    "messenger_rendering": {"schema_version": "omh_messenger_rendering/v1"},
+                    "actions": [],
+                },
+            },
+            source="discord",
+        )
+
+        self.assertEqual(rendered["body"], body)
+        self.assertEqual(rendered["body_text"], "")
+        self.assertEqual(rendered["body_text_source"], "missing_messenger_rendering.body_text")
+        self.assertIn("missing_messenger_safe_body", rendered["render_warnings"])
 
     def test_route_mode_exposes_visible_omh_usage_trace_for_multiple_workflows(self) -> None:
         cases = (
@@ -498,6 +656,22 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(response["status_card"]["schema_version"], "status_card/v1")
         self.assertEqual(response["status_card"]["steps"][2]["id"], "verification")
         self.assertEqual(response["status_card"]["steps"][2]["state"], "pending")
+
+    def test_status_copy_names_dispatched_coding_agent(self) -> None:
+        response = build_chat_response_from_status(
+            {
+                "run_id": "run-1",
+                "next_action": "wait_for_executor_evidence",
+                "prepared": {"executor_target": "codex"},
+                "execution": {"observed": False},
+                "verification": {"observed": False},
+                "review": {"required": False},
+            }
+        )
+
+        self.assertEqual(response["plain_headline"], "The coding handoff (Codex) was dispatched.")
+        self.assertEqual(response["status_card"]["headline"], "The coding handoff (Codex) was dispatched.")
+        self.assertIn("waiting for Codex executor evidence", response["body"])
 
     def test_status_card_exposes_platform_neutral_progress_steps(self) -> None:
         card = build_status_card_from_status(
