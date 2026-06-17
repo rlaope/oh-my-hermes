@@ -266,6 +266,13 @@ def roles_reference_markdown() -> str:
         "`omh setup --profile-pack <id>` only when you also want visible role files under",
         "Hermes.",
         "",
+        "The setup choice is an organization pattern for Hermes chat, not proof that",
+        "any worker or executor ran:",
+        "",
+        '<p align="center">',
+        '  <img src="../assets/omh-profile-interaction-map.svg" alt="OMH organization pattern map" width="920">',
+        "</p>",
+        "",
         "## Roles",
         "",
     ]
