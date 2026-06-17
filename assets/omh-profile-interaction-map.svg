@@ -1,139 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
-  <title id="title">OMH organization patterns</title>
-  <desc id="desc">A dark architecture-style diagram showing how OMH organizes Hermes work into solo, research, product ops, coding runtime, and CTO loop patterns.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">OMH request-to-handoff interaction map</title>
+  <desc id="desc">A plain Hermes request flows through OMH routing into a prepared handoff, then only moves to observed status after wrapper or runtime evidence is recorded.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#050814"/>
-      <stop offset="0.58" stop-color="#091221"/>
-      <stop offset="1" stop-color="#111827"/>
-    </linearGradient>
-    <linearGradient id="router" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#22d3ee"/>
-      <stop offset="1" stop-color="#6366f1"/>
-    </linearGradient>
-    <linearGradient id="boundary" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#14b8a6"/>
-      <stop offset="0.5" stop-color="#22d3ee"/>
-      <stop offset="1" stop-color="#8b5cf6"/>
-    </linearGradient>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9"/>
-    </marker>
     <style>
-      .title { font: 800 36px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f8fafc; }
-      .subtitle { font: 500 17px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #b8c5d9; }
-      .eyebrow { font: 800 12px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1.8px; fill: #67e8f9; }
-      .label { font: 800 19px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #f8fafc; }
-      .role { font: 750 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #eef6ff; }
-      .body { font: 500 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #aebbd2; }
-      .note { font: 650 12px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #91a3bf; }
-      .panel { fill: rgba(15, 23, 42, 0.82); stroke: rgba(148, 163, 184, 0.25); stroke-width: 1.15; }
-      .hot { fill: rgba(8, 47, 73, 0.72); stroke: rgba(103, 232, 249, 0.56); stroke-width: 1.45; }
-      .pattern { fill: rgba(15, 23, 42, 0.76); stroke: rgba(148, 163, 184, 0.22); stroke-width: 1.1; }
-      .chip { fill: rgba(2, 6, 23, 0.78); stroke: rgba(103, 232, 249, 0.36); stroke-width: 1; }
-      .chipV { fill: rgba(46, 16, 101, 0.48); stroke: rgba(196, 181, 253, 0.44); stroke-width: 1; }
-      .chipG { fill: rgba(20, 83, 45, 0.42); stroke: rgba(94, 234, 212, 0.44); stroke-width: 1; }
-      .line { stroke: #67e8f9; stroke-width: 1.7; fill: none; marker-end: url(#arrow); opacity: 0.84; }
-      .softLine { stroke: rgba(148, 163, 184, 0.48); stroke-width: 1.25; fill: none; stroke-dasharray: 5 6; marker-end: url(#arrow); }
+      text { font-family: Arial, Helvetica, sans-serif; }
+      .bg { fill: #f8fafc; }
+      .title { font-size: 34px; font-weight: 700; fill: #111827; }
+      .subtitle { font-size: 17px; fill: #4b5563; }
+      .card { fill: #ffffff; stroke: #d7dee8; stroke-width: 2; }
+      .card-blue { fill: #eff6ff; stroke: #93c5fd; stroke-width: 2; }
+      .card-green { fill: #ecfdf5; stroke: #86efac; stroke-width: 2; }
+      .card-amber { fill: #fffbeb; stroke: #fbbf24; stroke-width: 2; }
+      .card-slate { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 2; }
+      .label { font-size: 19px; font-weight: 700; fill: #111827; }
+      .small-label { font-size: 14px; font-weight: 700; fill: #1f2937; }
+      .body { font-size: 14px; fill: #374151; }
+      .muted { font-size: 13px; fill: #64748b; }
+      .pill { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+      .pill-text { font-size: 13px; font-weight: 700; fill: #1f2937; }
+      .arrow-line { stroke: #2563eb; stroke-width: 4; stroke-linecap: round; }
+      .arrow-head { fill: #2563eb; }
+      .thin-arrow-line { stroke: #64748b; stroke-width: 2.5; stroke-linecap: round; }
+      .thin-arrow-head { fill: #64748b; }
+      .rule { fill: #0f172a; }
+      .rule-title { font-size: 15px; font-weight: 700; fill: #ffffff; }
+      .rule-text { font-size: 14px; fill: #cbd5e1; }
     </style>
   </defs>
 
-  <rect width="1200" height="720" fill="url(#bg)"/>
-  <circle cx="1020" cy="90" r="185" fill="#2563eb" opacity="0.10"/>
-  <circle cx="150" cy="622" r="230" fill="#0f766e" opacity="0.12"/>
-  <rect x="34" y="34" width="1132" height="652" rx="30" fill="none" stroke="rgba(148, 163, 184, 0.16)"/>
+  <rect class="bg" x="0" y="0" width="1200" height="700"/>
+  <text class="title" x="72" y="62">OMH keeps Hermes chat, handoff, and evidence in separate lanes</text>
+  <text class="subtitle" x="72" y="92">Users ask Hermes in plain language. OMH shapes the workflow without pretending prepared work already ran.</text>
 
-  <text x="72" y="86" class="eyebrow">OMH ORGANIZATION PATTERNS</text>
-  <text x="72" y="128" class="title">One chat, five work architectures</text>
-  <text x="72" y="160" class="subtitle">Profiles describe role interaction patterns around a request.</text>
-  <text x="72" y="185" class="subtitle">They are not hidden agents, and every workflow remains available.</text>
+  <rect class="card" x="72" y="126" width="196" height="110" rx="14"/>
+  <text class="small-label" x="96" y="160">Plain request</text>
+  <text class="body" x="96" y="188">"Can this become</text>
+  <text class="body" x="96" y="210">a safe repo change?"</text>
 
-  <rect x="74" y="220" width="202" height="86" rx="18" class="panel"/>
-  <text x="98" y="252" class="eyebrow">INPUT</text>
-  <text x="98" y="283" class="label">Plain request</text>
+  <line class="arrow-line" x1="282" y1="181" x2="318" y2="181"/>
+  <path class="arrow-head" d="M334 181 L316 171 L316 191 Z"/>
 
-  <rect x="386" y="204" width="230" height="118" rx="22" class="hot" filter="url(#glow)"/>
-  <text x="414" y="240" class="eyebrow">ROUTER</text>
-  <text x="414" y="272" class="label">Hermes Guide</text>
-  <text x="414" y="296" class="body">Selects a pattern, skill,</text>
-  <text x="414" y="316" class="body">role owner, and next action.</text>
+  <rect class="card-blue" x="348" y="126" width="204" height="110" rx="14"/>
+  <text class="small-label" x="372" y="160">Hermes Agent</text>
+  <text class="body" x="372" y="188">Chat intake, memory,</text>
+  <text class="body" x="372" y="210">skills, and narration</text>
 
-  <rect x="732" y="220" width="202" height="86" rx="18" class="panel"/>
-  <text x="756" y="252" class="eyebrow">OUTPUT</text>
-  <text x="756" y="283" class="label">Plan / brief / handoff</text>
+  <line class="arrow-line" x1="566" y1="181" x2="602" y2="181"/>
+  <path class="arrow-head" d="M618 181 L600 171 L600 191 Z"/>
 
-  <rect x="978" y="220" width="142" height="86" rx="18" class="panel"/>
-  <text x="1000" y="252" class="eyebrow">STATE</text>
-  <text x="1000" y="283" class="label">Status card</text>
+  <rect class="card-green" x="632" y="126" width="222" height="110" rx="14"/>
+  <text class="small-label" x="656" y="160">OMH workflow layer</text>
+  <text class="body" x="656" y="188">Role, playbook, status,</text>
+  <text class="body" x="656" y="210">and evidence boundary</text>
 
-  <path d="M276 263 C320 263 342 263 386 263" class="line"/>
-  <path d="M616 263 C666 263 682 263 732 263" class="line"/>
-  <path d="M934 263 C954 263 958 263 978 263" class="line"/>
+  <line class="arrow-line" x1="868" y1="181" x2="904" y2="181"/>
+  <path class="arrow-head" d="M920 181 L902 171 L902 191 Z"/>
 
-  <rect x="72" y="372" width="196" height="172" rx="21" class="pattern"/>
-  <text x="96" y="407" class="label">Solo operator</text>
-  <text x="96" y="432" class="body">For one user who wants</text>
-  <text x="96" y="452" class="body">safe defaults.</text>
-  <rect x="96" y="480" width="64" height="36" rx="11" class="chip"/>
-  <text x="110" y="503" class="role">Guide</text>
-  <rect x="178" y="480" width="66" height="36" rx="11" class="chip"/>
-  <text x="193" y="503" class="role">Plan</text>
-  <path d="M160 498 C166 498 172 498 178 498" class="line"/>
+  <rect class="card-amber" x="934" y="126" width="194" height="110" rx="14"/>
+  <text class="small-label" x="958" y="160">Runtime handoff</text>
+  <text class="body" x="958" y="188">Codex, Claude Code,</text>
+  <text class="body" x="958" y="210">Hermes, or wrapper</text>
 
-  <rect x="292" y="372" width="196" height="172" rx="21" class="pattern"/>
-  <text x="316" y="407" class="label">Research ops</text>
-  <text x="316" y="432" class="body">For evidence, sources,</text>
-  <text x="316" y="452" class="body">briefs, and strategy.</text>
-  <rect x="316" y="480" width="82" height="36" rx="11" class="chipG"/>
-  <text x="329" y="503" class="role">Research</text>
-  <rect x="416" y="480" width="48" height="36" rx="11" class="chip"/>
-  <text x="427" y="503" class="role">Brief</text>
-  <path d="M398 498 C405 498 410 498 416 498" class="line"/>
+  <rect class="card-blue" x="72" y="304" width="320" height="244" rx="16"/>
+  <text class="label" x="104" y="344">Retained by Hermes</text>
+  <text class="muted" x="104" y="370">Guide, Researcher, Planner, Operator</text>
+  <rect class="pill" x="104" y="398" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="124" y="421">route request and ask once</text>
+  <rect class="pill" x="104" y="446" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="124" y="469">research, plan, or explain fit</text>
+  <rect class="pill" x="104" y="494" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="124" y="517">show next visible action</text>
 
-  <rect x="512" y="372" width="196" height="172" rx="21" class="pattern"/>
-  <text x="536" y="407" class="label">Product ops</text>
-  <text x="536" y="432" class="body">For feedback, cadence,</text>
-  <text x="536" y="452" class="body">reports, and reliability.</text>
-  <rect x="536" y="480" width="76" height="36" rx="11" class="chip"/>
-  <text x="548" y="503" class="role">Triage</text>
-  <rect x="630" y="480" width="54" height="36" rx="11" class="chipG"/>
-  <text x="642" y="503" class="role">Ops</text>
-  <path d="M612 498 C620 498 623 498 630 498" class="line"/>
+  <rect class="card-green" x="440" y="304" width="320" height="244" rx="16"/>
+  <text class="label" x="472" y="344">Prepared handoff</text>
+  <text class="muted" x="472" y="370">Handoff Guide and Tracker</text>
+  <rect class="pill" x="472" y="398" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="492" y="421">choose responsible executor</text>
+  <rect class="pill" x="472" y="446" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="492" y="469">package scope and checks</text>
+  <rect class="pill" x="472" y="494" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="492" y="517">mark prepared_not_observed</text>
 
-  <rect x="732" y="372" width="196" height="172" rx="21" class="pattern"/>
-  <text x="756" y="407" class="label">Coding runtime</text>
-  <text x="756" y="432" class="body">For Codex, Claude Code,</text>
-  <text x="756" y="452" class="body">Hermes, or runtime paths.</text>
-  <rect x="756" y="480" width="58" height="36" rx="11" class="chip"/>
-  <text x="771" y="503" class="role">Plan</text>
-  <rect x="832" y="480" width="72" height="36" rx="11" class="chipV"/>
-  <text x="845" y="503" class="role">Handoff</text>
-  <path d="M814 498 C821 498 825 498 832 498" class="line"/>
+  <rect class="card-amber" x="808" y="304" width="320" height="244" rx="16"/>
+  <text class="label" x="840" y="344">Observed evidence</text>
+  <text class="muted" x="840" y="370">Reviewer, Tracker, and runtime records</text>
+  <rect class="pill" x="840" y="398" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="860" y="421">dispatch, result, or artifact</text>
+  <rect class="pill" x="840" y="446" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="860" y="469">tests, review, CI, readiness</text>
+  <rect class="pill" x="840" y="494" width="238" height="36" rx="18"/>
+  <text class="pill-text" x="860" y="517">merge or delivery evidence</text>
 
-  <rect x="952" y="372" width="176" height="172" rx="21" class="pattern"/>
-  <text x="976" y="407" class="label">CTO loop</text>
-  <text x="976" y="432" class="body">For PM, CTO, Dev, QA,</text>
-  <text x="976" y="452" class="body">Security, and Ops lanes.</text>
-  <rect x="976" y="480" width="44" height="36" rx="11" class="chipV"/>
-  <text x="989" y="503" class="role">PM</text>
-  <rect x="1036" y="480" width="62" height="36" rx="11" class="chip"/>
-  <text x="1048" y="503" class="role">CTO</text>
-  <path d="M1020 498 C1026 498 1030 498 1036 498" class="line"/>
+  <line class="thin-arrow-line" x1="392" y1="426" x2="416" y2="426"/>
+  <path class="thin-arrow-head" d="M432 426 L416 416 L416 436 Z"/>
+  <line class="thin-arrow-line" x1="760" y1="426" x2="784" y2="426"/>
+  <path class="thin-arrow-head" d="M800 426 L784 416 L784 436 Z"/>
 
-  <path d="M501 322 C501 350 170 344 170 372" class="softLine"/>
-  <path d="M501 322 C501 350 390 344 390 372" class="softLine"/>
-  <path d="M501 322 C501 350 610 344 610 372" class="softLine"/>
-  <path d="M501 322 C501 350 830 344 830 372" class="softLine"/>
-  <path d="M501 322 C501 350 1040 344 1040 372" class="softLine"/>
-
-  <rect x="188" y="594" width="824" height="52" rx="20" fill="rgba(8, 47, 73, 0.56)" stroke="rgba(103, 232, 249, 0.36)"/>
-  <rect x="208" y="612" width="150" height="4" rx="2" fill="url(#boundary)"/>
-  <text x="382" y="626" class="note">Evidence boundary: prepared plans, handoffs, and reports become observed only after matching runtime or wrapper records exist.</text>
+  <rect class="rule" x="72" y="590" width="1056" height="72" rx="16"/>
+  <text class="rule-title" x="104" y="623">Public claim rule</text>
+  <text class="rule-text" x="104" y="647">Prepared handoff != observed execution until a wrapper or runtime records evidence for dispatch, result, verification, review, CI, or merge.</text>
 </svg>

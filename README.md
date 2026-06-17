@@ -69,22 +69,16 @@ Then talk to Hermes:
 Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
-Hermes should explain why `request-to-handoff` is the right first workflow,
-name the responsible role, show the next action, and say what is not evidence
-yet. Users should not need to know `omh recommend`, `omh chat interact`, or
-other backend commands for normal use.
+Hermes should route the request, name the responsible role, show the next
+action, and keep the prepared handoff separate from observed work. Normal
+users do not need to know `omh recommend`, `omh chat interact`, or other
+backend commands.
 
-Need localized terminal output, project-local setup, pinned releases, manual
-`./omh` picker behavior, or wrapper registration contracts? Use the detailed
-[installation guide](docs/INSTALLATION.md).
-
-What OMH changes is intentionally small:
-
-- It installs managed Hermes-visible skills and records local status contracts.
-- It can repair or reapply `skills.external_dirs` when a Hermes profile drifts.
-- It keeps CLI output for setup, doctor, update, and wrapper backends.
-- It does not patch Hermes core, run hidden coding work, or turn a prepared
-  handoff into observed execution.
+OMH's setup footprint is deliberately small: it installs Hermes-visible skills,
+records local status contracts, and can repair managed `skills.external_dirs`
+drift without patching Hermes core. Localized terminal output, project-local
+setup, pinned releases, manual `./omh` picker behavior, and wrapper
+registration contracts live in the [installation guide](docs/INSTALLATION.md).
 
 [Website](https://rlaope.github.io/oh-my-hermes/) -
 [Documentation](docs/README.md) -
@@ -150,7 +144,7 @@ or install visible role files, but every OMH workflow remains available either
 way.
 
 <p align="center">
-  <img src="assets/omh-profile-interaction-map.svg" alt="OMH team preset interaction map" width="920">
+  <img src="assets/omh-profile-interaction-map.svg" alt="OMH request-to-handoff interaction map" width="920">
 </p>
 
 ## How It Feels In Hermes
