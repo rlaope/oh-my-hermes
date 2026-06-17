@@ -14,6 +14,18 @@ class ConfigChange:
     text: str
 
 
+@dataclass(frozen=True)
+class _InlineExternalDirs:
+    matched: bool
+    supported: bool
+    values: list[str]
+
+
+_BARE_YAML_NULLS = {"null", "Null", "NULL", "~"}
+_UNSUPPORTED_EXTERNAL_DIRS_SHAPE = "unsupported skills.external_dirs shape; use a YAML block list or inline list"
+_DUPLICATE_EXTERNAL_DIRS_SHAPE = "duplicate skills.external_dirs entries are unsupported; keep one YAML block list or inline list"
+
+
 def _normalize(value: str | Path) -> str:
     return str(Path(value).expanduser())
 
@@ -40,11 +52,38 @@ def _format_external_dirs(values: list[str]) -> list[str]:
     return ["  external_dirs:", *[f"    - {value}" for value in values]]
 
 
-def _inline_external_dirs(line: str) -> list[str] | None:
+def _classify_inline_external_dirs(line: str) -> _InlineExternalDirs:
+    # Readers stay non-throwing for doctor/probe stability: unsupported inline
+    # scalars mean "no valid dirs observed". Mutations remain strict and reject
+    # matched-but-unsupported shapes instead of guessing YAML semantics.
     match = re.match(r"^  external_dirs:\s*(?P<value>\S.*)$", line)
     if not match:
-        return None
-    return _parse_inline_list(match.group("value"))
+        return _InlineExternalDirs(False, False, [])
+    value = match.group("value").strip()
+    if value in _BARE_YAML_NULLS:
+        return _InlineExternalDirs(True, True, [])
+    parsed = _parse_inline_list(value)
+    if parsed is None:
+        return _InlineExternalDirs(True, False, [])
+    return _InlineExternalDirs(True, True, parsed)
+
+
+def _validate_external_dirs_mutation_shape(config_text: str) -> None:
+    in_skills = False
+    external_dirs_declarations = 0
+    for line in config_text.splitlines():
+        stripped = line.strip()
+        if not line.startswith(" ") and stripped:
+            in_skills = stripped == "skills:"
+            continue
+        if in_skills and line.startswith("  ") and not line.startswith("    "):
+            inline = _classify_inline_external_dirs(line)
+            if inline.matched or stripped == "external_dirs:":
+                external_dirs_declarations += 1
+                if external_dirs_declarations > 1:
+                    raise ValueError(_DUPLICATE_EXTERNAL_DIRS_SHAPE)
+                if inline.matched and not inline.supported:
+                    raise ValueError(_UNSUPPORTED_EXTERNAL_DIRS_SHAPE)
 
 
 def external_dirs(config_text: str) -> list[str]:
@@ -59,9 +98,10 @@ def external_dirs(config_text: str) -> list[str]:
             in_external = False
             continue
         if in_skills and line.startswith("  ") and not line.startswith("    "):
-            inline = _inline_external_dirs(line)
-            if inline is not None:
-                result.extend(inline)
+            inline = _classify_inline_external_dirs(line)
+            if inline.matched:
+                if inline.supported:
+                    result.extend(inline.values)
                 in_external = False
                 continue
             in_external = stripped == "external_dirs:"
@@ -72,6 +112,7 @@ def external_dirs(config_text: str) -> list[str]:
 
 
 def ensure_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange:
+    _validate_external_dirs_mutation_shape(config_text)
     target = _normalize(skill_dir)
     if target in external_dirs(config_text):
         return ConfigChange(False, "external dir already present", config_text)
@@ -92,15 +133,15 @@ def ensure_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
         if line and not line.startswith(" "):
             break
         if line.startswith("  ") and not line.startswith("    "):
-            inline = _inline_external_dirs(line)
-            if inline is not None:
-                values = inline
+            inline = _classify_inline_external_dirs(line)
+            if inline.matched:
+                if not inline.supported:
+                    raise ValueError(_UNSUPPORTED_EXTERNAL_DIRS_SHAPE)
+                values = inline.values
                 if target in values:
                     return ConfigChange(False, "external dir already present", config_text)
                 lines[idx:idx + 1] = _format_external_dirs([*values, target])
                 return ConfigChange(True, "expanded inline external_dirs", "\n".join(lines) + "\n")
-            if line.strip().startswith("external_dirs:") and line.strip() != "external_dirs:":
-                raise ValueError("unsupported skills.external_dirs shape; use a YAML block list or inline list")
             if line.strip() == "external_dirs:":
                 external_index = idx
                 break
@@ -117,6 +158,7 @@ def ensure_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
 
 
 def remove_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange:
+    _validate_external_dirs_mutation_shape(config_text)
     target = _normalize(skill_dir)
     lines = config_text.splitlines()
     changed = False
@@ -131,10 +173,12 @@ def remove_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
             output.append(line)
             continue
         if in_skills and line.startswith("  ") and not line.startswith("    "):
-            inline = _inline_external_dirs(line)
-            if inline is not None:
-                values = [value for value in inline if value != target]
-                if len(values) != len(inline):
+            inline = _classify_inline_external_dirs(line)
+            if inline.matched:
+                if not inline.supported:
+                    raise ValueError(_UNSUPPORTED_EXTERNAL_DIRS_SHAPE)
+                values = [value for value in inline.values if value != target]
+                if len(values) != len(inline.values):
                     changed = True
                     output.extend(_format_external_dirs(values))
                     in_external = False

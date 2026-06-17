@@ -14,6 +14,7 @@ from _cli_harness import run_cli
 from omh.cli import OmhError, cmd_runtime_merge
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
+from omh.config_adapter import external_dirs
 from omh.skill_pack import builtin_skill_templates
 
 
@@ -140,6 +141,47 @@ class CliTests(unittest.TestCase):
             command_check = {check["name"]: check for check in doctor_payload["checks"]}["command_path"]
             self.assertEqual(command_check["severity"], "ok")
             self.assertTrue(command_check["observed"])
+
+    def test_setup_recovers_bare_null_external_dirs_shape(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            hermes_home.mkdir()
+            config_path = hermes_home / "config.yaml"
+            original_config = "skills:\n  external_dirs: null\n"
+            config_path.write_text(original_config, encoding="utf-8")
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(base + ["setup", "--dry-run", "--no-interactive", "--language", "en"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH setup preview complete.", stdout)
+            self.assertEqual(config_path.read_text(encoding="utf-8"), original_config)
+            self.assertFalse(omh_home.exists())
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["setup", "--no-interactive", "--language", "en"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH setup complete.", stdout)
+            config_text = config_path.read_text(encoding="utf-8")
+            self.assertEqual(external_dirs(config_text), [str((omh_home / "skills").resolve())])
+            self.assertIn("  external_dirs:\n    - ", config_text)
+            self.assertNotIn("external_dirs: null", config_text)
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["doctor", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            checks = {check["name"]: check for check in payload["checks"]}
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["summary"]["status"], "ok")
+            self.assertTrue(checks["external_dir"]["observed"])
 
     def test_doctor_warns_when_omh_command_is_not_on_path(self) -> None:
         with TemporaryDirectory() as tmp:
