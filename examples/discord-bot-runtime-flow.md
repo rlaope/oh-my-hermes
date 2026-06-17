@@ -27,7 +27,13 @@ status update.
      python -c 'import json,sys; data=json.load(sys.stdin)["chat_response"]; print(data["headline"]); print(data["body"])'
    ```
 
-   Render `chat_response.actions` as buttons when the platform supports them.
+   `chat_response.headline` already starts with a visible marker such as
+   `[omh] web-research`. Render `chat_response.actions` as buttons when the
+   platform supports them, and use `chat_response.messenger_rendering` to avoid
+   wide Markdown tables in Discord. Research comparisons should become short
+   sections, bullets, or split messages instead of a single table-heavy block.
+   Keep the prefix on the first line only; repeat it only when posting separate
+   split messages.
    Typical action ids include `accept_plan`, `revise_plan`, `choose_executor`,
    `show_prompt_handoff`, `copy_prompt_handoff`, `send_to_executor`,
    `show_status`, and `cancel`. `send_to_codex` is only a compatibility alias

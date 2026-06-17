@@ -59,23 +59,38 @@ runtime run exists and the wrapper needs a compact progress card.
 1. Receive the platform event and store only the metadata needed by the wrapper.
 2. Ask OMH for a platform-neutral interaction envelope.
 3. Render `chat_response.headline`, `chat_response.body`,
-   `chat_response.actions`, and `chat_response.claim_boundary`.
-4. If `target_notice.action` is `ask_to_apply_target_change`, render a short
+   `chat_response.actions`, and `chat_response.claim_boundary`. The headline
+   already includes the visible OMH usage marker, such as `[omh] web-research`;
+   use `chat_response.plain_headline` only when a compact surface needs the
+   unprefixed text.
+4. Apply `chat_response.messenger_rendering` when the target is Discord, Slack,
+   Telegram, or another narrow chat surface. Prefer short paragraphs, bullets,
+   numbered lists, and status lines; convert wide Markdown tables into bullets
+   or split chunks before posting. Render the prefix once per response, not on
+   every paragraph; repeat it only when the adapter posts a long response as
+   separate message chunks.
+5. If `target_notice.action` is `ask_to_apply_target_change`, render a short
    setup-change comment and an apply action. Until accepted or auto-applied,
    keep the workflow scoped to the current thread target. The
    `apply_target_change` action payload carries
    `target_observation.source_metadata`; pass that sanitized metadata back to
    the wrapper backend with target-change apply enabled to persist the same
    target update.
-5. If the response is a plan, wait for the user to accept or revise the plan
+6. If the response is a plan, wait for the user to accept or revise the plan
    before preparing a handoff.
-6. If a coding handoff is prepared, dispatch the `coding_executor_handoff/v1`
+7. If a coding handoff is prepared, check `executor_readiness/v1` before first
+   dispatch for the selected profile. A wrapper may run
+   `omh coding executor-readiness --executor <profile>` once, cache the result,
+   and skip later probes unless the user forces a retry. If readiness is
+   `missing` or `blocked`, ask the user to choose another coding agent,
+   configure PATH, continue in Hermes, or keep a prompt/runtime handoff.
+8. Dispatch the `coding_executor_handoff/v1`
    payload to the external executor outside OMH. For Codex targets, use
    `codex_skill` and `codex_invocation.dispatch_text_template`; this is the
    `$skill {message}` surface Codex actually receives.
-7. Record only evidence the wrapper actually observed: dispatch, executor
+9. Record only evidence the wrapper actually observed: dispatch, executor
    result, verification, review, CI, merge readiness, and merge.
-8. Re-render status from OMH after each observed transition.
+10. Re-render status from OMH after each observed transition.
 
 ## State Transition Reference
 

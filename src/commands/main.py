@@ -25,6 +25,7 @@ from .chat import (
 from .coding import (
     _add_coding_commands,
     cmd_coding_delegate,
+    cmd_coding_executor_readiness,
     cmd_coding_lifecycle_dispatch,
     cmd_coding_lifecycle_report,
     cmd_coding_lifecycle_result,

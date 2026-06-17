@@ -159,6 +159,9 @@ class WrapperSessionTests(unittest.TestCase):
             accepted = record_plan_decision(paths, session_id, "accept")
             self.assertEqual(accepted["session"]["status"], "executor_choice_required")
             self.assertEqual(accepted["status"]["chat_response"]["state"]["next_action"], "choose_executor")
+            self.assertTrue(accepted["status"]["chat_response"]["headline"].startswith("[omh] handoff - "))
+            self.assertEqual(accepted["status"]["chat_response"]["usage_trace"]["visible_prefix"], "[omh] handoff")
+            self.assertEqual(accepted["status"]["chat_response"]["messenger_rendering"]["prefix_policy"]["default"], "once_per_response_first_line")
 
             with self.assertRaises(WrapperSessionError):
                 prepare_wrapper_session_handoff(paths, session_id, message)

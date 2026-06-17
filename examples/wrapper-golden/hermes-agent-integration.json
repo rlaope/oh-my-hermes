@@ -35,8 +35,11 @@
       ],
       "renderable_fields": [
         "chat_response.headline",
+        "chat_response.plain_headline",
         "chat_response.body",
         "chat_response.actions",
+        "chat_response.usage_trace.visible_prefix",
+        "chat_response.messenger_rendering",
         "chat_response.claim_boundary",
         "chat_response.state"
       ]
@@ -48,14 +51,25 @@
         "kind",
         "visibility",
         "headline",
+        "plain_headline",
         "body",
         "state",
+        "usage_trace",
+        "messenger_rendering",
         "actions",
         "claim_boundary"
       ],
       "renderable_fields": [
         "headline",
+        "plain_headline",
         "body",
+        "usage_trace.visible_prefix",
+        "usage_trace.selected_workflow",
+        "usage_trace.selected_harness",
+        "messenger_rendering.preferred_blocks",
+        "messenger_rendering.avoid_blocks",
+        "messenger_rendering.prefix_policy",
+        "messenger_rendering.table_policy",
         "actions[].id",
         "actions[].label",
         "actions[].enabled",

@@ -21,6 +21,11 @@ from .executors import (
     runtime_profile_contract,
     runtime_templates_for_profile,
 )
+from .executor_readiness import (
+    executor_readiness_contract,
+    executor_readiness_for_selection,
+    with_executor_readiness_options,
+)
 from .harness_quality import with_wrapper_actions
 from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from .memory import validate_handoff_context_blocked, validate_handoff_context_pack
@@ -122,10 +127,14 @@ def build_coding_delegation_payload(
             "selected_executor_profile": selection.selected_executor_profile,
             "dispatch_policy": selection.dispatch_policy,
             "dispatchable": selection.dispatchable,
+            "executor_readiness": executor_readiness_for_selection(
+                selection.selected_executor_profile,
+                choice_required=selection.choice_required,
+            ),
             "executor_selection": {
                 "status": selection.status,
                 "choice_required": selection.choice_required,
-                "options": public_executor_options() if selection.choice_required else [],
+                "options": with_executor_readiness_options(public_executor_options()) if selection.choice_required else [],
             },
         }
     )
@@ -379,6 +388,7 @@ def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dic
         "status": "prepared_not_observed",
         "recording_contract": "prepared_not_observed",
         "dispatch_contract": "wrapper_dispatches_to_codex; omh_does_not_execute_codex",
+        "executor_readiness": executor_readiness_contract("codex"),
         "prompt_template": _codex_prompt_template(delegation, codex_skill=codex_skill),
         "execution_brief": {
             "task_source": "original_message_at_dispatch_time",
@@ -456,6 +466,7 @@ def _prompt_handoff(profile: str, delegation: CodingDelegation) -> dict[str, obj
         "status": "prepared_not_observed",
         "recording_contract": "prompt_prepared_not_dispatched",
         "dispatch_contract": "prompt_only_no_dispatch",
+        "executor_readiness": executor_readiness_contract(profile),
         "prompt_template": _prompt_only_template(delegation, profile=profile, label=label),
         "scope": [
             "Use the original task message as the executor request.",
@@ -507,6 +518,7 @@ def _runtime_handoff(profile: str, delegation: CodingDelegation) -> dict[str, ob
         "status": "prepared_not_observed",
         "recording_contract": "runtime_prepared_not_started",
         "dispatch_contract": "wrapper_or_user_starts_runtime; omh_does_not_execute_runtime",
+        "executor_readiness": executor_readiness_contract(profile),
         "prompt_template": _runtime_prompt_template(delegation, profile=profile, label=label),
         "runtime_brief": {
             "task_source": "original_message_at_runtime_start",

@@ -86,6 +86,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`./omh`, `/omh`, `./skills`, or `/skills`", router.content)
         self.assertIn("Keep real skill names unchanged", router.content)
         self.assertIn("chat_response.state.skill_picker.options", router.content)
+        self.assertIn("Do not make the user approve `omh list`", router.content)
+        self.assertIn("executor_readiness/v1", router.content)
+        self.assertIn("omh coding executor-readiness --executor <profile>", router.content)
+        self.assertIn("retry at most once", router.content)
         self.assertIn("Hermes-native install paths should converge", router.content)
         self.assertIn("skills.external_dirs", router.content)
         self.assertIn("Skill Role Classification", router.content)
@@ -528,6 +532,24 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("docs-specialist", skills["ultraprocess"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
 
+    def test_coding_handoff_skills_include_executor_readiness_fallback(self) -> None:
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+        handoff_names = {
+            definition.name
+            for definition in installable_skill_definitions()
+            if definition.hermes_role in {"handoff-guide", "runtime-handoff-guidance"}
+            or definition.quality_tier == "handoff-gated"
+        }
+
+        self.assertTrue({"ralph", "ultragoal", "ultraprocess", "team", "ultrawork", "ai-slop-cleaner"} <= handoff_names)
+        for name in handoff_names:
+            with self.subTest(skill=name):
+                content = templates[name]
+                self.assertIn("Executor readiness:", content)
+                self.assertIn("executor_readiness/v1", content)
+                self.assertIn("retry only after that state changes", content)
+                self.assertIn("not dispatch, implementation, verification, review, CI, merge-readiness, or merge evidence", content)
+
     def test_harnesses_define_runtime_evidence_contract(self) -> None:
         for harness in builtin_harnesses():
             self.assertGreaterEqual(len(harness.artifact_events), 1)
@@ -789,6 +811,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Open omh", installation)
         self.assertIn("`./omh`, `/omh`, `./skills`, or `/skills`", installation)
         self.assertIn("chat_response.state.skill_picker.options", installation)
+        self.assertIn("Do not ask the", installation)
+        self.assertIn("approve `omh list`", installation)
+        self.assertIn("omh coding executor-readiness --executor <profile>", installation)
+        self.assertIn("Readiness", installation)
         self.assertIn("name the responsible", installation)
         self.assertIn("Hermes CLI Release Smoke", installation)
         self.assertIn("--hermes-home /tmp/hermes-smoke release hermes-smoke --live --install-path setup", installation)

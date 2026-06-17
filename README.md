@@ -181,6 +181,9 @@ What OMH changes is intentionally small:
   for the selected path: Codex lifecycle, Claude Code or generic prompt
   handoff, or Hermes/OMX/OMO/OMC runtime handoff with team/swarm,
   worker-protocol, and worktree guidance.
+- **First-use coding agent readiness** - wrappers can check the selected Codex,
+  Claude Code, Hermes, or oh-my runtime path once, then ask the user to choose,
+  configure, or fall back before a handoff fails.
 - **Hermes coding team path** - when the user chooses Hermes itself as the
   coding owner, OMH exposes solo, durable-goal, team, and swarm start modes
   with worker ACK, worktree, result, verification, review, CI, and merge
@@ -190,6 +193,14 @@ What OMH changes is intentionally small:
   surfaces can render buttons such as Open in Codex, Open in Claude Code,
   Attach session, Refresh status, Record completed, Record blocked, and Ask
   Hermes to verify. The user does not need to type backend commands.
+- **Visible OMH workflow trace** - wrapper responses can start once with
+  markers like `[omh] plan`, `[omh] web-research`, or `[omh] status` and carry
+  `omh_usage_trace/v1` plus messenger-safe rendering hints, so
+  Discord/Slack-style chats show which OMH workflow shaped the answer without
+  treating the marker as execution evidence.
+- **Catalog without shell approval** - when a user asks "what OMH workflows are
+  available?", Hermes can render the workflow picker directly instead of asking
+  the user to approve `omh list`.
 - **Operating model defaults** - a solo operator, small team, research ops, or
   coding runtime team can be recorded during setup so Hermes starts from the
   right collaboration posture without forcing visible role files.

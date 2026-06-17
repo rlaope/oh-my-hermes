@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload, coding_delegation_record_payload
+from ..executor_readiness import EXECUTOR_READINESS_PROFILES, probe_executor_readiness
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..memory import read_handoff_context_pack_file
@@ -214,6 +215,21 @@ def cmd_coding_lifecycle_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coding_executor_readiness(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            probe_executor_readiness(
+                _paths(args),
+                args.executor,
+                force=bool(args.force),
+                dry_run=bool(args.dry_run),
+            )
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def _add_coding_commands(sub) -> None:
     coding = sub.add_parser("coding", help="Prepare executor-neutral or tracked coding handoff artifacts.")
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
@@ -310,3 +326,12 @@ def _add_coding_commands(sub) -> None:
     lifecycle_report = lifecycle_sub.add_parser("report")
     lifecycle_report.add_argument("--run", dest="run_id", required=True)
     lifecycle_report.set_defaults(func=cmd_coding_lifecycle_report)
+
+    readiness = coding_sub.add_parser(
+        "executor-readiness",
+        help="Probe or preview first-use coding agent readiness for wrapper fallback decisions.",
+    )
+    readiness.add_argument("--executor", choices=EXECUTOR_READINESS_PROFILES, required=True)
+    readiness.add_argument("--force", action="store_true", help="Run the probe even if a first-use result is already cached.")
+    readiness.add_argument("--dry-run", action="store_true", help="Return the probe contract without running or caching it.")
+    readiness.set_defaults(func=cmd_coding_executor_readiness)

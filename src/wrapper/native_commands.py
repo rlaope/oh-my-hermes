@@ -69,6 +69,8 @@ def render_native_command_response(interaction: dict[str, object], *, source: st
         "source": source,
         "response_kind": kind,
         "thread_key": interaction.get("thread_key", ""),
+        "usage_trace": response.get("usage_trace", {}),
+        "messenger_rendering": response.get("messenger_rendering", {}),
         "claim_boundary": "Rendered command UI is wrapper guidance until the platform event is observed.",
         "not_evidence": [
             "platform render observed",

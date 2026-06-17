@@ -22,6 +22,8 @@ CHAT_RESPONSE_SCHEMA_VERSION = "chat_response/v1"
 STATUS_CARD_SCHEMA_VERSION = "status_card/v1"
 SKILL_PICKER_SCHEMA_VERSION = "omh_skill_picker/v1"
 COMMAND_PREVIEW_SCHEMA_VERSION = "omh_command_preview/v1"
+USAGE_TRACE_SCHEMA_VERSION = "omh_usage_trace/v1"
+MESSENGER_RENDERING_SCHEMA_VERSION = "omh_messenger_rendering/v1"
 INTERACTION_MODES = ("auto", "route", "plan", "delegate")
 VISIBLE_ACTIONS = (
     "answer:clarify",
@@ -231,11 +233,14 @@ def build_chat_interaction_payload(
     route = route_chat_message(message, source=source, limit=limit, min_confidence=min_confidence)
     resolved_mode = _resolve_mode(mode, route, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)
-    base["route"] = public_route_payload(route, include_message=include_message)
+    route_payload = public_route_payload(route, include_message=include_message)
+    if _is_skill_catalog_question(message):
+        route_payload = _catalog_question_route_payload(route_payload)
+    base["route"] = route_payload
 
     if resolved_mode == "route" and _is_command_preview_invocation(message):
         base["chat_response"] = build_chat_response_from_route(
-            route,
+            route_payload,
             thread_key=str(base["thread_key"]),
             message=message,
             include_message=include_message,
@@ -244,18 +249,18 @@ def build_chat_interaction_payload(
         return _finish_interaction(base, target_notice)
 
     if resolved_mode == "clarify" or route["action"] != "dispatch":
-        base["next_action"] = "answer_clarification"
         base["chat_response"] = build_chat_response_from_route(
-            route,
+            route_payload,
             thread_key=str(base["thread_key"]),
             message=message,
             include_message=include_message,
         )
+        base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "answer_clarification"))
         return _finish_interaction(base, target_notice)
 
     if resolved_mode == "route":
         base["chat_response"] = build_chat_response_from_route(
-            route,
+            route_payload,
             thread_key=str(base["thread_key"]),
             message=message,
             include_message=include_message,
@@ -340,6 +345,8 @@ def build_chat_response_from_route(
     action = str(decision.get("action", "fallback"))
     if _is_command_preview_invocation(message):
         return _command_preview_response(decision, thread_key=thread_key, message=message)
+    if _is_skill_catalog_question(message):
+        return _skill_picker_response(decision, thread_key=thread_key, message=message)
     if action == "dispatch":
         selected = str(decision.get("selected_skill", "the selected workflow"))
         if selected == _ROUTER_SKILL and _is_skill_picker_invocation(message):
@@ -614,6 +621,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "selected_executor_profile": delegation_payload.get("selected_executor_profile", "codex"),
                 "dispatch_policy": delegation_payload.get("dispatch_policy", "ask_before_dispatch"),
                 "executor_target": handoff.get("executor_target", "codex"),
+                "executor_readiness": delegation_payload.get("executor_readiness", {}),
             },
         )
     if action == "delegate" and delegation_payload.get("prompt_handoff"):
@@ -640,6 +648,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "selected_executor_profile": selected,
                 "dispatch_policy": "prepare_only",
                 "dispatchable": False,
+                "executor_readiness": delegation_payload.get("executor_readiness", {}),
             },
         )
     if action == "delegate" and delegation_payload.get("runtime_handoff"):
@@ -693,6 +702,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "underlying_agent": runtime_profile.get("underlying_agent", ""),
                 "dispatch_policy": "prepare_only",
                 "dispatchable": False,
+                "executor_readiness": delegation_payload.get("executor_readiness", {}),
             },
         )
     if action == "delegate" and _nested(delegation_payload, "executor_selection").get("choice_required"):
@@ -712,6 +722,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "selected_executor_profile": None,
                 "dispatchable": False,
                 "executor_options": _nested(delegation_payload, "executor_selection").get("options", []),
+                "executor_readiness": delegation_payload.get("executor_readiness", {}),
             },
         )
     if action == "clarify":
@@ -894,6 +905,8 @@ def _resolve_mode(mode: str, route: dict[str, object], *, message: str = "") -> 
         return mode
     if _is_command_preview_invocation(message):
         return "route"
+    if _is_skill_catalog_question(message):
+        return "route"
     action = str(route.get("action", "fallback"))
     if action != "dispatch":
         return _ROUTE_TO_MODE.get(action, "clarify")
@@ -923,6 +936,39 @@ def _selected_recommendation_policy(decision: dict[str, object], selected: str) 
     return {}
 
 
+def _catalog_question_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
+    updated = dict(route_payload)
+    harness = primary_harness_for_skill(_ROUTER_SKILL)
+    updated.update(
+        {
+            "action": "dispatch",
+            "ambiguous": False,
+            "candidate_harness": harness,
+            "candidate_skill": _ROUTER_SKILL,
+            "confidence": "high",
+            "reason": "Catalog question; show the OMH workflow picker instead of asking for shell command approval.",
+            "recommendations": [
+                {
+                    "confidence": "high",
+                    "evidence_boundary": "Skill picker routing is not plan acceptance, dispatch, execution, review, CI, or verification evidence.",
+                    "matched": ["catalog_question"],
+                    "next_action": "choose_skill",
+                    "score": max(10, int(updated.get("score", 0) or 0)),
+                    "skill": _ROUTER_SKILL,
+                    "wrapper_guidance": "Render the OMH workflow picker in chat; do not ask the user to approve `omh list` for catalog discovery.",
+                }
+            ],
+            "routing_instruction": "Show the OMH workflow picker for this catalog question.",
+            "routing_prompt_template": "Show the OMH workflow picker for this catalog question.\n\nUser message:\n{message}",
+            "score": max(10, int(updated.get("score", 0) or 0)),
+            "selected_harness": harness,
+            "selected_skill": _ROUTER_SKILL,
+            "threshold": "high",
+        }
+    )
+    return updated
+
+
 def _is_skill_picker_invocation(message: str) -> bool:
     parts = message.strip().split(maxsplit=1)
     if not parts:
@@ -936,6 +982,68 @@ def _is_skill_picker_invocation(message: str) -> bool:
         return False
     rest = parts[1].strip().lower() if len(parts) > 1 else ""
     return rest in _SKILL_PICKER_HELP_TOKENS
+
+
+def _is_skill_catalog_question(message: str) -> bool:
+    lowered = message.strip().lower()
+    if not lowered:
+        return False
+    explicit_catalog_phrases = (
+        "what commands are available",
+        "which commands are available",
+        "commands do you have",
+        "what skills are available",
+        "which skills are available",
+        "skills do you have",
+        "what workflows are available",
+        "which workflows are available",
+        "workflows do you have",
+        "available commands",
+        "available skills",
+        "available workflows",
+        "list commands",
+        "list skills",
+        "list workflows",
+        "show commands",
+        "show skills",
+        "show workflows",
+        "command menu",
+        "skill menu",
+        "workflow menu",
+        "skill picker",
+        "workflow picker",
+        "catalog",
+        "목록",
+        "리스트",
+    )
+    has_context = any(token in lowered for token in ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스"))
+    has_catalog_word = any(token in lowered for token in ("skill", "workflow", "command", "스킬", "워크플로", "명령", "기능"))
+    if not has_catalog_word:
+        return False
+    if any(phrase in lowered for phrase in explicit_catalog_phrases):
+        return True
+    availability_markers = (
+        "available",
+        "do you have",
+        "are there",
+        "can i use",
+        "can you do",
+        "menu",
+        "picker",
+        "뭐",
+        "무엇",
+        "어떤",
+        "알려",
+        "보여",
+        "있어",
+        "있나요",
+        "가능",
+    )
+    if has_context and any(marker in lowered for marker in availability_markers):
+        return True
+    words = lowered.replace("?", " ").replace("!", " ").split()
+    plural_catalog_words = ("commands", "skills", "workflows", "워크플로", "워크플로우", "스킬")
+    return has_context and len(words) <= 4 and any(word in lowered for word in plural_catalog_words)
 
 
 def _is_command_preview_invocation(message: str) -> bool:
@@ -1031,10 +1139,15 @@ def _command_preview_prefix(token: str) -> str:
 
 def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
+    catalog_question = _is_skill_catalog_question(message)
     return _chat_response(
         kind="skill_picker",
-        headline="Choose an OMH workflow.",
-        body="Pick a workflow, or choose Route for me and Hermes will select the safest next step from the request.",
+        headline="Here are the OMH workflows." if catalog_question else "Choose an OMH workflow.",
+        body=(
+            "You do not need to run a shell command for this. Pick a workflow here, or choose Route for me and Hermes will select the safest next step."
+            if catalog_question
+            else "Pick a workflow, or choose Route for me and Hermes will select the safest next step from the request."
+        ),
         phase="skill_selection",
         next_action="choose_skill",
         thread_key=thread_key,
@@ -1057,6 +1170,7 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
             "route_action": decision.get("action", "dispatch"),
             "confidence": decision.get("confidence", "low"),
             "selected_workflow": _ROUTER_SKILL,
+            "catalog_question": catalog_question,
             "skill_picker": picker,
             "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
         },
@@ -1164,19 +1278,144 @@ def _chat_response(
     if thread_key:
         state["thread_key"] = thread_key
     state.update(extra_state or {})
+    usage_trace = usage_trace_payload(kind=kind, phase=phase, next_action=next_action, state=state)
+    headline_with_prefix = headline_with_usage_prefix(headline, str(usage_trace["visible_prefix"]))
     response: dict[str, object] = {
         "schema_version": CHAT_RESPONSE_SCHEMA_VERSION,
         "kind": kind,
         "visibility": "thread",
-        "headline": headline,
+        "headline": headline_with_prefix,
+        "plain_headline": headline,
         "body": body,
         "state": state,
+        "usage_trace": usage_trace,
+        "messenger_rendering": messenger_rendering_contract(
+            visible_prefix=str(usage_trace["visible_prefix"]),
+            first_line=headline_with_prefix,
+            body=body,
+            claim_boundary=claim_boundary,
+        ),
         "actions": actions,
         "claim_boundary": claim_boundary,
     }
     if status_card:
         response["status_card"] = status_card
     return response
+
+
+def usage_trace_payload(*, kind: str, phase: str, next_action: str, state: dict[str, object]) -> dict[str, object]:
+    workflow = _usage_workflow(state)
+    harness = primary_harness_for_skill(workflow) if workflow else ""
+    label = workflow or _usage_label(state, kind=kind, phase=phase, next_action=next_action)
+    trace: dict[str, object] = {
+        "schema_version": USAGE_TRACE_SCHEMA_VERSION,
+        "brand": "omh",
+        "visibility": "visible_prefix",
+        "visible_prefix": f"[omh] {label}",
+        "label": label,
+        "selected_workflow": workflow,
+        "selected_harness": harness,
+        "phase": phase,
+        "next_action": next_action,
+        "evidence_state": _usage_evidence_state(state, phase=phase, next_action=next_action),
+        "claim_boundary": "This trace is a routing/status marker, not execution evidence.",
+    }
+    executor = str(state.get("selected_executor_profile") or state.get("executor_target") or "")
+    if executor:
+        trace["selected_executor_profile"] = executor
+    runtime_family = str(state.get("runtime_family") or "")
+    if runtime_family:
+        trace["runtime_family"] = runtime_family
+    return trace
+
+
+def _usage_workflow(state: dict[str, object]) -> str:
+    for key in ("selected_workflow", "recommended_workflow"):
+        value = str(state.get(key, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _usage_label(state: dict[str, object], *, kind: str, phase: str, next_action: str) -> str:
+    executor = str(state.get("selected_executor_profile") or state.get("executor_target") or "").strip()
+    if executor:
+        return f"{executor}-handoff"
+    if kind == "plan":
+        return "plan"
+    if kind == "clarification":
+        return "clarification"
+    if kind in {"status", "blocker"}:
+        return "status"
+    if kind == "handoff":
+        return "handoff"
+    if kind == "command_preview":
+        return "command-preview"
+    if kind == "skill_picker":
+        return _ROUTER_SKILL
+    return phase or next_action or kind or "workflow"
+
+
+def _usage_evidence_state(state: dict[str, object], *, phase: str, next_action: str) -> str:
+    if next_action in {"wait_for_executor_evidence", "record_review_evidence", "record_verification_evidence", "record_ci_evidence", "record_merge_readiness"}:
+        return "observed_partial"
+    if next_action.startswith("surface_") and next_action.endswith("_blocker"):
+        return "observed_partial"
+    if next_action in {"report_completion_with_evidence", "report_merge_ready", "report_merged"}:
+        return "observed_reportable"
+    if phase.endswith("prepared") or "handoff" in phase or next_action in {"dispatch_to_workflow", "present_plan", "accept_or_revise_plan"}:
+        return "prepared_not_observed"
+    if bool(state.get("execution_observed", False)) or bool(state.get("verification_observed", False)):
+        return "observed_partial"
+    return "routing_not_execution"
+
+
+def headline_with_usage_prefix(headline: str, visible_prefix: str) -> str:
+    if headline.startswith("[omh] "):
+        return headline
+    return f"{visible_prefix} - {headline}"
+
+
+def messenger_rendering_contract(
+    *,
+    visible_prefix: str,
+    first_line: str,
+    body: str,
+    claim_boundary: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": MESSENGER_RENDERING_SCHEMA_VERSION,
+        "visible_prefix": visible_prefix,
+        "first_line": first_line,
+        "body_format": "messenger_safe_markdown",
+        "preferred_blocks": ["short_paragraph", "bulleted_list", "numbered_list", "status_lines"],
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {
+            "max_recommended_chars": 1800,
+            "split_on": ["headings", "bullets", "paragraphs"],
+        },
+        "prefix_policy": {
+            "default": "once_per_response_first_line",
+            "repeat_when": "adapter_splits_response_across_separate_messages_or_chunks",
+            "do_not_repeat": "every_paragraph_or_every_line",
+        },
+        "platform_hints": {
+            "discord": "Start the first message with the visible prefix, prefer bullets or numbered lists over tables, and repeat the prefix only if the adapter splits a long response into separate messages.",
+            "slack": "Start the response with the visible prefix, prefer blocks or bullets over wide Markdown tables, and keep claim boundaries visible.",
+            "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts.",
+            "hermes": "Render the visible prefix as a compact workflow/status marker before the body.",
+        },
+        "table_policy": "convert_tables_to_bullets_for_messenger",
+        "body_preview": _short_text(body, limit=180),
+        "claim_boundary": claim_boundary,
+    }
+
+
+def _short_text(value: str, *, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
 
 
 def _action(action_id: str, label: str, style: str, *, enabled: bool = True, payload: dict[str, object] | None = None) -> dict[str, object]:

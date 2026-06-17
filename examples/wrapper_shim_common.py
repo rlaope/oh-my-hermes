@@ -78,10 +78,13 @@ def _render(source: str, interaction: dict[str, object]) -> dict[str, object]:
         "response": {
             "kind": response.get("kind", ""),
             "headline": response.get("headline", ""),
+            "plain_headline": response.get("plain_headline", ""),
             "body": response.get("body", ""),
             "phase": state.get("phase", ""),
             "claim_boundary": response.get("claim_boundary", ""),
         },
+        "usage_trace": response.get("usage_trace", {}),
+        "messenger_rendering": response.get("messenger_rendering", {}),
         "actions": [
             {
                 "id": action.get("id", ""),
