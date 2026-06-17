@@ -6,6 +6,14 @@ from dataclasses import dataclass
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
 EXPLICIT_INVOCATION_PREFIXES = ("$", "/", "./", "@")
+_EXPLICIT_SKILL_ALIASES = {
+    "ohmy": "oh-my-hermes",
+}
+_PREFIXED_SKILL_ALIASES = {
+    "omh": "oh-my-hermes",
+    "ohmy": "oh-my-hermes",
+    "skills": "oh-my-hermes",
+}
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
 _SCHEDULED_OPS_STRONG_TOKENS = frozenset(
@@ -192,11 +200,22 @@ def meets_confidence_threshold(confidence: str, threshold: str) -> bool:
 
 def explicit_skill_invocation(message: str, names: set[str]) -> str | None:
     first = message.strip().split(maxsplit=1)[0].strip(":,").lower()
+    used_prefix = False
     for prefix in sorted(EXPLICIT_INVOCATION_PREFIXES, key=len, reverse=True):
         if first.startswith(prefix):
             first = first[len(prefix) :].strip(":,")
+            used_prefix = True
             break
-    return first if first in names else None
+    if first in names:
+        return first
+    alias = _EXPLICIT_SKILL_ALIASES.get(first)
+    if alias in names:
+        return alias
+    if used_prefix:
+        alias = _PREFIXED_SKILL_ALIASES.get(first)
+        if alias in names:
+            return alias
+    return None
 
 
 def active_routing_guard_rules(

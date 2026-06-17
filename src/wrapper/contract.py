@@ -9,7 +9,7 @@ from ..coding_delegation import build_coding_delegation_payload
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
-from ..skills.catalog import retained_delegation_skill_names
+from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from .hermes_runtime import (
     hermes_coding_team_body,
     hermes_coding_team_claim_boundary,
@@ -20,9 +20,15 @@ from .hermes_runtime import (
 CHAT_INTERACTION_SCHEMA_VERSION = "chat_interaction/v1"
 CHAT_RESPONSE_SCHEMA_VERSION = "chat_response/v1"
 STATUS_CARD_SCHEMA_VERSION = "status_card/v1"
+SKILL_PICKER_SCHEMA_VERSION = "omh_skill_picker/v1"
+COMMAND_PREVIEW_SCHEMA_VERSION = "omh_command_preview/v1"
 INTERACTION_MODES = ("auto", "route", "plan", "delegate")
 VISIBLE_ACTIONS = (
     "answer:clarify",
+    "show_command_preview",
+    "show_skill_picker",
+    "choose_skill",
+    "search_skills",
     "accept_plan",
     "revise_plan",
     "prepare_handoff",
@@ -71,6 +77,24 @@ VISIBLE_ACTIONS = (
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
 _CLARIFICATION_SKILLS = {"deep-interview"}
+_ROUTER_SKILL = "oh-my-hermes"
+_SKILL_PICKER_TOKENS = frozenset({"omh", "ohmy", "skills"})
+_SKILL_PICKER_HELP_TOKENS = frozenset({"", "help", "menu", "list", "commands", "workflows", "skills"})
+_COMMAND_PREVIEW_PREFIXES = ("./", "/")
+_COMMAND_PREVIEW_ALIAS = "omh"
+_SKILL_PICKER_ENTRIES = (
+    ("oh-my-hermes", "Route for me", "Let Hermes choose the safest workflow.", "./omh <request>"),
+    ("deep-interview", "Deep Interview", "Clarify fuzzy goals before planning.", "./deep-interview <request>"),
+    ("ralplan", "Ralplan", "Research and plan before execution.", "./ralplan <request>"),
+    ("loop", "Loop", "Iterate on a loopable long-horizon goal.", "./loop <goal>"),
+    ("ultraprocess", "Ultra Process", "Run one research-plan-implement-review-sync cycle.", "./ultraprocess <request>"),
+    ("feedback-triage", "Feedback Triage", "Turn customer or product signals into investigation.", "./feedback-triage <signal>"),
+    ("web-research", "Web Research", "Gather source-backed current evidence.", "./web-research <question>"),
+    ("code-review", "Code Review", "Review completed work without overclaiming evidence.", "./code-review <scope>"),
+    ("materials-package", "Materials Package", "Shape PPT, PDF, spreadsheet, document, or Markdown deliverables.", "./materials-package <brief>"),
+    ("automation-blueprint", "Automation Blueprint", "Prepare recurring Hermes scheduled-ops workflows.", "./automation-blueprint <intent>"),
+    ("doctor", "Doctor", "Check OMH install and Hermes registration health.", "./doctor"),
+)
 _RETAINED_DELEGATION_SKILLS = set(retained_delegation_skill_names())
 _DIRECT_WORKFLOW_SKILLS = {
     "web-research",
@@ -205,9 +229,19 @@ def build_chat_interaction_payload(
     message = extract_message_text(event_or_message)
     metadata = _source_metadata(event_or_message, source_metadata)
     route = route_chat_message(message, source=source, limit=limit, min_confidence=min_confidence)
-    resolved_mode = _resolve_mode(mode, route)
+    resolved_mode = _resolve_mode(mode, route, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)
     base["route"] = public_route_payload(route, include_message=include_message)
+
+    if resolved_mode == "route" and _is_command_preview_invocation(message):
+        base["chat_response"] = build_chat_response_from_route(
+            route,
+            thread_key=str(base["thread_key"]),
+            message=message,
+            include_message=include_message,
+        )
+        base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_command_preview"))
+        return _finish_interaction(base, target_notice)
 
     if resolved_mode == "clarify" or route["action"] != "dispatch":
         base["next_action"] = "answer_clarification"
@@ -304,8 +338,12 @@ def build_chat_response_from_route(
     include_message: bool = False,
 ) -> dict[str, object]:
     action = str(decision.get("action", "fallback"))
+    if _is_command_preview_invocation(message):
+        return _command_preview_response(decision, thread_key=thread_key, message=message)
     if action == "dispatch":
         selected = str(decision.get("selected_skill", "the selected workflow"))
+        if selected == _ROUTER_SKILL and _is_skill_picker_invocation(message):
+            return _skill_picker_response(decision, thread_key=thread_key, message=message)
         if selected == "cancel":
             return _chat_response(
                 kind="cancellation",
@@ -851,14 +889,18 @@ def _chat_response_with_target_notice(response: dict[str, object], target_notice
     return updated
 
 
-def _resolve_mode(mode: str, route: dict[str, object]) -> str:
+def _resolve_mode(mode: str, route: dict[str, object], *, message: str = "") -> str:
     if mode != "auto":
         return mode
+    if _is_command_preview_invocation(message):
+        return "route"
     action = str(route.get("action", "fallback"))
     if action != "dispatch":
         return _ROUTE_TO_MODE.get(action, "clarify")
     selected = str(route.get("selected_skill", ""))
     if selected == "cancel":
+        return "route"
+    if selected == _ROUTER_SKILL and _is_skill_picker_invocation(message):
         return "route"
     if selected in _CLARIFICATION_SKILLS:
         return "clarify"
@@ -879,6 +921,186 @@ def _selected_recommendation_policy(decision: dict[str, object], selected: str) 
                 "wrapper_guidance": item.get("wrapper_guidance", ""),
             }
     return {}
+
+
+def _is_skill_picker_invocation(message: str) -> bool:
+    parts = message.strip().split(maxsplit=1)
+    if not parts:
+        return False
+    first = parts[0].strip(":,").lower()
+    for prefix in ("./", "/", "$", "@"):
+        if first.startswith(prefix):
+            first = first[len(prefix) :].strip(":,")
+            break
+    if first not in _SKILL_PICKER_TOKENS:
+        return False
+    rest = parts[1].strip().lower() if len(parts) > 1 else ""
+    return rest in _SKILL_PICKER_HELP_TOKENS
+
+
+def _is_command_preview_invocation(message: str) -> bool:
+    token = _first_token(message).lower()
+    if not token:
+        return False
+    if len(message.strip().split(maxsplit=1)) > 1:
+        return False
+    for prefix in _COMMAND_PREVIEW_PREFIXES:
+        if not token.startswith(prefix):
+            continue
+        typed = token[len(prefix) :].strip(":,")
+        return typed != _COMMAND_PREVIEW_ALIAS and _COMMAND_PREVIEW_ALIAS.startswith(typed)
+    return False
+
+
+def _command_preview_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
+    preview = _command_preview_state(message, source=str(decision.get("source", "generic")))
+    return _chat_response(
+        kind="command_preview",
+        headline="Open OMH.",
+        body="Complete or choose `omh` to open the OMH workflow picker. The preview shows one top-level entry instead of every installed workflow.",
+        phase="command_preview",
+        next_action="show_command_preview",
+        thread_key=thread_key,
+        actions=[
+            _action(
+                "show_command_preview",
+                "Show omh",
+                "primary",
+                payload={
+                    "schema_version": COMMAND_PREVIEW_SCHEMA_VERSION,
+                    "suggestions": preview["suggestions"],
+                },
+            ),
+            _action(
+                "show_skill_picker",
+                "Open picker",
+                "secondary",
+                payload={
+                    "insert_text": preview["suggestions"][0]["insert_text"] if preview["suggestions"] else "./omh",
+                    "opens_schema": SKILL_PICKER_SCHEMA_VERSION,
+                },
+            ),
+        ],
+        claim_boundary="Command preview is autocomplete guidance only; it is not routing, plan acceptance, dispatch, execution, review, CI, or verification evidence.",
+        extra_state={
+            "route_action": decision.get("action", "fallback"),
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": _ROUTER_SKILL,
+            "command_preview": preview,
+        },
+    )
+
+
+def _command_preview_state(message: str, *, source: str) -> dict[str, object]:
+    token = _first_token(message)
+    prefix = _command_preview_prefix(token)
+    insert_text = f"{prefix}{_COMMAND_PREVIEW_ALIAS}" if prefix else "./omh"
+    return {
+        "schema_version": COMMAND_PREVIEW_SCHEMA_VERSION,
+        "trigger": token,
+        "source": source,
+        "selection_mode": "single_top_level_command",
+        "suggestions": [
+            {
+                "id": _COMMAND_PREVIEW_ALIAS,
+                "label": _COMMAND_PREVIEW_ALIAS,
+                "insert_text": insert_text,
+                "description": "Open the OMH workflow picker.",
+                "opens_schema": SKILL_PICKER_SCHEMA_VERSION,
+                "action_id": "show_skill_picker",
+            }
+        ],
+        "top_level_aliases_only": True,
+        "hide_installed_workflows_until_picker_opens": True,
+        "rendering_hints": {
+            "discord": "When the user types `./`, show only `omh`; selecting it inserts `./omh` and opens the picker.",
+            "slack": "When the user types `/`, show only `omh`; selecting it inserts `/omh` and opens the picker.",
+            "hermes_tui": "Render one preview row: `omh` opens the OMH workflow picker.",
+        },
+        "claim_boundary": "This preview records no workflow selection; it only helps the wrapper render autocomplete.",
+    }
+
+
+def _command_preview_prefix(token: str) -> str:
+    for prefix in _COMMAND_PREVIEW_PREFIXES:
+        if token.lower().startswith(prefix):
+            return prefix
+    return ""
+
+
+def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
+    picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
+    return _chat_response(
+        kind="skill_picker",
+        headline="Choose an OMH workflow.",
+        body="Pick a workflow, or choose Route for me and Hermes will select the safest next step from the request.",
+        phase="skill_selection",
+        next_action="choose_skill",
+        thread_key=thread_key,
+        actions=[
+            _action(
+                "choose_skill",
+                "Choose workflow",
+                "primary",
+                payload={
+                    "schema_version": SKILL_PICKER_SCHEMA_VERSION,
+                    "selection_mode": "single_select",
+                    "options": picker["options"],
+                },
+            ),
+            _action("search_skills", "Search workflows", "secondary", payload={"input_schema": {"query": "string"}}),
+            _action("show_status", "Show status", "secondary"),
+        ],
+        claim_boundary="Choosing a skill is routing intent only; it is not plan acceptance, dispatch, execution, review, CI, or verification evidence.",
+        extra_state={
+            "route_action": decision.get("action", "dispatch"),
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": _ROUTER_SKILL,
+            "skill_picker": picker,
+            "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
+        },
+    )
+
+
+def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
+    installed = {definition.name: definition for definition in installable_skill_definitions()}
+    options = []
+    for skill_id, label, description, direct_invocation in _SKILL_PICKER_ENTRIES:
+        definition = installed.get(skill_id)
+        if definition is None:
+            continue
+        options.append(
+            {
+                "id": skill_id,
+                "label": label,
+                "description": description,
+                "direct_invocation": direct_invocation,
+                "harness": primary_harness_for_skill(skill_id),
+                "action_id": "choose_skill",
+                "payload": {
+                    "skill": skill_id,
+                    "direct_invocation": direct_invocation,
+                    "preserve_original_message": True,
+                },
+            }
+        )
+    return {
+        "schema_version": SKILL_PICKER_SCHEMA_VERSION,
+        "trigger": _first_token(message),
+        "source": source,
+        "selection_mode": "single_select",
+        "options": options,
+        "rendering_hints": {
+            "discord": "Render options as a select menu or compact buttons in the current thread.",
+            "slack": "Render options as a static select or button list in the current thread.",
+            "hermes_tui": "Render options as a compact command list; keep real skill names unchanged.",
+        },
+        "claim_boundary": "This picker records routing intent only; selected workflows still need their own plan, handoff, or observed evidence.",
+    }
+
+
+def _first_token(message: str) -> str:
+    return message.strip().split(maxsplit=1)[0] if message.strip() else ""
 
 
 def _public_plan_payload(plan_payload: dict[str, object], *, include_message: bool) -> dict[str, object]:

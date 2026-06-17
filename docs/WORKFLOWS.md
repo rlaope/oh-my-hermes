@@ -29,24 +29,25 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Classify requests into Hermes-retained planning/research/interview lanes, executor choice, or prepared coding handoffs; do not execute code.
 - Why this exists: `oh-my-hermes` exists to keep Hermes chat routing conservative: it maps plain requests to the right workflow, explains evidence boundaries, and avoids making every keyword look like hidden implementation.
-- Use when: Use as the top-level router when a request references oh-my-hermes, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.
+- Use when: Use as the top-level router when a request references oh-my-hermes, asks for the workflow picker, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.
 - Do not use when:
   - The user already invoked a more specific installed skill and its routing signals are unambiguous.
   - The message is ordinary chat, status acknowledgement, or a question that does not need workflow routing.
   - The wrapper wants to claim execution, review, CI, or merge evidence that no observed artifact provides.
-- Strong routing signals: `oh-my-hermes`, `omh`, `skill routing`, `workflow routing`, `chat routing`, `request-to-handoff`, `plain request`, `role-owned next action`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
+- Strong routing signals: `oh-my-hermes`, `omh`, `./`, `/`, `./o`, `/o`, `./om`, `/om`, `./omh`, `/omh`, `./skills`, `/skills`, `skill picker`, `workflow picker`, `skill routing`, `workflow routing`, `chat routing`, `request-to-handoff`, `plain request`, `role-owned next action`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
 - Good example:
   - Prompt: Use OMH request-to-handoff for: safely add a feature to this repo.
   - Expected behavior: Classify the request, name the retained Hermes lane or prepared coding handoff, and expose the observed/prepared evidence boundary.
   - Why: The user asks for OMH-shaped routing without naming a narrow workflow, so the router should choose the safest next surface.
 - Bad example:
   - Prompt: omh
-  - Expected behavior: Do not infer a coding workflow; explain setup or ask what the user wants to do next.
-  - Why: A bare product name is too weak to justify workflow activation or implementation claims.
+  - Expected behavior: Show the workflow picker or ask what the user wants to do next; do not infer a coding workflow.
+  - Why: A bare product name is a picker or clarification signal, not implementation evidence.
 - Quality bar:
   - Route only from explicit invocation, strong catalog evidence, or a clear workflow-shaped request.
   - Return a clarification or fallback path instead of forcing low-confidence messages into a workflow.
   - Keep users command-agnostic by naming the next UX step rather than shell commands.
+  - Expose direct workflow selection without renaming skills or adding an `omh-` prefix to every skill name.
   - Use request-to-handoff as the first path when a plain request needs role, plan, handoff, or status UX.
 - Required inputs:
   - user request
@@ -59,6 +60,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - runtime run record when a wrapper can observe request handling
 - Safety rules:
   - Prefer explicit skill invocation over weak keyword inference.
+  - Treat partial `./`, `/`, `./o`, or `/om` input as command preview; show one top-level `omh` entry before opening the workflow picker.
+  - Treat bare `./omh`, `/omh`, `./skills`, or `/skills` as a workflow picker request, not as implementation intent.
   - Ask one concise question when routing signals conflict.
   - Do not claim to override Hermes core routing.
 

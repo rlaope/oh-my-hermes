@@ -101,11 +101,11 @@ LOOP_CONTEXT_POLICY_REF = "loop_engineering.context_policy"
 LOOP_COST_POLICY_REF = "loop_engineering.cost_policy"
 LOOP_EXECUTOR_OPTIONS = (
     {"id": "choose", "label": "Ask me each time", "dispatchable_by_default": False},
-    {"id": "codex", "label": "Codex lifecycle handoff", "dispatchable_by_default": True},
-    {"id": "claude-code", "label": "Claude Code prompt handoff", "dispatchable_by_default": False},
-    {"id": "generic", "label": "Generic coding-agent prompt", "dispatchable_by_default": False},
-    {"id": "omx-runtime", "label": "Plugin/runtime handoff", "dispatchable_by_default": False},
-    {"id": "hermes", "label": "Hermes coding/runtime work", "dispatchable_by_default": False},
+    {"id": "codex", "label": "Codex", "dispatchable_by_default": True},
+    {"id": "claude-code", "label": "Claude Code", "dispatchable_by_default": False},
+    {"id": "generic", "label": "Other coding agent", "dispatchable_by_default": False},
+    {"id": "omx-runtime", "label": "Oh-my runtime", "dispatchable_by_default": False},
+    {"id": "hermes", "label": "Hermes", "dispatchable_by_default": False},
 )
 LOOP_EXECUTOR_OPTION_IDS = tuple(str(option["id"]) for option in LOOP_EXECUTOR_OPTIONS)
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")

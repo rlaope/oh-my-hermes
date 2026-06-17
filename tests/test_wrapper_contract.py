@@ -196,6 +196,60 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("observed status", payload["chat_response"]["body"])
         self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
+    def test_direct_omh_invocation_exposes_skill_picker(self) -> None:
+        payload = build_chat_interaction_payload("./omh", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "choose_skill")
+        self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+        self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+        picker = payload["chat_response"]["state"]["skill_picker"]
+        self.assertEqual(picker["schema_version"], "omh_skill_picker/v1")
+        self.assertEqual(picker["selection_mode"], "single_select")
+        option_ids = {option["id"] for option in picker["options"]}
+        self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertIn("choose_skill", actions)
+        self.assertIn("search_skills", actions)
+        self.assertEqual(actions["choose_skill"]["payload"]["schema_version"], "omh_skill_picker/v1")
+        self.assertIn("routing intent only", payload["chat_response"]["claim_boundary"])
+
+    def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
+        cases = {
+            "./": "./omh",
+            "/": "/omh",
+            "./o": "./omh",
+            "/om": "/omh",
+        }
+
+        for message, insert_text in cases.items():
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "show_command_preview")
+                self.assertEqual(payload["chat_response"]["kind"], "command_preview")
+                preview = payload["chat_response"]["state"]["command_preview"]
+                self.assertEqual(preview["schema_version"], "omh_command_preview/v1")
+                self.assertEqual(preview["selection_mode"], "single_top_level_command")
+                self.assertEqual([suggestion["label"] for suggestion in preview["suggestions"]], ["omh"])
+                self.assertEqual(preview["suggestions"][0]["insert_text"], insert_text)
+                self.assertTrue(preview["top_level_aliases_only"])
+                self.assertTrue(preview["hide_installed_workflows_until_picker_opens"])
+                self.assertNotIn("loop", json.dumps(preview))
+                self.assertNotIn("ralplan", json.dumps(preview))
+
+    def test_direct_skills_invocation_uses_picker_not_management_skill(self) -> None:
+        payload = build_chat_interaction_payload("./skills", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "choose_skill")
+        self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+        self.assertNotEqual(payload["route"]["selected_skill"], "skill")
+        self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+        aliases = payload["chat_response"]["state"]["direct_invocation_aliases"]
+        self.assertIn("./skills", aliases)
+
     def test_loop_interaction_exposes_start_card_without_raw_goal_by_default(self) -> None:
         message = "./loop make OMH a 10k-star quality Hermes-native project"
 

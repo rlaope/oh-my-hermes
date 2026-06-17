@@ -336,26 +336,35 @@ The backend flow is:
 3. `omh` returns one `chat_interaction/v1` envelope with a renderable
    `chat_response/v1`, optional `status_card/v1`, a stable `thread_key`,
    platform-neutral actions, and a conservative `next_action`.
-4. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
+4. If the message is a partial command prefix such as `./`, `/`, `./o`, or
+   `/om`, the wrapper renders `chat_response.state.command_preview.suggestions`
+   as autocomplete and shows exactly one top-level entry: `omh`. Selecting it
+   inserts `./omh` or `/omh` and opens the workflow picker.
+5. If the message is `./omh`, `/omh`, `./skills`, or `/skills`, the wrapper
+   renders `chat_response.state.skill_picker.options` as a platform-native
+   select menu, button list, or Hermes TUI command list. Selecting an option
+   forwards the original request to that skill. This keeps installed skill
+   names clean; the skills do not need an `omh-` prefix.
+6. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
    `status_card` when present in the original channel or thread. The user does
    not need to know any `omh` command names.
-5. If the interaction asks for clarification, the wrapper keeps the answer in
+7. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.
-6. If the interaction presents a plan, the wrapper waits for the user to accept
+8. If the interaction presents a plan, the wrapper waits for the user to accept
    or revise it before preparing any coding handoff.
-7. If the accepted interaction exposes executor or runtime selection, the
+9. If the accepted interaction exposes executor or runtime selection, the
    wrapper uses the chosen profile. Codex can use the run-backed lifecycle path;
    Claude Code and generic agents use prompt-only handoffs; Hermes, OMX, OMO,
    and OMC use runtime handoffs with team/swarm, worker-protocol, and worktree
    guidance. The wrapper records only what it actually observes.
-8. If the wrapper observes Hermes target metadata such as `agent_ref`,
+10. If the wrapper observes Hermes target metadata such as `agent_ref`,
    `agent_count`, or `hermes_home`, `chat_interaction/v1` may include
    `target_notice` and `target_topology`. Render the concise notice or
    `apply_target_change` action before treating single-to-multi or
    multi-to-single target changes as persistent setup state. When target
    identity metadata is present, `thread_key` is scoped by that target so two
    Hermes agents in the same channel do not share wrapper session state.
-9. If the wrapper has local memory-like context candidates, it can run
+11. If the wrapper has local memory-like context candidates, it can run
    `omh memory inspect` and attach a conflict-free `handoff_context_pack/v1` to
    the later handoff. Conflicting or stale assumptions must be shown as memory
    review, not silently reused.
@@ -666,7 +675,7 @@ compatibility surfaces remain routable either way:
 omh setup --profile-pack cto-loop --profile-pack startup-delivery
 ```
 
-Record a default coding handoff style during setup:
+Record a default coding agent during setup:
 
 ```sh
 omh setup --default-executor claude-code
@@ -674,9 +683,9 @@ omh setup --default-executor claude-code
 
 Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
 `omx-runtime`, `omo-runtime`, and `omc-runtime`. The recommended default is
-`choose`, which asks before dispatch. Legacy `OMH_SETUP_PROFILES=1,3` still maps
-to setup profile categories for automation that already uses it, but new scripts
-should prefer `OMH_DEFAULT_EXECUTOR`.
+`choose`, which asks before choosing a coding agent. Legacy
+`OMH_SETUP_PROFILES=1,3` still maps to setup profile categories for automation
+that already uses it, but new scripts should prefer `OMH_DEFAULT_EXECUTOR`.
 
 Record a Hermes-facing operating model during setup:
 

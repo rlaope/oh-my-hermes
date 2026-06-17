@@ -71,7 +71,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Terminal command: omh found at /usr/local/bin/omh", stdout)
             self.assertIn("Hermes connection:", stdout)
             self.assertIn("Coding requests:", stdout)
-            self.assertIn("Hermes will ask before choosing a coding agent", stdout)
+            self.assertIn("Coding requests: Ask every time", stdout)
             self.assertIn("Hermes profile check:", stdout)
             self.assertIn("OMH status helper:", stdout)
             self.assertIn("Restart or reload Hermes Agent", stdout)
@@ -449,8 +449,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup", stdout)
-            self.assertIn("When a request may need coding", stdout)
-            self.assertIn("does not hide or remove any OMH skills", stdout)
+            self.assertIn("Default coding agent", stdout)
+            self.assertIn("Pick the coding agent Hermes should suggest first", stdout)
+            self.assertIn("2) Codex", stdout)
+            self.assertIn("3) Claude Code", stdout)
             self.assertIn("Show advanced options", stdout)
             self.assertIn("Add an optional visible team role preset", stdout)
             self.assertIn("every OMH workflow is still installed", stdout)
@@ -546,7 +548,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH 워크플로 설치", stdout)
             self.assertIn("OMH 설정이 완료되었습니다.", stdout)
             self.assertIn("설치 위치:", stdout)
-            self.assertIn("코딩 에이전트를 고르기 전에 Hermes가 먼저 물어봅니다", stdout)
+            self.assertIn("코딩 요청: 매번 물어보기", stdout)
             self.assertNotIn("skills.external_dirs", stdout)
             self.assertNotIn("토폴로지", stdout)
             self.assertNotIn("플러그인 브리지", stdout)
@@ -2147,6 +2149,49 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertNotEqual(payload["route"]["selected_skill"], "oh-my-hermes")
                 self.assertNotIn(message, json.dumps(payload))
+
+    def test_chat_interact_direct_picker_aliases(self) -> None:
+        for message in ("./omh", "/omh", "./skills", "/skills"):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "choose_skill")
+                self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+                self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+                picker = payload["chat_response"]["state"]["skill_picker"]
+                self.assertEqual(picker["schema_version"], "omh_skill_picker/v1")
+                option_ids = {option["id"] for option in picker["options"]}
+                self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
+                self.assertIn("choose_skill", {action["id"] for action in payload["chat_response"]["actions"]})
+
+    def test_chat_interact_partial_prefix_preview_shows_only_omh(self) -> None:
+        cases = {
+            "./": "./omh",
+            "/": "/omh",
+            "./o": "./omh",
+            "/om": "/omh",
+        }
+
+        for message, insert_text in cases.items():
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "show_command_preview")
+                self.assertEqual(payload["chat_response"]["kind"], "command_preview")
+                preview = payload["chat_response"]["state"]["command_preview"]
+                self.assertEqual(preview["schema_version"], "omh_command_preview/v1")
+                self.assertEqual([suggestion["label"] for suggestion in preview["suggestions"]], ["omh"])
+                self.assertEqual(preview["suggestions"][0]["insert_text"], insert_text)
+                self.assertTrue(preview["top_level_aliases_only"])
+                self.assertNotIn("loop", json.dumps(preview))
 
     def test_chat_route_exposes_selected_recommendation_policy(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "prepare weekly ops review from customer feedback and release risks"])
@@ -4546,6 +4591,49 @@ class CliTests(unittest.TestCase):
             self.assertEqual(setup["steps"]["profile"]["selected_categories"], ["prompt-only-coding"])
             self.assertEqual(setup["steps"]["profile"]["default_executor"], "claude-code")
             self.assertEqual(setup["steps"]["profile"]["dispatch_policy"], "prepare_only")
+
+    def test_setup_choice_menu_uses_cursor_not_checkbox(self) -> None:
+        from omh.commands.setup import _choice_menu_lines
+
+        lines = _choice_menu_lines(
+            "Default coding agent",
+            ["Pick the coding agent Hermes should suggest first."],
+            [
+                {"choice": "1", "value": "choose", "label": "Ask every time", "description": ""},
+                {"choice": "2", "value": "codex", "label": "Codex", "description": "Use Codex."},
+            ],
+            1,
+            default_choice="1",
+            use_color=False,
+        )
+        rendered = "\n".join(lines)
+
+        self.assertIn("  > 2) Codex", rendered)
+        self.assertIn("  1) Ask every time (recommended)", rendered)
+        self.assertNotIn("[x]", rendered)
+        self.assertNotIn("[ ]", rendered)
+
+    def test_setup_executor_copy_uses_simple_coding_agent_names(self) -> None:
+        from omh.commands.language import tr
+        from omh.commands.setup import _executor_summary
+
+        self.assertEqual(tr("en", "executor_title"), "Default coding agent")
+        self.assertEqual(tr("en", "executor_codex_label"), "Codex")
+        self.assertEqual(tr("en", "executor_claude_label"), "Claude Code")
+        self.assertEqual(tr("ko", "executor_codex_label"), "Codex")
+        self.assertEqual(_executor_summary("en", "codex"), "Codex")
+        self.assertEqual(_executor_summary("ko", "choose"), "매번 물어보기")
+        setup_copy = " ".join(
+            [
+                tr("en", "executor_intro_1"),
+                tr("en", "executor_codex_label"),
+                tr("en", "executor_claude_label"),
+                tr("ko", "executor_intro_1"),
+                tr("ko", "executor_codex_label"),
+                tr("ko", "executor_claude_label"),
+            ]
+        ).lower()
+        self.assertNotIn("handoff", setup_copy)
 
     def test_optional_team_profile_packs_are_listed_and_installed_on_request(self) -> None:
         status, stdout, stderr = run_cli(["profile", "list"])
