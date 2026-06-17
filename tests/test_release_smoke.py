@@ -154,15 +154,17 @@ class ReleaseSmokeTests(unittest.TestCase):
         first_use = payload["first_use_status_smoke"]
         self.assertEqual(first_use["target_binding"]["omh_home"], "<tempdir>/home/.omh")
         self.assertEqual(first_use["target_binding"]["hermes_home"], "<tempdir>/home/.hermes")
+        self.assertEqual(payload["environment"]["OMH_RUN_SETUP"], "0")
         self.assertEqual(payload["environment"]["OMH_RUN_DOCTOR"], "1")
-        self.assertEqual(payload["environment"]["OMH_SETUP_ARGS"], "--no-interactive")
+        self.assertEqual(payload["environment"]["OMH_SETUP_ARGS"], "")
         self.assertIn("<tempdir>", payload["work_dir"])
         self.assertEqual(payload["steps"][0]["command"], ["sh", str(Path("/tmp/omh-repo/install.sh").resolve())])
-        self.assertEqual(payload["steps"][1]["command"][1:], ["doctor", "--json"])
+        self.assertEqual(payload["steps"][1]["name"], "installed_command_smoke")
+        self.assertIn("release", payload["steps"][1]["command"])
         self.assertIn("first_use_status_smoke", payload)
         self.assertIn("does not download over curl", payload["proof_boundary"])
 
-    def test_install_script_smoke_live_runs_installer_doctor_and_command_smoke(self) -> None:
+    def test_install_script_smoke_live_installs_command_without_setup_and_runs_command_smoke(self) -> None:
         seen: list[list[str]] = []
         seen_env: list[dict[str, str]] = []
 
@@ -176,8 +178,6 @@ class ReleaseSmokeTests(unittest.TestCase):
                 installed.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
                 installed.chmod(0o755)
                 return CommandResult(command, 0, "installer ok", "")
-            if list(command)[1:] == ["doctor", "--json"]:
-                return CommandResult(command, 0, '{"ok": true}', "")
             return CommandResult(command, 0, "ok", "")
 
         with self.subTest("live"):
@@ -204,7 +204,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["failed_step"], "")
         self.assertTrue(payload["retained_work_dir"])
         self.assertEqual(seen[0], ["sh", str(install_script.resolve())])
-        self.assertIn([str((root / "work" / "bin" / "omh").resolve()), "doctor", "--json"], seen)
+        self.assertNotIn([str((root / "work" / "bin" / "omh").resolve()), "doctor", "--json"], seen)
         self.assertIn([str((root / "work" / "bin" / "omh").resolve()), "--help"], seen)
         expected_omh_home = str((root / "work" / "home" / ".omh").resolve())
         expected_hermes_home = str((root / "work" / "home" / ".hermes").resolve())
@@ -217,6 +217,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["environment"]["HERMES_HOME"], expected_hermes_home)
         self.assertTrue(payload["installed_command_smoke"]["ok"])
         self.assertTrue(payload["installed_command_smoke"]["observed"])
+        self.assertEqual(payload["environment"]["OMH_RUN_SETUP"], "0")
         self.assertIn("isolated", payload["proof_boundary"])
 
     def test_install_script_smoke_default_runner_does_not_inherit_operator_controls(self) -> None:
@@ -279,7 +280,8 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertTrue(blocked_keys.isdisjoint(run_env))
             self.assertEqual(run_env["OMH_HOME"], str((root / "work" / "home" / ".omh").resolve()))
             self.assertEqual(run_env["HERMES_HOME"], str((root / "work" / "home" / ".hermes").resolve()))
-            self.assertEqual(run_env["OMH_SETUP_ARGS"], "--no-interactive")
+            self.assertEqual(run_env["OMH_RUN_SETUP"], "0")
+            self.assertEqual(run_env["OMH_SETUP_ARGS"], "")
 
     def test_exact_subprocess_runner_uses_only_explicit_env(self) -> None:
         with patch.dict("os.environ", {"OMH_SCOPE": "project", "OMH_PROFILE_PACKS": "cto-loop"}, clear=False):

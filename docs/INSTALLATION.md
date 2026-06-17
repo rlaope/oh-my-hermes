@@ -27,9 +27,10 @@ First-run expectation:
 3. You restart or reload Hermes Agent.
 4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
-The installer normally runs setup automatically, but `omh setup` is kept here
-as the explicit repairable step: it installs generated managed skills and
-registers them with Hermes through `skills.external_dirs`.
+The curl installer intentionally stops before setup. It installs the isolated
+command package and `omh` executable only. `omh setup` is the explicit,
+repairable step that installs generated managed skills and registers them with
+Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
 chooses the setup language, connects OMH to the target Hermes profile, saves the
 default coding request preference, installs the OMH status helper, and then
@@ -138,7 +139,7 @@ omh release hermes-smoke
 
 The installer path has a separate first-time downloader smoke. Plan mode is
 also safe for CI and only describes the isolated HOME, venv, bin directory,
-setup, doctor, and installed-command checks:
+command-install and installed-command checks:
 
 ```sh
 omh release install-smoke
@@ -147,8 +148,9 @@ omh release install-smoke
 When you want observed evidence that `install.sh` itself works from a checkout,
 run it live. This still does not mutate your real Hermes profile; OMH creates a
 temporary HOME, virtual environment, and bin directory, then runs
-`install.sh`, smoke-installed `omh doctor --json`, and installed-command smoke
-inside that isolated target:
+`install.sh` and installed-command smoke inside that isolated target. It does
+not run setup or doctor unless an advanced one-shot compatibility smoke opts in
+with `--run-setup`:
 
 ```sh
 omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
@@ -215,12 +217,12 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 For custom release archives or local package sources accepted by `pip`, pass
 `OMH_PACKAGE_URL`.
 
-The installer creates an isolated OMH virtual environment, links the `omh`
-command into `~/.local/bin` when possible, runs `omh setup` to install managed
-Hermes skills and register the managed skill directory with Hermes, then runs
-`omh doctor` as a separate health check. This avoids Homebrew and distro Python
-`externally-managed-environment` failures while keeping the user-facing command
-simple.
+The installer creates an isolated OMH virtual environment and links the `omh`
+command into `~/.local/bin` when possible. It does not run `omh setup`, register
+Hermes skill directories, install plugin state, or run `omh doctor` by default.
+That avoids Homebrew and distro Python `externally-managed-environment`
+failures while keeping the setup boundary visible: install the command first,
+then run `omh setup` when you are ready to connect OMH to Hermes.
 
 Installer and setup output can be localized with `OMH_LANG` or `--language`.
 Supported language codes are `en`, `ko`, `ja`, and `zh`:
@@ -248,8 +250,8 @@ the registered skill directory.
 
 ## Set Up And Verify
 
-The installer runs setup automatically. Re-run it when you want to repair or
-refresh the local Hermes skill registration:
+Run setup explicitly after the installer, and re-run it whenever you want to
+repair or refresh the local Hermes skill registration:
 
 ```sh
 omh setup
@@ -644,30 +646,30 @@ Then restart Hermes Agent.
 
 ## Install Options
 
-Record the optional MCP bridge preference during bootstrap:
+Record the optional MCP bridge preference during setup:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_WITH_MCP=1 sh
+omh setup --with-mcp
 ```
 
-Use project-local OMH/Hermes paths during bootstrap:
+Use project-local OMH/Hermes paths during setup:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SCOPE=project sh
+omh setup --scope project
 ```
 
-Install one or more optional Hermes agent/profile packs during bootstrap. These
+Install one or more optional Hermes agent/profile packs during setup. These
 are visible team role preset files only; core workflow skills are installed and
 compatibility surfaces remain routable either way:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop,startup-delivery sh
+omh setup --profile-pack cto-loop --profile-pack startup-delivery
 ```
 
-Record a default coding handoff style during bootstrap:
+Record a default coding handoff style during setup:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_DEFAULT_EXECUTOR=claude-code sh
+omh setup --default-executor claude-code
 ```
 
 Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
@@ -714,16 +716,17 @@ curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh
 Supported values are `en`, `ko`, `ja`, and `zh`. The same setting can be passed
 directly to setup with `omh setup --language zh`.
 
-Skip automatic Hermes config registration:
+Skip Hermes config registration during setup:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_AUTO_APPLY=0 sh
+omh setup --skip-apply
 ```
 
-Skip the final health check:
+Advanced one-shot compatibility mode can run setup from the installer, but it
+is not the default download path:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_RUN_DOCTOR=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_RUN_SETUP=1 OMH_RUN_DOCTOR=0 sh
 ```
 
 Use the active Python environment instead of the default isolated venv:
@@ -738,15 +741,15 @@ Customize the isolated install locations:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_VENV_DIR="$HOME/.local/share/omh/venv" OMH_BIN_DIR="$HOME/.local/bin" sh
 ```
 
-Pass a current `omh setup` flag before `install.sh` has a first-class
-environment variable for it:
+Pass current `omh setup` flags only when that advanced one-shot mode is
+explicitly enabled:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_SETUP_ARGS="--dry-run" sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_RUN_SETUP=1 OMH_SETUP_ARGS="--dry-run" sh
 ```
 
-`OMH_SETUP_ARGS` is an advanced escape hatch. Prefer the named variables above
-for stable install recipes.
+`OMH_SETUP_ARGS` is an advanced escape hatch. Normal install recipes should run
+`omh setup ...` as a separate command.
 
 ## Uninstall
 

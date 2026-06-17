@@ -43,10 +43,10 @@ Custom archive:
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PACKAGE_URL=https://github.com/rlaope/oh-my-hermes/archive/refs/tags/v<version>.zip sh
 ```
 
-Plugin/profile bootstrap smoke:
+Advanced one-shot setup compatibility smoke:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | OMH_RUN_SETUP=1 OMH_PROFILE_PACKS=cto-loop OMH_RUN_DOCTOR=0 sh
 ```
 
 ## Required Checks
@@ -73,7 +73,8 @@ python3 -m venv /tmp/omh-wheel-smoke
 /tmp/omh-wheel-smoke/bin/omh --help
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home release hermes-smoke --install-path setup --omh-command /tmp/omh-wheel-smoke/bin/omh --include-command-smoke
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.0
-OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh
+OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.0-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin sh install.sh
+/tmp/omh-installer-bin/omh --omh-home /tmp/omh-installer-home --hermes-home /tmp/omh-installer-hermes setup --dry-run
 ```
 
 The checklist command renders the same release gates as a deterministic
@@ -108,9 +109,9 @@ python3 -m omh.cli release install-smoke
 
 Live mode executes the local `install.sh` in a temporary HOME with an isolated
 OMH virtual environment and bin directory. It installs from the local checkout,
-runs setup through the installer, runs smoke-installed `omh doctor --json`, and
-then runs installed-command smoke. It does not mutate the operator's real
-Hermes profile or prove a later Hermes chat selected OMH:
+does not run setup through the installer, and then runs installed-command
+smoke. It does not mutate the operator's real Hermes profile or prove a later
+Hermes chat selected OMH:
 
 ```sh
 omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
@@ -155,7 +156,7 @@ confirming the ambient default profile:
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --live --install-path setup
 ```
 
-The live smoke runs install/setup plus:
+The live smoke runs the selected Hermes install path plus:
 
 ```sh
 hermes skills tap list
