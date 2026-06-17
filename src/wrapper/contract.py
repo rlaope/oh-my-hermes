@@ -1015,6 +1015,7 @@ def _command_preview_state(message: str, *, source: str) -> dict[str, object]:
         "rendering_hints": {
             "discord": "When the user types `./`, show only `omh`; selecting it inserts `./omh` and opens the picker.",
             "slack": "When the user types `/`, show only `omh`; selecting it inserts `/omh` and opens the picker.",
+            "telegram": "When the user sends `/` or `/om`, show the `omh` bot command or an Open omh inline button.",
             "hermes_tui": "Render one preview row: `omh` opens the OMH workflow picker.",
         },
         "claim_boundary": "This preview records no workflow selection; it only helps the wrapper render autocomplete.",

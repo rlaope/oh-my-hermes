@@ -2193,6 +2193,29 @@ class CliTests(unittest.TestCase):
                 self.assertTrue(preview["top_level_aliases_only"])
                 self.assertNotIn("loop", json.dumps(preview))
 
+    def test_chat_native_command_exports_platform_registration_contracts(self) -> None:
+        cases = {
+            "discord": "discord_application_command_manifest/v1",
+            "slack": "slack_command_shortcut_manifest/v1",
+            "telegram": "telegram_bot_command_menu/v1",
+            "hermes": "hermes_tui_command_preview/v1",
+        }
+
+        for source, registration_schema in cases.items():
+            with self.subTest(source=source):
+                status, stdout, stderr = run_cli(["chat", "native-command", "--source", source])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["schema_version"], "omh_native_command_surface/v1")
+                self.assertEqual(payload["source"], source)
+                self.assertEqual(payload["command"], "omh")
+                self.assertEqual(payload["registration"]["schema_version"], registration_schema)
+                self.assertEqual(payload["preview_contract"]["only_top_level_suggestions"], ["omh"])
+                self.assertEqual(payload["fallback_card"]["primary_action"]["label"], "Open omh")
+                self.assertIn("platform command installed", payload["not_evidence"])
+
     def test_chat_route_exposes_selected_recommendation_policy(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "prepare weekly ops review from customer feedback and release risks"])
 

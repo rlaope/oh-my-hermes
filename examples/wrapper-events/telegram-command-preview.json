@@ -1,0 +1,14 @@
+{
+  "update_id": "telegram-preview-001",
+  "message": {
+    "message_id": "telegram-message-preview-001",
+    "date": "1781706000",
+    "chat": {
+      "id": "repo-maintenance"
+    },
+    "from": {
+      "id": "maintainer-1"
+    },
+    "text": "/"
+  }
+}

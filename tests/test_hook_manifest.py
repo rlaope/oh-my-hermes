@@ -26,4 +26,8 @@ class HookManifestTests(unittest.TestCase):
         self.assertIn("bounded_status_context", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("executor_opened", events)
         self.assertIn("selected_executor_profile", events["executor_opened"]["payload_fields"])
+        self.assertIn("native_command_registered", events)
+        self.assertIn("registration_schema", events["native_command_registered"]["payload_fields"])
+        self.assertIn("native_command_rendered", events)
+        self.assertIn("render_kind", events["native_command_rendered"]["payload_fields"])
         self.assertIn("not proof", hooks["pre_llm_call"]["claim_boundary"])
