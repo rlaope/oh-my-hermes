@@ -29,6 +29,8 @@ def hook_manifest() -> dict[str, object]:
         ],
         "wrapper_events": [
             _wrapper_event("prompt_submitted", ("source", "message_length", "message_sha256")),
+            _wrapper_event("native_command_registered", ("source", "command", "registration_schema")),
+            _wrapper_event("native_command_rendered", ("source", "response_kind", "render_kind")),
             _wrapper_event("status_refresh", ("session_id", "run_id")),
             _wrapper_event("executor_opened", ("session_id", "selected_executor_profile", "external_session_ref")),
             _wrapper_event("session_attached", ("session_id", "external_session_ref")),
@@ -43,6 +45,7 @@ def hook_manifest() -> dict[str, object]:
             "src/plugin_bundle/omh/plugin.yaml",
             "src/plugin_bundle/omh/__init__.py",
             "src/wrapper/contract.py",
+            "src/wrapper/native_commands.py",
         ],
     }
 

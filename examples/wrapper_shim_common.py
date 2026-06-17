@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.wrapper.contract import INTERACTION_MODES, build_chat_interaction_payload, build_chat_status_interaction  # noqa: E402
+from src.wrapper.native_commands import build_native_command_surface, render_native_command_response  # noqa: E402
 
 
 SCHEMA_VERSION = "wrapper_adapter_shim/v1"
@@ -45,7 +46,12 @@ def run_shim(source: str, argv: list[str] | None = None) -> int:
 
 
 def _default_fixture(source: str) -> Path:
-    filename = "discord-safe-feature.json" if source == "discord" else "slack-risky-refactor.json"
+    filename_by_source = {
+        "discord": "discord-safe-feature.json",
+        "slack": "slack-risky-refactor.json",
+        "telegram": "telegram-command-preview.json",
+    }
+    filename = filename_by_source.get(source, "discord-safe-feature.json")
     return Path(__file__).resolve().parent / "wrapper-events" / filename
 
 
@@ -85,6 +91,8 @@ def _render(source: str, interaction: dict[str, object]) -> dict[str, object]:
             }
             for action in _list_of_dicts(response.get("actions", []))
         ],
+        "native_command_registration": build_native_command_surface(source),
+        "native_render": render_native_command_response(interaction, source=source),
         "status_card": status_card if isinstance(status_card, dict) else None,
         "not_evidence_until_observed": [
             "executor_dispatch",

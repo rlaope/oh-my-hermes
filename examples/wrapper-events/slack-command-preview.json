@@ -1,0 +1,10 @@
+{
+  "event_id": "slack-preview-001",
+  "event": {
+    "client_msg_id": "slack-message-preview-001",
+    "channel": "repo-maintenance",
+    "user": "maintainer-1",
+    "text": "/",
+    "ts": "1781706000.000100"
+  }
+}

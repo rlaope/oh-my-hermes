@@ -113,6 +113,12 @@ also keep `./skills` as a compatibility alias. The actual skill names stay
 clean, such as `loop`, `ralplan`, `ultraprocess`, and `web-research`, without
 adding an `omh-` prefix to every workflow.
 
+For messenger-native entry points, wrapper operators can use
+`omh chat native-command --source discord|slack|telegram` to export the `/omh`
+or command-menu registration contract. If the platform cannot show live
+autocomplete for plain `./`, the wrapper can answer with an `Open omh` card
+that opens the same picker.
+
 If your Hermes environment supports native skill taps, this is the equivalent
 Hermes-native front door:
 

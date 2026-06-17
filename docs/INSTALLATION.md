@@ -329,54 +329,60 @@ image that starts the wrapper.
 
 The backend flow is:
 
-1. The wrapper receives a user message in Discord, Slack, or another chat
+1. The wrapper receives a user message in Discord, Slack, Telegram, or another chat
    surface.
 2. The wrapper calls `omh chat interact` with the platform source and either a
    plain message or event JSON.
 3. `omh` returns one `chat_interaction/v1` envelope with a renderable
    `chat_response/v1`, optional `status_card/v1`, a stable `thread_key`,
    platform-neutral actions, and a conservative `next_action`.
-4. If the message is a partial command prefix such as `./`, `/`, `./o`, or
+4. At startup or deploy time, the wrapper can call
+   `omh chat native-command --source discord`, `--source slack`, or
+   `--source telegram` to obtain the platform registration contract for `/omh`
+   or the equivalent command/menu surface.
+5. If the message is a partial command prefix such as `./`, `/`, `./o`, or
    `/om`, the wrapper renders `chat_response.state.command_preview.suggestions`
-   as autocomplete and shows exactly one top-level entry: `omh`. Selecting it
-   inserts `./omh` or `/omh` and opens the workflow picker.
-5. If the message is `./omh`, `/omh`, `./skills`, or `/skills`, the wrapper
+   as autocomplete when the platform supports it. If native autocomplete is not
+   available for plain messages, render the returned
+   `omh_command_fallback_card/v1` style card with a single `Open omh` action.
+   Selecting it submits `./omh` or `/omh` and opens the workflow picker.
+6. If the message is `./omh`, `/omh`, `./skills`, or `/skills`, the wrapper
    renders `chat_response.state.skill_picker.options` as a platform-native
    select menu, button list, or Hermes TUI command list. Selecting an option
    forwards the original request to that skill. This keeps installed skill
    names clean; the skills do not need an `omh-` prefix.
-6. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
+7. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
    `status_card` when present in the original channel or thread. The user does
    not need to know any `omh` command names.
-7. If the interaction asks for clarification, the wrapper keeps the answer in
+8. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.
-8. If the interaction presents a plan, the wrapper waits for the user to accept
+9. If the interaction presents a plan, the wrapper waits for the user to accept
    or revise it before preparing any coding handoff.
-9. If the accepted interaction exposes executor or runtime selection, the
+10. If the accepted interaction exposes executor or runtime selection, the
    wrapper uses the chosen profile. Codex can use the run-backed lifecycle path;
    Claude Code and generic agents use prompt-only handoffs; Hermes, OMX, OMO,
    and OMC use runtime handoffs with team/swarm, worker-protocol, and worktree
    guidance. The wrapper records only what it actually observes.
-10. If the wrapper observes Hermes target metadata such as `agent_ref`,
+11. If the wrapper observes Hermes target metadata such as `agent_ref`,
    `agent_count`, or `hermes_home`, `chat_interaction/v1` may include
    `target_notice` and `target_topology`. Render the concise notice or
    `apply_target_change` action before treating single-to-multi or
    multi-to-single target changes as persistent setup state. When target
    identity metadata is present, `thread_key` is scoped by that target so two
    Hermes agents in the same channel do not share wrapper session state.
-11. If the wrapper has local memory-like context candidates, it can run
+12. If the wrapper has local memory-like context candidates, it can run
    `omh memory inspect` and attach a conflict-free `handoff_context_pack/v1` to
    the later handoff. Conflicting or stale assumptions must be shown as memory
    review, not silently reused.
-10. Status updates use `omh coding lifecycle report` or
+13. Status updates use `omh coding lifecycle report` or
    `omh chat interact --run <run-id>` and stay in the same thread.
-11. Hermes still starts with its normal config and reads `skills.external_dirs`;
+14. Hermes still starts with its normal config and reads `skills.external_dirs`;
    `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
 
-`omh` does not replace the Discord bot, modify Slack commands, open network
-connections, invoke coding executors, or patch Hermes internals. It prepares
-deterministic local contracts that a wrapper can render, dispatch, and later
-update with observed evidence.
+`omh` provides deterministic local contracts for command registration, fallback
+cards, workflow selection, handoff, and status. The active Hermes wrapper owns
+the transport session, platform registration side effect, and later observed
+evidence updates.
 
 For a hosted bot, the practical bootstrap shape is usually:
 

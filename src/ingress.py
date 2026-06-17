@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-CHAT_SOURCES = ("generic", "discord", "slack", "hermes")
+CHAT_SOURCES = ("generic", "discord", "slack", "telegram", "hermes")
 SOURCE_METADATA_KEYS = (
     "source_event_id",
     "channel_ref",
@@ -32,10 +32,40 @@ _EVENT_TEXT_PATHS = (
 )
 
 _SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
-    "source_event_id": (("id",), ("event_id",), ("message", "id"), ("event", "id"), ("event", "client_msg_id")),
-    "channel_ref": (("channel",), ("channel_id",), ("message", "channel"), ("event", "channel"), ("channel", "id")),
-    "user_ref": (("user",), ("user_id",), ("author", "id"), ("message", "author", "id"), ("event", "user")),
-    "timestamp": (("timestamp",), ("created_at",), ("ts",), ("message", "timestamp"), ("event", "ts"), ("event", "event_ts")),
+    "source_event_id": (
+        ("id",),
+        ("event_id",),
+        ("update_id",),
+        ("message", "id"),
+        ("message", "message_id"),
+        ("event", "id"),
+        ("event", "client_msg_id"),
+    ),
+    "channel_ref": (
+        ("channel",),
+        ("channel_id",),
+        ("message", "channel"),
+        ("message", "chat", "id"),
+        ("event", "channel"),
+        ("channel", "id"),
+    ),
+    "user_ref": (
+        ("user",),
+        ("user_id",),
+        ("author", "id"),
+        ("message", "author", "id"),
+        ("message", "from", "id"),
+        ("event", "user"),
+    ),
+    "timestamp": (
+        ("timestamp",),
+        ("created_at",),
+        ("ts",),
+        ("message", "timestamp"),
+        ("message", "date"),
+        ("event", "ts"),
+        ("event", "event_ts"),
+    ),
     "agent_ref": (("agent_ref",), ("agent", "id"), ("bot", "id"), ("message", "agent", "id"), ("event", "agent", "id")),
     "target_ref": (("target_ref",), ("target", "id"), ("workspace", "id"), ("team", "id"), ("guild_id",)),
     "runtime_ref": (("runtime_ref",), ("runtime", "id"), ("hermes", "runtime_id"), ("hermes_runtime", "id")),

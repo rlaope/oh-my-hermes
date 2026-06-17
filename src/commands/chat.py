@@ -18,6 +18,7 @@ from ..wrapper.executor_sessions import (
     record_executor_session_result,
     request_executor_session_verification,
 )
+from ..wrapper.native_commands import NATIVE_COMMAND_SOURCES, build_native_command_surface
 from ..wrapper.sessions import (
     WrapperSessionError,
     build_wrapper_session_status,
@@ -296,6 +297,14 @@ def cmd_chat_session_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat_native_command(args: argparse.Namespace) -> int:
+    try:
+        _print_json(build_native_command_surface(args.source))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def _add_chat_commands(sub) -> None:
     chat = sub.add_parser("chat", help="Turn wrapper chat events into OMH routing, handoff, and status envelopes.")
     chat_sub = chat.add_subparsers(dest="chat_command", required=True)
@@ -371,6 +380,15 @@ def _add_chat_commands(sub) -> None:
     interact.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
     _add_target_metadata_options(interact)
     interact.set_defaults(func=cmd_chat_interact)
+
+    native_command = chat_sub.add_parser("native-command", help="Print the platform-native OMH command registration contract.")
+    native_command.add_argument(
+        "--source",
+        choices=NATIVE_COMMAND_SOURCES,
+        default="generic",
+        help="Target messenger or Hermes surface for the command manifest.",
+    )
+    native_command.set_defaults(func=cmd_chat_native_command)
 
     session = chat_sub.add_parser("session")
     session_sub = session.add_subparsers(dest="session_command", required=True)

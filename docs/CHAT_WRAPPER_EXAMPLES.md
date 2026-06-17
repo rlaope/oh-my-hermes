@@ -12,6 +12,12 @@ responsibilities, and evidence boundaries, read
 
 ```sh
 uv run python examples/discord-adapter-shim.py
+uv run python examples/discord-adapter-shim.py examples/wrapper-events/discord-command-preview.json
+uv run python examples/slack-adapter-shim.py examples/wrapper-events/slack-command-preview.json
+uv run python examples/telegram-adapter-shim.py examples/wrapper-events/telegram-command-preview.json
+uv run python -m src.cli chat native-command --source discord
+uv run python -m src.cli chat native-command --source slack
+uv run python -m src.cli chat native-command --source telegram
 uv run python -m src.cli demo orchestration
 ```
 
@@ -22,6 +28,47 @@ the full deterministic path:
 ```text
 recommend -> chat response -> Hermes plan -> selected executor/runtime handoff -> status card
 ```
+
+## Messenger-Native OMH Entry
+
+For platforms that support registered commands or bot menus, wrappers can load
+the deterministic OMH command contract:
+
+```sh
+omh chat native-command --source discord
+omh chat native-command --source slack
+omh chat native-command --source telegram
+```
+
+Those commands return `omh_native_command_surface/v1` with the platform's `/omh`
+or menu registration shape plus the same evidence boundary used by the chat
+contract. If the user sends only `./` or `/` in a normal chat message and the
+platform cannot show live autocomplete, the wrapper can render the fallback
+card returned by `omh_native_command_render/v1`:
+
+```text
+Hermes Agent  BOT
+Open OMH
+
+Choose `omh` to open the workflow picker. The picker appears before any
+workflow, plan, handoff, or execution is selected.
+
+[ Open omh ]
+
+State
+- Response kind: command_preview
+- Opens: omh_skill_picker/v1
+- Claim boundary: preview/card rendering is not workflow selection or execution evidence.
+```
+
+User-facing effect:
+
+- Typing `./` does not expose every workflow name at once.
+- Discord can register `/omh`, Slack can register `/omh` or a shortcut, and
+  Telegram can register the `omh` bot command menu.
+- If native command preview is limited by the platform, the user still gets an
+  `Open omh` card in the same Hermes conversation.
+- The card only opens the picker; it does not claim that a workflow started.
 
 ## Discord-Style Plan Response
 

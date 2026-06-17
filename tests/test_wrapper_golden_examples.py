@@ -232,6 +232,54 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertIn("executor_result", payload["not_evidence_until_observed"])
                 self.assertNotIn(raw_message, result.stdout)
 
+    def test_messenger_command_preview_shims_render_open_omh_cards(self) -> None:
+        cases = (
+            (
+                "examples/discord-adapter-shim.py",
+                "examples/wrapper-events/discord-command-preview.json",
+                "discord",
+                "discord_message_components",
+            ),
+            (
+                "examples/slack-adapter-shim.py",
+                "examples/wrapper-events/slack-command-preview.json",
+                "slack",
+                "slack_blocks",
+            ),
+            (
+                "examples/telegram-adapter-shim.py",
+                "examples/wrapper-events/telegram-command-preview.json",
+                "telegram",
+                "telegram_inline_keyboard",
+            ),
+        )
+
+        for script, fixture, source, component_kind in cases:
+            with self.subTest(source=source):
+                result = subprocess.run(
+                    [sys.executable, script, fixture],
+                    cwd=Path.cwd(),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.returncode, 0)
+                payload = json.loads(result.stdout)
+                native_render = payload["native_render"]
+                registration = payload["native_command_registration"]
+                self.assertEqual(payload["schema_version"], "wrapper_adapter_shim/v1")
+                self.assertEqual(payload["source"], source)
+                self.assertEqual(payload["response"]["kind"], "command_preview")
+                self.assertEqual(native_render["schema_version"], "omh_native_command_render/v1")
+                self.assertEqual(native_render["render_kind"], "fallback_card")
+                self.assertEqual(native_render["card"]["primary_action"]["label"], "Open omh")
+                self.assertEqual(native_render["component"]["kind"], component_kind)
+                self.assertEqual(registration["schema_version"], "omh_native_command_surface/v1")
+                self.assertEqual(registration["preview_contract"]["only_top_level_suggestions"], ["omh"])
+                self.assertIn("workflow selected", native_render["not_evidence"])
+
     def _source_harness_quality(self, item: dict[str, object]) -> dict[str, object]:
         source = item["source_payload"]
         if source == "coding_delegation/v1.harness_quality":

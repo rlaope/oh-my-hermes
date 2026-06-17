@@ -7,6 +7,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.wrapper_contract import build_chat_interaction_payload, build_chat_response_from_status, build_status_card_from_status
+from omh.wrapper.native_commands import build_native_command_surface, render_native_command_response
 
 
 class WrapperContractTests(unittest.TestCase):
@@ -236,8 +237,45 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(preview["suggestions"][0]["insert_text"], insert_text)
                 self.assertTrue(preview["top_level_aliases_only"])
                 self.assertTrue(preview["hide_installed_workflows_until_picker_opens"])
+                self.assertIn("telegram", preview["rendering_hints"])
                 self.assertNotIn("loop", json.dumps(preview))
                 self.assertNotIn("ralplan", json.dumps(preview))
+
+    def test_native_command_surfaces_cover_major_messenger_registration_paths(self) -> None:
+        cases = {
+            "discord": "discord_application_command_manifest/v1",
+            "slack": "slack_command_shortcut_manifest/v1",
+            "telegram": "telegram_bot_command_menu/v1",
+            "hermes": "hermes_tui_command_preview/v1",
+        }
+
+        for source, registration_schema in cases.items():
+            with self.subTest(source=source):
+                surface = build_native_command_surface(source)
+
+                self.assertEqual(surface["schema_version"], "omh_native_command_surface/v1")
+                self.assertEqual(surface["source"], source)
+                self.assertEqual(surface["command"], "omh")
+                self.assertEqual(surface["preview_contract"]["only_top_level_suggestions"], ["omh"])
+                self.assertEqual(surface["fallback_card"]["schema_version"], "omh_command_fallback_card/v1")
+                self.assertEqual(surface["fallback_card"]["primary_action"]["label"], "Open omh")
+                self.assertEqual(surface["registration"]["schema_version"], registration_schema)
+                self.assertIn("platform command installed", surface["not_evidence"])
+                self.assertIn("not observed platform registration", surface["claim_boundary"])
+
+    def test_command_preview_can_render_platform_native_fallback_card(self) -> None:
+        interaction = build_chat_interaction_payload("./", source="discord")
+
+        rendered = render_native_command_response(interaction, source="discord")
+
+        self.assertEqual(rendered["schema_version"], "omh_native_command_render/v1")
+        self.assertEqual(rendered["source"], "discord")
+        self.assertEqual(rendered["response_kind"], "command_preview")
+        self.assertEqual(rendered["render_kind"], "fallback_card")
+        self.assertEqual(rendered["card"]["primary_action"]["submit_text"], "./omh")
+        self.assertEqual(rendered["component"]["kind"], "discord_message_components")
+        self.assertEqual(rendered["component"]["buttons"][0]["label"], "Open omh")
+        self.assertIn("workflow selected", rendered["not_evidence"])
 
     def test_direct_skills_invocation_uses_picker_not_management_skill(self) -> None:
         payload = build_chat_interaction_payload("./skills", source="discord")
