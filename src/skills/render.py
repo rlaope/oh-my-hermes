@@ -249,6 +249,8 @@ Normal users should talk to Hermes Agent or invoke installed Hermes skills throu
 
 ## Direct Picker Aliases
 
+If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview with exactly one top-level suggestion: `omh`. Selecting it should insert `./omh` or `/omh` and then open the workflow picker. Do not preview every installed workflow at the first `./` stage.
+
 If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
 
 In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.options` as a select menu or compact button list. In Hermes TUI, render the same options as a text command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.

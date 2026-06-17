@@ -2168,6 +2168,31 @@ class CliTests(unittest.TestCase):
                 self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
                 self.assertIn("choose_skill", {action["id"] for action in payload["chat_response"]["actions"]})
 
+    def test_chat_interact_partial_prefix_preview_shows_only_omh(self) -> None:
+        cases = {
+            "./": "./omh",
+            "/": "/omh",
+            "./o": "./omh",
+            "/om": "/omh",
+        }
+
+        for message, insert_text in cases.items():
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "show_command_preview")
+                self.assertEqual(payload["chat_response"]["kind"], "command_preview")
+                preview = payload["chat_response"]["state"]["command_preview"]
+                self.assertEqual(preview["schema_version"], "omh_command_preview/v1")
+                self.assertEqual([suggestion["label"] for suggestion in preview["suggestions"]], ["omh"])
+                self.assertEqual(preview["suggestions"][0]["insert_text"], insert_text)
+                self.assertTrue(preview["top_level_aliases_only"])
+                self.assertNotIn("loop", json.dumps(preview))
+
     def test_chat_route_exposes_selected_recommendation_policy(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "prepare weekly ops review from customer feedback and release risks"])
 

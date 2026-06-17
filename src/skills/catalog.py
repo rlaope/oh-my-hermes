@@ -407,6 +407,12 @@ _DEFINITIONS = [
         (
             "oh-my-hermes",
             "omh",
+            "./",
+            "/",
+            "./o",
+            "/o",
+            "./om",
+            "/om",
             "./omh",
             "/omh",
             "./skills",
@@ -435,6 +441,7 @@ _DEFINITIONS = [
         artifact_expectations=("runtime run record when a wrapper can observe request handling",),
         safety_rules=(
             "Prefer explicit skill invocation over weak keyword inference.",
+            "Treat partial `./`, `/`, `./o`, or `/om` input as command preview; show one top-level `omh` entry before opening the workflow picker.",
             "Treat bare `./omh`, `/omh`, `./skills`, or `/skills` as a workflow picker request, not as implementation intent.",
             "Ask one concise question when routing signals conflict.",
             "Do not claim to override Hermes core routing.",

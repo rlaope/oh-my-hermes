@@ -214,6 +214,31 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(actions["choose_skill"]["payload"]["schema_version"], "omh_skill_picker/v1")
         self.assertIn("routing intent only", payload["chat_response"]["claim_boundary"])
 
+    def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
+        cases = {
+            "./": "./omh",
+            "/": "/omh",
+            "./o": "./omh",
+            "/om": "/omh",
+        }
+
+        for message, insert_text in cases.items():
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "show_command_preview")
+                self.assertEqual(payload["chat_response"]["kind"], "command_preview")
+                preview = payload["chat_response"]["state"]["command_preview"]
+                self.assertEqual(preview["schema_version"], "omh_command_preview/v1")
+                self.assertEqual(preview["selection_mode"], "single_top_level_command")
+                self.assertEqual([suggestion["label"] for suggestion in preview["suggestions"]], ["omh"])
+                self.assertEqual(preview["suggestions"][0]["insert_text"], insert_text)
+                self.assertTrue(preview["top_level_aliases_only"])
+                self.assertTrue(preview["hide_installed_workflows_until_picker_opens"])
+                self.assertNotIn("loop", json.dumps(preview))
+                self.assertNotIn("ralplan", json.dumps(preview))
+
     def test_direct_skills_invocation_uses_picker_not_management_skill(self) -> None:
         payload = build_chat_interaction_payload("./skills", source="discord")
 
