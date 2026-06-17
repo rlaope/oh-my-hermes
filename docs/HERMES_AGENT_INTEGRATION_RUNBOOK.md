@@ -64,14 +64,16 @@ runtime run exists and the wrapper needs a compact progress card.
    includes the visible OMH usage marker, such as `[omh] web-research`; use
    `chat_response.plain_headline` only when a compact surface needs the
    unprefixed text.
-4. Apply `chat_response.messenger_rendering` when the target is Discord, Slack,
-   Telegram, or another narrow chat surface. Render
-   `chat_response.messenger_rendering.body_text` instead of raw
-   `chat_response.body`; OMH has already converted Markdown tables into
-   messenger-safe bullets when possible. Adapters that need structured blocks
-   can use `chat_response.messenger_rendering.body_blocks`. Render the prefix
-   once per response, not on every paragraph; repeat it only when the adapter
-   posts a long response as separate message chunks.
+4. Apply `chat_response.messenger_rendering` according to the target surface's
+   `render_profile`. Discord, Slack, and Telegram default to
+   `limited_markdown`; Hermes TUI, web, and generic rich Markdown surfaces
+   default to `rich_markdown`. Render
+   `chat_response.messenger_rendering.body_text` for the selected profile. Use
+   `fallback_body_text` when relaying a rich response into a narrower chat
+   surface, or pass `--render-profile limited_markdown` when calling
+   `omh chat interact`. Render the prefix once per response, not on every
+   paragraph; repeat it only when the adapter posts a long response as separate
+   message chunks.
 5. If `target_notice.action` is `ask_to_apply_target_change`, render a short
    setup-change comment and an apply action. Until accepted or auto-applied,
    keep the workflow scoped to the current thread target. The
@@ -151,10 +153,12 @@ Open buttons include `executor_launch/v1` under
 Codex command templates use `codex` and optional `codex --cd`; Claude Code
 command templates use `claude` and optional `claude --add-dir`. Prompt
 placeholders use `{executor_prompt_shell_quoted}`, and workspace command
-templates use `{workspace_path_shell_quoted}` for shell-safe paths. The wrapper
-substitutes `{executor_prompt}` from the prepared handoff prompt or original
-chat message it already holds, then calls `open-executor --observed` only after
-it sees the user/platform open the executor.
+templates use `{workspace_path_shell_quoted}` for shell-safe paths. The launch
+payload is explicitly `ui_only` and `not_backend_execution`; fallback executors
+without a deterministic local command expose prompt-copy guidance only. The
+wrapper substitutes `{executor_prompt}` from the prepared handoff prompt or
+original chat message it already holds, then calls `open-executor --observed`
+only after it sees the user/platform open the executor.
 
 For a Codex handoff, the wrapper can record an observed open and later result:
 

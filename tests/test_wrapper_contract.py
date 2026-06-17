@@ -9,6 +9,7 @@ load_local_package()
 from omh.wrapper_contract import (
     build_chat_interaction_payload,
     build_chat_response_from_status,
+    build_chat_status_interaction,
     build_status_card_from_status,
     messenger_rendering_contract,
 )
@@ -283,6 +284,67 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("Hermes Agent", rendering["body_preview"])
         self.assertTrue(any(block["type"] == "bullet" and "Hermes Agent" in block["text"] for block in rendering["body_blocks"]))
 
+    def test_messenger_rendering_preserves_tables_for_rich_markdown_profile(self) -> None:
+        body = "\n".join(
+            [
+                "비교는 이렇게 보면 됩니다.",
+                "",
+                "| 계열 | 강점 |",
+                "| --- | --- |",
+                "| Hermes | Gateway |",
+            ]
+        )
+
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] web-research",
+            first_line="[omh] web-research - 비교 결과입니다.",
+            body=body,
+            claim_boundary="Research summary is not execution evidence.",
+            render_profile="rich_markdown",
+        )
+
+        self.assertEqual(rendering["render_profile"], "rich_markdown")
+        self.assertEqual(rendering["body_format"], "rich_markdown")
+        self.assertEqual(rendering["body_text"], body)
+        self.assertEqual(rendering["transforms_applied"], [])
+        self.assertIn("| --- | --- |", rendering["body_text"])
+        self.assertIn("markdown_table", rendering["preferred_blocks"])
+        self.assertNotIn("markdown_table", rendering["avoid_blocks"])
+        self.assertEqual(rendering["table_policy"], "preserve_markdown_tables_when_supported")
+        self.assertTrue(any(block["type"] == "markdown_table" for block in rendering["body_blocks"]))
+        self.assertIn("- Hermes: 강점: Gateway", rendering["fallback_body_text"])
+        self.assertIn("markdown_table_to_bullets", rendering["fallback_transforms_applied"])
+
+    def test_status_interaction_uses_source_rendering_profile(self) -> None:
+        table_body = "\n".join(
+            [
+                "| Surface | Result |",
+                "| --- | --- |",
+                "| Hermes TUI | preserve table |",
+            ]
+        )
+        status = {"next_action": "custom_table_status", "safe_summary": table_body}
+
+        hermes_payload = build_chat_status_interaction(status, source="hermes")
+        discord_payload = build_chat_status_interaction(status, source="discord")
+        overridden_payload = build_chat_status_interaction(
+            status,
+            source="hermes",
+            source_metadata={"render_profile": "limited_markdown"},
+        )
+
+        hermes_rendering = hermes_payload["chat_response"]["messenger_rendering"]
+        discord_rendering = discord_payload["chat_response"]["messenger_rendering"]
+        overridden_rendering = overridden_payload["chat_response"]["messenger_rendering"]
+        self.assertEqual(hermes_rendering["render_profile"], "rich_markdown")
+        self.assertIn("| --- | --- |", hermes_rendering["body_text"])
+        self.assertIn("- Hermes TUI: Result: preserve table", hermes_rendering["fallback_body_text"])
+        self.assertEqual(discord_rendering["render_profile"], "limited_markdown")
+        self.assertNotIn("| --- | --- |", discord_rendering["body_text"])
+        self.assertIn("- Hermes TUI: Result: preserve table", discord_rendering["body_text"])
+        self.assertEqual(overridden_rendering["render_profile"], "limited_markdown")
+        self.assertNotIn("| --- | --- |", overridden_rendering["body_text"])
+
     def test_messenger_rendering_converts_tables_without_outer_pipes(self) -> None:
         body = "\n".join(
             [
@@ -404,7 +466,7 @@ class WrapperContractTests(unittest.TestCase):
         )
 
         self.assertEqual(rendered["body"], body)
-        self.assertEqual(rendered["body_text"], "")
+        self.assertEqual(rendered["body_text"], body)
         self.assertEqual(rendered["body_text_source"], "missing_messenger_rendering.body_text")
         self.assertIn("missing_messenger_safe_body", rendered["render_warnings"])
 

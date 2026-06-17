@@ -89,7 +89,14 @@ TARGET_SOURCE_METADATA_KEYS = (
     "agent_count",
     "target_count",
 )
-CODING_SOURCE_METADATA_KEYS = ("source_event_id", "channel_ref", "user_ref", "timestamp", *TARGET_SOURCE_METADATA_KEYS)
+CODING_SOURCE_METADATA_KEYS = (
+    "source_event_id",
+    "channel_ref",
+    "user_ref",
+    "timestamp",
+    "render_profile",
+    *TARGET_SOURCE_METADATA_KEYS,
+)
 CODING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
 CODING_EXECUTOR_SELECTION_KEYS = ("status", "choice_required", "options")
 CODING_EXECUTOR_SELECTION_STATUSES = (

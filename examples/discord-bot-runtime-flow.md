@@ -28,13 +28,12 @@ status update.
    ```
 
    `chat_response.headline` already starts with a visible marker such as
-   `[omh] web-research`. Render `chat_response.actions` as buttons when the
-   platform supports them, and use `chat_response.messenger_rendering` to avoid
-   wide Markdown tables in Discord. Post
-   `chat_response.messenger_rendering.body_text` for the body; it keeps prose
-   intact while converting supported Markdown tables into bullets. Keep the
-   prefix on the first line only; repeat it only when posting separate split
-   messages.
+   `[omh] web-research`. Discord uses the `limited_markdown` render profile, so
+   `chat_response.messenger_rendering.body_text` is the body to post; it keeps
+   prose intact while converting supported Markdown tables into bullets. Rich
+   Hermes TUI or web surfaces can render their own profile's `body_text` with
+   tables preserved. Keep the prefix on the first line only; repeat it only
+   when posting separate split messages.
    Typical action ids include `accept_plan`, `revise_plan`, `choose_executor`,
    `show_prompt_handoff`, `copy_prompt_handoff`, `send_to_executor`,
    `show_status`, and `cancel`. `send_to_codex` is only a compatibility alias

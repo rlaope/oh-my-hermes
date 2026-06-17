@@ -15,6 +15,7 @@ SOURCE_METADATA_KEYS = (
     "hermes_home",
     "agent_count",
     "target_count",
+    "render_profile",
 )
 
 _EVENT_TEXT_PATHS = (
@@ -72,6 +73,7 @@ _SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "hermes_home": (("hermes_home",), ("runtime", "hermes_home"), ("hermes", "home")),
     "agent_count": (("agent_count",), ("agents_count",), ("target", "agent_count"), ("runtime", "agent_count"), ("hermes", "agent_count")),
     "target_count": (("target_count",), ("targets_count",), ("runtime", "target_count"), ("hermes", "target_count")),
+    "render_profile": (("render_profile",), ("rendering", "profile"), ("surface", "render_profile"), ("platform", "render_profile")),
 }
 
 

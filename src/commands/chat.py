@@ -10,7 +10,7 @@ from ..memory import read_handoff_context_pack_file
 from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_message, routing_record_payload
 from ..runtime.artifacts import create_run, summarize_delegated_coding_status, write_routing_decision
 from ..targets import TARGET_METADATA_KEYS, build_target_change_notice, inspect_target_observation, record_target_observation
-from ..wrapper.contract import INTERACTION_MODES, build_chat_interaction_payload, build_chat_status_interaction
+from ..wrapper.contract import INTERACTION_MODES, RENDER_PROFILES, build_chat_interaction_payload, build_chat_status_interaction
 from ..wrapper.executor_sessions import (
     ExecutorSessionError,
     attach_executor_session,
@@ -191,6 +191,15 @@ def _add_target_metadata_options(parser: argparse.ArgumentParser) -> None:
         "--auto-apply-target-change",
         action="store_true",
         help="Persist observed Hermes target topology changes and register the managed skill dir when hermes_home metadata is present.",
+    )
+
+
+def _add_render_profile_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--render-profile",
+        choices=RENDER_PROFILES,
+        default="",
+        help="Override the source default rendering profile for this adapter surface.",
     )
 
 
@@ -378,6 +387,7 @@ def _add_chat_commands(sub) -> None:
     interact.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     interact.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     interact.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    _add_render_profile_option(interact)
     _add_target_metadata_options(interact)
     interact.set_defaults(func=cmd_chat_interact)
 
@@ -403,6 +413,7 @@ def _add_chat_commands(sub) -> None:
     session_start.add_argument("--source-event-id", default="")
     session_start.add_argument("--channel-ref", default="")
     session_start.add_argument("--user-ref", default="")
+    _add_render_profile_option(session_start)
     session_start.add_argument("--executor", choices=CODING_EXECUTOR_TARGETS, default=None)
     _add_target_metadata_options(session_start)
     session_start.set_defaults(func=cmd_chat_session_start)

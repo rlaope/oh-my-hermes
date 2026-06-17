@@ -25,6 +25,10 @@ SKILL_PICKER_SCHEMA_VERSION = "omh_skill_picker/v1"
 COMMAND_PREVIEW_SCHEMA_VERSION = "omh_command_preview/v1"
 USAGE_TRACE_SCHEMA_VERSION = "omh_usage_trace/v1"
 MESSENGER_RENDERING_SCHEMA_VERSION = "omh_messenger_rendering/v1"
+RENDER_PROFILE_LIMITED_MARKDOWN = "limited_markdown"
+RENDER_PROFILE_RICH_MARKDOWN = "rich_markdown"
+RENDER_PROFILES = (RENDER_PROFILE_LIMITED_MARKDOWN, RENDER_PROFILE_RICH_MARKDOWN)
+_LIMITED_MARKDOWN_SOURCES = frozenset({"discord", "slack", "telegram"})
 INTERACTION_MODES = ("auto", "route", "plan", "delegate")
 VISIBLE_ACTIONS = (
     "answer:clarify",
@@ -333,7 +337,7 @@ def build_chat_status_interaction(
         "redaction_policy": "metadata_only",
         "overclaim_guard": status_payload.get("overclaim_guard", _default_overclaim_guard()),
     }
-    return payload
+    return _finish_interaction(payload, None)
 
 
 def build_chat_response_from_route(
@@ -887,15 +891,20 @@ def _base_interaction(
 
 
 def _finish_interaction(payload: dict[str, object], target_notice: dict[str, object] | None) -> dict[str, object]:
-    if not target_notice:
-        return payload
-    payload["target_notice"] = target_notice
-    topology = target_notice.get("topology")
-    if isinstance(topology, dict):
-        payload["target_topology"] = topology
+    if target_notice:
+        payload["target_notice"] = target_notice
+        topology = target_notice.get("topology")
+        if isinstance(topology, dict):
+            payload["target_topology"] = topology
     response = payload.get("chat_response")
     if isinstance(response, dict):
-        payload["chat_response"] = _chat_response_with_target_notice(response, target_notice)
+        if target_notice:
+            response = _chat_response_with_target_notice(response, target_notice)
+        payload["chat_response"] = _chat_response_with_render_profile(
+            response,
+            source=str(payload.get("source", "generic")),
+            source_metadata=_nested(payload, "source_metadata"),
+        )
     return payload
 
 
@@ -942,6 +951,26 @@ def _chat_response_with_target_notice(response: dict[str, object], target_notice
             first_line=str(updated.get("headline", "")),
             body=str(updated.get("body", "")),
             claim_boundary=str(updated.get("claim_boundary", "")),
+        )
+    return updated
+
+
+def _chat_response_with_render_profile(
+    response: dict[str, object],
+    *,
+    source: str,
+    source_metadata: dict[str, object],
+) -> dict[str, object]:
+    updated = dict(response)
+    trace = updated.get("usage_trace")
+    visible_prefix = str(trace.get("visible_prefix", "")) if isinstance(trace, dict) else ""
+    if visible_prefix:
+        updated["messenger_rendering"] = messenger_rendering_contract(
+            visible_prefix=visible_prefix,
+            first_line=str(updated.get("headline", "")),
+            body=str(updated.get("body", "")),
+            claim_boundary=str(updated.get("claim_boundary", "")),
+            render_profile=render_profile_for_source(source, source_metadata),
         )
     return updated
 
@@ -1556,22 +1585,43 @@ def messenger_rendering_contract(
     first_line: str,
     body: str,
     claim_boundary: str,
+    render_profile: str = RENDER_PROFILE_LIMITED_MARKDOWN,
 ) -> dict[str, object]:
-    body_text, transforms = _messenger_safe_body(body)
+    resolved_profile = _normalize_render_profile(render_profile)
+    safe_body_text, safe_transforms = _messenger_safe_body(body)
+    if resolved_profile == RENDER_PROFILE_RICH_MARKDOWN:
+        body_text = body
+        body_format = "rich_markdown"
+        preferred_blocks = ["short_paragraph", "bulleted_list", "numbered_list", "markdown_table", "status_lines"]
+        avoid_blocks = ["large_unbroken_block"]
+        table_policy = "preserve_markdown_tables_when_supported"
+        transforms: list[str] = []
+    else:
+        body_text = safe_body_text
+        body_format = "messenger_safe_markdown"
+        preferred_blocks = ["short_paragraph", "bulleted_list", "numbered_list", "status_lines"]
+        avoid_blocks = ["markdown_table", "wide_table", "large_unbroken_block"]
+        table_policy = "convert_tables_to_bullets_for_messenger"
+        transforms = safe_transforms
     return {
         "schema_version": MESSENGER_RENDERING_SCHEMA_VERSION,
+        "render_profile": resolved_profile,
         "visible_prefix": visible_prefix,
         "first_line": first_line,
-        "body_format": "messenger_safe_markdown",
+        "body_format": body_format,
         "body_text": body_text,
-        "body_blocks": _messenger_body_blocks(body_text),
-        "preferred_blocks": ["short_paragraph", "bulleted_list", "numbered_list", "status_lines"],
-        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "body_blocks": _render_body_blocks(body_text, render_profile=resolved_profile),
+        "fallback_body_format": "messenger_safe_markdown",
+        "fallback_body_text": safe_body_text,
+        "fallback_body_blocks": _messenger_body_blocks(safe_body_text),
+        "preferred_blocks": preferred_blocks,
+        "avoid_blocks": avoid_blocks,
         "chunking": {
             "max_recommended_chars": 1800,
             "split_on": ["headings", "bullets", "paragraphs"],
         },
         "transforms_applied": transforms,
+        "fallback_transforms_applied": safe_transforms,
         "prefix_policy": {
             "default": "once_per_response_first_line",
             "repeat_when": "adapter_splits_response_across_separate_messages_or_chunks",
@@ -1581,12 +1631,35 @@ def messenger_rendering_contract(
             "discord": "Start the first message with the visible prefix, prefer bullets or numbered lists over tables, and repeat the prefix only if the adapter splits a long response into separate messages.",
             "slack": "Start the response with the visible prefix, prefer blocks or bullets over wide Markdown tables, and keep claim boundaries visible.",
             "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts.",
-            "hermes": "Render the visible prefix as a compact workflow/status marker before the body.",
+            "hermes": "Render body_text as rich Markdown when the Hermes surface supports it; use fallback_body_text when relaying to a narrow chat adapter.",
+            "generic": "Use body_text for the declared render_profile; use fallback_body_text if the actual surface cannot render Markdown tables.",
         },
-        "table_policy": "convert_tables_to_bullets_for_messenger",
+        "table_policy": table_policy,
         "body_preview": _short_text(body_text, limit=180),
         "claim_boundary": claim_boundary,
     }
+
+
+def render_profile_for_source(source: str, source_metadata: dict[str, object] | None = None) -> str:
+    metadata = source_metadata or {}
+    explicit = str(metadata.get("render_profile", "")).strip()
+    if explicit in RENDER_PROFILES:
+        return explicit
+    if source in _LIMITED_MARKDOWN_SOURCES:
+        return RENDER_PROFILE_LIMITED_MARKDOWN
+    return RENDER_PROFILE_RICH_MARKDOWN
+
+
+def _normalize_render_profile(render_profile: str) -> str:
+    if render_profile in RENDER_PROFILES:
+        return render_profile
+    return RENDER_PROFILE_LIMITED_MARKDOWN
+
+
+def _render_body_blocks(body: str, *, render_profile: str) -> list[dict[str, object]]:
+    if render_profile == RENDER_PROFILE_RICH_MARKDOWN:
+        return _rich_markdown_body_blocks(body)
+    return _messenger_body_blocks(body)
 
 
 def _messenger_safe_body(body: str) -> tuple[str, list[str]]:
@@ -1773,6 +1846,66 @@ def _messenger_body_blocks(body: str) -> list[dict[str, object]]:
     if current:
         blocks.append({"type": "paragraph", "text": " ".join(current)})
     return blocks
+
+
+def _rich_markdown_body_blocks(body: str) -> list[dict[str, object]]:
+    lines = body.splitlines()
+    if not lines:
+        return []
+    blocks: list[dict[str, object]] = []
+    paragraph: list[str] = []
+    index = 0
+    in_code_fence = False
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        if _is_code_fence_line(line):
+            in_code_fence = not in_code_fence
+            paragraph.append(stripped)
+            index += 1
+            continue
+        if not in_code_fence and _is_markdown_table_start(lines, index):
+            if paragraph:
+                blocks.extend(_messenger_body_blocks("\n".join(paragraph)))
+                paragraph = []
+            table_lines: list[str] = []
+            while index < len(lines) and _is_markdown_table_line(lines[index]):
+                table_lines.append(lines[index])
+                index += 1
+            block = _markdown_table_block(table_lines)
+            if block:
+                blocks.append(block)
+            else:
+                paragraph.extend(table_lines)
+            continue
+        if not stripped:
+            if paragraph:
+                blocks.extend(_messenger_body_blocks("\n".join(paragraph)))
+                paragraph = []
+            index += 1
+            continue
+        paragraph.append(stripped)
+        index += 1
+    if paragraph:
+        blocks.extend(_messenger_body_blocks("\n".join(paragraph)))
+    return blocks
+
+
+def _markdown_table_block(lines: list[str]) -> dict[str, object]:
+    if len(lines) < 2 or not _is_markdown_separator_line(lines[1]):
+        return {}
+    headers = _split_markdown_table_row(lines[0])
+    rows = [
+        _split_markdown_table_row(row)
+        for row in lines[2:]
+        if not _is_markdown_separator_line(row) and any(_split_markdown_table_row(row))
+    ]
+    return {
+        "type": "markdown_table",
+        "markdown": "\n".join(lines),
+        "headers": headers,
+        "rows": rows,
+    }
 
 
 def _numbered_list_text(stripped: str) -> str:

@@ -133,12 +133,16 @@ from `chat_response.usage_trace.visible_prefix`, for example:
 
 That marker is product status, not a command the user has to learn. The same
 response includes `chat_response.messenger_rendering`, which tells Discord,
-Slack, Telegram, and Hermes-style adapters to start with the visible prefix,
-prefer short paragraphs or bullets, and render
-`chat_response.messenger_rendering.body_text` when posting into narrow
-messenger surfaces. That safe body keeps the original prose but converts wide
-Markdown tables into messenger-safe lists when possible. Adapters that render
-native blocks can use `chat_response.messenger_rendering.body_blocks`.
+Slack, Telegram, Hermes TUI, web, and other adapters which rendering profile OMH
+selected for that surface. Render `chat_response.messenger_rendering.body_text`
+for the selected profile. Narrow messenger profiles convert wide Markdown
+tables into messenger-safe lists when possible, while rich Markdown profiles
+preserve tables for TUI or web surfaces. If a rich response must be relayed into
+a narrower chat surface, use
+`chat_response.messenger_rendering.fallback_body_text`.
+If a legacy response does not include `body_text`, render the original
+`chat_response.body` and keep a warning visible in adapter diagnostics rather
+than posting an empty message.
 
 Apply the prefix once at the first line of one rendered response. Do not repeat
 `[omh] <workflow>` on every paragraph or every line. If an adapter splits a
@@ -202,7 +206,9 @@ User-facing effect:
   `{executor_prompt_shell_quoted}`; workspace command templates use
   `{workspace_path_shell_quoted}` for shell-safe paths. After the wrapper
   observes the user or platform open the executor, it records the backend open
-  action; showing the command is still not execution evidence.
+  action; showing the command is still not execution evidence. Executors
+  without a deterministic local command expose prompt-copy guidance only, not a
+  terminal command.
 - Execution, verification, CI, merge-readiness, and merge stay separate.
 - The wrapper can keep editing the same thread as evidence arrives.
 
@@ -320,12 +326,12 @@ What gets better for the team:
 | --- | --- |
 | Bot headline | `chat_response.headline` |
 | Bot headline without prefix | `chat_response.plain_headline` |
-| Bot body for rich/web surfaces | `chat_response.body` |
-| Messenger-safe bot body | `chat_response.messenger_rendering.body_text` |
-| Messenger-safe body blocks | `chat_response.messenger_rendering.body_blocks` |
+| Bot body for rich/web surfaces | `chat_response.messenger_rendering.body_text` when `render_profile` is `rich_markdown` |
+| Messenger-safe bot body | `chat_response.messenger_rendering.body_text` when `render_profile` is `limited_markdown`, or `chat_response.messenger_rendering.fallback_body_text` as a downgrade |
+| Messenger body blocks | `chat_response.messenger_rendering.body_blocks`; use `fallback_body_blocks` when downgrading |
 | Visible OMH workflow marker | `chat_response.usage_trace.visible_prefix` |
 | Selected workflow/harness | `chat_response.usage_trace.selected_workflow`, `chat_response.usage_trace.selected_harness` |
-| Messenger-safe body hints | `chat_response.messenger_rendering.transforms_applied`, `chat_response.messenger_rendering.preferred_blocks`, `chat_response.messenger_rendering.avoid_blocks`, `chat_response.messenger_rendering.table_policy`, `chat_response.messenger_rendering.prefix_policy` |
+| Rendering profile and hints | `chat_response.messenger_rendering.render_profile`, `chat_response.messenger_rendering.transforms_applied`, `chat_response.messenger_rendering.fallback_transforms_applied`, `chat_response.messenger_rendering.preferred_blocks`, `chat_response.messenger_rendering.avoid_blocks`, `chat_response.messenger_rendering.table_policy`, `chat_response.messenger_rendering.prefix_policy` |
 | Button ids | `chat_response.actions[].id` |
 | Thread key | `thread_key` |
 | Current phase | `chat_response.state.phase` |
