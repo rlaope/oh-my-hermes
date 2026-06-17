@@ -135,6 +135,24 @@ in CI without touching the current Hermes profile:
 omh release hermes-smoke
 ```
 
+The installer path has a separate first-time downloader smoke. Plan mode is
+also safe for CI and only describes the isolated HOME, venv, bin directory,
+setup, doctor, and installed-command checks:
+
+```sh
+omh release install-smoke
+```
+
+When you want observed evidence that `install.sh` itself works from a checkout,
+run it live. This still does not mutate your real Hermes profile; OMH creates a
+temporary HOME, virtual environment, and bin directory, then runs
+`install.sh`, smoke-installed `omh doctor --json`, and installed-command smoke
+inside that isolated target:
+
+```sh
+omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
+```
+
 The plan also reports `installed_command_smoke` and
 `first_use_status_smoke`. The first checks that the installed `omh` command is
 discoverable on PATH before proving the console script can run; the second locks

@@ -43,7 +43,7 @@ implementation or claim runtime behavior it did not observe.
 | HUD, status, and session observability | Available | `omh hud`, plugin `omh_hud`/`omh_status`, wrapper sessions, runtime runs, and status cards. | Live host HUD rendering depends on Hermes/plugin support. |
 | MCP and tool bridge preference | Partial | `omh setup --with-mcp`, setup state, and `omh probe` host-config separation. | OMH does not ship or auto-enable a real MCP server/tool bridge in v1. |
 | Loop and autopilot workflow | Available | `loop`, `ultraprocess`, `ralplan`, `ultragoal`, loop queue ticks, verification tiers, and failure-mode cards. | Scheduling, connector I/O, worktree creation, and subagent execution remain prepared or delegated until observed. |
-| Doctor, update, uninstall, and release smoke | Available | `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh release checklist`, and `omh release hermes-smoke`. | Live release smoke still needs an explicit target Hermes profile or operator confirmation before mutation. |
+| Doctor, update, uninstall, and release smoke | Available | `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh release checklist`, `omh release install-smoke`, and `omh release hermes-smoke`. | Installer smoke can run live in an isolated temp HOME; live Hermes profile smoke still needs an explicit target Hermes profile or operator confirmation before mutation. |
 
 ## Implementation Plan
 

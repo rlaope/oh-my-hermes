@@ -754,6 +754,55 @@ class CliTests(unittest.TestCase):
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
 
+    def test_release_install_smoke_defaults_to_human_plan_with_json_escape_hatch(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            install_script = root / "install.sh"
+            install_script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "release",
+                    "install-smoke",
+                    "--repo-root",
+                    str(root),
+                    "--install-script",
+                    str(install_script),
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH install smoke", stdout)
+            self.assertIn("Mode: plan; observed evidence: no", stdout)
+            self.assertIn("install_script", stdout)
+            self.assertIn("installed_command_smoke", stdout)
+            self.assertIn("For machine-readable output", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
+            status, stdout, stderr = run_cli(
+                [
+                    "release",
+                    "install-smoke",
+                    "--repo-root",
+                    str(root),
+                    "--install-script",
+                    str(install_script),
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "install_script_smoke/v1")
+            self.assertEqual(payload["mode"], "plan")
+            self.assertFalse(payload["observed"])
+            self.assertEqual(payload["install_script"], str(install_script.resolve()))
+
     def test_release_hermes_smoke_cli_can_observe_installed_command_without_live_profile_mutation(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

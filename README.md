@@ -402,6 +402,7 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release hermes-smoke
+python3 -m omh.cli release install-smoke
 omh --help
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
@@ -410,6 +411,13 @@ Smoke-test setup without touching real home directories:
 
 ```sh
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run
+```
+
+Smoke-test the user-facing installer in an isolated temp HOME/venv/bin without
+touching your real Hermes profile:
+
+```sh
+omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
 ```
 
 Before a release candidate, run the live Hermes profile smoke from the target

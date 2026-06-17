@@ -13,6 +13,7 @@ from ..release import (
     run_hermes_release_smoke,
     run_installed_command_smoke,
 )
+from ..release_install_smoke import install_script_smoke_plan, run_install_script_smoke
 from .common import _print_json, _wants_json
 
 
@@ -72,6 +73,40 @@ def cmd_release_hermes_smoke(args: argparse.Namespace) -> int:
     return 0 if payload["ok"] else 1
 
 
+def cmd_release_install_smoke(args: argparse.Namespace) -> int:
+    setup_args = tuple(args.setup_args or ["--no-interactive"])
+    try:
+        if args.live:
+            payload = run_install_script_smoke(
+                repo_root=args.repo_root,
+                install_script=args.install_script,
+                package_url=args.package_url,
+                python_command=args.python,
+                setup_args=setup_args,
+                run_doctor=not args.skip_doctor,
+                timeout_seconds=args.timeout,
+                work_dir=args.work_dir,
+                keep_work_dir=args.keep_work_dir,
+            )
+        else:
+            payload = install_script_smoke_plan(
+                repo_root=args.repo_root,
+                install_script=args.install_script,
+                package_url=args.package_url,
+                python_command=args.python,
+                setup_args=setup_args,
+                run_doctor=not args.skip_doctor,
+                work_dir=args.work_dir,
+            )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if _wants_json(args) or args.live:
+        _print_json(payload)
+    else:
+        _print_install_smoke_summary(payload)
+    return 0 if payload["ok"] else 1
+
+
 def _add_release_commands(sub) -> None:
     release = sub.add_parser("release", help="Plan or run release smoke checks for real Hermes installation paths.")
     release_sub = release.add_subparsers(dest="release_command", required=True)
@@ -112,6 +147,23 @@ def _add_release_commands(sub) -> None:
     smoke.add_argument("--timeout", type=int, default=30, help="Per-command timeout in seconds for --live or --include-command-smoke.")
     smoke.set_defaults(func=cmd_release_hermes_smoke)
 
+    install_smoke = release_sub.add_parser(
+        "install-smoke",
+        help="Plan or run install.sh in an isolated temp home like a first-time downloader.",
+    )
+    install_smoke.add_argument("--live", action="store_true", help="Actually run install.sh in an isolated temp HOME/venv/bin.")
+    install_smoke.add_argument("--repo-root", default=None, help="OMH source checkout to install from; defaults to the current checkout.")
+    install_smoke.add_argument("--install-script", default=None, help="Path to install.sh; defaults to <repo-root>/install.sh.")
+    install_smoke.add_argument("--package-url", default=None, help="Package URL/path passed to install.sh; defaults to the repo root.")
+    install_smoke.add_argument("--python", default="", help="Python executable passed as OMH_PYTHON; defaults to this Python.")
+    install_smoke.add_argument("--setup-args", nargs="*", default=["--no-interactive"], help="Extra OMH_SETUP_ARGS passed to setup.")
+    install_smoke.add_argument("--skip-doctor", action="store_true", help="Set OMH_RUN_DOCTOR=0 for the installer step.")
+    install_smoke.add_argument("--work-dir", default=None, help="Use this work directory instead of a temporary one.")
+    install_smoke.add_argument("--keep-work-dir", action="store_true", help="Keep the generated temporary work directory after --live.")
+    install_smoke.add_argument("--timeout", type=int, default=120, help="Per-command timeout in seconds for --live.")
+    install_smoke.add_argument("--json", action="store_true", help="Print the machine-readable install smoke payload.")
+    install_smoke.set_defaults(func=cmd_release_install_smoke)
+
 
 def _print_release_checklist_summary(payload: dict[str, object]) -> None:
     print(f"OMH release checklist for {payload['version']} ({payload['tag']})")
@@ -145,4 +197,26 @@ def _print_release_checklist_summary(payload: dict[str, object]) -> None:
             print(f"    {item['command']}")
     print("")
     print(f"Next: {payload['recommended_next_action']}")
+    print("For machine-readable output, rerun with `--json`.")
+
+
+def _print_install_smoke_summary(payload: dict[str, object]) -> None:
+    mode = str(payload.get("mode", "plan"))
+    print("OMH install smoke")
+    print(f"Mode: {mode}; observed evidence: {'yes' if payload.get('observed') else 'no'}")
+    print(f"Install script: {payload.get('install_script')}")
+    print(f"Package URL: {payload.get('package_url')}")
+    print(f"Work dir: {payload.get('work_dir')}")
+    print("")
+    print("Steps:")
+    for step in payload.get("steps", []):
+        if not isinstance(step, dict):
+            continue
+        print(f"  - {step.get('name')} [{step.get('phase')}]")
+        command = step.get("command", [])
+        if isinstance(command, list):
+            print(f"    {' '.join(str(part) for part in command)}")
+        print(f"    Boundary: {step.get('proof_boundary', '')}")
+    print("")
+    print(f"Next: {payload.get('recommended_next_action')}")
     print("For machine-readable output, rerun with `--json`.")
