@@ -68,14 +68,15 @@ The first five minutes should feel simple:
 3. Ask Hermes the prompt below.
 
 The installer normally runs setup for you. Keep `omh setup` in the quick start
-because it is the repeatable repair step that installs generated skills under
-`~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
+because it is the repeatable repair step that installs OMH workflows under
+`~/.omh/skills` and connects that workflow folder to Hermes.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
-language, install scope, Hermes registration, the default coding handoff style,
-optional MCP preference, and optional visible team role presets. Those choices
-save defaults; they do not remove OMH workflows. Non-interactive shells use the
-safe defaults. Add `--json` when an operator or wrapper needs the full
-machine-readable payload.
+language, install location, Hermes connection, and the default coding request
+preference. First installs can press Enter through the recommended choices.
+Advanced options such as MCP bridge preferences or visible team role presets
+stay behind an explicit advanced step or setup flags, and every OMH workflow
+remains available either way. Non-interactive shells use the safe defaults. Add
+`--json` when an operator or wrapper needs the full machine-readable payload.
 
 The default user scope installs under `~/.omh` and `~/.hermes`. Use project
 scope when a repository should carry its own isolated OMH/Hermes setup:

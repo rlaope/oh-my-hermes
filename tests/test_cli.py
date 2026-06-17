@@ -41,7 +41,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Normal use happens in Hermes chat:", help_text)
         self.assertIn("`omh` was not found", help_text)
         self.assertIn("setup", help_text)
-        self.assertIn("Install managed skills and connect them", help_text)
+        self.assertIn("Connect OMH workflows to the target Hermes profile", help_text)
         self.assertIn("chat", help_text)
         self.assertIn("wrapper chat events", help_text)
         self.assertIn("omh cases recommend", help_text)
@@ -63,22 +63,28 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("[1/", stdout)
-            self.assertIn("Installing managed skills", stdout)
+            self.assertIn("Installing OMH workflows", stdout)
             self.assertIn("OMH setup complete.", stdout)
-            self.assertIn("Skills:", stdout)
-            self.assertIn("Setup scope:", stdout)
-            self.assertIn("Install mode: managed Hermes skills", stdout)
-            self.assertIn("MCP mode: none", stdout)
-            self.assertIn("Setup state:", stdout)
+            self.assertIn("OMH workflows:", stdout)
+            self.assertIn("Install location:", stdout)
+            self.assertIn("Status:", stdout)
             self.assertIn("Terminal command: omh found at /usr/local/bin/omh", stdout)
-            self.assertIn("Hermes registration:", stdout)
-            self.assertIn("Coding handoff default:", stdout)
-            self.assertIn("State log:", stdout)
-            self.assertIn("last_setup", stdout)
-            self.assertIn("Visible team preset:", stdout)
+            self.assertIn("Hermes connection:", stdout)
+            self.assertIn("Coding requests:", stdout)
+            self.assertIn("Hermes will ask before choosing a coding agent", stdout)
+            self.assertIn("Hermes profile check:", stdout)
+            self.assertIn("OMH status helper:", stdout)
             self.assertIn("Restart or reload Hermes Agent", stdout)
             self.assertIn("If Hermes cannot see OMH yet", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
+            self.assertNotIn("skills.external_dirs", stdout)
+            self.assertNotIn("Plugin bridge", stdout)
+            self.assertNotIn("MCP mode: none", stdout)
+            self.assertNotIn("Routing guardrails", stdout)
+            self.assertNotIn("Operating model", stdout)
+            self.assertNotIn("Target topology", stdout)
+            self.assertNotIn("single_agent_target", stdout)
+            self.assertNotIn("State log:", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
 
@@ -433,6 +439,7 @@ class CliTests(unittest.TestCase):
                     "y",
                     "2",
                     "y",
+                    "y",
                     "4",
                 ]
             ) + "\n"
@@ -444,12 +451,13 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH setup", stdout)
             self.assertIn("When a request may need coding", stdout)
             self.assertIn("does not hide or remove any OMH skills", stdout)
+            self.assertIn("Show advanced options", stdout)
             self.assertIn("Add an optional visible team role preset", stdout)
             self.assertIn("every OMH workflow is still installed", stdout)
             self.assertIn("OMH setup complete.", stdout)
-            self.assertIn("Plugin bridge:", stdout)
+            self.assertIn("OMH status helper:", stdout)
             self.assertNotIn("Install optional plugin bridge", stdout)
-            self.assertIn("MCP mode: bridge requested", stdout)
+            self.assertIn("Advanced tool bridge: preference recorded", stdout)
             self.assertIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
             self.assertEqual(profile["selected_categories"], ["codex-lifecycle"])
@@ -535,9 +543,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH 설정", stdout)
-            self.assertIn("관리 스킬 설치", stdout)
+            self.assertIn("OMH 워크플로 설치", stdout)
             self.assertIn("OMH 설정이 완료되었습니다.", stdout)
-            self.assertIn("설치 모드:", stdout)
+            self.assertIn("설치 위치:", stdout)
+            self.assertIn("코딩 에이전트를 고르기 전에 Hermes가 먼저 물어봅니다", stdout)
+            self.assertNotIn("skills.external_dirs", stdout)
+            self.assertNotIn("토폴로지", stdout)
+            self.assertNotIn("플러그인 브리지", stdout)
+            self.assertNotIn("관리 스킬", stdout)
             self.assertIn("기계가 읽는 출력", stdout)
 
             status, stdout, stderr = run_cli(base + ["doctor", "--language", "ko"], output_json=False)
@@ -553,9 +566,40 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
-            self.assertIn("刷新托管 Hermes 技能包", stdout)
-            self.assertIn(f"已准备 {len(builtin_skill_templates())} 个托管技能", stdout)
+            self.assertIn("刷新 OMH 工作流包", stdout)
+            self.assertIn(f"已准备 {len(builtin_skill_templates())} 个工作流", stdout)
             self.assertIn("OMH install 已完成。", stdout)
+
+    def test_setup_reports_status_helper_conflict_in_plain_language(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            plugin_dir = hermes_home / "plugins" / "omh"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "README.txt").write_text("operator-owned\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "setup",
+                    "--dry-run",
+                    "--no-interactive",
+                    "--language",
+                    "en",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("Installing OMH workflows", stdout)
+            self.assertIn("OMH status helper location already exists", stderr)
+            self.assertIn("omh setup --force", stderr)
+            self.assertNotIn("plugin manifest", stderr.lower())
+            self.assertNotIn("PluginPackError", stderr)
 
     def test_language_catalogs_have_matching_keys(self) -> None:
         expected_keys = set(MESSAGES["en"])
@@ -571,9 +615,9 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
-            self.assertIn("Installing managed skills", stdout)
+            self.assertIn("Installing OMH workflows", stdout)
             self.assertIn("OMH install complete.", stdout)
-            self.assertIn(f"Skills: {len(builtin_skill_templates())} managed skill(s)", stdout)
+            self.assertIn(f"OMH workflows: {len(builtin_skill_templates())} ready", stdout)
             self.assertIn("Run `omh setup`", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)

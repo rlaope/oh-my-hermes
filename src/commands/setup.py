@@ -665,14 +665,14 @@ def cmd_setup(args: argparse.Namespace) -> int:
     progress.step(step_index, total_steps, tr(language, "step_plugin"), detail=str(paths.hermes_plugin_dir))
     steps["plugin"] = _plugin_setup_result(args, paths)
     plugin_status = steps["plugin"].get("status", "installed") if isinstance(steps["plugin"], dict) else "installed"
-    progress.done(str(plugin_status))
+    progress.done(_plugin_status_label(language, str(plugin_status)))
     step_index += 1
 
     steps["mcp"] = _mcp_setup_result(args, paths)
     if args.with_mcp:
         progress.step(step_index, total_steps, tr(language, "step_mcp"), detail=str(paths.runtime_state_path))
         mcp_status = steps["mcp"].get("status", "bridge_requested") if isinstance(steps["mcp"], dict) else "bridge_requested"
-        progress.done(tr(language, "done_mcp_bridge", status=mcp_status))
+        progress.done(tr(language, "done_mcp_bridge", status=_mcp_status_label(language, str(mcp_status))))
         step_index += 1
 
     if args.profile_pack:
@@ -686,7 +686,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     progress.step(step_index, total_steps, tr(language, "step_preferences"))
     steps["profile"] = _setup_profile_result(args, paths)
     profile_executor = steps["profile"].get("default_executor", "choose") if isinstance(steps["profile"], dict) else "choose"
-    progress.done(tr(language, "done_default_executor", executor=profile_executor))
+    progress.done(tr(language, "done_default_executor", executor=_executor_summary(language, str(profile_executor))))
     step_index += 1
 
     progress.step(step_index, total_steps, tr(language, "step_targets"))
@@ -896,14 +896,25 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
     )
     args.default_executor = _ask_default_executor(use_color=use_color, language=language)
     args.profile = setup_profile_categories_for_executor(str(args.default_executor))
-    args.with_mcp = _ask_yes_no(
-        tr(language, "mcp_question"),
+    show_advanced = _ask_yes_no(
+        tr(language, "advanced_question"),
         default=False,
         use_color=use_color,
-        note=tr(language, "mcp_note"),
+        note=tr(language, "advanced_note"),
         language=language,
     )
-    args.profile_pack = _ask_team_profile_packs(use_color=use_color, language=language)
+    if show_advanced:
+        args.with_mcp = _ask_yes_no(
+            tr(language, "mcp_question"),
+            default=False,
+            use_color=use_color,
+            note=tr(language, "mcp_note"),
+            language=language,
+        )
+        args.profile_pack = _ask_team_profile_packs(use_color=use_color, language=language)
+    else:
+        args.with_mcp = False
+        args.profile_pack = []
     print("")
 
 
@@ -1249,7 +1260,6 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
         operator_summary = {}
 
     install = steps.get("install", {})
-    apply = steps.get("apply", {})
     profile = steps.get("profile", {})
     targets = steps.get("targets", {})
     skills = install.get("skills", []) if isinstance(install, dict) else []
@@ -1261,12 +1271,9 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
     print(_color(title, "1;36", use_color))
     print(_color(tr(language, "summary"), "1;32", use_color))
     scope_label = tr(language, "setup_scope_" + str(operator_summary.get("scope", "custom")))
-    install_mode_label = tr(language, "setup_install_mode_" + str(operator_summary.get("install_mode", "managed_skills")))
     mcp_mode_label = tr(language, "setup_mcp_mode_" + str(operator_summary.get("mcp_mode", "none")))
     status_label = tr(language, "setup_status_" + str(operator_summary.get("status", "configured")))
     print(f"  {tr(language, 'setup_scope', scope=scope_label)}")
-    print(f"  {tr(language, 'setup_install_mode', mode=install_mode_label)}")
-    print(f"  {tr(language, 'setup_mcp_mode', mode=mcp_mode_label)}")
     print(f"  {tr(language, 'setup_status', status=status_label)}")
     command_path = operator_summary.get("command_path", {})
     if isinstance(command_path, dict):
@@ -1289,37 +1296,25 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
     else:
         print(f"  {tr(language, 'registration_unknown', status=discovery_status or 'unknown')}")
 
-    if isinstance(apply, dict) and apply.get("message"):
-        print(f"  {tr(language, 'apply_line', message=apply.get('message'))}")
-
     if isinstance(profile, dict):
-        selected = ", ".join(str(item) for item in profile.get("selected_categories", []) or [])
         executor = str(profile.get("default_executor", ""))
-        model = _resolved_operating_model(profile)
-        if selected or executor:
-            print(f"  {tr(language, 'default_handoff', summary=_executor_summary(executor))}")
-            if selected:
-                print(f"  {tr(language, 'setup_profile', selected=selected)}")
-        if isinstance(model, dict) and model.get("id"):
-            print(f"  Operating model: {model.get('title', model.get('id'))} ({model.get('id')})")
+        if executor:
+            print(f"  {tr(language, 'default_handoff', summary=_executor_summary(language, executor))}")
 
     if isinstance(topology, dict):
         print(
             f"  {tr(language, 'target_topology', mode=topology.get('mode', 'unknown'), count=topology.get('known_target_count', 0))}"
         )
-    state_log = operator_summary.get("state_log", {})
-    if isinstance(state_log, dict) and state_log.get("path") and state_log.get("entry"):
-        print(f"  {tr(language, 'state_log', path=state_log.get('path'), entry=state_log.get('entry'))}")
-
     plugin = payload.get("plugin_distribution")
     if isinstance(plugin, dict):
-        print(f"  {tr(language, 'plugin_bridge', status=plugin.get('status', 'installed'))}")
+        print(f"  {tr(language, 'plugin_bridge', status=_plugin_status_label(language, str(plugin.get('status', 'installed'))))}")
+
+    if str(operator_summary.get("mcp_mode", "none")) == "bridge_requested":
+        print(f"  {tr(language, 'setup_mcp_mode', mode=mcp_mode_label)}")
 
     team_profiles = payload.get("team_profiles")
     if isinstance(team_profiles, list) and team_profiles:
         print(f"  {tr(language, 'team_activated', count=len(team_profiles))}")
-    elif not dry_run:
-        print(f"  {tr(language, 'team_none')}")
 
     print(_color(tr(language, "next"), "1;32", use_color))
     if dry_run:
@@ -1783,28 +1778,97 @@ def _config_change_label(language: str, message: str) -> str:
     return translated if translated != key else message
 
 
-def _executor_summary(executor: str) -> str:
+def _executor_summary(language: str, executor: str) -> str:
     labels = {
-        "choose": "ask before choosing a coding executor",
-        "codex": "Codex tracked handoff when selected",
-        "claude-code": "Claude Code prompt handoff",
-        "generic": "portable prompt handoff for any coding agent",
-        "hermes": "keep small coding-like work in Hermes by default",
-        "omx-runtime": "OMX runtime handoff",
-        "omo-runtime": "OMO runtime handoff",
-        "omc-runtime": "OMC runtime handoff",
+        "en": {
+            "choose": "Hermes will ask before choosing a coding agent",
+            "codex": "Hermes will prepare Codex handoffs when coding is selected",
+            "claude-code": "Hermes will prepare Claude Code prompts",
+            "generic": "Hermes will prepare portable prompts for any coding agent",
+            "hermes": "Hermes will keep small coding-like work inside Hermes first",
+            "omx-runtime": "Hermes will prepare oh-my runtime handoffs",
+            "omo-runtime": "Hermes will prepare oh-my runtime handoffs",
+            "omc-runtime": "Hermes will prepare oh-my runtime handoffs",
+        },
+        "ko": {
+            "choose": "코딩 에이전트를 고르기 전에 Hermes가 먼저 물어봅니다",
+            "codex": "코딩이 선택되면 Hermes가 Codex용 작업을 준비합니다",
+            "claude-code": "Hermes가 Claude Code에 줄 프롬프트를 준비합니다",
+            "generic": "Hermes가 어떤 코딩 에이전트에도 줄 수 있는 프롬프트를 준비합니다",
+            "hermes": "작은 코딩 유사 작업은 먼저 Hermes 안에서 다룹니다",
+            "omx-runtime": "Hermes가 oh-my 런타임용 작업을 준비합니다",
+            "omo-runtime": "Hermes가 oh-my 런타임용 작업을 준비합니다",
+            "omc-runtime": "Hermes가 oh-my 런타임용 작업을 준비합니다",
+        },
+        "ja": {
+            "choose": "コーディングエージェントを選ぶ前に Hermes が確認します",
+            "codex": "コーディングが選ばれたら Hermes が Codex 向け作業を準備します",
+            "claude-code": "Hermes が Claude Code 用プロンプトを準備します",
+            "generic": "Hermes が任意のコーディングエージェント向けプロンプトを準備します",
+            "hermes": "小さなコーディングに近い作業はまず Hermes 内で扱います",
+            "omx-runtime": "Hermes が oh-my ランタイム向け作業を準備します",
+            "omo-runtime": "Hermes が oh-my ランタイム向け作業を準備します",
+            "omc-runtime": "Hermes が oh-my ランタイム向け作業を準備します",
+        },
+        "zh": {
+            "choose": "Hermes 会先询问，再选择编码代理",
+            "codex": "选择编码后，Hermes 会准备 Codex 交接",
+            "claude-code": "Hermes 会准备 Claude Code 提示词",
+            "generic": "Hermes 会准备可交给任意编码代理的提示词",
+            "hermes": "小型类似编码的工作会先留在 Hermes 内处理",
+            "omx-runtime": "Hermes 会准备 oh-my 运行时交接",
+            "omo-runtime": "Hermes 会准备 oh-my 运行时交接",
+            "omc-runtime": "Hermes 会准备 oh-my 运行时交接",
+        },
     }
-    return f"{labels.get(executor, 'unknown')} ({executor or 'unknown'})"
+    code = normalize_language(language)
+    return labels.get(code, labels["en"]).get(executor, labels.get(code, labels["en"])["choose"])
+
+
+def _plugin_status_label(language: str, status: str) -> str:
+    code = normalize_language(language)
+    labels = {
+        "en": {"installed": "ready", "would_install": "would be installed", "unchanged": "ready", "updated": "updated"},
+        "ko": {"installed": "준비됨", "would_install": "설치 예정", "unchanged": "준비됨", "updated": "업데이트됨"},
+        "ja": {"installed": "準備完了", "would_install": "インストール予定", "unchanged": "準備完了", "updated": "更新済み"},
+        "zh": {"installed": "已就绪", "would_install": "将安装", "unchanged": "已就绪", "updated": "已更新"},
+    }
+    return labels.get(code, labels["en"]).get(status, status)
+
+
+def _mcp_status_label(language: str, status: str) -> str:
+    code = normalize_language(language)
+    labels = {
+        "en": {"bridge_requested": "preference recorded", "not_requested": "not enabled"},
+        "ko": {"bridge_requested": "선호 기록됨", "not_requested": "사용 안 함"},
+        "ja": {"bridge_requested": "設定を記録済み", "not_requested": "無効"},
+        "zh": {"bridge_requested": "偏好已记录", "not_requested": "未启用"},
+    }
+    return labels.get(code, labels["en"]).get(status, status)
 
 
 def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
     try:
         result = install_plugin_bundle(paths, force=args.force, dry_run=args.dry_run)
     except PluginPackError as exc:
-        raise OmhError(str(exc)) from exc
+        raise OmhError(_friendly_plugin_error(paths, str(exc))) from exc
     if not args.dry_run:
         update_state(paths, {"last_plugin_distribution": result})
     return result
+
+
+def _friendly_plugin_error(paths, message: str) -> str:
+    if "exists without an OMH plugin manifest" in message:
+        return (
+            "OMH status helper location already exists, but it does not look like an OMH-managed install: "
+            f"{paths.hermes_plugin_dir}. Run `omh setup --force` to replace only the OMH status helper files."
+        )
+    if "managed plugin files changed" in message:
+        return (
+            "OMH status helper files were changed outside OMH. Run `omh setup --force` to refresh the helper, "
+            "or inspect the plugin directory before replacing it."
+        )
+    return message
 
 
 def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
@@ -1846,17 +1910,6 @@ def _setup_profile_result(args: argparse.Namespace, paths) -> dict[str, object]:
         return {**profile, "dry_run": True, "written": False, "path": str(paths.setup_profile_path)}
     profile = write_setup_profile(paths, args.profile, default_executor=default_executor, operating_model=operating_model)
     return {**profile, "dry_run": False, "written": True, "path": str(paths.setup_profile_path)}
-
-
-def _resolved_operating_model(profile: dict[str, object]) -> dict[str, object]:
-    model_id = str(profile.get("operating_model_id", ""))
-    if not model_id:
-        return {}
-    try:
-        model = inspect_operating_model(model_id).get("model", {})
-    except TeamProfileError:
-        return {"id": model_id, "title": model_id}
-    return model if isinstance(model, dict) else {}
 
 
 def _team_profile_setup_result(args: argparse.Namespace, paths) -> list[dict[str, object]]:
@@ -1948,7 +2001,7 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
 
 
 def _add_top_level_commands(sub) -> None:
-    setup = sub.add_parser("setup", help="Install managed skills and connect them to the target Hermes profile.")
+    setup = sub.add_parser("setup", help="Connect OMH workflows to the target Hermes profile.")
     _add_common_install_options(setup)
     setup.add_argument(
         "--scope",
