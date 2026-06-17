@@ -19,6 +19,7 @@ omh playbook recommend "I want to safely add a feature to this repo"
 omh playbook recommend "research latest official sources"
 omh playbook recommend "prepare weekly ops review from customer feedback and release risks"
 omh playbook recommend "every morning check competitor news and send a Slack digest only if something changed"
+omh playbook recommend "set up a research department with Scout, Analyst, and Briefer for market papers"
 omh playbook recommend "organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions"
 omh playbook recommend "create a monthly leadership PPT report package from current status and risks"
 omh playbook recommend "turn the revenue spreadsheet into an Excel and PDF package with render QA"
@@ -39,6 +40,7 @@ files.
 | `request-to-handoff` | A user sends a natural request and needs the first role-owned next action. | Route request -> select role -> plan or prepare -> handoff or retain -> status card. |
 | `safe-feature-change` | A user wants a safe feature, bug fix, or refactor flow. | Recommend -> plan -> accept -> coding handoff -> status card. |
 | `source-backed-research` | A user needs current, official, comparative, or citation-backed evidence. | Clarify scope -> gather sources -> synthesize -> report confidence. |
+| `research-department` | A user wants ongoing market, competitor, paper, news, or source-monitoring research without hand-building Hermes profiles and delivery glue. | Scope research -> source inbox -> Scout/Analyst/Briefer lanes -> integration readiness -> briefing status. |
 | `research-to-strategy-brief` | A user wants business or customer evidence shaped into strategy. | Scope research -> evidence table -> meeting topics -> strategy options -> decision record. |
 | `meeting-prep-to-record` | A user wants context turned into a meeting agenda and record template. | Context -> agenda -> prompts -> decisions needed -> record template. |
 | `feedback-triage` | A user brings customer feedback, bug signals, or feature asks. | Source boundary -> clusters -> severity/opportunity -> next workflow. |
@@ -131,12 +133,20 @@ For scheduled operations, a prompt like:
 every morning check competitor news and send a Slack digest only if something changed
 ```
 
-routes to `scheduled-ops-blueprint`. The wrapper can show cadence, delivery
-surface, silence policy, selected skills, context chain, and missing runtime
-evidence. The blueprint can prepare `hermes_ops_blueprint/v1`; it cannot prove
-host cron creation, Hermes automation enablement, source retrieval, Slack
-delivery, no-agent execution, plugin load, connector invocation, review, CI, or
-merge evidence.
+can route to `research-department` when the request is really about ongoing
+collection, synthesis, and briefing. The wrapper can show Scout, Analyst, and
+Briefer lanes, `source_inbox/v1`, `briefing_status/v1`, optional NotebookLM or
+Obsidian readiness, and the observed evidence still needed. The plan can
+prepare `research_department_plan/v1`; it cannot prove source retrieval,
+NotebookLM execution, Obsidian writes, host cron creation, gateway delivery,
+conflict resolution, or verified briefing evidence.
+
+Pure schedule or delivery requests still route to `scheduled-ops-blueprint`.
+The wrapper can show cadence, delivery surface, silence policy, selected
+skills, context chain, and missing runtime evidence. The blueprint can prepare
+`hermes_ops_blueprint/v1`; it cannot prove host cron creation, Hermes
+automation enablement, source retrieval, Slack delivery, no-agent execution,
+plugin load, connector invocation, review, CI, or merge evidence.
 
 `operating-rhythm-history` keeps cadence records, decisions, and action items
 durable without claiming the meeting happened unless notes are observed.

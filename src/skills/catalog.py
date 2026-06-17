@@ -921,6 +921,84 @@ _DEFINITIONS = [
         ),
     ),
     SkillDefinition(
+        "research-department",
+        "Hermes Research Department workflow pack: prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries.",
+        (
+            "research-department",
+            "research department",
+            "research ops department",
+            "research operations department",
+            "scout analyst briefer",
+            "scout analyst brief",
+            "daily research department",
+            "competitor research department",
+            "market research department",
+            "paper review",
+            "weekly paper review",
+            "research paper review",
+            "paper research",
+            "notebooklm research",
+            "obsidian research vault",
+            "research inbox",
+            "source inbox",
+            "briefing status",
+            "리서치 부서",
+            "리서치 조직",
+            "리서치 운영",
+            "수집 합성 브리핑",
+            "경쟁사 리서치 부서",
+        ),
+        (
+            "Use when Hermes should turn an ongoing or recurring research request into a prepared "
+            "Scout -> Analyst -> Briefer workflow with source inbox, optional NotebookLM/Obsidian readiness, "
+            "and briefing status without claiming research execution."
+        ),
+        category="research",
+        phase="research-department",
+        hermes_role="retained-cognition",
+        delegation_boundary="retained-catalog-intent",
+        handoff_policy=(
+            "Keep the research operating model in Hermes. Map Scout to `web-research`/`autoresearch-goal`, "
+            "Analyst to `research-brief`/`best-practice-research`, and Briefer to `report-package` or meeting/report workflows. "
+            "Record retrieval, NotebookLM, Obsidian, delivery, and verification only from observed evidence."
+        ),
+        required_inputs=("topic or watch area", "source boundaries", "cadence", "delivery target", "storage preference"),
+        expected_outputs=("research_department_plan/v1", "source_inbox/v1", "briefing_status/v1", "not-evidence boundary"),
+        artifact_expectations=("research_department_plan/v1 under .omh/research-department/plans when a wrapper or CLI records it",),
+        safety_rules=(
+            "Do not claim web retrieval, NotebookLM query, Obsidian write, cron creation, gateway delivery, or verification from a prepared plan.",
+            "Keep raw findings, processed notes, briefs, conflicts, and verification needs in separate source inbox buckets.",
+            "Treat NotebookLM and Obsidian as optional readiness hints unless observed integration evidence exists.",
+        ),
+        quality_tier="research-ops-gated",
+        quality_bar=(
+            "Name topic, source boundaries, cadence, delivery target, storage destination, and optional integration readiness.",
+            "Map Scout, Analyst, and Briefer lanes to concrete OMH skills and source inbox buckets.",
+            "Expose collected, synthesized, briefed, conflict, and verification counts as status, not execution proof.",
+            "List required evidence before claiming retrieval, synthesis, storage, delivery, or verification.",
+        ),
+        why_this_exists=(
+            "`research-department` exists so Hermes users can start complex research-ops patterns without manually designing "
+            "profiles, cron, NotebookLM, Obsidian, and delivery glue, while OMH keeps every runtime claim observed-only."
+        ),
+        do_not_use_when=(
+            "The user only needs a one-off current-source lookup; use `web-research`.",
+            "The user only needs a one-off business synthesis; use `research-brief`.",
+            "The request is pure scheduling with no source collection or synthesis; use `automation-blueprint`.",
+            "The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.",
+        ),
+        good_example=SkillExample(
+            prompt="research-department 매일 경쟁사와 시장 뉴스를 수집해서 변화가 있으면 브리핑해줘.",
+            expected="Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, optional integration readiness, and observed-only evidence requirements.",
+            why="The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.",
+        ),
+        bad_example=SkillExample(
+            prompt="research-department prove NotebookLM queried the notebook and posted the Slack brief.",
+            expected="Ask for observed NotebookLM and gateway delivery evidence or mark those states as not_observed.",
+            why="The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.",
+        ),
+    ),
+    SkillDefinition(
         "strategy-brief",
         "Hermes Strategy Brief workflow: options, tradeoffs, recommendation, and decision notes.",
         (
@@ -2810,6 +2888,58 @@ _HARNESSES = [
         ),
     ),
     HarnessDefinition(
+        "research-department",
+        "Prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries.",
+        "Use when recurring or durable market, competitor, paper, news, or source-monitoring research should become a Hermes workflow pack.",
+        ("topic or watch area", "source boundaries", "cadence", "delivery target", "storage preference"),
+        ("research_department_plan/v1", "source_inbox/v1", "briefing_status/v1", "not-evidence boundary"),
+        (
+            "research lanes are prepared",
+            "source inbox buckets are separated",
+            "retrieval, synthesis, storage, delivery, and verification claims remain observed-only",
+        ),
+        (
+            "validate research_department_plan/v1",
+            "check Scout/Analyst/Briefer lane mapping",
+            "verify not_evidence_until_observed lists retrieval, NotebookLM, Obsidian, scheduler, and delivery claims",
+        ),
+        "If topic, sources, cadence, delivery, or storage are missing, prepare the plan and ask for the smallest missing confirmation.",
+        (
+            "research_plan_scope_recorded",
+            "source_inbox_prepared",
+            "briefing_status_prepared",
+            "integration_readiness_prepared",
+        ),
+        "Record research department plans as Hermes-retained projection metadata; record source retrieval, NotebookLM, Obsidian, delivery, and verification only from observed evidence.",
+        "metadata_only",
+        quality_tier="research-ops-gated",
+        quality_bar=(
+            "Name topic, source boundaries, cadence, delivery target, storage destination, and optional integration readiness.",
+            "Map Scout, Analyst, and Briefer lanes to concrete OMH skills and source inbox buckets.",
+            "Expose collected, synthesized, briefed, conflict, and verification counts as status, not execution proof.",
+            "List required evidence before claiming retrieval, NotebookLM, Obsidian, delivery, or verification.",
+        ),
+        evidence_ladder=(
+            "research_plan_scope_recorded",
+            "source_inbox_prepared",
+            "briefing_status_prepared",
+            "optional_integrations_classified",
+            "observed_evidence_recorded_when_available",
+        ),
+        wrapper_actions=(
+            "show_research_department_plan",
+            "revise_research_sources",
+            "confirm_cadence_delivery_storage",
+            "record_source_observation",
+            "show_status",
+        ),
+        overclaim_guards=(
+            "A research_department_plan/v1 artifact is not source retrieval, NotebookLM execution, Obsidian writes, host cron creation, gateway delivery, or verification evidence.",
+            "Source inbox buckets are not proof that source content was fetched or processed.",
+            "Briefing status counts are only prepared status until matching source, synthesis, storage, delivery, or review evidence exists.",
+        ),
+    ),
+    HarnessDefinition(
         "reliability-review",
         "Review incidents, SLOs, error budgets, and remediation follow-ups with strict observed evidence boundaries.",
         "Use when SRE-style incident, postmortem, SLO, error-budget, or service reliability review is requested.",
@@ -3198,6 +3328,7 @@ _PRIMARY_HARNESSES = {
     "report-package": "report-package",
     "materials-package": "materials-package",
     "automation-blueprint": "scheduled-ops-blueprint",
+    "research-department": "research-department",
     "reliability-review": "reliability-review",
     "idea-to-deploy": "app-delivery-loop",
     "cto-loop": "app-delivery-loop",

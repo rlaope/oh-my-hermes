@@ -9,6 +9,8 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.routing import recommend as recommend_module
+from omh.capabilities.orchestration import orchestration_patterns
+from omh.wrapper.contract import VISIBLE_ACTIONS
 from omh.roles import role_definitions, role_file_markdown, roles_reference_markdown
 from omh.skill_pack import (
     builtin_definitions,
@@ -18,7 +20,7 @@ from omh.skill_pack import (
     routable_definitions,
     skill_exposure_payload,
 )
-from omh.playbooks import list_playbooks
+from omh.playbooks import inspect_playbook, list_playbooks
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
     SkillDefinition,
@@ -136,6 +138,7 @@ class RouterContentTests(unittest.TestCase):
             "deep-interview",
             "web-research",
             "research-brief",
+            "research-department",
             "strategy-brief",
             "meeting-brief",
             "feedback-triage",
@@ -301,6 +304,7 @@ class RouterContentTests(unittest.TestCase):
                 "goal-execution",
                 "planning",
                 "research",
+                "research-department",
                 "business-research",
                 "strategy-synthesis",
                 "meeting-facilitation",
@@ -351,6 +355,31 @@ class RouterContentTests(unittest.TestCase):
         self.assertTrue(
             any("source plan is not observed source retrieval" in guard for guard in contract["overclaim_guards"])
         )
+
+    def test_research_department_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        playbooks = {playbook["id"]: playbook for playbook in list_playbooks()["playbooks"]}
+        patterns = {pattern["id"]: pattern for pattern in orchestration_patterns()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("research-department", definitions)
+        self.assertIn("research-department", harnesses)
+        self.assertIn("research-department", playbooks)
+        self.assertEqual(primary_harness_for_skill("research-department"), "research-department")
+        self.assertIn("research_department_workflow", patterns)
+        self.assertIn("research-department", patterns["research_department_workflow"]["compatible_skills"])
+        self.assertTrue(
+            {"show_research_department_plan", "revise_research_sources", "record_source_observation"}.issubset(
+                set(VISIBLE_ACTIONS)
+            )
+        )
+        self.assertIn("source_inbox/v1", harnesses["research-department"].expected_outputs)
+        self.assertIn("source_inbox_prepared", harnesses["research-department"].evidence_ladder)
+        self.assertIn("briefing_status", playbooks["research-department"]["pipeline"])
+        self.assertIn("briefing_status/v1", inspect_playbook("research-department")["playbook"]["stages"][-1]["contract"])
+        self.assertIn("research-department", templates)
+        self.assertIn("Scout", templates["research-department"].content)
 
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
         for definition in builtin_definitions():
@@ -442,6 +471,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("selected executor/runtime handoff", definitions["ultraprocess"].handoff_policy)
         self.assertEqual(primary_harness_for_skill("web-research"), "research")
         self.assertEqual(primary_harness_for_skill("research-brief"), "business-research")
+        self.assertEqual(primary_harness_for_skill("research-department"), "research-department")
         self.assertEqual(primary_harness_for_skill("strategy-brief"), "strategy-synthesis")
         self.assertEqual(primary_harness_for_skill("meeting-brief"), "meeting-facilitation")
         self.assertEqual(primary_harness_for_skill("feedback-triage"), "customer-insight-triage")
@@ -465,6 +495,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertTrue(
             {
                 "research-brief",
+                "research-department",
                 "strategy-brief",
                 "meeting-brief",
                 "feedback-triage",
@@ -777,6 +808,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`idea-to-deploy`, `ultragoal`, `loop`, and `ultraprocess`", readme)
         self.assertIn("`ultraprocess`", readme)
         self.assertIn("`deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`", readme)
+        self.assertIn("`research-department` / `web-research` / `research-brief` / `report-package`", readme)
         self.assertIn("`automation-blueprint` / `web-research` / `report-package`", readme)
         self.assertIn("## Organization Patterns", readme)
         self.assertIn("role-interaction patterns, not hidden workers", readme)
@@ -1121,6 +1153,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("request-to-handoff", playbooks)
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
+        self.assertIn("research-department", playbooks)
         self.assertIn("operating-rhythm-history", playbooks)
         self.assertIn("scheduled-ops-blueprint", playbooks)
         self.assertIn("report-package", playbooks)

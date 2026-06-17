@@ -67,6 +67,9 @@ def _orchestration_eligibility(definition: SkillDefinition) -> list[str]:
         patterns.add("worktree_isolated_workers")
     if definition.name in {"loop"}:
         patterns.add("loop_run_once")
+    if definition.name == "research-department":
+        patterns.add("research_department_workflow")
+        patterns.add("scheduled_ops_blueprint")
     if "handoff" in definition.handoff_policy.lower() or "runtime" in definition.hermes_role:
         patterns.add("executor_session_handoff")
     if definition.category == "materials":

@@ -22,6 +22,7 @@ class OrchestrationPatternTests(unittest.TestCase):
             "worktree_isolated_workers",
             "loop_run_once",
             "scheduled_ops_blueprint",
+            "research_department_workflow",
             "executor_session_handoff",
             "hermes_coding_team_path",
             "materials_generation_handoff",
@@ -42,6 +43,11 @@ class OrchestrationPatternTests(unittest.TestCase):
         self.assertIn("automation-blueprint", scheduled["compatible_skills"])
         self.assertIn("host_schedule_observed", scheduled["observed_evidence_required"])
         self.assertIn("Do not claim host cron", scheduled["do_not_use_when"])
+
+        research_department = patterns["research_department_workflow"]
+        self.assertIn("research-department", research_department["compatible_skills"])
+        self.assertIn("research_department_plan/v1", research_department["prepared_artifacts"])
+        self.assertIn("source retrieval", research_department["do_not_use_when"])
 
         hermes_team = patterns["hermes_coding_team_path"]
         self.assertIn("record_runtime_observation", hermes_team["wrapper_actions"])

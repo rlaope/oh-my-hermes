@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .localization import normalized_phrase
+
 
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
@@ -78,6 +80,61 @@ _SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
         "변화",
         "조용히",
     }
+)
+_RESEARCH_DEPARTMENT_STRONG_TOKENS = frozenset(
+    {
+        "research",
+        "competitor",
+        "competitors",
+        "market",
+        "industry",
+        "paper",
+        "papers",
+        "notebooklm",
+        "obsidian",
+        "vault",
+        "리서치",
+        "조사",
+        "경쟁사",
+        "시장",
+        "산업",
+        "논문",
+        "옵시디언",
+    }
+)
+_RESEARCH_DEPARTMENT_SUPPORT_TOKENS = frozenset(
+    {
+        "news",
+        "source",
+        "sources",
+        "brief",
+        "briefing",
+        "digest",
+        "뉴스",
+        "출처",
+        "자료",
+        "브리핑",
+        "요약",
+    }
+)
+_RESEARCH_DEPARTMENT_PHRASES = (
+    "research department",
+    "research ops",
+    "research operations",
+    "scout analyst briefer",
+    "daily research",
+    "weekly research",
+    "competitor research",
+    "market research",
+    "source inbox",
+    "briefing status",
+    "notebooklm",
+    "obsidian vault",
+    "리서치 부서",
+    "리서치 운영",
+    "경쟁사 리서치",
+    "시장 리서치",
+    "수집 합성 브리핑",
 )
 _SCHEDULED_OPS_PHRASES = (
     "every morning",
@@ -181,9 +238,19 @@ SCHEDULED_OPS_BLUEPRINT_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; recurring schedule or delivery requests should prepare a Hermes ops blueprint first.",
     activation_status="active",
 )
+RESEARCH_DEPARTMENT_GUARD = RoutingGuardRule(
+    id="research_department_before_generic_scheduled_ops",
+    rule="Recurring or durable research operations should route to the research department workflow pack before generic scheduled ops.",
+    matched_label="guard:research_department",
+    preferred_skills=("research-department",),
+    score_boost=40,
+    why="Matched guard/trigger metadata; recurring research operations should prepare a Scout/Analyst/Briefer research department plan.",
+    activation_status="active",
+)
 ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
+    RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     DELIVERY_CYCLE_GUARD,
@@ -229,7 +296,10 @@ def active_routing_guard_rules(
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
-    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+    research_department_applies = _research_department_guard_applies(normalized_query, query_tokens)
+    if research_department_applies:
+        rules.append(RESEARCH_DEPARTMENT_GUARD)
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens) and not research_department_applies:
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
@@ -243,16 +313,16 @@ def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str])
         return False
     if {"risky", "dangerous", "unsafe"} & query_tokens:
         return True
-    return any(
-        phrase in normalized_query
-        for phrase in (
+    return _contains_phrase(
+        normalized_query,
+        (
             "feels risky",
             "seems risky",
             "위험한 리팩터링",
             "위험한 리팩토링",
             "리팩터링 위험",
             "리팩토링 위험",
-        )
+        ),
     )
 
 
@@ -263,13 +333,36 @@ def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: 
         return True
     if _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens and _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens:
         return True
-    return any(phrase in normalized_query for phrase in _SCHEDULED_OPS_PHRASES)
+    return _contains_phrase(normalized_query, _SCHEDULED_OPS_PHRASES)
+
+
+def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if is_explicit_one_off_request(normalized_query, query_tokens):
+        return False
+    recurring = (
+        _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens)
+        or bool({"ongoing", "durable", "24", "daily", "weekly", "monthly", "매일", "매주"} & query_tokens)
+        or _contains_phrase(normalized_query, ("ongoing", "durable", "daily", "weekly", "monthly", "매일", "매주"))
+    )
+    support = bool(_RESEARCH_DEPARTMENT_SUPPORT_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query, _RESEARCH_DEPARTMENT_SUPPORT_TOKENS
+    )
+    specific_research_domain = (
+        bool((_RESEARCH_DEPARTMENT_STRONG_TOKENS - {"research", "리서치", "조사"}) & query_tokens)
+        or _contains_phrase(normalized_query, ("경쟁사", "시장", "논문"))
+    )
+    generic_research = bool({"research", "리서치", "조사"} & query_tokens)
+    research = (
+        specific_research_domain
+        or (generic_research and support)
+        or _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
+    )
+    explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
+    return recurring and research and (support or specific_research_domain or explicit_research_ops)
 
 
 def is_explicit_one_off_request(normalized_query: str, query_tokens: set[str]) -> bool:
-    return bool(_ONE_OFF_TOKENS & query_tokens) or any(
-        phrase in normalized_query for phrase in _ONE_OFF_PHRASES
-    )
+    return bool(_ONE_OFF_TOKENS & query_tokens) or _contains_phrase(normalized_query, _ONE_OFF_PHRASES)
 
 
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -292,9 +385,9 @@ def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -
         "upstream",
     } & query_tokens:
         return True
-    return any(
-        phrase in normalized_query
-        for phrase in (
+    return _contains_phrase(
+        normalized_query,
+        (
             "web search",
             "search the web",
             "internet search",
@@ -311,7 +404,7 @@ def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -
             "최신 자료",
             "최신 출처",
             "자료 찾아",
-        )
+        ),
     )
 
 
@@ -331,9 +424,9 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
         "문서",
     } & query_tokens:
         return True
-    return any(
-        phrase in normalized_query
-        for phrase in (
+    return _contains_phrase(
+        normalized_query,
+        (
             "open a pr",
             "prepare a pr",
             "make a pr",
@@ -341,14 +434,14 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
             "pr-ready",
             "pull request",
             "pr까지",
-        )
+        ),
     )
 
 
 def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    return _delivery_cycle_terms(normalized_query, query_tokens) and any(
-        phrase in normalized_query
-        for phrase in (
+    return _delivery_cycle_terms(normalized_query, query_tokens) and _contains_phrase(
+        normalized_query,
+        (
             "prepare a pr",
             "open a pr",
             "make a pr",
@@ -360,5 +453,9 @@ def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str])
             "계획 구현 리뷰 문서",
             "기획 구현 리뷰 문서",
             "pr까지",
-        )
+        ),
     )
+
+
+def _contains_phrase(normalized_query: str, phrases: tuple[str, ...] | frozenset[str]) -> bool:
+    return any(normalized_phrase(phrase) in normalized_query for phrase in phrases)

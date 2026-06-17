@@ -74,8 +74,8 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "every morning check competitor news and send a Slack digest only if something changed",
-                "automation-blueprint",
-                "scheduled-ops-blueprint",
+                "research-department",
+                "research-department",
             ),
         )
 

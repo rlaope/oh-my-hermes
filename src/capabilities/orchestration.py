@@ -119,6 +119,16 @@ def orchestration_patterns() -> list[dict[str, object]]:
             ("blueprint_prepared", "host_schedule_observed", "delivery_observed", "source_retrieval_observed"),
         ),
         _pattern(
+            "research_department_workflow",
+            "Use when Hermes should prepare ongoing research operations as Scout, Analyst, and Briefer lanes.",
+            "Do not claim source retrieval, NotebookLM, Obsidian, scheduler, gateway delivery, or verification evidence from the prepared plan.",
+            "researcher",
+            ("research-department", "web-research", "research-brief", "best-practice-research", "report-package", "automation-blueprint"),
+            ("show_research_department_plan", "revise_research_sources", "show_status"),
+            actions,
+            ("research_plan_prepared", "source_retrieval_observed", "synthesis_observed", "brief_delivery_observed", "verification_observed"),
+        ),
+        _pattern(
             "executor_session_handoff",
             "Use when Hermes prepares work for Codex, Claude Code, Hermes coding skills, or oh-my runtimes.",
             "Do not report completion before dispatch/result/verification evidence is recorded.",
@@ -184,6 +194,7 @@ def _prepared_artifacts(pattern_id: str) -> list[str]:
         "hermes_coding_team_path": ["coding_runtime_handoff/v1", "hermes_coding_team_path/v1", "runtime_observation/v1 when observed"],
         "loop_run_once": ["loop_runtime/v1", "loop_status_card/v1"],
         "scheduled_ops_blueprint": ["hermes_ops_blueprint/v1"],
+        "research_department_workflow": ["research_department_plan/v1", "source_inbox/v1", "briefing_status/v1"],
         "materials_generation_handoff": ["material_artifact/v1"],
         "worktree_isolated_workers": ["runtime_observation/v1 when observed"],
     }
