@@ -11,6 +11,7 @@ from .coding_contracts import (
     RUNTIME_HANDOFF_SCHEMA_VERSION,
 )
 from .executors import (
+    HERMES_CODING_TEAM_WRAPPER_ACTIONS,
     executor_label,
     executor_selection_for_target,
     hermes_coding_team_path_contract,
@@ -688,7 +689,14 @@ def _public_harness_quality(
 
 
 def _runtime_wrapper_actions(profile: str) -> tuple[str, ...]:
-    actions = [
+    if profile == "hermes":
+        return (
+            "show_runtime_handoff",
+            *HERMES_CODING_TEAM_WRAPPER_ACTIONS[:-1],
+            "choose_executor",
+            HERMES_CODING_TEAM_WRAPPER_ACTIONS[-1],
+        )
+    return (
         "show_runtime_handoff",
         "start_runtime",
         "prepare_worktree",
@@ -696,11 +704,7 @@ def _runtime_wrapper_actions(profile: str) -> tuple[str, ...]:
         "start_swarm",
         "choose_executor",
         "show_status",
-    ]
-    if profile == "hermes":
-        actions.insert(1, "show_coding_team_path")
-        actions.insert(2, "start_hermes_coding")
-    return tuple(actions)
+    )
 
 
 def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) -> str:

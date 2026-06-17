@@ -328,6 +328,20 @@ class RuntimeArtifactTests(unittest.TestCase):
                 event_type,
             )
 
+        invalid_start_event = deepcopy(handoff)
+        invalid_start_event["hermes_coding_team_path"]["start_modes"][0]["first_observed_event"] = "not_a_runtime_event"
+        self.assertIn(
+            "first_observed_event is unsupported",
+            json.dumps(validate_coding_runtime_handoff(invalid_start_event)),
+        )
+
+        invalid_action = deepcopy(handoff)
+        invalid_action["hermes_coding_team_path"]["wrapper_actions"] = ["claim_done_without_evidence"]
+        self.assertIn(
+            "wrapper_actions must match the Hermes coding team action contract",
+            json.dumps(validate_coding_runtime_handoff(invalid_action)),
+        )
+
     def test_runtime_observation_records_status_ladder_without_claiming_missing_steps(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

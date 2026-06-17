@@ -35,6 +35,7 @@ def build_coding_briefing(
         headline=headline,
         executor_status=executor_status,
         work_summary=work_summary,
+        runtime_milestones=runtime_milestones,
         pending_gaps=pending_gaps,
         next_action=next_action,
     )
@@ -377,6 +378,7 @@ def _user_facing_lines(
     headline: str,
     executor_status: dict[str, Any],
     work_summary: dict[str, Any],
+    runtime_milestones: list[dict[str, str]],
     pending_gaps: list[str],
     next_action: str,
 ) -> list[str]:
@@ -389,7 +391,18 @@ def _user_facing_lines(
         lines.append(safe_summary)
     team_path = _object(_object(work_summary.get("handoff_contract")).get("coding_team_path"))
     if team_path:
-        lines.append("Hermes coding team path is prepared; team, worker, worktree, and verification evidence still require runtime observations.")
+        observed = [str(step["id"]) for step in runtime_milestones if step.get("state") == "complete"]
+        remaining = [str(step["id"]) for step in runtime_milestones if step.get("state") in {"pending", "blocked", "in_progress"}]
+        if observed:
+            lines.append(
+                "Hermes coding team path observations: "
+                f"{', '.join(observed[:4])}; still missing: {', '.join(remaining[:5]) or 'none'}."
+            )
+        else:
+            lines.append(
+                "Hermes coding team path is prepared; runtime observations are still required before "
+                "worker, worktree, verification, review, CI, or merge claims advance."
+            )
     if pending_gaps:
         lines.append(f"Still missing evidence: {', '.join(pending_gaps[:5])}.")
     lines.append(f"Next action: {next_action}.")

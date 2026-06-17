@@ -15,6 +15,7 @@ from ..executors import (
     EXECUTOR_PROFILES,
     HERMES_CODING_TEAM_START_MODE_IDS,
     HERMES_CODING_TEAM_STATUS_LADDER,
+    HERMES_CODING_TEAM_WRAPPER_ACTIONS,
     WORK_OWNER_MODES,
 )
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
@@ -1959,6 +1960,16 @@ def validate_hermes_coding_team_path(path: Any, *, selected: str) -> list[str]:
             mode_ids.add(str(mode.get("id", "")))
             for key in ("id", "label", "use_when", "entrypoint", "first_observed_event"):
                 _require(isinstance(mode.get(key), str), errors, f"coding_delegation runtime_handoff hermes_coding_team_path.start_modes[{index}].{key} must be a string")
+            first_event = mode.get("first_observed_event")
+            if isinstance(first_event, str):
+                _require(
+                    first_event in RUNTIME_OBSERVATION_EVENTS,
+                    errors,
+                    (
+                        "coding_delegation runtime_handoff hermes_coding_team_path."
+                        f"start_modes[{index}].first_observed_event is unsupported: {first_event}"
+                    ),
+                )
         missing_modes = sorted(set(HERMES_CODING_TEAM_START_MODE_IDS) - mode_ids)
         unsupported_modes = sorted(mode_ids - set(HERMES_CODING_TEAM_START_MODE_IDS))
         _require(
@@ -1984,6 +1995,14 @@ def validate_hermes_coding_team_path(path: Any, *, selected: str) -> list[str]:
             string_ladder == list(HERMES_CODING_TEAM_STATUS_LADDER),
             errors,
             "coding_delegation runtime_handoff hermes_coding_team_path.status_ladder must match the full Hermes coding team ladder",
+        )
+    wrapper_actions = path.get("wrapper_actions", [])
+    if isinstance(wrapper_actions, list):
+        string_actions = [action for action in wrapper_actions if isinstance(action, str)]
+        _require(
+            string_actions == list(HERMES_CODING_TEAM_WRAPPER_ACTIONS),
+            errors,
+            "coding_delegation runtime_handoff hermes_coding_team_path.wrapper_actions must match the Hermes coding team action contract",
         )
     return errors
 

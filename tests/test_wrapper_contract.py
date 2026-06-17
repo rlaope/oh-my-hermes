@@ -179,6 +179,8 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("worker_dispatch", team_path["status_ladder"])
         self.assertIn("show_coding_team_path", actions)
         self.assertIn("start_hermes_coding", actions)
+        self.assertIn("record_runtime_observation", actions)
+        self.assertIn("record_runtime_observation", team_path["wrapper_actions"])
         self.assertIn("prepared only", payload["chat_response"]["claim_boundary"].lower())
 
     def test_route_mode_surfaces_recommendation_policy_actions(self) -> None:

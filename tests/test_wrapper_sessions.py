@@ -354,6 +354,7 @@ class WrapperSessionTests(unittest.TestCase):
             prepared_actions = {action["id"] for action in prepared["status"]["chat_response"]["actions"]}
             self.assertIn("show_coding_team_path", prepared_actions)
             self.assertIn("start_hermes_coding", prepared_actions)
+            self.assertIn("record_runtime_observation", prepared_actions)
             self.assertEqual(prepared["status"]["next_action"], "show_runtime_handoff")
             self.assertEqual(validate_runtime(paths)["runs"], [])
 
@@ -395,6 +396,10 @@ class WrapperSessionTests(unittest.TestCase):
             milestones = {item["id"]: item["state"] for item in status["coding_briefing"]["runtime_milestones"]}
 
             self.assertEqual(status["coding_briefing"]["current_state"]["coding_agent"], "running(hermes)")
+            lines = "\n".join(status["coding_briefing"]["user_facing_lines"])
+            self.assertIn("runtime_start", lines)
+            self.assertIn("worker_dispatch", lines)
+            self.assertIn("still missing", lines)
             self.assertEqual(milestones["runtime_start"], "complete")
             self.assertEqual(milestones["worker_dispatch"], "complete")
             for pending_event in (
@@ -409,7 +414,7 @@ class WrapperSessionTests(unittest.TestCase):
                 self.assertEqual(milestones[pending_event], "pending")
                 self.assertIn(pending_event, status["coding_briefing"]["runtime_milestone_gaps"])
             self.assertIn("executor_result", status["coding_briefing"]["pending_gaps"])
-            self.assertIn("Hermes coding team path is prepared", "\n".join(status["coding_briefing"]["user_facing_lines"]))
+            self.assertIn("Hermes coding team path observations", lines)
 
     def test_runtime_handoff_preparation_is_idempotent_and_preserves_envelope(self) -> None:
         with TemporaryDirectory() as tmp:

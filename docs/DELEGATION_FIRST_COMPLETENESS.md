@@ -173,7 +173,8 @@ visibility, headline, body, state, platform-neutral actions, and claim boundary.
 Allowed actions include `answer:*`, `accept_plan`, `revise_plan`,
 `prepare_handoff`, `choose_executor`, `show_prompt_handoff`,
 `copy_prompt_handoff`, `show_runtime_handoff`, `start_runtime`,
-`start_hermes_coding`, `prepare_worktree`, `start_team`, `start_swarm`,
+`show_coding_team_path`, `start_hermes_coding`, `prepare_worktree`,
+`start_team`, `start_swarm`, `record_runtime_observation`,
 `send_to_executor`, `show_status`,
 `show_memory_status`, `apply_memory_updates`, and `cancel`. Memory review
 actions such as `keep_memory`, `forget_memory`, `update_memory`, and

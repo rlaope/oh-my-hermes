@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ..executors import HERMES_CODING_TEAM_STATUS_LADDER, HERMES_CODING_TEAM_WRAPPER_ACTIONS
 from ..wrapper.contract import VISIBLE_ACTIONS
 from .schema import ORCHESTRATION_PATTERN_SCHEMA_VERSION, PREPARED_NOT_OBSERVED
 
@@ -73,9 +74,9 @@ def orchestration_patterns() -> list[dict[str, object]]:
             "Do not use as proof that Hermes started coding, launched workers, created worktrees, verified, reviewed, or merged anything.",
             "handoff-guide",
             ("ultragoal", "ultrawork", "team", "code-review"),
-            ("show_runtime_handoff", "show_coding_team_path", "start_hermes_coding", "prepare_worktree", "start_team", "start_swarm", "show_status"),
+            ("show_runtime_handoff", *HERMES_CODING_TEAM_WRAPPER_ACTIONS),
             actions,
-            ("runtime_start_observed", "worker_dispatch_observed_when_used", "worker_result_observed", "verification_observed"),
+            tuple(f"{event}_observed" for event in HERMES_CODING_TEAM_STATUS_LADDER),
         ),
         _pattern(
             "swarm_batch",

@@ -19,6 +19,15 @@ HERMES_CODING_TEAM_STATUS_LADDER = (
     "merge_readiness",
     "merge",
 )
+HERMES_CODING_TEAM_WRAPPER_ACTIONS = (
+    "show_coding_team_path",
+    "start_hermes_coding",
+    "prepare_worktree",
+    "start_team",
+    "start_swarm",
+    "record_runtime_observation",
+    "show_status",
+)
 
 WORK_OWNER_MODES = ("retained_hermes", "prompt_only_handoff", "runtime_handoff", "external_executor")
 DISPATCH_POLICIES = ("prepare_only", "ask_before_dispatch", "configured_auto_dispatch_reserved")
@@ -405,15 +414,7 @@ def hermes_coding_team_path_contract(profile: str) -> dict[str, object]:
             "Escalate scope expansion, shared-file conflicts, or unclear verification ownership.",
         ],
         "status_ladder": list(HERMES_CODING_TEAM_STATUS_LADDER),
-        "wrapper_actions": [
-            "show_coding_team_path",
-            "start_hermes_coding",
-            "prepare_worktree",
-            "start_team",
-            "start_swarm",
-            "record_runtime_observation",
-            "show_status",
-        ],
+        "wrapper_actions": list(HERMES_CODING_TEAM_WRAPPER_ACTIONS),
         "not_observed_by_omh": [
             "Hermes skill start",
             "team or swarm worker launch",
