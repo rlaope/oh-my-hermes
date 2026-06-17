@@ -31,6 +31,7 @@ def _explicit_source_metadata(args: argparse.Namespace) -> dict[str, str]:
         "source_event_id": getattr(args, "source_event_id", ""),
         "channel_ref": getattr(args, "channel_ref", ""),
         "user_ref": getattr(args, "user_ref", ""),
+        "render_profile": getattr(args, "render_profile", ""),
     }
     values.update({key: getattr(args, key, "") for key in TARGET_METADATA_KEYS if key != "hermes_home"})
     return {key: str(value) for key, value in values.items() if value}

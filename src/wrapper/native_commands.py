@@ -111,7 +111,7 @@ def render_native_command_response(interaction: dict[str, object], *, source: st
         body_text_source = "messenger_rendering.body_text"
         render_warnings: list[str] = []
     else:
-        rendered_body_text = ""
+        rendered_body_text = str(response.get("body", ""))
         body_text_source = "missing_messenger_rendering.body_text"
         render_warnings = ["missing_messenger_safe_body"]
     payload.update(

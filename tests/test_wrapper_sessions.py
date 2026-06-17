@@ -25,6 +25,7 @@ from omh.runtime_records import validate_wrapper_session_record
 from omh.wrapper.executor_sessions import (
     ExecutorSessionError,
     attach_executor_session,
+    build_executor_session_actions,
     build_executor_session_status,
     open_executor_session,
     record_executor_session_result,
@@ -52,13 +53,18 @@ class WrapperSessionTests(unittest.TestCase):
             first = create_or_resume_wrapper_session(
                 paths,
                 message,
-                source="discord",
-                source_metadata={"source_event_id": "m1", "channel_ref": "c1", "raw": "drop-me"},
+                source="hermes",
+                source_metadata={
+                    "source_event_id": "m1",
+                    "channel_ref": "c1",
+                    "render_profile": "limited_markdown",
+                    "raw": "drop-me",
+                },
             )
             second = create_or_resume_wrapper_session(
                 paths,
                 message,
-                source="discord",
+                source="hermes",
                 source_metadata={"source_event_id": "m1", "channel_ref": "c1"},
             )
 
@@ -66,11 +72,15 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertFalse(first["resumed"])
             self.assertTrue(second["resumed"])
             self.assertEqual(session["session_id"], second["session"]["session_id"])
-            self.assertEqual(session["session_id"], session_id_for_thread_key("discord:c1:m1"))
+            self.assertEqual(session["session_id"], session_id_for_thread_key("hermes:c1:m1"))
             self.assertEqual(session["status"], "plan_presented")
             self.assertEqual(session["decision"], "none")
             self.assertEqual(session["current_run_id"], "")
-            self.assertEqual(session["source_metadata"], {"source_event_id": "m1", "channel_ref": "c1"})
+            self.assertEqual(first["status"]["chat_response"]["messenger_rendering"]["render_profile"], "limited_markdown")
+            self.assertEqual(
+                session["source_metadata"],
+                {"source_event_id": "m1", "channel_ref": "c1", "render_profile": "limited_markdown"},
+            )
             self.assertNotIn(message, json.dumps(first))
             self.assertEqual(validate_wrapper_session_record(session), [])
 
@@ -1010,6 +1020,37 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertNotIn("claude-summary", json.dumps(exported))
             self.assertEqual(validate_runtime(paths)["runs"], [])
             self.assertTrue(validate_runtime(paths)["ok"])
+
+    def test_non_terminal_executor_launches_are_prompt_only(self) -> None:
+        for executor in ("generic", "hermes", "omx-runtime", "omo-runtime", "omc-runtime"):
+            with self.subTest(executor=executor):
+                actions = {
+                    action["id"]: action
+                    for action in build_executor_session_actions(
+                        {
+                            "session_id": "ws-test",
+                            "status": "runtime_handoff_prepared",
+                            "selected_executor_profile": executor,
+                        }
+                    )
+                }
+                launch = actions["open_executor_session"]["payload"]["launch"]
+
+                self.assertTrue(launch["ui_only"])
+                self.assertTrue(launch["not_backend_execution"])
+                self.assertEqual(launch["execution_policy"], "copyable_instruction_only")
+                expected_copy_blocks = [
+                    {
+                        "id": "copy_prompt",
+                        "label": f"Copy prompt for {launch['executor_label']}",
+                        "text_template": "{executor_prompt}",
+                    }
+                ]
+                self.assertEqual(launch["copy_blocks"], expected_copy_blocks)
+                self.assertEqual(launch["command_templates"][0]["launch_mode"], "prompt_only")
+                self.assertNotIn("copy_terminal_command", {block["id"] for block in launch["copy_blocks"]})
+                self.assertNotIn("shell_command_template", launch["command_templates"][0])
+                self.assertNotEqual(launch["command_templates"][0].get("shell_command_template"), "{executor_prompt}")
 
     def test_runtime_executor_session_attachment_records_runtime_start_only(self) -> None:
         with TemporaryDirectory() as tmp:

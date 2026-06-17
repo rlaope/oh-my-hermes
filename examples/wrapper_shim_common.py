@@ -72,7 +72,7 @@ def _render(source: str, interaction: dict[str, object]) -> dict[str, object]:
         rendered_body_text = body_text
         body_text_source = "messenger_rendering.body_text"
     else:
-        rendered_body_text = ""
+        rendered_body_text = str(response.get("body", ""))
         body_text_source = "missing_messenger_rendering.body_text"
     status_card = response.get("status_card") or interaction.get("status_card")
     return {

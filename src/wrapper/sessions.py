@@ -32,6 +32,7 @@ from .contract import (
     build_chat_status_interaction,
     headline_with_usage_prefix,
     messenger_rendering_contract,
+    render_profile_for_source,
     usage_trace_payload,
 )
 from .briefing import build_coding_briefing, chat_response_briefing
@@ -900,8 +901,14 @@ def _next_action_for_session(session: dict[str, Any]) -> str:
 def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
     status = str(session.get("status", "plan_presented"))
     thread_key = str(session.get("thread_key", ""))
+    raw_source_metadata = session.get("source_metadata", {})
+    source_metadata = raw_source_metadata if isinstance(raw_source_metadata, dict) else {}
+
+    def response(**kwargs: object) -> dict[str, object]:
+        return _chat_response(**kwargs, source_metadata=source_metadata)
+
     if status == "plan_presented":
-        return _chat_response(
+        return response(
             kind="plan",
             headline="I drafted a plan for this request.",
             body="Please accept or revise the plan before any coding handoff is prepared.",
@@ -916,7 +923,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             claim_boundary="A wrapper session plan is not execution evidence.",
         )
     if status == "plan_accepted":
-        return _chat_response(
+        return response(
             kind="handoff",
             headline="The plan is accepted.",
             body="I can prepare the selected executor/runtime handoff, but no executor or runtime work is observed yet.",
@@ -927,7 +934,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             claim_boundary="Plan acceptance is not execution evidence.",
         )
     if status == "executor_choice_required":
-        return _chat_response(
+        return response(
             kind="handoff",
             headline="Choose who should own the coding work.",
             body="Hermes can keep shaping the work, prepare a prompt-only handoff, or prepare a Codex lifecycle handoff.",
@@ -940,7 +947,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
     if status == "executor_selected":
         selected = str(session.get("selected_executor_profile") or "Hermes")
         if session.get("work_owner_mode") == "runtime_handoff":
-            return _chat_response(
+            return response(
                 kind="handoff",
                 headline="The runtime choice is recorded.",
                 body=f"I can prepare the {selected} runtime contract next. No runtime work, team, swarm, or worktree is observed yet.",
@@ -950,7 +957,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
                 actions=[_action("prepare_handoff", "Prepare handoff", "primary"), _action("cancel", "Cancel", "secondary")],
                 claim_boundary="Runtime selection is not runtime start, dispatch, or implementation evidence.",
             )
-        return _chat_response(
+        return response(
             kind="handoff",
             headline="The executor choice is recorded.",
             body=f"I can prepare the {selected} handoff next. No executor work is observed yet.",
@@ -962,7 +969,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
         )
     if status == "prompt_handoff_prepared":
         selected = str(session.get("selected_executor_profile") or "executor")
-        return _chat_response(
+        return response(
             kind="handoff",
             headline="A prompt handoff is ready.",
             body=f"The {selected} prompt is prepared for copy/pass-through only; no runtime run or executor evidence exists yet.",
@@ -986,7 +993,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             if selected == "hermes"
             else f"The {selected} runtime contract is prepared with team/swarm, worker-protocol, and worktree guidance; no runtime evidence exists yet."
         )
-        return _chat_response(
+        return response(
             kind="handoff",
             headline="A runtime handoff is ready.",
             body=body,
@@ -1009,7 +1016,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             ),
         )
     if status == "revision_requested":
-        return _chat_response(
+        return response(
             kind="clarification",
             headline="A plan revision was requested.",
             body="I will keep the request in planning until a revised plan is accepted.",
@@ -1020,7 +1027,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             claim_boundary="Revision request is not execution evidence.",
         )
     if status == "cancelled":
-        return _chat_response(
+        return response(
             kind="status",
             headline="This wrapper session is cancelled.",
             body="No handoff or executor work should be inferred from this session.",
@@ -1031,7 +1038,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             claim_boundary="Cancelled session has no execution evidence.",
         )
     if status == "clarifying":
-        return _chat_response(
+        return response(
             kind="clarification",
             headline="I need one clarification before routing this.",
             body="Please answer the clarification before any plan or handoff is prepared.",
@@ -1041,7 +1048,7 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
             actions=[_action("answer:clarify", "Answer clarification", "primary"), _action("cancel", "Cancel", "secondary")],
             claim_boundary="No execution has started.",
         )
-    return _chat_response(
+    return response(
         kind="status",
         headline="I have a conservative wrapper-session status.",
         body="Session state is available, but execution claims require linked runtime evidence.",
@@ -1063,6 +1070,7 @@ def _chat_response(
     thread_key: str,
     actions: list[dict[str, object]],
     claim_boundary: str,
+    source_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     state = {"phase": phase, "next_action": next_action, "thread_key": thread_key}
     usage_trace = usage_trace_payload(kind=kind, phase=phase, next_action=next_action, state=state)
@@ -1081,10 +1089,17 @@ def _chat_response(
             first_line=headline_with_prefix,
             body=body,
             claim_boundary=claim_boundary,
+            render_profile=render_profile_for_source(_source_from_thread_key(thread_key), source_metadata),
         ),
         "actions": actions,
         "claim_boundary": claim_boundary,
     }
+
+
+def _source_from_thread_key(thread_key: str) -> str:
+    if ":" not in thread_key:
+        return "generic"
+    return thread_key.split(":", 1)[0] or "generic"
 
 
 def _action(action_id: str, label: str, style: str, *, enabled: bool = True) -> dict[str, object]:

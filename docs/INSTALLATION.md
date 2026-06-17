@@ -361,13 +361,16 @@ The backend flow is:
    already starts with the visible OMH marker, such as `[omh] web-research`;
    adapters can read `chat_response.usage_trace` for the selected workflow,
    harness, executor, and evidence boundary without parsing prose.
-9. Discord, Slack, Telegram, and similar adapters apply
-   `chat_response.messenger_rendering`: start with the visible prefix and
-   render `chat_response.messenger_rendering.body_text` instead of raw
-   `chat_response.body`. OMH converts wide Markdown tables into
-   messenger-safe bullets when possible; block-based adapters can use
-   `chat_response.messenger_rendering.body_blocks`. The prefix appears once
-   per response; repeat it only if the adapter splits a long answer into
+9. Adapters apply `chat_response.messenger_rendering` for the selected surface:
+   Discord, Slack, and Telegram default to `limited_markdown`, while Hermes TUI,
+   web, and generic rich Markdown surfaces default to `rich_markdown`. Render
+   `chat_response.messenger_rendering.body_text` for that profile. Limited
+   profiles convert wide Markdown tables into messenger-safe bullets when
+   possible; rich profiles preserve tables. If a rich response is later relayed
+   into a narrow chat surface, use
+   `chat_response.messenger_rendering.fallback_body_text` or call
+   `omh chat interact --render-profile limited_markdown`. The prefix appears
+   once per response; repeat it only if the adapter splits a long answer into
    separate posted chunks.
 10. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.

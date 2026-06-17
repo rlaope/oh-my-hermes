@@ -1751,6 +1751,25 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "plan")
         self.assertIn("Accept plan", {action["label"] for action in payload["chat_response"]["actions"]})
 
+    def test_chat_interact_render_profile_override_is_preserved(self) -> None:
+        status, stdout, stderr = run_cli(
+            [
+                "chat",
+                "interact",
+                "--source",
+                "hermes",
+                "--render-profile",
+                "limited_markdown",
+                "Ajoute une fonctionnalité en toute sécurité à ce dépôt",
+            ]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["source_metadata"]["render_profile"], "limited_markdown")
+        self.assertEqual(payload["chat_response"]["messenger_rendering"]["render_profile"], "limited_markdown")
+
     def test_plain_multilingual_feature_request_does_not_invent_safety_signal(self) -> None:
         cases = (
             "agregar una función",

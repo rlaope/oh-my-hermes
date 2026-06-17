@@ -800,23 +800,15 @@ def _executor_launch_contract(executor: str, session: dict[str, Any]) -> dict[st
         "selected_executor_profile": executor,
         "executor_label": label,
         "mode": "interactive_terminal_or_app",
+        "ui_only": True,
+        "execution_policy": "copyable_instruction_only",
+        "not_backend_execution": True,
         "prompt_placeholder": prompt_placeholder,
         "prompt_source": "prepared handoff prompt or original chat message held by the wrapper at click time",
         "workspace_placeholder": workspace_placeholder,
         "workspace_shell_placeholder": workspace_shell_placeholder,
         "command_templates": templates,
-        "copy_blocks": [
-            {
-                "id": "copy_prompt",
-                "label": f"Copy prompt for {label}",
-                "text_template": prompt_placeholder,
-            },
-            {
-                "id": "copy_terminal_command",
-                "label": f"Copy {label} terminal command",
-                "text_template": templates[0]["shell_command_template"] if templates else prompt_placeholder,
-            },
-        ],
+        "copy_blocks": _launch_copy_blocks(label, prompt_placeholder, templates),
         "after_launch_backend_action": "open-executor",
         "observed_transition": "dispatch/open observed",
         "claim_boundary": "Launch instructions are not execution evidence; record observed dispatch/open only after the wrapper sees the user or platform open the executor.",
@@ -869,10 +861,34 @@ def _launch_command_templates(
             "id": "copy_prompt_to_executor",
             "label": f"Copy prompt for {executor_label(executor)}",
             "argv_template": [prompt_placeholder],
-            "shell_command_template": prompt_placeholder,
+            "launch_mode": "prompt_only",
             "when_to_use": "Use when this executor does not have a deterministic local launch command in OMH.",
         }
     ]
+
+
+def _launch_copy_blocks(
+    label: str,
+    prompt_placeholder: str,
+    templates: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    blocks: list[dict[str, object]] = [
+        {
+            "id": "copy_prompt",
+            "label": f"Copy prompt for {label}",
+            "text_template": prompt_placeholder,
+        }
+    ]
+    first_shell_template = str(templates[0].get("shell_command_template", "")) if templates else ""
+    if first_shell_template:
+        blocks.append(
+            {
+                "id": "copy_terminal_command",
+                "label": f"Copy {label} terminal command",
+                "text_template": first_shell_template,
+            }
+        )
+    return blocks
 
 
 def _open_summary(session: dict[str, Any], *, observed: bool) -> str:
