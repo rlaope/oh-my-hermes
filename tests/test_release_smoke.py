@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import sys
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from omh.release import (
-    CommandResult,
-    _subprocess_runner,
     hermes_release_smoke_plan,
     release_readiness_checklist,
     run_hermes_release_smoke,
 )
+from omh.release_install_smoke import install_script_smoke_plan, run_install_script_smoke
+from omh.release_smoke_core import CommandResult, subprocess_runner, subprocess_runner_exact_env
 
 
 class ReleaseSmokeTests(unittest.TestCase):
@@ -36,6 +37,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("dist/oh_my_hermes-1.0.0-py3-none-any.whl", items["wheel_install"]["command"])
         self.assertIn("wheel_setup_dry_run", items)
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
+        self.assertIn("release install-smoke --live", items["installer_smoke"]["command"])
         self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
         self.assertFalse(items["tag_and_publish"]["required"])
@@ -136,6 +138,174 @@ class ReleaseSmokeTests(unittest.TestCase):
             ],
             installed_commands,
         )
+
+    def test_install_script_smoke_plan_is_isolated_and_non_observed(self) -> None:
+        payload = install_script_smoke_plan(repo_root="/tmp/omh-repo", install_script="/tmp/omh-repo/install.sh")
+
+        self.assertEqual(payload["schema_version"], "install_script_smoke/v1")
+        self.assertEqual(payload["mode"], "plan")
+        self.assertFalse(payload["observed"])
+        self.assertEqual(payload["repo_root"], str(Path("/tmp/omh-repo").resolve()))
+        self.assertEqual(payload["package_url"], str(Path("/tmp/omh-repo").resolve()))
+        self.assertIn("OMH_VENV_DIR", payload["environment"])
+        self.assertIn("OMH_BIN_DIR", payload["environment"])
+        self.assertEqual(payload["environment"]["OMH_HOME"], "<tempdir>/home/.omh")
+        self.assertEqual(payload["environment"]["HERMES_HOME"], "<tempdir>/home/.hermes")
+        first_use = payload["first_use_status_smoke"]
+        self.assertEqual(first_use["target_binding"]["omh_home"], "<tempdir>/home/.omh")
+        self.assertEqual(first_use["target_binding"]["hermes_home"], "<tempdir>/home/.hermes")
+        self.assertEqual(payload["environment"]["OMH_RUN_DOCTOR"], "1")
+        self.assertEqual(payload["environment"]["OMH_SETUP_ARGS"], "--no-interactive")
+        self.assertIn("<tempdir>", payload["work_dir"])
+        self.assertEqual(payload["steps"][0]["command"], ["sh", str(Path("/tmp/omh-repo/install.sh").resolve())])
+        self.assertEqual(payload["steps"][1]["command"][1:], ["doctor", "--json"])
+        self.assertIn("first_use_status_smoke", payload)
+        self.assertIn("does not download over curl", payload["proof_boundary"])
+
+    def test_install_script_smoke_live_runs_installer_doctor_and_command_smoke(self) -> None:
+        seen: list[list[str]] = []
+        seen_env: list[dict[str, str]] = []
+
+        def runner(command, _timeout, env):
+            seen.append(list(command))
+            seen_env.append(dict(env or {}))
+            if list(command)[0] == "sh":
+                bin_dir = Path(env["OMH_BIN_DIR"])
+                bin_dir.mkdir(parents=True, exist_ok=True)
+                installed = bin_dir / "omh"
+                installed.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                installed.chmod(0o755)
+                return CommandResult(command, 0, "installer ok", "")
+            if list(command)[1:] == ["doctor", "--json"]:
+                return CommandResult(command, 0, '{"ok": true}', "")
+            return CommandResult(command, 0, "ok", "")
+
+        with self.subTest("live"):
+            from tempfile import TemporaryDirectory
+
+            with TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                install_script = root / "install.sh"
+                install_script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                with patch.dict(
+                    "os.environ",
+                    {"OMH_HOME": "/real/operator/omh", "HERMES_HOME": "/real/operator/hermes"},
+                ):
+                    payload = run_install_script_smoke(
+                        repo_root=root,
+                        install_script=install_script,
+                        work_dir=root / "work",
+                        runner=runner,
+                        timeout_seconds=5,
+                    )
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["observed"])
+        self.assertEqual(payload["failed_step"], "")
+        self.assertTrue(payload["retained_work_dir"])
+        self.assertEqual(seen[0], ["sh", str(install_script.resolve())])
+        self.assertIn([str((root / "work" / "bin" / "omh").resolve()), "doctor", "--json"], seen)
+        self.assertIn([str((root / "work" / "bin" / "omh").resolve()), "--help"], seen)
+        expected_omh_home = str((root / "work" / "home" / ".omh").resolve())
+        expected_hermes_home = str((root / "work" / "home" / ".hermes").resolve())
+        self.assertTrue(seen_env)
+        self.assertTrue(all(env["OMH_HOME"] == expected_omh_home for env in seen_env))
+        self.assertTrue(all(env["HERMES_HOME"] == expected_hermes_home for env in seen_env))
+        self.assertTrue(all(env["OMH_HOME"] != "/real/operator/omh" for env in seen_env))
+        self.assertTrue(all(env["HERMES_HOME"] != "/real/operator/hermes" for env in seen_env))
+        self.assertEqual(payload["environment"]["OMH_HOME"], expected_omh_home)
+        self.assertEqual(payload["environment"]["HERMES_HOME"], expected_hermes_home)
+        self.assertTrue(payload["installed_command_smoke"]["ok"])
+        self.assertTrue(payload["installed_command_smoke"]["observed"])
+        self.assertIn("isolated", payload["proof_boundary"])
+
+    def test_install_script_smoke_default_runner_does_not_inherit_operator_controls(self) -> None:
+        seen_env: list[dict[str, str]] = []
+
+        def fake_run(command, *, stdout, stderr, text, timeout, check, env):
+            del stdout, stderr, text, timeout, check
+            run_env = dict(env or {})
+            seen_env.append(run_env)
+            if list(command)[0] == "sh":
+                bin_dir = Path(run_env["OMH_BIN_DIR"])
+                bin_dir.mkdir(parents=True, exist_ok=True)
+                installed = bin_dir / "omh"
+                installed.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                installed.chmod(0o755)
+            return subprocess.CompletedProcess(command, 0, "ok", "")
+
+        with self.subTest("live"):
+            from tempfile import TemporaryDirectory
+
+            with TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                install_script = root / "install.sh"
+                install_script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                with patch.dict(
+                    "os.environ",
+                    {
+                        "OMH_HOME": "/real/operator/omh",
+                        "HERMES_HOME": "/real/operator/hermes",
+                        "OMH_SCOPE": "project",
+                        "OMH_PROFILE_PACKS": "cto-loop",
+                        "OMH_SETUP_PROFILES": "1,3",
+                        "OMH_DEFAULT_EXECUTOR": "claude-code",
+                        "OMH_WITH_MCP": "1",
+                        "OMH_WITH_PLUGIN": "1",
+                        "OMH_PIP_ARGS": "--break-system-packages",
+                    },
+                    clear=False,
+                ):
+                    with patch("omh.release_smoke_core.subprocess.run", side_effect=fake_run):
+                        payload = run_install_script_smoke(
+                            repo_root=root,
+                            install_script=install_script,
+                            work_dir=root / "work",
+                            timeout_seconds=5,
+                        )
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(seen_env)
+        blocked_keys = {
+            "OMH_SCOPE",
+            "OMH_PROFILE_PACKS",
+            "OMH_SETUP_PROFILES",
+            "OMH_DEFAULT_EXECUTOR",
+            "OMH_WITH_MCP",
+            "OMH_WITH_PLUGIN",
+            "OMH_PIP_ARGS",
+        }
+        for run_env in seen_env:
+            self.assertTrue(blocked_keys.isdisjoint(run_env))
+            self.assertEqual(run_env["OMH_HOME"], str((root / "work" / "home" / ".omh").resolve()))
+            self.assertEqual(run_env["HERMES_HOME"], str((root / "work" / "home" / ".hermes").resolve()))
+            self.assertEqual(run_env["OMH_SETUP_ARGS"], "--no-interactive")
+
+    def test_exact_subprocess_runner_uses_only_explicit_env(self) -> None:
+        with patch.dict("os.environ", {"OMH_SCOPE": "project", "OMH_PROFILE_PACKS": "cto-loop"}, clear=False):
+            result = subprocess_runner_exact_env(
+                [
+                    sys.executable,
+                    "-c",
+                    "import os; print('OMH_SCOPE' in os.environ, 'OMH_PROFILE_PACKS' in os.environ, os.environ['HOME'])",
+                ],
+                5,
+                {"HOME": "/tmp/omh-smoke-home"},
+            )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "False False /tmp/omh-smoke-home")
+
+    def test_install_script_smoke_fails_before_running_when_script_missing(self) -> None:
+        def runner(command, _timeout, _env):  # pragma: no cover - missing script should stop first
+            raise AssertionError(f"unexpected command: {command}")
+
+        payload = run_install_script_smoke(repo_root="/tmp/no-such-omh-repo", runner=runner)
+
+        self.assertFalse(payload["ok"])
+        self.assertFalse(payload["observed"])
+        self.assertEqual(payload["failed_step"], "install_script_missing")
+        self.assertIn("--install-script", payload["recommended_next_action"])
 
     def test_live_smoke_records_successful_command_results(self) -> None:
         seen: list[list[str]] = []
@@ -280,13 +450,13 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["results"], [])
 
     def test_subprocess_runner_reports_missing_executable_as_command_failure(self) -> None:
-        result = _subprocess_runner(["/definitely/not/a/real/omh-command"], 1)
+        result = subprocess_runner(["/definitely/not/a/real/omh-command"], 1)
 
         self.assertEqual(result.returncode, 127)
         self.assertIn("No such file", result.stderr)
 
     def test_subprocess_runner_normalizes_timeout_bytes_output(self) -> None:
-        result = _subprocess_runner(
+        result = subprocess_runner(
             [
                 sys.executable,
                 "-c",

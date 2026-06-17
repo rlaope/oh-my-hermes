@@ -63,6 +63,8 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke ins
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.0
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 python3 -m omh.cli release hermes-smoke
+python3 -m omh.cli release install-smoke
+omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
 omh --help
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 uv build
@@ -94,6 +96,24 @@ profile:
 
 ```sh
 python3 -m omh.cli release hermes-smoke
+```
+
+The installer gate separately checks the user-facing `curl ... | sh` entry
+point without depending on curl or GitHub. Plan mode reports the isolated target
+and remains unobserved:
+
+```sh
+python3 -m omh.cli release install-smoke
+```
+
+Live mode executes the local `install.sh` in a temporary HOME with an isolated
+OMH virtual environment and bin directory. It installs from the local checkout,
+runs setup through the installer, runs smoke-installed `omh doctor --json`, and
+then runs installed-command smoke. It does not mutate the operator's real
+Hermes profile or prove a later Hermes chat selected OMH:
+
+```sh
+omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
 ```
 
 The plan includes two release-contract subchecks:
@@ -170,6 +190,7 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Harness catalog validation status.
 - Runtime validation status.
 - Capability probe status.
+- Install script smoke status, including whether it was plan-only or live.
 - Hermes CLI install smoke status, including whether it was plan-only or live.
 - Plugin bundle status when `omh setup` changed.
 - GitHub Pages workflow status when public site copy changed.

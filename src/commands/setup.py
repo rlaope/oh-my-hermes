@@ -14,6 +14,7 @@ except ImportError:  # pragma: no cover - Windows compatibility guard.
     tty = None
 
 from .. import __version__
+from ..command_path import inspect_omh_command_path
 from ..config_adapter import ensure_external_dir, external_dirs, read_config, remove_external_dir, write_config
 from ..doctor import doctor_ok, recommended_next_action, run_doctor
 from ..executors import CODING_EXECUTOR_TARGETS
@@ -365,6 +366,7 @@ def _setup_operator_summary(
             "skills_dir": str(paths.skills_dir),
             "hermes_config_path": str(paths.hermes_config_path),
         },
+        "command_path": inspect_omh_command_path(),
         "state_log": {},
     }
     if not dry_run:
@@ -403,6 +405,7 @@ def _doctor_operator_summary(checks: list[object]) -> dict[str, object]:
         "blocking": blocking,
         "warnings": warnings,
         "groups": [
+            _doctor_group("command", check_dicts, ("command_path",)),
             _doctor_group("managed_skills", check_dicts, ("manifest", "manifest_skills_dir", "local_modifications", "skills_dir", "skill:")),
             _doctor_group("runtime", check_dicts, ("runtime_artifacts", "workflow_state", "runtime_state")),
             _doctor_group("hermes_registration", check_dicts, ("hermes_config", "external_dir", "runtime_context")),
@@ -1265,6 +1268,13 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
     print(f"  {tr(language, 'setup_install_mode', mode=install_mode_label)}")
     print(f"  {tr(language, 'setup_mcp_mode', mode=mcp_mode_label)}")
     print(f"  {tr(language, 'setup_status', status=status_label)}")
+    command_path = operator_summary.get("command_path", {})
+    if isinstance(command_path, dict):
+        if command_path.get("found"):
+            print(f"  {tr(language, 'command_path_found', path=command_path.get('path', 'omh'))}")
+        else:
+            print(f"  {tr(language, 'command_path_missing')}")
+            print(f"  {tr(language, 'command_path_missing_next')}")
     print(f"  {tr(language, 'skills_line', count=len(skills), path=hermes_native.get('skills_dir', ''))}")
 
     discovery_status = str(hermes_native.get("discovery_status", ""))
@@ -1317,6 +1327,7 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
     else:
         print(f"  {tr(language, 'setup_next_reload')}")
         print(f"  {tr(language, 'setup_next_prompt')}")
+        print(f"  {tr(language, 'setup_next_verify')}")
     print(f"  {tr(language, 'machine_readable')}")
 
 

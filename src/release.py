@@ -1,22 +1,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import re
 import shlex
 import shutil
-import subprocess
-from typing import Callable, Mapping, Sequence
+from typing import Mapping, Sequence
 
 from . import __version__
+from .command_path import (
+    installed_command_path_check_plan,
+    inspect_installed_command_path,
+    path_check_kind,
+)
+from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
 HERMES_SMOKE_SCHEMA = "hermes_release_smoke/v1"
 RELEASE_CHECKLIST_SCHEMA = "release_readiness_checklist/v1"
 INSTALLED_COMMAND_SMOKE_SCHEMA = "installed_omh_command_smoke/v1"
-INSTALLED_COMMAND_PATH_CHECK_SCHEMA = "installed_omh_path_check/v1"
 FIRST_USE_STATUS_SMOKE_SCHEMA = "first_use_status_smoke/v1"
 RELEASE_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*(?:[-_+.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$")
 DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
@@ -93,17 +96,6 @@ class ReleaseChecklistItem:
             "evidence_required": self.evidence_required,
             "proof_boundary": self.proof_boundary,
         }
-
-
-@dataclass(frozen=True)
-class CommandResult:
-    command: Sequence[str]
-    returncode: int
-    stdout: str = ""
-    stderr: str = ""
-
-
-Runner = Callable[[Sequence[str], int, Mapping[str, str] | None], CommandResult]
 
 
 def release_readiness_checklist(
@@ -286,18 +278,13 @@ def release_readiness_checklist(
         ),
         ReleaseChecklistItem(
             "installer_smoke",
-            "Run install.sh against the built package in dry-run setup mode",
-            (
-                "OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python "
-                f"OMH_PACKAGE_URL=file://$PWD/{wheel} "
-                'OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin '
-                'OMH_SETUP_ARGS="--dry-run" OMH_RUN_DOCTOR=0 sh install.sh'
-            ),
+            "Run the install.sh smoke in an isolated temp home",
+            f"{omh_display} release install-smoke --live --repo-root \"$PWD\" --install-script \"$PWD/install.sh\"",
             "installer",
             True,
             False,
-            "install.sh installs the command package and runs setup dry-run without touching system Python packages.",
-            "Installer dry-run setup is bootstrap evidence, not Hermes runtime-use evidence.",
+            "install_script_smoke reports ok=true after install.sh creates a temp venv/bin command, runs setup, runs doctor, and proves the installed command can render release smoke.",
+            "Install script smoke mutates only its isolated temp HOME/venv/bin unless --work-dir points elsewhere; it is not live Hermes runtime-use evidence.",
         ),
         ReleaseChecklistItem(
             "live_tap_smoke",
@@ -571,7 +558,7 @@ def installed_command_smoke_plan(
         "observed": False,
         "command_under_test": omh_command,
         "target_binding": target,
-        "path_check": _installed_command_path_check_plan(omh_command),
+        "path_check": installed_command_path_check_plan(omh_command),
         "proof_boundary": (
             "Plan mode lists installed-command checks only. Run release hermes-smoke with "
             "--include-command-smoke to observe PATH resolution and the installed OMH executable."
@@ -750,7 +737,7 @@ def run_hermes_release_smoke(
         omh_home=target["omh_home"],
         hermes_home=target["hermes_home"],
     )
-    execute = runner or _subprocess_runner
+    execute = runner or subprocess_runner
     command_smoke = (
         run_installed_command_smoke(
             omh_command=omh_command,
@@ -828,8 +815,8 @@ def run_hermes_release_smoke(
                 "returncode": result.returncode,
                 "ok": step_ok,
                 "environment": {"HERMES_HOME": smoke_env["HERMES_HOME"]},
-                "stdout_excerpt": _bounded_text(result.stdout),
-                "stderr_excerpt": _bounded_text(result.stderr),
+                "stdout_excerpt": bounded_text(result.stdout),
+                "stderr_excerpt": bounded_text(result.stderr),
             }
         )
         if not step_ok and not failed_step:
@@ -878,8 +865,8 @@ def run_installed_command_smoke(
         raise ValueError("Installed command smoke timeout must be at least one second")
     plan = installed_command_smoke_plan(omh_command=omh_command, omh_home=omh_home, hermes_home=hermes_home)
     target = plan["target_binding"]
-    execute = runner or _subprocess_runner
-    path_check = _installed_command_path_check(omh_command)
+    execute = runner or subprocess_runner
+    path_check = inspect_installed_command_path(omh_command)
     if not bool(path_check["ok"]):
         return {
             "schema_version": INSTALLED_COMMAND_SMOKE_SCHEMA,
@@ -921,8 +908,8 @@ def run_installed_command_smoke(
                 **step.to_payload(),
                 "returncode": result.returncode,
                 "ok": step_ok,
-                "stdout_excerpt": _bounded_text(result.stdout),
-                "stderr_excerpt": _bounded_text(result.stderr),
+                "stdout_excerpt": bounded_text(result.stdout),
+                "stderr_excerpt": bounded_text(result.stderr),
             }
         )
         if not step_ok and not failed_step:
@@ -951,97 +938,9 @@ def run_installed_command_smoke(
     }
 
 
-def _subprocess_runner(command: Sequence[str], timeout_seconds: int, env: Mapping[str, str] | None = None) -> CommandResult:
-    run_env = os.environ.copy()
-    if env:
-        run_env.update({key: str(value) for key, value in env.items()})
-    try:
-        completed = subprocess.run(
-            list(command),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-            env=run_env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        stdout = _coerce_text(exc.stdout)
-        stderr = _coerce_text(exc.stderr) or f"timed out after {timeout_seconds}s"
-        return CommandResult(command, 124, stdout, stderr)
-    except OSError as exc:
-        return CommandResult(command, 127, "", str(exc))
-    return CommandResult(command, completed.returncode, completed.stdout, completed.stderr)
-
-
-def _coerce_text(value: str | bytes | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value
-
-
-def _bounded_text(value: str, limit: int = 1200) -> str:
-    if len(value) <= limit:
-        return value
-    return value[: limit - 15].rstrip() + "\n...[truncated]"
-
-
-def _installed_command_path_check_plan(omh_command: str) -> dict[str, object]:
-    command = str(omh_command or "omh").strip()
-    return {
-        "schema_version": INSTALLED_COMMAND_PATH_CHECK_SCHEMA,
-        "mode": "plan",
-        "ok": True,
-        "observed": False,
-        "command_under_test": command,
-        "check": _path_check_kind(command),
-        "resolved_path": None,
-        "proof_boundary": (
-            "Plan mode does not inspect the operator PATH. Live command smoke resolves the command before running it."
-        ),
-    }
-
-
-def _installed_command_path_check(omh_command: str) -> dict[str, object]:
-    command = str(omh_command or "omh").strip()
-    check = _path_check_kind(command)
-    resolved_path: str | None = None
-    ok = False
-    if check == "direct_path":
-        path = Path(command).expanduser()
-        ok = path.is_file() and os.access(path, os.X_OK)
-        resolved_path = str(path.resolve()) if path.exists() else None
-    else:
-        resolved = shutil.which(command)
-        ok = bool(resolved)
-        resolved_path = str(Path(resolved).resolve()) if resolved else None
-    return {
-        "schema_version": INSTALLED_COMMAND_PATH_CHECK_SCHEMA,
-        "mode": "live",
-        "ok": ok,
-        "observed": True,
-        "command_under_test": command,
-        "check": check,
-        "resolved_path": resolved_path,
-        "proof_boundary": (
-            "This observes command discoverability/executability only; the later help/setup-plan steps prove "
-            "console-script importability and plan rendering."
-        ),
-    }
-
-
-def _path_check_kind(command: str) -> str:
-    separators = [os.sep]
-    if os.altsep:
-        separators.append(os.altsep)
-    return "direct_path" if any(separator in command for separator in separators) else "path_lookup"
-
-
 def _target_binding(*, omh_home: str | Path | None = None, hermes_home: str | Path | None = None) -> dict[str, object]:
-    omh = _expand_home(omh_home, "OMH_HOME", "~/.omh")
-    hermes = _expand_home(hermes_home, "HERMES_HOME", "~/.hermes")
+    omh = expand_home(omh_home, "OMH_HOME", "~/.omh")
+    hermes = expand_home(hermes_home, "HERMES_HOME", "~/.hermes")
     return {
         "omh_home": str(omh),
         "hermes_home": str(hermes),
@@ -1050,12 +949,6 @@ def _target_binding(*, omh_home: str | Path | None = None, hermes_home: str | Pa
         "hermes_env_key": "HERMES_HOME",
         "proof_boundary": "Live smoke binds Hermes CLI subprocesses to this HERMES_HOME; it does not prove another profile was checked.",
     }
-
-
-def _expand_home(value: str | Path | None, env_key: str, default: str) -> Path:
-    source = str(value) if value is not None else os.environ.get(env_key, default)
-    return Path(os.path.expandvars(source)).expanduser().resolve()
-
 
 def _omh_scoped_command(
     omh_command: str,
@@ -1146,7 +1039,7 @@ def _installed_command_smoke_next_action(
             "continue with Hermes profile smoke or release tagging."
         )
     if failed_step == "installed_omh_path":
-        if _path_check_kind(command) == "direct_path":
+        if path_check_kind(command) == "direct_path":
             return f"Make {shlex.quote(command)} executable, or pass --omh-command with an executable OMH path."
         return (
             f"Install OMH so `command -v {shlex.quote(command)}` resolves, "

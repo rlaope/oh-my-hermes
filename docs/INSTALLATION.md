@@ -20,6 +20,13 @@ omh setup
 omh doctor
 ```
 
+First-run expectation:
+
+1. `omh setup` installs the managed skills and records safe defaults.
+2. `omh doctor` checks local registration and points to the next repair action.
+3. You restart or reload Hermes Agent.
+4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
+
 The installer normally runs setup automatically, but `omh setup` is kept here
 as the explicit repairable step: it installs generated managed skills and
 registers them with Hermes through `skills.external_dirs`.
@@ -28,9 +35,10 @@ selects user or project scope, detects the Hermes config path, confirms skill
 registration, asks for the default coding handoff style, installs the Hermes
 plugin bridge, and can opt into an MCP bridge preference or a visible team role
 preset. Those choices do not add or remove OMH workflows; they only save
-defaults for how Hermes should present handoff and role surfaces. In
-non-interactive shells it
-uses safe defaults and prints a concise step-by-step summary. Use
+defaults for how Hermes should present handoff and role surfaces. For a first
+install, pressing Enter through the recommended choices is the intended path.
+In non-interactive shells it uses safe defaults and prints a concise
+step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
 
@@ -45,7 +53,10 @@ omh --scope project doctor
 The installer also prints the installed `omh` command path. By default it uses
 an isolated OMH virtual environment and links `omh` into a user bin directory
 when possible. If that directory is not on `PATH`, add the printed directory to
-`PATH` or run the printed absolute `omh` path directly.
+`PATH` or run the printed absolute `omh` path directly. `omh doctor` includes a
+non-blocking command availability warning for this case, so source checkouts,
+wrapper runtimes, and absolute-path installs can still verify Hermes
+registration without pretending the shell alias is ready.
 
 Plugin support is installed by `omh setup` by default. It provides a thin
 Hermes plugin bridge in addition to the skill pack:
@@ -122,6 +133,24 @@ in CI without touching the current Hermes profile:
 
 ```sh
 omh release hermes-smoke
+```
+
+The installer path has a separate first-time downloader smoke. Plan mode is
+also safe for CI and only describes the isolated HOME, venv, bin directory,
+setup, doctor, and installed-command checks:
+
+```sh
+omh release install-smoke
+```
+
+When you want observed evidence that `install.sh` itself works from a checkout,
+run it live. This still does not mutate your real Hermes profile; OMH creates a
+temporary HOME, virtual environment, and bin directory, then runs
+`install.sh`, smoke-installed `omh doctor --json`, and installed-command smoke
+inside that isolated target:
+
+```sh
+omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
 ```
 
 The plan also reports `installed_command_smoke` and
@@ -244,11 +273,11 @@ does not prove Hermes has reloaded or used the skill yet.
 `discovery_status: config_registered_reload_required` means restart or refresh
 Hermes before claiming the skill is visible in chat.
 `omh doctor` should report a grouped health summary by default: managed skills,
-runtime state, Hermes registration, target topology, optional surfaces, issue
-counts, recommended next action, and the `last_doctor` state-log entry when the
-runtime directory is writable. `omh doctor --json` returns the full check
-payload plus `doctor_summary/v1`. `omh list` should show a concise managed
-skill summary by default and the full manifest with `--json`.
+runtime state, Hermes registration, target topology, optional surfaces, command
+availability, issue counts, recommended next action, and the `last_doctor`
+state-log entry when the runtime directory is writable. `omh doctor --json`
+returns the full check payload plus `doctor_summary/v1`. `omh list` should show
+a concise managed skill summary by default and the full manifest with `--json`.
 Human-facing maintenance and catalog commands print readable terminal summaries
 by default: `omh install`, `omh update`, `omh uninstall`, `omh apply`,
 `omh list`, `omh recommend`, `omh playbook ...`, `omh profile ...`,

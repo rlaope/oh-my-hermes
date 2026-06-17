@@ -68,6 +68,7 @@ Install OMH and apply the Hermes setup:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
+omh doctor
 ```
 
 Terminal setup output supports English, Korean, Japanese, and Chinese:
@@ -83,16 +84,21 @@ requests such as payment failures, risky refactors, safe feature work, and
 issue-to-PR preparation. OMH does not call a translation API; unsupported
 phrasing falls back to the normal clarify or planning path.
 
+The first five minutes should feel simple:
+
+1. Run `omh setup` and accept the recommended choices.
+2. Restart or reload Hermes Agent.
+3. Ask Hermes the prompt below.
+
 The installer normally runs setup for you. Keep `omh setup` in the quick start
 because it is the repeatable repair step that installs generated skills under
 `~/.omh/skills` and registers them with Hermes through `skills.external_dirs`.
 When you run it in a real terminal, `omh setup` opens a small colored wizard for
-the setup language, install scope, Hermes registration, the default coding
-handoff style, optional MCP bridge preference, and optional visible team role
-presets. It also installs the lightweight Hermes plugin bridge so local OMH
-status context is available when Hermes supports it. All OMH workflows are
-installed either way. Non-interactive shells use the safe defaults. Add `--json`
-when an operator or wrapper needs the full machine-readable payload.
+language, install scope, Hermes registration, the default coding handoff style,
+optional MCP preference, and optional visible team role presets. Those choices
+save defaults; they do not remove OMH workflows. Non-interactive shells use the
+safe defaults. Add `--json` when an operator or wrapper needs the full
+machine-readable payload.
 
 The default user scope installs under `~/.omh` and `~/.hermes`. Use project
 scope when a repository should carry its own isolated OMH/Hermes setup:
@@ -107,6 +113,9 @@ Verify the local install:
 ```sh
 omh doctor
 ```
+
+If a new terminal says `omh` is not found, use the absolute command path printed
+by the installer or add that directory to `PATH`, then run `omh doctor` again.
 
 Then talk to Hermes:
 
@@ -393,6 +402,7 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release hermes-smoke
+python3 -m omh.cli release install-smoke
 omh --help
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
@@ -401,6 +411,13 @@ Smoke-test setup without touching real home directories:
 
 ```sh
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run
+```
+
+Smoke-test the user-facing installer in an isolated temp HOME/venv/bin without
+touching your real Hermes profile:
+
+```sh
+omh release install-smoke --live --repo-root "$PWD" --install-script "$PWD/install.sh"
 ```
 
 Before a release candidate, run the live Hermes profile smoke from the target

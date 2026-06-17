@@ -122,8 +122,14 @@ def build_parser() -> argparse.ArgumentParser:
             "Quick start:\n"
             "  omh setup\n"
             "  omh doctor\n\n"
+            "First five minutes:\n"
+            "  1. Run setup, accepting the recommended choices.\n"
+            "  2. Restart or reload Hermes Agent.\n"
+            "  3. Ask Hermes the prompt below.\n\n"
             "Normal use happens in Hermes chat:\n"
             "  Use OMH request-to-handoff for: I want to safely add a feature to this repo.\n\n"
+            "If your shell says `omh` was not found after install, use the absolute\n"
+            "command path printed by the installer or add that directory to PATH.\n\n"
             "Operator examples:\n"
             "  omh recommend \"risky refactor\"\n"
             "  omh cases recommend \"daily competitor digest\"\n"
@@ -178,8 +184,8 @@ def _print_welcome() -> None:
         """OMH - oh-my-hermes
 
 Install OMH, then talk to Hermes. The `omh` command is the setup, doctor,
-verifier, and wrapper/backend surface; the normal user experience is Hermes
-Agent chat with installed OMH skills.
+update, verifier, and wrapper/backend surface; the normal user experience is
+Hermes Agent chat with installed OMH skills.
 
 If this screen appears after `omh uninstall`, the command package is still on
 PATH. `uninstall` removes OMH-managed Hermes files and removes the command only
@@ -188,6 +194,12 @@ when it can prove the command came from the install.sh-managed OMH venv.
 Start:
   omh setup              Install skills and connect them to Hermes
   omh doctor             Check local OMH health and registration
+  omh update             Refresh managed skills and update metadata
+
+First five minutes:
+  1. Run `omh setup` and accept the recommended choices.
+  2. Restart or reload Hermes Agent.
+  3. Ask Hermes the prompt below.
 
 Useful operator commands:
   omh recommend "risky refactor"
@@ -202,6 +214,10 @@ Useful operator commands:
 
 After setup, restart or reload Hermes Agent and try:
   Use OMH request-to-handoff for: I want to safely add a feature to this repo.
+
+If `omh` is not found in a new terminal, use the absolute command path printed
+by the installer or add that directory to PATH. Run `omh doctor` after that to
+verify Hermes registration.
 
 Run `omh --help` for the full command list."""
     )

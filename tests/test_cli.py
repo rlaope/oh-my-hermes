@@ -26,6 +26,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("OMH - oh-my-hermes", stdout)
         self.assertIn("omh setup", stdout)
         self.assertIn("Agent chat with installed OMH skills", stdout)
+        self.assertIn("First five minutes:", stdout)
+        self.assertIn("If `omh` is not found", stdout)
         self.assertIn("If this screen appears after `omh uninstall`", stdout)
         self.assertIn("omh --help", stdout)
 
@@ -34,7 +36,9 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("Install OMH once, then use Hermes chat.", help_text)
         self.assertIn("Quick start:", help_text)
+        self.assertIn("First five minutes:", help_text)
         self.assertIn("Normal use happens in Hermes chat:", help_text)
+        self.assertIn("`omh` was not found", help_text)
         self.assertIn("setup", help_text)
         self.assertIn("Install managed skills and connect them", help_text)
         self.assertIn("chat", help_text)
@@ -52,7 +56,8 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
 
-            status, stdout, stderr = run_cli(base + ["setup"], output_json=False)
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["setup"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
@@ -64,17 +69,20 @@ class CliTests(unittest.TestCase):
             self.assertIn("Install mode: managed Hermes skills", stdout)
             self.assertIn("MCP mode: none", stdout)
             self.assertIn("Setup state:", stdout)
+            self.assertIn("Terminal command: omh found at /usr/local/bin/omh", stdout)
             self.assertIn("Hermes registration:", stdout)
             self.assertIn("Coding handoff default:", stdout)
             self.assertIn("State log:", stdout)
             self.assertIn("last_setup", stdout)
             self.assertIn("Visible team preset:", stdout)
             self.assertIn("Restart or reload Hermes Agent", stdout)
+            self.assertIn("If Hermes cannot see OMH yet", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
 
-            status, stdout, stderr = run_cli(base + ["doctor"], output_json=False)
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["doctor"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
@@ -82,8 +90,10 @@ class CliTests(unittest.TestCase):
             self.assertIn("Status: ok", stdout)
             self.assertIn("Checks:", stdout)
             self.assertIn("Issues: 0 blocking", stdout)
+            self.assertIn("Command availability: ok", stdout)
             self.assertIn("Managed skills: ok", stdout)
             self.assertIn("Hermes registration: ok", stdout)
+            self.assertIn("Use OMH request-to-handoff", stdout)
             self.assertIn("State log:", stdout)
             self.assertIn("last_doctor", stdout)
             self.assertIn("Boundary: restart or reload Hermes", stdout)
@@ -101,7 +111,8 @@ class CliTests(unittest.TestCase):
             self.assertFalse((dry_root / ".omh").exists())
             self.assertFalse((dry_root / ".hermes").exists())
 
-            status, stdout, stderr = run_cli(base + ["setup", "--json"], output_json=False)
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["setup", "--json"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
@@ -111,10 +122,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(setup_payload["operator_summary"]["install_mode"], "managed_skills")
             self.assertEqual(setup_payload["operator_summary"]["mcp_mode"], "none")
             self.assertEqual(setup_payload["operator_summary"]["state_log"]["entry"], "last_setup")
+            self.assertEqual(setup_payload["operator_summary"]["command_path"]["status"], "on_path")
             self.assertEqual(setup_payload["steps"]["profile"]["operating_model_id"], "solo-operator")
             self.assertEqual(setup_payload["operator_summary"]["operating_model_id"], "solo-operator")
 
-            status, stdout, stderr = run_cli(base + ["doctor", "--json"], output_json=False)
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["doctor", "--json"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
@@ -122,7 +135,38 @@ class CliTests(unittest.TestCase):
             self.assertTrue(doctor_payload["ok"])
             self.assertEqual(doctor_payload["summary"]["schema_version"], "doctor_summary/v1")
             self.assertEqual(doctor_payload["summary"]["status"], "ok")
+            self.assertIn("request-to-handoff", doctor_payload["recommended_next_action"])
             self.assertEqual(doctor_payload["state_log"]["entry"], "last_doctor")
+            command_check = {check["name"]: check for check in doctor_payload["checks"]}["command_path"]
+            self.assertEqual(command_check["severity"], "ok")
+            self.assertTrue(command_check["observed"])
+
+    def test_doctor_warns_when_omh_command_is_not_on_path(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, _stdout, stderr = run_cli(base + ["setup", "--no-interactive"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+
+            with patch("omh.command_path.shutil.which", return_value=None):
+                status, stdout, stderr = run_cli(base + ["doctor"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH doctor complete.", stdout)
+            self.assertIn("Command availability: warning", stdout)
+            self.assertIn("Use the absolute command path printed by the installer", stdout)
+
+            with patch("omh.command_path.shutil.which", return_value=None):
+                status, stdout, stderr = run_cli(base + ["doctor", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            payload = json.loads(stdout)
+            checks = {check["name"]: check for check in payload["checks"]}
+            self.assertEqual(checks["command_path"]["severity"], "warning")
+            self.assertFalse(checks["command_path"]["observed"])
+            self.assertIn("absolute command path", payload["recommended_next_action"])
 
     def test_operator_catalog_commands_default_to_human_summary_with_json_escape_hatch(self) -> None:
         cases = (
@@ -359,7 +403,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("When a request may need coding", stdout)
             self.assertIn("does not hide or remove any OMH skills", stdout)
             self.assertIn("Add an optional visible team role preset", stdout)
-            self.assertIn("They do not enable or disable OMH workflows", stdout)
+            self.assertIn("every OMH workflow is still installed", stdout)
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("Plugin bridge:", stdout)
             self.assertNotIn("Install optional plugin bridge", stdout)
@@ -709,6 +753,55 @@ class CliTests(unittest.TestCase):
         self.assertIn("uv build", items["build_artifacts"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
+
+    def test_release_install_smoke_defaults_to_human_plan_with_json_escape_hatch(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            install_script = root / "install.sh"
+            install_script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "release",
+                    "install-smoke",
+                    "--repo-root",
+                    str(root),
+                    "--install-script",
+                    str(install_script),
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH install smoke", stdout)
+            self.assertIn("Mode: plan; observed evidence: no", stdout)
+            self.assertIn("install_script", stdout)
+            self.assertIn("installed_command_smoke", stdout)
+            self.assertIn("For machine-readable output", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
+            status, stdout, stderr = run_cli(
+                [
+                    "release",
+                    "install-smoke",
+                    "--repo-root",
+                    str(root),
+                    "--install-script",
+                    str(install_script),
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "install_script_smoke/v1")
+            self.assertEqual(payload["mode"], "plan")
+            self.assertFalse(payload["observed"])
+            self.assertEqual(payload["install_script"], str(install_script.resolve()))
 
     def test_release_hermes_smoke_cli_can_observe_installed_command_without_live_profile_mutation(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -3954,10 +4047,11 @@ class CliTests(unittest.TestCase):
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
 
-            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "install"])[0], 0)
-            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "apply"])[0], 0)
-            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "list"])[0], 0)
-            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])[0], 0)
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "install"])[0], 0)
+                self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "apply"])[0], 0)
+                self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "list"])[0], 0)
+                self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])[0], 0)
 
             manifest = json.loads((omh_home / "manifest.json").read_text(encoding="utf-8"))
             names = {skill["name"] for skill in manifest["skills"]}
@@ -3970,11 +4064,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(state["last_applied_skills_dir"], str((omh_home / "skills").resolve()))
             self.assertEqual(state["release_channel"], "preview")
 
-            _, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                _, doctor_stdout, _ = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])
             doctor = json.loads(doctor_stdout)
             checks = {check["name"]: check for check in doctor["checks"]}
             self.assertIn("recommended_next_action", doctor)
             self.assertIn("request-to-handoff", doctor["recommended_next_action"])
+            self.assertTrue(checks["command_path"]["ok"])
+            self.assertEqual(checks["command_path"]["severity"], "ok")
             self.assertTrue(checks["runtime_context"]["ok"])
             self.assertIn("--hermes-home", checks["runtime_context"]["message"])
             self.assertEqual(checks["runtime_context"]["severity"], "ok")
@@ -4008,6 +4105,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["operator_summary"]["schema_version"], "setup_operator_summary/v1")
             self.assertEqual(payload["operator_summary"]["status"], "configured")
             self.assertEqual(payload["operator_summary"]["state_log"]["entry"], "last_setup")
+            self.assertEqual(payload["operator_summary"]["command_path"]["schema_version"], "omh_command_path/v1")
             self.assertEqual(payload["hermes_native"]["mode"], "omh_bootstrap")
             self.assertFalse(payload["hermes_native"]["dry_run"])
             self.assertTrue(payload["hermes_native"]["observed"])

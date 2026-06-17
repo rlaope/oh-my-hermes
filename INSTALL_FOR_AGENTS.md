@@ -30,6 +30,11 @@ setup explicitly because it is the repairable, repeatable step:
 omh setup
 ```
 
+If `command -v omh` is still empty after install, use the absolute command path
+printed by the installer or add that directory to `PATH`, then continue with
+doctor. Treat this as a command availability warning, not proof that Hermes
+registration failed.
+
 Expected local result:
 
 - generated skills are installed under `~/.omh/skills`;
@@ -47,6 +52,8 @@ Report:
 
 - `ok`;
 - top-level `recommended_next_action`;
+- whether the `command_path` check found `omh` on PATH or only an absolute path
+  is available;
 - any check with `severity: blocking`;
 - any check with `severity: warning`;
 - whether the target Hermes runtime still needs restart/reload.
