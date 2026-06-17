@@ -43,6 +43,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("ultragoal", sections["skills"])
         self.assertIn("omh_capabilities", sections["hooks"])
         self.assertIn("executor_session_handoff", sections["orchestration_patterns"])
+        self.assertIn("hermes_coding_team_path", sections["orchestration_patterns"])
         self.assertIn("ultragoal", sections["tool_requirements"])
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:

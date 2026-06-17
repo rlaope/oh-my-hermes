@@ -157,6 +157,11 @@ so OMH can display and record `main@old -> main@new` instead of only `main`.
   for the selected path: Codex lifecycle, Claude Code or generic prompt
   handoff, or Hermes/OMX/OMO/OMC runtime handoff with team/swarm,
   worker-protocol, and worktree guidance.
+- **Hermes coding team path** - when the user chooses Hermes itself as the
+  coding owner, OMH exposes solo, durable-goal, team, and swarm start modes
+  with worker ACK, worktree, result, verification, review, CI, and merge
+  milestones. The path stays `prepared_not_observed` until the wrapper records
+  matching `runtime_observation/v1` events.
 - **Wrapper-native executor sessions** - after a handoff is ready, Hermes chat
   surfaces can render buttons such as Open in Codex, Open in Claude Code,
   Attach session, Refresh status, Record completed, Record blocked, and Ask
@@ -292,6 +297,18 @@ that missing steps happened:
 omh coding delegate --executor omx-runtime "risky refactor"
 omh runtime observe --session <session-id> --runtime-profile omx-runtime --event runtime_start --summary "operator started runtime"
 ```
+
+If the user wants Hermes to do the coding through installed OMH skills, choose
+the Hermes runtime path instead of an external executor:
+
+```sh
+omh chat interact --mode delegate --executor hermes "coordinate a safe coding team for this refactor"
+```
+
+That returns `coding_runtime_handoff/v1` plus `hermes_coding_team_path/v1`,
+including entries such as "Use OMH ultragoal", "Use OMH ultrawork", and
+"Use OMH team". Those are start choices for Hermes chat surfaces, not proof
+that a team, worker, worktree, or implementation already exists.
 
 `--runtime-profile` must match the prepared runtime handoff on that wrapper
 session. Prompt-only and Codex lifecycle sessions report runtime observation as

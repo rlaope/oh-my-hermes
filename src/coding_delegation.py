@@ -13,6 +13,7 @@ from .coding_contracts import (
 from .executors import (
     executor_label,
     executor_selection_for_target,
+    hermes_coding_team_path_contract,
     prompt_invocation_for_profile,
     public_executor_options,
     runtime_invocation_for_profile,
@@ -144,6 +145,7 @@ def build_coding_delegation_payload(
         has_runtime_handoff="runtime_handoff" in payload,
         has_prompt_handoff="prompt_handoff" in payload,
         choice_required=selection.choice_required,
+        runtime_profile=selection.selected_executor_profile,
     )
     metadata = {key: value for key, value in (source_metadata or {}).items() if value}
     if metadata:
@@ -494,7 +496,7 @@ def _runtime_handoff(profile: str, delegation: CodingDelegation) -> dict[str, ob
     invocation = runtime_invocation_for_profile(profile)
     contract = runtime_profile_contract(profile)
     label = executor_label(profile)
-    return {
+    handoff: dict[str, object] = {
         "schema_version": RUNTIME_HANDOFF_SCHEMA_VERSION,
         "work_owner_mode": "runtime_handoff",
         "selected_executor_profile": profile,
@@ -647,9 +649,13 @@ def _runtime_handoff(profile: str, delegation: CodingDelegation) -> dict[str, ob
         },
         "harness_quality": with_wrapper_actions(
             harness_quality_contract(delegation.recommended_harness),
-            ("show_runtime_handoff", "start_runtime", "prepare_worktree", "start_team", "start_swarm", "choose_executor", "show_status"),
+            _runtime_wrapper_actions(profile),
         ),
     }
+    team_path = hermes_coding_team_path_contract(profile)
+    if team_path:
+        handoff["hermes_coding_team_path"] = team_path
+    return handoff
 
 
 def _public_harness_quality(
@@ -661,12 +667,13 @@ def _public_harness_quality(
     has_runtime_handoff: bool,
     has_prompt_handoff: bool,
     choice_required: bool,
+    runtime_profile: str | None,
 ) -> dict[str, object]:
     contract = harness_quality_contract(harness)
     if action == "delegate" and has_executor_handoff:
         return with_wrapper_actions(contract, ("send_to_executor", "send_to_codex", "show_status"))
     if action == "delegate" and has_runtime_handoff:
-        return with_wrapper_actions(contract, ("show_runtime_handoff", "start_runtime", "prepare_worktree", "start_team", "start_swarm", "choose_executor", "show_status"))
+        return with_wrapper_actions(contract, _runtime_wrapper_actions(runtime_profile or ""))
     if action == "delegate" and has_prompt_handoff:
         return with_wrapper_actions(contract, ("show_prompt_handoff", "copy_prompt_handoff", "choose_executor", "show_status"))
     if action == "delegate" and work_owner_mode == "runtime_handoff":
@@ -678,6 +685,22 @@ def _public_harness_quality(
     if work_owner_mode == "retained_hermes":
         return with_wrapper_actions(contract, ("show_status",))
     return with_wrapper_actions(contract, ("show_status",))
+
+
+def _runtime_wrapper_actions(profile: str) -> tuple[str, ...]:
+    actions = [
+        "show_runtime_handoff",
+        "start_runtime",
+        "prepare_worktree",
+        "start_team",
+        "start_swarm",
+        "choose_executor",
+        "show_status",
+    ]
+    if profile == "hermes":
+        actions.insert(1, "show_coding_team_path")
+        actions.insert(2, "start_hermes_coding")
+    return tuple(actions)
 
 
 def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) -> str:

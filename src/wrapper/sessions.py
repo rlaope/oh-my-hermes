@@ -967,16 +967,25 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
     if status == "runtime_handoff_prepared":
         selected = str(session.get("selected_executor_profile") or "runtime")
         primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
+        primary_label = "Start Hermes coding" if selected == "hermes" else "Start runtime"
+        extra_actions = [_action("show_coding_team_path", "Show team path", "secondary")] if selected == "hermes" else []
+        body = (
+            "The Hermes coding path is prepared with solo/team/swarm choices, worker-protocol, and worktree guidance; "
+            "no Hermes coding, worker, or worktree evidence exists yet."
+            if selected == "hermes"
+            else f"The {selected} runtime contract is prepared with team/swarm, worker-protocol, and worktree guidance; no runtime evidence exists yet."
+        )
         return _chat_response(
             kind="handoff",
             headline="A runtime handoff is ready.",
-            body=f"The {selected} runtime contract is prepared with team/swarm, worker-protocol, and worktree guidance; no runtime evidence exists yet.",
+            body=body,
             phase="runtime_handoff_prepared",
             next_action="show_runtime_handoff",
             thread_key=thread_key,
             actions=[
                 _action("show_runtime_handoff", "Show runtime", "primary"),
-                _action(primary_action, "Start runtime", "primary", enabled=False),
+                *extra_actions,
+                _action(primary_action, primary_label, "primary", enabled=False),
                 _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False),
                 _action("start_team", "Start team", "secondary", enabled=False),
                 _action("start_swarm", "Start swarm", "secondary", enabled=False),

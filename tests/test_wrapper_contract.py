@@ -159,6 +159,28 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("prepare_worktree", actions)
         self.assertNotIn("prompt_handoff", payload["delegation"])
 
+    def test_delegate_mode_can_prepare_hermes_coding_team_path(self) -> None:
+        payload = build_chat_interaction_payload("coordinate a safe coding team for a risky refactor", mode="delegate", source="discord", executor_target="hermes")
+
+        actions = {action["id"] for action in payload["chat_response"]["actions"]}
+        runtime = payload["delegation"]["runtime_handoff"]
+        team_path = runtime["hermes_coding_team_path"]
+        modes = {mode["id"] for mode in team_path["start_modes"]}
+
+        self.assertEqual(payload["next_action"], "show_runtime_handoff")
+        self.assertEqual(runtime["runtime_profile"]["runtime_family"], "omh")
+        self.assertTrue(runtime["runtime_profile"]["supports_hermes_coding_team_path"])
+        self.assertEqual(team_path["schema_version"], "hermes_coding_team_path/v1")
+        self.assertEqual(team_path["status"], "prepared_not_observed")
+        self.assertIn("solo", modes)
+        self.assertIn("team", modes)
+        self.assertIn("swarm", modes)
+        self.assertIn("runtime_start", team_path["status_ladder"])
+        self.assertIn("worker_dispatch", team_path["status_ladder"])
+        self.assertIn("show_coding_team_path", actions)
+        self.assertIn("start_hermes_coding", actions)
+        self.assertIn("prepared only", payload["chat_response"]["claim_boundary"].lower())
+
     def test_route_mode_surfaces_recommendation_policy_actions(self) -> None:
         payload = build_chat_interaction_payload(
             "prepare weekly ops review from customer feedback and release risks",

@@ -10,7 +10,13 @@ from ..coding_contracts import (
     PROMPT_HANDOFF_SCHEMA_VERSION,
     RUNTIME_HANDOFF_SCHEMA_VERSION,
 )
-from ..executors import DISPATCH_POLICIES, EXECUTOR_PROFILES, WORK_OWNER_MODES
+from ..executors import (
+    DISPATCH_POLICIES,
+    EXECUTOR_PROFILES,
+    HERMES_CODING_TEAM_START_MODE_IDS,
+    HERMES_CODING_TEAM_STATUS_LADDER,
+    WORK_OWNER_MODES,
+)
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
 from ..local_store import utc_now
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack
@@ -196,6 +202,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "review",
     "evidence_contract",
     "harness_quality",
+    "hermes_coding_team_path",
     "context_pack",
     "context_pack_blocked",
 )
@@ -216,6 +223,7 @@ CODING_RUNTIME_PROFILE_KEYS = (
     "supports_tmux_workers",
     "supports_worker_protocol",
     "supports_worktree_guidance",
+    "supports_hermes_coding_team_path",
     "requires_operator_runtime",
 )
 CODING_RUNTIME_TEMPLATE_KEYS = ("label", "syntax", "command_template", "when_to_use", "observed_event")
@@ -892,6 +900,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
     if context_pack_blocked:
         compact["context_pack_blocked"] = context_pack_blocked
+    team_path = _compact_hermes_coding_team_path(value.get("hermes_coding_team_path"))
+    if team_path:
+        compact["hermes_coding_team_path"] = team_path
     return compact
 
 
@@ -923,7 +934,36 @@ def _compact_runtime_profile(value: Any) -> dict[str, Any]:
         "supports_tmux_workers": bool(value.get("supports_tmux_workers", value.get("supports_worker_protocol", False))),
         "supports_worker_protocol": bool(value.get("supports_worker_protocol", False)),
         "supports_worktree_guidance": bool(value.get("supports_worktree_guidance", False)),
+        "supports_hermes_coding_team_path": bool(value.get("supports_hermes_coding_team_path", False)),
         "requires_operator_runtime": bool(value.get("requires_operator_runtime", False)),
+    }
+
+
+def _compact_hermes_coding_team_path(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or not value:
+        return {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "profile": str(value.get("profile", "")),
+        "status": str(value.get("status", "")),
+        "purpose": str(value.get("purpose", "")),
+        "start_modes": [
+            {
+                "id": str(mode.get("id", "")),
+                "label": str(mode.get("label", "")),
+                "use_when": str(mode.get("use_when", "")),
+                "entrypoint": str(mode.get("entrypoint", "")),
+                "first_observed_event": str(mode.get("first_observed_event", "")),
+            }
+            for mode in value.get("start_modes", [])
+            if isinstance(mode, dict)
+        ],
+        "leader_contract": _compact_string_list(value.get("leader_contract", [])),
+        "worker_contract": _compact_string_list(value.get("worker_contract", [])),
+        "status_ladder": _compact_string_list(value.get("status_ladder", [])),
+        "wrapper_actions": _compact_string_list(value.get("wrapper_actions", [])),
+        "not_observed_by_omh": _compact_string_list(value.get("not_observed_by_omh", [])),
+        "claim_boundary": str(value.get("claim_boundary", "")),
     }
 
 
@@ -1722,7 +1762,13 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         for key in ("profile", "label", "runtime_family", "underlying_agent"):
             _require(isinstance(runtime_profile.get(key), str), errors, f"coding_delegation runtime_handoff runtime_profile.{key} must be a string")
         _require(runtime_profile.get("profile") == handoff.get("selected_executor_profile"), errors, "coding_delegation runtime_handoff runtime_profile.profile must match selected executor")
-        for key in ("supports_team_swarm", "supports_worker_protocol", "supports_worktree_guidance", "requires_operator_runtime"):
+        for key in (
+            "supports_team_swarm",
+            "supports_worker_protocol",
+            "supports_worktree_guidance",
+            "supports_hermes_coding_team_path",
+            "requires_operator_runtime",
+        ):
             _require(isinstance(runtime_profile.get(key), bool), errors, f"coding_delegation runtime_handoff runtime_profile.{key} must be boolean")
         if "supports_tmux_workers" in runtime_profile:
             _require(isinstance(runtime_profile.get("supports_tmux_workers"), bool), errors, "coding_delegation runtime_handoff runtime_profile.supports_tmux_workers must be boolean")
@@ -1863,9 +1909,82 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
                     errors,
                     f"coding_delegation runtime_handoff evidence_contract.{nested_key} must include required boundaries: {missing_values}",
                 )
+    if "hermes_coding_team_path" in handoff:
+        errors.extend(validate_hermes_coding_team_path(handoff["hermes_coding_team_path"], selected=str(handoff.get("selected_executor_profile", ""))))
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation runtime_handoff harness_quality"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation runtime_handoff"))
+    return errors
+
+
+def validate_hermes_coding_team_path(path: Any, *, selected: str) -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(path, dict), errors, "coding_delegation runtime_handoff hermes_coding_team_path must be an object")
+    if not isinstance(path, dict):
+        return errors
+    allowed_keys = {
+        "schema_version",
+        "profile",
+        "status",
+        "purpose",
+        "start_modes",
+        "leader_contract",
+        "worker_contract",
+        "status_ladder",
+        "wrapper_actions",
+        "not_observed_by_omh",
+        "claim_boundary",
+    }
+    extra_keys = sorted(set(path) - allowed_keys)
+    _require(not extra_keys, errors, f"coding_delegation runtime_handoff hermes_coding_team_path has unsupported keys: {extra_keys}")
+    _require(selected == "hermes", errors, "coding_delegation runtime_handoff hermes_coding_team_path is only valid for hermes")
+    _require(path.get("schema_version") == "hermes_coding_team_path/v1", errors, "coding_delegation runtime_handoff hermes_coding_team_path schema_version is invalid")
+    _require(path.get("profile") == "hermes", errors, "coding_delegation runtime_handoff hermes_coding_team_path profile must be hermes")
+    _require(path.get("status") == "prepared_not_observed", errors, "coding_delegation runtime_handoff hermes_coding_team_path status must be prepared_not_observed")
+    for key in ("purpose", "claim_boundary"):
+        _require(isinstance(path.get(key), str), errors, f"coding_delegation runtime_handoff hermes_coding_team_path.{key} must be a string")
+    for key in ("leader_contract", "worker_contract", "status_ladder", "wrapper_actions", "not_observed_by_omh"):
+        _require(isinstance(path.get(key), list), errors, f"coding_delegation runtime_handoff hermes_coding_team_path.{key} must be a list")
+        if isinstance(path.get(key), list):
+            for index, value in enumerate(path[key]):
+                _require(isinstance(value, str), errors, f"coding_delegation runtime_handoff hermes_coding_team_path.{key}[{index}] must be a string")
+    start_modes = path.get("start_modes")
+    _require(isinstance(start_modes, list), errors, "coding_delegation runtime_handoff hermes_coding_team_path.start_modes must be a list")
+    if isinstance(start_modes, list):
+        mode_ids = set()
+        for index, mode in enumerate(start_modes):
+            _require(isinstance(mode, dict), errors, f"coding_delegation runtime_handoff hermes_coding_team_path.start_modes[{index}] must be an object")
+            if not isinstance(mode, dict):
+                continue
+            mode_ids.add(str(mode.get("id", "")))
+            for key in ("id", "label", "use_when", "entrypoint", "first_observed_event"):
+                _require(isinstance(mode.get(key), str), errors, f"coding_delegation runtime_handoff hermes_coding_team_path.start_modes[{index}].{key} must be a string")
+        missing_modes = sorted(set(HERMES_CODING_TEAM_START_MODE_IDS) - mode_ids)
+        unsupported_modes = sorted(mode_ids - set(HERMES_CODING_TEAM_START_MODE_IDS))
+        _require(
+            not missing_modes,
+            errors,
+            f"coding_delegation runtime_handoff hermes_coding_team_path.start_modes must include required modes: {missing_modes}",
+        )
+        _require(
+            not unsupported_modes,
+            errors,
+            f"coding_delegation runtime_handoff hermes_coding_team_path.start_modes has unsupported modes: {unsupported_modes}",
+        )
+        if not missing_modes and not unsupported_modes:
+            _require(
+                len(mode_ids) == len([mode for mode in start_modes if isinstance(mode, dict)]),
+                errors,
+                "coding_delegation runtime_handoff hermes_coding_team_path.start_modes must not duplicate ids",
+            )
+    status_ladder = path.get("status_ladder", [])
+    if isinstance(status_ladder, list):
+        string_ladder = [event for event in status_ladder if isinstance(event, str)]
+        _require(
+            string_ladder == list(HERMES_CODING_TEAM_STATUS_LADDER),
+            errors,
+            "coding_delegation runtime_handoff hermes_coding_team_path.status_ladder must match the full Hermes coding team ladder",
+        )
     return errors
 
 

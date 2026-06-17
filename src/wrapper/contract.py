@@ -25,11 +25,13 @@ VISIBLE_ACTIONS = (
     "show_prompt_handoff",
     "copy_prompt_handoff",
     "show_runtime_handoff",
+    "show_coding_team_path",
     "start_runtime",
     "start_hermes_coding",
     "start_team",
     "start_swarm",
     "prepare_worktree",
+    "record_runtime_observation",
     "send_to_executor",
     "send_to_codex",
     "open_executor_session",
@@ -603,19 +605,32 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         runtime_profile = _nested(runtime_handoff, "runtime_profile")
         runtime_label = str(runtime_profile.get("label") or executor_label(selected))
         primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
+        primary_label = "Start Hermes coding" if selected == "hermes" else "Start runtime"
+        extra_actions = (
+            [_action("show_coding_team_path", "Show team path", "secondary", payload={"selected_executor_profile": selected})]
+            if selected == "hermes"
+            else []
+        )
+        body = (
+            "I prepared the Hermes coding path with solo/team/swarm choices, worker-protocol, and worktree guidance. "
+            "This is not Hermes coding, worker, worktree, review, CI, or merge evidence."
+            if selected == "hermes"
+            else (
+                f"I prepared a {runtime_label} runtime contract with team/swarm, worker-protocol, and worktree guidance. "
+                "This is not runtime start, implementation, review, CI, or merge evidence."
+            )
+        )
         return _chat_response(
             kind="handoff",
             headline="A runtime handoff is ready.",
-            body=(
-                f"I prepared a {runtime_label} runtime contract with team/swarm, worker-protocol, and worktree guidance. "
-                "This is not runtime start, implementation, review, CI, or merge evidence."
-            ),
+            body=body,
             phase="runtime_handoff_prepared",
             next_action="show_runtime_handoff",
             thread_key=thread_key,
             actions=[
                 _action("show_runtime_handoff", "Show runtime", "primary", payload={"selected_executor_profile": selected}),
-                _action(primary_action, "Start runtime", "primary", enabled=False, payload={"selected_executor_profile": selected}),
+                *extra_actions,
+                _action(primary_action, primary_label, "primary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("start_team", "Start team", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("start_swarm", "Start swarm", "secondary", enabled=False, payload={"selected_executor_profile": selected}),

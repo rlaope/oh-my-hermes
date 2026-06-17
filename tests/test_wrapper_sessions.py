@@ -232,6 +232,8 @@ class WrapperSessionTests(unittest.TestCase):
                     "original_context",
                     "work_summary",
                     "progress",
+                    "runtime_milestones",
+                    "runtime_milestone_gaps",
                     "evidence_summary",
                     "pending_gaps",
                     "next_action",
@@ -342,8 +344,72 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_team_swarm"])
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_tmux_workers"])
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_worktree_guidance"])
+            self.assertEqual(prepared["handoff"]["runtime_handoff"]["hermes_coding_team_path"]["schema_version"], "hermes_coding_team_path/v1")
+            self.assertEqual(
+                prepared["status"]["coding_briefing"]["work_summary"]["handoff_contract"]["coding_team_path"]["status"],
+                "prepared_not_observed",
+            )
+            self.assertEqual(prepared["status"]["coding_briefing"]["runtime_milestones"][0]["id"], "runtime_start")
+            self.assertEqual(prepared["status"]["coding_briefing"]["runtime_milestones"][0]["state"], "pending")
+            prepared_actions = {action["id"] for action in prepared["status"]["chat_response"]["actions"]}
+            self.assertIn("show_coding_team_path", prepared_actions)
+            self.assertIn("start_hermes_coding", prepared_actions)
             self.assertEqual(prepared["status"]["next_action"], "show_runtime_handoff")
             self.assertEqual(validate_runtime(paths)["runs"], [])
+
+    def test_hermes_coding_team_path_status_uses_runtime_observations(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "coordinate a safe coding team for a risky refactor", source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "hermes")
+            prepare_wrapper_session_handoff(paths, session_id, "coordinate a safe coding team for a risky refactor")
+            session_dir = paths.runtime_wrapper_sessions_dir / session_id
+
+            write_runtime_observation(
+                session_dir,
+                {
+                    "target_type": "wrapper_session",
+                    "target_id": session_id,
+                    "runtime_profile": "hermes",
+                    "event_type": "runtime_start",
+                    "status": "observed",
+                    "summary": "Hermes coding skill path started",
+                },
+            )
+            write_runtime_observation(
+                session_dir,
+                {
+                    "target_type": "wrapper_session",
+                    "target_id": session_id,
+                    "runtime_profile": "hermes",
+                    "event_type": "worker_dispatch",
+                    "status": "observed",
+                    "summary": "Hermes assigned worker lane 1",
+                    "worker_ref": "hermes-lane-1",
+                },
+            )
+
+            status = build_wrapper_session_status(paths, session_id)
+            milestones = {item["id"]: item["state"] for item in status["coding_briefing"]["runtime_milestones"]}
+
+            self.assertEqual(status["coding_briefing"]["current_state"]["coding_agent"], "running(hermes)")
+            self.assertEqual(milestones["runtime_start"], "complete")
+            self.assertEqual(milestones["worker_dispatch"], "complete")
+            for pending_event in (
+                "worktree_creation",
+                "worker_result",
+                "verification",
+                "review",
+                "ci",
+                "merge_readiness",
+                "merge",
+            ):
+                self.assertEqual(milestones[pending_event], "pending")
+                self.assertIn(pending_event, status["coding_briefing"]["runtime_milestone_gaps"])
+            self.assertIn("executor_result", status["coding_briefing"]["pending_gaps"])
+            self.assertIn("Hermes coding team path is prepared", "\n".join(status["coding_briefing"]["user_facing_lines"]))
 
     def test_runtime_handoff_preparation_is_idempotent_and_preserves_envelope(self) -> None:
         with TemporaryDirectory() as tmp:

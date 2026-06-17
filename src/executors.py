@@ -6,6 +6,19 @@ from dataclasses import dataclass
 EXECUTOR_HANDOFF_SCHEMA_VERSION = "coding_executor_handoff/v1"
 PROMPT_HANDOFF_SCHEMA_VERSION = "coding_prompt_handoff/v1"
 RUNTIME_HANDOFF_SCHEMA_VERSION = "coding_runtime_handoff/v1"
+HERMES_CODING_TEAM_PATH_SCHEMA_VERSION = "hermes_coding_team_path/v1"
+HERMES_CODING_TEAM_START_MODE_IDS = ("solo", "durable_goal", "team", "swarm")
+HERMES_CODING_TEAM_STATUS_LADDER = (
+    "runtime_start",
+    "worktree_creation",
+    "worker_dispatch",
+    "worker_result",
+    "verification",
+    "review",
+    "ci",
+    "merge_readiness",
+    "merge",
+)
 
 WORK_OWNER_MODES = ("retained_hermes", "prompt_only_handoff", "runtime_handoff", "external_executor")
 DISPATCH_POLICIES = ("prepare_only", "ask_before_dispatch", "configured_auto_dispatch_reserved")
@@ -28,11 +41,25 @@ RUNTIME_PROFILE_DETAILS = {
         "recommended_for": "Hermes-owned coding using OMH skills, team/swarm guidance, tmux-style workers, worker protocol, and worktree discipline",
         "templates": (
             {
-                "label": "Hermes retained coding skill",
+                "label": "Hermes solo coding skill",
                 "syntax": "Hermes skill",
                 "command_template": "Use OMH ultrawork for: {message}",
-                "when_to_use": "Use when the operator wants Hermes itself to own a bounded coding task with OMH guardrails.",
+                "when_to_use": "Use when the operator wants Hermes itself to own one bounded coding task with OMH guardrails.",
                 "observed_event": "runtime_start",
+            },
+            {
+                "label": "Hermes durable goal loop",
+                "syntax": "Hermes skill",
+                "command_template": "Use OMH ultragoal for: {message}",
+                "when_to_use": "Use when Hermes should keep one ambitious coding goal durable across planning, implementation, review, and verification.",
+                "observed_event": "runtime_start",
+            },
+            {
+                "label": "Hermes coordinated team",
+                "syntax": "Hermes skill",
+                "command_template": "Use OMH team for: {message}",
+                "when_to_use": "Use only when Hermes can split independent lanes and the wrapper can record worker dispatch/result evidence.",
+                "observed_event": "worker_dispatch",
             },
             {
                 "label": "Hermes review gate",
@@ -312,6 +339,7 @@ def runtime_profile_contract(profile: str) -> dict[str, object]:
         "supports_tmux_workers": True,
         "supports_worker_protocol": True,
         "supports_worktree_guidance": True,
+        "supports_hermes_coding_team_path": profile == "hermes",
         "requires_operator_runtime": profile != "hermes",
     }
 
@@ -321,3 +349,85 @@ def runtime_templates_for_profile(profile: str) -> list[dict[str, str]]:
         raise ValueError(f"unsupported runtime executor profile: {profile}")
     templates = RUNTIME_PROFILE_DETAILS[profile].get("templates", ())
     return [{key: str(value) for key, value in template.items()} for template in templates]
+
+
+def hermes_coding_team_path_contract(profile: str) -> dict[str, object]:
+    if profile != "hermes":
+        return {}
+    return {
+        "schema_version": HERMES_CODING_TEAM_PATH_SCHEMA_VERSION,
+        "profile": "hermes",
+        "status": "prepared_not_observed",
+        "purpose": (
+            "Let Hermes own coding through selected OMH coding skills, solo/team/swarm guidance, "
+            "and observed runtime ledger events without pretending a separate executor ran."
+        ),
+        "start_modes": [
+            {
+                "id": "solo",
+                "label": "Hermes solo coding",
+                "use_when": "One bounded coding lane is enough and shared-file coordination is unnecessary.",
+                "entrypoint": "Use OMH ultrawork for: {message}",
+                "first_observed_event": "runtime_start",
+            },
+            {
+                "id": "durable_goal",
+                "label": "Hermes durable goal",
+                "use_when": "The task needs a durable plan, implementation pass, review, verification, and PR-level report.",
+                "entrypoint": "Use OMH ultragoal for: {message}",
+                "first_observed_event": "runtime_start",
+            },
+            {
+                "id": "team",
+                "label": "Hermes coding team",
+                "use_when": "Independent lanes can be assigned with explicit ownership and integration by one leader.",
+                "entrypoint": "Use OMH team for: {message}",
+                "first_observed_event": "worker_dispatch",
+            },
+            {
+                "id": "swarm",
+                "label": "Hermes swarm batch",
+                "use_when": "A prepared batch has many independent lanes and a clear verification integrator.",
+                "entrypoint": "Use OMH ultrawork for: {message}",
+                "first_observed_event": "worker_dispatch",
+            },
+        ],
+        "leader_contract": [
+            "Keep chat intake, clarification, scope split, and status narration in Hermes.",
+            "Assign one owner per lane and one verifier/integrator before any parallel work starts.",
+            "Require worker ACK, file/worktree ownership, result summary, and verification refs for each lane.",
+            "Report blockers instead of upgrading missing runtime events into evidence.",
+        ],
+        "worker_contract": [
+            "ACK the assigned lane before work starts.",
+            "Claim files or a worktree before editing shared repository state.",
+            "Report changed files, tests, blockers, and evidence references back to the Hermes leader.",
+            "Escalate scope expansion, shared-file conflicts, or unclear verification ownership.",
+        ],
+        "status_ladder": list(HERMES_CODING_TEAM_STATUS_LADDER),
+        "wrapper_actions": [
+            "show_coding_team_path",
+            "start_hermes_coding",
+            "prepare_worktree",
+            "start_team",
+            "start_swarm",
+            "record_runtime_observation",
+            "show_status",
+        ],
+        "not_observed_by_omh": [
+            "Hermes skill start",
+            "team or swarm worker launch",
+            "tmux pane creation",
+            "worktree creation",
+            "code edits",
+            "verification",
+            "review",
+            "CI",
+            "merge readiness",
+            "merge",
+        ],
+        "claim_boundary": (
+            "This is an optional Hermes coding path contract. It becomes runtime evidence only after a wrapper "
+            "or operator records matching runtime_observation/v1 events."
+        ),
+    }
