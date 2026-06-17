@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import unicodedata
 from typing import Any
 
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
@@ -997,6 +998,7 @@ def _is_skill_catalog_question(message: str) -> bool:
     lowered = message.strip().lower()
     if not lowered:
         return False
+    search_texts = _catalog_search_texts(lowered)
     explicit_catalog_phrases = (
         "what commands are available",
         "which commands are available",
@@ -1022,17 +1024,98 @@ def _is_skill_catalog_question(message: str) -> bool:
         "skill picker",
         "workflow picker",
         "catalog",
+        "comandos disponibles",
+        "habilidades disponibles",
+        "flujos de trabajo disponibles",
+        "commandes disponibles",
+        "competences disponibles",
+        "fluxos de trabalho disponiveis",
+        "comandos disponiveis",
+        "verfugbare befehle",
+        "verfugbare workflows",
+        "befehle verfugbar",
+        "workflows verfugbar",
+        "使えるスキル",
+        "利用可能なスキル",
+        "利用可能なワークフロー",
+        "有哪些命令",
+        "有哪些技能",
+        "有哪些工作流",
+        "可用命令",
+        "可用技能",
+        "可用工作流",
+        "доступные команды",
+        "доступные навыки",
+        "доступные рабочие процессы",
+        "список команд",
         "목록",
         "리스트",
     )
-    has_context = any(token in lowered for token in ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스"))
-    has_catalog_word = any(token in lowered for token in ("skill", "workflow", "command", "스킬", "워크플로", "명령", "기능"))
+    context_markers = ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스")
+    catalog_words = (
+        "skill",
+        "skills",
+        "workflow",
+        "workflows",
+        "command",
+        "commands",
+        "스킬",
+        "워크플로",
+        "워크플로우",
+        "명령",
+        "기능",
+        "comandos",
+        "habilidades",
+        "flujos de trabajo",
+        "fluxos de trabalho",
+        "commandes",
+        "competences",
+        "befehle",
+        "workflows",
+        "スキル",
+        "ワークフロー",
+        "コマンド",
+        "技能",
+        "工作流",
+        "命令",
+        "команды",
+        "навыки",
+        "рабочие процессы",
+    )
+    has_context = _contains_catalog_token(search_texts, context_markers)
+    has_catalog_word = _contains_catalog_token(search_texts, catalog_words)
     if not has_catalog_word:
         return False
-    if any(phrase in lowered for phrase in explicit_catalog_phrases):
+    if _contains_catalog_token(search_texts, explicit_catalog_phrases):
         return True
-    if any(marker in lowered for marker in ("뭐 있어", "뭐 있", "있나요", "가능", "목록", "리스트")):
-        return True
+    catalog_collection_words = (
+        "skills",
+        "skill들",
+        "workflows",
+        "commands",
+        "스킬",
+        "워크플로",
+        "워크플로우",
+        "명령",
+        "기능",
+        "comandos",
+        "habilidades",
+        "flujos de trabajo",
+        "fluxos de trabalho",
+        "commandes",
+        "competences",
+        "befehle",
+        "スキル",
+        "ワークフロー",
+        "コマンド",
+        "技能",
+        "工作流",
+        "命令",
+        "команды",
+        "навыки",
+        "рабочие процессы",
+    )
+    has_catalog_collection_word = _contains_catalog_token(search_texts, catalog_collection_words)
     availability_markers = (
         "available",
         "do you have",
@@ -1041,6 +1124,33 @@ def _is_skill_catalog_question(message: str) -> bool:
         "can you do",
         "menu",
         "picker",
+        "disponible",
+        "disponibles",
+        "disponivel",
+        "disponiveis",
+        "liste",
+        "lista",
+        "mostrar",
+        "afficher",
+        "anzeigen",
+        "gibt es",
+        "verfugbar",
+        "verfuegbar",
+        "使える",
+        "利用可能",
+        "一覧",
+        "有哪些",
+        "可用",
+        "列表",
+        "доступ",
+        "список",
+        "متاحة",
+        "قائمة",
+        "उपलब्ध",
+        "danh sach",
+        "có những",
+        "tersedia",
+        "daftar",
         "뭐",
         "무엇",
         "어떤",
@@ -1049,12 +1159,29 @@ def _is_skill_catalog_question(message: str) -> bool:
         "있어",
         "있나요",
         "가능",
+        "목록",
+        "리스트",
     )
-    if has_context and any(marker in lowered for marker in availability_markers):
+    if not has_context and has_catalog_collection_word and _contains_catalog_token(search_texts, availability_markers):
+        return True
+    if has_context and has_catalog_collection_word and _contains_catalog_token(search_texts, availability_markers):
         return True
     words = lowered.replace("?", " ").replace("!", " ").split()
     plural_catalog_words = ("commands", "skills", "workflows", "워크플로", "워크플로우", "스킬")
-    return has_context and len(words) <= 4 and any(word in lowered for word in plural_catalog_words)
+    return has_context and len(words) <= 4 and _contains_catalog_token(search_texts, plural_catalog_words)
+
+
+def _catalog_search_texts(lowered: str) -> tuple[str, ...]:
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", lowered)
+        if not unicodedata.combining(character)
+    )
+    return (lowered,) if folded == lowered else (lowered, folded)
+
+
+def _contains_catalog_token(search_texts: tuple[str, ...], tokens: tuple[str, ...]) -> bool:
+    return any(token in text for text in search_texts for token in tokens)
 
 
 def _is_command_preview_invocation(message: str) -> bool:
