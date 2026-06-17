@@ -2150,6 +2150,24 @@ class CliTests(unittest.TestCase):
                 self.assertNotEqual(payload["route"]["selected_skill"], "oh-my-hermes")
                 self.assertNotIn(message, json.dumps(payload))
 
+    def test_chat_interact_direct_picker_aliases(self) -> None:
+        for message in ("./omh", "/omh", "./skills", "/skills"):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "choose_skill")
+                self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+                self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+                picker = payload["chat_response"]["state"]["skill_picker"]
+                self.assertEqual(picker["schema_version"], "omh_skill_picker/v1")
+                option_ids = {option["id"] for option in picker["options"]}
+                self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
+                self.assertIn("choose_skill", {action["id"] for action in payload["chat_response"]["actions"]})
+
     def test_chat_route_exposes_selected_recommendation_policy(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "prepare weekly ops review from customer feedback and release risks"])
 

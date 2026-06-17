@@ -407,6 +407,12 @@ _DEFINITIONS = [
         (
             "oh-my-hermes",
             "omh",
+            "./omh",
+            "/omh",
+            "./skills",
+            "/skills",
+            "skill picker",
+            "workflow picker",
             "skill routing",
             "workflow routing",
             "chat routing",
@@ -419,7 +425,7 @@ _DEFINITIONS = [
             "상태 기록",
             "증거 경계",
         ),
-        "Use as the top-level router when a request references oh-my-hermes, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.",
+        "Use as the top-level router when a request references oh-my-hermes, asks for the workflow picker, the flagship request-to-handoff path, installed workflows, or ambiguous workflow routing.",
         category="router",
         phase="routing",
         hermes_role="retained-router",
@@ -429,6 +435,7 @@ _DEFINITIONS = [
         artifact_expectations=("runtime run record when a wrapper can observe request handling",),
         safety_rules=(
             "Prefer explicit skill invocation over weak keyword inference.",
+            "Treat bare `./omh`, `/omh`, `./skills`, or `/skills` as a workflow picker request, not as implementation intent.",
             "Ask one concise question when routing signals conflict.",
             "Do not claim to override Hermes core routing.",
         ),
@@ -437,6 +444,7 @@ _DEFINITIONS = [
             "Route only from explicit invocation, strong catalog evidence, or a clear workflow-shaped request.",
             "Return a clarification or fallback path instead of forcing low-confidence messages into a workflow.",
             "Keep users command-agnostic by naming the next UX step rather than shell commands.",
+            "Expose direct workflow selection without renaming skills or adding an `omh-` prefix to every skill name.",
             "Use request-to-handoff as the first path when a plain request needs role, plan, handoff, or status UX.",
         ),
         why_this_exists="`oh-my-hermes` exists to keep Hermes chat routing conservative: it maps plain requests to the right workflow, explains evidence boundaries, and avoids making every keyword look like hidden implementation.",
@@ -452,8 +460,8 @@ _DEFINITIONS = [
         ),
         bad_example=SkillExample(
             prompt="omh",
-            expected="Do not infer a coding workflow; explain setup or ask what the user wants to do next.",
-            why="A bare product name is too weak to justify workflow activation or implementation claims.",
+            expected="Show the workflow picker or ask what the user wants to do next; do not infer a coding workflow.",
+            why="A bare product name is a picker or clarification signal, not implementation evidence.",
         ),
     ),
     SkillDefinition(

@@ -107,6 +107,11 @@ name the responsible role, show the next action, and say what is not evidence
 yet. Users should not need to know `omh recommend`, `omh chat interact`, or
 other backend commands for normal use.
 
+When you want to choose manually in a chat surface, type `./omh` or `./skills`.
+Wrappers can render that as a compact workflow picker while the actual skill
+names stay clean, such as `loop`, `ralplan`, `ultraprocess`, and
+`web-research`, without adding an `omh-` prefix to every workflow.
+
 If your Hermes environment supports native skill taps, this is the equivalent
 Hermes-native front door:
 
