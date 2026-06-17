@@ -292,7 +292,18 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("routing intent only", payload["chat_response"]["claim_boundary"])
 
     def test_natural_catalog_questions_open_picker_without_shell(self) -> None:
-        for message in ("OMH 명령어 뭐 있어?", "skill들은 뭐 있어?", "what OMH workflows are available?"):
+        for message in (
+            "OMH 명령어 뭐 있어?",
+            "skill들은 뭐 있어?",
+            "what OMH workflows are available?",
+            "¿Qué comandos de OMH están disponibles?",
+            "Quelles commandes OMH sont disponibles ?",
+            "Welche OMH Workflows gibt es?",
+            "OMHで使えるスキルは？",
+            "OMH 有哪些工作流？",
+            "Quais workflows do OMH estão disponíveis?",
+            "Какие команды OMH доступны?",
+        ):
             with self.subTest(message=message):
                 payload = build_chat_interaction_payload(message, source="discord")
 
@@ -309,9 +320,13 @@ class WrapperContractTests(unittest.TestCase):
     def test_non_catalog_command_and_skill_questions_do_not_open_picker(self) -> None:
         for message in (
             "show me the command to install OMH",
+            "what command is available to install OMH?",
             "what command should I run to verify installation?",
             "what skills are needed to debug this Python error?",
             "list files that mention command injection",
+            "¿Qué comando debería ejecutar para instalar OMH?",
+            "Quel workflow dois-je utiliser pour ce bug Python?",
+            "Welche Datei erwähnt command injection?",
         ):
             with self.subTest(message=message):
                 payload = build_chat_interaction_payload(message, source="discord")
