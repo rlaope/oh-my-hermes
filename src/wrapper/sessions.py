@@ -28,6 +28,11 @@ from ..runtime.artifacts import (
 )
 from .contract import build_chat_interaction_payload, build_chat_status_interaction
 from .briefing import build_coding_briefing, chat_response_briefing
+from .hermes_runtime import (
+    hermes_coding_team_body,
+    hermes_coding_team_claim_boundary,
+    hermes_coding_team_extra_action_specs,
+)
 from .executor_sessions import (
     build_executor_session_status,
     build_executor_session_status_card,
@@ -967,22 +972,34 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
     if status == "runtime_handoff_prepared":
         selected = str(session.get("selected_executor_profile") or "runtime")
         primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
+        primary_label = "Start Hermes coding" if selected == "hermes" else "Start runtime"
+        extra_actions = [_action_from_spec(spec) for spec in hermes_coding_team_extra_action_specs()] if selected == "hermes" else []
+        body = (
+            hermes_coding_team_body()
+            if selected == "hermes"
+            else f"The {selected} runtime contract is prepared with team/swarm, worker-protocol, and worktree guidance; no runtime evidence exists yet."
+        )
         return _chat_response(
             kind="handoff",
             headline="A runtime handoff is ready.",
-            body=f"The {selected} runtime contract is prepared with team/swarm, worker-protocol, and worktree guidance; no runtime evidence exists yet.",
+            body=body,
             phase="runtime_handoff_prepared",
             next_action="show_runtime_handoff",
             thread_key=thread_key,
             actions=[
                 _action("show_runtime_handoff", "Show runtime", "primary"),
-                _action(primary_action, "Start runtime", "primary", enabled=False),
+                *extra_actions,
+                _action(primary_action, primary_label, "primary", enabled=False),
                 _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False),
                 _action("start_team", "Start team", "secondary", enabled=False),
                 _action("start_swarm", "Start swarm", "secondary", enabled=False),
                 _action("show_status", "Show status", "secondary"),
             ],
-            claim_boundary="Runtime handoff is not runtime start, worktree creation, worker dispatch, implementation, review, CI, or merge evidence.",
+            claim_boundary=(
+                hermes_coding_team_claim_boundary()
+                if selected == "hermes"
+                else "Runtime handoff is not runtime start, worktree creation, worker dispatch, implementation, review, CI, or merge evidence."
+            ),
         )
     if status == "revision_requested":
         return _chat_response(
@@ -1054,3 +1071,12 @@ def _chat_response(
 
 def _action(action_id: str, label: str, style: str, *, enabled: bool = True) -> dict[str, object]:
     return {"id": action_id, "label": label, "style": style, "enabled": enabled, "payload": {}}
+
+
+def _action_from_spec(spec: dict[str, object]) -> dict[str, object]:
+    return _action(
+        str(spec.get("id", "")),
+        str(spec.get("label", "")),
+        str(spec.get("style", "")),
+        enabled=bool(spec.get("enabled", True)),
+    )

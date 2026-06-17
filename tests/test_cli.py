@@ -4281,6 +4281,50 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("executor_handoff", payload["delegation"])
             self.assertNotIn("prompt_handoff", payload["delegation"])
 
+    def test_chat_interact_can_prepare_hermes_coding_team_path(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "chat",
+                    "interact",
+                    "--mode",
+                    "delegate",
+                    "--source",
+                    "discord",
+                    "--executor",
+                    "hermes",
+                    "coordinate",
+                    "a",
+                    "safe",
+                    "coding",
+                    "team",
+                    "for",
+                    "a",
+                    "risky",
+                    "refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            runtime_handoff = payload["delegation"]["runtime_handoff"]
+            team_path = runtime_handoff["hermes_coding_team_path"]
+
+            self.assertEqual(payload["next_action"], "show_runtime_handoff")
+            self.assertEqual(payload["delegation"]["selected_executor_profile"], "hermes")
+            self.assertEqual(team_path["schema_version"], "hermes_coding_team_path/v1")
+            self.assertIn("show_coding_team_path", runtime_handoff["harness_quality"]["wrapper_actions"])
+            self.assertIn("start_hermes_coding", runtime_handoff["harness_quality"]["wrapper_actions"])
+            self.assertIn("worker_dispatch", team_path["status_ladder"])
+            self.assertFalse(payload["delegation"]["dispatchable"])
+
     def test_setup_records_operating_model_without_installing_profile_packs(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

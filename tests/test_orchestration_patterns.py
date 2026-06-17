@@ -23,6 +23,7 @@ class OrchestrationPatternTests(unittest.TestCase):
             "loop_run_once",
             "scheduled_ops_blueprint",
             "executor_session_handoff",
+            "hermes_coding_team_path",
             "materials_generation_handoff",
         }:
             self.assertIn(expected, patterns)
@@ -41,3 +42,7 @@ class OrchestrationPatternTests(unittest.TestCase):
         self.assertIn("automation-blueprint", scheduled["compatible_skills"])
         self.assertIn("host_schedule_observed", scheduled["observed_evidence_required"])
         self.assertIn("Do not claim host cron", scheduled["do_not_use_when"])
+
+        hermes_team = patterns["hermes_coding_team_path"]
+        self.assertIn("record_runtime_observation", hermes_team["wrapper_actions"])
+        self.assertIn("merge_observed", hermes_team["observed_evidence_required"])

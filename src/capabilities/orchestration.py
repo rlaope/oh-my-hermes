@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ..executors import HERMES_CODING_TEAM_STATUS_LADDER, HERMES_CODING_TEAM_WRAPPER_ACTIONS
 from ..wrapper.contract import VISIBLE_ACTIONS
 from .schema import ORCHESTRATION_PATTERN_SCHEMA_VERSION, PREPARED_NOT_OBSERVED
 
@@ -66,6 +67,16 @@ def orchestration_patterns() -> list[dict[str, object]]:
             ("start_team", "start_swarm", "show_status"),
             actions,
             ("topology_prepared", "worker_dispatch_observed", "worker_result_observed"),
+        ),
+        _pattern(
+            "hermes_coding_team_path",
+            "Use when Hermes itself is selected to coordinate OMH coding skills with optional solo, team, swarm, worker, and worktree guidance.",
+            "Do not use as proof that Hermes started coding, launched workers, created worktrees, verified, reviewed, or merged anything.",
+            "handoff-guide",
+            ("ultragoal", "ultrawork", "team", "code-review"),
+            ("show_runtime_handoff", *HERMES_CODING_TEAM_WRAPPER_ACTIONS),
+            actions,
+            tuple(f"{event}_observed" for event in HERMES_CODING_TEAM_STATUS_LADDER),
         ),
         _pattern(
             "swarm_batch",
@@ -158,7 +169,7 @@ def _pattern(
 
 
 def _required_decisions(pattern_id: str) -> list[str]:
-    if pattern_id in {"executor_session_handoff", "team_staged_pipeline", "swarm_batch", "worktree_isolated_workers"}:
+    if pattern_id in {"executor_session_handoff", "team_staged_pipeline", "hermes_coding_team_path", "swarm_batch", "worktree_isolated_workers"}:
         return ["executor_or_runtime_profile", "authority_scope", "verification_gate"]
     if pattern_id == "loop_run_once":
         return ["permission_profile", "next_verification", "feedback_or_wait_policy"]
@@ -170,6 +181,7 @@ def _required_decisions(pattern_id: str) -> list[str]:
 def _prepared_artifacts(pattern_id: str) -> list[str]:
     mapping = {
         "executor_session_handoff": ["coding_delegation/v1", "wrapper_session/v1"],
+        "hermes_coding_team_path": ["coding_runtime_handoff/v1", "hermes_coding_team_path/v1", "runtime_observation/v1 when observed"],
         "loop_run_once": ["loop_runtime/v1", "loop_status_card/v1"],
         "scheduled_ops_blueprint": ["hermes_ops_blueprint/v1"],
         "materials_generation_handoff": ["material_artifact/v1"],

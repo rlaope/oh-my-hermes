@@ -36,6 +36,7 @@ omh capabilities inspect executor_session_handoff --json
 | `worktree_isolated_workers` | Parallel implementation that should use isolated workspaces. |
 | `loop_run_once` | A bounded loop tick without a daemon or hidden execution. |
 | `executor_session_handoff` | Prepared handoff for Codex, Claude Code, Hermes coding skills, or oh-my runtimes. |
+| `hermes_coding_team_path` | Optional Hermes-owned coding path with solo, durable-goal, team, and swarm start choices plus an observed runtime ladder. |
 | `materials_generation_handoff` | Documents, decks, spreadsheets, PDFs, or other material packages needing generation/QA. |
 
 ## Evidence Rule

@@ -2215,10 +2215,13 @@ Route implementation requests through scoped context, edit discipline, tests, re
   - `show_prompt_handoff`
   - `copy_prompt_handoff`
   - `show_runtime_handoff`
+  - `show_coding_team_path`
   - `start_runtime`
+  - `start_hermes_coding`
   - `prepare_worktree`
   - `start_team`
   - `start_swarm`
+  - `record_runtime_observation`
   - `choose_executor`
   - `send_to_executor`
   - `send_to_codex`

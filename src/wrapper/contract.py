@@ -10,6 +10,11 @@ from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..skills.catalog import retained_delegation_skill_names
+from .hermes_runtime import (
+    hermes_coding_team_body,
+    hermes_coding_team_claim_boundary,
+    hermes_coding_team_extra_action_specs,
+)
 
 
 CHAT_INTERACTION_SCHEMA_VERSION = "chat_interaction/v1"
@@ -25,11 +30,13 @@ VISIBLE_ACTIONS = (
     "show_prompt_handoff",
     "copy_prompt_handoff",
     "show_runtime_handoff",
+    "show_coding_team_path",
     "start_runtime",
     "start_hermes_coding",
     "start_team",
     "start_swarm",
     "prepare_worktree",
+    "record_runtime_observation",
     "send_to_executor",
     "send_to_codex",
     "open_executor_session",
@@ -603,26 +610,42 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         runtime_profile = _nested(runtime_handoff, "runtime_profile")
         runtime_label = str(runtime_profile.get("label") or executor_label(selected))
         primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
+        primary_label = "Start Hermes coding" if selected == "hermes" else "Start runtime"
+        extra_actions = (
+            [_action_from_spec(spec) for spec in hermes_coding_team_extra_action_specs(selected_executor_profile=selected)]
+            if selected == "hermes"
+            else []
+        )
+        body = (
+            hermes_coding_team_body()
+            if selected == "hermes"
+            else (
+                f"I prepared a {runtime_label} runtime contract with team/swarm, worker-protocol, and worktree guidance. "
+                "This is not runtime start, implementation, review, CI, or merge evidence."
+            )
+        )
         return _chat_response(
             kind="handoff",
             headline="A runtime handoff is ready.",
-            body=(
-                f"I prepared a {runtime_label} runtime contract with team/swarm, worker-protocol, and worktree guidance. "
-                "This is not runtime start, implementation, review, CI, or merge evidence."
-            ),
+            body=body,
             phase="runtime_handoff_prepared",
             next_action="show_runtime_handoff",
             thread_key=thread_key,
             actions=[
                 _action("show_runtime_handoff", "Show runtime", "primary", payload={"selected_executor_profile": selected}),
-                _action(primary_action, "Start runtime", "primary", enabled=False, payload={"selected_executor_profile": selected}),
+                *extra_actions,
+                _action(primary_action, primary_label, "primary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("start_team", "Start team", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("start_swarm", "Start swarm", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("choose_executor", "Change runtime", "secondary"),
                 _action("show_status", "Show status", "secondary"),
             ],
-            claim_boundary="Runtime handoff is prepared only; OMH has not started Hermes, OMX, OMO, OMC, workers, tmux, or worktrees.",
+            claim_boundary=(
+                hermes_coding_team_claim_boundary()
+                if selected == "hermes"
+                else "Runtime handoff is prepared only; OMH has not started Hermes, OMX, OMO, OMC, workers, tmux, or worktrees."
+            ),
             extra_state={
                 "delegation_action": action,
                 "intent": delegation.get("intent", "unknown"),
@@ -937,6 +960,16 @@ def _action(action_id: str, label: str, style: str, *, enabled: bool = True, pay
     if action_id not in VISIBLE_ACTIONS and not action_id.startswith("answer:"):
         raise ValueError(f"unsupported chat response action: {action_id}")
     return {"id": action_id, "label": label, "style": style, "enabled": enabled, "payload": payload or {}}
+
+
+def _action_from_spec(spec: dict[str, object]) -> dict[str, object]:
+    return _action(
+        str(spec.get("id", "")),
+        str(spec.get("label", "")),
+        str(spec.get("style", "")),
+        enabled=bool(spec.get("enabled", True)),
+        payload=spec.get("payload") if isinstance(spec.get("payload"), dict) else None,
+    )
 
 
 def _phase_for_next_action(next_action: str) -> str:

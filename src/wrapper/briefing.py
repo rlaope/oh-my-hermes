@@ -26,6 +26,7 @@ def build_coding_briefing(
     next_action = str(runtime_status.get("next_action") or _next_action_from_session(session, executor_status, runtime_observation))
     blocking_reason = str(runtime_status.get("blocking_reason") or _blocking_reason_from_status(next_action))
     progress = _progress_steps(session, runtime_status, executor_status, runtime_observation)
+    runtime_milestones = _runtime_milestones(_active_handoff(session, runtime_status), runtime_observation)
     headline = _headline(selected_executor, lifecycle_status, next_action, executor_status, runtime_status, runtime_observation)
     evidence = _evidence_summary(progress, runtime_status, executor_status)
     pending_gaps = _pending_gaps(progress, runtime_status, executor_status, runtime_observation)
@@ -34,6 +35,7 @@ def build_coding_briefing(
         headline=headline,
         executor_status=executor_status,
         work_summary=work_summary,
+        runtime_milestones=runtime_milestones,
         pending_gaps=pending_gaps,
         next_action=next_action,
     )
@@ -56,6 +58,8 @@ def build_coding_briefing(
         "original_context": _original_context(session, runtime_status),
         "work_summary": work_summary,
         "progress": progress,
+        "runtime_milestones": runtime_milestones,
+        "runtime_milestone_gaps": [str(step["id"]) for step in runtime_milestones if step.get("state") in {"pending", "blocked", "in_progress"}],
         "evidence_summary": evidence,
         "pending_gaps": pending_gaps,
         "next_action": next_action,
@@ -214,6 +218,7 @@ def _work_summary(session: dict[str, Any], runtime_status: dict[str, Any]) -> di
             "runtime_brief": _object(handoff.get("runtime_brief")),
             "report_contract": _object(handoff.get("report_contract")),
             "evidence_contract": _object(handoff.get("evidence_contract")),
+            "coding_team_path": _coding_team_path_summary(_object(handoff.get("hermes_coding_team_path"))),
             "context_pack": _context_pack_summary(_object(handoff.get("context_pack"))),
             "context_pack_blocked": _context_pack_blocked_summary(_object(handoff.get("context_pack_blocked"))),
         },
@@ -229,6 +234,10 @@ def _active_handoff(session: dict[str, Any], runtime_status: dict[str, Any]) -> 
     handoff_contract = _object(runtime_status.get("handoff_contract"))
     if handoff_contract:
         return handoff_contract
+    for key in ("prompt_handoff", "runtime_handoff"):
+        handoff = _object(session.get(key))
+        if handoff:
+            return handoff
     prepared = _object(runtime_status.get("prepared"))
     if prepared:
         # Runtime status is compact; the session keeps richer prompt/runtime handoff detail for non-run paths.
@@ -238,10 +247,6 @@ def _active_handoff(session: dict[str, Any], runtime_status: dict[str, Any]) -> 
             "recommended_workflow": prepared.get("workflow", ""),
             "recommended_harness": prepared.get("harness", ""),
         }
-    for key in ("prompt_handoff", "runtime_handoff"):
-        handoff = _object(session.get(key))
-        if handoff:
-            return handoff
     return {}
 
 
@@ -373,6 +378,7 @@ def _user_facing_lines(
     headline: str,
     executor_status: dict[str, Any],
     work_summary: dict[str, Any],
+    runtime_milestones: list[dict[str, str]],
     pending_gaps: list[str],
     next_action: str,
 ) -> list[str]:
@@ -383,6 +389,20 @@ def _user_facing_lines(
     safe_summary = str(work_summary.get("safe_summary", ""))
     if safe_summary and safe_summary not in lines:
         lines.append(safe_summary)
+    team_path = _object(_object(work_summary.get("handoff_contract")).get("coding_team_path"))
+    if team_path:
+        observed = [str(step["id"]) for step in runtime_milestones if step.get("state") == "complete"]
+        remaining = [str(step["id"]) for step in runtime_milestones if step.get("state") in {"pending", "blocked", "in_progress"}]
+        if observed:
+            lines.append(
+                "Hermes coding team path observations: "
+                f"{', '.join(observed[:4])}; still missing: {', '.join(remaining[:5]) or 'none'}."
+            )
+        else:
+            lines.append(
+                "Hermes coding team path is prepared; runtime observations are still required before "
+                "worker, worktree, verification, review, CI, or merge claims advance."
+            )
     if pending_gaps:
         lines.append(f"Still missing evidence: {', '.join(pending_gaps[:5])}.")
     lines.append(f"Next action: {next_action}.")
@@ -453,6 +473,59 @@ def _context_pack_summary(context_pack: dict[str, Any]) -> dict[str, Any]:
         "redaction_policy": str(context_pack.get("redaction_policy", "")),
         "claim_boundary": str(context_pack.get("claim_boundary", "")),
     }
+
+
+def _coding_team_path_summary(path: dict[str, Any]) -> dict[str, Any]:
+    if not path:
+        return {}
+    return {
+        "schema_version": str(path.get("schema_version", "")),
+        "status": str(path.get("status", "")),
+        "start_modes": [
+            {
+                "id": str(mode.get("id", "")),
+                "label": str(mode.get("label", "")),
+                "entrypoint": str(mode.get("entrypoint", "")),
+                "first_observed_event": str(mode.get("first_observed_event", "")),
+            }
+            for mode in _list_value(path.get("start_modes"))
+            if isinstance(mode, dict)
+        ],
+        "status_ladder": _string_list(path.get("status_ladder")),
+        "wrapper_actions": _string_list(path.get("wrapper_actions")),
+        "claim_boundary": str(path.get("claim_boundary", "")),
+    }
+
+
+def _runtime_milestones(handoff: dict[str, Any], runtime_observation: dict[str, Any]) -> list[dict[str, str]]:
+    team_path = _object(handoff.get("hermes_coding_team_path"))
+    observation_contract = _object(handoff.get("observation_contract"))
+    ladder = _string_list(team_path.get("status_ladder")) or _string_list(observation_contract.get("status_ladder"))
+    if not ladder:
+        return []
+    return [
+        {
+            "id": event_type,
+            "state": _runtime_event_state(runtime_observation, event_type, "pending"),
+            "summary": _runtime_milestone_summary(event_type),
+        }
+        for event_type in ladder
+    ]
+
+
+def _runtime_milestone_summary(event_type: str) -> str:
+    summaries = {
+        "runtime_start": "The selected runtime or Hermes coding path has actually started.",
+        "worktree_creation": "An isolated worktree or equivalent workspace has been observed.",
+        "worker_dispatch": "A worker lane, team member, or equivalent runtime lane has been dispatched.",
+        "worker_result": "A worker or runtime lane reported a result with metadata.",
+        "verification": "Verification evidence has been recorded separately.",
+        "review": "Review evidence has been recorded separately.",
+        "ci": "CI evidence has been recorded separately.",
+        "merge_readiness": "Merge readiness has been recorded separately.",
+        "merge": "Merge evidence has been recorded separately.",
+    }
+    return summaries.get(event_type, f"{event_type} evidence has been recorded separately.")
 
 
 def _context_pack_blocked_summary(context_pack_blocked: dict[str, Any]) -> dict[str, Any]:
