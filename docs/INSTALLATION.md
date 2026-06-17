@@ -718,6 +718,10 @@ compatibility surfaces remain routable either way:
 omh setup --profile-pack cto-loop --profile-pack startup-delivery
 ```
 
+The `cto-loop` pack is an optional CTO, PM, Dev, QA, Security, and Ops
+team-shaped preset. It is not installed by default; use it only when the target
+Hermes workspace benefits from visible role files.
+
 Record a default coding agent during setup:
 
 ```sh
@@ -751,6 +755,7 @@ Inspect the available models with:
 ```sh
 omh profile list
 omh profile inspect coding-runtime-team
+omh profile inspect cto-loop
 ```
 
 Use a profile pack only when you also want visible role files installed under
