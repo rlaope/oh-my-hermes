@@ -1507,6 +1507,148 @@ class CliTests(unittest.TestCase):
             self.assertIn("formula_recalculation", ladder["formats"]["xlsx"]["checks"])
             self.assertIn("locale_font_check", ladder["formats"]["hwp"]["checks"])
 
+    def test_visual_cli_prepares_prompt_cards_and_records_observations(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "img-summary"]
+            legacy_base = ["--omh-home", str(root / ".omh"), "visual"]
+            artifact = root / "card.png"
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "pr",
+                    "--headline",
+                    "PR Review Card",
+                    "--language",
+                    "ko",
+                    "--section",
+                    "summary:What changed:Setup output is easier to read.",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Visual prompt card prepared.", stdout)
+            self.assertIn("Status: prepared", stdout)
+            self.assertIn("Copy mode: structured", stdout)
+            self.assertIn("Visual format: pr_review_infographic", stdout)
+            self.assertIn("Aspect ratio: square_1_1", stdout)
+            self.assertIn("Not evidence yet: image generated, visual QA passed, delivered.", stdout)
+            self.assertIn("Choose and set up an image tool before generation.", stdout)
+            self.assertIn("GPT image tool", stdout)
+            self.assertIn("Setup is capability preparation only", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
+            status, stdout, stderr = run_cli(
+                legacy_base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "pr",
+                    "--headline",
+                    "Compatibility Card",
+                    "--section",
+                    "summary:What changed:Alias still prepares the card.",
+                    "--json",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertEqual(json.loads(stdout)["schema_version"], "visual_prompt_card/v1")
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "meeting",
+                    "--from-file",
+                    __file__,
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            card = json.loads(stdout)
+            self.assertEqual(card["schema_version"], "visual_prompt_card/v1")
+            self.assertEqual(card["source_kind"], "meeting")
+            self.assertEqual(card["visual_format"], "meeting_recap_card")
+            self.assertEqual(card["copy_mode"], "extractive_draft")
+            self.assertTrue(card["requires_human_or_hermes_review"])
+            self.assertEqual(card["capability_setup"]["schema_version"], "image_generation_setup/v1")
+            self.assertTrue(card["capability_setup"]["required"])
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "report",
+                    "--aspect-ratio",
+                    "long_scroll",
+                    "--section",
+                    "summary:Executive summary:Revenue grew while support cost increased.",
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            report = json.loads(stdout)
+            self.assertEqual(report["source_kind"], "report_summary")
+            self.assertEqual(report["visual_format"], "report_digest_card")
+            self.assertEqual(report["aspect_ratio"], "long_scroll")
+            self.assertIn("long vertical document-style canvas", report["generation_prompt"])
+
+            card_id = "20260618T011325Z-github-pr-abc123"
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "observe",
+                    "--card-id",
+                    card_id,
+                    "--type",
+                    "generated-image",
+                    "--path",
+                    str(artifact),
+                    "--summary",
+                    "Wrapper reported generated PNG.",
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            observation = json.loads(stdout)
+            self.assertEqual(observation["schema_version"], "visual_observation/v1")
+            self.assertEqual(observation["observation_type"], "generated_image_observed")
+            self.assertIn("visual_qa_passed", observation["does_not_prove"])
+            self.assertTrue((root / ".omh" / "visual" / "observations" / "index.json").exists())
+
+            status, _stdout, stderr = run_cli(
+                base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "meeting",
+                    "--section",
+                    "summary:Title:Text:extra",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("exactly three colon-separated fields", stderr)
+
     def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
 
@@ -1812,6 +1954,58 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(top["next_action"], "prepare_material_package")
                 self.assertIn("binary export", top["evidence_boundary"])
                 self.assertIn("material_artifact/v1", top["wrapper_guidance"])
+
+    def test_recommend_visual_summary_routes_to_visual_prompt_cards(self) -> None:
+        cases = (
+            "Turn these meeting notes into a vertical summary image.",
+            "Make a PR summary card.",
+            "Summarize this bug as a triage card.",
+            "Make a competitor-news briefing card.",
+            "Create a release announcement image.",
+            "회의록을 세로 요약 이미지로 만들어줘",
+            "PR 요약 카드",
+            "이슈 트리아지 카드",
+            "경쟁사 뉴스 브리핑 카드",
+            "릴리즈 노트 발표 이미지",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], "img-summary")
+                self.assertEqual(top["hermes_role"], "operator")
+                self.assertEqual(top["next_action"], "prepare_visual_prompt_card")
+                self.assertIn("not generated image", top["evidence_boundary"])
+                self.assertIn("visual_prompt_card/v1", top["wrapper_guidance"])
+
+    def test_recommend_plain_summary_report_does_not_overroute_to_visual_summary(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "prepare monthly summary report", "--limit", "3"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        top = json.loads(stdout)["recommendations"][0]
+        self.assertEqual(top["skill"], "report-package")
+        self.assertNotEqual(top["skill"], "img-summary")
+
+    def test_recommend_visual_summary_guard_does_not_match_unrelated_card_or_image_work(self) -> None:
+        cases = (
+            "fix the credit card payment bug",
+            "investigate the image upload bug report",
+            "prepare image assets package",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                skills = [item["skill"] for item in json.loads(stdout)["recommendations"]]
+                self.assertNotEqual(skills[0], "img-summary")
 
     def test_recommend_delivery_status_overlap_rules_are_explicit(self) -> None:
         cases = (

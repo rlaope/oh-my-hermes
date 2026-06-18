@@ -951,6 +951,72 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not claim render QA, formula recalculation, approval, or delivery from a prepared material plan.
   - Keep source facts, assumptions, missing inputs, and generated output evidence separate.
 
+### img-summary
+
+[omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.
+
+- Category: `materials`
+- Phase: `visual-prompt-card`
+- Hermes role: `operator`
+- Quality tier: `visual-card-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Keep card copy shaping, source-kind selection, language mode, prompt assembly, and evidence narration in Hermes. Use wrapper-reported image generation only as an optional action; record generated image, visual QA, and delivery claims only from visual_observation/v1 evidence.
+- Why this exists: `img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
+- Use when: Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt without claiming image generation.
+- Do not use when:
+  - The user needs a deck, PDF, spreadsheet, HWP, Markdown package, or binary file export plan; use `materials-package`.
+  - The user wants a text-only report, leadership brief, or PPT-ready outline; use `report-package`.
+  - The user asks OMH to directly generate, inspect, upload, or post an image without a wrapper-supplied observed evidence path.
+- Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `summary image`, `vertical card`, `vertical summary image`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `PR 요약 카드`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `업데이트 발표 이미지`
+- Good example:
+  - Prompt: img-summary make a PR summary card for reviewers.
+  - Expected behavior: Prepare visual_prompt_card/v1 with the PR review infographic format, copy mode, generation prompt, negative prompt, and not-evidence boundaries.
+  - Why: The request asks for an image-card communication artifact, not a PDF/deck package or hidden image generation.
+- Bad example:
+  - Prompt: img-summary prove this generated card was posted to Slack.
+  - Expected behavior: Ask for visual_observation/v1 delivery evidence or report delivery as not_observed.
+  - Why: A prompt card cannot prove generated image, QA, or delivery evidence.
+- Quality bar:
+  - Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.
+  - Use the source-specific format profile instead of forcing every visual into the same grid.
+  - Use long_scroll when the card needs a document-style vertical canvas with more sections.
+  - Keep visible card text short, readable, and faithful to supplied source or structured sections.
+  - Separate prompt prepared, image generated, visual QA passed, and delivered states.
+  - Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
+  - Use materials/report workflows only after an observed generated file needs packaging.
+- Required inputs:
+  - source kind
+  - visual format or auto
+  - aspect ratio
+  - headline or source text
+  - audience
+  - language mode
+  - card sections or supplied source excerpts
+- Expected outputs:
+  - visual_prompt_card/v1
+  - image_generation_setup/v1 when generator capability is missing
+  - source-specific visual format
+  - image-safe card copy
+  - generation prompt
+  - negative prompt
+  - quality checks
+  - visual evidence boundary
+- Artifact expectations:
+  - visual_prompt_card/v1 prompt card when prepared
+  - image_generation_setup/v1 fallback when image_generation_capability/v1 is unknown or prompt_only
+  - visual_observation/v1 only when a wrapper or user records generated image, visual QA, or delivery evidence
+- Safety rules:
+  - Do not call image providers, LLMs, APIs, or network services from OMH core.
+  - Do not claim image generation, visual QA, posting, sharing, attachment, or delivery from a prepared prompt card.
+  - Require visual_observation/v1 before claiming generated image, visual QA, or delivery evidence.
+  - Raw source text may become only an extractive draft; do not fabricate summaries, owners, decisions, test results, or conclusions.
+  - Show `generate_visual_image` only when wrapper context reports image_generation_capability/v1 as connected, and still treat it as wrapper-owned action rather than evidence.
+  - When image_generation_capability/v1 is unknown or prompt_only, ask which image tool to use and route to image_generation_setup/v1 instead of pretending generation can start.
+
 ### automation-blueprint
 
 [omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
@@ -2861,6 +2927,79 @@ Plan, hand off, and verify material-processing work across decks, PDFs, spreadsh
   - A material_artifact/v1 plan is not binary PPTX, PDF, Keynote, DOCX, XLSX, HWP, or upload evidence.
   - Planned QA checks are not render QA, formula recalculation, approval, or delivery evidence.
 - Fallback: If source data or target format is missing, create a material scaffold and ask for the smallest missing input before generation.
+
+### img-summary
+
+Prepare source-specific visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.
+
+- Use when: Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile.
+- Quality tier: `visual-card-gated`
+- Quality bar:
+  - Use meeting, PR, issue, research, report, and release format profiles instead of one fixed grid.
+  - Keep visual card copy short, source-faithful, and readable at the selected aspect ratio.
+  - Represent structured sections and extractive drafts separately.
+  - Never treat connected image capability as generated image evidence.
+  - Keep generated image, visual QA, and delivery as separate observed records.
+- Inputs:
+  - source kind
+  - visual format
+  - aspect ratio
+  - audience
+  - language mode
+  - headline or source text
+  - structured sections or extractive source excerpts
+- Outputs:
+  - visual_prompt_card/v1
+  - source-specific visual format
+  - image-safe card copy
+  - generation prompt
+  - negative prompt
+  - quality checks
+  - available wrapper actions
+- Stop conditions:
+  - prompt card is prepared
+  - copy mode is explicit
+  - format profile is source-specific
+  - image generation, visual QA, and delivery remain observed-only
+- Verification:
+  - validate visual_prompt_card/v1
+  - check source kind and language mode
+  - check visual format and aspect ratio
+  - ensure raw source uses extractive_draft copy mode
+  - record visual_observation/v1 only for supplied generated image, QA, or delivery evidence
+- Evidence ladder:
+  - `source_kind_selected`
+  - `visual_format_selected`
+  - `card_copy_prepared`
+  - `prompt_card_prepared`
+  - `image_generation_capability_checked`
+  - `generated_image_observed_when_available`
+  - `visual_qa_observed_when_available`
+  - `delivery_observed_when_available`
+- Wrapper actions:
+  - `show_visual_prompt_card`
+  - `copy_visual_prompt`
+  - `revise_visual_card`
+  - `change_visual_language`
+  - `choose_image_generator`
+  - `setup_image_generator`
+  - `generate_visual_image`
+  - `record_visual_image`
+  - `record_visual_qa`
+  - `record_visual_delivery`
+  - `show_visual_status`
+- Artifact events:
+  - `visual_card_prepared`
+  - `generation_action_available_when_connected`
+  - `visual_observation_recorded_when_available`
+- Delegation expectation: Record img-summary as Hermes-retained prompt-card preparation; record image generation, visual QA, and delivery only from visual_observation/v1 evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A visual_prompt_card/v1 artifact is not generated image, visual QA, sharing, posting, attachment, or delivery evidence.
+  - An image_generation_setup/v1 fallback is connector preparation only, not generated image evidence.
+  - A connected image-generation capability changes available actions only; it is not execution evidence.
+  - A generated image observation does not prove visual QA or delivery.
+- Fallback: If image capability is unavailable, show choose/setup image tool fallback actions plus copy/revise/status actions, and keep generation prompt-only until capability is connected.
 
 ### scheduled-ops-blueprint
 

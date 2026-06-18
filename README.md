@@ -150,7 +150,23 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
+| `img-summary` | Prepare provider-neutral image-card prompts for meetings, PRs, issues, research, and releases. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+
+### Img Summary Skill
+
+`img-summary` helps Hermes turn source material into an image-card prompt
+that another connected image tool can use. It is not one fixed template:
+meeting notes, reports, GitHub PRs, issues, research, and releases each get a
+source-specific visual format. Use `--aspect-ratio long_scroll` when the card
+needs room for more sections. Generated images, visual QA, and delivery stay
+separate until they are recorded as observed evidence. If no image generator is
+connected yet, Hermes can ask which tool to use: a GPT image tool, an existing
+Hermes connector, a generic image tool, or prompt-only mode.
+
+<p align="center">
+  <img src="assets/omh-img-summary-card.png" alt="OMH img-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
+</p>
 
 <br>
 
@@ -158,7 +174,7 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 
 | Surface | What it means in practice |
 | --- | --- |
-| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `web-research`, `materials-package`, and `ultraprocess`. |
+| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `web-research`, `materials-package`, `img-summary`, and `ultraprocess`. |
 | Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
 | Coding handoff paths | Hermes can prepare work for Codex, Claude Code, Hermes itself, or another runtime without pretending the work already ran. |

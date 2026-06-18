@@ -83,6 +83,18 @@ _SKILL_POLICIES = {
             "QA ladder, and an executor-neutral generation handoff when a binary file is needed."
         ),
     ),
+    "img-summary": RecommendationPolicy(
+        next_action="prepare_visual_prompt_card",
+        evidence_boundary=(
+            "A visual prompt card is not generated image, visual QA, sharing, posting, attachment, or delivery evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare visual_prompt_card/v1 with short image-safe copy, generation prompt, negative prompt, "
+            "language/aspect metadata, and visual_observation/v1 evidence requirements. Show generate action only "
+            "when image_generation_capability/v1 is connected; otherwise route to image_generation_setup/v1 to choose "
+            "a GPT image tool, existing Hermes connector, generic image tool, or prompt-only path."
+        ),
+    ),
     "automation-blueprint": RecommendationPolicy(
         next_action="prepare_scheduled_ops_blueprint",
         evidence_boundary=(
@@ -412,12 +424,16 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
         matches = _fallback_recommendations(definitions, query)
         return [recommendation.to_dict() for recommendation in matches[:limit]]
     if apply_guardrails:
+        guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
         matches = _apply_guardrail_reranking(
             matches,
-            normalized_query=normalized_query,
-            query_tokens=query_tokens,
-            explicit_skill=explicit_skill,
+            guards=guards,
         )
+        visual_guard_active = any(guard.id == "img_summary_before_materials_or_delivery" for guard in guards)
+        if explicit_skill != "img-summary" and not visual_guard_active:
+            matches = [recommendation for recommendation in matches if recommendation.skill != "img-summary"]
+            if not matches:
+                matches = _fallback_recommendations(definitions, query)
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
     return [recommendation.to_dict() for recommendation in matches[:limit]]
 
@@ -522,11 +538,8 @@ def _fallback_recommendations(definitions: list[SkillDefinition], query: str) ->
 def _apply_guardrail_reranking(
     recommendations: list[Recommendation],
     *,
-    normalized_query: str,
-    query_tokens: set[str],
-    explicit_skill: str | None,
+    guards: tuple[RoutingGuardRule, ...],
 ) -> list[Recommendation]:
-    guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
     if not guards:
         return recommendations
     reranked = []

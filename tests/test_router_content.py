@@ -146,6 +146,7 @@ class RouterContentTests(unittest.TestCase):
             "operating-rhythm",
             "report-package",
             "materials-package",
+            "img-summary",
             "automation-blueprint",
             "reliability-review",
             "idea-to-deploy",
@@ -250,6 +251,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["operating-rhythm"].next_action, "prepare_operating_record")
         self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
+        self.assertEqual(recommend_module._SKILL_POLICIES["img-summary"].next_action, "prepare_visual_prompt_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
         self.assertEqual(recommend_module._SKILL_POLICIES["github-event-ops"].next_action, "prepare_github_event_ops_card")
@@ -313,6 +315,7 @@ class RouterContentTests(unittest.TestCase):
                 "operating-rhythm",
                 "report-package",
                 "materials-package",
+                "img-summary",
                 "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
@@ -395,6 +398,46 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("briefing_status/v1", inspect_playbook("research-department")["playbook"]["stages"][-1]["contract"])
         self.assertIn("research-department", templates)
         self.assertIn("Scout", templates["research-department"].content)
+
+    def test_visual_summary_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("img-summary", definitions)
+        self.assertIn("img-summary", harnesses)
+        self.assertIn("img-summary", templates)
+        self.assertEqual(primary_harness_for_skill("img-summary"), "img-summary")
+        self.assertEqual(definitions["img-summary"].category, "materials")
+        self.assertEqual(definitions["img-summary"].phase, "visual-prompt-card")
+        self.assertIn("visual_prompt_card/v1", definitions["img-summary"].expected_outputs)
+        self.assertIn("image_generation_setup/v1 when generator capability is missing", definitions["img-summary"].expected_outputs)
+        self.assertIn("image_generation_setup/v1", " ".join(definitions["img-summary"].safety_rules))
+        self.assertIn("visual_observation/v1", " ".join(definitions["img-summary"].safety_rules))
+        self.assertIn("visual_prompt_card/v1", harnesses["img-summary"].expected_outputs)
+        self.assertIn("generated_image_observed_when_available", harnesses["img-summary"].evidence_ladder)
+        self.assertIn("choose_image_generator", harnesses["img-summary"].wrapper_actions)
+        self.assertIn("setup_image_generator", harnesses["img-summary"].wrapper_actions)
+        self.assertIn("record_visual_delivery", harnesses["img-summary"].wrapper_actions)
+        self.assertTrue(
+            {
+                "show_visual_prompt_card",
+                "copy_visual_prompt",
+                "revise_visual_card",
+                "change_visual_language",
+                "choose_image_generator",
+                "setup_image_generator",
+                "generate_visual_image",
+                "record_visual_image",
+                "record_visual_qa",
+                "record_visual_delivery",
+                "show_visual_status",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("image-generation-ready visual prompt cards", templates["img-summary"].content)
+        self.assertIn("Do not call image providers", templates["img-summary"].content)
+        self.assertIn("image_generation_setup/v1", templates["img-summary"].content)
+        self.assertIn("Preferred harness for this skill: `img-summary`", templates["img-summary"].content)
 
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
         for definition in builtin_definitions():
@@ -494,6 +537,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("operating-rhythm"), "operating-rhythm")
         self.assertEqual(primary_harness_for_skill("report-package"), "report-package")
         self.assertEqual(primary_harness_for_skill("materials-package"), "materials-package")
+        self.assertEqual(primary_harness_for_skill("img-summary"), "img-summary")
         self.assertEqual(primary_harness_for_skill("reliability-review"), "reliability-review")
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
@@ -518,6 +562,7 @@ class RouterContentTests(unittest.TestCase):
                 "operating-rhythm",
                 "report-package",
                 "materials-package",
+                "img-summary",
                 "reliability-review",
                 "idea-to-deploy",
                 "cto-loop",
@@ -772,11 +817,13 @@ class RouterContentTests(unittest.TestCase):
             Path("site/index.html"),
             Path("site/docs/index.html"),
             Path("site/docs/loop/index.html"),
+            Path("site/docs/image-gen/index.html"),
             Path("site/docs/intent-to-plan/index.html"),
             Path("site/docs/product-ops/index.html"),
             Path("site/docs/executor-handoff/index.html"),
             Path("site/styles.css"),
             Path("site/assets/hermes-agent-hero.png"),
+            Path("site/assets/omh-img-summary-card.png"),
         ]
 
         for path in required_paths:
@@ -797,6 +844,7 @@ class RouterContentTests(unittest.TestCase):
         site = Path("site/index.html").read_text(encoding="utf-8")
         site_docs = Path("site/docs/index.html").read_text(encoding="utf-8")
         site_loop = Path("site/docs/loop/index.html").read_text(encoding="utf-8")
+        site_image_gen = Path("site/docs/image-gen/index.html").read_text(encoding="utf-8")
         site_intent = Path("site/docs/intent-to-plan/index.html").read_text(encoding="utf-8")
         site_product_ops = Path("site/docs/product-ops/index.html").read_text(encoding="utf-8")
         site_handoff = Path("site/docs/executor-handoff/index.html").read_text(encoding="utf-8")
@@ -997,8 +1045,14 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("planner", site)
         self.assertIn("Prepared is not observed", site)
         self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site)
-        self.assertIn("Loop is now a flagship OMH lane.", site)
+        self.assertIn("Loop and Image gen are flagship OMH lanes.", site)
         self.assertIn("<h3>Loop!</h3>", site)
+        self.assertIn("Image gen prompt cards", site)
+        self.assertIn("Visual summaries that match the source.", site)
+        self.assertIn('href="docs/image-gen/"', site)
+        self.assertIn("assets/omh-img-summary-card.png", site)
+        self.assertIn("source-specific cards for meetings, reports", site)
+        self.assertIn("If no image tool is connected", site)
         self.assertIn('<a class="loop-spotlight" href="docs/loop/"', site)
         self.assertIn('href="docs/loop/"', site)
         self.assertIn('href="docs/intent-to-plan/"', site)
@@ -1015,8 +1069,14 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("planner", site_docs)
         self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site_docs)
         self.assertIn('<a class="loop-spotlight loop-spotlight--docs" href="loop/"', site_docs)
+        self.assertIn('<a class="imagegen-spotlight imagegen-spotlight--docs" href="image-gen/"', site_docs)
         self.assertIn('<span class="button button--primary" aria-hidden="true">Open Loop docs</span>', site_docs)
         self.assertIn("../assets/omh-loop-engineering.png", site_docs)
+        self.assertIn("../assets/omh-img-summary-card.png", site_docs)
+        self.assertIn("visual_prompt_card/v1", site_docs)
+        self.assertIn("visual_observation/v1", site_docs)
+        self.assertIn("image_generation_setup/v1", site_docs)
+        self.assertIn('href="image-gen/"', site_docs)
         self.assertIn('href="intent-to-plan/"', site_docs)
         self.assertIn('href="product-ops/"', site_docs)
         self.assertIn('href="executor-handoff/"', site_docs)
@@ -1041,8 +1101,22 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("A loop tick is not execution", site_loop)
         self.assertIn("Intent to plan", site_intent)
         self.assertIn("deep-interview", site_intent)
+        self.assertIn("Image gen that stays source-aware.", site_image_gen)
+        self.assertIn("meeting_recap_card", site_image_gen)
+        self.assertIn("report_digest_card", site_image_gen)
+        self.assertIn("pr_review_infographic", site_image_gen)
+        self.assertIn("issue_triage_card", site_image_gen)
+        self.assertIn("research_briefing_board", site_image_gen)
+        self.assertIn("release_announcement_card", site_image_gen)
+        self.assertIn("visual_prompt_card/v1", site_image_gen)
+        self.assertIn("visual_observation/v1", site_image_gen)
+        self.assertIn("image_generation_setup/v1", site_image_gen)
+        self.assertIn("connected image tool", site_image_gen)
+        self.assertIn("They are not generated image evidence.", site_image_gen)
         self.assertIn("Company and product ops", site_product_ops)
         self.assertIn("feedback-triage", site_product_ops)
+        self.assertIn("source-specific Image gen cards", site_product_ops)
+        self.assertIn('href="../image-gen/"', site_product_ops)
         self.assertIn("Executor-ready handoff", site_handoff)
         self.assertIn("Codex, Claude Code", site_handoff)
         topbar = site.split('<header class="topbar"', 1)[1].split("</header>", 1)[0]
@@ -1062,6 +1136,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertNotIn("omh doctor", hero_command)
         self.assertIn("assets/omh-loop-engineering.png", site)
         self.assertTrue(Path("site/assets/omh-loop-engineering.png").is_file())
+        self.assertTrue(Path("site/assets/omh-img-summary-card.png").is_file())
         self.assertNotIn("github.com/rlaope/oh-my-hermes/tree/main/docs", site)
         self.assertIn("OMH Documentation", site_docs)
         self.assertIn("hermes skills tap add rlaope/oh-my-hermes", site_docs)
@@ -1074,6 +1149,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("harness_progress/v1", site)
         self.assertIn("assets/hermes-agent-hero.png", site_css)
         self.assertIn(".loop-spotlight", site_css)
+        self.assertIn(".imagegen-spotlight", site_css)
+        self.assertIn(".image-format-grid", site_css)
         self.assertIn(".feature-flow", site_css)
 
     def test_direction_and_agent_contract_lock_product_boundary(self) -> None:

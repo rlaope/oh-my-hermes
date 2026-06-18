@@ -136,6 +136,68 @@ _RESEARCH_DEPARTMENT_PHRASES = (
     "시장 리서치",
     "수집 합성 브리핑",
 )
+_VISUAL_SUMMARY_MODALITY_TOKENS = frozenset(
+    {
+        "visual",
+        "image",
+        "vertical",
+        "이미지",
+        "세로",
+    }
+)
+_VISUAL_SUMMARY_CARD_TOKENS = frozenset({"card", "카드"})
+_VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = frozenset(
+    {
+        "summary",
+        "announcement",
+        "briefing",
+        "triage",
+        "review",
+        "release",
+        "meeting",
+        "notes",
+        "pr",
+        "pull",
+        "request",
+        "research",
+        "news",
+        "competitor",
+        "요약",
+        "브리핑",
+        "발표",
+        "트리아지",
+        "회의",
+        "회의록",
+        "리서치",
+        "뉴스",
+        "경쟁사",
+    }
+)
+_VISUAL_SUMMARY_PHRASES = (
+    "img-summary",
+    "img summary",
+    "visual-summary",
+    "visual summary",
+    "visual prompt card",
+    "image card",
+    "summary image",
+    "vertical card",
+    "vertical summary image",
+    "pr summary card",
+    "pull request card",
+    "issue triage card",
+    "bug triage card",
+    "news briefing card",
+    "competitor news briefing card",
+    "release announcement image",
+    "release notes image",
+    "회의록을 세로 요약 이미지",
+    "회의록 세로 요약 이미지",
+    "pr 요약 카드",
+    "이슈 트리아지 카드",
+    "경쟁사 뉴스 브리핑 카드",
+    "릴리즈 노트 발표 이미지",
+)
 _SCHEDULED_OPS_PHRASES = (
     "every morning",
     "every day",
@@ -229,6 +291,15 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; PR or delivery-cycle requests need the one-cycle process lane rather than research-only routing.",
     activation_status="active",
 )
+VISUAL_SUMMARY_GUARD = RoutingGuardRule(
+    id="img_summary_before_materials_or_delivery",
+    rule="Image, card, or img-summary requests should route to img-summary before materials or PR delivery-cycle lanes.",
+    matched_label="guard:img_summary",
+    preferred_skills=("img-summary",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
+    activation_status="active",
+)
 SCHEDULED_OPS_BLUEPRINT_GUARD = RoutingGuardRule(
     id="scheduled_ops_blueprint_before_reliability_or_research",
     rule="Recurring schedule, delivery, or silence-policy requests should route to the scheduled ops blueprint lane before one-off review/research lanes.",
@@ -253,6 +324,7 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
+    VISUAL_SUMMARY_GUARD,
     DELIVERY_CYCLE_GUARD,
 )
 
@@ -310,6 +382,8 @@ def active_routing_guard_rules(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        rules.append(VISUAL_SUMMARY_GUARD)
     if delivery_cycle_applies:
         rules.append(DELIVERY_CYCLE_GUARD)
     return tuple(rules)
@@ -445,7 +519,22 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
     )
 
 
+def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if (_VISUAL_SUMMARY_MODALITY_TOKENS | _VISUAL_SUMMARY_CARD_TOKENS) & query_tokens and (
+        _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens
+    ):
+        return True
+    if _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens and _contains_phrase(
+        normalized_query,
+        ("summary image", "summary card", "briefing card", "announcement image", "요약 이미지", "요약 카드"),
+    ):
+        return True
+    return _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
+
+
 def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
     return _delivery_cycle_terms(normalized_query, query_tokens) and _contains_phrase(
         normalized_query,
         (

@@ -113,6 +113,7 @@ from .setup import (
 )
 from .state import _add_state_commands, cmd_state_clear, cmd_state_finish, cmd_state_start, cmd_state_status
 from .use_cases import _add_cases_commands, cmd_cases_inspect, cmd_cases_list, cmd_cases_recommend
+from .visual import _add_visual_commands, cmd_visual_observe, cmd_visual_prompt_card
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -145,6 +146,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh loop status\n"
             "  omh ops list\n"
             "  omh materials list\n"
+            "  omh img-summary prompt-card --kind github_pr --visual-format auto --section summary:What_changed:Safer_setup_copy\n"
+            "  omh img-summary prompt-card --kind report --aspect-ratio long_scroll --section summary:Executive_summary:Weekly_metrics_changed\n"
             "  omh runtime status\n\n"
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
@@ -180,6 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_menubar_commands(sub)
     _add_ops_commands(sub)
     _add_materials_commands(sub)
+    _add_visual_commands(sub)
     _add_runtime_commands(sub)
     _add_goal_commands(sub)
     _add_state_commands(sub)
@@ -218,6 +222,7 @@ Useful operator commands:
   omh loop status        Show loopable goal cycle state
   omh ops list           List local operations artifacts
   omh materials list     List material-processing artifacts
+  omh img-summary prompt-card Prepare image-generation-ready summary cards
   omh runtime status     Show local evidence artifacts
 
 After setup, restart or reload Hermes Agent and try:

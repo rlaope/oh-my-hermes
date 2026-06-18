@@ -11,6 +11,7 @@ from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
+from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
     hermes_coding_team_body,
     hermes_coding_team_claim_boundary,
@@ -84,6 +85,17 @@ VISIBLE_ACTIONS = (
     "revise_research_sources",
     "confirm_cadence_delivery_tooling",
     "record_source_observation",
+    "show_visual_prompt_card",
+    "copy_visual_prompt",
+    "revise_visual_card",
+    "change_visual_language",
+    "choose_image_generator",
+    "setup_image_generator",
+    "generate_visual_image",
+    "record_visual_image",
+    "record_visual_qa",
+    "record_visual_delivery",
+    "show_visual_status",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
@@ -104,6 +116,7 @@ _SKILL_PICKER_ENTRIES = (
     ("research-department", "Research Department", "Prepare Scout, Analyst, and Briefer research ops.", "./research-department <topic>"),
     ("code-review", "Code Review", "Review completed work without overclaiming evidence.", "./code-review <scope>"),
     ("materials-package", "Materials Package", "Shape PPT, PDF, spreadsheet, document, or Markdown deliverables.", "./materials-package <brief>"),
+    ("img-summary", "Img Summary", "Prepare image-generation-ready summary cards.", "./img-summary <source>"),
     ("automation-blueprint", "Automation Blueprint", "Prepare recurring Hermes scheduled-ops workflows.", "./automation-blueprint <intent>"),
     ("doctor", "Doctor", "Check OMH install and Hermes registration health.", "./doctor"),
 )
@@ -508,6 +521,55 @@ def build_chat_response_from_route(
                         "merge readiness",
                         "merge",
                     ],
+                },
+            )
+        if selected == "img-summary" or policy_next_action == "prepare_visual_prompt_card":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A visual prompt card is not generated image evidence."
+            body = str(policy.get("wrapper_guidance", "")) or (
+                "I will prepare a readable visual prompt card. Image generation, visual QA, and delivery stay unobserved "
+                "until a wrapper or user records evidence."
+            )
+            return _chat_response(
+                kind="img_summary",
+                headline="I can prepare an img-summary card for this.",
+                body=body,
+                phase="visual_prompt_prepared",
+                next_action="prepare_visual_prompt_card",
+                thread_key=thread_key,
+                actions=[
+                    _action("show_visual_prompt_card", "Show card", "primary"),
+                    _action("copy_visual_prompt", "Copy prompt", "secondary"),
+                    _action("revise_visual_card", "Revise card", "secondary"),
+                    _action("change_visual_language", "Change language", "secondary"),
+                    _action("choose_image_generator", "Choose image tool", "secondary"),
+                    _action("setup_image_generator", "Set up image tool", "secondary"),
+                    _action("record_visual_image", "Record generated image", "secondary"),
+                    _action("record_visual_qa", "Record visual QA", "secondary"),
+                    _action("record_visual_delivery", "Record delivery", "secondary"),
+                    _action("show_visual_status", "Show visual status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "visual_prompt_card/v1",
+                    "observation_schema": "visual_observation/v1",
+                    "image_generation_capability": "unknown",
+                    "image_generation_setup": image_generation_setup_fallback("unknown"),
+                    "evidence_not_observed": [
+                        "image generation",
+                        "visual QA",
+                        "sharing",
+                        "posting",
+                        "attachment",
+                        "delivery",
+                    ],
+                    "capability_action_rule": (
+                        "Show generate_visual_image only when wrapper context reports image_generation_capability/v1 "
+                        "with state connected; that action is still not generation evidence."
+                    ),
                 },
             )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"

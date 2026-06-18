@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OMH Image Gen</title>
+    <meta
+      name="description"
+      content="OMH Image gen docs for img-summary prompt cards, source-specific card formats, connected image tools, and observed-only image evidence."
+    >
+    <link rel="stylesheet" href="../../styles.css">
+  </head>
+  <body class="docs-page feature-page">
+    <header class="topbar topbar--solid" aria-label="Primary">
+      <a class="brand brand--link" href="../../">OMH</a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="../">Docs</a>
+        <a class="nav__icon" href="https://github.com/rlaope/oh-my-hermes" aria-label="Open OMH repository on GitHub" title="GitHub repository">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.52 2.87 8.35 6.85 9.7.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.37 9.37 0 0 1 12 6.92c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.8c0 .27.18.58.69.48A10.06 10.06 0 0 0 22 12.22C22 6.58 17.52 2 12 2Z"></path></svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="feature-shell imagegen-page">
+      <header class="feature-hero feature-hero--imagegen">
+        <div class="feature-hero__copy">
+          <p class="eyebrow">Flagship lane</p>
+          <h1>Image gen that stays source-aware.</h1>
+          <p>
+            <code>img-summary</code> helps Hermes prepare image-generation
+            prompt cards for meeting notes, reports, GitHub PRs, issues,
+            research briefings, and release updates. OMH shapes the card before
+            a connected image tool runs, then records image generation, visual
+            QA, attachment, and delivery only when those events are observed. If
+            no generator is connected yet, Hermes can first choose a GPT image
+            tool, an existing Hermes connector, a generic image tool, or
+            prompt-only mode.
+          </p>
+          <div class="feature-actions">
+            <a class="button button--primary" href="../">Back to docs</a>
+            <a class="button" href="../product-ops/">Product ops lane</a>
+          </div>
+        </div>
+        <figure class="imagegen-doc-poster">
+          <img
+            src="../../assets/omh-img-summary-card.png"
+            alt="OMH img-summary poster with source inputs, prompt card, connected image tool, and visual observation states"
+          >
+        </figure>
+      </header>
+
+      <section class="feature-section">
+        <h2>Formats follow the source</h2>
+        <p>
+          The visual system is not one fixed grid. OMH selects a visual format
+          and aspect ratio that match the source, then keeps the shared proof
+          structure stable: summary, key points, why it matters, next action,
+          caveats, and observed evidence.
+        </p>
+        <div class="image-format-grid" aria-label="Visual summary source-specific formats">
+          <article class="image-format-card">
+            <span>meeting_recap_card</span>
+            <h3>Meeting notes</h3>
+            <p>Decisions, owners, blockers, and next actions for team follow-up.</p>
+          </article>
+          <article class="image-format-card">
+            <span>report_digest_card</span>
+            <h3>Reports</h3>
+            <p>Long-scroll digest cards for metrics, observations, caveats, and actions.</p>
+          </article>
+          <article class="image-format-card">
+            <span>pr_review_infographic</span>
+            <h3>GitHub PRs</h3>
+            <p>What changed, risk, tests, reviewers, and merge readiness for sharing.</p>
+          </article>
+          <article class="image-format-card">
+            <span>issue_triage_card</span>
+            <h3>Issues</h3>
+            <p>Signal, severity, reproduction path, owner, and triage decision.</p>
+          </article>
+          <article class="image-format-card">
+            <span>research_briefing_board</span>
+            <h3>Research</h3>
+            <p>Findings, source quality, disagreement, caveats, and what to verify.</p>
+          </article>
+          <article class="image-format-card">
+            <span>release_announcement_card</span>
+            <h3>Releases</h3>
+            <p>What is new, who should care, upgrade notes, and confidence level.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="feature-section feature-section--split">
+        <div class="feature-copy">
+          <h2>End-to-end flow</h2>
+          <p>
+            Hermes can use this lane when a chat summary needs to become a
+            shareable visual. The wrapper can show the prompt card, copy the
+            prompt into an already connected image tool, or fall back to
+            image_generation_setup/v1 before generation, then record what
+            happened back into OMH.
+          </p>
+          <div class="feature-flow feature-flow--imagegen" aria-label="Image generation flow">
+            <span>source</span>
+            <span>visual_prompt_card/v1</span>
+            <span>image_generation_setup/v1</span>
+            <span>connected image tool</span>
+            <span>visual_observation/v1</span>
+          </div>
+        </div>
+        <aside class="feature-contract">
+          <h2>Evidence ladder</h2>
+          <ul class="docs-list">
+            <li><strong>Prompt prepared</strong> means copy, layout, language, negative prompt, and QA checklist are ready.</li>
+            <li><strong>Image generated</strong> means a connected image tool produced a concrete image.</li>
+            <li><strong>Visual QA passed</strong> means somebody checked readability, fit, source alignment, and safety.</li>
+            <li><strong>Attached or delivered</strong> means a wrapper or operator shared the image.</li>
+            <li><strong>Recorded in OMH</strong> means a matching <code>visual_observation/v1</code> event exists.</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section class="feature-section">
+        <h2>Try the backend contract</h2>
+        <p>
+          Normal users should ask Hermes for the card in chat. Operators and
+          wrappers can call the deterministic backend to preview the exact
+          contract shape without contacting an image provider.
+        </p>
+        <div class="command" role="region" aria-label="Image gen prompt card commands" tabindex="0">
+          <code>omh img-summary prompt-card --kind github_pr --section summary:What_changed:Setup_copy_now_matches_the_site
+omh img-summary prompt-card --kind report --section summary:Executive_summary:Weekly_metrics_changed
+omh img-summary observe --card-id &lt;id&gt; --type generated_image_observed --path ./card.png --summary "Generated with connected image tool"</code>
+        </div>
+        <p>
+          The first two commands prepare <code>visual_prompt_card/v1</code>.
+          If no image tool is connected, the card also carries
+          <code>image_generation_setup/v1</code> so Hermes can ask what to use
+          before generation. They are not generated image evidence. The
+          observation command records one explicit event after the external
+          image step actually happens.
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Image gen docs are part of the OMH public site.</span>
+      <span>Developed by <a href="https://github.com/rlaope">rlaope</a>.</span>
+    </footer>
+  </body>
+</html>
