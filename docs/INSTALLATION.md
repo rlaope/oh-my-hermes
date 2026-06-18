@@ -94,6 +94,33 @@ Hermes has loaded it.
 If the target Hermes runtime requires a separate plugin enable command, follow
 that runtime's plugin enable/reload step.
 
+For native menu bar or status-widget integrations, use the platform-neutral
+view model:
+
+```sh
+omh menubar status
+```
+
+It emits `menubar_status/v1` JSON with separate `hermes_agents` and
+`external_coding_executors` sections, friendly labels such as
+`OMH connection: Ready`, `Hermes targets: 2`, `Coding handoff: Codex`, and
+`Send mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
+text. Codex and other coding tools are external executors, not Hermes agents.
+Without an explicit process overlay, the payload reports configured/prepared
+state only and leaves PID plus running/restarting unobserved.
+
+A native macOS MenuBarExtra app or test harness can pass a short-lived
+`menubar_process_overlay/v1` file when it has actually observed local process
+state:
+
+```sh
+omh menubar status --overlay /path/to/overlay.json
+```
+
+The overlay is app-local and expires by TTL. OMH does not auto-read process
+caches, scan the host, launch agents, or infer that a prepared coding handoff
+is running.
+
 MCP bridge setup is also optional and intentionally conservative:
 
 ```sh

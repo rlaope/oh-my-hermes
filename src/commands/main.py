@@ -62,6 +62,7 @@ from .materials import (
     cmd_materials_show,
     cmd_materials_validate,
 )
+from .menubar import _add_menubar_commands, cmd_menubar_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .ops import (
     _add_ops_commands,
@@ -140,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh playbook recommend \"turn this issue into a PR\"\n"
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
             "  omh hud\n"
+            "  omh menubar status\n"
             "  omh loop status\n"
             "  omh ops list\n"
             "  omh materials list\n"
@@ -175,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_hud_commands(sub)
     _add_loop_commands(sub)
     _add_memory_commands(sub)
+    _add_menubar_commands(sub)
     _add_ops_commands(sub)
     _add_materials_commands(sub)
     _add_runtime_commands(sub)
@@ -211,6 +214,7 @@ Useful operator commands:
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
+  omh menubar status     Show the menu bar app status view model
   omh loop status        Show loopable goal cycle state
   omh ops list           List local operations artifacts
   omh materials list     List material-processing artifacts

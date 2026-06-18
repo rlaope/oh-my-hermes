@@ -160,6 +160,29 @@ patch Hermes core, or claim execution evidence from prepared handoffs. Role
 context is prompt guidance only; it is not proof
 that a separate role, worker, or executor ran.
 
+`menubar_status.py` owns the platform-neutral macOS menu bar view model exposed
+by `omh menubar status`. Its `menubar_status/v1` payload is a UI projection over
+the same local HUD, target registry, and runtime evidence. It is intentionally
+not the source of truth. The payload separates `hermes_agents` from
+`external_coding_executors` so Codex, Claude Code, OMX, OMO, OMC, or generic
+coding tools cannot be rendered as Hermes agents by accident. Compact surfaces
+receive source and model `icon_id` values plus tooltip text rather than Markdown
+tables or prose-only labels.
+
+`current_external_coding_executor` names the selected row explicitly, preferring
+`runtime/state.json` `last_run_id` when it matches the recent executor list, so
+settings and compact summaries do not rely on an unnamed list-order convention.
+
+The menu bar status contract reports configured Hermes targets and prepared
+handoffs without inventing process state. PID, `running`, and `restarting`
+values are applied only from a caller-provided `menubar_process_overlay/v1`
+payload, normally produced by a native macOS MenuBarExtra app or test harness.
+That overlay is app-local, expires after a short TTL, and applies restarting
+state only inside its restart window. OMH does not scan processes, launch
+agents, infer runtime health, or turn prepared handoffs into observed
+execution. A native macOS app can be built on top of this contract later; this
+repository slice provides the deterministic backend contract and CLI projection.
+
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
 top-level error handling, and the public command handler re-export surface.
 Domain command modules under `commands/` own support JSON output for bootstrap,
