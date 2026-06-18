@@ -201,6 +201,19 @@ _SKILL_POLICIES.update(
             evidence_boundary="An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
             wrapper_guidance="Report token/cost/latency/run-history telemetry as wrapper-safe status with clear local-estimate vs provider-observed boundaries.",
         ),
+        "agent-ops-review": RecommendationPolicy(
+            next_action="prepare_agent_ops_review",
+            evidence_boundary=(
+                "An agent ops review card is not source retrieval, executor dispatch, coding progress, "
+                "implementation, review, verification, CI, merge-readiness, merge, platform delivery, "
+                "provider billing, or live runtime telemetry evidence."
+            ),
+            wrapper_guidance=(
+                "Render a manager-facing quality and throughput card: workflow quality lanes, blockers, "
+                "next actions, and throughput levers. Keep shell commands hidden from normal chat users and "
+                "record only observed runtime/source/review evidence."
+            ),
+        ),
     }
 )
 _CATEGORY_POLICIES = {

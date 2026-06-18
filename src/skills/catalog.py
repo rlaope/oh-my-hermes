@@ -336,6 +336,7 @@ _CODING_INTENT_BY_SKILL.update(
         "voice-operator": "planning",
         "toolbelt-readiness": "planning",
         "ops-observability-card": "planning",
+        "agent-ops-review": "planning",
     }
 )
 
@@ -2436,6 +2437,38 @@ _FEATURE_SURFACE_SKILLS = (
         good_prompt="ops-observability-card show token, cost, latency, and last run status for this loop.",
         bad_prompt="ops-observability-card claim exact provider billing from local estimates.",
     ),
+    _feature_surface_skill(
+        "agent-ops-review",
+        "Hermes agent ops review workflow: help a manager inspect AI-agent research, coding, review, status, blockers, quality gates, and throughput levers.",
+        (
+            "agent-ops-review",
+            "agent ops review",
+            "agent productivity",
+            "operator productivity",
+            "manager view",
+            "quality dashboard",
+            "throughput review",
+            "agent work quality",
+            "coding progress quality",
+            "research coding review status",
+            "ai agent manager",
+            "third-party manager",
+            "관리자 입장",
+            "작업 생산량",
+            "처리량",
+            "품질 퀄리티",
+            "작업 품질",
+            "진행상황",
+            "리서치 코딩 리뷰",
+        ),
+        "Use when Hermes should explain AI-agent work from a manager/operator perspective: quality gates, progress, blockers, next actions, and throughput opportunities across research, coding, review, and status.",
+        category="operator",
+        phase="manager-review",
+        next_action="prepare_agent_ops_review",
+        boundary="An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge-readiness, merge, platform delivery, provider billing, or live runtime telemetry evidence.",
+        good_prompt="agent-ops-review show me quality, blockers, and throughput for AI-agent research, coding, and review work.",
+        bad_prompt="agent-ops-review claim Codex finished and CI passed because a handoff exists.",
+    ),
 )
 
 
@@ -2530,6 +2563,14 @@ _SURFACE_EXPOSURES = (
         "harness_reference",
         "Use as a telemetry/status harness for token, cost, latency, run history, and failure-mode boundaries.",
         True,
+    ),
+    SurfaceExposure(
+        "agent-ops-review",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when a manager wants quality, blockers, next actions, and throughput guidance for AI-agent work.",
     ),
 )
 
@@ -3513,6 +3554,31 @@ _FEATURE_SURFACE_HARNESSES = (
         wrapper_actions=("show_observability", "record_metric", "record_failure_mode", "show_status"),
         overclaim_guard="An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
     ),
+    _feature_surface_harness(
+        "agent-ops-review",
+        "Prepare a manager-facing quality and throughput review for AI-agent research, coding, review, and status work.",
+        "Use when a third-party operator or team lead wants to understand progress, blockers, quality gates, next actions, and safe throughput levers without running shell catalog commands.",
+        ("manager request", "work context or run/session references when available", "target outcome", "known evidence gaps"),
+        ("agent_operator_productivity/v1", "agent_operator_status_card/v1", "quality lanes", "blockers", "next action", "throughput levers"),
+        quality_tier="manager-review-gated",
+        evidence_ladder=(
+            "manager_scope_recorded",
+            "quality_lanes_prepared",
+            "evidence_gaps_named",
+            "next_action_selected",
+            "runtime_observation_recorded_when_available",
+        ),
+        wrapper_actions=(
+            "show_agent_ops_review",
+            "choose_ops_lane",
+            "prepare_research_lane",
+            "prepare_coding_lane",
+            "prepare_review_lane",
+            "refresh_agent_ops_status",
+            "record_agent_ops_observation",
+        ),
+        overclaim_guard="An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.",
+    ),
 )
 
 
@@ -3568,6 +3634,7 @@ _PRIMARY_HARNESSES.update(
         "voice-operator": "voice-operator",
         "toolbelt-readiness": "toolbelt-readiness",
         "ops-observability-card": "ops-observability-card",
+        "agent-ops-review": "agent-ops-review",
     }
 )
 

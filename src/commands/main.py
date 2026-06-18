@@ -66,6 +66,9 @@ from .menubar import _add_menubar_commands, cmd_menubar_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
 from .ops import (
     _add_ops_commands,
+    cmd_ops_agent_review,
+    cmd_ops_agent_review_list,
+    cmd_ops_agent_review_show,
     cmd_ops_blueprint,
     cmd_ops_blueprint_list,
     cmd_ops_blueprint_show,
