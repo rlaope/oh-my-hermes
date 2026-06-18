@@ -30,8 +30,39 @@
       <stop offset="0.5" stop-color="#f5dde2"/>
       <stop offset="1" stop-color="#1d1d24"/>
     </linearGradient>
+    <radialGradient id="securityGlow" cx="73%" cy="28%" r="62%">
+      <stop offset="0" stop-color="#ff5577" stop-opacity=".34"/>
+      <stop offset=".45" stop-color="#6a2aff" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#0a0514" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="commerceGlow" cx="78%" cy="18%" r="58%">
+      <stop offset="0" stop-color="#8ef7d7" stop-opacity=".5"/>
+      <stop offset=".48" stop-color="#ffe2a8" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sportsGlow" cx="90%" cy="88%" r="82%">
+      <stop offset="0" stop-color="#ff8c38" stop-opacity=".76"/>
+      <stop offset=".55" stop-color="#57f58a" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#082339" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="fashionGlow" cx="72%" cy="12%" r="72%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".82"/>
+      <stop offset=".45" stop-color="#f0a9bc" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#11131c" stop-opacity="0"/>
+    </radialGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#102030" flood-opacity="0.16"/>
+    </filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="9" result="noise"/>
+      <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .16 0"/>
+    </filter>
+    <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="11" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
     <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
       <path d="M42 0H0V42" fill="none" stroke="#7ab7ff" stroke-opacity="0.12"/>
@@ -67,8 +98,8 @@
 
     <text class="h1" x="48" y="154">img-summary</text>
     <text class="h1" x="48" y="224">adapts by domain</text>
-    <text class="body" x="51" y="274">One stable card contract. Different visual worlds for the subject.</text>
-    <text class="body" x="51" y="305">Security can look like security. Sports can move. Fashion can feel editorial.</text>
+    <text class="body" x="51" y="274">One stable card contract. Premium backgrounds by subject.</text>
+    <text class="body" x="51" y="305">Security can feel cinematic. Sports can move. Fashion can show texture.</text>
 
     <g transform="translate(618 58)">
       <rect x="0" y="0" width="244" height="244" rx="48" fill="#e8f4ff" opacity=".8"/>
@@ -81,7 +112,14 @@
 
     <g transform="translate(48 372)" filter="url(#shadow)">
       <rect width="404" height="408" rx="26" fill="url(#security)"/>
+      <rect width="404" height="408" rx="26" fill="url(#securityGlow)"/>
+      <rect width="404" height="408" rx="26" filter="url(#grain)" opacity=".42"/>
       <rect width="404" height="408" rx="26" fill="url(#grid)" opacity=".36"/>
+      <g opacity=".28">
+        <path d="M32 88H188M32 109H152M32 130H226M32 151H134" stroke="#9befff" stroke-width="2"/>
+        <path d="M300 78l43 22v54l-43 24-43-24v-54z" fill="none" stroke="#9befff" stroke-width="3"/>
+        <path d="M254 262c36-27 76-30 121-10" fill="none" stroke="#ff4b6f" stroke-width="5" filter="url(#softGlow)"/>
+      </g>
       <path d="M270 34c54 12 88 53 92 112-28 20-60 35-92 43-34-10-64-24-90-43 4-59 37-100 90-112z" fill="#ff4b6f" opacity=".18"/>
       <rect x="26" y="26" width="116" height="30" rx="15" fill="#ffffff" opacity=".12"/>
       <circle cx="44" cy="41" r="7" fill="#ff4b6f"/>
@@ -106,7 +144,14 @@
 
     <g transform="translate(489 372)" filter="url(#shadow)">
       <rect width="404" height="408" rx="26" fill="url(#commerce)"/>
+      <rect width="404" height="408" rx="26" fill="url(#commerceGlow)"/>
+      <rect width="404" height="408" rx="26" filter="url(#grain)" opacity=".28"/>
       <circle cx="318" cy="84" r="70" fill="#2fd6b6" opacity=".24"/>
+      <g opacity=".42">
+        <rect x="258" y="182" width="92" height="116" rx="14" fill="#ffffff" stroke="#d8efe7"/>
+        <path d="M272 204h58M272 224h46M272 244h62M272 264h38" stroke="#8ab9ad" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="91" cy="336" r="35" fill="#ffd07a" opacity=".34"/>
+      </g>
       <path d="M280 60h54l14 84h-82z" fill="#ffffff" opacity=".7" stroke="#26ad99"/>
       <path d="M278 80h72" stroke="#26ad99" stroke-width="6" stroke-linecap="round"/>
       <rect x="26" y="26" width="126" height="30" rx="15" fill="#0f766e" opacity=".14"/>
@@ -134,7 +179,15 @@
 
     <g transform="translate(48 824)" filter="url(#shadow)">
       <rect width="404" height="408" rx="26" fill="url(#sports)"/>
+      <rect width="404" height="408" rx="26" fill="url(#sportsGlow)"/>
+      <rect width="404" height="408" rx="26" filter="url(#grain)" opacity=".36"/>
       <path d="M0 238c100-42 202-42 404 0" fill="none" stroke="#ffffff" stroke-opacity=".22" stroke-width="18"/>
+      <g opacity=".38">
+        <path d="M-30 118C92 88 164 88 298 118" fill="none" stroke="#ffffff" stroke-width="6"/>
+        <path d="M18 386c84-90 199-115 365-84" fill="none" stroke="#8bf56f" stroke-width="5"/>
+        <circle cx="333" cy="80" r="26" fill="none" stroke="#ffffff" stroke-width="5"/>
+        <path d="M321 80h24M333 68v24" stroke="#ffffff" stroke-width="4"/>
+      </g>
       <path d="M40 332H364M88 332V382M316 332V382M202 304V386" stroke="#ffffff" stroke-opacity=".28" stroke-width="5"/>
       <rect x="26" y="26" width="104" height="30" rx="15" fill="#ffffff" opacity=".13"/>
       <circle cx="44" cy="41" r="7" fill="#8bf56f"/>
@@ -154,8 +207,15 @@
 
     <g transform="translate(489 824)" filter="url(#shadow)">
       <rect width="404" height="408" rx="26" fill="url(#fashion)"/>
+      <rect width="404" height="408" rx="26" fill="url(#fashionGlow)"/>
+      <rect width="404" height="408" rx="26" filter="url(#grain)" opacity=".26"/>
       <path d="M276 0h128v408H276z" fill="#11131c" opacity=".88"/>
       <path d="M299 58c36 20 54 52 54 96s-18 76-54 96" fill="none" stroke="#f7d7df" stroke-width="14" opacity=".54"/>
+      <g opacity=".34">
+        <rect x="184" y="58" width="64" height="82" rx="10" fill="#ffffff"/>
+        <path d="M198 74h33M198 91h23M198 108h38" stroke="#bd6f86" stroke-width="4"/>
+        <path d="M62 280c42-34 89-44 139-30" fill="none" stroke="#f7d7df" stroke-width="7"/>
+      </g>
       <rect x="26" y="26" width="112" height="30" rx="15" fill="#11131c" opacity=".12"/>
       <circle cx="44" cy="41" r="7" fill="#d86d8b"/>
       <text class="chip" x="58" y="45" fill="#11131c">FASHION</text>
@@ -185,8 +245,8 @@
       </g>
       <g transform="translate(28 128)">
         <circle cx="16" cy="16" r="16" fill="#e9fbf7"/><text x="10" y="22" font-size="18" font-weight="900" fill="#11998a">2</text>
-        <text class="body" x="44" y="22">Variable style: security systems, retail/product cues, sports motion,</text>
-        <text class="body" x="44" y="48">fashion editorial, finance dashboards, and research walls.</text>
+        <text class="body" x="44" y="22">Premium background plate: real-feeling texture, camera depth,</text>
+        <text class="body" x="44" y="48">lighting, domain props, and readable card modules on top.</text>
       </g>
       <g transform="translate(28 182)">
         <circle cx="16" cy="16" r="16" fill="#fff5dc"/><text x="10" y="22" font-size="18" font-weight="900" fill="#b36b16">3</text>

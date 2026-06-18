@@ -53,6 +53,10 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertEqual(card["image_text"]["footer"], "OMH generated")
         self.assertIn("OMH generated", card["generation_prompt"])
         self.assertIn("format contract", card["visual_theme"]["format_contract"])
+        self.assertIn("Premium image standard", card["layout"]["quality_rule"])
+        self.assertIn("Background plate requirement", card["layout"]["background_plate_rule"])
+        self.assertIn("Material and texture direction", card["generation_prompt"])
+        self.assertIn("Camera and rendering treatment", card["generation_prompt"])
         self.assertIn("generate_visual_image", card["available_actions"])
         self.assertEqual(card["capability_detection"]["state"], "connected")
         self.assertEqual(card["capability_setup"]["schema_version"], "image_generation_setup/v1")
@@ -127,6 +131,7 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertIn("report dashboard", report["format_profile"]["theme_direction"])
         self.assertIn("long vertical document-style canvas", report["generation_prompt"])
         self.assertIn("Do not force every source kind into the same grid", report["generation_prompt"])
+        self.assertIn("high-fidelity photographic", report["generation_prompt"])
 
     def test_visual_theme_adapts_to_domain_without_losing_common_format(self) -> None:
         security = build_visual_prompt_card(
@@ -188,8 +193,43 @@ class VisualSummaryTests(unittest.TestCase):
                 self.assertEqual(card["layout"]["brand_mark"], "OMH generated")
                 self.assertEqual(card["image_text"]["footer"], "OMH generated")
                 self.assertIn("evidence footer", card["layout"]["composition_rule"])
+                self.assertIn("scene_quality", card["visual_theme"])
+                self.assertIn("background_plate", card["visual_theme"])
+                self.assertIn("material_texture", card["visual_theme"])
+                self.assertIn("depth_lighting", card["visual_theme"])
+                self.assertIn("camera_treatment", card["visual_theme"])
+                self.assertIn("flat vector clipart", card["visual_theme"]["avoid_style"])
+                self.assertIn("Premium scene reference", card["generation_prompt"])
+                self.assertIn("Background plate:", card["generation_prompt"])
+                self.assertIn("Material and texture direction", card["generation_prompt"])
+                self.assertIn("Depth and lighting direction", card["generation_prompt"])
+                self.assertIn("Camera and rendering treatment", card["generation_prompt"])
                 self.assertIn("Do not reuse a generic dark glass card", card["generation_prompt"])
                 self.assertEqual(validate_visual_prompt_card(card), [])
+
+    def test_visual_prompt_rejects_color_swap_template_quality(self) -> None:
+        card = build_visual_prompt_card(
+            kind="issue",
+            headline="Security Prompt Injection Review",
+            sections=[
+                {
+                    "role": "signal",
+                    "title": "Signal",
+                    "image_text": "A prompt injection attempt tries to leak tool output and bypass authentication controls.",
+                }
+            ],
+        )
+
+        self.assertIn("cinematic security operations room", card["visual_theme"]["scene_quality"])
+        self.assertIn("photo-real SOC analyst desk", card["visual_theme"]["background_plate"])
+        self.assertIn("matte graphite panels", card["visual_theme"]["material_texture"])
+        self.assertIn("screen reflections", card["visual_theme"]["depth_lighting"])
+        self.assertIn("35mm cinematic close-up", card["visual_theme"]["camera_treatment"])
+        self.assertIn("plain gradient backdrops", card["generation_prompt"])
+        self.assertIn("color-swapped templates", card["generation_prompt"])
+        self.assertIn("low-detail wallpaper", card["generation_prompt"])
+        self.assertIn("before placing the readable card modules", card["generation_prompt"])
+        self.assertIn("rich subject-specific environment first", card["generation_prompt"])
 
     def test_visual_copy_can_be_denser_when_canvas_can_expand(self) -> None:
         long_text = (

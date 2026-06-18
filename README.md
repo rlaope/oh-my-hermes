@@ -150,7 +150,7 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
-| `img-summary` | Prepare provider-neutral image-card prompts whose format follows the source and whose background/motifs follow the domain. | "Make a PR summary card for reviewers." |
+| `img-summary` | Prepare provider-neutral image-card prompts whose format follows the source and whose premium background plate, texture, camera, lighting, and motifs follow the domain. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ### Img Summary Skill
@@ -158,9 +158,12 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 `img-summary` helps Hermes turn source material into an image-card prompt
 that another connected image tool can use. It is not one fixed template:
 meeting notes, reports, GitHub PRs, issues, research, and releases each get a
-source-specific visual format, while the visual mood follows the domain. A
-security card should feel like a security system, a sports card can use courts,
-tracks, gear, and motion, and a fashion card can feel editorial. Use
+source-specific visual format, while the visual mood follows the domain. OMH
+asks the image tool to build a real-feeling background plate first, then place
+readable modules on top. A security card should feel like a cinematic security
+operations room with monitor reflections, a sports card can use real court or
+track texture, gear, and motion, and a fashion card can feel like a
+high-fashion editorial set with fabric, paper grain, and studio lighting. Use
 `--aspect-ratio long_scroll` when the card needs room for more sections or
 denser copy. Generated images, visual QA, and delivery stay separate until they
 are recorded as observed evidence. If no image generator is connected yet,
@@ -179,8 +182,11 @@ connector, a generic image tool, or prompt-only mode.
 > source-specific format, domain-aware visual theme, readable card copy,
 > generation prompt, negative prompt, QA checklist, and wrapper actions. The
 > prompt asks image tools to keep the source badge, content modules, evidence
-> footer, and small `OMH generated` mark stable while changing the scene,
-> motifs, palette, and layout density for the subject.
+> footer, and small `OMH generated` mark stable while changing the background
+> plate, scene, material texture, camera treatment, lighting, motifs, palette,
+> and layout density for the subject. It explicitly rejects flat vector
+> clipart, plain gradients, generic glass cards, color-swapped templates, and
+> low-detail wallpaper.
 >
 > **Rules.** A prepared card is not a generated image. Image generation,
 > visual QA, attachment, and delivery stay unobserved until a wrapper or user

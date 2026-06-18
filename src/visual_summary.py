@@ -253,6 +253,18 @@ _FORMAT_PROFILES = {
 _SECTION_TITLE_MAX_WORDS = 10
 _SECTION_TEXT_MAX_WORDS = 28
 _DEFAULT_VISUAL_MARK = "OMH generated"
+_PREMIUM_IMAGE_QUALITY = (
+    "Premium image standard: build a high-fidelity photographic, cinematic, or high-end 3D background scene "
+    "with real material texture, depth, lens/lighting detail, and subject-specific atmosphere before placing the readable card modules."
+)
+_PREMIUM_BACKGROUND_PLATE_RULE = (
+    "Background plate requirement: create a rich subject-specific environment first, with real-feeling surfaces, props, "
+    "imperfections, atmospheric depth, shadows, and reflections; the foreground card modules should sit on top of that scene."
+)
+_PREMIUM_AVOID_STYLE = (
+    "Avoid flat vector clipart, plain gradient backdrops, simple icon boards, generic glassmorphism, "
+    "color-swapped templates, empty card grids, and low-detail wallpaper."
+)
 _DOMAIN_PROFILES = {
     "security": {
         "label": "security operations",
@@ -277,6 +289,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("auth log rows", "shield outline", "lock nodes", "red anomaly pulses", "network trace lines"),
         "palette": "deep graphite, alert red, electric cyan, muted violet, restrained warning highlights",
         "composition": "layer the content over a controlled security dashboard, with threat lanes and containment checkpoints instead of a generic card stack",
+        "scene_quality": "cinematic security operations room with layered monitor glow, shallow depth, reflected glass, and a dark systems wall behind the content",
+        "background_plate": "photo-real SOC analyst desk, multiple monitor walls, blurred incident map, access-control console, cable shadows, and red/cyan alert spill in the room",
+        "material_texture": "matte graphite panels, translucent terminal glass, LED pixels, cable shadows, red alert bloom, and subtle fingerprint/noise grain",
+        "depth_lighting": "low-key cinematic lighting with screen reflections, volumetric haze, rim-lit shield geometry, and crisp foreground text panels",
+        "camera_treatment": "35mm cinematic close-up, shallow depth of field, anamorphic monitor highlights, realistic reflection falloff, and readable foreground overlays",
     },
     "commerce": {
         "label": "commerce and shopping",
@@ -301,6 +318,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("product tiles", "receipt strips", "cart path", "price tags", "package labels"),
         "palette": "warm off-white, retail green, checkout teal, soft gold, product-photo neutrals",
         "composition": "make the reading path feel like a product journey from discovery to cart, with receipt and product-card details",
+        "scene_quality": "premium retail product photo set with real checkout counter surfaces, soft product shadows, packaging props, and receipt paper depth",
+        "background_plate": "editorial checkout countertop photo with tactile receipts, folded packaging, product labels, scanner glass, soft shadows, and a warm retail counter glow",
+        "material_texture": "coated paper receipts, satin packaging, soft plastic labels, brushed counter surface, product-card embossing, and gentle studio grain",
+        "depth_lighting": "bright editorial product lighting with softboxes, realistic contact shadows, warm highlights, and clean readable foreground modules",
+        "camera_treatment": "premium product-photography angle, macro paper texture, softbox reflections, shallow prop depth, and clean overlay spacing",
     },
     "sports": {
         "label": "sports field and gear",
@@ -327,6 +349,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("court arcs", "track lanes", "scoreboard blocks", "gear silhouettes", "motion arrows"),
         "palette": "stadium navy, court green, track orange, chalk white, energetic accent colors",
         "composition": "use diagonal motion, scoreboard callouts, and field/court spatial cues so the card feels athletic rather than corporate",
+        "scene_quality": "sports editorial background with real court or track texture, equipment close-ups, motion blur, sweat/chalk detail, and stadium depth",
+        "background_plate": "real court or running-track surface photographed at ground level, with chalk marks, shoe scuffs, gear close-ups, scoreboard glow, and crowd-depth bokeh",
+        "material_texture": "rubber court grain, jersey knit, scuffed sneaker leather, chalk lines, scoreboard LEDs, and energetic motion streaks",
+        "depth_lighting": "arena-style directional light with crisp shadows, kinetic depth, foreground gear silhouettes, and readable overlay panels",
+        "camera_treatment": "sports editorial low-angle lens, motion blur on background action, sharp foreground callouts, rim light, and energetic diagonal composition",
     },
     "fashion": {
         "label": "fashion editorial",
@@ -352,6 +379,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("fabric texture", "lookbook frame", "garment tag", "runway strip", "annotation pins"),
         "palette": "soft studio white, ink black, muted blush, silver, one seasonal accent",
         "composition": "treat sections like editorial callouts around a lookbook spread, not like software dashboard cards",
+        "scene_quality": "high-fashion editorial set with real fabric swatches, garment close-ups, magazine paper depth, runway light, and tasteful negative space",
+        "background_plate": "fashion magazine editorial table with layered fabric swatches, garment tags, stitched details, runway-light spill, printed proof sheets, and tactile paper grain",
+        "material_texture": "woven fabric, satin sheen, paper grain, garment tags, stitched seams, soft studio backdrop, and polished metal pins",
+        "depth_lighting": "luxury studio lighting with soft shadows, shallow depth of field, glossy magazine highlights, and quiet readable callouts",
+        "camera_treatment": "editorial still-life lens, shallow focus on textile detail, soft studio falloff, restrained luxury contrast, and magazine-layout negative space",
     },
     "finance": {
         "label": "finance and metrics",
@@ -361,6 +393,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("trend lines", "ledger rows", "KPI chips", "forecast bands", "approval stamp"),
         "palette": "midnight blue, paper white, measured green, amber warning, steel gray",
         "composition": "prioritize metric hierarchy, deltas, and decision boxes over decorative illustration",
+        "scene_quality": "executive analytics desk with polished dashboard glass, ledger paper, depth-stacked KPI panels, and boardroom-grade lighting",
+        "background_plate": "boardroom analytics surface with glass dashboard reflection, printed ledger sheets, fountain-pen marks, metal desk edge, and stacked KPI display depth",
+        "material_texture": "brushed metal, premium paper stock, glass dashboard reflections, subtle ledger grain, and embossed approval stamps",
+        "depth_lighting": "focused boardroom lighting with soft reflections, layered chart depth, and restrained executive contrast",
+        "camera_treatment": "executive tabletop photography, controlled reflections, crisp metric overlays, subtle paper macro texture, and calm depth layering",
     },
     "developer": {
         "label": "developer workflow",
@@ -370,6 +407,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("diff blocks", "merge arrows", "CI badges", "review comments", "branch graph"),
         "palette": "dark slate, code blue, success green, review purple, CI amber",
         "composition": "keep PR risk, tests, and reviewer focus visible as a review board rather than a marketing poster",
+        "scene_quality": "high-end developer workstation scene with diff panes, terminal glass, branch graph depth, and realistic monitor reflections",
+        "background_plate": "real developer desk with code-review monitors, keyboard edge, diff panes reflected in glass, branch graph on a side display, and muted CI status lights",
+        "material_texture": "dark editor glass, keyboard texture, terminal phosphor glow, CI badge enamel, code-paper overlays, and subtle screen grain",
+        "depth_lighting": "moody desk lighting with monitor glow, layered UI depth, crisp review panels, and readable technical typography",
+        "camera_treatment": "over-the-shoulder workstation perspective, monitor bloom, shallow desk depth, sharp code-card foreground, and realistic screen reflections",
     },
     "research": {
         "label": "research synthesis",
@@ -379,6 +421,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("source pins", "citation strips", "synthesis nodes", "briefing memo", "confidence markers"),
         "palette": "warm paper, ink navy, evidence blue, muted green, caution amber",
         "composition": "show source-to-insight flow with clear caveats and next-scan space",
+        "scene_quality": "research studio wall with pinned source clippings, paper scans, notebook texture, evidence strings, and analyst desk depth",
+        "background_plate": "analyst research wall and desk with pinned clippings, notebook pages, citation strips, binder clips, scanned paper texture, and layered source piles",
+        "material_texture": "archival paper grain, sticky notes, ink marks, cork board, translucent source cards, binder clips, and citation strips",
+        "depth_lighting": "warm desk-lamp lighting with shallow depth, layered documents, soft shadows, and calm analytical focus",
+        "camera_treatment": "documentary research-desk angle, warm lamp falloff, macro paper detail, soft background pins, and readable synthesis overlays",
     },
     "operations": {
         "label": "operations briefing",
@@ -388,6 +435,11 @@ _DOMAIN_PROFILES = {
         "motifs": ("status rails", "context panels", "evidence chips", "next-action marker"),
         "palette": "neutral paper, deep ink, OMH blue, soft teal, quiet gold",
         "composition": "keep a clear briefing hierarchy while allowing the source kind to drive section shape",
+        "scene_quality": "premium operator command board with layered workspace surfaces, calm status panels, realistic paper/glass depth, and subtle brand light",
+        "background_plate": "calm operator workspace with layered paper notes, frosted glass panels, status rail reflections, desk shadows, and subtle blue workspace light",
+        "material_texture": "soft paper, frosted glass, brushed UI rails, blue enamel markers, clean desk shadows, and fine display grain",
+        "depth_lighting": "balanced studio lighting with gentle depth, clear contrast, and quiet foreground hierarchy",
+        "camera_treatment": "clean product-documentation angle, mild depth of field, realistic shadows, quiet reflections, and well-spaced readable modules",
     },
 }
 _MIME_BY_SUFFIX = {
@@ -487,8 +539,10 @@ def build_visual_prompt_card(
             "brand_mark": _DEFAULT_VISUAL_MARK,
             "composition_rule": (
                 "Preserve source label, headline, readable section modules, evidence footer, and a small OMH generated mark; "
-                "adapt background, motif, and layout rhythm to the detected domain."
+                "adapt high-fidelity background plate, texture, motif, lighting, and layout rhythm to the detected domain."
             ),
+            "quality_rule": _PREMIUM_IMAGE_QUALITY,
+            "background_plate_rule": _PREMIUM_BACKGROUND_PLATE_RULE,
             "density_rule": "If the supplied copy needs more room, extend the canvas or add rows rather than shrinking text.",
         },
         "format_profile": {
@@ -507,10 +561,16 @@ def build_visual_prompt_card(
         "style_direction": {
             "mood": f"{domain_profile['style_family']} over {format_profile['theme_direction']}",
             "background": domain_profile["background_scene"],
+            "scene_quality": domain_profile["scene_quality"],
+            "background_plate": domain_profile["background_plate"],
+            "material_texture": domain_profile["material_texture"],
+            "depth_lighting": domain_profile["depth_lighting"],
+            "camera_treatment": domain_profile["camera_treatment"],
             "motifs": list(domain_profile["motifs"]),
             "composition": domain_profile["composition"],
             "typography": "readable labels, medium-density copy, and enough canvas height for the selected format",
             "palette": domain_profile["palette"],
+            "avoid_style": _PREMIUM_AVOID_STYLE,
         },
         "generation_prompt": _generation_prompt(
             source_kind,
@@ -614,7 +674,19 @@ def validate_visual_prompt_card(record: dict[str, Any]) -> list[str]:
         if not isinstance(visual_theme, dict):
             errors.append("visual_theme must be an object when supplied")
         else:
-            for field in ("label", "style_family", "background_scene", "palette", "composition"):
+            for field in (
+                "label",
+                "style_family",
+                "background_scene",
+                "palette",
+                "composition",
+                "scene_quality",
+                "background_plate",
+                "material_texture",
+                "depth_lighting",
+                "camera_treatment",
+                "avoid_style",
+            ):
                 if not str(visual_theme.get(field, "")).strip():
                     errors.append(f"visual_theme.{field} is required")
             if not isinstance(visual_theme.get("motifs"), list) or not visual_theme.get("motifs"):
@@ -955,9 +1027,15 @@ def _public_domain_profile(profile: dict[str, Any]) -> dict[str, Any]:
         "motifs": list(profile["motifs"]),
         "palette": profile["palette"],
         "composition": profile["composition"],
+        "scene_quality": profile["scene_quality"],
+        "background_plate": profile["background_plate"],
+        "material_texture": profile["material_texture"],
+        "depth_lighting": profile["depth_lighting"],
+        "camera_treatment": profile["camera_treatment"],
+        "avoid_style": _PREMIUM_AVOID_STYLE,
         "format_contract": (
             "OMH format contract: keep source badge, headline, content modules, evidence footer, and small 'OMH generated' mark stable; "
-            "vary scene, motifs, palette, and layout density by domain."
+            "vary high-fidelity background plate, scene, material texture, camera treatment, motifs, palette, depth, and layout density by domain."
         ),
     }
 
@@ -983,6 +1061,13 @@ def _generation_prompt(
         f"Use this theme direction: {profile['theme_direction']}. "
         f"Use this visual metaphor: {profile['visual_metaphor']}. "
         f"Use this domain background: {domain_profile['background_scene']}. "
+        f"{_PREMIUM_IMAGE_QUALITY} "
+        f"{_PREMIUM_BACKGROUND_PLATE_RULE} "
+        f"Premium scene reference: {domain_profile['scene_quality']}. "
+        f"Background plate: {domain_profile['background_plate']}. "
+        f"Material and texture direction: {domain_profile['material_texture']}. "
+        f"Depth and lighting direction: {domain_profile['depth_lighting']}. "
+        f"Camera and rendering treatment: {domain_profile['camera_treatment']}. "
         f"Use these domain motifs: {', '.join(domain_profile['motifs'])}. "
         f"Palette direction: {domain_profile['palette']}. "
         f"Composition direction: {domain_profile['composition']}. "
@@ -995,6 +1080,7 @@ def _generation_prompt(
         "or using long-scroll composition over shrinking text. "
         "Keep the copy readable and faithful to the supplied source. "
         "Do not force every source kind into the same grid; adapt composition to the format and domain. "
+        f"{_PREMIUM_AVOID_STYLE} "
         "Do not reuse a generic dark glass card when the domain calls for sports, fashion, commerce, security, finance, or research-specific scenery.\n"
         f"Card copy:\n{section_lines}"
     )
