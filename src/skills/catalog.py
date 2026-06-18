@@ -1428,7 +1428,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "img-summary",
-        "Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific, domain-aware image-generation-ready visual prompt cards.",
+        "Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific, domain-aware, poster-archetype-aware image-generation-ready visual prompt cards.",
         (
             "img-summary",
             "img summary",
@@ -1473,7 +1473,7 @@ _DEFINITIONS = [
             "릴리즈 노트 발표 이미지",
             "업데이트 발표 이미지",
         ),
-        "Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, premium background plate, material texture, camera treatment, lighting, and motifs adapt to the domain without claiming image generation.",
+        "Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, premium background plate, material texture, camera treatment, lighting, motifs, and poster design grammar adapt without claiming image generation.",
         category="materials",
         phase="visual-prompt-card",
         hermes_role="retained-cognition",
@@ -1482,12 +1482,15 @@ _DEFINITIONS = [
             "Keep card copy shaping, source-kind selection, language mode, prompt assembly, and evidence narration in Hermes. "
             "Use wrapper-reported image generation only as an optional action; record generated image, visual QA, and delivery claims only from visual_observation/v1 evidence."
         ),
-        required_inputs=("source kind", "visual format or auto", "aspect ratio", "headline or source text", "audience", "language mode", "card sections or supplied source excerpts"),
+        required_inputs=("source kind", "visual format or auto", "poster archetype or auto", "aspect ratio", "headline or source text", "audience", "language mode", "card sections or supplied source excerpts"),
         expected_outputs=(
             "visual_prompt_card/v1",
             "image_generation_setup/v1 when generator capability is missing",
             "source-specific visual format",
+            "detected domain_key",
             "domain-aware visual theme",
+            "poster_archetype/v1",
+            "poster archetype visual grammar",
             "premium background plate, texture, camera, and lighting direction",
             "image-safe card copy",
             "generation prompt",
@@ -1512,7 +1515,9 @@ _DEFINITIONS = [
         quality_bar=(
             "Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.",
             "Use the source-specific format profile instead of forcing every visual into the same grid.",
+            "Expose the detected `domain_key` so wrappers and users can explain why a domain-specific scene and poster archetype were selected.",
             "Adapt the high-fidelity background plate, scene, material texture, depth, lighting, camera treatment, motifs, palette, and composition to the detected domain such as security, commerce, sports, fashion, finance, developer work, or research.",
+            "Resolve a poster archetype such as Swiss grid, cinematic key-art, editorial magazine, constructivist photomontage, data infographic, product ad, technical brutalist, museum exhibition, sports event, or luxury lookbook, and keep it separate from source kind and domain.",
             "Ask image tools to render the domain-specific environment first, then place readable card modules on top; reject flat vector clipart, plain gradients, generic glass cards, color-swapped templates, and low-detail wallpaper.",
             "Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark.",
             "Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.",
@@ -1523,7 +1528,8 @@ _DEFINITIONS = [
         ),
         why_this_exists=(
             "`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts "
-            "while adapting format to the source kind, adapting visual mood, premium background plate, texture, lighting, and camera treatment to the domain, and keeping generation, QA, and delivery as observed-only wrapper or user evidence."
+            "while adapting format to the source kind, adapting visual mood, premium background plate, texture, lighting, and camera treatment to the domain, "
+            "choosing a poster archetype for visual grammar, and keeping generation, QA, and delivery as observed-only wrapper or user evidence."
         ),
         do_not_use_when=(
             "The user needs a deck, PDF, spreadsheet, HWP, Markdown package, or binary file export plan; use `materials-package`.",
@@ -2973,16 +2979,18 @@ _HARNESSES = [
     ),
     HarnessDefinition(
         "img-summary",
-        "Prepare source-specific and premium domain-aware visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.",
-        "Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile, domain theme, premium background plate/texture/camera direction, and stable OMH generated mark.",
-        ("source kind", "visual format", "aspect ratio", "audience", "language mode", "headline or source text", "structured sections or extractive source excerpts"),
-        ("visual_prompt_card/v1", "source-specific visual format", "domain-aware visual theme", "premium background plate/scene/texture/camera/lighting direction", "image-safe card copy", "generation prompt", "negative prompt", "quality checks", "available wrapper actions"),
-        ("prompt card is prepared", "copy mode is explicit", "format profile is source-specific", "visual theme is domain-aware", "image generation, visual QA, and delivery remain observed-only"),
+        "Prepare source-specific, premium domain-aware, and poster-archetype-aware visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.",
+        "Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile, domain theme, poster archetype, premium background plate/texture/camera direction, and stable OMH generated mark.",
+        ("source kind", "visual format", "poster archetype", "aspect ratio", "audience", "language mode", "headline or source text", "structured sections or extractive source excerpts"),
+        ("visual_prompt_card/v1", "source-specific visual format", "detected domain_key", "domain-aware visual theme", "poster_archetype/v1", "poster archetype visual grammar", "premium background plate/scene/texture/camera/lighting direction", "image-safe card copy", "generation prompt", "negative prompt", "quality checks", "available wrapper actions"),
+        ("prompt card is prepared", "copy mode is explicit", "format profile is source-specific", "visual theme is domain-aware", "poster archetype is explicit", "image generation, visual QA, and delivery remain observed-only"),
         (
             "validate visual_prompt_card/v1",
             "check source kind and language mode",
             "check visual format and aspect ratio",
+            "check top-level visual_theme and style_direction domain_key mirrors",
             "check visual_theme and OMH generated format contract",
+            "check poster_archetype/v1 and source/domain/archetype separation",
             "check scene_quality/background_plate/material_texture/depth_lighting/camera_treatment guidance",
             "ensure raw source uses extractive_draft copy mode",
             "record visual_observation/v1 only for supplied generated image, QA, or delivery evidence",
@@ -2995,6 +3003,7 @@ _HARNESSES = [
         quality_bar=(
             "Use meeting, PR, issue, research, report, and release format profiles instead of one fixed grid.",
             "Use domain-aware premium background plates, real-feeling textures, camera treatment, lighting, and motifs so security looks like a security system, sports looks athletic, fashion looks editorial, and commerce looks retail/product-led.",
+            "Use poster archetypes as distinct visual grammar, not color presets: sports_event should feel like an event poster, luxury_lookbook like a lookbook, technical_brutalist like a systems poster, and data_infographic like an analysis poster.",
             "Reject color-only restyling; require a rich photographed, cinematic, or high-end 3D environment under the readable modules rather than flat template variants.",
             "Keep the OMH generated mark, evidence footer, and source badge stable even when the visual style changes.",
             "Keep visual card copy source-faithful and readable at the selected aspect ratio; extend the canvas when content needs more room.",
@@ -3005,6 +3014,7 @@ _HARNESSES = [
         evidence_ladder=(
             "source_kind_selected",
             "visual_format_selected",
+            "poster_archetype_selected",
             "card_copy_prepared",
             "prompt_card_prepared",
             "image_generation_capability_checked",

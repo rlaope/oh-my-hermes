@@ -18,6 +18,7 @@ VISUAL_OBSERVATION_SCHEMA_VERSION = "visual_observation/v1"
 VISUAL_OBSERVATIONS_INDEX_SCHEMA_VERSION = "omh_visual_observations_index/v1"
 IMAGE_GENERATION_CAPABILITY_SCHEMA_VERSION = "image_generation_capability/v1"
 IMAGE_GENERATION_SETUP_SCHEMA_VERSION = "image_generation_setup/v1"
+POSTER_ARCHETYPE_SCHEMA_VERSION = "poster_archetype/v1"
 
 SOURCE_KINDS = (
     "meeting",
@@ -39,6 +40,19 @@ VISUAL_FORMATS = (
     "release_announcement_card",
 )
 VISUAL_FORMAT_CHOICES = ("auto",) + VISUAL_FORMATS
+POSTER_ARCHETYPES = (
+    "swiss_grid",
+    "cinematic_key_art",
+    "editorial_magazine",
+    "constructivist_photomontage",
+    "data_infographic",
+    "product_ad",
+    "technical_brutalist",
+    "museum_exhibition",
+    "sports_event",
+    "luxury_lookbook",
+)
+POSTER_ARCHETYPE_CHOICES = ("auto",) + POSTER_ARCHETYPES
 CAPABILITY_STATES = ("unknown", "prompt_only", "connected")
 OBSERVATION_TYPES = ("generated_image_observed", "visual_qa_observed", "delivery_observed")
 SUPPORTED_IMAGE_MIME_TYPES = ("image/png", "image/jpeg", "image/webp")
@@ -200,6 +214,23 @@ _FORMAT_BY_KIND = {
     "report_summary": "report_digest_card",
     "release_announcement": "release_announcement_card",
 }
+_POSTER_ARCHETYPE_BY_KIND = {
+    "meeting": "editorial_magazine",
+    "github_pr": "swiss_grid",
+    "issue_feedback": "cinematic_key_art",
+    "research_briefing": "data_infographic",
+    "report_summary": "data_infographic",
+    "release_announcement": "product_ad",
+}
+_POSTER_ARCHETYPE_BY_DOMAIN = {
+    "security": "cinematic_key_art",
+    "commerce": "product_ad",
+    "sports": "sports_event",
+    "fashion": "luxury_lookbook",
+    "finance": "data_infographic",
+    "developer": "technical_brutalist",
+    "research": "editorial_magazine",
+}
 _FORMAT_PROFILES = {
     "meeting_recap_card": {
         "label": "meeting recap visual card",
@@ -248,6 +279,118 @@ _FORMAT_PROFILES = {
         "structure": ("What is new", "Why it matters", "Who benefits", "Migration note", "Call to action"),
         "theme_direction": "launch board, product update layers, clean announcement energy",
         "visual_metaphor": "stacked product cards, sparkle markers, release ribbon, update badge",
+    },
+}
+_POSTER_ARCHETYPE_PROFILES = {
+    "swiss_grid": {
+        "label": "Swiss grid information poster",
+        "visual_grammar": "strict modular grid, asymmetric alignment, generous margins, precise hierarchy, minimal decoration",
+        "composition_principle": "use a rational grid with clear columns, baseline rhythm, and one dominant information axis",
+        "type_treatment": "clean grotesk typography, strong scale contrast, compact labels, no ornamental headline effects",
+        "image_strategy": "use restrained cropped workspace or artifact photography only where it clarifies the information hierarchy",
+        "texture_finish": "matte paper, quiet ink, crisp rule lines, subtle print grain, refined white or neutral negative space",
+        "background_behavior": "keep the background disciplined and architectural; let structure and spacing carry the premium feel",
+        "best_for": ("PR reviews", "release notes", "technical summaries", "operator checklists"),
+        "avoid": "avoid decorative collage, noisy backgrounds, centered poster symmetry, and vague marketing composition",
+    },
+    "cinematic_key_art": {
+        "label": "Cinematic key-art poster",
+        "visual_grammar": "dramatic subject scene, foreground information panels, atmosphere, contrast, hero focal point",
+        "composition_principle": "build a film-poster reading path: scene first, title second, evidence/status modules third",
+        "type_treatment": "bold cinematic headline with controlled tracking, compact dossier labels, high-contrast support copy",
+        "image_strategy": "stage a realistic environment with light, smoke, reflections, props, and a clear incident or action cue",
+        "texture_finish": "lens bloom, volumetric haze, metal/glass surfaces, grain, screen glow, and realistic contact shadows",
+        "background_behavior": "make the background feel like a premium still from the domain, not a plain wallpaper behind cards",
+        "best_for": ("security incidents", "high-risk issue triage", "launch moments", "operator alerts"),
+        "avoid": "avoid generic dark glass panels, empty gradients, stock cyber icons, and unreadable poster drama",
+    },
+    "editorial_magazine": {
+        "label": "Editorial magazine spread",
+        "visual_grammar": "magazine cover/spread hierarchy, pull quotes, captions, section gutters, editorial rhythm",
+        "composition_principle": "combine a strong masthead-like title with feature blocks, callouts, and a paced reading flow",
+        "type_treatment": "editorial serif or refined sans pairings, smart captions, compact deck copy, visible section labels",
+        "image_strategy": "use tasteful documentary still life, paper layers, desk scenes, or human-context photography as the visual anchor",
+        "texture_finish": "premium paper, ink grain, editorial proof sheets, layered clippings, soft studio or desk-lamp light",
+        "background_behavior": "let the scene feel published and curated while preserving the OMH evidence footer and modules",
+        "best_for": ("meeting recaps", "research briefs", "strategy notes", "human-readable reports"),
+        "avoid": "avoid rigid dashboard grids when the content needs narrative context or editorial pacing",
+    },
+    "constructivist_photomontage": {
+        "label": "Constructivist photomontage",
+        "visual_grammar": "diagonal force, layered photo fragments, bold blocks, arrows, stamps, urgency, propaganda-poster energy",
+        "composition_principle": "activate diagonals and overlapping shapes while keeping each OMH content module readable",
+        "type_treatment": "condensed bold labels, stamped status marks, rotated accents, clear numbered blocks",
+        "image_strategy": "cut together domain photos, UI fragments, diagrams, and symbolic shapes into a controlled collage",
+        "texture_finish": "risograph ink, paper wear, halftone, torn-edge collage, rubber-stamp marks, tactile print layers",
+        "background_behavior": "use motion and collision deliberately; do not let collage obscure factual copy or evidence states",
+        "best_for": ("campaigns", "urgent internal alerts", "release announcements", "retrospective narratives"),
+        "avoid": "avoid chaotic collage, unreadable rotated body text, or vintage styling unrelated to the subject",
+    },
+    "data_infographic": {
+        "label": "Data infographic poster",
+        "visual_grammar": "charts, ladders, timelines, evidence bands, metrics, annotations, source-to-insight flow",
+        "composition_principle": "make the causal or evidence path visible with charts and progressive modules instead of pure decoration",
+        "type_treatment": "metric-first numbers, concise labels, clear legends, short annotation copy, strong source citations",
+        "image_strategy": "use dashboards, paper ledgers, data walls, maps, or source stacks as supporting scenery",
+        "texture_finish": "glass dashboards, ledger paper, chart ink, subtle grid texture, dimensional data cards",
+        "background_behavior": "support analysis and comparison; every visual element should explain structure, scale, trend, or caveat",
+        "best_for": ("research scans", "reports", "finance metrics", "ops reviews", "market briefings"),
+        "avoid": "avoid decorative charts without meaning, fake numbers, unlabeled axes, or infographic clutter",
+    },
+    "product_ad": {
+        "label": "Product announcement ad",
+        "visual_grammar": "premium product hero, benefit callouts, launch badge, clean conversion path, polished commerce energy",
+        "composition_principle": "lead with a tactile product or feature moment, then stack benefit, migration, and next-action modules",
+        "type_treatment": "bold launch headline, compact benefits, product-tag labels, clear call-to-action treatment",
+        "image_strategy": "stage product, packaging, checkout, app, or release artifacts with studio lighting and believable props",
+        "texture_finish": "softbox highlights, satin packaging, receipt paper, enamel badges, polished product shadows",
+        "background_behavior": "make the subject feel launch-ready while retaining source facts and evidence boundaries",
+        "best_for": ("release announcements", "commerce PRs", "feature launches", "customer-facing updates"),
+        "avoid": "avoid generic SaaS gradient cards, overpromising claims, and fake customer proof",
+    },
+    "technical_brutalist": {
+        "label": "Technical brutalist systems poster",
+        "visual_grammar": "raw systems panels, terminal blocks, hard borders, monospace labels, visible infrastructure",
+        "composition_principle": "show the system surface directly: logs, diffs, run states, topology, checkpoints, and hard boundaries",
+        "type_treatment": "monospace or industrial sans labels, stark status chips, compact technical copy, high-contrast separators",
+        "image_strategy": "use real-feeling terminal glass, code-review screens, hardware, server panels, and structured trace overlays",
+        "texture_finish": "terminal phosphor, metal panels, screen reflections, grid scratches, CI badge enamel, code-paper overlays",
+        "background_behavior": "make it feel engineered and inspectable rather than glossy marketing; preserve technical evidence labels",
+        "best_for": ("GitHub PR cards", "runtime status", "coding handoffs", "architecture or CI reviews"),
+        "avoid": "avoid vague futuristic neon, fake code gibberish, and decorative circuits that do not support the workflow",
+    },
+    "museum_exhibition": {
+        "label": "Museum exhibition placard",
+        "visual_grammar": "calm exhibit wall, artifact label hierarchy, archival object focus, curatorial captions, quiet authority",
+        "composition_principle": "treat each section like a labeled artifact with provenance, context, caveat, and next observation",
+        "type_treatment": "museum label typography, small but legible captions, restrained title scale, precise provenance notes",
+        "image_strategy": "stage documents, artifacts, screenshots, or material samples as curated objects in a gallery-like environment",
+        "texture_finish": "archival paper, gallery wall, museum lighting, linen board, label stock, soft shadows",
+        "background_behavior": "create trust through restraint and provenance; do not overdramatize routine context",
+        "best_for": ("evidence reviews", "retrospectives", "research archives", "careful meeting summaries"),
+        "avoid": "avoid busy dashboards, hype language, and cinematic effects when the card should feel archival",
+    },
+    "sports_event": {
+        "label": "Sports event poster",
+        "visual_grammar": "kinetic diagonal motion, scoreboard hierarchy, field/court texture, gear closeups, event energy",
+        "composition_principle": "use movement and arena depth to guide the eye from headline to numbered modules to final status",
+        "type_treatment": "bold condensed sports headline, scoreboard numerals, jersey-tag labels, short energetic section copy",
+        "image_strategy": "stage the real court, track, field, equipment, jersey fabric, scuffed shoes, or crowd-depth background",
+        "texture_finish": "rubber grain, chalk lines, jersey knit, scoreboard LEDs, sweat/glare, shoe scuffs, arena haze",
+        "background_behavior": "make the card feel athletic through motion, lens, material, and spatial cues rather than only changing colors",
+        "best_for": ("sports research", "team updates", "sponsorship briefs", "gear or club announcements"),
+        "avoid": "avoid corporate cards with sports icons pasted on top, static grids, and generic blue/orange palettes",
+    },
+    "luxury_lookbook": {
+        "label": "Luxury lookbook poster",
+        "visual_grammar": "fashion-editorial spacing, textile closeups, model/lookbook framing, refined annotations, seasonal mood",
+        "composition_principle": "use negative space, tactile material detail, and editorial callouts around a hero garment or mood board",
+        "type_treatment": "refined fashion typography, small garment-tag labels, understated headline, elegant section rhythm",
+        "image_strategy": "stage fabric swatches, runway light, garment tags, proof sheets, lookbook pages, or model-crop atmosphere",
+        "texture_finish": "woven fabric, satin sheen, paper grain, stitching, polished pins, glossy proof sheets, soft studio shadows",
+        "background_behavior": "make the card feel like a premium editorial asset, not a software dashboard with fashion colors",
+        "best_for": ("fashion reports", "lookbook releases", "style research", "brand announcements"),
+        "avoid": "avoid oversized UI tiles, generic gradients, cheap stock runway imagery, and cluttered product grids",
     },
 }
 _SECTION_TITLE_MAX_WORDS = 10
@@ -487,6 +630,7 @@ def build_visual_prompt_card(
     language: str = "source",
     aspect_ratio: str = "auto",
     visual_format: str = "auto",
+    poster_archetype: str = "auto",
     sections: list[dict[str, str]] | None = None,
     source_text: str = "",
     capability_state: str = "unknown",
@@ -519,6 +663,9 @@ def build_visual_prompt_card(
 
     resolved_headline = str(headline).strip() or _HEADLINES[source_kind]
     domain_profile = _domain_profile_for_card(source_kind, resolved_headline, visual_sections, source_excerpt)
+    domain_key = _domain_key_for_profile(domain_profile)
+    resolved_poster_archetype = resolve_poster_archetype(source_kind, poster_archetype, domain_profile=domain_profile)
+    poster_profile = _POSTER_ARCHETYPE_PROFILES[resolved_poster_archetype]
     record = {
         "schema_version": VISUAL_PROMPT_CARD_SCHEMA_VERSION,
         "card_id": "",
@@ -531,15 +678,22 @@ def build_visual_prompt_card(
         "languages": _languages(language),
         "aspect_ratio": resolved_aspect_ratio,
         "visual_format": resolved_format,
+        "domain_key": domain_key,
+        "poster_archetype": resolved_poster_archetype,
         "layout": {
             "type": format_profile["layout_type"],
             "sections": [section["role"] for section in visual_sections],
             "hierarchy": ", ".join(format_profile["structure"]),
             "recommended_aspect_ratio": format_profile["default_aspect_ratio"],
+            "poster_archetype": resolved_poster_archetype,
             "brand_mark": _DEFAULT_VISUAL_MARK,
             "composition_rule": (
                 "Preserve source label, headline, readable section modules, evidence footer, and a small OMH generated mark; "
                 "adapt high-fidelity background plate, texture, motif, lighting, and layout rhythm to the detected domain."
+            ),
+            "poster_archetype_rule": (
+                "Keep source kind, domain scene, and poster archetype separate: source kind controls information structure, "
+                "domain controls subject matter and material world, poster archetype controls the visual grammar."
             ),
             "quality_rule": _PREMIUM_IMAGE_QUALITY,
             "background_plate_rule": _PREMIUM_BACKGROUND_PLATE_RULE,
@@ -551,7 +705,8 @@ def build_visual_prompt_card(
             "theme_direction": format_profile["theme_direction"],
             "visual_metaphor": format_profile["visual_metaphor"],
         },
-        "visual_theme": _public_domain_profile(domain_profile),
+        "visual_theme": _public_domain_profile(domain_key, domain_profile),
+        "poster_archetype_profile": _public_poster_archetype_profile(resolved_poster_archetype, poster_profile),
         "sections": visual_sections,
         "image_text": {
             "headline": _clip_words(resolved_headline, 12),
@@ -560,6 +715,7 @@ def build_visual_prompt_card(
         },
         "style_direction": {
             "mood": f"{domain_profile['style_family']} over {format_profile['theme_direction']}",
+            "domain_key": domain_key,
             "background": domain_profile["background_scene"],
             "scene_quality": domain_profile["scene_quality"],
             "background_plate": domain_profile["background_plate"],
@@ -568,6 +724,12 @@ def build_visual_prompt_card(
             "camera_treatment": domain_profile["camera_treatment"],
             "motifs": list(domain_profile["motifs"]),
             "composition": domain_profile["composition"],
+            "poster_archetype": resolved_poster_archetype,
+            "poster_visual_grammar": poster_profile["visual_grammar"],
+            "poster_composition_principle": poster_profile["composition_principle"],
+            "poster_type_treatment": poster_profile["type_treatment"],
+            "poster_image_strategy": poster_profile["image_strategy"],
+            "poster_texture_finish": poster_profile["texture_finish"],
             "typography": "readable labels, medium-density copy, and enough canvas height for the selected format",
             "palette": domain_profile["palette"],
             "avoid_style": _PREMIUM_AVOID_STYLE,
@@ -579,7 +741,9 @@ def build_visual_prompt_card(
             language,
             resolved_aspect_ratio,
             resolved_format,
+            domain_key,
             domain_profile,
+            poster_profile,
         ),
         "negative_prompt": (
             "Do not invent facts, owners, decisions, test results, approvals, or delivery claims. "
@@ -616,6 +780,24 @@ def resolve_visual_format(source_kind: str, visual_format: str = "auto") -> str:
     if visual_format == "auto":
         return _FORMAT_BY_KIND[normalize_source_kind(source_kind)]
     return visual_format
+
+
+def resolve_poster_archetype(
+    source_kind: str,
+    poster_archetype: str = "auto",
+    *,
+    domain_profile: dict[str, Any] | None = None,
+) -> str:
+    if poster_archetype not in POSTER_ARCHETYPE_CHOICES:
+        raise ValueError(
+            f"unsupported poster archetype: {poster_archetype}; expected one of {', '.join(POSTER_ARCHETYPE_CHOICES)}"
+        )
+    if poster_archetype != "auto":
+        return poster_archetype
+    domain_key = _domain_key_for_profile(domain_profile) if domain_profile else ""
+    if domain_key in _POSTER_ARCHETYPE_BY_DOMAIN:
+        return _POSTER_ARCHETYPE_BY_DOMAIN[domain_key]
+    return _POSTER_ARCHETYPE_BY_KIND[normalize_source_kind(source_kind)]
 
 
 def resolve_aspect_ratio(aspect_ratio: str, visual_format: str) -> str:
@@ -662,35 +844,77 @@ def validate_visual_prompt_card(record: dict[str, Any]) -> list[str]:
                 errors.append(f"sections[{index}].max_words must be at least 4")
     if record.get("visual_format") not in VISUAL_FORMATS:
         errors.append(f"visual_format must be one of {', '.join(VISUAL_FORMATS)}")
+    domain_key = str(record.get("domain_key", ""))
+    if domain_key not in _DOMAIN_PROFILES:
+        errors.append(f"domain_key must be one of {', '.join(sorted(_DOMAIN_PROFILES))}")
+    if record.get("poster_archetype") not in POSTER_ARCHETYPES:
+        errors.append(f"poster_archetype must be one of {', '.join(POSTER_ARCHETYPES)}")
     layout = record.get("layout", {})
     allowed_layout_types = {str(profile["layout_type"]) for profile in _FORMAT_PROFILES.values()}
     if not isinstance(layout, dict) or layout.get("type") not in allowed_layout_types:
         errors.append(f"layout.type must be one of {', '.join(sorted(allowed_layout_types))}")
+    elif layout.get("poster_archetype") != record.get("poster_archetype"):
+        errors.append("layout.poster_archetype must match poster_archetype")
     profile = record.get("format_profile", {})
     if not isinstance(profile, dict) or not str(profile.get("theme_direction", "")).strip():
         errors.append("format_profile.theme_direction is required")
-    visual_theme = record.get("visual_theme", {})
-    if visual_theme:
-        if not isinstance(visual_theme, dict):
-            errors.append("visual_theme must be an object when supplied")
-        else:
-            for field in (
-                "label",
-                "style_family",
-                "background_scene",
-                "palette",
-                "composition",
-                "scene_quality",
-                "background_plate",
-                "material_texture",
-                "depth_lighting",
-                "camera_treatment",
-                "avoid_style",
-            ):
-                if not str(visual_theme.get(field, "")).strip():
-                    errors.append(f"visual_theme.{field} is required")
-            if not isinstance(visual_theme.get("motifs"), list) or not visual_theme.get("motifs"):
-                errors.append("visual_theme.motifs must be a non-empty list")
+    visual_theme = record.get("visual_theme")
+    if not isinstance(visual_theme, dict):
+        errors.append("visual_theme must be an object")
+    else:
+        for field in (
+            "domain_key",
+            "label",
+            "style_family",
+            "background_scene",
+            "palette",
+            "composition",
+            "scene_quality",
+            "background_plate",
+            "material_texture",
+            "depth_lighting",
+            "camera_treatment",
+            "avoid_style",
+        ):
+            if not str(visual_theme.get(field, "")).strip():
+                errors.append(f"visual_theme.{field} is required")
+        if visual_theme.get("domain_key") != record.get("domain_key"):
+            errors.append("visual_theme.domain_key must match domain_key")
+        if not isinstance(visual_theme.get("motifs"), list) or not visual_theme.get("motifs"):
+            errors.append("visual_theme.motifs must be a non-empty list")
+    poster_profile = record.get("poster_archetype_profile")
+    if not isinstance(poster_profile, dict):
+        errors.append("poster_archetype_profile must be an object")
+    else:
+        if poster_profile.get("schema_version") != POSTER_ARCHETYPE_SCHEMA_VERSION:
+            errors.append("poster_archetype_profile.schema_version must be poster_archetype/v1")
+        if poster_profile.get("id") != record.get("poster_archetype"):
+            errors.append("poster_archetype_profile.id must match poster_archetype")
+        for field in (
+            "label",
+            "visual_grammar",
+            "composition_principle",
+            "type_treatment",
+            "image_strategy",
+            "texture_finish",
+            "background_behavior",
+            "avoid",
+        ):
+            if not str(poster_profile.get(field, "")).strip():
+                errors.append(f"poster_archetype_profile.{field} is required")
+        if not isinstance(poster_profile.get("best_for"), list) or not poster_profile.get("best_for"):
+            errors.append("poster_archetype_profile.best_for must be a non-empty list")
+    style_direction = record.get("style_direction", {})
+    if isinstance(style_direction, dict):
+        if style_direction.get("domain_key") != record.get("domain_key"):
+            errors.append("style_direction.domain_key must match domain_key")
+        if style_direction.get("poster_archetype") != record.get("poster_archetype"):
+            errors.append("style_direction.poster_archetype must match poster_archetype")
+        if isinstance(poster_profile, dict) and str(poster_profile.get("visual_grammar", "")).strip():
+            if style_direction.get("poster_visual_grammar") != poster_profile.get("visual_grammar"):
+                errors.append("style_direction.poster_visual_grammar must match poster_archetype_profile.visual_grammar")
+    else:
+        errors.append("style_direction must be an object")
     setup = record.get("capability_setup", {})
     if not isinstance(setup, dict) or setup.get("schema_version") != IMAGE_GENERATION_SETUP_SCHEMA_VERSION:
         errors.append("capability_setup.schema_version must be image_generation_setup/v1")
@@ -936,9 +1160,12 @@ def _visual_card_identity_payload(record: dict[str, Any]) -> dict[str, Any]:
         "languages",
         "aspect_ratio",
         "visual_format",
+        "domain_key",
+        "poster_archetype",
         "layout",
         "format_profile",
         "visual_theme",
+        "poster_archetype_profile",
         "sections",
         "image_text",
         "style_direction",
@@ -1019,8 +1246,18 @@ def _domain_tiebreak_rank(domain: str, source_kind: str) -> int:
     return 0
 
 
-def _public_domain_profile(profile: dict[str, Any]) -> dict[str, Any]:
+def _domain_key_for_profile(profile: dict[str, Any] | None) -> str:
+    if not profile:
+        return ""
+    for domain, candidate in _DOMAIN_PROFILES.items():
+        if candidate is profile or candidate == profile:
+            return domain
+    return ""
+
+
+def _public_domain_profile(domain_key: str, profile: dict[str, Any]) -> dict[str, Any]:
     return {
+        "domain_key": domain_key,
         "label": profile["label"],
         "style_family": profile["style_family"],
         "background_scene": profile["background_scene"],
@@ -1040,6 +1277,22 @@ def _public_domain_profile(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _public_poster_archetype_profile(archetype: str, profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": POSTER_ARCHETYPE_SCHEMA_VERSION,
+        "id": archetype,
+        "label": profile["label"],
+        "visual_grammar": profile["visual_grammar"],
+        "composition_principle": profile["composition_principle"],
+        "type_treatment": profile["type_treatment"],
+        "image_strategy": profile["image_strategy"],
+        "texture_finish": profile["texture_finish"],
+        "background_behavior": profile["background_behavior"],
+        "best_for": list(profile["best_for"]),
+        "avoid": profile["avoid"],
+    }
+
+
 def _generation_prompt(
     kind: str,
     headline: str,
@@ -1047,7 +1300,9 @@ def _generation_prompt(
     language: str,
     aspect_ratio: str,
     visual_format: str,
+    domain_key: str,
     domain_profile: dict[str, Any],
+    poster_profile: dict[str, Any],
 ) -> str:
     section_lines = "\n".join(
         f"- {section['title']}: {section['image_text']}"
@@ -1057,10 +1312,18 @@ def _generation_prompt(
     return (
         f"Create a {aspect_ratio} {profile['label']} for {kind}. "
         f"Use language mode {language}. Headline: {headline}. "
-        f"Detected visual domain: {domain_profile['label']} ({domain_profile['style_family']}). "
+        f"Detected visual domain: {domain_key} / {domain_profile['label']} ({domain_profile['style_family']}). "
         f"Use this theme direction: {profile['theme_direction']}. "
         f"Use this visual metaphor: {profile['visual_metaphor']}. "
         f"Use this domain background: {domain_profile['background_scene']}. "
+        f"Poster archetype contract ({POSTER_ARCHETYPE_SCHEMA_VERSION}): {poster_profile['label']}. "
+        "Source kind controls information structure, domain controls the scene/material world, and poster archetype controls visual grammar. "
+        f"Poster visual grammar: {poster_profile['visual_grammar']}. "
+        f"Poster composition principle: {poster_profile['composition_principle']}. "
+        f"Poster typography: {poster_profile['type_treatment']}. "
+        f"Poster image strategy: {poster_profile['image_strategy']}. "
+        f"Poster texture/finish: {poster_profile['texture_finish']}. "
+        f"Poster background behavior: {poster_profile['background_behavior']}. "
         f"{_PREMIUM_IMAGE_QUALITY} "
         f"{_PREMIUM_BACKGROUND_PLATE_RULE} "
         f"Premium scene reference: {domain_profile['scene_quality']}. "
@@ -1080,6 +1343,7 @@ def _generation_prompt(
         "or using long-scroll composition over shrinking text. "
         "Keep the copy readable and faithful to the supplied source. "
         "Do not force every source kind into the same grid; adapt composition to the format and domain. "
+        f"Do not violate the poster archetype: {poster_profile['avoid']}. "
         f"{_PREMIUM_AVOID_STYLE} "
         "Do not reuse a generic dark glass card when the domain calls for sports, fashion, commerce, security, finance, or research-specific scenery.\n"
         f"Card copy:\n{section_lines}"

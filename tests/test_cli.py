@@ -1536,6 +1536,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("Status: prepared", stdout)
             self.assertIn("Copy mode: structured", stdout)
             self.assertIn("Visual format: pr_review_infographic", stdout)
+            self.assertIn("Visual domain: developer workflow (developer)", stdout)
+            self.assertIn("Poster archetype: technical_brutalist", stdout)
             self.assertIn("Aspect ratio: square_1_1", stdout)
             self.assertIn("Not evidence yet: image generated, visual QA passed, delivered.", stdout)
             self.assertIn("Choose and set up an image tool before generation.", stdout)
@@ -1581,6 +1583,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(card["schema_version"], "visual_prompt_card/v1")
             self.assertEqual(card["source_kind"], "meeting")
             self.assertEqual(card["visual_format"], "meeting_recap_card")
+            self.assertEqual(card["visual_theme"]["domain_key"], card["domain_key"])
             self.assertEqual(card["copy_mode"], "extractive_draft")
             self.assertTrue(card["requires_human_or_hermes_review"])
             self.assertEqual(card["capability_setup"]["schema_version"], "image_generation_setup/v1")
@@ -1594,6 +1597,8 @@ class CliTests(unittest.TestCase):
                     "report",
                     "--aspect-ratio",
                     "long_scroll",
+                    "--poster-archetype",
+                    "editorial_magazine",
                     "--section",
                     "summary:Executive summary:Revenue grew while support cost increased.",
                     "--json",
@@ -1605,7 +1610,10 @@ class CliTests(unittest.TestCase):
             report = json.loads(stdout)
             self.assertEqual(report["source_kind"], "report_summary")
             self.assertEqual(report["visual_format"], "report_digest_card")
+            self.assertEqual(report["visual_theme"]["domain_key"], report["domain_key"])
+            self.assertEqual(report["poster_archetype"], "editorial_magazine")
             self.assertEqual(report["aspect_ratio"], "long_scroll")
+            self.assertIn("Editorial magazine spread", report["generation_prompt"])
             self.assertIn("long vertical document-style canvas", report["generation_prompt"])
 
             card_id = "20260618T011325Z-github-pr-abc123"
