@@ -146,6 +146,7 @@ class RouterContentTests(unittest.TestCase):
             "operating-rhythm",
             "report-package",
             "materials-package",
+            "visual-summary",
             "automation-blueprint",
             "reliability-review",
             "idea-to-deploy",
@@ -250,6 +251,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["operating-rhythm"].next_action, "prepare_operating_record")
         self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
+        self.assertEqual(recommend_module._SKILL_POLICIES["visual-summary"].next_action, "prepare_visual_prompt_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
         self.assertEqual(recommend_module._SKILL_POLICIES["github-event-ops"].next_action, "prepare_github_event_ops_card")
@@ -313,6 +315,7 @@ class RouterContentTests(unittest.TestCase):
                 "operating-rhythm",
                 "report-package",
                 "materials-package",
+                "visual-summary",
                 "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
@@ -395,6 +398,39 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("briefing_status/v1", inspect_playbook("research-department")["playbook"]["stages"][-1]["contract"])
         self.assertIn("research-department", templates)
         self.assertIn("Scout", templates["research-department"].content)
+
+    def test_visual_summary_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("visual-summary", definitions)
+        self.assertIn("visual-summary", harnesses)
+        self.assertIn("visual-summary", templates)
+        self.assertEqual(primary_harness_for_skill("visual-summary"), "visual-summary")
+        self.assertEqual(definitions["visual-summary"].category, "materials")
+        self.assertEqual(definitions["visual-summary"].phase, "visual-prompt-card")
+        self.assertIn("visual_prompt_card/v1", definitions["visual-summary"].expected_outputs)
+        self.assertIn("visual_observation/v1", " ".join(definitions["visual-summary"].safety_rules))
+        self.assertIn("visual_prompt_card/v1", harnesses["visual-summary"].expected_outputs)
+        self.assertIn("generated_image_observed_when_available", harnesses["visual-summary"].evidence_ladder)
+        self.assertIn("record_visual_delivery", harnesses["visual-summary"].wrapper_actions)
+        self.assertTrue(
+            {
+                "show_visual_prompt_card",
+                "copy_visual_prompt",
+                "revise_visual_card",
+                "change_visual_language",
+                "generate_visual_image",
+                "record_visual_image",
+                "record_visual_qa",
+                "record_visual_delivery",
+                "show_visual_status",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("image-generation-ready visual prompt cards", templates["visual-summary"].content)
+        self.assertIn("Do not call image providers", templates["visual-summary"].content)
+        self.assertIn("Preferred harness for this skill: `visual-summary`", templates["visual-summary"].content)
 
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
         for definition in builtin_definitions():
@@ -494,6 +530,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("operating-rhythm"), "operating-rhythm")
         self.assertEqual(primary_harness_for_skill("report-package"), "report-package")
         self.assertEqual(primary_harness_for_skill("materials-package"), "materials-package")
+        self.assertEqual(primary_harness_for_skill("visual-summary"), "visual-summary")
         self.assertEqual(primary_harness_for_skill("reliability-review"), "reliability-review")
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
@@ -518,6 +555,7 @@ class RouterContentTests(unittest.TestCase):
                 "operating-rhythm",
                 "report-package",
                 "materials-package",
+                "visual-summary",
                 "reliability-review",
                 "idea-to-deploy",
                 "cto-loop",
