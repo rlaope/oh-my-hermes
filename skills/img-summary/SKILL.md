@@ -16,7 +16,7 @@ This is a Hermes-native `img-summary` workflow skill.
 
 ## Why This Exists
 
-`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind, adapting visual mood to the domain, and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
+`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind, adapting visual mood, premium background plate, texture, lighting, and camera treatment to the domain, and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
 
 ## Do Not Use When
 
@@ -40,7 +40,7 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, background, and motifs adapt to the domain without claiming image generation.
+Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, premium background plate, material texture, camera treatment, lighting, and motifs adapt to the domain without claiming image generation.
 
     Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `summary image`, `vertical card`, `vertical summary image`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `PR 요약 카드`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `업데이트 발표 이미지`
 
@@ -55,7 +55,8 @@ Quality bar:
 
 - Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.
 - Use the source-specific format profile instead of forcing every visual into the same grid.
-- Adapt the background, motifs, palette, and composition to the detected domain such as security, commerce, sports, fashion, finance, developer work, or research.
+- Adapt the high-fidelity background plate, scene, material texture, depth, lighting, camera treatment, motifs, palette, and composition to the detected domain such as security, commerce, sports, fashion, finance, developer work, or research.
+- Ask image tools to render the domain-specific environment first, then place readable card modules on top; reject flat vector clipart, plain gradients, generic glass cards, color-swapped templates, and low-detail wallpaper.
 - Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark.
 - Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.
 - Keep visible card text readable and faithful to supplied source or structured sections; do not shrink paragraphs into tiny poster copy.
@@ -83,6 +84,7 @@ Expected outputs:
 - image_generation_setup/v1 when generator capability is missing
 - source-specific visual format
 - domain-aware visual theme
+- premium background plate, texture, camera, and lighting direction
 - image-safe card copy
 - generation prompt
 - negative prompt
