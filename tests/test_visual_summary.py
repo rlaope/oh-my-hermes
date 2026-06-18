@@ -16,6 +16,8 @@ from omh.visual_summary import (
     list_visual_observations,
     normalize_source_kind,
     parse_section_arg,
+    resolve_aspect_ratio,
+    resolve_visual_format,
     validate_visual_observation,
     validate_visual_prompt_card,
     visual_wrapper_actions,
@@ -43,12 +45,15 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertEqual(card["copy_mode"], "structured")
         self.assertEqual(card["languages"], ["en", "ko"])
         self.assertFalse(card["requires_human_or_hermes_review"])
-        self.assertEqual(card["aspect_ratio"], "vertical_9_16")
-        self.assertEqual(card["layout"]["type"], "boxed_vertical_card")
+        self.assertEqual(card["aspect_ratio"], "square_1_1")
+        self.assertEqual(card["visual_format"], "pr_review_infographic")
+        self.assertEqual(card["layout"]["type"], "pr_review_infographic")
+        self.assertIn("Review focus", card["format_profile"]["structure"])
         self.assertIn("generate_visual_image", card["available_actions"])
         self.assertEqual(card["capability_detection"]["state"], "connected")
         self.assertIn("Do not invent facts", card["negative_prompt"])
-        self.assertIn("large readable text", card["generation_prompt"])
+        self.assertIn("PR review infographic", card["generation_prompt"])
+        self.assertIn("developer workspace", card["generation_prompt"])
         self.assertIn("image_generated", card["not_evidence_until_observed"])
         self.assertEqual(validate_visual_prompt_card(card), [])
 
@@ -66,7 +71,7 @@ class VisualSummaryTests(unittest.TestCase):
         second = build_visual_prompt_card(**args)
 
         self.assertEqual(first, second)
-        self.assertEqual(first["card_id"], "github-pr-332a04fbe266")
+        self.assertRegex(first["card_id"], r"^github-pr-[0-9a-f]{12}$")
         self.assertNotIn("created_at", first)
 
     def test_all_source_kind_templates_are_supported(self) -> None:
@@ -92,6 +97,29 @@ class VisualSummaryTests(unittest.TestCase):
 
         self.assertIn("horizontal_16_9", card["generation_prompt"])
         self.assertNotIn("boxed vertical visual summary card", card["generation_prompt"])
+
+    def test_visual_formats_are_source_specific_and_support_long_scroll(self) -> None:
+        self.assertEqual(resolve_visual_format("meeting"), "meeting_recap_card")
+        self.assertEqual(resolve_visual_format("report"), "report_digest_card")
+        self.assertEqual(resolve_visual_format("issue"), "issue_triage_card")
+        self.assertEqual(resolve_aspect_ratio("auto", resolve_visual_format("github_pr")), "square_1_1")
+        self.assertEqual(resolve_aspect_ratio("auto", resolve_visual_format("report")), "long_scroll")
+
+        report = build_visual_prompt_card(
+            kind="report",
+            aspect_ratio="long_scroll",
+            sections=[
+                {"role": "summary", "title": "Executive summary", "image_text": "Revenue grew while support cost increased."},
+                {"role": "metric", "title": "Metric", "image_text": "Activation improved after setup copy changes."},
+            ],
+        )
+
+        self.assertEqual(report["source_kind"], "report_summary")
+        self.assertEqual(report["visual_format"], "report_digest_card")
+        self.assertEqual(report["aspect_ratio"], "long_scroll")
+        self.assertIn("report dashboard", report["format_profile"]["theme_direction"])
+        self.assertIn("long vertical document-style canvas", report["generation_prompt"])
+        self.assertIn("Do not force every source kind into the same grid", report["generation_prompt"])
 
     def test_extractive_draft_uses_bounded_source_without_fabricated_claims(self) -> None:
         source = "\n".join(f"Observed line {index} from the supplied notes." for index in range(1, 80))

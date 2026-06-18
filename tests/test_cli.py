@@ -1534,6 +1534,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("Visual prompt card prepared.", stdout)
             self.assertIn("Status: prepared", stdout)
             self.assertIn("Copy mode: structured", stdout)
+            self.assertIn("Visual format: pr_review_infographic", stdout)
+            self.assertIn("Aspect ratio: square_1_1", stdout)
             self.assertIn("Not evidence yet: image generated, visual QA passed, delivered.", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
@@ -1556,8 +1558,31 @@ class CliTests(unittest.TestCase):
             card = json.loads(stdout)
             self.assertEqual(card["schema_version"], "visual_prompt_card/v1")
             self.assertEqual(card["source_kind"], "meeting")
+            self.assertEqual(card["visual_format"], "meeting_recap_card")
             self.assertEqual(card["copy_mode"], "extractive_draft")
             self.assertTrue(card["requires_human_or_hermes_review"])
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "report",
+                    "--aspect-ratio",
+                    "long_scroll",
+                    "--section",
+                    "summary:Executive summary:Revenue grew while support cost increased.",
+                    "--json",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            report = json.loads(stdout)
+            self.assertEqual(report["source_kind"], "report_summary")
+            self.assertEqual(report["visual_format"], "report_digest_card")
+            self.assertEqual(report["aspect_ratio"], "long_scroll")
+            self.assertIn("long vertical document-style canvas", report["generation_prompt"])
 
             card_id = "20260618T011325Z-github-pr-abc123"
             status, stdout, stderr = run_cli(

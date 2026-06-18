@@ -23,10 +23,21 @@ SOURCE_KINDS = (
     "github_pr",
     "issue_feedback",
     "research_briefing",
+    "report_summary",
     "release_announcement",
 )
 LANGUAGE_MODES = ("en", "ko", "bilingual", "source")
-ASPECT_RATIOS = ("vertical_9_16", "square_1_1", "horizontal_16_9")
+ASPECT_RATIOS = ("vertical_9_16", "long_scroll", "square_1_1", "portrait_4_5", "horizontal_16_9")
+ASPECT_RATIO_CHOICES = ("auto",) + ASPECT_RATIOS
+VISUAL_FORMATS = (
+    "meeting_recap_card",
+    "pr_review_infographic",
+    "issue_triage_card",
+    "research_briefing_board",
+    "report_digest_card",
+    "release_announcement_card",
+)
+VISUAL_FORMAT_CHOICES = ("auto",) + VISUAL_FORMATS
 CAPABILITY_STATES = ("unknown", "prompt_only", "connected")
 OBSERVATION_TYPES = ("generated_image_observed", "visual_qa_observed", "delivery_observed")
 SUPPORTED_IMAGE_MIME_TYPES = ("image/png", "image/jpeg", "image/webp")
@@ -69,6 +80,12 @@ _SOURCE_KIND_ALIASES = {
     "뉴스": "research_briefing",
     "경쟁사": "research_briefing",
     "브리핑": "research_briefing",
+    "report_summary": "report_summary",
+    "report": "report_summary",
+    "digest": "report_summary",
+    "status_report": "report_summary",
+    "리포트": "report_summary",
+    "보고서": "report_summary",
     "release_announcement": "release_announcement",
     "release": "release_announcement",
     "announcement": "release_announcement",
@@ -95,6 +112,7 @@ _DEFAULT_AUDIENCE = {
     "github_pr": "reviewers",
     "issue_feedback": "product and engineering triage",
     "research_briefing": "operators and decision makers",
+    "report_summary": "operators and stakeholders",
     "release_announcement": "users and stakeholders",
 }
 _HEADLINES = {
@@ -102,6 +120,7 @@ _HEADLINES = {
     "github_pr": "PR Review Card",
     "issue_feedback": "Issue Triage Card",
     "research_briefing": "Research Briefing Card",
+    "report_summary": "Report Digest Card",
     "release_announcement": "Release Announcement Card",
 }
 _SECTION_TEMPLATES = {
@@ -129,6 +148,12 @@ _SECTION_TEMPLATES = {
         ("implication", "Implication"),
         ("follow_up", "Follow-up"),
     ),
+    "report_summary": (
+        ("summary", "Executive summary"),
+        ("metric", "Metric or signal"),
+        ("insight", "Insight"),
+        ("next_action", "Next action"),
+    ),
     "release_announcement": (
         ("summary", "What is new"),
         ("benefit", "Who benefits"),
@@ -141,7 +166,66 @@ _MISSING_INPUTS = {
     "github_pr": ("changed scope", "review focus", "verification evidence", "risk notes"),
     "issue_feedback": ("source boundary", "severity", "suspected area", "next owner"),
     "research_briefing": ("source list", "freshness", "confidence", "follow-up decision"),
+    "report_summary": ("report period", "source data", "metric definitions", "decision owner"),
     "release_announcement": ("audience", "new capabilities", "migration notes", "call to action"),
+}
+_FORMAT_BY_KIND = {
+    "meeting": "meeting_recap_card",
+    "github_pr": "pr_review_infographic",
+    "issue_feedback": "issue_triage_card",
+    "research_briefing": "research_briefing_board",
+    "report_summary": "report_digest_card",
+    "release_announcement": "release_announcement_card",
+}
+_FORMAT_PROFILES = {
+    "meeting_recap_card": {
+        "label": "meeting recap visual card",
+        "layout_type": "meeting_recap_card",
+        "default_aspect_ratio": "vertical_9_16",
+        "structure": ("Context", "Decisions", "Owners", "Risks", "Next actions"),
+        "theme_direction": "collaboration room, agenda board, speaker notes, calm operator palette",
+        "visual_metaphor": "meeting table, agenda cards, decision stamps, action-owner markers",
+    },
+    "pr_review_infographic": {
+        "label": "PR review infographic",
+        "layout_type": "pr_review_infographic",
+        "default_aspect_ratio": "square_1_1",
+        "structure": ("Summary", "Changed files or surface", "Review focus", "Validation", "Risk", "Conclusion"),
+        "theme_direction": "developer workspace, code review panels, test status, precise technical lines",
+        "visual_metaphor": "code panels, merge arrows, review checkmarks, CI badges",
+    },
+    "issue_triage_card": {
+        "label": "issue triage visual card",
+        "layout_type": "issue_triage_card",
+        "default_aspect_ratio": "vertical_9_16",
+        "structure": ("Signal", "Impact", "Suspected area", "Next investigation", "Missing evidence"),
+        "theme_direction": "incident desk, alert markers, priority tags, product support board",
+        "visual_metaphor": "ticket cards, warning triangle, severity ladder, reproduction path",
+    },
+    "research_briefing_board": {
+        "label": "research briefing board",
+        "layout_type": "research_briefing_board",
+        "default_aspect_ratio": "long_scroll",
+        "structure": ("Topic", "Findings", "Sources", "Contradictions", "Implications", "Next scan"),
+        "theme_direction": "research wall, source snippets, synthesis map, calm analytical grid",
+        "visual_metaphor": "source inbox, evidence pins, synthesis nodes, briefing memo",
+    },
+    "report_digest_card": {
+        "label": "report digest card",
+        "layout_type": "report_digest_card",
+        "default_aspect_ratio": "long_scroll",
+        "structure": ("Executive summary", "Metrics", "Trend", "Insight", "Decision", "Follow-up"),
+        "theme_direction": "report dashboard, metric cards, ledger lines, board-ready briefing",
+        "visual_metaphor": "charts, tables, KPI strips, executive memo sections",
+    },
+    "release_announcement_card": {
+        "label": "release announcement card",
+        "layout_type": "release_announcement_card",
+        "default_aspect_ratio": "square_1_1",
+        "structure": ("What is new", "Why it matters", "Who benefits", "Migration note", "Call to action"),
+        "theme_direction": "launch board, product update layers, clean announcement energy",
+        "visual_metaphor": "stacked product cards, sparkle markers, release ribbon, update badge",
+    },
 }
 _MIME_BY_SUFFIX = {
     ".png": "image/png",
@@ -186,7 +270,8 @@ def build_visual_prompt_card(
     headline: str = "",
     audience: str = "",
     language: str = "source",
-    aspect_ratio: str = "vertical_9_16",
+    aspect_ratio: str = "auto",
+    visual_format: str = "auto",
     sections: list[dict[str, str]] | None = None,
     source_text: str = "",
     capability_state: str = "unknown",
@@ -196,8 +281,9 @@ def build_visual_prompt_card(
     source_kind = normalize_source_kind(kind)
     if language not in LANGUAGE_MODES:
         raise ValueError(f"unsupported visual language: {language}; expected one of {', '.join(LANGUAGE_MODES)}")
-    if aspect_ratio not in ASPECT_RATIOS:
-        raise ValueError(f"unsupported visual aspect ratio: {aspect_ratio}; expected one of {', '.join(ASPECT_RATIOS)}")
+    resolved_format = resolve_visual_format(source_kind, visual_format)
+    format_profile = _FORMAT_PROFILES[resolved_format]
+    resolved_aspect_ratio = resolve_aspect_ratio(aspect_ratio, resolved_format)
     if capability_state not in CAPABILITY_STATES:
         raise ValueError(f"unsupported visual capability state: {capability_state}; expected one of {', '.join(CAPABILITY_STATES)}")
 
@@ -227,11 +313,19 @@ def build_visual_prompt_card(
         "source_kind": source_kind,
         "audience": str(audience).strip() or _DEFAULT_AUDIENCE[source_kind],
         "languages": _languages(language),
-        "aspect_ratio": aspect_ratio,
+        "aspect_ratio": resolved_aspect_ratio,
+        "visual_format": resolved_format,
         "layout": {
-            "type": "boxed_vertical_card",
+            "type": format_profile["layout_type"],
             "sections": [section["role"] for section in visual_sections],
-            "hierarchy": "headline, primary section, supporting sections, footer",
+            "hierarchy": ", ".join(format_profile["structure"]),
+            "recommended_aspect_ratio": format_profile["default_aspect_ratio"],
+        },
+        "format_profile": {
+            "label": format_profile["label"],
+            "structure": list(format_profile["structure"]),
+            "theme_direction": format_profile["theme_direction"],
+            "visual_metaphor": format_profile["visual_metaphor"],
         },
         "sections": visual_sections,
         "image_text": {
@@ -239,11 +333,18 @@ def build_visual_prompt_card(
             "footer": "Prepared by Hermes with OMH",
         },
         "style_direction": {
-            "mood": "modern, high-contrast, clean information card",
-            "typography": "large readable labels, short lines, no tiny paragraphs",
+            "mood": str(format_profile["theme_direction"]),
+            "typography": "readable labels, short lines, and enough canvas height for the selected format",
             "palette": "controlled by wrapper or user preference",
         },
-        "generation_prompt": _generation_prompt(source_kind, resolved_headline, visual_sections, language, aspect_ratio),
+        "generation_prompt": _generation_prompt(
+            source_kind,
+            resolved_headline,
+            visual_sections,
+            language,
+            resolved_aspect_ratio,
+            resolved_format,
+        ),
         "negative_prompt": (
             "Do not invent facts, owners, decisions, test results, approvals, or delivery claims. "
             "Do not render tiny unreadable paragraphs. Do not hide source uncertainty. "
@@ -270,6 +371,22 @@ def build_visual_prompt_card(
     if errors:
         raise ValueError("; ".join(errors))
     return record
+
+
+def resolve_visual_format(source_kind: str, visual_format: str = "auto") -> str:
+    if visual_format not in VISUAL_FORMAT_CHOICES:
+        raise ValueError(f"unsupported visual format: {visual_format}; expected one of {', '.join(VISUAL_FORMAT_CHOICES)}")
+    if visual_format == "auto":
+        return _FORMAT_BY_KIND[normalize_source_kind(source_kind)]
+    return visual_format
+
+
+def resolve_aspect_ratio(aspect_ratio: str, visual_format: str) -> str:
+    if aspect_ratio not in ASPECT_RATIO_CHOICES:
+        raise ValueError(f"unsupported visual aspect ratio: {aspect_ratio}; expected one of {', '.join(ASPECT_RATIO_CHOICES)}")
+    if aspect_ratio == "auto":
+        return str(_FORMAT_PROFILES[visual_format]["default_aspect_ratio"])
+    return aspect_ratio
 
 
 def validate_visual_prompt_card(record: dict[str, Any]) -> list[str]:
@@ -306,9 +423,15 @@ def validate_visual_prompt_card(record: dict[str, Any]) -> list[str]:
                 errors.append(f"sections[{index}].priority must be primary, secondary, or supporting")
             if int(section.get("max_words", 0) or 0) < 4:
                 errors.append(f"sections[{index}].max_words must be at least 4")
+    if record.get("visual_format") not in VISUAL_FORMATS:
+        errors.append(f"visual_format must be one of {', '.join(VISUAL_FORMATS)}")
     layout = record.get("layout", {})
-    if not isinstance(layout, dict) or layout.get("type") != "boxed_vertical_card":
-        errors.append("layout.type must be boxed_vertical_card")
+    allowed_layout_types = {str(profile["layout_type"]) for profile in _FORMAT_PROFILES.values()}
+    if not isinstance(layout, dict) or layout.get("type") not in allowed_layout_types:
+        errors.append(f"layout.type must be one of {', '.join(sorted(allowed_layout_types))}")
+    profile = record.get("format_profile", {})
+    if not isinstance(profile, dict) or not str(profile.get("theme_direction", "")).strip():
+        errors.append("format_profile.theme_direction is required")
     image_text = record.get("image_text", {})
     if not isinstance(image_text, dict) or not str(image_text.get("headline", "")).strip():
         errors.append("image_text.headline is required")
@@ -524,7 +647,9 @@ def _visual_card_identity_payload(record: dict[str, Any]) -> dict[str, Any]:
         "audience",
         "languages",
         "aspect_ratio",
+        "visual_format",
         "layout",
+        "format_profile",
         "sections",
         "image_text",
         "style_direction",
@@ -548,18 +673,42 @@ def _languages(language: str) -> list[str]:
     return [language]
 
 
-def _generation_prompt(kind: str, headline: str, sections: list[dict[str, Any]], language: str, aspect_ratio: str) -> str:
+def _generation_prompt(
+    kind: str,
+    headline: str,
+    sections: list[dict[str, Any]],
+    language: str,
+    aspect_ratio: str,
+    visual_format: str,
+) -> str:
     section_lines = "\n".join(
         f"- {section['title']}: {section['image_text']}"
         for section in sections
     )
+    profile = _FORMAT_PROFILES[visual_format]
     return (
-        f"Create a {aspect_ratio} boxed visual summary card for {kind}. "
+        f"Create a {aspect_ratio} {profile['label']} for {kind}. "
         f"Use language mode {language}. Headline: {headline}. "
-        "Use large readable text, clear section boxes, strong contrast, and generous spacing. "
-        "Keep every visible text block short and faithful to the supplied copy.\n"
+        f"Use this theme direction: {profile['theme_direction']}. "
+        f"Use this visual metaphor: {profile['visual_metaphor']}. "
+        f"Common structure: {', '.join(profile['structure'])}. "
+        f"{_aspect_guidance(aspect_ratio)} "
+        "Keep visible text short, readable, and faithful to the supplied copy. "
+        "Do not force every source kind into the same grid; adapt composition to the format.\n"
         f"Card copy:\n{section_lines}"
     )
+
+
+def _aspect_guidance(aspect_ratio: str) -> str:
+    if aspect_ratio == "long_scroll":
+        return "Use a long vertical document-style canvas; let the card extend downward when content needs more sections."
+    if aspect_ratio == "portrait_4_5":
+        return "Use a portrait social-card canvas with compact but readable sections."
+    if aspect_ratio == "square_1_1":
+        return "Use a square PR/social infographic canvas with a tight three-part reading path."
+    if aspect_ratio == "horizontal_16_9":
+        return "Use a horizontal briefing-slide canvas with left-to-right information flow."
+    return "Use a vertical mobile-friendly canvas with clear section rhythm."
 
 
 def _quality_checks() -> list[dict[str, str]]:

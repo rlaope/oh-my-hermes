@@ -1428,7 +1428,7 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "visual-summary",
-        "Hermes Visual Summary workflow: turn meetings, PRs, issues, research, and release notes into image-generation-ready visual prompt cards.",
+        "Hermes Visual Summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.",
         (
             "visual-summary",
             "visual summary",
@@ -1450,6 +1450,9 @@ _DEFINITIONS = [
             "feedback card",
             "triage card",
             "research card",
+            "report card",
+            "report summary card",
+            "report digest card",
             "news briefing card",
             "competitor-news briefing card",
             "briefing card",
@@ -1463,12 +1466,14 @@ _DEFINITIONS = [
             "이슈 트리아지 카드",
             "버그 트리아지 카드",
             "피드백 카드",
+            "리포트 요약 카드",
+            "보고서 요약 카드",
             "경쟁사 뉴스 브리핑 카드",
             "리서치 브리핑 카드",
             "릴리즈 노트 발표 이미지",
             "업데이트 발표 이미지",
         ),
-        "Use when Hermes should shape supplied notes, PR context, issue feedback, research/news, or release notes into a readable vertical image-card prompt without claiming image generation.",
+        "Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt without claiming image generation.",
         category="materials",
         phase="visual-prompt-card",
         hermes_role="retained-cognition",
@@ -1477,8 +1482,8 @@ _DEFINITIONS = [
             "Keep card copy shaping, source-kind selection, language mode, prompt assembly, and evidence narration in Hermes. "
             "Use wrapper-reported image generation only as an optional action; record generated image, visual QA, and delivery claims only from visual_observation/v1 evidence."
         ),
-        required_inputs=("source kind", "headline or source text", "audience", "language mode", "card sections or supplied source excerpts"),
-        expected_outputs=("visual_prompt_card/v1", "image-safe card copy", "generation prompt", "negative prompt", "quality checks", "visual evidence boundary"),
+        required_inputs=("source kind", "visual format or auto", "aspect ratio", "headline or source text", "audience", "language mode", "card sections or supplied source excerpts"),
+        expected_outputs=("visual_prompt_card/v1", "source-specific visual format", "image-safe card copy", "generation prompt", "negative prompt", "quality checks", "visual evidence boundary"),
         artifact_expectations=("visual_prompt_card/v1 prompt card when prepared", "visual_observation/v1 only when a wrapper or user records generated image, visual QA, or delivery evidence"),
         safety_rules=(
             "Do not call image providers, LLMs, APIs, or network services from OMH core.",
@@ -1489,7 +1494,9 @@ _DEFINITIONS = [
         ),
         quality_tier="visual-card-gated",
         quality_bar=(
-            "Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, or release_announcement.",
+            "Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.",
+            "Use the source-specific format profile instead of forcing every visual into the same grid.",
+            "Use long_scroll when the card needs a document-style vertical canvas with more sections.",
             "Keep visible card text short, readable, and faithful to supplied source or structured sections.",
             "Separate prompt prepared, image generated, visual QA passed, and delivered states.",
             "Prefer `visual-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.",
@@ -1497,7 +1504,7 @@ _DEFINITIONS = [
         ),
         why_this_exists=(
             "`visual-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts "
-            "while keeping generation, QA, and delivery as observed-only wrapper or user evidence."
+            "while adapting format to the source kind and keeping generation, QA, and delivery as observed-only wrapper or user evidence."
         ),
         do_not_use_when=(
             "The user needs a deck, PDF, spreadsheet, HWP, Markdown package, or binary file export plan; use `materials-package`.",
@@ -1506,7 +1513,7 @@ _DEFINITIONS = [
         ),
         good_example=SkillExample(
             prompt="visual-summary make a PR summary card for reviewers.",
-            expected="Prepare visual_prompt_card/v1 with PR-specific sections, copy mode, generation prompt, negative prompt, and not-evidence boundaries.",
+            expected="Prepare visual_prompt_card/v1 with the PR review infographic format, copy mode, generation prompt, negative prompt, and not-evidence boundaries.",
             why="The request asks for an image-card communication artifact, not a PDF/deck package or hidden image generation.",
         ),
         bad_example=SkillExample(
@@ -2947,14 +2954,15 @@ _HARNESSES = [
     ),
     HarnessDefinition(
         "visual-summary",
-        "Prepare visual prompt cards for meetings, PRs, issue feedback, research briefings, and release announcements without claiming image generation.",
-        "Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card.",
-        ("source kind", "audience", "language mode", "headline or source text", "structured sections or extractive source excerpts"),
-        ("visual_prompt_card/v1", "image-safe card copy", "generation prompt", "negative prompt", "quality checks", "available wrapper actions"),
-        ("prompt card is prepared", "copy mode is explicit", "image generation, visual QA, and delivery remain observed-only"),
+        "Prepare source-specific visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.",
+        "Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile.",
+        ("source kind", "visual format", "aspect ratio", "audience", "language mode", "headline or source text", "structured sections or extractive source excerpts"),
+        ("visual_prompt_card/v1", "source-specific visual format", "image-safe card copy", "generation prompt", "negative prompt", "quality checks", "available wrapper actions"),
+        ("prompt card is prepared", "copy mode is explicit", "format profile is source-specific", "image generation, visual QA, and delivery remain observed-only"),
         (
             "validate visual_prompt_card/v1",
             "check source kind and language mode",
+            "check visual format and aspect ratio",
             "ensure raw source uses extractive_draft copy mode",
             "record visual_observation/v1 only for supplied generated image, QA, or delivery evidence",
         ),
@@ -2964,13 +2972,15 @@ _HARNESSES = [
         "metadata_only",
         quality_tier="visual-card-gated",
         quality_bar=(
-            "Keep visual card copy short, source-faithful, and readable at vertical mobile sizes.",
+            "Use meeting, PR, issue, research, report, and release format profiles instead of one fixed grid.",
+            "Keep visual card copy short, source-faithful, and readable at the selected aspect ratio.",
             "Represent structured sections and extractive drafts separately.",
             "Never treat connected image capability as generated image evidence.",
             "Keep generated image, visual QA, and delivery as separate observed records.",
         ),
         evidence_ladder=(
             "source_kind_selected",
+            "visual_format_selected",
             "card_copy_prepared",
             "prompt_card_prepared",
             "image_generation_capability_checked",

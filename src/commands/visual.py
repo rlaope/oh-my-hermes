@@ -5,11 +5,12 @@ from pathlib import Path
 
 from ..installer import OmhError
 from ..visual_summary import (
-    ASPECT_RATIOS,
+    ASPECT_RATIO_CHOICES,
     CAPABILITY_STATES,
     LANGUAGE_MODES,
     OBSERVATION_TYPES,
     SOURCE_KINDS,
+    VISUAL_FORMAT_CHOICES,
     build_visual_observation,
     build_visual_prompt_card,
     normalize_observation_type,
@@ -29,6 +30,7 @@ def cmd_visual_prompt_card(args: argparse.Namespace) -> int:
             audience=args.audience,
             language=args.language,
             aspect_ratio=args.aspect_ratio,
+            visual_format=args.visual_format,
             sections=sections,
             source_text=source_text,
             capability_state=args.capability_state,
@@ -83,6 +85,8 @@ def _print_prompt_card_summary(card: dict[str, object]) -> None:
     print(f"Status: {card['status']}")
     print(f"Copy mode: {card['copy_mode']}")
     print(f"Language: {', '.join(card.get('languages', []))}")
+    print(f"Visual format: {card['visual_format']}")
+    print(f"Aspect ratio: {card['aspect_ratio']}")
     print(f"Image generator: {state}")
     print("")
     print(str(card["image_text"]["headline"]))
@@ -139,7 +143,8 @@ def _add_visual_commands(sub) -> None:
     prompt_card.add_argument("--headline", default="")
     prompt_card.add_argument("--audience", default="")
     prompt_card.add_argument("--language", choices=LANGUAGE_MODES, default="source")
-    prompt_card.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default="vertical_9_16")
+    prompt_card.add_argument("--aspect-ratio", choices=ASPECT_RATIO_CHOICES, default="auto")
+    prompt_card.add_argument("--visual-format", choices=VISUAL_FORMAT_CHOICES, default="auto")
     prompt_card.add_argument("--section", action="append", metavar="ROLE:TITLE:TEXT")
     prompt_card.add_argument("--from-file", default="")
     prompt_card.add_argument("--capability-state", choices=CAPABILITY_STATES, default="unknown")
