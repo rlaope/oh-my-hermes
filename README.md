@@ -41,6 +41,17 @@ practical layer of ready-to-use workflows such as `web-research`, `doctor`,
 `idea-to-deploy`, `ultragoal`, `loop`, and `ultraprocess` so Hermes can feel
 easier to start, easier to trust, and more natural to apply in real work.
 
+> [!NOTE]
+> **Friren Agent is hard at work improving OMH inside Art&Engine.**
+>
+> Improve OMH System !!
+>
+> <p align="center">
+>   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
+> </p>
+
+<br>
+
 ## Quick Start
 
 Install the `omh` command, then connect it to Hermes:
@@ -99,6 +110,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 > Explore [ArtEngine Lab](https://rlaope.github.io/artengine-lab/) for the
 > Art & Engineering studio behind OMH.
 
+<br>
+
 ## Why OMH
 
 <p align="center">
@@ -117,6 +130,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 - **Local and inspectable** - skills, manifests, plans, sessions, and status
   records stay in user-owned local directories.
 
+<br>
+
 ## Core Workflows
 
 | Need | OMH helps Hermes do this | Example |
@@ -129,6 +144,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
+<br>
+
 ## What You Get
 
 | Surface | What it means in practice |
@@ -140,6 +157,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
 | Organization patterns | Solo, research, product ops, coding runtime, and CTO-style collaboration patterns help Hermes present the right role flow for the request. |
 
+<br>
+
 ## Organization Patterns
 
 Profiles describe how Hermes should organize work around a request. They are
@@ -150,6 +169,8 @@ way.
 <p align="center">
   <img src="assets/omh-profile-interaction-map.svg" alt="OMH request-to-handoff interaction map" width="920">
 </p>
+
+<br>
 
 ## How It Feels In Hermes
 
@@ -164,6 +185,8 @@ way.
 
 Advanced team presets, plugin status helpers, MCP preferences, runtime
 observation, and release smoke commands are covered in the documentation below.
+
+<br>
 
 ## Documentation
 
@@ -184,6 +207,8 @@ observation, and release smoke commands are covered in the documentation below.
 | Harness quality contracts | [Harness Quality Contract](docs/HARNESS_QUALITY.md) |
 | Representative workflows | [Application Cases](docs/APPLICATION_CASES.md) |
 | Public website source | [GitHub Pages site](site/index.html) |
+
+<br>
 
 ## Development
 
