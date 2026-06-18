@@ -1618,22 +1618,39 @@ def _command_package_display_change(payload: dict[str, object], release_update: 
     display = release_update.get("display", {})
     if not isinstance(display, dict):
         display = {}
+    previous = release_update.get("previous", {})
+    if not isinstance(previous, dict):
+        previous = {}
+    current = release_update.get("current", {})
+    if not isinstance(current, dict):
+        current = {}
     channel = str(payload.get("release_channel", "")).strip()
     version_change = str(display.get("version_change", "")).strip()
     source_ref_change = str(display.get("source_ref_change", "")).strip()
-    if channel == "stable" and version_change:
+    package_url_change = str(display.get("package_url_change", "")).strip()
+    previous_version = str(previous.get("release_version", "")).strip()
+    current_version = str(current.get("release_version", "")).strip()
+    previous_ref = str(previous.get("release_source_ref", "")).strip()
+    current_ref = str(current.get("release_source_ref", "")).strip()
+    previous_package_url = str(previous.get("release_package_url", "")).strip()
+    current_package_url = str(current.get("release_package_url", "")).strip()
+    version_changed = bool(current_version and previous_version != current_version)
+    source_ref_changed = bool(current_ref and previous_ref != current_ref)
+    package_url_changed = bool(current_package_url and previous_package_url != current_package_url)
+    if channel == "stable" and version_changed and version_change:
         return version_change
-    if source_ref_change:
+    if channel == "stable" and current_version and source_ref_changed and source_ref_change:
+        return f"{current_version} ({source_ref_change})"
+    if channel == "stable" and current_version and package_url_changed and package_url_change:
+        return f"{current_version} (package URL changed)"
+    if source_ref_changed and source_ref_change:
         return source_ref_change
-    current = release_update.get("current", {})
-    if isinstance(current, dict):
-        if channel == "stable":
-            version = str(current.get("release_version", "")).strip()
-            if version:
-                return version
-        source_ref = str(current.get("release_source_ref", "")).strip()
-        if source_ref:
-            return source_ref
+    if package_url_changed and package_url_change:
+        return package_url_change
+    if channel == "stable" and current_version:
+        return f"{current_version} -> {current_version}" if previous_version == current_version else current_version
+    if current_ref:
+        return f"{current_ref} -> {current_ref}" if previous_ref == current_ref else current_ref
     package_url = str(payload.get("release_package_url", "")).strip()
     return package_url or "updated"
 
