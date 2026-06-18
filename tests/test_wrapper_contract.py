@@ -685,8 +685,8 @@ class WrapperContractTests(unittest.TestCase):
 
         self.assertEqual(payload["mode"], "route")
         self.assertEqual(payload["next_action"], "prepare_visual_prompt_card")
-        self.assertEqual(payload["chat_response"]["kind"], "visual_summary")
-        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "visual-summary")
+        self.assertEqual(payload["chat_response"]["kind"], "img_summary")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "img-summary")
         self.assertEqual(payload["chat_response"]["state"]["artifact_schema"], "visual_prompt_card/v1")
         self.assertEqual(payload["chat_response"]["state"]["observation_schema"], "visual_observation/v1")
         self.assertEqual(payload["chat_response"]["state"]["image_generation_capability"], "unknown")

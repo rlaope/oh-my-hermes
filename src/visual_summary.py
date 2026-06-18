@@ -139,7 +139,7 @@ _DEFAULT_AUDIENCE = {
     "release_announcement": "users and stakeholders",
 }
 _HEADLINES = {
-    "meeting": "Meeting Visual Summary",
+    "meeting": "Meeting Image Summary",
     "github_pr": "PR Review Card",
     "issue_feedback": "Issue Triage Card",
     "research_briefing": "Research Briefing Card",

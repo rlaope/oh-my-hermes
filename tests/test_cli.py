@@ -1510,7 +1510,8 @@ class CliTests(unittest.TestCase):
     def test_visual_cli_prepares_prompt_cards_and_records_observations(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            base = ["--omh-home", str(root / ".omh"), "visual"]
+            base = ["--omh-home", str(root / ".omh"), "img-summary"]
+            legacy_base = ["--omh-home", str(root / ".omh"), "visual"]
             artifact = root / "card.png"
 
             status, stdout, stderr = run_cli(
@@ -1542,6 +1543,24 @@ class CliTests(unittest.TestCase):
             self.assertIn("Setup is capability preparation only", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
+
+            status, stdout, stderr = run_cli(
+                legacy_base
+                + [
+                    "prompt-card",
+                    "--kind",
+                    "pr",
+                    "--headline",
+                    "Compatibility Card",
+                    "--section",
+                    "summary:What changed:Alias still prepares the card.",
+                    "--json",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertEqual(json.loads(stdout)["schema_version"], "visual_prompt_card/v1")
 
             status, stdout, stderr = run_cli(
                 base
@@ -1957,7 +1976,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(stderr, "")
                 self.assertEqual(status, 0)
                 top = json.loads(stdout)["recommendations"][0]
-                self.assertEqual(top["skill"], "visual-summary")
+                self.assertEqual(top["skill"], "img-summary")
                 self.assertEqual(top["hermes_role"], "operator")
                 self.assertEqual(top["next_action"], "prepare_visual_prompt_card")
                 self.assertIn("not generated image", top["evidence_boundary"])
@@ -1970,7 +1989,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         top = json.loads(stdout)["recommendations"][0]
         self.assertEqual(top["skill"], "report-package")
-        self.assertNotEqual(top["skill"], "visual-summary")
+        self.assertNotEqual(top["skill"], "img-summary")
 
     def test_recommend_visual_summary_guard_does_not_match_unrelated_card_or_image_work(self) -> None:
         cases = (
@@ -1986,7 +2005,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(stderr, "")
                 self.assertEqual(status, 0)
                 skills = [item["skill"] for item in json.loads(stdout)["recommendations"]]
-                self.assertNotEqual(skills[0], "visual-summary")
+                self.assertNotEqual(skills[0], "img-summary")
 
     def test_recommend_delivery_status_overlap_rules_are_explicit(self) -> None:
         cases = (

@@ -174,6 +174,9 @@ _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = frozenset(
     }
 )
 _VISUAL_SUMMARY_PHRASES = (
+    "img-summary",
+    "img summary",
+    "visual-summary",
     "visual summary",
     "visual prompt card",
     "image card",
@@ -289,10 +292,10 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     activation_status="active",
 )
 VISUAL_SUMMARY_GUARD = RoutingGuardRule(
-    id="visual_summary_before_materials_or_delivery",
-    rule="Image, card, or visual-summary requests should route to visual-summary before materials or PR delivery-cycle lanes.",
-    matched_label="guard:visual_summary",
-    preferred_skills=("visual-summary",),
+    id="img_summary_before_materials_or_delivery",
+    rule="Image, card, or img-summary requests should route to img-summary before materials or PR delivery-cycle lanes.",
+    matched_label="guard:img_summary",
+    preferred_skills=("img-summary",),
     score_boost=30,
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",

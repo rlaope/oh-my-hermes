@@ -116,7 +116,7 @@ _SKILL_PICKER_ENTRIES = (
     ("research-department", "Research Department", "Prepare Scout, Analyst, and Briefer research ops.", "./research-department <topic>"),
     ("code-review", "Code Review", "Review completed work without overclaiming evidence.", "./code-review <scope>"),
     ("materials-package", "Materials Package", "Shape PPT, PDF, spreadsheet, document, or Markdown deliverables.", "./materials-package <brief>"),
-    ("visual-summary", "Visual Summary", "Prepare image-generation-ready summary cards.", "./visual-summary <source>"),
+    ("img-summary", "Img Summary", "Prepare image-generation-ready summary cards.", "./img-summary <source>"),
     ("automation-blueprint", "Automation Blueprint", "Prepare recurring Hermes scheduled-ops workflows.", "./automation-blueprint <intent>"),
     ("doctor", "Doctor", "Check OMH install and Hermes registration health.", "./doctor"),
 )
@@ -523,15 +523,15 @@ def build_chat_response_from_route(
                     ],
                 },
             )
-        if selected == "visual-summary" or policy_next_action == "prepare_visual_prompt_card":
+        if selected == "img-summary" or policy_next_action == "prepare_visual_prompt_card":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A visual prompt card is not generated image evidence."
             body = str(policy.get("wrapper_guidance", "")) or (
                 "I will prepare a readable visual prompt card. Image generation, visual QA, and delivery stay unobserved "
                 "until a wrapper or user records evidence."
             )
             return _chat_response(
-                kind="visual_summary",
-                headline="I can prepare a visual summary card for this.",
+                kind="img_summary",
+                headline="I can prepare an img-summary card for this.",
                 body=body,
                 phase="visual_prompt_prepared",
                 next_action="prepare_visual_prompt_card",

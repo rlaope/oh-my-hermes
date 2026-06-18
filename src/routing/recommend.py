@@ -83,7 +83,7 @@ _SKILL_POLICIES = {
             "QA ladder, and an executor-neutral generation handoff when a binary file is needed."
         ),
     ),
-    "visual-summary": RecommendationPolicy(
+    "img-summary": RecommendationPolicy(
         next_action="prepare_visual_prompt_card",
         evidence_boundary=(
             "A visual prompt card is not generated image, visual QA, sharing, posting, attachment, or delivery evidence."
@@ -429,9 +429,9 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
             matches,
             guards=guards,
         )
-        visual_guard_active = any(guard.id == "visual_summary_before_materials_or_delivery" for guard in guards)
-        if explicit_skill != "visual-summary" and not visual_guard_active:
-            matches = [recommendation for recommendation in matches if recommendation.skill != "visual-summary"]
+        visual_guard_active = any(guard.id == "img_summary_before_materials_or_delivery" for guard in guards)
+        if explicit_skill != "img-summary" and not visual_guard_active:
+            matches = [recommendation for recommendation in matches if recommendation.skill != "img-summary"]
             if not matches:
                 matches = _fallback_recommendations(definitions, query)
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))

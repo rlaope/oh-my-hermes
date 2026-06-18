@@ -311,7 +311,7 @@ _CODING_INTENT_BY_SKILL = {
     "operating-rhythm": "planning",
     "report-package": "planning",
     "materials-package": "planning",
-    "visual-summary": "planning",
+    "img-summary": "planning",
     "automation-blueprint": "planning",
     "reliability-review": "planning",
     "idea-to-deploy": "planning",
@@ -1427,11 +1427,11 @@ _DEFINITIONS = [
         ),
     ),
     SkillDefinition(
-        "visual-summary",
-        "Hermes Visual Summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.",
+        "img-summary",
+        "Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.",
         (
-            "visual-summary",
-            "visual summary",
+            "img-summary",
+            "img summary",
             "visual prompt card",
             "image card",
             "summary image",
@@ -1459,7 +1459,7 @@ _DEFINITIONS = [
             "release announcement image",
             "release notes image",
             "announcement card",
-            "multilingual visual summary",
+            "multilingual img-summary",
             "회의록 세로 요약 이미지",
             "회의 요약 이미지",
             "PR 요약 카드",
@@ -1513,11 +1513,11 @@ _DEFINITIONS = [
             "Use long_scroll when the card needs a document-style vertical canvas with more sections.",
             "Keep visible card text short, readable, and faithful to supplied source or structured sections.",
             "Separate prompt prepared, image generated, visual QA passed, and delivered states.",
-            "Prefer `visual-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.",
+            "Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.",
             "Use materials/report workflows only after an observed generated file needs packaging.",
         ),
         why_this_exists=(
-            "`visual-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts "
+            "`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts "
             "while adapting format to the source kind and keeping generation, QA, and delivery as observed-only wrapper or user evidence."
         ),
         do_not_use_when=(
@@ -1526,12 +1526,12 @@ _DEFINITIONS = [
             "The user asks OMH to directly generate, inspect, upload, or post an image without a wrapper-supplied observed evidence path.",
         ),
         good_example=SkillExample(
-            prompt="visual-summary make a PR summary card for reviewers.",
+            prompt="img-summary make a PR summary card for reviewers.",
             expected="Prepare visual_prompt_card/v1 with the PR review infographic format, copy mode, generation prompt, negative prompt, and not-evidence boundaries.",
             why="The request asks for an image-card communication artifact, not a PDF/deck package or hidden image generation.",
         ),
         bad_example=SkillExample(
-            prompt="visual-summary prove this generated card was posted to Slack.",
+            prompt="img-summary prove this generated card was posted to Slack.",
             expected="Ask for visual_observation/v1 delivery evidence or report delivery as not_observed.",
             why="A prompt card cannot prove generated image, QA, or delivery evidence.",
         ),
@@ -2967,7 +2967,7 @@ _HARNESSES = [
         ),
     ),
     HarnessDefinition(
-        "visual-summary",
+        "img-summary",
         "Prepare source-specific visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.",
         "Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile.",
         ("source kind", "visual format", "aspect ratio", "audience", "language mode", "headline or source text", "structured sections or extractive source excerpts"),
@@ -2982,7 +2982,7 @@ _HARNESSES = [
         ),
         "If image capability is unavailable, show choose/setup image tool fallback actions plus copy/revise/status actions, and keep generation prompt-only until capability is connected.",
         ("visual_card_prepared", "generation_action_available_when_connected", "visual_observation_recorded_when_available"),
-        "Record visual summary as Hermes-retained prompt-card preparation; record image generation, visual QA, and delivery only from visual_observation/v1 evidence.",
+        "Record img-summary as Hermes-retained prompt-card preparation; record image generation, visual QA, and delivery only from visual_observation/v1 evidence.",
         "metadata_only",
         quality_tier="visual-card-gated",
         quality_bar=(
@@ -3514,7 +3514,7 @@ _PRIMARY_HARNESSES = {
     "operating-rhythm": "operating-rhythm",
     "report-package": "report-package",
     "materials-package": "materials-package",
-    "visual-summary": "visual-summary",
+    "img-summary": "img-summary",
     "automation-blueprint": "scheduled-ops-blueprint",
     "research-department": "research-department",
     "reliability-review": "reliability-review",

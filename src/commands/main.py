@@ -146,8 +146,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh loop status\n"
             "  omh ops list\n"
             "  omh materials list\n"
-            "  omh visual prompt-card --kind github_pr --visual-format auto --section summary:What_changed:Safer_setup_copy\n"
-            "  omh visual prompt-card --kind report --aspect-ratio long_scroll --section summary:Executive_summary:Weekly_metrics_changed\n"
+            "  omh img-summary prompt-card --kind github_pr --visual-format auto --section summary:What_changed:Safer_setup_copy\n"
+            "  omh img-summary prompt-card --kind report --aspect-ratio long_scroll --section summary:Executive_summary:Weekly_metrics_changed\n"
             "  omh runtime status\n\n"
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
@@ -222,7 +222,7 @@ Useful operator commands:
   omh loop status        Show loopable goal cycle state
   omh ops list           List local operations artifacts
   omh materials list     List material-processing artifacts
-  omh visual prompt-card Prepare image-generation-ready summary cards
+  omh img-summary prompt-card Prepare image-generation-ready summary cards
   omh runtime status     Show local evidence artifacts
 
 After setup, restart or reload Hermes Agent and try:

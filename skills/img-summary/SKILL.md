@@ -1,6 +1,6 @@
 ---
-name: visual-summary
-description: [omh] Hermes Visual Summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.
+name: img-summary
+description: [omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, materials]
@@ -10,13 +10,13 @@ metadata:
     quality_tier: visual-card-gated
 ---
 
-# Visual Summary
+# Img Summary
 
-This is a Hermes-native `visual-summary` workflow skill.
+This is a Hermes-native `img-summary` workflow skill.
 
 ## Why This Exists
 
-`visual-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
+`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
 
 ## Do Not Use When
 
@@ -28,13 +28,13 @@ This is a Hermes-native `visual-summary` workflow skill.
 
 Good example:
 
-- Prompt: visual-summary make a PR summary card for reviewers.
+- Prompt: img-summary make a PR summary card for reviewers.
 - Expected behavior: Prepare visual_prompt_card/v1 with the PR review infographic format, copy mode, generation prompt, negative prompt, and not-evidence boundaries.
 - Why: The request asks for an image-card communication artifact, not a PDF/deck package or hidden image generation.
 
 Bad example:
 
-- Prompt: visual-summary prove this generated card was posted to Slack.
+- Prompt: img-summary prove this generated card was posted to Slack.
 - Expected behavior: Ask for visual_observation/v1 delivery evidence or report delivery as not_observed.
 - Why: A prompt card cannot prove generated image, QA, or delivery evidence.
 
@@ -42,7 +42,7 @@ Bad example:
 
 Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt without claiming image generation.
 
-    Strong routing signals: `visual-summary`, `visual summary`, `visual prompt card`, `image card`, `summary image`, `vertical card`, `vertical summary image`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `announcement card`, `multilingual visual summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `PR 요약 카드`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `업데이트 발표 이미지`
+    Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `summary image`, `vertical card`, `vertical summary image`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `PR 요약 카드`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `업데이트 발표 이미지`
 
 ## Catalog Metadata
 
@@ -58,7 +58,7 @@ Quality bar:
 - Use long_scroll when the card needs a document-style vertical canvas with more sections.
 - Keep visible card text short, readable, and faithful to supplied source or structured sections.
 - Separate prompt prepared, image generated, visual QA passed, and delivered states.
-- Prefer `visual-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
+- Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
 - Use materials/report workflows only after an observed generated file needs packaging.
 
 Handoff policy:
@@ -109,12 +109,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `visual-summary`.
+Preferred harness for this skill: `img-summary`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill visual-summary --harness visual-summary --status started
+omh runtime record --skill img-summary --harness img-summary --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

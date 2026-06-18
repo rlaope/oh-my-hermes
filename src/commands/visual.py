@@ -141,11 +141,24 @@ def _print_observation_summary(record: dict[str, object]) -> None:
 
 
 def _add_visual_commands(sub) -> None:
-    visual = sub.add_parser(
-        "visual",
-        help="Prepare visual summary prompt cards and record observed visual evidence.",
+    _add_visual_parser(
+        sub,
+        "img-summary",
+        help="Prepare img-summary prompt cards and record observed visual evidence.",
     )
-    visual_sub = visual.add_subparsers(dest="visual_command", required=True)
+    _add_visual_parser(
+        sub,
+        "visual",
+        help=argparse.SUPPRESS,
+    )
+
+
+def _add_visual_parser(sub, name: str, *, help: str) -> None:
+    visual = sub.add_parser(
+        name,
+        help=help,
+    )
+    visual_sub = visual.add_subparsers(dest=f"{name.replace('-', '_')}_command", required=True)
 
     prompt_card = visual_sub.add_parser(
         "prompt-card",

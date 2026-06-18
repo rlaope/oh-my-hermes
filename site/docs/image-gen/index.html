@@ -6,7 +6,7 @@
     <title>OMH Image Gen</title>
     <meta
       name="description"
-      content="OMH Image gen docs for visual-summary prompt cards, source-specific card formats, connected image tools, and observed-only image evidence."
+      content="OMH Image gen docs for img-summary prompt cards, source-specific card formats, connected image tools, and observed-only image evidence."
     >
     <link rel="stylesheet" href="../../styles.css">
   </head>
@@ -27,7 +27,7 @@
           <p class="eyebrow">Flagship lane</p>
           <h1>Image gen that stays source-aware.</h1>
           <p>
-            <code>visual-summary</code> helps Hermes prepare image-generation
+            <code>img-summary</code> helps Hermes prepare image-generation
             prompt cards for meeting notes, reports, GitHub PRs, issues,
             research briefings, and release updates. OMH shapes the card before
             a connected image tool runs, then records image generation, visual
@@ -43,8 +43,8 @@
         </div>
         <figure class="imagegen-doc-poster">
           <img
-            src="../../assets/omh-visual-summary-card.png"
-            alt="OMH visual-summary poster with source inputs, prompt card, connected image tool, and visual observation states"
+            src="../../assets/omh-img-summary-card.png"
+            alt="OMH img-summary poster with source inputs, prompt card, connected image tool, and visual observation states"
           >
         </figure>
       </header>
@@ -129,9 +129,9 @@
           contract shape without contacting an image provider.
         </p>
         <div class="command" role="region" aria-label="Image gen prompt card commands" tabindex="0">
-          <code>omh visual prompt-card --kind github_pr --section summary:What_changed:Setup_copy_now_matches_the_site
-omh visual prompt-card --kind report --section summary:Executive_summary:Weekly_metrics_changed
-omh visual observe --card-id &lt;id&gt; --type generated_image_observed --path ./card.png --summary "Generated with connected image tool"</code>
+          <code>omh img-summary prompt-card --kind github_pr --section summary:What_changed:Setup_copy_now_matches_the_site
+omh img-summary prompt-card --kind report --section summary:Executive_summary:Weekly_metrics_changed
+omh img-summary observe --card-id &lt;id&gt; --type generated_image_observed --path ./card.png --summary "Generated with connected image tool"</code>
         </div>
         <p>
           The first two commands prepare <code>visual_prompt_card/v1</code>.

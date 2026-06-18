@@ -100,7 +100,7 @@ class VisualSummaryTests(unittest.TestCase):
         )
 
         self.assertIn("horizontal_16_9", card["generation_prompt"])
-        self.assertNotIn("boxed vertical visual summary card", card["generation_prompt"])
+        self.assertNotIn("boxed vertical img summary card", card["generation_prompt"])
 
     def test_visual_formats_are_source_specific_and_support_long_scroll(self) -> None:
         self.assertEqual(resolve_visual_format("meeting"), "meeting_recap_card")
