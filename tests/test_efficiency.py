@@ -7,6 +7,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_skill_templates
+from omh.routing import recommend as recommend_module
 from omh.skills import render as render_module
 from omh.skills.catalog import (
     builtin_harnesses,
@@ -104,6 +105,18 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("feedback-triage", catalog_intent_delegation_skill_names())
         self.assertIn("code-review", coding_skills_for_intent("review"))
         self.assertIn("research-brief", retained_delegation_skill_names())
+
+    def test_recommendation_metadata_cache_is_reused_without_payload_poisoning(self) -> None:
+        recommend_module._prepared_routable_definitions.cache_clear()
+
+        first = recommend_module.recommend_skills("risky refactor", limit=2)
+        first[0]["skill"] = "mutated"
+        second = recommend_module.recommend_skills("risky refactor", limit=2)
+        cache_info = recommend_module._prepared_routable_definitions.cache_info()
+
+        self.assertNotEqual(second[0]["skill"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
 
 
 if __name__ == "__main__":

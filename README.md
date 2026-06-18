@@ -14,7 +14,7 @@
   <a href="https://github.com/rlaope/oh-my-hermes"><img alt="GitHub" src="https://img.shields.io/badge/github-rlaope%2Foh--my--hermes-181717?logo=github"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Status" src="https://img.shields.io/badge/status-1.0.0%20stable-blue">
+  <img alt="Status" src="https://img.shields.io/badge/status-1.0.1%20stable-blue">
 </p>
 
 Most people skip the docs. **oh-my-hermes** is built for that reality: install
@@ -262,6 +262,6 @@ python3 -m compileall src
 python3 -m omh.cli docs workflows --check
 ```
 
-OMH 1.0.0 is a quality-gated stable baseline. Richer profile activation probes
+OMH 1.0.1 is a quality-gated stable baseline. Richer profile activation probes
 and more artifact-backed wrapper examples are tracked in the roadmap and
 release docs.
