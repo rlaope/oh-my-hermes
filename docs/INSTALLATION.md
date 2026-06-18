@@ -692,17 +692,21 @@ conversation, execution, GitHub, CI, and merge evidence that OMH later records.
 
 ## Update
 
-Update the managed skill pack from the currently installed `omh` command
-package:
+Update the installed `omh` command package and then refresh the managed skill
+pack:
 
 ```sh
 omh update
 omh doctor
 ```
 
-Most users should run only `omh update`. The command uses the channel and
-version metadata that were installed with the local `omh` package, refreshes the
-managed skills, and records a concise update log.
+Most users should run only `omh update`. When `omh` is running from the default
+install.sh-managed venv, the command first updates the command package from the
+recorded preview/stable package source, re-enters the updated CLI, refreshes the
+managed skills, and records a concise update log. If `omh` is running from a
+pip, pipx, distro, or custom Python install that OMH cannot safely mutate, the
+update still refreshes workflows but prints `Command package: not updated` plus
+the installer command needed to update the CLI itself.
 
 Advanced operators can still pin or test a different source with
 `omh update --channel stable --version <version>` or
@@ -711,12 +715,12 @@ release validation, fixtures, or intentional rollback testing. Local
 modifications block updates unless `--force` is supplied.
 
 Run `omh doctor` after an update. Use `omh setup` only when doctor reports that
-Hermes registration needs repair, then restart Hermes Agent. `omh update` does
-not fetch or replace the running `omh` command package itself. Rerun the
-installer to sync command-code changes from the preview or stable package
-source; the installer passes command-package update evidence into OMH so the
-state log can show version/ref movement such as `1.0.0 -> 1.0.1` or
-`main@old -> main@new` when `OMH_SOURCE_REF` is provided:
+Hermes registration needs repair, then restart Hermes Agent. Rerun the installer
+manually only when `omh update` says the command package was not updated, or
+when you intentionally want a one-shot reinstall from a specific source ref. The
+installer passes command-package update evidence into OMH so the state log can
+show version/ref movement such as `1.0.0 -> 1.0.1` or `main@old -> main@new`
+when `OMH_SOURCE_REF` is provided:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
