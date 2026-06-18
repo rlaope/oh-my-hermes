@@ -690,9 +690,17 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["chat_response"]["state"]["artifact_schema"], "visual_prompt_card/v1")
         self.assertEqual(payload["chat_response"]["state"]["observation_schema"], "visual_observation/v1")
         self.assertEqual(payload["chat_response"]["state"]["image_generation_capability"], "unknown")
+        setup = payload["chat_response"]["state"]["image_generation_setup"]
+        self.assertEqual(setup["schema_version"], "image_generation_setup/v1")
+        self.assertTrue(setup["required"])
+        self.assertEqual(setup["recommended_option"], "gpt-image")
+        self.assertEqual(setup["next_action"], "choose_image_generator")
+        self.assertIn("GPT image tool", {option["label"] for option in setup["options"]})
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertTrue(actions["show_visual_prompt_card"]["enabled"])
         self.assertTrue(actions["copy_visual_prompt"]["enabled"])
+        self.assertTrue(actions["choose_image_generator"]["enabled"])
+        self.assertTrue(actions["setup_image_generator"]["enabled"])
         self.assertTrue(actions["record_visual_image"]["enabled"])
         self.assertNotIn("generate_visual_image", actions)
         self.assertIn("not generated image", payload["chat_response"]["claim_boundary"])

@@ -91,7 +91,8 @@ _SKILL_POLICIES = {
         wrapper_guidance=(
             "Prepare visual_prompt_card/v1 with short image-safe copy, generation prompt, negative prompt, "
             "language/aspect metadata, and visual_observation/v1 evidence requirements. Show generate action only "
-            "when image_generation_capability/v1 is connected, and keep it separate from observed image evidence."
+            "when image_generation_capability/v1 is connected; otherwise route to image_generation_setup/v1 to choose "
+            "a GPT image tool, existing Hermes connector, generic image tool, or prompt-only path."
         ),
     ),
     "automation-blueprint": RecommendationPolicy(

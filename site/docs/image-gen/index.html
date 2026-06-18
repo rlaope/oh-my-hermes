@@ -31,7 +31,10 @@
             prompt cards for meeting notes, reports, GitHub PRs, issues,
             research briefings, and release updates. OMH shapes the card before
             a connected image tool runs, then records image generation, visual
-            QA, attachment, and delivery only when those events are observed.
+            QA, attachment, and delivery only when those events are observed. If
+            no generator is connected yet, Hermes can first choose a GPT image
+            tool, an existing Hermes connector, a generic image tool, or
+            prompt-only mode.
           </p>
           <div class="feature-actions">
             <a class="button button--primary" href="../">Back to docs</a>
@@ -94,12 +97,14 @@
           <p>
             Hermes can use this lane when a chat summary needs to become a
             shareable visual. The wrapper can show the prompt card, copy the
-            prompt into an already connected image tool, then record what
+            prompt into an already connected image tool, or fall back to
+            image_generation_setup/v1 before generation, then record what
             happened back into OMH.
           </p>
           <div class="feature-flow feature-flow--imagegen" aria-label="Image generation flow">
             <span>source</span>
             <span>visual_prompt_card/v1</span>
+            <span>image_generation_setup/v1</span>
             <span>connected image tool</span>
             <span>visual_observation/v1</span>
           </div>
@@ -130,8 +135,11 @@ omh visual observe --card-id &lt;id&gt; --type generated_image_observed --path .
         </div>
         <p>
           The first two commands prepare <code>visual_prompt_card/v1</code>.
-          They are not generated image evidence. The observation command records
-          one explicit event after the external image step actually happens.
+          If no image tool is connected, the card also carries
+          <code>image_generation_setup/v1</code> so Hermes can ask what to use
+          before generation. They are not generated image evidence. The
+          observation command records one explicit event after the external
+          image step actually happens.
         </p>
       </section>
     </main>

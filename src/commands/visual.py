@@ -102,6 +102,19 @@ def _print_prompt_card_summary(card: dict[str, object]) -> None:
     if "generate_visual_image" in card.get("available_actions", []):
         print("- Generate image in the connected wrapper or image tool.")
     else:
+        setup = card.get("capability_setup", {})
+        if isinstance(setup, dict) and setup.get("required"):
+            print("- Choose and set up an image tool before generation.")
+            options = setup.get("options", [])
+            if isinstance(options, list) and options:
+                labels = [
+                    str(item.get("label", "")).strip()
+                    for item in options
+                    if isinstance(item, dict) and str(item.get("label", "")).strip()
+                ]
+                if labels:
+                    print(f"- Options: {', '.join(labels)}.")
+            print("- Setup is capability preparation only; it is not generated image evidence.")
         print("- Copy the prompt into the image tool selected by the user or wrapper.")
     print("- Record generated image, visual QA, and delivery only after observed evidence exists.")
     print("")

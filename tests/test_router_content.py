@@ -411,9 +411,13 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["visual-summary"].category, "materials")
         self.assertEqual(definitions["visual-summary"].phase, "visual-prompt-card")
         self.assertIn("visual_prompt_card/v1", definitions["visual-summary"].expected_outputs)
+        self.assertIn("image_generation_setup/v1 when generator capability is missing", definitions["visual-summary"].expected_outputs)
+        self.assertIn("image_generation_setup/v1", " ".join(definitions["visual-summary"].safety_rules))
         self.assertIn("visual_observation/v1", " ".join(definitions["visual-summary"].safety_rules))
         self.assertIn("visual_prompt_card/v1", harnesses["visual-summary"].expected_outputs)
         self.assertIn("generated_image_observed_when_available", harnesses["visual-summary"].evidence_ladder)
+        self.assertIn("choose_image_generator", harnesses["visual-summary"].wrapper_actions)
+        self.assertIn("setup_image_generator", harnesses["visual-summary"].wrapper_actions)
         self.assertIn("record_visual_delivery", harnesses["visual-summary"].wrapper_actions)
         self.assertTrue(
             {
@@ -421,6 +425,8 @@ class RouterContentTests(unittest.TestCase):
                 "copy_visual_prompt",
                 "revise_visual_card",
                 "change_visual_language",
+                "choose_image_generator",
+                "setup_image_generator",
                 "generate_visual_image",
                 "record_visual_image",
                 "record_visual_qa",
@@ -430,6 +436,7 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertIn("image-generation-ready visual prompt cards", templates["visual-summary"].content)
         self.assertIn("Do not call image providers", templates["visual-summary"].content)
+        self.assertIn("image_generation_setup/v1", templates["visual-summary"].content)
         self.assertIn("Preferred harness for this skill: `visual-summary`", templates["visual-summary"].content)
 
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
@@ -1045,6 +1052,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="docs/image-gen/"', site)
         self.assertIn("assets/omh-visual-summary-card.png", site)
         self.assertIn("source-specific cards for meetings, reports", site)
+        self.assertIn("If no image tool is connected", site)
         self.assertIn('<a class="loop-spotlight" href="docs/loop/"', site)
         self.assertIn('href="docs/loop/"', site)
         self.assertIn('href="docs/intent-to-plan/"', site)
@@ -1067,6 +1075,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("../assets/omh-visual-summary-card.png", site_docs)
         self.assertIn("visual_prompt_card/v1", site_docs)
         self.assertIn("visual_observation/v1", site_docs)
+        self.assertIn("image_generation_setup/v1", site_docs)
         self.assertIn('href="image-gen/"', site_docs)
         self.assertIn('href="intent-to-plan/"', site_docs)
         self.assertIn('href="product-ops/"', site_docs)
@@ -1101,6 +1110,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("release_announcement_card", site_image_gen)
         self.assertIn("visual_prompt_card/v1", site_image_gen)
         self.assertIn("visual_observation/v1", site_image_gen)
+        self.assertIn("image_generation_setup/v1", site_image_gen)
         self.assertIn("connected image tool", site_image_gen)
         self.assertIn("They are not generated image evidence.", site_image_gen)
         self.assertIn("Company and product ops", site_product_ops)

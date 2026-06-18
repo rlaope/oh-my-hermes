@@ -156,7 +156,9 @@ that another connected image tool can use. It is not one fixed template:
 meeting notes, reports, GitHub PRs, issues, research, and releases each get a
 source-specific visual format. Use `--aspect-ratio long_scroll` when the card
 needs room for more sections. Generated images, visual QA, and delivery stay
-separate until they are recorded as observed evidence.
+separate until they are recorded as observed evidence. If no image generator is
+connected yet, Hermes can ask which tool to use: a GPT image tool, an existing
+Hermes connector, a generic image tool, or prompt-only mode.
 
 <p align="center">
   <img src="assets/omh-visual-summary-card.png" alt="OMH visual-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">

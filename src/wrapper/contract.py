@@ -11,6 +11,7 @@ from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
+from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
     hermes_coding_team_body,
     hermes_coding_team_claim_boundary,
@@ -88,6 +89,8 @@ VISIBLE_ACTIONS = (
     "copy_visual_prompt",
     "revise_visual_card",
     "change_visual_language",
+    "choose_image_generator",
+    "setup_image_generator",
     "generate_visual_image",
     "record_visual_image",
     "record_visual_qa",
@@ -538,6 +541,8 @@ def build_chat_response_from_route(
                     _action("copy_visual_prompt", "Copy prompt", "secondary"),
                     _action("revise_visual_card", "Revise card", "secondary"),
                     _action("change_visual_language", "Change language", "secondary"),
+                    _action("choose_image_generator", "Choose image tool", "secondary"),
+                    _action("setup_image_generator", "Set up image tool", "secondary"),
                     _action("record_visual_image", "Record generated image", "secondary"),
                     _action("record_visual_qa", "Record visual QA", "secondary"),
                     _action("record_visual_delivery", "Record delivery", "secondary"),
@@ -552,6 +557,7 @@ def build_chat_response_from_route(
                     "artifact_schema": "visual_prompt_card/v1",
                     "observation_schema": "visual_observation/v1",
                     "image_generation_capability": "unknown",
+                    "image_generation_setup": image_generation_setup_fallback("unknown"),
                     "evidence_not_observed": [
                         "image generation",
                         "visual QA",

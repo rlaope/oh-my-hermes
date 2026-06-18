@@ -78,6 +78,7 @@ Required inputs:
 Expected outputs:
 
 - visual_prompt_card/v1
+- image_generation_setup/v1 when generator capability is missing
 - source-specific visual format
 - image-safe card copy
 - generation prompt
@@ -88,6 +89,7 @@ Expected outputs:
 Artifact expectations:
 
 - visual_prompt_card/v1 prompt card when prepared
+- image_generation_setup/v1 fallback when image_generation_capability/v1 is unknown or prompt_only
 - visual_observation/v1 only when a wrapper or user records generated image, visual QA, or delivery evidence
 
 Safety rules:
@@ -97,6 +99,7 @@ Safety rules:
 - Require visual_observation/v1 before claiming generated image, visual QA, or delivery evidence.
 - Raw source text may become only an extractive draft; do not fabricate summaries, owners, decisions, test results, or conclusions.
 - Show `generate_visual_image` only when wrapper context reports image_generation_capability/v1 as connected, and still treat it as wrapper-owned action rather than evidence.
+- When image_generation_capability/v1 is unknown or prompt_only, ask which image tool to use and route to image_generation_setup/v1 instead of pretending generation can start.
 
 ## Harness Discipline
 

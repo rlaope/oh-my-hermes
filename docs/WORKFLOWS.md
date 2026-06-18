@@ -998,6 +998,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - card sections or supplied source excerpts
 - Expected outputs:
   - visual_prompt_card/v1
+  - image_generation_setup/v1 when generator capability is missing
   - source-specific visual format
   - image-safe card copy
   - generation prompt
@@ -1006,6 +1007,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - visual evidence boundary
 - Artifact expectations:
   - visual_prompt_card/v1 prompt card when prepared
+  - image_generation_setup/v1 fallback when image_generation_capability/v1 is unknown or prompt_only
   - visual_observation/v1 only when a wrapper or user records generated image, visual QA, or delivery evidence
 - Safety rules:
   - Do not call image providers, LLMs, APIs, or network services from OMH core.
@@ -1013,6 +1015,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Require visual_observation/v1 before claiming generated image, visual QA, or delivery evidence.
   - Raw source text may become only an extractive draft; do not fabricate summaries, owners, decisions, test results, or conclusions.
   - Show `generate_visual_image` only when wrapper context reports image_generation_capability/v1 as connected, and still treat it as wrapper-owned action rather than evidence.
+  - When image_generation_capability/v1 is unknown or prompt_only, ask which image tool to use and route to image_generation_setup/v1 instead of pretending generation can start.
 
 ### automation-blueprint
 
@@ -2978,6 +2981,8 @@ Prepare source-specific visual prompt cards for meetings, reports, PRs, issue fe
   - `copy_visual_prompt`
   - `revise_visual_card`
   - `change_visual_language`
+  - `choose_image_generator`
+  - `setup_image_generator`
   - `generate_visual_image`
   - `record_visual_image`
   - `record_visual_qa`
@@ -2991,9 +2996,10 @@ Prepare source-specific visual prompt cards for meetings, reports, PRs, issue fe
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A visual_prompt_card/v1 artifact is not generated image, visual QA, sharing, posting, attachment, or delivery evidence.
+  - An image_generation_setup/v1 fallback is connector preparation only, not generated image evidence.
   - A connected image-generation capability changes available actions only; it is not execution evidence.
   - A generated image observation does not prove visual QA or delivery.
-- Fallback: If image capability is unavailable, show copy/revise/status actions and keep generation prompt-only.
+- Fallback: If image capability is unavailable, show choose/setup image tool fallback actions plus copy/revise/status actions, and keep generation prompt-only until capability is connected.
 
 ### scheduled-ops-blueprint
 

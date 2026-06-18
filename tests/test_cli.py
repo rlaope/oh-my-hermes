@@ -1537,6 +1537,9 @@ class CliTests(unittest.TestCase):
             self.assertIn("Visual format: pr_review_infographic", stdout)
             self.assertIn("Aspect ratio: square_1_1", stdout)
             self.assertIn("Not evidence yet: image generated, visual QA passed, delivered.", stdout)
+            self.assertIn("Choose and set up an image tool before generation.", stdout)
+            self.assertIn("GPT image tool", stdout)
+            self.assertIn("Setup is capability preparation only", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
 
@@ -1561,6 +1564,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(card["visual_format"], "meeting_recap_card")
             self.assertEqual(card["copy_mode"], "extractive_draft")
             self.assertTrue(card["requires_human_or_hermes_review"])
+            self.assertEqual(card["capability_setup"]["schema_version"], "image_generation_setup/v1")
+            self.assertTrue(card["capability_setup"]["required"])
 
             status, stdout, stderr = run_cli(
                 base

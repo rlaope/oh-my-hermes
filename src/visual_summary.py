@@ -17,6 +17,7 @@ VISUAL_PROMPT_CARD_SCHEMA_VERSION = "visual_prompt_card/v1"
 VISUAL_OBSERVATION_SCHEMA_VERSION = "visual_observation/v1"
 VISUAL_OBSERVATIONS_INDEX_SCHEMA_VERSION = "omh_visual_observations_index/v1"
 IMAGE_GENERATION_CAPABILITY_SCHEMA_VERSION = "image_generation_capability/v1"
+IMAGE_GENERATION_SETUP_SCHEMA_VERSION = "image_generation_setup/v1"
 
 SOURCE_KINDS = (
     "meeting",
@@ -51,6 +52,28 @@ SAFE_VISUAL_ACTIONS = (
     "record_visual_qa",
     "record_visual_delivery",
     "show_visual_status",
+)
+IMAGE_GENERATION_SETUP_OPTIONS = (
+    {
+        "id": "gpt-image",
+        "label": "GPT image tool",
+        "description": "Use an already available GPT/OpenAI-style image generator outside OMH.",
+    },
+    {
+        "id": "hermes-image-connector",
+        "label": "Existing Hermes connector",
+        "description": "Use an image-capable connector that the active Hermes environment already exposes.",
+    },
+    {
+        "id": "generic-image-tool",
+        "label": "Generic image tool",
+        "description": "Copy the prompt into Midjourney, Stable Diffusion, a design tool, or another external generator.",
+    },
+    {
+        "id": "prompt-only",
+        "label": "Prompt only",
+        "description": "Keep the card prepared and let the user generate or attach an image later.",
+    },
 )
 
 _SOURCE_KIND_ALIASES = {
@@ -356,6 +379,7 @@ def build_visual_prompt_card(
             "state": capability_state,
             "meaning": "Wrapper-reported generator availability only; not generation evidence.",
         },
+        "capability_setup": image_generation_setup_fallback(capability_state),
         "available_actions": visual_wrapper_actions(capability_state),
         "source_excerpt": source_excerpt,
         "not_evidence_until_observed": [
@@ -432,6 +456,14 @@ def validate_visual_prompt_card(record: dict[str, Any]) -> list[str]:
     profile = record.get("format_profile", {})
     if not isinstance(profile, dict) or not str(profile.get("theme_direction", "")).strip():
         errors.append("format_profile.theme_direction is required")
+    setup = record.get("capability_setup", {})
+    if not isinstance(setup, dict) or setup.get("schema_version") != IMAGE_GENERATION_SETUP_SCHEMA_VERSION:
+        errors.append("capability_setup.schema_version must be image_generation_setup/v1")
+    else:
+        if setup.get("required") not in {True, False}:
+            errors.append("capability_setup.required must be boolean")
+        if not isinstance(setup.get("options"), list) or not setup.get("options"):
+            errors.append("capability_setup.options must be a non-empty list")
     image_text = record.get("image_text", {})
     if not isinstance(image_text, dict) or not str(image_text.get("headline", "")).strip():
         errors.append("image_text.headline is required")
@@ -453,7 +485,28 @@ def visual_wrapper_actions(capability_state: str = "unknown") -> list[str]:
     actions = list(SAFE_VISUAL_ACTIONS)
     if capability_state == "connected":
         actions.insert(4, "generate_visual_image")
+    else:
+        actions.insert(4, "setup_image_generator")
+        actions.insert(4, "choose_image_generator")
     return actions
+
+
+def image_generation_setup_fallback(capability_state: str = "unknown") -> dict[str, Any]:
+    if capability_state not in CAPABILITY_STATES:
+        raise ValueError(f"unsupported visual capability state: {capability_state}")
+    needs_setup = capability_state != "connected"
+    return {
+        "schema_version": IMAGE_GENERATION_SETUP_SCHEMA_VERSION,
+        "required": needs_setup,
+        "state": "needed" if needs_setup else "not_needed",
+        "question": "Which image generation tool should Hermes use for this card?" if needs_setup else "",
+        "recommended_option": "gpt-image" if needs_setup else "",
+        "options": [dict(option) for option in IMAGE_GENERATION_SETUP_OPTIONS],
+        "next_action": "choose_image_generator" if needs_setup else "generate_visual_image",
+        "setup_boundary": (
+            "Choosing or setting up an image tool is capability preparation only; it is not generated image, visual QA, or delivery evidence."
+        ),
+    }
 
 
 def normalize_observation_type(value: str) -> str:
@@ -657,6 +710,7 @@ def _visual_card_identity_payload(record: dict[str, Any]) -> dict[str, Any]:
         "negative_prompt",
         "quality_checks",
         "capability_detection",
+        "capability_setup",
         "source_excerpt",
         "not_evidence_until_observed",
     )

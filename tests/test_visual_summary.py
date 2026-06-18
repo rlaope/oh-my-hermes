@@ -13,6 +13,7 @@ from omh.visual_summary import (
     SOURCE_KINDS,
     build_visual_observation,
     build_visual_prompt_card,
+    image_generation_setup_fallback,
     list_visual_observations,
     normalize_source_kind,
     parse_section_arg,
@@ -51,6 +52,9 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertIn("Review focus", card["format_profile"]["structure"])
         self.assertIn("generate_visual_image", card["available_actions"])
         self.assertEqual(card["capability_detection"]["state"], "connected")
+        self.assertEqual(card["capability_setup"]["schema_version"], "image_generation_setup/v1")
+        self.assertFalse(card["capability_setup"]["required"])
+        self.assertEqual(card["capability_setup"]["next_action"], "generate_visual_image")
         self.assertIn("Do not invent facts", card["negative_prompt"])
         self.assertIn("PR review infographic", card["generation_prompt"])
         self.assertIn("developer workspace", card["generation_prompt"])
@@ -151,6 +155,17 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertNotIn("generate_visual_image", visual_wrapper_actions("unknown"))
         self.assertNotIn("generate_visual_image", visual_wrapper_actions("prompt_only"))
         self.assertIn("generate_visual_image", visual_wrapper_actions("connected"))
+        self.assertIn("choose_image_generator", visual_wrapper_actions("unknown"))
+        self.assertIn("setup_image_generator", visual_wrapper_actions("prompt_only"))
+        self.assertNotIn("choose_image_generator", visual_wrapper_actions("connected"))
+
+        setup = image_generation_setup_fallback("unknown")
+        self.assertEqual(setup["schema_version"], "image_generation_setup/v1")
+        self.assertTrue(setup["required"])
+        self.assertEqual(setup["recommended_option"], "gpt-image")
+        self.assertEqual(setup["next_action"], "choose_image_generator")
+        self.assertIn("GPT image tool", {option["label"] for option in setup["options"]})
+        self.assertIn("not generated image", setup["setup_boundary"])
 
     def test_visual_observation_validation_and_store_boundaries(self) -> None:
         with TemporaryDirectory() as tmp:
