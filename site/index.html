@@ -51,6 +51,7 @@ omh setup</code>
           <div class="hero-proof" aria-label="Core OMH contracts">
             <span>Fits existing Hermes setup</span>
             <span>Role-owned next action</span>
+            <span>Image gen prompt cards</span>
             <span>Prepared is not observed</span>
           </div>
           <div class="actions" aria-label="Primary actions">
@@ -159,11 +160,12 @@ omh setup</code>
       <section class="section section--poster" id="flagship-workflows">
         <div class="section__header section__header--poster">
           <p class="eyebrow">Representative workflows</p>
-          <h2>Loop is now a flagship OMH lane.</h2>
+          <h2>Loop and Image gen are flagship OMH lanes.</h2>
           <p>
             OMH helps Hermes decide whether a goal is loopable, shape fuzzy
-            intent, operate non-coding product work, and prepare executor-ready
-            coding handoffs without blurring who owns observed evidence.
+            intent, operate non-coding product work, prepare image-ready
+            summaries, and prepare executor-ready coding handoffs without
+            blurring who owns observed evidence.
           </p>
         </div>
         <a class="loop-spotlight" href="docs/loop/" aria-label="Open Loop flagship workflow docs">
@@ -189,6 +191,33 @@ omh setup</code>
             <img
               src="assets/omh-loop-engineering.png"
               alt="Loop Engineering poster showing a goal-driven research, plan, handoff, feedback, and repeat cycle for OMH"
+            >
+          </figure>
+        </a>
+        <a class="imagegen-spotlight" href="docs/image-gen/" aria-label="Open Image gen workflow docs">
+          <div class="imagegen-spotlight__copy">
+            <span class="new-badge">Image gen</span>
+            <h3>Visual summaries that match the source.</h3>
+            <p>
+              <code>visual-summary</code> turns meetings, reports, GitHub PRs,
+              issues, research, and release notes into source-specific prompt
+              cards for a connected image tool. OMH prepares copy, layout,
+              aspect ratio, negative prompt, and QA checklist; generation and
+              delivery still need observed evidence.
+            </p>
+            <div class="imagegen-format-strip" aria-hidden="true">
+              <span>meeting</span>
+              <span>report</span>
+              <span>PR</span>
+              <span>issue</span>
+              <span>research</span>
+              <span>release</span>
+            </div>
+          </div>
+          <figure class="imagegen-poster-frame">
+            <img
+              src="assets/omh-visual-summary-card.png"
+              alt="OMH visual-summary poster showing image-generation prompt cards, evidence ladder, and supported card formats"
             >
           </figure>
         </a>
@@ -251,14 +280,14 @@ omh setup</code>
               <a class="text-link" href="docs/product-ops/">Open docs</a>
             </article>
             <article class="flagship-item">
-              <span>Visual summaries</span>
+              <span>Image gen</span>
               <h3><code>visual-summary</code></h3>
               <p>
-                Hermes prepares image-generation-ready cards for meeting notes,
-                PRs, issue triage, research briefings, and releases while image
-                generation, QA, and delivery remain observed-only.
+                Hermes prepares source-specific cards for meetings, reports,
+                PRs, issues, research, and releases while image generation, QA,
+                and delivery remain observed-only.
               </p>
-              <a class="text-link" href="docs/product-ops/">Open docs</a>
+              <a class="text-link" href="docs/image-gen/">Open docs</a>
             </article>
             <article class="flagship-item">
               <span>Executor-ready handoff</span>
