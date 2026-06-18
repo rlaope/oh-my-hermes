@@ -23,6 +23,7 @@ from ..hashutil import sha256_file
 from ..installer import OmhError, install_skill_pack, uninstall_skill_pack
 from ..local_store import atomic_write_text
 from ..manifest import read_manifest
+from ..menubar_app import setup_menubar_app, uninstall_menubar_app
 from ..plugin_pack import PluginPackError, install_plugin_bundle
 from ..probe import probe_capabilities
 from ..release import RELEASE_CHANNELS, package_url_for
@@ -465,6 +466,8 @@ def _setup_operator_summary(
     status = "dry_run" if dry_run else "skills_only" if getattr(args, "skip_apply", False) else "configured"
     plugin = steps.get("plugin", {})
     plugin_status = str(plugin.get("status", "installed")) if isinstance(plugin, dict) else "installed"
+    menubar = steps.get("menubar", {})
+    menubar_status = str(menubar.get("status", "not_requested")) if isinstance(menubar, dict) else "not_requested"
     team_status = "profile_pack" if getattr(args, "profile_pack", []) else "available"
     mcp = steps.get("mcp", {})
     mcp_mode = str(mcp.get("mode", "none")) if isinstance(mcp, dict) else "none"
@@ -476,6 +479,7 @@ def _setup_operator_summary(
         "install_mode": "managed_skills",
         "mcp_mode": mcp_mode,
         "plugin_mode": plugin_status,
+        "menubar_mode": menubar_status,
         "team_mode": team_status,
         "operating_model_id": operating_model_id,
         "status": status,
@@ -661,6 +665,11 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     if not args.dry_run and change.changed:
         write_config(paths.hermes_config_path, change.text)
     remove_all = bool(args.all or args.purge or (not args.registration_only and not args.remove_files))
+    menubar_result = (
+        uninstall_menubar_app(paths, dry_run=bool(args.dry_run))
+        if remove_all and _uninstall_should_remove_menubar(args)
+        else {"status": "not_requested", "operation": "uninstall"}
+    )
     result = uninstall_skill_pack(
         paths,
         remove_files=bool(args.remove_files),
@@ -684,6 +693,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
             "scope": scope,
             "registration_only": bool(args.registration_only),
             "dry_run": args.dry_run,
+            "menubar_app": menubar_result,
             "language": language,
         }
     )
@@ -763,7 +773,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
         progress.header(tr(language, "setup_title"), tr(language, "setup_subtitle"))
-    total_steps = 5 + (1 if args.with_mcp else 0) + (1 if args.profile_pack else 0)
+    setup_menubar = _setup_should_attempt_menubar(args)
+    total_steps = 5 + (1 if args.with_mcp else 0) + (1 if args.profile_pack else 0) + (1 if setup_menubar else 0)
     step_index = 1
 
     progress.step(step_index, total_steps, tr(language, "step_install_skills"), detail=str(paths.skills_dir))
@@ -787,6 +798,19 @@ def cmd_setup(args: argparse.Namespace) -> int:
     plugin_status = steps["plugin"].get("status", "installed") if isinstance(steps["plugin"], dict) else "installed"
     progress.done(_plugin_status_label(language, str(plugin_status)))
     step_index += 1
+
+    if setup_menubar:
+        progress.step(step_index, total_steps, tr(language, "step_menubar"), detail=str(paths.omh_home / "menubar"))
+        steps["menubar"] = _menubar_setup_result(args, paths)
+        menubar_status = str(steps["menubar"].get("status", "unknown")) if isinstance(steps["menubar"], dict) else "unknown"
+        if menubar_status in {"running", "installed", "dry_run"}:
+            progress.done(_menubar_status_label(language, menubar_status))
+        else:
+            reason = str(steps["menubar"].get("reason", menubar_status)) if isinstance(steps["menubar"], dict) else menubar_status
+            progress.skip(reason)
+        step_index += 1
+    else:
+        steps["menubar"] = {"schema_version": "menubar_app/v1", "status": "not_requested"}
 
     steps["mcp"] = _mcp_setup_result(args, paths)
     if args.with_mcp:
@@ -818,6 +842,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         setup_context={
             "apply_skipped": bool(args.skip_apply),
             "with_plugin": True,
+            "with_menubar": bool(setup_menubar),
             "with_mcp": bool(args.with_mcp),
             "profile_packs": list(args.profile_pack),
             "setup_profiles": list(args.profile),
@@ -889,6 +914,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
                     "operator_summary": operator_summary,
                     "setup_profile": steps["profile"],
                     "mcp_setup": steps["mcp"],
+                    "menubar_app": steps["menubar"],
                     "team_profiles": steps.get("team_profiles", []),
                     "target_observation": steps["targets"],
                 }
@@ -926,11 +952,33 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
         or getattr(args, "default_executor", None)
         or args.profile_pack
         or args.with_mcp
+        or getattr(args, "with_menubar", False)
+        or getattr(args, "no_menubar", False)
         or args.skip_apply
         or getattr(args, "scope", None)
     ):
         return False
     return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _setup_should_attempt_menubar(args: argparse.Namespace) -> bool:
+    if getattr(args, "no_menubar", False):
+        return False
+    if getattr(args, "with_menubar", False):
+        return True
+    if os.environ.get("OMH_MENUBAR", "1") == "0":
+        return False
+    if _wants_json(args) or getattr(args, "dry_run", False):
+        return False
+    if _setup_scope(args) != "user":
+        return False
+    if _setup_paths_were_explicit(args):
+        return False
+    return sys.platform == "darwin"
+
+
+def _uninstall_should_remove_menubar(args: argparse.Namespace) -> bool:
+    return _setup_scope(args) == "user" and not _setup_paths_were_explicit(args)
 
 
 def _resolve_language(args: argparse.Namespace) -> str:
@@ -1427,6 +1475,11 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
     plugin = payload.get("plugin_distribution")
     if isinstance(plugin, dict):
         print(f"  {tr(language, 'plugin_bridge', status=_plugin_status_label(language, str(plugin.get('status', 'installed'))))}")
+
+    menubar = steps.get("menubar")
+    if isinstance(menubar, dict) and str(menubar.get("status", "not_requested")) != "not_requested":
+        status = str(menubar.get("status", "unknown"))
+        print(f"  {tr(language, 'menubar_helper', status=_menubar_status_label(language, status))}")
 
     if str(operator_summary.get("mcp_mode", "none")) == "bridge_requested":
         print(f"  {tr(language, 'setup_mcp_mode', mode=mcp_mode_label)}")
@@ -1997,6 +2050,49 @@ def _plugin_status_label(language: str, status: str) -> str:
     return labels.get(code, labels["en"]).get(status, status)
 
 
+def _menubar_status_label(language: str, status: str) -> str:
+    code = normalize_language(language)
+    labels = {
+        "en": {
+            "running": "started",
+            "installed": "installed",
+            "installed_start_failed": "installed; start failed",
+            "dry_run": "would install",
+            "skipped": "skipped",
+            "failed": "failed",
+            "not_requested": "not started",
+        },
+        "ko": {
+            "running": "시작됨",
+            "installed": "설치됨",
+            "installed_start_failed": "설치됨; 시작 실패",
+            "dry_run": "설치 예정",
+            "skipped": "건너뜀",
+            "failed": "실패",
+            "not_requested": "시작 안 함",
+        },
+        "ja": {
+            "running": "起動済み",
+            "installed": "インストール済み",
+            "installed_start_failed": "インストール済み; 起動失敗",
+            "dry_run": "インストール予定",
+            "skipped": "スキップ",
+            "failed": "失敗",
+            "not_requested": "未起動",
+        },
+        "zh": {
+            "running": "已启动",
+            "installed": "已安装",
+            "installed_start_failed": "已安装；启动失败",
+            "dry_run": "将安装",
+            "skipped": "已跳过",
+            "failed": "失败",
+            "not_requested": "未启动",
+        },
+    }
+    return labels.get(code, labels["en"]).get(status, status)
+
+
 def _mcp_status_label(language: str, status: str) -> str:
     code = normalize_language(language)
     labels = {
@@ -2015,6 +2111,22 @@ def _plugin_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
         raise OmhError(_friendly_plugin_error(paths, str(exc))) from exc
     if not args.dry_run:
         update_state(paths, {"last_plugin_distribution": result})
+    return result
+
+
+def _menubar_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
+    try:
+        result = setup_menubar_app(paths, dry_run=bool(args.dry_run), start=True, force=bool(args.force))
+    except RuntimeError as exc:
+        result = {
+            "schema_version": "menubar_app/v1",
+            "status": "failed",
+            "supported": sys.platform == "darwin",
+            "dry_run": bool(args.dry_run),
+            "reason": str(exc),
+        }
+    if not args.dry_run:
+        update_state(paths, {"last_menubar_app": result})
     return result
 
 
@@ -2197,6 +2309,16 @@ def _add_top_level_commands(sub) -> None:
         "--with-plugin",
         action="store_true",
         help=argparse.SUPPRESS,
+    )
+    setup.add_argument(
+        "--with-menubar",
+        action="store_true",
+        help="Install and start the native macOS OMH menu bar helper when supported.",
+    )
+    setup.add_argument(
+        "--no-menubar",
+        action="store_true",
+        help="Do not start the native macOS OMH menu bar helper during setup.",
     )
     setup.add_argument(
         "--with-mcp",
