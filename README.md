@@ -164,9 +164,26 @@ separate until they are recorded as observed evidence. If no image generator is
 connected yet, Hermes can ask which tool to use: a GPT image tool, an existing
 Hermes connector, a generic image tool, or prompt-only mode.
 
-<p align="center">
-  <img src="assets/omh-img-summary-card.png" alt="OMH img-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
-</p>
+> <p align="center">
+>   <img src="assets/omh-img-summary-card.png" alt="OMH img-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
+> </p>
+>
+> **Made with `img-summary`.** Hermes uses this skill to turn notes, PRs,
+> issues, research, reports, or release notes into a shareable image-card
+> prompt for a connected image tool.
+>
+> **How it works.** OMH prepares `visual_prompt_card/v1`: source kind,
+> source-specific format, readable card copy, generation prompt, negative
+> prompt, QA checklist, and wrapper actions.
+>
+> **Rules.** A prepared card is not a generated image. Image generation,
+> visual QA, attachment, and delivery stay unobserved until a wrapper or user
+> records `visual_observation/v1`.
+>
+> **Screen meaning.** The card shows the expected flow: source material ->
+> prompt card -> connected image tool -> observed evidence. If no image tool is
+> connected, Hermes asks the user to choose GPT image, a Hermes connector, a
+> generic image tool, or prompt-only mode.
 
 <br>
 
