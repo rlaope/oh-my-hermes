@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import subprocess
 import sys
 import time
 
@@ -51,6 +52,8 @@ RELEASE_UPDATE_SCHEMA_VERSION = "release_update_status/v1"
 SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION = "setup_operator_summary/v1"
 DOCTOR_SUMMARY_SCHEMA_VERSION = "doctor_summary/v1"
 MCP_SETUP_SCHEMA_VERSION = "omh_mcp_setup/v1"
+SELF_UPDATE_REENTRY_ENV = "OMH_UPDATE_COMMAND_PACKAGE_REENTERED"
+SELF_UPDATE_SKIP_ENV = "OMH_SKIP_COMMAND_PACKAGE_UPDATE"
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -139,7 +142,121 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_update(args: argparse.Namespace) -> int:
+    self_update = _command_package_self_update_plan(args)
+    if self_update.get("should_update"):
+        return _run_command_package_self_update(args, self_update)
     return cmd_install(args)
+
+
+def _command_package_self_update_plan(args: argparse.Namespace) -> dict[str, object]:
+    if bool(getattr(args, "command_package_updated", False)):
+        return {"should_update": False, "reason": "command package update already observed"}
+    if bool(getattr(args, "dry_run", False)):
+        return {"should_update": False, "reason": "dry run does not update the command package"}
+    if os.environ.get(SELF_UPDATE_REENTRY_ENV):
+        return {"should_update": False, "reason": "already re-entered after command package update"}
+    if os.environ.get(SELF_UPDATE_SKIP_ENV):
+        return {"should_update": False, "reason": f"{SELF_UPDATE_SKIP_ENV} is set"}
+    if getattr(args, "from_skills_dir", None) or getattr(args, "source", None):
+        return {"should_update": False, "reason": "explicit skill source updates workflows only"}
+    try:
+        release = package_url_for(args.channel, args.version or "", args.package_url or "")
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if release.channel == "local" and release.package_url == "local":
+        return {"should_update": False, "reason": "local updates require an explicit package source"}
+    managed = _managed_command_runtime()
+    if not managed["managed"]:
+        return {"should_update": False, "reason": managed["reason"]}
+    return {
+        "should_update": True,
+        "release": release,
+        "python": managed["python"],
+        "venv_dir": managed["venv_dir"],
+        "reason": "running from install.sh-managed command package venv",
+    }
+
+
+def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, object]) -> int:
+    release = plan.get("release")
+    package_url = str(getattr(release, "package_url", "") or "")
+    if not package_url:
+        raise OmhError("cannot update command package because no package URL is available")
+    python = str(plan.get("python") or sys.executable)
+    wants_json = _wants_json(args)
+    progress = _HumanProgress(enabled=not wants_json, use_color=_use_color())
+    progress.header("OMH update", "Refresh the OMH command package and workflow pack.")
+    progress.step(1, 2, "Updating omh command package", detail=package_url)
+    completed = subprocess.run(
+        [
+            python,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "-q",
+            "--force-reinstall",
+            "--upgrade",
+            package_url,
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "pip install failed").strip()
+        raise OmhError(f"command package update failed: {detail}")
+    progress.done("command package updated")
+    if not wants_json:
+        progress.step(2, 2, "Refreshing OMH workflows with the updated command")
+    argv = _reentry_argv_with_command_package_updated()
+    env = dict(os.environ)
+    env[SELF_UPDATE_REENTRY_ENV] = "1"
+    rerun = subprocess.run([python, "-m", "omh.cli", *argv], env=env)
+    return int(rerun.returncode)
+
+
+def _reentry_argv_with_command_package_updated() -> list[str]:
+    argv = list(sys.argv[1:])
+    if "--command-package-updated" not in argv:
+        argv.append("--command-package-updated")
+    return argv
+
+
+def _managed_command_runtime() -> dict[str, object]:
+    venv_dir = _managed_command_venv_dir()
+    if venv_dir is None:
+        return {"managed": False, "reason": "HOME or OMH_VENV_DIR is not available"}
+    executable = Path(sys.executable).expanduser().resolve()
+    if not _is_relative_to(executable, venv_dir):
+        return {
+            "managed": False,
+            "reason": "current omh command is not running from the install.sh-managed OMH venv",
+            "python": str(executable),
+            "venv_dir": str(venv_dir),
+        }
+    return {"managed": True, "reason": "", "python": str(executable), "venv_dir": str(venv_dir)}
+
+
+def _managed_command_venv_dir() -> Path | None:
+    explicit = os.environ.get("OMH_VENV_DIR")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        return (Path(xdg_data_home).expanduser() / "omh" / "venv").resolve()
+    home = os.environ.get("HOME")
+    if home:
+        return (Path(home).expanduser() / ".local" / "share" / "omh" / "venv").resolve()
+    return None
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def _install_operation(args: argparse.Namespace) -> str:
@@ -176,6 +293,9 @@ def _command_package_status_for_install(
     elif dry_run:
         status = "would_remain_unchanged"
         reason = "dry run previews managed skill changes without changing the command package"
+    elif operation == "update" and source == "builtin":
+        status = "not_updated"
+        reason = "managed skills were refreshed, but the omh command package was not updated in this run"
     elif source != "builtin":
         reason = "managed skills were refreshed from an explicit skill source; the command package was not changed"
     return {

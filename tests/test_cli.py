@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from _cli_harness import run_cli
 from omh.cli import OmhError, cmd_runtime_merge
+from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
@@ -640,7 +641,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Recorded package URL:", stdout)
             self.assertIn("Source ref: main -> main", stdout)
             self.assertIn("Release state: refreshed", stdout)
-            self.assertIn("Command package: unchanged", stdout)
+            self.assertIn("Command package: not updated by this run", stdout)
             self.assertIn("State log:", stdout)
             self.assertIn("last_update", stdout)
             self.assertIn("Run `omh doctor` to verify health", stdout)
@@ -656,7 +657,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["operation"], "update")
             self.assertEqual(payload["managed_skills"]["status"], "updated")
             self.assertEqual(payload["command_package"]["schema_version"], "command_package_status/v1")
-            self.assertEqual(payload["command_package"]["status"], "unchanged")
+            self.assertEqual(payload["command_package"]["status"], "not_updated")
             self.assertFalse(payload["command_package"]["updated"])
             self.assertIn("install.sh", payload["command_package"]["update_instruction"])
             self.assertEqual(payload["release_source_ref"], "main")
@@ -668,9 +669,52 @@ class CliTests(unittest.TestCase):
 
             state = json.loads((root / ".omh" / "runtime" / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["last_update"]["operation"], "update")
-            self.assertEqual(state["last_update"]["command_package"]["status"], "unchanged")
+            self.assertEqual(state["last_update"]["command_package"]["status"], "not_updated")
             self.assertEqual(state["last_update"]["release_update"]["status"], "refreshed")
             self.assertEqual(state["last_update"]["managed_skills"]["count"], len(builtin_skill_templates()))
+
+    def test_update_self_update_reenters_with_command_package_marker(self) -> None:
+        args = Namespace(json=True)
+        plan = {"release": Namespace(package_url="https://example.invalid/omh.zip"), "python": sys.executable}
+        first = subprocess.CompletedProcess(args=["pip"], returncode=0, stdout="", stderr="")
+        second = subprocess.CompletedProcess(args=["omh"], returncode=0, stdout="", stderr="")
+
+        with patch.object(setup_commands.subprocess, "run", side_effect=[first, second]) as run:
+            with patch.object(setup_commands.sys, "argv", ["omh", "update", "--json"]):
+                status = setup_commands._run_command_package_self_update(args, plan)
+
+        self.assertEqual(status, 0)
+        pip_args = run.call_args_list[0].args[0]
+        self.assertEqual(pip_args[:4], [sys.executable, "-m", "pip", "install"])
+        self.assertIn("--force-reinstall", pip_args)
+        self.assertIn("https://example.invalid/omh.zip", pip_args)
+        reentry_args = run.call_args_list[1].args[0]
+        self.assertEqual(reentry_args[:3], [sys.executable, "-m", "omh.cli"])
+        self.assertIn("update", reentry_args)
+        self.assertIn("--json", reentry_args)
+        self.assertIn("--command-package-updated", reentry_args)
+        self.assertEqual(run.call_args_list[1].kwargs["env"][setup_commands.SELF_UPDATE_REENTRY_ENV], "1")
+
+    def test_update_self_update_skips_local_channel_without_package_source(self) -> None:
+        args = Namespace(
+            command_package_updated=False,
+            dry_run=False,
+            from_skills_dir=None,
+            source=None,
+            channel="local",
+            version="",
+            package_url="",
+        )
+
+        with patch.object(
+            setup_commands,
+            "_managed_command_runtime",
+            return_value={"managed": True, "python": sys.executable, "venv_dir": "/tmp/omh-venv"},
+        ):
+            plan = setup_commands._command_package_self_update_plan(args)
+
+        self.assertFalse(plan["should_update"])
+        self.assertIn("local updates require", plan["reason"])
 
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -5493,7 +5537,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Source ref: main@old -> main@manual", stdout)
             self.assertIn("Release state: metadata_recorded", stdout)
-            self.assertIn("Command package: unchanged", stdout)
+            self.assertIn("Command package: not updated by this run", stdout)
 
             status, stdout, stderr = run_cli(
                 ["--omh-home", str(omh_home), "update", "--source-ref", "main@manual", "--json"],
@@ -5520,7 +5564,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Source ref: (none) -> main@first", stdout)
             self.assertIn("Release state: metadata_recorded", stdout)
-            self.assertIn("Command package: unchanged", stdout)
+            self.assertIn("Command package: not updated by this run", stdout)
 
     def test_latest_release_update_state_wins_over_stale_last_update(self) -> None:
         with TemporaryDirectory() as tmp:
