@@ -242,7 +242,7 @@ final class OMHMenuBarDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         parseArguments()
-        configureMenu(summary: "Loading OMH status", details: [])
+        configureMenu(headline: "OMH", summary: "Loading status", cards: [])
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.refresh()
@@ -285,36 +285,65 @@ final class OMHMenuBarDelegate: NSObject, NSApplicationDelegate {
     private func refresh() {
         guard let payload = readStatusPayload() else {
             statusItem.button?.title = "omh !"
-            configureMenu(summary: "OMH status unavailable", details: ["Run omh doctor in Terminal."])
+            configureMenu(
+                headline: "OMH needs attention",
+                summary: "Status unavailable",
+                cards: [
+                    [
+                        "title": "Recovery",
+                        "rows": [
+                            ["label": "Next", "value": "Run omh doctor"],
+                            ["label": "Then", "value": "Run omh setup if registration needs repair"]
+                        ]
+                    ]
+                ]
+            )
             return
         }
         let display = payload["display"] as? [String: Any]
         let settings = payload["settings"] as? [String: Any]
         let title = (display?["menu_title"] as? String) ?? "omh"
+        let headline = (display?["headline"] as? String) ?? "OMH ready"
         let summary = (display?["summary_line"] as? String) ?? "OMH ready"
         let connection = ((settings?["omh_connection"] as? [String: Any])?["value"] as? String) ?? "unknown"
         let mark = connection == "ready" ? "✓" : "!"
         statusItem.button?.title = "\(title) \(mark)"
-        statusItem.button?.toolTip = summary
-        var details: [String] = []
-        for key in ["omh_connection", "hermes_targets", "coding_handoff", "send_mode"] {
-            if let row = settings?[key] as? [String: Any], let label = row["label"] as? String {
-                details.append(label)
-            }
-        }
-        configureMenu(summary: summary, details: details)
+        statusItem.button?.toolTip = "\(headline) — \(summary)"
+        configureMenu(headline: headline, summary: summary, cards: menuCards(from: payload))
     }
 
-    private func configureMenu(summary: String, details: [String]) {
+    private func configureMenu(headline: String, summary: String, cards: [[String: Any]]) {
         let menu = NSMenu()
-        let summaryItem = NSMenuItem(title: summary, action: nil, keyEquivalent: "")
-        summaryItem.isEnabled = false
-        menu.addItem(summaryItem)
-        if !details.isEmpty {
+        let headlineItem = disabledItem(" \(headline)")
+        let font = NSFont.menuBarFont(ofSize: 0)
+        headlineItem.attributedTitle = NSAttributedString(
+            string: " \(headline)",
+            attributes: [.font: NSFont.boldSystemFont(ofSize: font.pointSize)]
+        )
+        menu.addItem(headlineItem)
+        menu.addItem(disabledItem(" \(summary)"))
+
+        for card in cards {
             menu.addItem(NSMenuItem.separator())
-            for detail in details {
-                let item = NSMenuItem(title: detail, action: nil, keyEquivalent: "")
-                item.isEnabled = false
+            if let title = card["title"] as? String, !title.isEmpty {
+                let item = disabledItem(" \(title)")
+                item.attributedTitle = NSAttributedString(
+                    string: " \(title)",
+                    attributes: [.font: NSFont.boldSystemFont(ofSize: font.pointSize)]
+                )
+                menu.addItem(item)
+            }
+            if let rows = card["rows"] as? [[String: Any]] {
+                for row in rows.prefix(5) {
+                    let line = rowTitle(row)
+                    let item = disabledItem("   \(line)")
+                    item.toolTip = line
+                    menu.addItem(item)
+                }
+            }
+            if let footer = card["footer"] as? String, !footer.isEmpty {
+                let item = disabledItem("   \(footer)")
+                item.toolTip = footer
                 menu.addItem(item)
             }
         }
@@ -322,6 +351,55 @@ final class OMHMenuBarDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Refresh", action: #selector(refreshClicked(_:)), keyEquivalent: "r"))
         menu.addItem(NSMenuItem(title: "Quit OMH Menu Bar", action: #selector(quitClicked(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    private func disabledItem(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    private func rowTitle(_ row: [String: Any]) -> String {
+        let label = (row["label"] as? String) ?? ""
+        let value = (row["value"] as? String) ?? ""
+        let detail = (row["detail"] as? String) ?? ""
+        var pieces: [String] = []
+        if !label.isEmpty {
+            pieces.append(label)
+        }
+        if !value.isEmpty {
+            pieces.append(value)
+        }
+        var title = pieces.joined(separator: ": ")
+        if !detail.isEmpty {
+            title += " — \(detail)"
+        }
+        return title.isEmpty ? "Unavailable" : title
+    }
+
+    private func menuCards(from payload: [String: Any]) -> [[String: Any]] {
+        if
+            let display = payload["display"] as? [String: Any],
+            let cards = display["menu_cards"] as? [[String: Any]],
+            !cards.isEmpty
+        {
+            return cards
+        }
+        return fallbackCards(from: payload)
+    }
+
+    private func fallbackCards(from payload: [String: Any]) -> [[String: Any]] {
+        let settings = payload["settings"] as? [String: Any]
+        var rows: [[String: String]] = []
+        for key in ["omh_connection", "hermes_targets", "coding_handoff", "send_mode"] {
+            if
+                let row = settings?[key] as? [String: Any],
+                let label = row["label"] as? String
+            {
+                rows.append(["label": label, "value": ""])
+            }
+        }
+        return [["title": "Overview", "rows": rows]]
     }
 
     private func readStatusPayload() -> [String: Any]? {

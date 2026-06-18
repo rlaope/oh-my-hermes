@@ -354,7 +354,7 @@ def _display(
     settings: dict[str, Any],
     hermes_agents: list[dict[str, Any]],
     current_executor_row: dict[str, Any],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     headline = "OMH ready" if settings["omh_connection"]["value"] == "ready" else "OMH needs attention"
     pieces = [f"{len(hermes_agents)} Hermes target(s)"]
     if current_executor_row:
@@ -365,7 +365,140 @@ def _display(
         "menu_title": "omh",
         "headline": headline,
         "summary_line": " · ".join(pieces),
+        "menu_cards": _menu_cards(settings, hermes_agents, current_executor_row),
     }
+
+
+def _menu_cards(
+    settings: dict[str, Any],
+    hermes_agents: list[dict[str, Any]],
+    current_executor_row: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "title": "Overview",
+            "rows": [
+                _menu_row("Connection", _setting_value(settings, "omh_connection", default="unknown")),
+                _menu_row("Hermes targets", str(len(hermes_agents)), detail=_target_menu_detail(settings)),
+                _menu_row("Coding agent", _coding_agent_menu_value(settings, current_executor_row)),
+            ],
+        },
+        {
+            "title": "Hermes",
+            "rows": _hermes_menu_rows(hermes_agents),
+            "footer": "Process details appear only after an observed runtime overlay.",
+        },
+        {
+            "title": "Coding",
+            "rows": _coding_menu_rows(settings, current_executor_row),
+        },
+        {
+            "title": "Evidence",
+            "rows": [
+                _menu_row("Boundary", _evidence_menu_value(hermes_agents, current_executor_row)),
+                _menu_row("Next", _evidence_next_action(current_executor_row)),
+            ],
+        },
+    ]
+
+
+def _menu_row(label: str, value: str, *, detail: str = "", tone: str = "neutral") -> dict[str, str]:
+    row = {"label": label, "value": value, "tone": tone}
+    if detail:
+        row["detail"] = detail
+    return row
+
+
+def _setting_value(settings: dict[str, Any], key: str, *, default: str = "") -> str:
+    row = _dict(settings.get(key))
+    return str(row.get("value", "") or default)
+
+
+def _target_menu_detail(settings: dict[str, Any]) -> str:
+    value = _setting_value(settings, "hermes_targets", default="unknown")
+    if value.startswith("single"):
+        return "single target"
+    if value.startswith("multi"):
+        return "multi target"
+    return value
+
+
+def _coding_agent_menu_value(settings: dict[str, Any], current_executor_row: dict[str, Any]) -> str:
+    if current_executor_row:
+        return str(current_executor_row.get("name", "") or "selected")
+    return _executor_setting_label(_setting_value(settings, "coding_handoff", default="choose"))
+
+
+def _hermes_menu_rows(hermes_agents: list[dict[str, Any]]) -> list[dict[str, str]]:
+    if not hermes_agents:
+        return [_menu_row("Target", "none", detail="run setup or reload Hermes")]
+    rows: list[dict[str, str]] = []
+    for agent in hermes_agents[:3]:
+        name = _short_text(str(agent.get("name", "") or "Hermes Agent"), limit=28)
+        status = str(agent.get("status_label", "") or agent.get("status", "") or "configured")
+        detail = _process_menu_detail(agent)
+        rows.append(_menu_row(name, status, detail=detail, tone="ok" if agent.get("status_observed") else "neutral"))
+    if len(hermes_agents) > 3:
+        rows.append(_menu_row("More", f"{len(hermes_agents) - 3} hidden"))
+    return rows
+
+
+def _coding_menu_rows(settings: dict[str, Any], current_executor_row: dict[str, Any]) -> list[dict[str, str]]:
+    if current_executor_row:
+        name = str(current_executor_row.get("name", "") or "Coding agent")
+        status = str(current_executor_row.get("status_label", "") or current_executor_row.get("status", "") or "prepared")
+        detail = _process_menu_detail(current_executor_row)
+        rows = [_menu_row(name, status, detail=detail)]
+        next_action = str(_dict(current_executor_row.get("evidence")).get("next_action", "") or "")
+        if next_action:
+            rows.append(_menu_row("Next", _short_text(next_action, limit=48)))
+        return rows
+    dispatch = _setting_value(settings, "send_mode", default="ask_before_dispatch")
+    return [
+        _menu_row("Current", "idle", detail="no external handoff"),
+        _menu_row("Send mode", _dispatch_policy_menu_value(dispatch, _setting_value(settings, "coding_handoff"))),
+    ]
+
+
+def _dispatch_policy_menu_value(dispatch_policy: str, executor: str) -> str:
+    label = _dispatch_policy_label(dispatch_policy, executor)
+    prefix = "Send mode: "
+    return label[len(prefix) :] if label.startswith(prefix) else label
+
+
+def _process_menu_detail(row: dict[str, Any]) -> str:
+    if row.get("pid_observed"):
+        return str(row.get("pid_label", "") or f"PID {row.get('pid')}")
+    if row.get("status_observed"):
+        return "runtime observed"
+    return "process not observed"
+
+
+def _evidence_menu_value(hermes_agents: list[dict[str, Any]], current_executor_row: dict[str, Any]) -> str:
+    observed_agents = sum(1 for row in hermes_agents if row.get("status_observed") or row.get("pid_observed"))
+    if current_executor_row:
+        evidence = _dict(current_executor_row.get("evidence"))
+        state = str(evidence.get("state", "") or "prepared_not_observed")
+        return _short_text(state.replace("_", " "), limit=32)
+    if observed_agents:
+        return f"{observed_agents} process observed"
+    return "metadata only"
+
+
+def _evidence_next_action(current_executor_row: dict[str, Any]) -> str:
+    if current_executor_row:
+        evidence = _dict(current_executor_row.get("evidence"))
+        next_action = str(evidence.get("next_action", "") or "")
+        if next_action:
+            return _short_text(next_action, limit=48)
+    return "open Hermes or run omh doctor"
+
+
+def _short_text(value: str, *, limit: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def _source_icon_id(source: str) -> str:
