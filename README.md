@@ -47,11 +47,15 @@ easier to start, easier to trust, and more natural to apply in real work.
 > Improve OMH System !!
 >
 > <p align="center">
->   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
+>   <a href="https://rlaope.github.io/artengine-lab/">
+>     <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
+>   </a>
 > </p>
 >
 > <p align="center">
->   <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
+>   <a href="https://rlaope.github.io/artengine-lab/">
+>     <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
+>   </a>
 > </p>
 
 <br>
@@ -111,8 +115,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 > **GitHub Follow**
 > Follow [@rlaope](https://github.com/rlaope) on GitHub for OMH updates and
 > related Hermes-native workflow projects.
-> Explore [ArtEngine Lab](https://rlaope.github.io/artengine-lab/) for the
-> Art & Engineering studio behind OMH.
+> Explore [Team Art & Engineering](https://rlaope.github.io/artengine-lab/)
+> for the studio behind OMH.
 
 <br>
 
