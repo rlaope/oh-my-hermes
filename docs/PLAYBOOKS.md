@@ -135,11 +135,11 @@ every morning check competitor news and send a Slack digest only if something ch
 
 can route to `research-department` when the request is really about ongoing
 collection, synthesis, and briefing. The wrapper can show Scout, Analyst, and
-Briefer lanes, `source_inbox/v1`, `briefing_status/v1`, optional NotebookLM or
-Obsidian readiness, and the observed evidence still needed. The plan can
+Briefer lanes, `source_inbox/v1`, `briefing_status/v1`, knowledge-store and
+synthesis-tool readiness, and the observed evidence still needed. The plan can
 prepare `research_department_plan/v1`; it cannot prove source retrieval,
-NotebookLM execution, Obsidian writes, host cron creation, gateway delivery,
-conflict resolution, or verified briefing evidence.
+synthesis-tool execution, knowledge-store writes, host cron creation, gateway
+delivery, conflict resolution, or verified briefing evidence.
 
 Pure schedule or delivery requests still route to `scheduled-ops-blueprint`.
 The wrapper can show cadence, delivery surface, silence policy, selected

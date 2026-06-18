@@ -1210,10 +1210,10 @@ class CliTests(unittest.TestCase):
                 + [
                     "research-department",
                     request,
-                    "--notebooklm",
-                    "preferred",
-                    "--obsidian",
-                    "preferred",
+                    "--synthesis-tool",
+                    "team knowledge summarizer",
+                    "--knowledge-store",
+                    "markdown folder",
                     "--dry-run",
                 ]
             )
@@ -1228,15 +1228,29 @@ class CliTests(unittest.TestCase):
             self.assertEqual(plan["kind"], "research-department-workflow")
             self.assertEqual([role["role"] for role in plan["roles"]], ["scout", "analyst", "briefer"])
             self.assertEqual(plan["cadence_intent"]["cadence"], "daily")
-            self.assertEqual(plan["optional_integrations"]["notebooklm"]["mode"], "preferred")
-            self.assertEqual(plan["optional_integrations"]["obsidian"]["mode"], "preferred")
+            self.assertEqual(plan["synthesis_tool"]["type"], "knowledge_summarizer")
+            self.assertEqual(plan["knowledge_store"]["type"], "markdown_folder")
+            self.assertEqual(plan["optional_integrations"]["synthesis_tool"]["readiness"], "operator_prefers_if_available")
+            self.assertEqual(plan["optional_integrations"]["knowledge_store"]["readiness"], "operator_prefers_if_available")
             self.assertTrue(dry["boundary"]["prepared_is_not_observed"])
             self.assertFalse(dry["boundary"]["source_retrieval_observed"])
-            self.assertFalse(dry["boundary"]["notebooklm_execution_observed"])
-            self.assertFalse(dry["boundary"]["obsidian_write_observed"])
+            self.assertFalse(dry["boundary"]["synthesis_tool_query_observed"])
+            self.assertFalse(dry["boundary"]["knowledge_store_write_observed"])
             self.assertFalse(dry["boundary"]["gateway_delivery_observed"])
-            self.assertIn("notebooklm_query_executed", dry["boundary"]["not_evidence_until_observed"])
-            self.assertIn("obsidian_vault_written", dry["boundary"]["not_evidence_until_observed"])
+            self.assertIn("synthesis_tool_query_observed", dry["boundary"]["not_evidence_until_observed"])
+            self.assertIn("knowledge_store_write_observed", dry["boundary"]["not_evidence_until_observed"])
+
+            status, stdout, stderr = run_cli(
+                base + ["research-department", request, "--notebooklm", "preferred", "--obsidian", "available", "--dry-run"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            alias_plan = json.loads(stdout)["plan"]
+            self.assertEqual(alias_plan["synthesis_tool"]["type"], "notebooklm")
+            self.assertEqual(alias_plan["knowledge_store"]["type"], "obsidian_vault")
+            self.assertEqual(alias_plan["synthesis_tool"]["readiness"], "operator_prefers_if_available")
+            self.assertEqual(alias_plan["knowledge_store"]["readiness"], "operator_supplied_available")
 
             status, stdout, stderr = run_cli(base + ["research-department", request])
 
@@ -2031,7 +2045,7 @@ class CliTests(unittest.TestCase):
         research_department = json.loads(stdout)["playbook"]
         self.assertEqual(research_department["pipeline"], [stage["id"] for stage in research_department["stages"]])
         self.assertIn("source_retrieval_observed", research_department["not_evidence_until_observed"])
-        self.assertIn("NotebookLM execution", " ".join(stage["evidence_boundary"] for stage in research_department["stages"]))
+        self.assertIn("synthesis-tool execution", " ".join(stage["evidence_boundary"] for stage in research_department["stages"]))
 
     def test_playbook_recommend_routes_feature_and_research_situations(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo"])

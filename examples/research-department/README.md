@@ -20,8 +20,8 @@ Briefer: prepare a digest or report with unresolved gaps visible.
 The artifact keeps these states separate:
 
 ```text
-prepared: topic, cadence, delivery target, source boundaries, optional integrations
-not observed: source retrieval, NotebookLM execution, Obsidian write, scheduler enablement, Slack delivery
+prepared: topic, cadence, delivery target, source boundaries, knowledge-store and synthesis-tool preferences
+not observed: source retrieval, synthesis-tool execution, knowledge-store write, scheduler enablement, Slack delivery
 ```
 
 Use the CLI backend for deterministic smoke checks:

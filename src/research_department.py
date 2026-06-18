@@ -39,14 +39,14 @@ OBSERVED_CLAIM_STATUSES = {
 
 PREPARED_IS_NOT_OBSERVED = (
     "A research-department plan is projection metadata only. It is not source retrieval, "
-    "NotebookLM execution, Obsidian writes, host cron creation, gateway delivery, human "
+    "synthesis-tool execution, knowledge-store writes, host cron creation, gateway delivery, human "
     "verification, connector invocation, or brief delivery evidence."
 )
 DEFAULT_NOT_EVIDENCE = (
     "source_retrieval_observed",
-    "notebooklm_query_executed",
-    "notebooklm_notebook_created",
-    "obsidian_vault_written",
+    "synthesis_tool_query_observed",
+    "synthesis_tool_workspace_created",
+    "knowledge_store_write_observed",
     "host_cron_created",
     "hermes_automation_enabled",
     "gateway_delivery_sent",
@@ -56,10 +56,15 @@ DEFAULT_NOT_EVIDENCE = (
     "conflict_resolution_complete",
     "connector_invoked",
 )
+LEGACY_NOT_EVIDENCE_ALIASES = {
+    "synthesis_tool_query_observed": ("notebooklm_query_executed",),
+    "synthesis_tool_workspace_created": ("notebooklm_notebook_created",),
+    "knowledge_store_write_observed": ("obsidian_vault_written",),
+}
 OBSERVED_EVIDENCE_REQUIRED = (
     "Observed source retrieval records or supplied source artifacts before claiming collected findings.",
-    "Observed NotebookLM MCP/tool output before claiming notebook query or notebook creation.",
-    "Observed Obsidian file writes before claiming vault persistence.",
+    "Observed synthesis-tool output before claiming knowledge summarization or workspace queries.",
+    "Observed knowledge-store write records before claiming persistent notes, inboxes, or briefs were saved.",
     "Hermes host automation or cron listing before claiming scheduled wakeups.",
     "Gateway or Hermes message delivery record before claiming a brief was delivered.",
     "Human or verifier review record before claiming conflicts or source quality are verified.",
@@ -113,6 +118,8 @@ def build_research_department_plan(
     cadence: str = "",
     delivery: str = "",
     storage: str = "",
+    knowledge_store: str = "",
+    synthesis_tool: str = "",
     source: str = "",
     sources: list[str] | None = None,
     notebooklm: str = "unknown",
@@ -130,6 +137,17 @@ def build_research_department_plan(
     briefing_status = build_briefing_status(plan_id=record_id, source_inbox=source_inbox, created_at=created)
     roles = _role_lanes()
     skill_chain = _skill_chain(source_policy)
+    knowledge_store_intent = _knowledge_store_intent(
+        clean_request,
+        storage=storage,
+        knowledge_store=knowledge_store,
+        obsidian=obsidian,
+    )
+    synthesis_tool_intent = _synthesis_tool_intent(
+        clean_request,
+        synthesis_tool=synthesis_tool,
+        notebooklm=notebooklm,
+    )
     record = {
         "schema_version": RESEARCH_DEPARTMENT_PLAN_SCHEMA_VERSION,
         "plan_id": record_id,
@@ -154,7 +172,9 @@ def build_research_department_plan(
         "topic_intent": _topic_intent(clean_request, topic=topic),
         "cadence_intent": _cadence_intent(clean_request, cadence=cadence),
         "delivery_intent": _delivery_intent(clean_request, delivery=delivery),
-        "storage_intent": _storage_intent(clean_request, storage=storage),
+        "storage_intent": knowledge_store_intent,
+        "knowledge_store": knowledge_store_intent,
+        "synthesis_tool": synthesis_tool_intent,
         "source_policy": source_policy,
         "roles": roles,
         "skill_chain": skill_chain,
@@ -162,16 +182,12 @@ def build_research_department_plan(
         "source_inbox": source_inbox,
         "briefing_status": briefing_status,
         "optional_integrations": {
-            "notebooklm": _optional_integration(
-                "notebooklm",
-                notebooklm,
-                purpose="Analyst enrichment over curated notebooks when the operator has configured it.",
-            ),
-            "obsidian": _optional_integration(
-                "obsidian",
-                obsidian,
-                purpose="Source inbox and brief persistence to a vault when the operator has configured it.",
-            ),
+            "knowledge_store": knowledge_store_intent,
+            "synthesis_tool": synthesis_tool_intent,
+            "compatibility_aliases": {
+                "notebooklm": "synthesis_tool",
+                "obsidian": "knowledge_store",
+            },
         },
         "prompt_outline": _prompt_outline(clean_request, skill_chain),
         "wrapper_actions": [
@@ -189,8 +205,8 @@ def build_research_department_plan(
             "A Hermes/governed scheduler only if the operator wants recurring wakeups.",
         ],
         "optional_runtime_capabilities": [
-            "NotebookLM MCP/tool access for curated notebook queries.",
-            "Obsidian vault access for persistent markdown storage.",
+            "A synthesis tool for curated knowledge summarization when the operator has configured one.",
+            "A knowledge store for persistent source inboxes, notes, and briefs when the operator has configured one.",
             "Gateway delivery evidence when briefs leave the current Hermes thread.",
         ],
         "not_evidence_until_observed": list(DEFAULT_NOT_EVIDENCE),
@@ -327,6 +343,10 @@ def validate_research_department_plan(record: dict[str, Any]) -> list[str]:
     ):
         if not isinstance(record.get(key), dict):
             errors.append(f"{key} must be an object")
+    legacy_tooling = _has_legacy_tooling(record)
+    for key in ("knowledge_store", "synthesis_tool"):
+        if not isinstance(record.get(key), dict) and not legacy_tooling:
+            errors.append(f"{key} must be an object")
     for key in (
         "roles",
         "skill_chain",
@@ -340,8 +360,12 @@ def validate_research_department_plan(record: dict[str, Any]) -> list[str]:
         if not isinstance(record.get(key), list):
             errors.append(f"{key} must be a list")
     not_evidence = set(_string_list(record.get("not_evidence_until_observed", [])))
-    if not set(DEFAULT_NOT_EVIDENCE).issubset(not_evidence):
-        errors.append("not_evidence_until_observed must include the default research evidence guard list")
+    missing = _missing_default_evidence_guards(not_evidence)
+    if missing:
+        errors.append(
+            "not_evidence_until_observed must include the default research evidence guard list: "
+            + ", ".join(missing)
+        )
     inbox = record.get("source_inbox")
     if isinstance(inbox, dict):
         errors.extend(validate_source_inbox(inbox))
@@ -390,8 +414,9 @@ def validate_briefing_status(record: dict[str, Any]) -> list[str]:
         if lane.get("status") not in OBSERVATION_STATUSES:
             errors.append(f"briefing_status.lanes.{lane_name}.status must remain prepared or not_observed")
     not_observed = set(_string_list(record.get("not_observed", [])))
-    if not set(DEFAULT_NOT_EVIDENCE).issubset(not_observed):
-        errors.append("briefing_status.not_observed must include the default research evidence guard list")
+    missing = _missing_default_evidence_guards(not_observed)
+    if missing:
+        errors.append("briefing_status.not_observed must include the default research evidence guard list: " + ", ".join(missing))
     return errors
 
 
@@ -532,7 +557,7 @@ def _workflow_chain(roles: list[dict[str, object]]) -> list[dict[str, object]]:
             "status": "prepared",
             "skills": _skills_for_role(roles, "analyst"),
             "prepared_output": "source_inbox.processed_notes",
-            "not_evidence": "notebooklm_query_executed",
+            "not_evidence": "synthesis_tool_query_observed",
         },
         {
             "stage": "brief",
@@ -625,22 +650,86 @@ def _delivery_intent(text: str, *, delivery: str = "") -> dict[str, object]:
     }
 
 
-def _storage_intent(text: str, *, storage: str = "") -> dict[str, object]:
-    source = f"{text} {storage}".casefold()
-    destinations: list[str] = []
-    if any(term in source for term in ("obsidian", "vault", "옵시디언", "볼트")):
-        destinations.append("obsidian")
-    if any(term in source for term in ("notebooklm", "notebook lm", "notebook")):
-        destinations.append("notebooklm")
-    if any(term in source for term in ("markdown", "md", "folder", "폴더", "마크다운")):
-        destinations.append("markdown-folder")
-    if not destinations:
-        destinations = ["local-markdown-folder"]
+def _knowledge_store_intent(
+    text: str,
+    *,
+    storage: str = "",
+    knowledge_store: str = "",
+    obsidian: str = "unknown",
+) -> dict[str, object]:
+    explicit = knowledge_store.strip() or storage.strip()
+    source = f"{text} {storage} {knowledge_store}".casefold()
+    store_type = "local_markdown_folder"
+    vendor_hint = ""
+    readiness_mode = _readiness_mode(obsidian)
+    if readiness_mode in {"available", "preferred"}:
+        store_type = "obsidian_vault"
+        vendor_hint = "obsidian"
+    elif any(term in source for term in ("obsidian", "vault", "옵시디언", "볼트")):
+        store_type = "obsidian_vault"
+        vendor_hint = "obsidian"
+    elif any(term in source for term in ("notion", "노션")):
+        store_type = "notion_workspace"
+        vendor_hint = "notion"
+    elif any(term in source for term in ("google drive", "gdrive", "google docs", "구글 드라이브")):
+        store_type = "google_drive"
+        vendor_hint = "google"
+    elif any(term in source for term in ("database", "db", "데이터베이스")):
+        store_type = "database"
+    elif any(term in source for term in ("markdown", "md", "folder", "폴더", "마크다운")):
+        store_type = "markdown_folder"
+    if explicit and readiness_mode == "unknown":
+        readiness_mode = "preferred"
     return {
+        "schema_version": "knowledge_store_intent/v1",
         "status": "prepared",
-        "destinations": destinations,
-        "explicit_storage": storage.strip(),
-        "requires_observed_write_evidence": any(destination in {"obsidian", "notebooklm"} for destination in destinations),
+        "type": store_type,
+        "explicit_target": explicit,
+        "vendor_hint": vendor_hint,
+        "mode": readiness_mode,
+        "readiness": _readiness_label(readiness_mode),
+        "requested_capability": "persist source inboxes, notes, briefs, and unresolved verification gaps",
+        "write_observed": False,
+        "requires_observed_write_evidence": True,
+        "boundary": "A knowledge-store preference is not write evidence or proof that the store is configured.",
+    }
+
+
+def _synthesis_tool_intent(
+    text: str,
+    *,
+    synthesis_tool: str = "",
+    notebooklm: str = "unknown",
+) -> dict[str, object]:
+    explicit = synthesis_tool.strip()
+    source = f"{text} {synthesis_tool}".casefold()
+    tool_type = "hermes_synthesis"
+    vendor_hint = ""
+    readiness_mode = _readiness_mode(notebooklm)
+    if readiness_mode in {"available", "preferred"}:
+        tool_type = "notebooklm"
+        vendor_hint = "notebooklm"
+    elif any(term in source for term in ("notebooklm", "notebook lm", "notebook")):
+        tool_type = "notebooklm"
+        vendor_hint = "notebooklm"
+    elif any(term in source for term in ("rag", "vector", "embedding", "벡터")):
+        tool_type = "local_rag"
+    elif any(term in source for term in ("summarizer", "summary tool", "knowledge summary", "요약 도구", "요약툴")):
+        tool_type = "knowledge_summarizer"
+    if explicit and readiness_mode == "unknown":
+        readiness_mode = "preferred"
+    return {
+        "schema_version": "synthesis_tool_intent/v1",
+        "status": "prepared",
+        "type": tool_type,
+        "explicit_target": explicit,
+        "vendor_hint": vendor_hint,
+        "mode": readiness_mode,
+        "readiness": _readiness_label(readiness_mode),
+        "requested_capability": "summarize curated sources, surface conflicts, and preserve missing evidence",
+        "query_observed": False,
+        "workspace_observed": False,
+        "boundary": "A synthesis-tool preference is not query evidence or proof that the tool is configured.",
     }
 
 
@@ -661,27 +750,22 @@ def _source_policy(text: str, *, sources: list[str]) -> dict[str, object]:
     }
 
 
-def _optional_integration(name: str, mode: str, *, purpose: str) -> dict[str, object]:
+def _readiness_mode(mode: str) -> str:
     normalized = str(mode or "unknown").strip().lower()
     if normalized not in {"unknown", "available", "unavailable", "preferred"}:
         normalized = "unknown"
+    return normalized
+
+
+def _readiness_label(mode: str) -> str:
+    normalized = _readiness_mode(mode)
     if normalized == "preferred":
-        readiness = "operator_prefers_if_available"
+        return "operator_prefers_if_available"
     elif normalized == "available":
-        readiness = "operator_supplied_available"
+        return "operator_supplied_available"
     elif normalized == "unavailable":
-        readiness = "not_available"
-    else:
-        readiness = "not_checked"
-    return {
-        "name": name,
-        "status": "prepared",
-        "mode": normalized,
-        "readiness": readiness,
-        "purpose": purpose,
-        "execution_observed": False,
-        "boundary": f"{name} is optional; this plan does not invoke it or prove it is configured.",
-    }
+        return "not_available"
+    return "not_checked"
 
 
 def _prompt_outline(text: str, skill_chain: list[dict[str, str]]) -> dict[str, object]:
@@ -697,7 +781,7 @@ def _prompt_outline(text: str, skill_chain: list[dict[str, str]]) -> dict[str, o
         "missing_decisions": [
             "confirm topic and source boundaries",
             "confirm cadence and delivery target",
-            "confirm storage destination and optional NotebookLM/Obsidian readiness",
+            "confirm knowledge-store destination and optional synthesis-tool readiness",
         ],
     }
 
@@ -756,6 +840,24 @@ def _nested_status_boundary_errors(value: object, *, path: str = "$") -> list[st
         for index, child in enumerate(value):
             errors.extend(_nested_status_boundary_errors(child, path=f"{path}[{index}]"))
     return errors
+
+
+def _missing_default_evidence_guards(ids: set[str]) -> list[str]:
+    missing: list[str] = []
+    for guard in DEFAULT_NOT_EVIDENCE:
+        if guard in ids:
+            continue
+        if any(alias in ids for alias in LEGACY_NOT_EVIDENCE_ALIASES.get(guard, ())):
+            continue
+        missing.append(guard)
+    return missing
+
+
+def _has_legacy_tooling(record: dict[str, Any]) -> bool:
+    optional = record.get("optional_integrations")
+    return isinstance(optional, dict) and (
+        isinstance(optional.get("notebooklm"), dict) or isinstance(optional.get("obsidian"), dict)
+    )
 
 
 def _stamp(value: datetime | str | None) -> str:

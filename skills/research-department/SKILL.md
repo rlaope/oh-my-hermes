@@ -16,7 +16,7 @@ This is a Hermes-native `research-department` workflow skill.
 
 ## Why This Exists
 
-`research-department` exists so Hermes users can start complex research-ops patterns without manually designing profiles, cron, NotebookLM, Obsidian, and delivery glue, while OMH keeps every runtime claim observed-only.
+`research-department` exists so Hermes users can start complex research-ops patterns without manually designing profiles, cron, knowledge storage, synthesis tooling, and delivery glue, while OMH keeps every runtime claim observed-only.
 
 ## Do Not Use When
 
@@ -30,20 +30,20 @@ This is a Hermes-native `research-department` workflow skill.
 Good example:
 
 - Prompt: research-department 매일 경쟁사와 시장 뉴스를 수집해서 변화가 있으면 브리핑해줘.
-- Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, optional integration readiness, and observed-only evidence requirements.
+- Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, knowledge-store and synthesis-tool readiness, and observed-only evidence requirements.
 - Why: The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.
 
 Bad example:
 
-- Prompt: research-department prove NotebookLM queried the notebook and posted the Slack brief.
-- Expected behavior: Ask for observed NotebookLM and gateway delivery evidence or mark those states as not_observed.
+- Prompt: research-department prove the synthesis tool queried the knowledge base and posted the Slack brief.
+- Expected behavior: Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.
 - Why: The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.
 
 ## Use When
 
-Use when Hermes should turn an ongoing or recurring research request into a prepared Scout -> Analyst -> Briefer workflow with source inbox, optional NotebookLM/Obsidian readiness, and briefing status without claiming research execution.
+Use when Hermes should turn an ongoing or recurring research request into a prepared Scout -> Analyst -> Briefer workflow with source inbox, knowledge-store and synthesis-tool readiness, and briefing status without claiming research execution.
 
-    Strong routing signals: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`, `competitor research department`, `market research department`, `paper review`, `weekly paper review`, `research paper review`, `paper research`, `notebooklm research`, `obsidian research vault`, `research inbox`, `source inbox`, `briefing status`, `리서치 부서`, `리서치 조직`, `리서치 운영`, `수집 합성 브리핑`, `경쟁사 리서치 부서`
+    Strong routing signals: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`, `competitor research department`, `market research department`, `paper review`, `weekly paper review`, `research paper review`, `paper research`, `notebooklm research`, `obsidian research vault`, `knowledge store`, `knowledge storage`, `synthesis tool`, `knowledge summarizer`, `research inbox`, `source inbox`, `briefing status`, `리서치 부서`, `리서치 조직`, `리서치 운영`, `수집 합성 브리핑`, `지식 저장소`, `요약 도구`, `경쟁사 리서치 부서`
 
 ## Catalog Metadata
 
@@ -54,14 +54,14 @@ Quality tier: `research-ops-gated`
 
 Quality bar:
 
-- Name topic, source boundaries, cadence, delivery target, storage destination, and optional integration readiness.
+- Name topic, source boundaries, cadence, delivery target, knowledge-store destination, and synthesis-tool readiness.
 - Map Scout, Analyst, and Briefer lanes to concrete OMH skills and source inbox buckets.
 - Expose collected, synthesized, briefed, conflict, and verification counts as status, not execution proof.
 - List required evidence before claiming retrieval, synthesis, storage, delivery, or verification.
 
 Handoff policy:
 
-Keep the research operating model in Hermes. Map Scout to `web-research`/`autoresearch-goal`, Analyst to `research-brief`/`best-practice-research`, and Briefer to `report-package` or meeting/report workflows. Record retrieval, NotebookLM, Obsidian, delivery, and verification only from observed evidence.
+Keep the research operating model in Hermes. Map Scout to `web-research`/`autoresearch-goal`, Analyst to `research-brief`/`best-practice-research`, and Briefer to `report-package` or meeting/report workflows. Record retrieval, synthesis-tool output, knowledge-store writes, delivery, and verification only from observed evidence.
 
 Required inputs:
 
@@ -69,7 +69,7 @@ Required inputs:
 - source boundaries
 - cadence
 - delivery target
-- storage preference
+- knowledge-store preference
 
 Expected outputs:
 
@@ -84,9 +84,9 @@ Artifact expectations:
 
 Safety rules:
 
-- Do not claim web retrieval, NotebookLM query, Obsidian write, cron creation, gateway delivery, or verification from a prepared plan.
+- Do not claim web retrieval, synthesis-tool query, knowledge-store write, cron creation, gateway delivery, or verification from a prepared plan.
 - Keep raw findings, processed notes, briefs, conflicts, and verification needs in separate source inbox buckets.
-- Treat NotebookLM and Obsidian as optional readiness hints unless observed integration evidence exists.
+- Treat vendor-specific tool names as optional aliases for synthesis-tool and knowledge-store readiness unless observed evidence exists.
 
 ## Harness Discipline
 

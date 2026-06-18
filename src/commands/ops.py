@@ -130,6 +130,8 @@ def cmd_ops_research_department(args: argparse.Namespace) -> int:
             cadence=args.cadence,
             delivery=args.delivery,
             storage=args.storage,
+            knowledge_store=args.knowledge_store,
+            synthesis_tool=args.synthesis_tool,
             source=args.source,
             sources=args.source_boundary or [],
             notebooklm=args.notebooklm,
@@ -153,8 +155,8 @@ def cmd_ops_research_department(args: argparse.Namespace) -> int:
             "boundary": {
                 "prepared_is_not_observed": True,
                 "source_retrieval_observed": False,
-                "notebooklm_execution_observed": False,
-                "obsidian_write_observed": False,
+                "synthesis_tool_query_observed": False,
+                "knowledge_store_write_observed": False,
                 "gateway_delivery_observed": False,
                 "not_evidence_until_observed": list(written["not_evidence_until_observed"]),
                 "observed_evidence_required": list(written["observed_evidence_required"]),
@@ -379,20 +381,22 @@ def _add_ops_commands(sub) -> None:
     research_department.add_argument("--topic", default="", help="Explicit research topic or watch area.")
     research_department.add_argument("--cadence", default="", help="Explicit cadence hint such as daily or weekly.")
     research_department.add_argument("--delivery", default="", help="Explicit delivery target hint.")
-    research_department.add_argument("--storage", default="", help="Explicit storage target such as markdown folder or Obsidian.")
+    research_department.add_argument("--storage", default="", help="Compatibility alias for --knowledge-store.")
+    research_department.add_argument("--knowledge-store", default="", help="Knowledge store target such as markdown folder, note vault, or database.")
+    research_department.add_argument("--synthesis-tool", default="", help="Knowledge synthesis tool hint such as Hermes synthesis, NotebookLM, or local RAG.")
     research_department.add_argument("--source", default="", help="Optional metadata source label.")
     research_department.add_argument("--source-boundary", action="append", help="Allowed source, source family, or scope boundary.")
     research_department.add_argument(
         "--notebooklm",
         choices=("unknown", "available", "unavailable", "preferred"),
         default="unknown",
-        help="Operator-supplied NotebookLM readiness hint; OMH does not probe or invoke it.",
+        help="Compatibility alias for a NotebookLM synthesis-tool readiness hint; OMH does not probe or invoke it.",
     )
     research_department.add_argument(
         "--obsidian",
         choices=("unknown", "available", "unavailable", "preferred"),
         default="unknown",
-        help="Operator-supplied Obsidian readiness hint; OMH does not probe or write to it.",
+        help="Compatibility alias for an Obsidian knowledge-store readiness hint; OMH does not probe or write to it.",
     )
     research_department.add_argument("--dry-run", action="store_true", help="Print the prepared plan without writing it.")
     research_department.set_defaults(func=cmd_ops_research_department)
