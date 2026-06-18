@@ -696,14 +696,19 @@ Update the managed skill pack from the currently installed `omh` command
 package:
 
 ```sh
-omh update --channel preview
+omh update
 omh doctor
 ```
 
-Use `omh update --channel stable --version <version>` to record a pinned stable
-managed-skill refresh, or `omh update --channel local --from-skills-dir ./skills`
-for a local fixture. Local modifications block updates unless `--force` is
-supplied.
+Most users should run only `omh update`. The command uses the channel and
+version metadata that were installed with the local `omh` package, refreshes the
+managed skills, and records a concise update log.
+
+Advanced operators can still pin or test a different source with
+`omh update --channel stable --version <version>` or
+`omh update --channel local --from-skills-dir ./skills`, but those flags are for
+release validation, fixtures, or intentional rollback testing. Local
+modifications block updates unless `--force` is supplied.
 
 Run `omh doctor` after an update. Use `omh setup` only when doctor reports that
 Hermes registration needs repair, then restart Hermes Agent. `omh update` does

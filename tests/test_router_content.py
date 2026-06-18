@@ -893,6 +893,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("OMH_CHANNEL=stable OMH_VERSION=<version>", installation)
         self.assertIn("v<version>", installation)
         self.assertIn("installs generated managed skills", installation)
+        update_section = installation.split("## Update", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("```sh\nomh update\nomh doctor\n```", update_section)
+        self.assertIn("Most users should run only `omh update`.", update_section)
+        self.assertLess(update_section.index("omh update\nomh doctor"), update_section.index("Advanced operators"))
+        self.assertNotIn("omh update --channel preview", update_section)
         self.assertIn("omh setup", readme)
         self.assertIn("omh doctor", readme)
         self.assertLess(readme.index("## Quick Start"), readme.index("## Why OMH"))
