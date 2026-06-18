@@ -149,6 +149,19 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `visual-summary` | Prepare provider-neutral image-card prompts for meetings, PRs, issues, research, and releases. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
+### Visual Summary Skill
+
+`visual-summary` helps Hermes turn source material into an image-card prompt
+that another connected image tool can use. It is not one fixed template:
+meeting notes, reports, GitHub PRs, issues, research, and releases each get a
+source-specific visual format. Use `--aspect-ratio long_scroll` when the card
+needs room for more sections. Generated images, visual QA, and delivery stay
+separate until they are recorded as observed evidence.
+
+<p align="center">
+  <img src="assets/omh-visual-summary-card.png" alt="OMH visual-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
+</p>
+
 <br>
 
 ## What You Get
