@@ -105,6 +105,10 @@ artifact changes, add or update tests that lock the public contract.
 ## Git And Commits
 
 Use `codex/` branch names unless the user requests another prefix.
+Before editing files for a coding task, create or switch to a dedicated
+`codex/` task branch unless the current branch is already clearly dedicated to
+that exact user goal. Do this before the first implementation edit so the work
+does not mix with unrelated branch history or user changes.
 
 Every commit must include DCO signoff and the local Lore-style trailers used by
 this repository:
