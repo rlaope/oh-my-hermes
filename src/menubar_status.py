@@ -376,20 +376,20 @@ def _menu_cards(
 ) -> list[dict[str, Any]]:
     return [
         {
-            "title": "Overview",
+            "title": "Connection",
             "rows": [
                 _menu_row("Connection", _setting_value(settings, "omh_connection", default="unknown")),
                 _menu_row("Hermes targets", str(len(hermes_agents)), detail=_target_menu_detail(settings)),
-                _menu_row("Coding agent", _coding_agent_menu_value(settings, current_executor_row)),
             ],
         },
         {
-            "title": "Hermes",
-            "rows": _hermes_menu_rows(hermes_agents),
-            "footer": "Process details appear only after an observed runtime overlay.",
+            "title": "Agent Status",
+            "columns": ["Agent", "PID", "Status"],
+            "rows": _agent_status_menu_rows(hermes_agents),
+            "footer": "PID is shown only after an observed runtime overlay.",
         },
         {
-            "title": "Coding",
+            "title": "Coding Handoff",
             "rows": _coding_menu_rows(settings, current_executor_row),
         },
         {
@@ -407,6 +407,16 @@ def _menu_row(label: str, value: str, *, detail: str = "", tone: str = "neutral"
     if detail:
         row["detail"] = detail
     return row
+
+
+def _agent_status_row(agent: str, pid: str, status: str, *, tone: str = "neutral") -> dict[str, str]:
+    return {
+        "kind": "agent_status",
+        "agent": agent,
+        "pid": pid,
+        "status": status,
+        "tone": tone,
+    }
 
 
 def _setting_value(settings: dict[str, Any], key: str, *, default: str = "") -> str:
@@ -429,17 +439,24 @@ def _coding_agent_menu_value(settings: dict[str, Any], current_executor_row: dic
     return _executor_setting_label(_setting_value(settings, "coding_handoff", default="choose"))
 
 
-def _hermes_menu_rows(hermes_agents: list[dict[str, Any]]) -> list[dict[str, str]]:
+def _agent_status_menu_rows(hermes_agents: list[dict[str, Any]]) -> list[dict[str, str]]:
     if not hermes_agents:
-        return [_menu_row("Target", "none", detail="run setup or reload Hermes")]
+        return [_agent_status_row("none", "not observed", "run setup")]
     rows: list[dict[str, str]] = []
     for agent in hermes_agents[:3]:
         name = _short_text(str(agent.get("name", "") or "Hermes Agent"), limit=28)
         status = str(agent.get("status_label", "") or agent.get("status", "") or "configured")
-        detail = _process_menu_detail(agent)
-        rows.append(_menu_row(name, status, detail=detail, tone="ok" if agent.get("status_observed") else "neutral"))
+        pid = _pid_menu_value(agent)
+        rows.append(
+            _agent_status_row(
+                name,
+                pid,
+                status,
+                tone="ok" if agent.get("status_observed") or agent.get("pid_observed") else "neutral",
+            )
+        )
     if len(hermes_agents) > 3:
-        rows.append(_menu_row("More", f"{len(hermes_agents) - 3} hidden"))
+        rows.append(_agent_status_row(f"+{len(hermes_agents) - 3} more", "not shown", "hidden"))
     return rows
 
 
@@ -447,15 +464,19 @@ def _coding_menu_rows(settings: dict[str, Any], current_executor_row: dict[str, 
     if current_executor_row:
         name = str(current_executor_row.get("name", "") or "Coding agent")
         status = str(current_executor_row.get("status_label", "") or current_executor_row.get("status", "") or "prepared")
-        detail = _process_menu_detail(current_executor_row)
-        rows = [_menu_row(name, status, detail=detail)]
+        rows = [
+            _menu_row("Agent", name),
+            _menu_row("Status", status),
+            _menu_row("PID", _pid_menu_value(current_executor_row)),
+        ]
         next_action = str(_dict(current_executor_row.get("evidence")).get("next_action", "") or "")
         if next_action:
             rows.append(_menu_row("Next", _short_text(next_action, limit=48)))
         return rows
     dispatch = _setting_value(settings, "send_mode", default="ask_before_dispatch")
     return [
-        _menu_row("Current", "idle", detail="no external handoff"),
+        _menu_row("Agent", _coding_agent_menu_value(settings, current_executor_row)),
+        _menu_row("Status", "idle", detail="no external handoff"),
         _menu_row("Send mode", _dispatch_policy_menu_value(dispatch, _setting_value(settings, "coding_handoff"))),
     ]
 
@@ -466,12 +487,10 @@ def _dispatch_policy_menu_value(dispatch_policy: str, executor: str) -> str:
     return label[len(prefix) :] if label.startswith(prefix) else label
 
 
-def _process_menu_detail(row: dict[str, Any]) -> str:
-    if row.get("pid_observed"):
-        return str(row.get("pid_label", "") or f"PID {row.get('pid')}")
-    if row.get("status_observed"):
-        return "runtime observed"
-    return "process not observed"
+def _pid_menu_value(row: dict[str, Any]) -> str:
+    if row.get("pid_observed") and row.get("pid"):
+        return str(row.get("pid"))
+    return "not observed"
 
 
 def _evidence_menu_value(hermes_agents: list[dict[str, Any]], current_executor_row: dict[str, Any]) -> str:

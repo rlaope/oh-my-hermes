@@ -168,9 +168,10 @@ not the source of truth. The payload separates `hermes_agents` from
 coding tools cannot be rendered as Hermes agents by accident. Compact surfaces
 receive source and model `icon_id` values plus tooltip text rather than Markdown
 tables or prose-only labels. `display.menu_cards` is the human-facing card model
-for the native menu bar helper, grouping the same contract into Overview,
-Hermes, Coding, and Evidence sections so compact UI surfaces do not need to
-render raw JSON-like text.
+for the native menu bar helper, grouping the same contract into Connection,
+Agent Status, Coding Handoff, and Evidence sections so compact UI surfaces do
+not need to render raw JSON-like text. The Agent Status section uses an explicit
+`Agent | PID | Status` row shape.
 
 `current_external_coding_executor` names the selected row explicitly, preferring
 `runtime/state.json` `last_run_id` when it matches the recent executor list, so

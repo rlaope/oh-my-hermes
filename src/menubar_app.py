@@ -333,11 +333,27 @@ final class OMHMenuBarDelegate: NSObject, NSApplicationDelegate {
                 )
                 menu.addItem(item)
             }
+            if let columns = card["columns"] as? [String], !columns.isEmpty {
+                let line = tableHeaderTitle(columns)
+                let item = disabledItem("   \(line)")
+                item.toolTip = line
+                item.attributedTitle = NSAttributedString(
+                    string: "   \(line)",
+                    attributes: [.font: NSFont.monospacedSystemFont(ofSize: font.pointSize, weight: .medium)]
+                )
+                menu.addItem(item)
+            }
             if let rows = card["rows"] as? [[String: Any]] {
                 for row in rows.prefix(5) {
                     let line = rowTitle(row)
                     let item = disabledItem("   \(line)")
                     item.toolTip = line
+                    if (row["kind"] as? String) == "agent_status" {
+                        item.attributedTitle = NSAttributedString(
+                            string: "   \(line)",
+                            attributes: [.font: NSFont.monospacedSystemFont(ofSize: font.pointSize, weight: .regular)]
+                        )
+                    }
                     menu.addItem(item)
                 }
             }
@@ -359,7 +375,34 @@ final class OMHMenuBarDelegate: NSObject, NSApplicationDelegate {
         return item
     }
 
+    private func tableHeaderTitle(_ columns: [String]) -> String {
+        let padded = columns.prefix(3).enumerated().map { index, value in
+            if index == 0 {
+                return fixedWidth(value, 18)
+            }
+            if index == 1 {
+                return fixedWidth(value, 13)
+            }
+            return value
+        }
+        return padded.joined()
+    }
+
+    private func fixedWidth(_ value: String, _ length: Int) -> String {
+        if value.count > length {
+            let endIndex = value.index(value.startIndex, offsetBy: max(0, length - 1))
+            return String(value[..<endIndex]) + "…"
+        }
+        return value.padding(toLength: length, withPad: " ", startingAt: 0)
+    }
+
     private func rowTitle(_ row: [String: Any]) -> String {
+        if (row["kind"] as? String) == "agent_status" {
+            let agent = fixedWidth((row["agent"] as? String) ?? "unknown", 18)
+            let pid = fixedWidth((row["pid"] as? String) ?? "not observed", 13)
+            let status = (row["status"] as? String) ?? "unknown"
+            return "\(agent)\(pid)\(status)"
+        }
         let label = (row["label"] as? String) ?? ""
         let value = (row["value"] as? String) ?? ""
         let detail = (row["detail"] as? String) ?? ""
