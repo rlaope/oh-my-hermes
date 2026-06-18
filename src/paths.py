@@ -67,6 +67,18 @@ class OmhPaths:
         return self.research_department_dir / "index.json"
 
     @property
+    def agent_operator_productivity_dir(self) -> Path:
+        return self.omh_home / "agent-ops"
+
+    @property
+    def agent_operator_productivity_cards_dir(self) -> Path:
+        return self.agent_operator_productivity_dir / "reviews"
+
+    @property
+    def agent_operator_productivity_index_path(self) -> Path:
+        return self.agent_operator_productivity_dir / "index.json"
+
+    @property
     def materials_dir(self) -> Path:
         return self.omh_home / "materials"
 

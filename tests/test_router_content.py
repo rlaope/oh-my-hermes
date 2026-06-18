@@ -57,6 +57,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
     "ops-observability-card": ("harness_only", False),
+    "agent-ops-review": ("workflow_skill", True),
 }
 
 
@@ -334,6 +335,7 @@ class RouterContentTests(unittest.TestCase):
                 "voice-operator",
                 "toolbelt-readiness",
                 "ops-observability-card",
+                "agent-ops-review",
             },
             harnesses,
         )

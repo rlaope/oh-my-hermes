@@ -10,6 +10,7 @@ from ..coding_delegation import build_coding_delegation_payload
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
+from ..operator_productivity import build_agent_operator_productivity_card
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
@@ -96,6 +97,13 @@ VISIBLE_ACTIONS = (
     "record_visual_qa",
     "record_visual_delivery",
     "show_visual_status",
+    "show_agent_ops_review",
+    "choose_ops_lane",
+    "prepare_research_lane",
+    "prepare_coding_lane",
+    "prepare_review_lane",
+    "refresh_agent_ops_status",
+    "record_agent_ops_observation",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
@@ -114,6 +122,7 @@ _SKILL_PICKER_ENTRIES = (
     ("feedback-triage", "Feedback Triage", "Turn customer or product signals into investigation.", "./feedback-triage <signal>"),
     ("web-research", "Web Research", "Gather source-backed current evidence.", "./web-research <question>"),
     ("research-department", "Research Department", "Prepare Scout, Analyst, and Briefer research ops.", "./research-department <topic>"),
+    ("agent-ops-review", "Agent Ops Review", "See quality, blockers, next action, and throughput levers.", "./agent-ops-review <request>"),
     ("code-review", "Code Review", "Review completed work without overclaiming evidence.", "./code-review <scope>"),
     ("materials-package", "Materials Package", "Shape PPT, PDF, spreadsheet, document, or Markdown deliverables.", "./materials-package <brief>"),
     ("img-summary", "Img Summary", "Prepare image-generation-ready summary cards.", "./img-summary <source>"),
@@ -570,6 +579,46 @@ def build_chat_response_from_route(
                         "Show generate_visual_image only when wrapper context reports image_generation_capability/v1 "
                         "with state connected; that action is still not generation evidence."
                     ),
+                },
+            )
+        if selected == "agent-ops-review" or policy_next_action == "prepare_agent_ops_review":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "An agent ops review card is not runtime evidence."
+            card = build_agent_operator_productivity_card(
+                message or selected,
+                source=str(decision.get("source", "generic")),
+            )
+            status_card = card["status_card"]
+            return _chat_response(
+                kind="agent_ops_review",
+                headline=str(status_card.get("headline", "I can prepare an agent ops review for this.")),
+                body=(
+                    "I will show quality gates, current gaps, blockers, next actions, and throughput levers "
+                    "without asking the user to approve shell catalog commands."
+                ),
+                phase="agent_ops_review_prepared",
+                next_action=str(card.get("next_action", "show_agent_ops_review")),
+                thread_key=thread_key,
+                actions=[
+                    _action("show_agent_ops_review", "Show agent ops review", "primary"),
+                    _action("prepare_research_lane", "Prepare research lane", "secondary"),
+                    _action("prepare_coding_lane", "Prepare coding lane", "secondary"),
+                    _action("prepare_review_lane", "Prepare review lane", "secondary"),
+                    _action("refresh_agent_ops_status", "Refresh status", "secondary"),
+                    _action("record_agent_ops_observation", "Record observation", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": card["schema_version"],
+                    "status_card_schema": status_card.get("schema_version", ""),
+                    "agent_ops_review": card,
+                    "quality_state": status_card.get("quality_state", "prepared_not_observed"),
+                    "blockers": status_card.get("blockers", []),
+                    "throughput_levers": card.get("throughput_levers", []),
+                    "evidence_not_observed": card.get("not_evidence_until_observed", []),
                 },
             )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"

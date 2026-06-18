@@ -2311,6 +2311,54 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or successful workflow completion evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### agent-ops-review
+
+[omh] Hermes agent ops review workflow: help a manager inspect AI-agent research, coding, review, status, blockers, quality gates, and throughput levers.
+
+- Category: `operator`
+- Phase: `manager-review`
+- Hermes role: `tracker`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when a manager wants quality, blockers, next actions, and throughput guidance for AI-agent work.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `agent-ops-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes should explain AI-agent work from a manager/operator perspective: quality gates, progress, blockers, next actions, and throughput opportunities across research, coding, review, and status.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `research coding review status`, `ai agent manager`, `third-party manager`, `관리자 입장`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `리서치 코딩 리뷰`
+- Good example:
+  - Prompt: agent-ops-review show me quality, blockers, and throughput for AI-agent research, coding, and review work.
+  - Expected behavior: Produce `prepare_agent_ops_review` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: agent-ops-review claim Codex finished and CI passed because a handoff exists.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - agent-ops-review/v1 card or guidance
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - agent-ops-review/v1 metadata-only runtime or wrapper card when recorded
+- Safety rules:
+  - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge-readiness, merge, platform delivery, provider billing, or live runtime telemetry evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ## Representative Harnesses
 
 ### coding-handling
@@ -4006,4 +4054,57 @@ Report wrapper-safe token, cost, latency, run history, queue, and failure-mode t
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### agent-ops-review
+
+Prepare a manager-facing quality and throughput review for AI-agent research, coding, review, and status work.
+
+- Use when: Use when a third-party operator or team lead wants to understand progress, blockers, quality gates, next actions, and safe throughput levers without running shell catalog commands.
+- Quality tier: `manager-review-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - manager request
+  - work context or run/session references when available
+  - target outcome
+  - known evidence gaps
+- Outputs:
+  - agent_operator_productivity/v1
+  - agent_operator_status_card/v1
+  - quality lanes
+  - blockers
+  - next action
+  - throughput levers
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `manager_scope_recorded`
+  - `quality_lanes_prepared`
+  - `evidence_gaps_named`
+  - `next_action_selected`
+  - `runtime_observation_recorded_when_available`
+- Wrapper actions:
+  - `show_agent_ops_review`
+  - `choose_ops_lane`
+  - `prepare_research_lane`
+  - `prepare_coding_lane`
+  - `prepare_review_lane`
+  - `refresh_agent_ops_status`
+  - `record_agent_ops_observation`
+- Artifact events:
+  - `agent-ops-review_scoped`
+  - `agent-ops-review_card_prepared`
+  - `agent-ops-review_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.

@@ -3,6 +3,14 @@ from __future__ import annotations
 import argparse
 
 from ..installer import OmhError
+from ..operator_productivity import (
+    build_agent_operator_productivity_card,
+    list_agent_operator_productivity_cards,
+    show_agent_operator_productivity_card,
+    summarize_agent_operator_productivity_card,
+    validate_agent_operator_productivity_store,
+    write_agent_operator_productivity_card,
+)
 from ..hermes_ops import (
     build_scheduled_ops_blueprint,
     list_hermes_ops_blueprints,
@@ -38,6 +46,7 @@ DEFAULT_OPS_LIST_LIMIT = 20
 DEFAULT_OPS_EXPORT_LIMIT = 20
 DEFAULT_BLUEPRINT_LIST_LIMIT = 20
 DEFAULT_RESEARCH_DEPARTMENT_LIST_LIMIT = 20
+DEFAULT_AGENT_OPS_LIST_LIMIT = 20
 
 
 def cmd_ops_write(args: argparse.Namespace) -> int:
@@ -168,6 +177,48 @@ def cmd_ops_research_department(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ops_agent_review(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        card = build_agent_operator_productivity_card(
+            " ".join(args.request),
+            title=args.title,
+            focus=args.focus,
+            source=args.source,
+        )
+        written = card if args.dry_run else write_agent_operator_productivity_card(paths, card)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "omh_ops_agent_review_result/v1",
+            "card": written,
+            "store": {
+                "omh_home": str(paths.omh_home),
+                "agent_ops_dir": str(paths.agent_operator_productivity_dir),
+                "cards_dir": str(paths.agent_operator_productivity_cards_dir),
+                "index_path": str(paths.agent_operator_productivity_index_path),
+                "index_authority": "cache_only",
+                "written": not args.dry_run,
+            },
+            "boundary": {
+                "prepared_is_not_observed": True,
+                "source_retrieval_observed": False,
+                "executor_dispatch_observed": False,
+                "executor_session_attached": False,
+                "implementation_observed": False,
+                "verification_passed": False,
+                "review_passed": False,
+                "ci_passed": False,
+                "merge_observed": False,
+                "not_evidence_until_observed": list(written["not_evidence_until_observed"]),
+                "observed_evidence_required": list(written["observed_evidence_required"]),
+            },
+        }
+    )
+    return 0
+
+
 def cmd_ops_list(args: argparse.Namespace) -> int:
     try:
         paths = _paths(args)
@@ -193,6 +244,29 @@ def cmd_ops_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ops_agent_review_list(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    try:
+        limit = _limit_from_args(args, default=DEFAULT_AGENT_OPS_LIST_LIMIT)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    all_records = list_agent_operator_productivity_cards(paths)
+    records = all_records if limit is None else all_records[-limit:]
+    _print_json(
+        {
+            "schema_version": "omh_ops_agent_review_list/v1",
+            "count": len(records),
+            "total_count": len(all_records),
+            "limit": limit if limit is not None else "all",
+            "truncated": limit is not None and len(all_records) > len(records),
+            "summary_only": True,
+            "index_authority": "cache_only",
+            "cards": [summarize_agent_operator_productivity_card(record) for record in records],
+        }
+    )
+    return 0
+
+
 def cmd_ops_research_department_list(args: argparse.Namespace) -> int:
     paths = _paths(args)
     try:
@@ -213,6 +287,16 @@ def cmd_ops_research_department_list(args: argparse.Namespace) -> int:
             "plans": [summarize_research_department_plan(record) for record in records],
         }
     )
+    return 0
+
+
+def cmd_ops_agent_review_show(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        card = show_agent_operator_productivity_card(paths, args.card_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"schema_version": "omh_ops_agent_review_show/v1", "card": card})
     return 0
 
 
@@ -251,9 +335,16 @@ def cmd_ops_validate(args: argparse.Namespace) -> int:
     result = validate_operations_store(paths)
     blueprint_result = validate_hermes_ops_store(paths)
     research_department_result = validate_research_department_store(paths)
+    agent_ops_result = validate_agent_operator_productivity_store(paths)
     result["hermes_ops_blueprints"] = blueprint_result
     result["research_department_plans"] = research_department_result
-    result["ok"] = bool(result["ok"]) and bool(blueprint_result["ok"]) and bool(research_department_result["ok"])
+    result["agent_ops_reviews"] = agent_ops_result
+    result["ok"] = (
+        bool(result["ok"])
+        and bool(blueprint_result["ok"])
+        and bool(research_department_result["ok"])
+        and bool(agent_ops_result["ok"])
+    )
     _print_json(result)
     return 0 if result["ok"] else 1
 
@@ -403,6 +494,17 @@ def _add_ops_commands(sub) -> None:
     research_department.add_argument("--dry-run", action="store_true", help="Print the prepared plan without writing it.")
     research_department.set_defaults(func=cmd_ops_research_department)
 
+    agent_review = ops_sub.add_parser(
+        "agent-review",
+        help="Prepare a manager-facing agent ops review card for research, coding, review, and status productivity.",
+    )
+    agent_review.add_argument("request", nargs="+", help="Natural-language agent operations management request.")
+    agent_review.add_argument("--title", default="")
+    agent_review.add_argument("--focus", choices=("auto", "mixed", "research", "coding", "review", "status"), default="auto")
+    agent_review.add_argument("--source", default="", help="Optional metadata source label.")
+    agent_review.add_argument("--dry-run", action="store_true", help="Print the prepared card without writing it.")
+    agent_review.set_defaults(func=cmd_ops_agent_review)
+
     blueprint_list = ops_sub.add_parser("blueprint-list", help="List prepared Hermes scheduled ops blueprints.")
     blueprint_list.add_argument("--limit", type=int, default=None)
     blueprint_list.add_argument("--all", action="store_true", help="Return all blueprint summaries instead of the default bounded window.")
@@ -420,6 +522,15 @@ def _add_ops_commands(sub) -> None:
     research_department_show = ops_sub.add_parser("research-department-show", help="Show one research department plan by id.")
     research_department_show.add_argument("plan_id")
     research_department_show.set_defaults(func=cmd_ops_research_department_show)
+
+    agent_review_list = ops_sub.add_parser("agent-review-list", help="List prepared agent ops review cards.")
+    agent_review_list.add_argument("--limit", type=int, default=None)
+    agent_review_list.add_argument("--all", action="store_true", help="Return all cards instead of the default bounded window.")
+    agent_review_list.set_defaults(func=cmd_ops_agent_review_list)
+
+    agent_review_show = ops_sub.add_parser("agent-review-show", help="Show one prepared agent ops review card by id.")
+    agent_review_show.add_argument("card_id")
+    agent_review_show.set_defaults(func=cmd_ops_agent_review_show)
 
     list_cmd = ops_sub.add_parser("list", help="List operations artifacts from local storage.")
     list_cmd.add_argument("--surface", choices=SURFACES, default="")

@@ -152,6 +152,7 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
 | `img-summary` | Prepare provider-neutral image-card prompts whose format follows the source, whose scene follows the domain, and whose poster archetype sets the design grammar. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+| `agent-ops-review` | Show a manager view of AI-agent research, coding, review, blockers, next actions, and throughput levers. | "As a manager, show the quality and progress of agent work." |
 
 ### Img Summary Skill
 
@@ -208,6 +209,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 | Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
 | Coding handoff paths | Hermes can prepare work for Codex, Claude Code, Hermes itself, or another runtime without pretending the work already ran. |
+| Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
 | Organization patterns | Solo, research, product ops, coding runtime, and CTO-style collaboration patterns help Hermes present the right role flow for the request. |
 

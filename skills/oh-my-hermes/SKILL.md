@@ -78,7 +78,7 @@ Use installed primary workflow skills plus compatibility surfaces in this regist
 - `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
 - `researcher`: `web-research`, `research-brief`, `research-department`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `ultraqa`, `code-review`, `ask`
-- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`
+- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor/runtime profile, prepare the matching handoff, and track only evidence it actually observes instead of implying code ran secretly.
@@ -186,6 +186,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `voice-operator`: `voice-operator`, `voice operator`, `voice-first`, `mobile command`, `short command`
 - `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`
+- `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.
 
@@ -225,6 +226,7 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `voice-operator`: Convert terse voice/mobile requests into safe clarify, plan, status, handoff, or confirmation actions. Tier `accessibility-gated`. Ladder: `voice_request_received` -> `ambiguity_checked` -> `safe_action_prepared` -> `confirmation_observed_when_required`. Actions: `ask_clarification`, `confirm_action`, `show_status`, `prepare_handoff`. Privacy `metadata_only`.
 - `toolbelt-readiness`: Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools for a workflow. Tier `tool-readiness-gated`. Ladder: `workflow_tools_scoped` -> `tool_requirements_listed` -> `installed_state_recorded_when_available` -> `credential_gaps_recorded`. Actions: `show_toolbelt`, `open_setup`, `record_tool_check`, `prepare_handoff`, `show_status`. Privacy `metadata_only`.
 - `ops-observability-card`: Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries. Tier `observability-gated`. Ladder: `telemetry_scope_recorded` -> `local_metrics_summarized` -> `failure_modes_checked` -> `provider_truth_observed_when_available`. Actions: `show_observability`, `record_metric`, `record_failure_mode`, `show_status`. Privacy `metadata_only`.
+- `agent-ops-review`: Prepare a manager-facing quality and throughput review for AI-agent research, coding, review, and status work. Tier `manager-review-gated`. Ladder: `manager_scope_recorded` -> `quality_lanes_prepared` -> `evidence_gaps_named` -> `next_action_selected`. Actions: `show_agent_ops_review`, `choose_ops_lane`, `prepare_research_lane`, `prepare_coding_lane`, `prepare_review_lane`. Privacy `metadata_only`.
 
 Harness priority:
 
