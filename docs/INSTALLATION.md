@@ -705,8 +705,11 @@ install.sh-managed venv, the command first updates the command package from the
 recorded preview/stable package source, re-enters the updated CLI, refreshes the
 managed skills, and records a concise update log. If `omh` is running from a
 pip, pipx, distro, or custom Python install that OMH cannot safely mutate, the
-update still refreshes workflows but prints `Command package: not updated` plus
-the installer command needed to update the CLI itself.
+update still refreshes workflows but prints
+`OMH command: not updated (workflows only)` plus the installer command needed to
+update the CLI itself. Successful command package updates print a compact line
+such as `OMH command: 1.0.0 -> 1.0.1 (updated)` or
+`OMH command: main@old -> main@new (updated)` before the workflow summary.
 
 Advanced operators can still pin or test a different source with
 `omh update --channel stable --version <version>` or
