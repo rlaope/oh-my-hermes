@@ -953,7 +953,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### img-summary
 
-[omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific image-generation-ready visual prompt cards.
+[omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific, domain-aware image-generation-ready visual prompt cards.
 
 - Category: `materials`
 - Phase: `visual-prompt-card`
@@ -965,8 +965,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Compatibility alias: `false`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep card copy shaping, source-kind selection, language mode, prompt assembly, and evidence narration in Hermes. Use wrapper-reported image generation only as an optional action; record generated image, visual QA, and delivery claims only from visual_observation/v1 evidence.
-- Why this exists: `img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
-- Use when: Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt without claiming image generation.
+- Why this exists: `img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind, adapting visual mood to the domain, and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
+- Use when: Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, background, and motifs adapt to the domain without claiming image generation.
 - Do not use when:
   - The user needs a deck, PDF, spreadsheet, HWP, Markdown package, or binary file export plan; use `materials-package`.
   - The user wants a text-only report, leadership brief, or PPT-ready outline; use `report-package`.
@@ -983,8 +983,10 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.
   - Use the source-specific format profile instead of forcing every visual into the same grid.
-  - Use long_scroll when the card needs a document-style vertical canvas with more sections.
-  - Keep visible card text short, readable, and faithful to supplied source or structured sections.
+  - Adapt the background, motifs, palette, and composition to the detected domain such as security, commerce, sports, fashion, finance, developer work, or research.
+  - Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark.
+  - Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.
+  - Keep visible card text readable and faithful to supplied source or structured sections; do not shrink paragraphs into tiny poster copy.
   - Separate prompt prepared, image generated, visual QA passed, and delivered states.
   - Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
   - Use materials/report workflows only after an observed generated file needs packaging.
@@ -1000,6 +1002,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - visual_prompt_card/v1
   - image_generation_setup/v1 when generator capability is missing
   - source-specific visual format
+  - domain-aware visual theme
   - image-safe card copy
   - generation prompt
   - negative prompt
@@ -2930,13 +2933,15 @@ Plan, hand off, and verify material-processing work across decks, PDFs, spreadsh
 
 ### img-summary
 
-Prepare source-specific visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.
+Prepare source-specific and domain-aware visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation.
 
-- Use when: Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile.
+- Use when: Use when Hermes should turn supplied source or structured card fields into a provider-neutral image-generation prompt card with an appropriate format profile, domain theme, and stable OMH generated mark.
 - Quality tier: `visual-card-gated`
 - Quality bar:
   - Use meeting, PR, issue, research, report, and release format profiles instead of one fixed grid.
-  - Keep visual card copy short, source-faithful, and readable at the selected aspect ratio.
+  - Use domain-aware backgrounds and motifs so security looks like a security system, sports looks athletic, fashion looks editorial, and commerce looks retail/product-led.
+  - Keep the OMH generated mark, evidence footer, and source badge stable even when the visual style changes.
+  - Keep visual card copy source-faithful and readable at the selected aspect ratio; extend the canvas when content needs more room.
   - Represent structured sections and extractive drafts separately.
   - Never treat connected image capability as generated image evidence.
   - Keep generated image, visual QA, and delivery as separate observed records.
@@ -2951,6 +2956,7 @@ Prepare source-specific visual prompt cards for meetings, reports, PRs, issue fe
 - Outputs:
   - visual_prompt_card/v1
   - source-specific visual format
+  - domain-aware visual theme
   - image-safe card copy
   - generation prompt
   - negative prompt
@@ -2960,11 +2966,13 @@ Prepare source-specific visual prompt cards for meetings, reports, PRs, issue fe
   - prompt card is prepared
   - copy mode is explicit
   - format profile is source-specific
+  - visual theme is domain-aware
   - image generation, visual QA, and delivery remain observed-only
 - Verification:
   - validate visual_prompt_card/v1
   - check source kind and language mode
   - check visual format and aspect ratio
+  - check visual_theme and OMH generated format contract
   - ensure raw source uses extractive_draft copy mode
   - record visual_observation/v1 only for supplied generated image, QA, or delivery evidence
 - Evidence ladder:

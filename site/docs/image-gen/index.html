@@ -30,11 +30,15 @@
             <code>img-summary</code> helps Hermes prepare image-generation
             prompt cards for meeting notes, reports, GitHub PRs, issues,
             research briefings, and release updates. OMH shapes the card before
-            a connected image tool runs, then records image generation, visual
-            QA, attachment, and delivery only when those events are observed. If
-            no generator is connected yet, Hermes can first choose a GPT image
-            tool, an existing Hermes connector, a generic image tool, or
-            prompt-only mode.
+            a connected image tool runs. The card keeps a stable OMH generated
+            mark and evidence footer, but the scene changes with the subject:
+            security can look like a security system, sports can use field or
+            gear motion, commerce can use checkout and product cues, and fashion
+            can use editorial lookbook language. OMH then records image
+            generation, visual QA, attachment, and delivery only when those
+            events are observed. If no generator is connected yet, Hermes can
+            first choose a GPT image tool, an existing Hermes connector, a
+            generic image tool, or prompt-only mode.
           </p>
           <div class="feature-actions">
             <a class="button button--primary" href="../">Back to docs</a>
@@ -53,9 +57,11 @@
         <h2>Formats follow the source</h2>
         <p>
           The visual system is not one fixed grid. OMH selects a visual format
-          and aspect ratio that match the source, then keeps the shared proof
-          structure stable: summary, key points, why it matters, next action,
-          caveats, and observed evidence.
+          and aspect ratio that match the source, then adds a detected visual
+          domain for background, motifs, palette, and composition. The shared
+          proof structure stays stable: source badge, headline, readable
+          modules, evidence footer, and the small <code>OMH generated</code>
+          mark.
         </p>
         <div class="image-format-grid" aria-label="Visual summary source-specific formats">
           <article class="image-format-card">
@@ -87,6 +93,11 @@
             <span>release_announcement_card</span>
             <h3>Releases</h3>
             <p>What is new, who should care, upgrade notes, and confidence level.</p>
+          </article>
+          <article class="image-format-card">
+            <span>domain_theme</span>
+            <h3>Subject mood</h3>
+            <p>Security, commerce, sports, fashion, finance, developer, and research prompts get different scenery and motifs.</p>
           </article>
         </div>
       </section>
