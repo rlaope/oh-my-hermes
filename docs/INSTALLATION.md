@@ -101,25 +101,42 @@ view model:
 omh menubar status
 ```
 
-It emits `menubar_status/v1` JSON with separate `hermes_agents` and
-`external_coding_executors` sections, friendly labels such as
+`omh menubar status` itself only emits `menubar_status/v1` JSON with separate
+`hermes_agents` and `external_coding_executors` sections, friendly labels such as
 `OMH connection: Ready`, `Hermes targets: 2`, `Coding handoff: Codex`, and
 `Send mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
 text. Codex and other coding tools are external executors, not Hermes agents.
 Without an explicit process overlay, the payload reports configured/prepared
 state only and leaves PID plus running/restarting unobserved.
 
-A native macOS MenuBarExtra app or test harness can pass a short-lived
-`menubar_process_overlay/v1` file when it has actually observed local process
-state:
+On macOS, a normal user-scope `omh setup` also attempts to build and start the
+small OMH menu bar helper when `swiftc` is available. The helper lives under
+`~/.omh/menubar`, is started with a user LaunchAgent, and refreshes the same
+`omh menubar status` payload. Use explicit commands when you want to manage it
+yourself:
+
+```sh
+omh menubar install
+omh menubar start
+omh menubar stop
+omh menubar uninstall
+```
+
+Set `OMH_MENUBAR=0` or run `omh setup --no-menubar` to skip the helper. Run
+`omh setup --with-menubar` to request it explicitly. Missing `swiftc` or a
+failed helper start does not make the OMH workflow setup fail; setup reports the
+menu bar step separately.
+
+A native macOS MenuBarExtra app, the OMH menu bar helper, or a test harness can
+pass a short-lived `menubar_process_overlay/v1` file when it has actually
+observed local process state:
 
 ```sh
 omh menubar status --overlay /path/to/overlay.json
 ```
 
 The overlay is app-local and expires by TTL. OMH does not auto-read process
-caches, scan the host, launch agents, or infer that a prepared coding handoff
-is running.
+caches, scan the host, or infer that a prepared coding handoff is running.
 
 MCP bridge setup is also optional and intentionally conservative:
 
