@@ -1,103 +1,158 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
-  <title id="title">OMH visual-summary workflow card</title>
-  <desc id="desc">A vertical product card explaining how OMH prepares provider-neutral visual summary prompts and records observed image evidence separately.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">OMH Visual Summary Cards infographic</title>
+  <desc id="desc">An infographic showing how OMH turns source material into visual summary cards with prompt preparation and observed evidence boundaries.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f7fbff"/>
-      <stop offset="0.5" stop-color="#eef7f5"/>
-      <stop offset="1" stop-color="#f4f0ff"/>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6fbff"/>
+      <stop offset="0.56" stop-color="#eef7f4"/>
+      <stop offset="1" stop-color="#f7f2ff"/>
     </linearGradient>
-    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1a6dff"/>
-      <stop offset="1" stop-color="#00a38a"/>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#163ef3"/>
+      <stop offset="0.55" stop-color="#007fae"/>
+      <stop offset="1" stop-color="#00a37c"/>
     </linearGradient>
+    <linearGradient id="dark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17283e"/>
+      <stop offset="1" stop-color="#081521"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#17283e" stroke-width="0.8" opacity="0.08"/>
+    </pattern>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#18213a" flood-opacity="0.16"/>
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#102033" flood-opacity="0.16"/>
     </filter>
     <style>
       .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       .mono { font-family: "SFMono-Regular", "SF Mono", Consolas, monospace; }
-      .title { font-size: 78px; font-weight: 800; letter-spacing: 0; fill: #102033; }
-      .subtitle { font-size: 34px; font-weight: 650; fill: #2c4058; }
-      .eyebrow { font-size: 24px; font-weight: 800; letter-spacing: 2px; fill: #1a6dff; text-transform: uppercase; }
-      .label { font-size: 25px; font-weight: 780; fill: #102033; }
-      .body { font-size: 28px; font-weight: 560; fill: #33475f; }
-      .small { font-size: 23px; font-weight: 620; fill: #50627a; }
-      .code { font-size: 25px; font-weight: 720; fill: #1554c0; }
+      .title { font-size: 58px; font-weight: 900; letter-spacing: 0; fill: #0f1c2e; }
+      .kicker { font-size: 17px; font-weight: 900; letter-spacing: 2px; fill: #1554c0; }
+      .subtitle { font-size: 17px; font-weight: 660; fill: #3e526b; }
+      .h2 { font-size: 27px; font-weight: 900; fill: #122238; }
+      .h3 { font-size: 20px; font-weight: 870; fill: #15243a; }
+      .body { font-size: 17px; font-weight: 650; fill: #33475f; }
+      .small { font-size: 14px; font-weight: 710; fill: #55677d; }
+      .tiny { font-size: 12px; font-weight: 760; fill: #63758b; }
+      .code { font-size: 13px; font-weight: 820; fill: #1554c0; }
       .white { fill: #ffffff; }
-      .muted { fill: #6b7b91; }
-      .card { fill: rgba(255,255,255,0.92); stroke: rgba(40,62,92,0.12); stroke-width: 2; }
-      .pill { fill: rgba(26,109,255,0.10); stroke: rgba(26,109,255,0.22); stroke-width: 2; }
-      .green { fill: rgba(0,163,138,0.10); stroke: rgba(0,163,138,0.24); stroke-width: 2; }
-      .amber { fill: rgba(234,153,0,0.12); stroke: rgba(234,153,0,0.24); stroke-width: 2; }
-      .line { stroke: #c5d4e6; stroke-width: 5; stroke-linecap: round; }
-      .arrow { fill: #8aa0b8; }
+      .panel { fill: rgba(255,255,255,0.9); stroke: rgba(25,45,72,0.25); stroke-width: 1.6; }
+      .frame { fill: none; stroke: #16263a; stroke-width: 2; }
+      .thin { fill: none; stroke: #16263a; stroke-width: 1; opacity: 0.55; }
+      .accent { stroke: #b12828; stroke-width: 2; fill: none; }
+      .accentText { fill: #a62020; font-size: 14px; font-weight: 850; }
+      .blueText { fill: #1554c0; }
+      .step { font-size: 24px; font-weight: 900; fill: #ffffff; }
     </style>
   </defs>
-  <rect width="1200" height="1500" rx="0" fill="url(#bg)"/>
-  <circle cx="1070" cy="90" r="170" fill="#dcecff" opacity="0.72"/>
-  <circle cx="90" cy="1380" r="210" fill="#dcfff7" opacity="0.72"/>
 
-  <g filter="url(#shadow)">
-    <rect x="78" y="72" width="1044" height="1356" rx="54" fill="#ffffff"/>
+  <rect width="1024" height="1024" fill="url(#paper)"/>
+  <rect width="1024" height="1024" fill="url(#grid)"/>
+
+  <rect x="18" y="18" width="988" height="988" rx="10" fill="none" stroke="#142033" stroke-width="3"/>
+  <rect x="28" y="28" width="968" height="968" rx="8" fill="none" stroke="#142033" stroke-width="1.4" opacity="0.55"/>
+  <path d="M38 52h42M52 38v42M944 38v42M924 52h42M38 972h42M52 944v42M944 944v42M924 972h42" class="thin"/>
+
+  <g transform="translate(58 54)">
+    <circle cx="72" cy="72" r="55" fill="none" stroke="#142033" stroke-width="1.4" opacity="0.72"/>
+    <path d="M72 20v104M22 72h100M37 37l70 70M107 37l-70 70" class="thin"/>
+    <path d="M72 35c-18 16-25 31-20 46 7 22 33 24 40 0 5-15-2-30-20-46Z" fill="none" stroke="#142033" stroke-width="2"/>
+    <path d="M72 34v77M57 48h30M54 72h36M57 96h30" class="thin"/>
   </g>
 
-  <rect x="78" y="72" width="1044" height="288" rx="54" fill="url(#hero)"/>
-  <text x="130" y="154" class="sans eyebrow white">OMH skill</text>
-  <text x="130" y="246" class="sans title white">visual-summary</text>
-  <text x="132" y="308" class="sans subtitle white">Readable image-card prompts for Hermes workflows</text>
-
-  <g transform="translate(130 424)">
-    <rect class="pill" x="0" y="0" width="940" height="104" rx="28"/>
-    <text x="34" y="43" class="sans label">Use it when Hermes should shape:</text>
-    <text x="34" y="79" class="sans small">meeting notes · PR reviews · issue triage · research briefings · release notes</text>
+  <g transform="translate(816 52)">
+    <circle cx="72" cy="72" r="56" fill="none" stroke="#142033" stroke-width="1.4" opacity="0.72"/>
+    <path d="M72 22c18 10 30 26 30 48 0 32-20 54-30 54S42 102 42 70c0-22 12-38 30-48Z" fill="none" stroke="#142033" stroke-width="2"/>
+    <path d="M72 38v78M50 55c16 9 28 9 44 0M48 82c18 9 30 9 48 0" class="thin"/>
+    <path d="M32 112c24-11 38-9 40 4 2-13 16-15 40-4" class="thin"/>
   </g>
 
-  <g transform="translate(130 594)">
-    <rect class="card" x="0" y="0" width="262" height="150" rx="26"/>
-    <text x="30" y="50" class="sans label">Source</text>
-    <text x="30" y="91" class="sans small">notes, PR, issue,</text>
-    <text x="30" y="122" class="sans small">research, release</text>
-
-    <line class="line" x1="284" y1="75" x2="360" y2="75"/>
-    <polygon class="arrow" points="360,75 338,60 338,90"/>
-
-    <rect class="card" x="382" y="0" width="262" height="150" rx="26"/>
-    <text x="412" y="50" class="mono code">visual_prompt</text>
-    <text x="412" y="91" class="mono code">_card/v1</text>
-    <text x="412" y="124" class="sans small">prepared only</text>
-
-    <line class="line" x1="666" y1="75" x2="742" y2="75"/>
-    <polygon class="arrow" points="742,75 720,60 720,90"/>
-
-    <rect class="card" x="764" y="0" width="176" height="150" rx="26"/>
-    <text x="794" y="50" class="sans label">Image tool</text>
-    <text x="794" y="91" class="sans small">wrapper-owned</text>
-    <text x="794" y="122" class="sans small">if connected</text>
+  <g transform="translate(192 62)">
+    <text x="0" y="24" class="sans kicker">OMH VISUAL WORKFLOW</text>
+    <text x="0" y="88" class="sans title">Visual Summary Cards</text>
+    <text x="2" y="119" class="sans subtitle">Hermes turns source context into shareable image-card prompts.</text>
   </g>
 
-  <g transform="translate(130 814)">
-    <rect class="green" x="0" y="0" width="440" height="246" rx="30"/>
-    <text x="34" y="52" class="sans label">Prepared by OMH</text>
-    <text x="34" y="100" class="sans body">• card copy and layout</text>
-    <text x="34" y="143" class="sans body">• language and audience</text>
-    <text x="34" y="186" class="sans body">• generation prompt</text>
-    <text x="34" y="226" class="sans body">• visual QA checklist</text>
-
-    <rect class="amber" x="500" y="0" width="440" height="246" rx="30"/>
-    <text x="534" y="52" class="sans label">Observed later</text>
-    <text x="534" y="100" class="sans body">• generated image</text>
-    <text x="534" y="143" class="sans body">• visual QA passed</text>
-    <text x="534" y="186" class="sans body">• attached or delivered</text>
-    <text x="534" y="226" class="sans body">• recorded evidence</text>
+  <g transform="translate(58 198)" filter="url(#shadow)">
+    <rect class="panel" x="0" y="0" width="908" height="86" rx="20"/>
+    <rect x="22" y="20" width="112" height="46" rx="14" fill="url(#ink)"/>
+    <text x="43" y="50" class="sans" font-size="17" font-weight="900" fill="#ffffff">Summary</text>
+    <text x="156" y="36" class="sans h3">One card from messy source material.</text>
+    <text x="156" y="63" class="sans body">Meetings, PRs, issues, research, and releases become image-generation-ready briefs.</text>
   </g>
 
-  <g transform="translate(130 1120)">
-    <rect x="0" y="0" width="940" height="164" rx="30" fill="#102033"/>
-    <text x="34" y="54" class="sans label white">Boundary that makes the workflow safe</text>
-    <text x="34" y="100" class="sans body white">No hidden image provider calls. No fake QA. No fake delivery.</text>
-    <text x="34" y="139" class="sans small" fill="#c9d8ea">A prompt card is useful preparation, not proof that an image exists.</text>
+  <g transform="translate(58 318)">
+    <rect class="panel" x="0" y="0" width="286" height="396" rx="18"/>
+    <circle cx="45" cy="46" r="28" fill="#121d2c"/>
+    <text x="37" y="55" class="sans step">1</text>
+    <text x="90" y="39" class="sans h2">Why</text>
+    <text x="90" y="66" class="sans small">make the idea visible</text>
+    <line x1="22" y1="92" x2="264" y2="92" stroke="#17283e" stroke-width="1.5" opacity="0.65"/>
+    <g transform="translate(42 124)">
+      <rect x="0" y="0" width="202" height="122" rx="18" fill="#ffffff" stroke="#17283e" stroke-width="2"/>
+      <path d="M22 26h158M22 54h106M22 82h136" class="thin"/>
+      <rect x="23" y="98" width="74" height="18" rx="7" fill="#e9f2ff" stroke="#b6d2ff"/>
+      <text x="35" y="112" class="mono code">source</text>
+    </g>
+    <path d="M62 282h160M62 314h116M62 346h146" class="thin"/>
+    <text x="42" y="378" class="sans accentText">less chat sludge</text>
   </g>
 
-  <text x="130" y="1358" class="mono code">omh visual prompt-card --kind pr --headline "PR Review Card"</text>
+  <g transform="translate(369 318)">
+    <rect class="panel" x="0" y="0" width="286" height="396" rx="18"/>
+    <circle cx="45" cy="46" r="28" fill="#121d2c"/>
+    <text x="37" y="55" class="sans step">2</text>
+    <text x="90" y="39" class="sans h2">How</text>
+    <text x="90" y="66" class="sans small">prepare the card prompt</text>
+    <line x1="22" y1="92" x2="264" y2="92" stroke="#17283e" stroke-width="1.5" opacity="0.65"/>
+    <g transform="translate(42 122)">
+      <rect x="0" y="0" width="202" height="154" rx="18" fill="#f2fbf8" stroke="#00a37c" stroke-width="2"/>
+      <text x="22" y="34" class="mono code">visual_prompt_card/v1</text>
+      <path d="M22 58h158M22 84h132M22 110h148M22 136h96" class="thin"/>
+      <circle cx="166" cy="116" r="26" fill="none" stroke="#00a37c" stroke-width="2"/>
+      <path d="M152 116l10 10 20-24" fill="none" stroke="#00a37c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="42" y="314" class="sans body">copy · layout · language</text>
+    <text x="42" y="344" class="sans body">prompt · QA checklist</text>
+    <text x="42" y="378" class="sans accentText">ready, not executed</text>
+  </g>
+
+  <g transform="translate(680 318)">
+    <rect class="panel" x="0" y="0" width="286" height="396" rx="18"/>
+    <circle cx="45" cy="46" r="28" fill="#121d2c"/>
+    <text x="37" y="55" class="sans step">3</text>
+    <text x="90" y="39" class="sans h2">Result</text>
+    <text x="90" y="66" class="sans small">keep evidence honest</text>
+    <line x1="22" y1="92" x2="264" y2="92" stroke="#17283e" stroke-width="1.5" opacity="0.65"/>
+    <g transform="translate(42 124)">
+      <rect x="0" y="0" width="202" height="126" rx="18" fill="#fff8e8" stroke="#d99a22" stroke-width="2"/>
+      <path d="M42 30h118M42 62h118M42 94h118" class="thin"/>
+      <circle cx="20" cy="30" r="9" fill="#00a37c"/>
+      <circle cx="20" cy="62" r="9" fill="#d99a22"/>
+      <circle cx="20" cy="94" r="9" fill="#d99a22"/>
+    </g>
+    <text x="42" y="298" class="sans body">generated image</text>
+    <text x="42" y="328" class="sans body">visual QA passed</text>
+    <text x="42" y="358" class="sans body">attached or delivered</text>
+    <text x="42" y="388" class="sans accentText">only when observed</text>
+  </g>
+
+  <path d="M345 520h24M655 520h24" stroke="#142033" stroke-width="4" stroke-linecap="round"/>
+  <polygon points="369,520 354,510 354,530" fill="#142033"/>
+  <polygon points="679,520 664,510 664,530" fill="#142033"/>
+
+  <g transform="translate(58 746)" filter="url(#shadow)">
+    <rect x="0" y="0" width="908" height="126" rx="22" fill="url(#dark)"/>
+    <text x="34" y="40" class="sans h3 white">Conclusion</text>
+    <text x="34" y="76" class="sans" font-size="22" font-weight="820" fill="#ffffff">A prompt card is useful preparation. It is not proof that an image exists.</text>
+    <text x="34" y="106" class="sans small" fill="#cbd9ea">OMH prepares the visual brief. Connected tools generate. Observations prove generation, QA, and delivery.</text>
+  </g>
+
+  <g transform="translate(58 904)">
+    <path d="M0 0h908" stroke="#142033" stroke-width="1.6" opacity="0.55"/>
+    <text x="0" y="44" class="sans h2">Oh My Hermes</text>
+    <text x="274" y="44" class="mono code">visual-summary</text>
+    <text x="766" y="42" class="mono tiny">omh generate</text>
+    <circle cx="888" cy="32" r="25" fill="none" stroke="#142033" stroke-width="3"/>
+    <path d="M888 10v44M866 32h44" stroke="#142033" stroke-width="3"/>
+  </g>
 </svg>
