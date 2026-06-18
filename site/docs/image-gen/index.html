@@ -6,7 +6,7 @@
     <title>OMH Image Gen</title>
     <meta
       name="description"
-      content="OMH Image gen docs for img-summary prompt cards, source-specific card formats, connected image tools, and observed-only image evidence."
+      content="OMH Image gen docs for img-summary prompt cards, source-specific card formats, poster archetypes, connected image tools, and observed-only image evidence."
     >
     <link rel="stylesheet" href="../../styles.css">
   </head>
@@ -31,12 +31,13 @@
             prompt cards for meeting notes, reports, GitHub PRs, issues,
             research briefings, and release updates. OMH shapes the card before
             a connected image tool runs. The card keeps a stable OMH generated
-            mark and evidence footer, but the background plate changes with
-            the subject: security can use a cinematic SOC room with monitor
-            reflections, sports can use real court or track texture and gear
-            motion, commerce can use product-photo checkout surfaces, and
-            fashion can use editorial fabric, runway, and magazine-paper
-            depth. OMH then records image
+            mark and evidence footer, while three layers change independently:
+            source kind defines the content structure, domain defines the
+            scene and materials with an explainable domain_key, and
+            poster_archetype/v1 defines the design grammar. Security can use cinematic key art, sports can use event
+            poster motion over real court or track texture, commerce can use
+            product-ad staging, and fashion can use luxury lookbook spacing,
+            fabric, runway, and magazine-paper depth. OMH then records image
             generation, visual QA, attachment, and delivery only when those
             events are observed. If no generator is connected yet, Hermes can
             first choose a GPT image tool, an existing Hermes connector, a
@@ -60,8 +61,11 @@
         <p>
           The visual system is not one fixed grid. OMH selects a visual format
           and aspect ratio that match the source, then adds a detected visual
-          domain for premium background plate, material texture, camera
-          treatment, lighting, motifs, palette, and composition. The shared proof structure stays
+          domain_key for premium background plate, material texture, camera
+          treatment, lighting, motifs, palette, and composition. A separate
+          poster archetype controls the poster grammar, such as Swiss grid,
+          cinematic key art, editorial magazine, data infographic, product ad,
+          technical brutalist, sports event, or luxury lookbook. The shared proof structure stays
           stable: source badge, headline, readable modules, evidence footer,
           and the small <code>OMH generated</code> mark.
         </p>
@@ -100,6 +104,11 @@
             <span>domain_theme</span>
             <h3>Subject mood</h3>
             <p>Security, commerce, sports, fashion, finance, developer, and research prompts get different scenery, texture, lighting, and motifs.</p>
+          </article>
+          <article class="image-format-card">
+            <span>poster_archetype/v1</span>
+            <h3>Design grammar</h3>
+            <p>Swiss grid, cinematic key art, product ad, technical brutalist, sports event, and luxury lookbook styles change composition, type, texture, and visual pacing.</p>
           </article>
         </div>
       </section>

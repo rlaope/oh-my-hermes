@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,6 +11,7 @@ load_local_package()
 
 from omh.paths import OmhPaths
 from omh.visual_summary import (
+    POSTER_ARCHETYPES,
     SOURCE_KINDS,
     build_visual_observation,
     build_visual_prompt_card,
@@ -18,6 +20,7 @@ from omh.visual_summary import (
     normalize_source_kind,
     parse_section_arg,
     resolve_aspect_ratio,
+    resolve_poster_archetype,
     resolve_visual_format,
     validate_visual_observation,
     validate_visual_prompt_card,
@@ -48,12 +51,25 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertFalse(card["requires_human_or_hermes_review"])
         self.assertEqual(card["aspect_ratio"], "square_1_1")
         self.assertEqual(card["visual_format"], "pr_review_infographic")
+        self.assertEqual(card["domain_key"], "developer")
+        self.assertEqual(card["visual_theme"]["domain_key"], "developer")
+        self.assertEqual(card["poster_archetype"], "technical_brutalist")
+        self.assertEqual(card["poster_archetype_profile"]["schema_version"], "poster_archetype/v1")
+        self.assertEqual(card["poster_archetype_profile"]["id"], "technical_brutalist")
         self.assertEqual(card["layout"]["type"], "pr_review_infographic")
+        self.assertEqual(card["layout"]["poster_archetype"], "technical_brutalist")
+        self.assertEqual(card["style_direction"]["domain_key"], "developer")
+        self.assertEqual(card["style_direction"]["poster_archetype"], "technical_brutalist")
         self.assertIn("Review focus", card["format_profile"]["structure"])
         self.assertEqual(card["image_text"]["footer"], "OMH generated")
         self.assertIn("OMH generated", card["generation_prompt"])
+        self.assertIn("Detected visual domain: developer / developer workflow", card["generation_prompt"])
+        self.assertIn("Poster archetype contract (poster_archetype/v1): Technical brutalist systems poster", card["generation_prompt"])
+        self.assertIn("Source kind controls information structure", card["generation_prompt"])
+        self.assertIn("raw systems panels", card["generation_prompt"])
         self.assertIn("format contract", card["visual_theme"]["format_contract"])
         self.assertIn("Premium image standard", card["layout"]["quality_rule"])
+        self.assertIn("source kind, domain scene, and poster archetype separate", card["layout"]["poster_archetype_rule"])
         self.assertIn("Background plate requirement", card["layout"]["background_plate_rule"])
         self.assertIn("Material and texture direction", card["generation_prompt"])
         self.assertIn("Camera and rendering treatment", card["generation_prompt"])
@@ -180,12 +196,19 @@ class VisualSummaryTests(unittest.TestCase):
         )
 
         self.assertEqual(security["visual_theme"]["label"], "security operations")
+        self.assertEqual(security["poster_archetype"], "cinematic_key_art")
+        self.assertIn("Cinematic key-art poster", security["generation_prompt"])
         self.assertIn("security operations center", security["generation_prompt"])
         self.assertEqual(shopping["visual_theme"]["label"], "commerce and shopping")
+        self.assertEqual(shopping["poster_archetype"], "product_ad")
         self.assertIn("checkout receipt", shopping["generation_prompt"])
         self.assertEqual(sports["visual_theme"]["label"], "sports field and gear")
+        self.assertEqual(sports["poster_archetype"], "sports_event")
+        self.assertIn("Sports event poster", sports["generation_prompt"])
         self.assertIn("court markings", sports["generation_prompt"])
         self.assertEqual(fashion["visual_theme"]["label"], "fashion editorial")
+        self.assertEqual(fashion["poster_archetype"], "luxury_lookbook")
+        self.assertIn("Luxury lookbook poster", fashion["generation_prompt"])
         self.assertIn("fashion editorial set", fashion["generation_prompt"])
 
         for card in (security, shopping, sports, fashion):
@@ -198,6 +221,9 @@ class VisualSummaryTests(unittest.TestCase):
                 self.assertIn("material_texture", card["visual_theme"])
                 self.assertIn("depth_lighting", card["visual_theme"])
                 self.assertIn("camera_treatment", card["visual_theme"])
+                self.assertIn("poster_archetype_profile", card)
+                self.assertEqual(card["poster_archetype_profile"]["schema_version"], "poster_archetype/v1")
+                self.assertIn("Poster visual grammar", card["generation_prompt"])
                 self.assertIn("flat vector clipart", card["visual_theme"]["avoid_style"])
                 self.assertIn("Premium scene reference", card["generation_prompt"])
                 self.assertIn("Background plate:", card["generation_prompt"])
@@ -206,6 +232,65 @@ class VisualSummaryTests(unittest.TestCase):
                 self.assertIn("Camera and rendering treatment", card["generation_prompt"])
                 self.assertIn("Do not reuse a generic dark glass card", card["generation_prompt"])
                 self.assertEqual(validate_visual_prompt_card(card), [])
+
+    def test_poster_archetypes_are_explicit_visual_grammar_not_source_or_domain(self) -> None:
+        self.assertEqual(resolve_poster_archetype("research"), "data_infographic")
+        for archetype in POSTER_ARCHETYPES:
+            with self.subTest(archetype=archetype):
+                card = build_visual_prompt_card(
+                    kind="research",
+                    headline="Market research briefing",
+                    poster_archetype=archetype,
+                    sections=[
+                        {
+                            "role": "finding",
+                            "title": "Finding",
+                            "image_text": "Customer research points to onboarding confusion and missing proof.",
+                        }
+                    ],
+                )
+
+                self.assertEqual(card["source_kind"], "research_briefing")
+                self.assertEqual(card["domain_key"], "research")
+                self.assertEqual(card["visual_theme"]["label"], "research synthesis")
+                self.assertEqual(card["visual_theme"]["domain_key"], "research")
+                self.assertEqual(card["poster_archetype"], archetype)
+                self.assertEqual(card["poster_archetype_profile"]["id"], archetype)
+                self.assertIn(card["poster_archetype_profile"]["label"], card["generation_prompt"])
+                self.assertIn("Source kind controls information structure", card["generation_prompt"])
+                self.assertEqual(validate_visual_prompt_card(card), [])
+
+    def test_rejects_invalid_poster_archetype_and_missing_archetype_contract(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported poster archetype"):
+            build_visual_prompt_card(
+                kind="meeting",
+                poster_archetype="bauhaus_space_opera",
+                sections=[{"role": "summary", "title": "Summary", "image_text": "A short note."}],
+            )
+
+        card = build_visual_prompt_card(
+            kind="meeting",
+            sections=[{"role": "summary", "title": "Summary", "image_text": "A short note."}],
+        )
+        broken = dict(card)
+        broken.pop("poster_archetype_profile")
+        self.assertIn("poster_archetype_profile must be an object", validate_visual_prompt_card(broken))
+
+        broken_theme_missing = dict(card)
+        broken_theme_missing.pop("visual_theme")
+        self.assertIn("visual_theme must be an object", validate_visual_prompt_card(broken_theme_missing))
+
+        broken_layout = deepcopy(card)
+        broken_layout["layout"]["poster_archetype"] = "swiss_grid"
+        self.assertIn("layout.poster_archetype must match poster_archetype", validate_visual_prompt_card(broken_layout))
+
+        broken_theme = deepcopy(card)
+        broken_theme["visual_theme"]["domain_key"] = "security"
+        self.assertIn("visual_theme.domain_key must match domain_key", validate_visual_prompt_card(broken_theme))
+
+        broken_style = deepcopy(card)
+        broken_style["style_direction"]["poster_archetype"] = "sports_event"
+        self.assertIn("style_direction.poster_archetype must match poster_archetype", validate_visual_prompt_card(broken_style))
 
     def test_visual_prompt_rejects_color_swap_template_quality(self) -> None:
         card = build_visual_prompt_card(

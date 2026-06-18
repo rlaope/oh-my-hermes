@@ -9,6 +9,7 @@ from ..visual_summary import (
     CAPABILITY_STATES,
     LANGUAGE_MODES,
     OBSERVATION_TYPES,
+    POSTER_ARCHETYPE_CHOICES,
     SOURCE_KINDS,
     VISUAL_FORMAT_CHOICES,
     build_visual_observation,
@@ -31,6 +32,7 @@ def cmd_visual_prompt_card(args: argparse.Namespace) -> int:
             language=args.language,
             aspect_ratio=args.aspect_ratio,
             visual_format=args.visual_format,
+            poster_archetype=args.poster_archetype,
             sections=sections,
             source_text=source_text,
             capability_state=args.capability_state,
@@ -86,6 +88,12 @@ def _print_prompt_card_summary(card: dict[str, object]) -> None:
     print(f"Copy mode: {card['copy_mode']}")
     print(f"Language: {', '.join(card.get('languages', []))}")
     print(f"Visual format: {card['visual_format']}")
+    theme = card.get("visual_theme", {})
+    if isinstance(theme, dict) and theme.get("label"):
+        domain_key = str(theme.get("domain_key", "")).strip()
+        suffix = f" ({domain_key})" if domain_key else ""
+        print(f"Visual domain: {theme['label']}{suffix}")
+    print(f"Poster archetype: {card['poster_archetype']}")
     print(f"Aspect ratio: {card['aspect_ratio']}")
     print(f"Image generator: {state}")
     print("")
@@ -171,6 +179,7 @@ def _add_visual_parser(sub, name: str, *, help: str) -> None:
     prompt_card.add_argument("--language", choices=LANGUAGE_MODES, default="source")
     prompt_card.add_argument("--aspect-ratio", choices=ASPECT_RATIO_CHOICES, default="auto")
     prompt_card.add_argument("--visual-format", choices=VISUAL_FORMAT_CHOICES, default="auto")
+    prompt_card.add_argument("--poster-archetype", choices=POSTER_ARCHETYPE_CHOICES, default="auto")
     prompt_card.add_argument("--section", action="append", metavar="ROLE:TITLE:TEXT")
     prompt_card.add_argument("--from-file", default="")
     prompt_card.add_argument("--capability-state", choices=CAPABILITY_STATES, default="unknown")

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="941" height="1672" viewBox="0 0 941 1672" role="img" aria-labelledby="title desc">
-  <title id="title">OMH img-summary domain-aware visual prompt card</title>
-  <desc id="desc">Poster showing that img-summary keeps the OMH generated format mark while adapting security, commerce, sports, and fashion visual themes.</desc>
+  <title id="title">OMH img-summary poster archetype visual prompt card</title>
+  <desc id="desc">Poster showing that img-summary keeps the OMH generated mark while adapting source formats, domain scenes, and poster archetype grammar.</desc>
   <defs>
     <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#f8fbff"/>
@@ -97,9 +97,9 @@
     </g>
 
     <text class="h1" x="48" y="154">img-summary</text>
-    <text class="h1" x="48" y="224">adapts by domain</text>
-    <text class="body" x="51" y="274">One stable card contract. Premium backgrounds by subject.</text>
-    <text class="body" x="51" y="305">Security can feel cinematic. Sports can move. Fashion can show texture.</text>
+    <text class="h1" x="48" y="224">poster grammar</text>
+    <text class="body" x="51" y="274">Source structure, domain scene, and poster grammar stay separate.</text>
+    <text class="body" x="51" y="305">Security can be key art. Sports can move. Fashion can become a lookbook.</text>
 
     <g transform="translate(618 58)">
       <rect x="0" y="0" width="244" height="244" rx="48" fill="#e8f4ff" opacity=".8"/>
@@ -126,7 +126,7 @@
       <text class="chip white" x="58" y="45">SECURITY</text>
       <text class="mark mutedWhite" x="279" y="45">OMH generated</text>
       <text class="cardTitle white" x="28" y="96">Login anomaly triage</text>
-      <text class="cardBody mutedWhite" x="28" y="125">issue_feedback · prepared, not evidence</text>
+      <text class="cardBody mutedWhite" x="28" y="125">issue_feedback · cinematic key art</text>
       <path d="M28 147H376" stroke="#ff4b6f" stroke-width="3"/>
       <g transform="translate(28 174)">
         <rect width="348" height="62" rx="14" fill="#ffffff" opacity=".10" stroke="#ffffff" stroke-opacity=".16"/>
@@ -159,7 +159,7 @@
       <text class="chip" x="58" y="45" fill="#0f766e">COMMERCE</text>
       <text class="mark" x="279" y="45" fill="#0f766e">OMH generated</text>
       <text class="cardTitle" x="28" y="96" fill="#092e33">Checkout PR card</text>
-      <text class="cardBody" x="28" y="125" fill="#426266">github_pr · prepared, not evidence</text>
+      <text class="cardBody" x="28" y="125" fill="#426266">github_pr · product ad grammar</text>
       <path d="M28 147H376" stroke="#2fd6b6" stroke-width="3"/>
       <g transform="translate(28 174)">
         <rect width="168" height="112" rx="16" fill="#ffffff" stroke="#d4efe6"/>
@@ -194,7 +194,7 @@
       <text class="chip white" x="58" y="45">SPORTS</text>
       <text class="mark white" x="279" y="45">OMH generated</text>
       <text class="cardTitle white" x="28" y="96">Basketball gear scan</text>
-      <text class="cardBody mutedWhite" x="28" y="125">research_briefing · long scroll ready</text>
+      <text class="cardBody mutedWhite" x="28" y="125">research_briefing · sports event poster</text>
       <path d="M28 147H376" stroke="#8bf56f" stroke-width="3"/>
       <rect x="28" y="174" width="348" height="74" rx="18" fill="#071d2f" opacity=".68"/>
       <text class="cardBody white" x="48" y="204">Topic</text>
@@ -222,7 +222,7 @@
       <text class="mark" x="279" y="45" fill="#ffffff">OMH generated</text>
       <text class="cardTitle" x="28" y="92" fill="#11131c">Lookbook launch</text>
       <text class="cardTitle" x="28" y="122" fill="#11131c">digest</text>
-      <text class="cardBody" x="28" y="151" fill="#5b4850">report_summary · editorial visual theme</text>
+      <text class="cardBody" x="28" y="151" fill="#5b4850">report_summary · luxury lookbook</text>
       <path d="M28 170H376" stroke="#d86d8b" stroke-width="3"/>
       <g transform="translate(28 194)">
         <rect width="226" height="154" rx="18" fill="#ffffff" opacity=".78"/>
@@ -232,7 +232,7 @@
         <text class="cardBody" x="18" y="111" fill="#5b4850">runway-ready copy.</text>
       </g>
       <rect x="26" y="350" width="235" height="30" rx="15" fill="#ffffff" opacity=".82"/>
-      <text class="micro" x="42" y="370" fill="#11131c">magazine spread · garment tags · proof footer</text>
+      <text class="micro" x="42" y="370" fill="#11131c">magazine spread · garment tags</text>
     </g>
 
     <g transform="translate(48 1284)">
@@ -245,17 +245,17 @@
       </g>
       <g transform="translate(28 128)">
         <circle cx="16" cy="16" r="16" fill="#e9fbf7"/><text x="10" y="22" font-size="18" font-weight="900" fill="#11998a">2</text>
-        <text class="body" x="44" y="22">Premium background plate: real-feeling texture, camera depth,</text>
-        <text class="body" x="44" y="48">lighting, domain props, and readable card modules on top.</text>
+        <text class="body" x="44" y="22">Domain scene: real-feeling texture, camera depth, lighting,</text>
+        <text class="body" x="44" y="48">subject props, and readable card modules on top.</text>
       </g>
       <g transform="translate(28 182)">
         <circle cx="16" cy="16" r="16" fill="#fff5dc"/><text x="10" y="22" font-size="18" font-weight="900" fill="#b36b16">3</text>
-        <text class="body" x="44" y="22">Longer copy is allowed: extend the canvas instead of shrinking text.</text>
+        <text class="body" x="44" y="22">Poster archetype: Swiss grid, key art, data poster, sports event, or lookbook.</text>
       </g>
     </g>
 
     <g transform="translate(48 1542)">
-      <text class="small" x="0" y="0">visual_prompt_card/v1 prepares the prompt · visual_observation/v1 records generated image, QA, or delivery</text>
+      <text class="small" x="0" y="0">visual_prompt_card/v1 + poster_archetype/v1 prepare the prompt · visual_observation/v1 records image, QA, or delivery</text>
       <text class="small" x="314" y="58" fill="#7a87a6">✦ OMH generated</text>
     </g>
   </g>
