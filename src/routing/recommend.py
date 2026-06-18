@@ -94,6 +94,17 @@ _SKILL_POLICIES = {
             "copy; ask for missing runtime/delivery decisions and record observed evidence only when Hermes or the host runtime provides it."
         ),
     ),
+    "research-department": RecommendationPolicy(
+        next_action="prepare_research_department_plan",
+        evidence_boundary=(
+            "A research department plan is not observed source retrieval, NotebookLM execution, Obsidian writes, "
+            "host cron creation, gateway delivery, conflict resolution, or verified briefing evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare research_department_plan/v1 with Scout, Analyst, and Briefer lanes, source_inbox/v1 buckets, "
+            "briefing_status/v1 counts, optional NotebookLM/Obsidian readiness, and observed-only evidence requirements."
+        ),
+    ),
     "reliability-review": RecommendationPolicy(
         next_action="prepare_reliability_review",
         evidence_boundary="A reliability review is not SLO pass, healthy error-budget, incident closure, remediation completion, verification, review, CI, or merge evidence.",

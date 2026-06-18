@@ -121,6 +121,7 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | --- | --- | --- |
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Shape fuzzy intent into an interview, plan, goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Keep product signals, source-backed research, and decisions in non-coding workflows. | "Payment failures keep coming up." |
+| `research-department` / `web-research` / `research-brief` / `report-package` | Prepare Scout -> Analyst -> Briefer research operations with source inbox and briefing status boundaries. | "Every morning, watch competitor news and brief me if something changed." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |

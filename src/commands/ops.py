@@ -23,12 +23,21 @@ from ..operations import (
     validate_operations_store,
     write_operation_artifact,
 )
+from ..research_department import (
+    build_research_department_plan,
+    list_research_department_plans,
+    show_research_department_plan,
+    summarize_research_department_plan,
+    validate_research_department_store,
+    write_research_department_plan,
+)
 from .common import _paths, _print_json
 
 
 DEFAULT_OPS_LIST_LIMIT = 20
 DEFAULT_OPS_EXPORT_LIMIT = 20
 DEFAULT_BLUEPRINT_LIST_LIMIT = 20
+DEFAULT_RESEARCH_DEPARTMENT_LIST_LIMIT = 20
 
 
 def cmd_ops_write(args: argparse.Namespace) -> int:
@@ -111,6 +120,50 @@ def cmd_ops_blueprint(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ops_research_department(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        plan = build_research_department_plan(
+            " ".join(args.request),
+            title=args.title,
+            topic=args.topic,
+            cadence=args.cadence,
+            delivery=args.delivery,
+            storage=args.storage,
+            source=args.source,
+            sources=args.source_boundary or [],
+            notebooklm=args.notebooklm,
+            obsidian=args.obsidian,
+        )
+        written = plan if args.dry_run else write_research_department_plan(paths, plan)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "omh_ops_research_department_result/v1",
+            "plan": written,
+            "store": {
+                "omh_home": str(paths.omh_home),
+                "research_department_dir": str(paths.research_department_dir),
+                "plans_dir": str(paths.research_department_plans_dir),
+                "index_path": str(paths.research_department_index_path),
+                "index_authority": "cache_only",
+                "written": not args.dry_run,
+            },
+            "boundary": {
+                "prepared_is_not_observed": True,
+                "source_retrieval_observed": False,
+                "notebooklm_execution_observed": False,
+                "obsidian_write_observed": False,
+                "gateway_delivery_observed": False,
+                "not_evidence_until_observed": list(written["not_evidence_until_observed"]),
+                "observed_evidence_required": list(written["observed_evidence_required"]),
+            },
+        }
+    )
+    return 0
+
+
 def cmd_ops_list(args: argparse.Namespace) -> int:
     try:
         paths = _paths(args)
@@ -136,6 +189,29 @@ def cmd_ops_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ops_research_department_list(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    try:
+        limit = _limit_from_args(args, default=DEFAULT_RESEARCH_DEPARTMENT_LIST_LIMIT)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    all_records = list_research_department_plans(paths)
+    records = all_records if limit is None else all_records[-limit:]
+    _print_json(
+        {
+            "schema_version": "omh_ops_research_department_list/v1",
+            "count": len(records),
+            "total_count": len(all_records),
+            "limit": limit if limit is not None else "all",
+            "truncated": limit is not None and len(all_records) > len(records),
+            "summary_only": True,
+            "index_authority": "cache_only",
+            "plans": [summarize_research_department_plan(record) for record in records],
+        }
+    )
+    return 0
+
+
 def cmd_ops_show(args: argparse.Namespace) -> int:
     try:
         paths = _paths(args)
@@ -143,6 +219,16 @@ def cmd_ops_show(args: argparse.Namespace) -> int:
     except (FileNotFoundError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json({"schema_version": "omh_ops_show/v1", "artifact": artifact})
+    return 0
+
+
+def cmd_ops_research_department_show(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        plan = show_research_department_plan(paths, args.plan_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"schema_version": "omh_ops_research_department_show/v1", "plan": plan})
     return 0
 
 
@@ -160,8 +246,10 @@ def cmd_ops_validate(args: argparse.Namespace) -> int:
     paths = _paths(args)
     result = validate_operations_store(paths)
     blueprint_result = validate_hermes_ops_store(paths)
+    research_department_result = validate_research_department_store(paths)
     result["hermes_ops_blueprints"] = blueprint_result
-    result["ok"] = bool(result["ok"]) and bool(blueprint_result["ok"])
+    result["research_department_plans"] = research_department_result
+    result["ok"] = bool(result["ok"]) and bool(blueprint_result["ok"]) and bool(research_department_result["ok"])
     _print_json(result)
     return 0 if result["ok"] else 1
 
@@ -282,6 +370,33 @@ def _add_ops_commands(sub) -> None:
     blueprint.add_argument("--dry-run", action="store_true", help="Print the prepared blueprint without writing it.")
     blueprint.set_defaults(func=cmd_ops_blueprint)
 
+    research_department = ops_sub.add_parser(
+        "research-department",
+        help="Prepare a Scout/Analyst/Briefer research department workflow without running research.",
+    )
+    research_department.add_argument("request", nargs="+", help="Natural-language research operations request.")
+    research_department.add_argument("--title", default="")
+    research_department.add_argument("--topic", default="", help="Explicit research topic or watch area.")
+    research_department.add_argument("--cadence", default="", help="Explicit cadence hint such as daily or weekly.")
+    research_department.add_argument("--delivery", default="", help="Explicit delivery target hint.")
+    research_department.add_argument("--storage", default="", help="Explicit storage target such as markdown folder or Obsidian.")
+    research_department.add_argument("--source", default="", help="Optional metadata source label.")
+    research_department.add_argument("--source-boundary", action="append", help="Allowed source, source family, or scope boundary.")
+    research_department.add_argument(
+        "--notebooklm",
+        choices=("unknown", "available", "unavailable", "preferred"),
+        default="unknown",
+        help="Operator-supplied NotebookLM readiness hint; OMH does not probe or invoke it.",
+    )
+    research_department.add_argument(
+        "--obsidian",
+        choices=("unknown", "available", "unavailable", "preferred"),
+        default="unknown",
+        help="Operator-supplied Obsidian readiness hint; OMH does not probe or write to it.",
+    )
+    research_department.add_argument("--dry-run", action="store_true", help="Print the prepared plan without writing it.")
+    research_department.set_defaults(func=cmd_ops_research_department)
+
     blueprint_list = ops_sub.add_parser("blueprint-list", help="List prepared Hermes scheduled ops blueprints.")
     blueprint_list.add_argument("--limit", type=int, default=None)
     blueprint_list.add_argument("--all", action="store_true", help="Return all blueprint summaries instead of the default bounded window.")
@@ -290,6 +405,15 @@ def _add_ops_commands(sub) -> None:
     blueprint_show = ops_sub.add_parser("blueprint-show", help="Show one prepared Hermes scheduled ops blueprint by id.")
     blueprint_show.add_argument("blueprint_id")
     blueprint_show.set_defaults(func=cmd_ops_blueprint_show)
+
+    research_department_list = ops_sub.add_parser("research-department-list", help="List prepared research department plans.")
+    research_department_list.add_argument("--limit", type=int, default=None)
+    research_department_list.add_argument("--all", action="store_true", help="Return all plan summaries instead of the default bounded window.")
+    research_department_list.set_defaults(func=cmd_ops_research_department_list)
+
+    research_department_show = ops_sub.add_parser("research-department-show", help="Show one research department plan by id.")
+    research_department_show.add_argument("plan_id")
+    research_department_show.set_defaults(func=cmd_ops_research_department_show)
 
     list_cmd = ops_sub.add_parser("list", help="List operations artifacts from local storage.")
     list_cmd.add_argument("--surface", choices=SURFACES, default="")

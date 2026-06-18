@@ -368,6 +368,7 @@ Use this flow for non-coding company work such as:
 
 - customer feedback triage
 - business or market research
+- ongoing research department workflows such as Scout -> Analyst -> Briefer
 - strategy memo preparation
 - meeting agenda and record preparation
 - weekly operating review
@@ -383,6 +384,7 @@ Example prompts:
 결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘
 prepare weekly ops review from customer feedback and release risks
 we need a competitor market scan and strategy memo for next week's leadership meeting
+every morning, watch competitor news and brief me only if something changed
 organize meeting history, scrum, sprint planning, retro decisions, and follow-up actions
 create a monthly leadership PPT report package from current status and risks
 엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘
@@ -394,6 +396,7 @@ run an incident postmortem with SLO, error budget, remediation, and service reli
 Hermes should use the business workflow skills:
 
 - `research-brief` for source-scoped business research
+- `research-department` for ongoing Scout, Analyst, and Briefer research operations
 - `strategy-brief` for options, tradeoffs, and decision notes
 - `meeting-brief` for agenda, prompts, decisions needed, and record templates
 - `feedback-triage` for customer signal clustering and next-workflow routing

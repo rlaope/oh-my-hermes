@@ -27,6 +27,14 @@ from omh.hermes_ops import (
     write_hermes_ops_blueprint,
 )
 from omh.paths import OmhPaths
+from omh.research_department import (
+    build_research_department_plan,
+    list_research_department_plans,
+    show_research_department_plan,
+    validate_research_department_plan,
+    validate_research_department_store,
+    write_research_department_plan,
+)
 
 
 class OperationsArtifactTests(unittest.TestCase):
@@ -133,6 +141,103 @@ class OperationsArtifactTests(unittest.TestCase):
         self.assertEqual(validate_hermes_ops_blueprint(payload), [])
         self.assertEqual(payload["schema_version"], "hermes_ops_blueprint/v1")
         self.assertIn("gateway_delivery_sent", payload["not_evidence_until_observed"])
+        self.assertEqual(payload, generated)
+
+    def test_research_department_plan_is_projection_not_runtime_evidence(self) -> None:
+        plan = build_research_department_plan(
+            "every morning watch competitor news and brief me if something changed",
+            created_at="2026-06-17T00:00:00Z",
+            notebooklm="preferred",
+            obsidian="preferred",
+        )
+
+        self.assertEqual(plan["schema_version"], "research_department_plan/v1")
+        self.assertEqual(plan["kind"], "research-department-workflow")
+        self.assertEqual(plan["observation_status"], "prepared")
+        self.assertEqual(plan["projection"]["authority"], "projection_only")
+        self.assertEqual([role["role"] for role in plan["roles"]], ["scout", "analyst", "briefer"])
+        self.assertEqual(plan["cadence_intent"]["cadence"], "daily")
+        self.assertEqual(plan["delivery_intent"]["surfaces"], ["report"])
+        self.assertEqual(plan["source_inbox"]["schema_version"], "source_inbox/v1")
+        self.assertEqual(plan["briefing_status"]["schema_version"], "briefing_status/v1")
+        self.assertIn("research-department", {item["skill"] for item in plan["skill_chain"]})
+        self.assertIn("web-research", {item["skill"] for item in plan["skill_chain"]})
+        self.assertIn("notebooklm_query_executed", plan["not_evidence_until_observed"])
+        self.assertIn("obsidian_vault_written", plan["not_evidence_until_observed"])
+        self.assertIn("gateway_delivery_sent", plan["not_evidence_until_observed"])
+        self.assertIn("source_retrieval_observed", plan["not_evidence_until_observed"])
+        self.assertIn("projection metadata only", plan["prepared_is_not"])
+        self.assertFalse(plan["optional_integrations"]["notebooklm"]["execution_observed"])
+        self.assertEqual(validate_research_department_plan(plan), [])
+
+    def test_research_department_source_boundaries_shape_lane_skills(self) -> None:
+        plan = build_research_department_plan(
+            "prepare a weekly research digest",
+            sources=["academic papers", "customer feedback", "competitor updates", "market reports"],
+            created_at="2026-06-17T00:00:00Z",
+        )
+
+        detected = set(plan["source_policy"]["detected_source_types"])
+        skills = {item["skill"] for item in plan["skill_chain"]}
+        self.assertTrue({"papers", "customer", "competitor", "market"}.issubset(detected))
+        self.assertIn("best-practice-research", skills)
+        self.assertIn("feedback-triage", skills)
+        self.assertEqual(plan["source_policy"]["source_boundaries"], ["academic papers", "customer feedback", "competitor updates", "market reports"])
+        self.assertEqual(validate_research_department_plan(plan), [])
+
+    def test_research_department_plan_store_round_trips_and_validates(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths_from_tmp(tmp)
+            plan = build_research_department_plan(
+                "매일 경쟁사와 논문 소식을 수집하고 충돌이 있으면 표시해서 브리핑해줘",
+                created_at="2026-06-17T00:00:00Z",
+            )
+
+            written = write_research_department_plan(paths, plan)
+
+            self.assertEqual(show_research_department_plan(paths, written["plan_id"])["title"], written["title"])
+            self.assertEqual(len(list_research_department_plans(paths)), 1)
+            self.assertTrue(paths.research_department_index_path.exists())
+            validation = validate_research_department_store(paths)
+            self.assertTrue(validation["ok"])
+            self.assertEqual(validation["plan_count"], 1)
+
+            with self.assertRaises(ValueError):
+                write_research_department_plan(paths, plan)
+
+    def test_research_department_plan_rejects_observed_claims(self) -> None:
+        plan = build_research_department_plan("daily competitor research", created_at="2026-06-17T00:00:00Z")
+        plan["source_inbox"]["buckets"]["raw_findings"]["status"] = "observed"
+        plan["briefing_status"]["lanes"]["briefer"]["status"] = "delivered"
+        plan["optional_integrations"]["notebooklm"]["execution_status"] = "completed"
+
+        errors = validate_research_department_plan(plan)
+
+        rendered = "; ".join(errors)
+        self.assertIn("$.source_inbox.buckets.raw_findings.status must remain prepared or not_observed", rendered)
+        self.assertIn("briefing_status.lanes.briefer.status must remain prepared or not_observed", rendered)
+        self.assertIn("optional_integrations.notebooklm.execution_status must not claim observed", rendered)
+
+    def test_research_department_example_fixture_matches_plan_schema(self) -> None:
+        fixture = Path("examples/research-department/competitor-digest.json")
+        payload = json.loads(fixture.read_text(encoding="utf-8"))
+        generated = build_research_department_plan(
+            "every morning check competitor news and send a Slack digest only if something changed",
+            title="Research department: competitor digest",
+            cadence="every morning",
+            delivery="Slack digest",
+            storage="markdown folder",
+            sources=["competitor news", "market updates"],
+            notebooklm="preferred",
+            obsidian="available",
+            source="example fixture",
+            plan_id="20260617T000000Z-research-department-competitor-digest-example",
+            created_at="2026-06-17T00:00:00Z",
+        )
+
+        self.assertEqual(validate_research_department_plan(payload), [])
+        self.assertEqual(payload["schema_version"], "research_department_plan/v1")
+        self.assertIn("source_retrieval_observed", payload["not_evidence_until_observed"])
         self.assertEqual(payload, generated)
 
     def test_prepared_operating_rhythm_artifact_round_trips(self) -> None:

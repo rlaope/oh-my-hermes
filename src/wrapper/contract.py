@@ -80,6 +80,9 @@ VISIBLE_ACTIONS = (
     "change_memory_scope",
     "apply_memory_updates",
     "show_memory_status",
+    "show_research_department_plan",
+    "revise_research_sources",
+    "record_source_observation",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
@@ -97,6 +100,7 @@ _SKILL_PICKER_ENTRIES = (
     ("ultraprocess", "Ultra Process", "Run one research-plan-implement-review-sync cycle.", "./ultraprocess <request>"),
     ("feedback-triage", "Feedback Triage", "Turn customer or product signals into investigation.", "./feedback-triage <signal>"),
     ("web-research", "Web Research", "Gather source-backed current evidence.", "./web-research <question>"),
+    ("research-department", "Research Department", "Prepare Scout, Analyst, and Briefer research ops.", "./research-department <topic>"),
     ("code-review", "Code Review", "Review completed work without overclaiming evidence.", "./code-review <scope>"),
     ("materials-package", "Materials Package", "Shape PPT, PDF, spreadsheet, document, or Markdown deliverables.", "./materials-package <brief>"),
     ("automation-blueprint", "Automation Blueprint", "Prepare recurring Hermes scheduled-ops workflows.", "./automation-blueprint <intent>"),

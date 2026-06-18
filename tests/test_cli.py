@@ -1198,6 +1198,72 @@ class CliTests(unittest.TestCase):
             self.assertTrue(validation["ok"])
             self.assertEqual(validation["hermes_ops_blueprints"]["blueprint_count"], 1)
 
+    def test_ops_research_department_cli_prepares_workflow_without_runtime_claims(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            base = ["--omh-home", str(omh_home), "ops"]
+            request = "every morning watch competitor news and brief me if something changed"
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "research-department",
+                    request,
+                    "--notebooklm",
+                    "preferred",
+                    "--obsidian",
+                    "preferred",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            dry = json.loads(stdout)
+            self.assertFalse(dry["store"]["written"])
+            self.assertFalse((omh_home / "research-department").exists())
+            plan = dry["plan"]
+            self.assertEqual(plan["schema_version"], "research_department_plan/v1")
+            self.assertEqual(plan["kind"], "research-department-workflow")
+            self.assertEqual([role["role"] for role in plan["roles"]], ["scout", "analyst", "briefer"])
+            self.assertEqual(plan["cadence_intent"]["cadence"], "daily")
+            self.assertEqual(plan["optional_integrations"]["notebooklm"]["mode"], "preferred")
+            self.assertEqual(plan["optional_integrations"]["obsidian"]["mode"], "preferred")
+            self.assertTrue(dry["boundary"]["prepared_is_not_observed"])
+            self.assertFalse(dry["boundary"]["source_retrieval_observed"])
+            self.assertFalse(dry["boundary"]["notebooklm_execution_observed"])
+            self.assertFalse(dry["boundary"]["obsidian_write_observed"])
+            self.assertFalse(dry["boundary"]["gateway_delivery_observed"])
+            self.assertIn("notebooklm_query_executed", dry["boundary"]["not_evidence_until_observed"])
+            self.assertIn("obsidian_vault_written", dry["boundary"]["not_evidence_until_observed"])
+
+            status, stdout, stderr = run_cli(base + ["research-department", request])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            written = json.loads(stdout)
+            self.assertTrue(written["store"]["written"])
+            plan_id = written["plan"]["plan_id"]
+            self.assertTrue((omh_home / "research-department" / "plans" / f"{plan_id}.json").exists())
+
+            status, stdout, stderr = run_cli(base + ["research-department-list"])
+            self.assertEqual(status, 0, stderr)
+            listing = json.loads(stdout)
+            self.assertEqual(listing["schema_version"], "omh_ops_research_department_list/v1")
+            self.assertEqual(listing["plans"][0]["plan_id"], plan_id)
+
+            status, stdout, stderr = run_cli(base + ["research-department-show", plan_id])
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(json.loads(stdout)["schema_version"], "omh_ops_research_department_show/v1")
+            self.assertEqual(json.loads(stdout)["plan"]["plan_id"], plan_id)
+
+            status, stdout, stderr = run_cli(base + ["validate"])
+            self.assertEqual(status, 0, stderr)
+            validation = json.loads(stdout)
+            self.assertTrue(validation["ok"])
+            self.assertEqual(validation["research_department_plans"]["plan_count"], 1)
+
     def test_ops_cli_lists_and_exports_are_bounded_by_default(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1552,8 +1618,8 @@ class CliTests(unittest.TestCase):
 
     def test_recommend_scheduled_ops_blueprint_beats_slack_sla_false_positive(self) -> None:
         positive_cases = (
-            "every morning check competitor news and send a Slack digest only if something changed",
-            "매일 아침 경쟁사 뉴스를 조사해서 변화 있으면 슬랙으로 보내줘",
+            "every morning send an operations digest to Slack only if something changed",
+            "매일 아침 운영 상태 요약을 변화 있으면 슬랙으로 보내줘",
         )
 
         for message in positive_cases:
@@ -1587,6 +1653,32 @@ class CliTests(unittest.TestCase):
                 self.assertNotEqual(recommendations[0]["skill"], "automation-blueprint")
                 if "slack" in message.lower() and "sla" in message.lower():
                     self.assertEqual(recommendations[0]["skill"], "reliability-review")
+
+    def test_recommend_research_department_beats_plain_scheduled_ops_for_research_loops(self) -> None:
+        cases = (
+            "every morning check competitor news and send a Slack digest only if something changed",
+            "매일 아침 경쟁사 뉴스를 조사해서 변화 있으면 슬랙으로 보내줘",
+            "set up a research department with scout analyst briefer for market papers",
+            "weekly paper review",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "research-department")
+                self.assertEqual(recommendations[0]["next_action"], "prepare_research_department_plan")
+                self.assertIn("source retrieval", recommendations[0]["evidence_boundary"])
+                self.assertIn("Scout", recommendations[0]["wrapper_guidance"])
+
+        status, stdout, stderr = run_cli(["recommend", "every week brief the marketing department on release notes", "--limit", "3"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertNotEqual(json.loads(stdout)["recommendations"][0]["skill"], "research-department")
 
     def test_recommend_app_operation_loops_feel_end_to_end_without_overclaiming(self) -> None:
         cases = (
@@ -1724,6 +1816,8 @@ class CliTests(unittest.TestCase):
         cases = (
             "research the codebase, make a plan, implement, code-review, sync docs, and open a PR",
             "web research and source scan, then prepare a PR",
+            "daily research plan implement and open a PR",
+            "every morning competitor research then prepare a PR",
         )
 
         for message in cases:
@@ -1860,6 +1954,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("request-to-handoff", playbooks)
         self.assertIn("safe-feature-change", playbooks)
         self.assertIn("source-backed-research", playbooks)
+        self.assertIn("research-department", playbooks)
         self.assertIn("research-to-strategy-brief", playbooks)
         self.assertIn("meeting-prep-to-record", playbooks)
         self.assertIn("feedback-triage", playbooks)
@@ -1881,6 +1976,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("postdeploy_record", playbooks["deploy-and-monitor"]["pipeline"])
         self.assertIn("delivery_silence_policy", playbooks["scheduled-ops-blueprint"]["pipeline"])
         self.assertIn("prepare_prompt", playbooks["scheduled-ops-blueprint"]["pipeline"])
+        self.assertIn("prepare_source_inbox", playbooks["research-department"]["pipeline"])
+        self.assertIn("briefing_status", playbooks["research-department"]["pipeline"])
+        self.assertIn("source_retrieval_observed", playbooks["research-department"]["not_evidence_until_observed"])
         self.assertIn("review", playbooks["scheduled-ops-blueprint"]["not_evidence_until_observed"])
         self.assertIn("ci", playbooks["scheduled-ops-blueprint"]["not_evidence_until_observed"])
         self.assertIn("merge", playbooks["scheduled-ops-blueprint"]["not_evidence_until_observed"])
@@ -1926,6 +2024,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("ci", scheduled["not_evidence_until_observed"])
         self.assertIn("merge", scheduled["not_evidence_until_observed"])
 
+        status, stdout, stderr = run_cli(["playbook", "inspect", "research-department"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        research_department = json.loads(stdout)["playbook"]
+        self.assertEqual(research_department["pipeline"], [stage["id"] for stage in research_department["stages"]])
+        self.assertIn("source_retrieval_observed", research_department["not_evidence_until_observed"])
+        self.assertIn("NotebookLM execution", " ".join(stage["evidence_boundary"] for stage in research_department["stages"]))
+
     def test_playbook_recommend_routes_feature_and_research_situations(self) -> None:
         status, stdout, stderr = run_cli(["playbook", "recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo"])
 
@@ -1946,6 +2053,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(research["id"], "source-backed-research")
         self.assertEqual(research["delegated_to_executor"], [])
         self.assertIn("source selection", " ".join(research["retained_by_hermes"]))
+
+        status, stdout, stderr = run_cli(
+            ["playbook", "recommend", "set", "up", "a", "research", "department", "with", "Scout", "Analyst", "and", "Briefer"]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        research_department = json.loads(stdout)["recommendations"][0]
+        self.assertEqual(research_department["id"], "research-department")
+        self.assertIn("source_retrieval_observed", research_department["not_evidence_until_observed"])
 
         for task in ("financial", "legal financial information", "official"):
             with self.subTest(task=task):
@@ -5413,6 +5530,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("record_export", harnesses["materials-package"]["wrapper_actions"])
         self.assertEqual(harnesses["scheduled-ops-blueprint"]["quality_tier"], "ops-blueprint-gated")
         self.assertIn("delivery_policy_prepared", harnesses["scheduled-ops-blueprint"]["evidence_ladder"])
+        self.assertEqual(harnesses["research-department"]["quality_tier"], "research-ops-gated")
+        self.assertIn("source_inbox_prepared", harnesses["research-department"]["evidence_ladder"])
+        self.assertIn("record_source_observation", harnesses["research-department"]["wrapper_actions"])
         self.assertEqual(harnesses["reliability-review"]["quality_tier"], "reliability-gated")
         self.assertIn("remediation_boundary_recorded", harnesses["reliability-review"]["evidence_ladder"])
         self.assertEqual(harnesses["app-delivery-loop"]["quality_tier"], "delivery-gated")
@@ -5446,6 +5566,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("report-package", harnesses)
         self.assertIn("materials-package", harnesses)
         self.assertIn("scheduled-ops-blueprint", harnesses)
+        self.assertIn("research-department", harnesses)
         self.assertIn("reliability-review", harnesses)
         self.assertIn("app-delivery-loop", harnesses)
         self.assertIn("blocking_question_asked", harnesses["deep-interview"]["evidence_ladder"])
@@ -5455,6 +5576,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("report-package", harnesses["report-package"]["primary_skills"])
         self.assertIn("materials-package", harnesses["materials-package"]["primary_skills"])
         self.assertIn("automation-blueprint", harnesses["scheduled-ops-blueprint"]["primary_skills"])
+        self.assertIn("research-department", harnesses["research-department"]["primary_skills"])
         self.assertIn("reliability-review", harnesses["reliability-review"]["primary_skills"])
         self.assertIn("idea-to-deploy", harnesses["app-delivery-loop"]["primary_skills"])
 

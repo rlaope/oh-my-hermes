@@ -50,7 +50,7 @@ If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview wi
 
 For messenger-native setup, wrappers can call `omh chat native-command --source discord`, `--source slack`, or `--source telegram` to get the platform command/menu registration contract. When plain-message autocomplete is not available, render the returned `omh_command_fallback_card/v1` as an `Open omh` button/card before opening the picker.
 
-If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
+If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `research-department`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
 
 In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.options` as a select menu or compact button list. In Hermes TUI, render the same options as a text command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.
 
@@ -76,7 +76,7 @@ Use installed primary workflow skills plus compatibility surfaces in this regist
 - `memory-keeper`: `wiki`, `memory-curation-review`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`
 - `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
-- `researcher`: `web-research`, `research-brief`, `best-practice-research`, `autoresearch-goal`
+- `researcher`: `web-research`, `research-brief`, `research-department`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `ultraqa`, `code-review`, `ask`
 - `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
@@ -150,6 +150,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `ultrawork`: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
 - `web-research`: `web-research`, `web research`, `web search`, `search the web`, `internet search`
 - `research-brief`: `research-brief`, `business-research`, `business research`, `research brief`, `source-backed business research`
+- `research-department`: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`
 - `strategy-brief`: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`
 - `meeting-brief`: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`
 - `feedback-triage`: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`
@@ -204,6 +205,7 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `report-package`: Package supplied inputs into reports, executive briefs, and PPT-ready Markdown/JSON outlines. Tier `report-gated`. Ladder: `report_scope_recorded` -> `inputs_organized` -> `package_outline_prepared` -> `approval_boundary_recorded`. Actions: `show_report`, `export_markdown`, `export_json`, `record_approval`, `show_status`. Privacy `metadata_only`.
 - `materials-package`: Plan, hand off, and verify material-processing work across decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary exports. Tier `material-gated`. Ladder: `material_scope_recorded` -> `source_inputs_organized` -> `format_qa_ladder_prepared` -> `generation_handoff_prepared_if_needed`. Actions: `show_material_plan`, `choose_target_format`, `prepare_generation_handoff`, `record_export`, `record_qa`. Privacy `metadata_only`.
 - `scheduled-ops-blueprint`: Prepare recurring Hermes operations as schedule/delivery/silence blueprints without claiming runtime execution. Tier `ops-blueprint-gated`. Ladder: `blueprint_scope_recorded` -> `schedule_policy_prepared` -> `delivery_policy_prepared` -> `silence_policy_prepared`. Actions: `show_blueprint`, `revise_schedule`, `confirm_delivery_policy`, `prepare_host_schedule`, `record_observed_runtime`. Privacy `metadata_only`.
+- `research-department`: Prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries. Tier `research-ops-gated`. Ladder: `research_plan_scope_recorded` -> `source_inbox_prepared` -> `briefing_status_prepared` -> `optional_integrations_classified`. Actions: `show_research_department_plan`, `revise_research_sources`, `confirm_cadence_delivery_storage`, `record_source_observation`, `show_status`. Privacy `metadata_only`.
 - `reliability-review`: Review incidents, SLOs, error budgets, and remediation follow-ups with strict observed evidence boundaries. Tier `reliability-gated`. Ladder: `reliability_scope_recorded` -> `evidence_boundary_recorded` -> `review_prepared_or_observed` -> `remediation_boundary_recorded`. Actions: `show_evidence`, `record_gap`, `prepare_handoff`, `record_metric`, `show_status`. Privacy `metadata_only`.
 - `app-delivery-loop`: Run complete app operation loops from idea through decision, handoff, release, deploy, and monitor status. Tier `delivery-gated`. Ladder: `loop_scope_recorded` -> `decision_gate_recorded` -> `plan_or_release_gate_accepted` -> `handoff_prepared_if_needed`. Actions: `show_delivery_loop`, `accept_plan`, `choose_executor`, `prepare_handoff`, `record_deploy`. Privacy `metadata_only`.
 - `goal-loop`: Run loopable goal projects through task/project/ambition classification, bounded goal shaping, task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution. Tier `loop-gated`. Ladder: `loop_triggered` -> `loopability_assessed` -> `goal_reframed` -> `permission_profile_recorded`. Actions: `assess_loopability`, `convert_to_loop_goal`, `route_direct_task`, `choose_permission_profile`, `start_loop`. Privacy `metadata_only`.
