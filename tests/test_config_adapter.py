@@ -31,12 +31,38 @@ class ConfigAdapterTests(unittest.TestCase):
         self.assertIn("disabled:", first.text)
         self.assertEqual(external_dirs(first.text), ["/tmp/omh/skills"])
 
+    def test_external_dirs_accepts_yaml_sequence_at_key_indent(self) -> None:
+        original = "model: test\nskills:\n  external_dirs:\n  - /tmp/omh/skills\n"
+
+        self.assertEqual(external_dirs(original), ["/tmp/omh/skills"])
+        change = ensure_external_dir(original, "/tmp/omh/skills")
+
+        self.assertFalse(change.changed)
+        self.assertEqual(change.text, original)
+
+    def test_ensure_external_dir_preserves_key_indent_sequence_style(self) -> None:
+        original = "skills:\n  external_dirs:\n  - /keep\n"
+        change = ensure_external_dir(original, "/tmp/omh/skills")
+
+        self.assertTrue(change.changed)
+        self.assertEqual(external_dirs(change.text), ["/keep", "/tmp/omh/skills"])
+        self.assertIn("  - /keep\n  - /tmp/omh/skills\n", change.text)
+
     def test_remove_external_dir_only_removes_managed_entry(self) -> None:
         original = "skills:\n  external_dirs:\n    - /keep\n    - /tmp/omh/skills\n"
         change = remove_external_dir(original, "/tmp/omh/skills")
 
         self.assertTrue(change.changed)
         self.assertEqual(external_dirs(change.text), ["/keep"])
+
+    def test_remove_external_dir_from_key_indent_sequence(self) -> None:
+        original = "skills:\n  external_dirs:\n  - /keep\n  - /tmp/omh/skills\n"
+        change = remove_external_dir(original, "/tmp/omh/skills")
+
+        self.assertTrue(change.changed)
+        self.assertEqual(external_dirs(change.text), ["/keep"])
+        self.assertIn("  - /keep\n", change.text)
+        self.assertNotIn("/tmp/omh/skills", change.text)
 
     def test_ensure_external_dir_expands_inline_list(self) -> None:
         original = "skills:\n  external_dirs: [/keep]\n"

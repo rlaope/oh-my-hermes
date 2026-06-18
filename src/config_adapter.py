@@ -52,6 +52,20 @@ def _format_external_dirs(values: list[str]) -> list[str]:
     return ["  external_dirs:", *[f"    - {value}" for value in values]]
 
 
+def _external_dir_item_value(line: str) -> str | None:
+    if line.startswith("    - ") or line.startswith("  - "):
+        return line.strip()[2:].strip().strip("'\"")
+    return None
+
+
+def _external_dir_item_prefix(line: str) -> str | None:
+    if line.startswith("    - "):
+        return "    - "
+    if line.startswith("  - "):
+        return "  - "
+    return None
+
+
 def _classify_inline_external_dirs(line: str) -> _InlineExternalDirs:
     # Readers stay non-throwing for doctor/probe stability: unsupported inline
     # scalars mean "no valid dirs observed". Mutations remain strict and reject
@@ -97,6 +111,11 @@ def external_dirs(config_text: str) -> list[str]:
             in_skills = stripped == "skills:"
             in_external = False
             continue
+        if in_skills and in_external:
+            value = _external_dir_item_value(line)
+            if value is not None:
+                result.append(value)
+                continue
         if in_skills and line.startswith("  ") and not line.startswith("    "):
             inline = _classify_inline_external_dirs(line)
             if inline.matched:
@@ -106,8 +125,6 @@ def external_dirs(config_text: str) -> list[str]:
                 continue
             in_external = stripped == "external_dirs:"
             continue
-        if in_skills and in_external and line.startswith("    - "):
-            result.append(stripped[2:].strip().strip("'\""))
     return result
 
 
@@ -151,9 +168,14 @@ def ensure_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
         return ConfigChange(True, "inserted skills.external_dirs", "\n".join(lines) + "\n")
 
     insert_at = external_index + 1
-    while insert_at < len(lines) and lines[insert_at].startswith("    - "):
+    item_prefix = "    - "
+    while insert_at < len(lines):
+        prefix = _external_dir_item_prefix(lines[insert_at])
+        if prefix is None:
+            break
+        item_prefix = prefix
         insert_at += 1
-    lines.insert(insert_at, f"    - {target}")
+    lines.insert(insert_at, f"{item_prefix}{target}")
     return ConfigChange(True, "added external dir", "\n".join(lines) + "\n")
 
 
@@ -172,6 +194,14 @@ def remove_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
             in_external = False
             output.append(line)
             continue
+        if in_skills and in_external:
+            value = _external_dir_item_value(line)
+            if value is not None:
+                if value == target:
+                    changed = True
+                    continue
+                output.append(line)
+                continue
         if in_skills and line.startswith("  ") and not line.startswith("    "):
             inline = _classify_inline_external_dirs(line)
             if inline.matched:
@@ -186,11 +216,6 @@ def remove_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
             in_external = stripped == "external_dirs:"
             output.append(line)
             continue
-        if in_skills and in_external and line.startswith("    - "):
-            value = stripped[2:].strip().strip("'\"")
-            if value == target:
-                changed = True
-                continue
         output.append(line)
     if not changed:
         return ConfigChange(False, "external dir absent", config_text)

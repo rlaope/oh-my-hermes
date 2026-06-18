@@ -101,7 +101,8 @@ view model:
 omh menubar status
 ```
 
-It emits `menubar_status/v1` JSON with separate `hermes_agents` and
+This command does not install, launch, or keep alive a macOS menu bar item next
+to Wi-Fi. It emits `menubar_status/v1` JSON with separate `hermes_agents` and
 `external_coding_executors` sections, friendly labels such as
 `OMH connection: Ready`, `Hermes targets: 2`, `Coding handoff: Codex`, and
 `Send mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
