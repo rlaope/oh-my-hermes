@@ -1568,6 +1568,15 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     print(_color(tr(language, "summary"), "1;32", use_color))
     print(f"  {tr(language, 'skills_line', count=len(skills), path=payload.get('skills_dir', ''))}")
     source = str(payload.get("source", "builtin"))
+    release_update = payload.get("release_update", {})
+    command_package = payload.get("command_package", {})
+    if isinstance(command_package, dict):
+        command_status = str(command_package.get("status", "")).strip()
+        if command_status == "updated":
+            change = _command_package_display_change(payload, release_update if isinstance(release_update, dict) else {})
+            print(_color(f"  {tr(language, 'command_package_update_line', change=change)}", "1;32", use_color))
+        elif label == "update" and source == "builtin" and not dry_run:
+            print(_color(f"  {tr(language, 'command_package_not_updated_line')}", "1;33", use_color))
     source_label = tr(language, "source_builtin") if source == "builtin" else source
     print(f"  {tr(language, 'source', source=source_label)}")
     channel = str(payload.get("release_channel", "")).strip()
@@ -1577,7 +1586,6 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     if package_url and package_url != "local":
         package_url_key = "recorded_package_url" if source == "builtin" else "package_url"
         print(f"  {tr(language, package_url_key, url=package_url)}")
-    release_update = payload.get("release_update", {})
     if isinstance(release_update, dict):
         display = release_update.get("display", {})
         if isinstance(display, dict):
@@ -1590,13 +1598,6 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
         status = str(release_update.get("status", "")).strip()
         if status:
             print(f"  {tr(language, 'release_update_status', status=status)}")
-    command_package = payload.get("command_package", {})
-    if isinstance(command_package, dict):
-        command_status = str(command_package.get("status", "")).strip()
-        if command_status == "updated":
-            print(f"  {tr(language, 'command_package_updated')}")
-        elif label == "update" and source == "builtin" and not dry_run:
-            print(f"  {tr(language, 'command_package_unchanged')}")
     state_path = str(payload.get("runtime_state_path", "")).strip()
     state_key = str(payload.get("runtime_state_key", "")).strip()
     if state_path and state_key:
@@ -1611,6 +1612,30 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     else:
         print(f"  {tr(language, 'install_next')}")
     print(f"  {tr(language, 'machine_readable')}")
+
+
+def _command_package_display_change(payload: dict[str, object], release_update: dict[str, object]) -> str:
+    display = release_update.get("display", {})
+    if not isinstance(display, dict):
+        display = {}
+    channel = str(payload.get("release_channel", "")).strip()
+    version_change = str(display.get("version_change", "")).strip()
+    source_ref_change = str(display.get("source_ref_change", "")).strip()
+    if channel == "stable" and version_change:
+        return version_change
+    if source_ref_change:
+        return source_ref_change
+    current = release_update.get("current", {})
+    if isinstance(current, dict):
+        if channel == "stable":
+            version = str(current.get("release_version", "")).strip()
+            if version:
+                return version
+        source_ref = str(current.get("release_source_ref", "")).strip()
+        if source_ref:
+            return source_ref
+    package_url = str(payload.get("release_package_url", "")).strip()
+    return package_url or "updated"
 
 
 def _print_apply_summary(payload: dict[str, object]) -> None:

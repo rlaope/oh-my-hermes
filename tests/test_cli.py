@@ -641,7 +641,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Recorded package URL:", stdout)
             self.assertIn("Source ref: main -> main", stdout)
             self.assertIn("Release state: refreshed", stdout)
-            self.assertIn("Command package: not updated by this run", stdout)
+            self.assertIn("OMH command: not updated (workflows only)", stdout)
             self.assertIn("State log:", stdout)
             self.assertIn("last_update", stdout)
             self.assertIn("Run `omh doctor` to verify health", stdout)
@@ -5443,7 +5443,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Source ref: main@new -> main@human", stdout)
             self.assertIn("Release state: updated", stdout)
-            self.assertIn("Command package: updated by installer", stdout)
+            self.assertIn("OMH command: main@new -> main@human (updated)", stdout)
             self.assertNotIn("To update the `omh` command itself", stdout)
 
             status, stdout, stderr = run_cli(
@@ -5508,6 +5508,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Release version: 1.0.1 -> 1.0.2", stdout)
             self.assertIn("Source ref: v1.0.1 -> v1.0.2", stdout)
             self.assertIn("Release state: updated", stdout)
+            self.assertIn("OMH command: 1.0.1 -> 1.0.2 (updated)", stdout)
 
     def test_direct_update_source_ref_metadata_does_not_claim_command_package_update(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -5537,7 +5538,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Source ref: main@old -> main@manual", stdout)
             self.assertIn("Release state: metadata_recorded", stdout)
-            self.assertIn("Command package: not updated by this run", stdout)
+            self.assertIn("OMH command: not updated (workflows only)", stdout)
 
             status, stdout, stderr = run_cli(
                 ["--omh-home", str(omh_home), "update", "--source-ref", "main@manual", "--json"],
@@ -5564,7 +5565,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("Source ref: (none) -> main@first", stdout)
             self.assertIn("Release state: metadata_recorded", stdout)
-            self.assertIn("Command package: not updated by this run", stdout)
+            self.assertIn("OMH command: not updated (workflows only)", stdout)
 
     def test_latest_release_update_state_wins_over_stale_last_update(self) -> None:
         with TemporaryDirectory() as tmp:
