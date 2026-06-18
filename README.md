@@ -49,6 +49,10 @@ easier to start, easier to trust, and more natural to apply in real work.
 > <p align="center">
 >   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
 > </p>
+>
+> <p align="center">
+>   <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
+> </p>
 
 <br>
 
