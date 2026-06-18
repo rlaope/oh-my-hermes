@@ -953,7 +953,7 @@ _PLAYBOOKS = (
                 "wrapper",
                 "Record whether the synthesis tool, knowledge store, scheduler, and delivery targets are unknown, available, unavailable, or preferred.",
                 "research_department_plan/v1",
-                ("confirm_cadence_delivery_storage", "show_status"),
+                ("confirm_cadence_delivery_tooling", "show_status"),
                 ("operator-supplied tooling readiness", "missing setup decisions"),
                 "Tooling readiness is not synthesis-tool execution, knowledge-store writes, scheduler enablement, or gateway delivery evidence.",
             ),

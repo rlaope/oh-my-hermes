@@ -82,6 +82,7 @@ VISIBLE_ACTIONS = (
     "show_memory_status",
     "show_research_department_plan",
     "revise_research_sources",
+    "confirm_cadence_delivery_tooling",
     "record_source_observation",
     "cancel",
 )

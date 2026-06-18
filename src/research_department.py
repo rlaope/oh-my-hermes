@@ -172,7 +172,6 @@ def build_research_department_plan(
         "topic_intent": _topic_intent(clean_request, topic=topic),
         "cadence_intent": _cadence_intent(clean_request, cadence=cadence),
         "delivery_intent": _delivery_intent(clean_request, delivery=delivery),
-        "storage_intent": knowledge_store_intent,
         "knowledge_store": knowledge_store_intent,
         "synthesis_tool": synthesis_tool_intent,
         "source_policy": source_policy,
@@ -184,16 +183,12 @@ def build_research_department_plan(
         "optional_integrations": {
             "knowledge_store": knowledge_store_intent,
             "synthesis_tool": synthesis_tool_intent,
-            "compatibility_aliases": {
-                "notebooklm": "synthesis_tool",
-                "obsidian": "knowledge_store",
-            },
         },
         "prompt_outline": _prompt_outline(clean_request, skill_chain),
         "wrapper_actions": [
             "show_research_department_plan",
             "revise_topic_or_sources",
-            "confirm_cadence_delivery_storage",
+            "confirm_cadence_delivery_tooling",
             "prepare_scout_research",
             "prepare_analyst_synthesis",
             "prepare_briefer_output",
@@ -213,8 +208,8 @@ def build_research_department_plan(
         "observed_evidence_required": list(OBSERVED_EVIDENCE_REQUIRED),
         "prepared_is_not": PREPARED_IS_NOT_OBSERVED,
         "next_action": (
-            "Present the research department plan in Hermes, confirm topic/source/cadence/storage, "
-            "then record source retrieval, synthesis, storage, and delivery only from observed evidence."
+            "Present the research department plan in Hermes, confirm topic/source/cadence/tooling, "
+            "then record source retrieval, synthesis-tool output, knowledge-store writes, and delivery only from observed evidence."
         ),
     }
     errors = validate_research_department_plan(record)
@@ -334,7 +329,6 @@ def validate_research_department_plan(record: dict[str, Any]) -> list[str]:
         "topic_intent",
         "cadence_intent",
         "delivery_intent",
-        "storage_intent",
         "source_policy",
         "source_inbox",
         "briefing_status",
@@ -373,6 +367,7 @@ def validate_research_department_plan(record: dict[str, Any]) -> list[str]:
     if isinstance(status, dict):
         errors.extend(validate_briefing_status(status))
     errors.extend(_nested_status_boundary_errors(record))
+    errors.extend(_projection_boolean_boundary_errors(record))
     return errors
 
 
@@ -658,25 +653,26 @@ def _knowledge_store_intent(
     obsidian: str = "unknown",
 ) -> dict[str, object]:
     explicit = knowledge_store.strip() or storage.strip()
-    source = f"{text} {storage} {knowledge_store}".casefold()
+    explicit_source = explicit.casefold()
+    concept_source = f"{text} {explicit}".casefold()
     store_type = "local_markdown_folder"
     vendor_hint = ""
     readiness_mode = _readiness_mode(obsidian)
-    if readiness_mode in {"available", "preferred"}:
+    if any(term in explicit_source for term in ("obsidian", "vault", "옵시디언", "볼트")):
         store_type = "obsidian_vault"
         vendor_hint = "obsidian"
-    elif any(term in source for term in ("obsidian", "vault", "옵시디언", "볼트")):
+    elif readiness_mode in {"available", "preferred"} and not explicit:
         store_type = "obsidian_vault"
         vendor_hint = "obsidian"
-    elif any(term in source for term in ("notion", "노션")):
+    elif any(term in concept_source for term in ("notion", "노션")):
         store_type = "notion_workspace"
         vendor_hint = "notion"
-    elif any(term in source for term in ("google drive", "gdrive", "google docs", "구글 드라이브")):
+    elif any(term in concept_source for term in ("google drive", "gdrive", "google docs", "구글 드라이브")):
         store_type = "google_drive"
         vendor_hint = "google"
-    elif any(term in source for term in ("database", "db", "데이터베이스")):
+    elif any(term in concept_source for term in ("database", "db", "데이터베이스")):
         store_type = "database"
-    elif any(term in source for term in ("markdown", "md", "folder", "폴더", "마크다운")):
+    elif any(term in concept_source for term in ("markdown", "md", "folder", "폴더", "마크다운")):
         store_type = "markdown_folder"
     if explicit and readiness_mode == "unknown":
         readiness_mode = "preferred"
@@ -702,19 +698,20 @@ def _synthesis_tool_intent(
     notebooklm: str = "unknown",
 ) -> dict[str, object]:
     explicit = synthesis_tool.strip()
-    source = f"{text} {synthesis_tool}".casefold()
+    explicit_source = explicit.casefold()
+    concept_source = f"{text} {synthesis_tool}".casefold()
     tool_type = "hermes_synthesis"
     vendor_hint = ""
     readiness_mode = _readiness_mode(notebooklm)
-    if readiness_mode in {"available", "preferred"}:
+    if any(term in explicit_source for term in ("notebooklm", "notebook lm", "notebook")):
         tool_type = "notebooklm"
         vendor_hint = "notebooklm"
-    elif any(term in source for term in ("notebooklm", "notebook lm", "notebook")):
+    elif readiness_mode in {"available", "preferred"} and not explicit:
         tool_type = "notebooklm"
         vendor_hint = "notebooklm"
-    elif any(term in source for term in ("rag", "vector", "embedding", "벡터")):
+    elif any(term in concept_source for term in ("rag", "vector", "embedding", "벡터")):
         tool_type = "local_rag"
-    elif any(term in source for term in ("summarizer", "summary tool", "knowledge summary", "요약 도구", "요약툴")):
+    elif any(term in concept_source for term in ("summarizer", "summary tool", "knowledge summary", "요약 도구", "요약툴")):
         tool_type = "knowledge_summarizer"
     if explicit and readiness_mode == "unknown":
         readiness_mode = "preferred"
@@ -839,6 +836,20 @@ def _nested_status_boundary_errors(value: object, *, path: str = "$") -> list[st
     elif isinstance(value, list):
         for index, child in enumerate(value):
             errors.extend(_nested_status_boundary_errors(child, path=f"{path}[{index}]"))
+    return errors
+
+
+def _projection_boolean_boundary_errors(value: object, *, path: str = "$") -> list[str]:
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if key not in {"not_observed", "not_evidence_until_observed"} and key.endswith("_observed") and bool(child):
+                errors.append(f"{child_path} must remain false in projection-only research plans")
+            errors.extend(_projection_boolean_boundary_errors(child, path=child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            errors.extend(_projection_boolean_boundary_errors(child, path=f"{path}[{index}]"))
     return errors
 
 

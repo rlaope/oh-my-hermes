@@ -591,6 +591,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - cadence
   - delivery target
   - knowledge-store preference
+  - synthesis-tool preference
 - Expected outputs:
   - research_department_plan/v1
   - source_inbox/v1
@@ -2933,7 +2934,8 @@ Prepare Scout, Analyst, and Briefer research operations with source inbox and br
   - source boundaries
   - cadence
   - delivery target
-  - storage preference
+  - knowledge-store preference
+  - synthesis-tool preference
 - Outputs:
   - research_department_plan/v1
   - source_inbox/v1
@@ -2956,7 +2958,7 @@ Prepare Scout, Analyst, and Briefer research operations with source inbox and br
 - Wrapper actions:
   - `show_research_department_plan`
   - `revise_research_sources`
-  - `confirm_cadence_delivery_storage`
+  - `confirm_cadence_delivery_tooling`
   - `record_source_observation`
   - `show_status`
 - Artifact events:

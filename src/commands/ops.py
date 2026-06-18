@@ -157,6 +157,8 @@ def cmd_ops_research_department(args: argparse.Namespace) -> int:
                 "source_retrieval_observed": False,
                 "synthesis_tool_query_observed": False,
                 "knowledge_store_write_observed": False,
+                "notebooklm_execution_observed": False,
+                "obsidian_write_observed": False,
                 "gateway_delivery_observed": False,
                 "not_evidence_until_observed": list(written["not_evidence_until_observed"]),
                 "observed_evidence_required": list(written["observed_evidence_required"]),

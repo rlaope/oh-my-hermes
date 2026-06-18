@@ -968,7 +968,14 @@ _DEFINITIONS = [
             "Analyst to `research-brief`/`best-practice-research`, and Briefer to `report-package` or meeting/report workflows. "
             "Record retrieval, synthesis-tool output, knowledge-store writes, delivery, and verification only from observed evidence."
         ),
-        required_inputs=("topic or watch area", "source boundaries", "cadence", "delivery target", "knowledge-store preference"),
+        required_inputs=(
+            "topic or watch area",
+            "source boundaries",
+            "cadence",
+            "delivery target",
+            "knowledge-store preference",
+            "synthesis-tool preference",
+        ),
         expected_outputs=("research_department_plan/v1", "source_inbox/v1", "briefing_status/v1", "not-evidence boundary"),
         artifact_expectations=("research_department_plan/v1 under .omh/research-department/plans when a wrapper or CLI records it",),
         safety_rules=(
@@ -2897,7 +2904,14 @@ _HARNESSES = [
         "research-department",
         "Prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries.",
         "Use when recurring or durable market, competitor, paper, news, or source-monitoring research should become a Hermes workflow pack.",
-        ("topic or watch area", "source boundaries", "cadence", "delivery target", "storage preference"),
+        (
+            "topic or watch area",
+            "source boundaries",
+            "cadence",
+            "delivery target",
+            "knowledge-store preference",
+            "synthesis-tool preference",
+        ),
         ("research_department_plan/v1", "source_inbox/v1", "briefing_status/v1", "not-evidence boundary"),
         (
             "research lanes are prepared",
@@ -2935,7 +2949,7 @@ _HARNESSES = [
         wrapper_actions=(
             "show_research_department_plan",
             "revise_research_sources",
-            "confirm_cadence_delivery_storage",
+            "confirm_cadence_delivery_tooling",
             "record_source_observation",
             "show_status",
         ),

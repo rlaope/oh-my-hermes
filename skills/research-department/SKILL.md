@@ -70,6 +70,7 @@ Required inputs:
 - cadence
 - delivery target
 - knowledge-store preference
+- synthesis-tool preference
 
 Expected outputs:
 

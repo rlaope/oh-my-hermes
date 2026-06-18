@@ -18,13 +18,15 @@
 </p>
 
 Most people skip the docs. **oh-my-hermes** is built for that reality: install
-it, keep working in Hermes, and let the added skills, contracts, and status
-cards make the next action obvious without replacing your existing setup.
+it, keep working in [Hermes](https://github.com/NousResearch/hermes-agent), and
+let the added skills, contracts, and status cards make the next action obvious
+without replacing your existing setup.
 
 The product is not "more CLI commands." The `omh` command is setup, repair,
-doctor, verifier, and wrapper/backend infrastructure. For Hermes wrappers and
-routers, that CLI contract is a first-class backend surface; for normal users,
-the main experience is still chat:
+doctor, verifier, and wrapper/backend infrastructure. For
+[Hermes](https://github.com/NousResearch/hermes-agent) wrappers and routers,
+that CLI contract is a first-class backend surface; for normal users, the main
+experience is still chat:
 
 ```text
 user says a plain request in Hermes

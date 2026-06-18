@@ -370,13 +370,28 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("research_department_workflow", patterns)
         self.assertIn("research-department", patterns["research_department_workflow"]["compatible_skills"])
         self.assertTrue(
-            {"show_research_department_plan", "revise_research_sources", "record_source_observation"}.issubset(
+            {
+                "show_research_department_plan",
+                "revise_research_sources",
+                "confirm_cadence_delivery_tooling",
+                "record_source_observation",
+            }.issubset(
                 set(VISIBLE_ACTIONS)
             )
         )
+        self.assertIn("knowledge-store preference", definitions["research-department"].required_inputs)
+        self.assertIn("synthesis-tool preference", definitions["research-department"].required_inputs)
+        self.assertIn("knowledge-store preference", harnesses["research-department"].required_inputs)
+        self.assertIn("synthesis-tool preference", harnesses["research-department"].required_inputs)
         self.assertIn("source_inbox/v1", harnesses["research-department"].expected_outputs)
         self.assertIn("source_inbox_prepared", harnesses["research-department"].evidence_ladder)
         self.assertIn("briefing_status", playbooks["research-department"]["pipeline"])
+        self.assertTrue(
+            any(
+                "confirm_cadence_delivery_tooling" in stage["wrapper_actions"]
+                for stage in inspect_playbook("research-department")["playbook"]["stages"]
+            )
+        )
         self.assertIn("briefing_status/v1", inspect_playbook("research-department")["playbook"]["stages"][-1]["contract"])
         self.assertIn("research-department", templates)
         self.assertIn("Scout", templates["research-department"].content)

@@ -1236,6 +1236,8 @@ class CliTests(unittest.TestCase):
             self.assertFalse(dry["boundary"]["source_retrieval_observed"])
             self.assertFalse(dry["boundary"]["synthesis_tool_query_observed"])
             self.assertFalse(dry["boundary"]["knowledge_store_write_observed"])
+            self.assertFalse(dry["boundary"]["notebooklm_execution_observed"])
+            self.assertFalse(dry["boundary"]["obsidian_write_observed"])
             self.assertFalse(dry["boundary"]["gateway_delivery_observed"])
             self.assertIn("synthesis_tool_query_observed", dry["boundary"]["not_evidence_until_observed"])
             self.assertIn("knowledge_store_write_observed", dry["boundary"]["not_evidence_until_observed"])
@@ -1251,6 +1253,29 @@ class CliTests(unittest.TestCase):
             self.assertEqual(alias_plan["knowledge_store"]["type"], "obsidian_vault")
             self.assertEqual(alias_plan["synthesis_tool"]["readiness"], "operator_prefers_if_available")
             self.assertEqual(alias_plan["knowledge_store"]["readiness"], "operator_supplied_available")
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "research-department",
+                    request,
+                    "--synthesis-tool",
+                    "team knowledge summarizer",
+                    "--knowledge-store",
+                    "markdown folder",
+                    "--notebooklm",
+                    "preferred",
+                    "--obsidian",
+                    "available",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            mixed_plan = json.loads(stdout)["plan"]
+            self.assertEqual(mixed_plan["synthesis_tool"]["type"], "knowledge_summarizer")
+            self.assertEqual(mixed_plan["knowledge_store"]["type"], "markdown_folder")
 
             status, stdout, stderr = run_cli(base + ["research-department", request])
 

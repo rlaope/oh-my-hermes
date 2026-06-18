@@ -49,19 +49,6 @@
     "explicit_delivery": "Slack digest",
     "requires_observed_gateway_evidence": true
   },
-  "storage_intent": {
-    "schema_version": "knowledge_store_intent/v1",
-    "status": "prepared",
-    "type": "markdown_folder",
-    "explicit_target": "markdown folder",
-    "vendor_hint": "",
-    "mode": "preferred",
-    "readiness": "operator_prefers_if_available",
-    "requested_capability": "persist source inboxes, notes, briefs, and unresolved verification gaps",
-    "write_observed": false,
-    "requires_observed_write_evidence": true,
-    "boundary": "A knowledge-store preference is not write evidence or proof that the store is configured."
-  },
   "knowledge_store": {
     "schema_version": "knowledge_store_intent/v1",
     "status": "prepared",
@@ -317,10 +304,6 @@
       "query_observed": false,
       "workspace_observed": false,
       "boundary": "A synthesis-tool preference is not query evidence or proof that the tool is configured."
-    },
-    "compatibility_aliases": {
-      "notebooklm": "synthesis_tool",
-      "obsidian": "knowledge_store"
     }
   },
   "prompt_outline": {
@@ -335,7 +318,7 @@
   "wrapper_actions": [
     "show_research_department_plan",
     "revise_topic_or_sources",
-    "confirm_cadence_delivery_storage",
+    "confirm_cadence_delivery_tooling",
     "prepare_scout_research",
     "prepare_analyst_synthesis",
     "prepare_briefer_output",
@@ -374,5 +357,5 @@
     "Human or verifier review record before claiming conflicts or source quality are verified."
   ],
   "prepared_is_not": "A research-department plan is projection metadata only. It is not source retrieval, synthesis-tool execution, knowledge-store writes, host cron creation, gateway delivery, human verification, connector invocation, or brief delivery evidence.",
-  "next_action": "Present the research department plan in Hermes, confirm topic/source/cadence/storage, then record source retrieval, synthesis, storage, and delivery only from observed evidence."
+  "next_action": "Present the research department plan in Hermes, confirm topic/source/cadence/tooling, then record source retrieval, synthesis-tool output, knowledge-store writes, and delivery only from observed evidence."
 }
