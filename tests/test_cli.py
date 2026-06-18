@@ -1816,6 +1816,8 @@ class CliTests(unittest.TestCase):
         cases = (
             "research the codebase, make a plan, implement, code-review, sync docs, and open a PR",
             "web research and source scan, then prepare a PR",
+            "daily research plan implement and open a PR",
+            "every morning competitor research then prepare a PR",
         )
 
         for message in cases:

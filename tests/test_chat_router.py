@@ -107,6 +107,21 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertIn("freshness", str(top["wrapper_guidance"]).lower())
                 self.assertIn("retrieval", str(top["evidence_boundary"]).lower())
 
+    def test_delivery_cycle_chat_beats_research_department_for_pr_requests(self) -> None:
+        cases = (
+            "daily research plan implement and open a PR",
+            "every morning competitor research then prepare a PR",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "ultraprocess")
+                self.assertEqual(decision["selected_harness"], "goal-execution")
+                self.assertEqual(decision["confidence"], "high")
+
     def test_event_text_extraction_supports_discord_slack_and_generic_shapes(self) -> None:
         self.assertEqual(extract_message_text({"message": {"content": "risky refactor"}}), "risky refactor")
         self.assertEqual(extract_message_text({"message": {"text": "risky refactor"}}), "risky refactor")

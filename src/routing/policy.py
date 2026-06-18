@@ -296,14 +296,21 @@ def active_routing_guard_rules(
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
-    research_department_applies = _research_department_guard_applies(normalized_query, query_tokens)
+    delivery_cycle_applies = _delivery_cycle_guard_applies(normalized_query, query_tokens)
+    research_department_applies = (
+        not delivery_cycle_applies and _research_department_guard_applies(normalized_query, query_tokens)
+    )
     if research_department_applies:
         rules.append(RESEARCH_DEPARTMENT_GUARD)
-    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens) and not research_department_applies:
+    if (
+        not delivery_cycle_applies
+        and _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens)
+        and not research_department_applies
+    ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
-    if _delivery_cycle_guard_applies(normalized_query, query_tokens):
+    if delivery_cycle_applies:
         rules.append(DELIVERY_CYCLE_GUARD)
     return tuple(rules)
 
