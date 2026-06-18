@@ -167,7 +167,10 @@ not the source of truth. The payload separates `hermes_agents` from
 `external_coding_executors` so Codex, Claude Code, OMX, OMO, OMC, or generic
 coding tools cannot be rendered as Hermes agents by accident. Compact surfaces
 receive source and model `icon_id` values plus tooltip text rather than Markdown
-tables or prose-only labels.
+tables or prose-only labels. `display.menu_cards` is the human-facing card model
+for the native menu bar helper, grouping the same contract into Overview,
+Hermes, Coding, and Evidence sections so compact UI surfaces do not need to
+render raw JSON-like text.
 
 `current_external_coding_executor` names the selected row explicitly, preferring
 `runtime/state.json` `last_run_id` when it matches the recent executor list, so
@@ -180,8 +183,8 @@ payload, normally produced by a native macOS MenuBarExtra app or test harness.
 That overlay is app-local, expires after a short TTL, and applies restarting
 state only inside its restart window. OMH does not scan processes, launch
 agents, infer runtime health, or turn prepared handoffs into observed
-execution. A native macOS app can be built on top of this contract later; this
-repository slice provides the deterministic backend contract and CLI projection.
+execution. The native macOS helper consumes the card model and keeps PID/process
+detail hidden until that overlay is fresh.
 
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
 top-level error handling, and the public command handler re-export surface.

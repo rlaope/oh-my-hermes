@@ -58,6 +58,10 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertEqual(payload["settings"]["hermes_targets"]["label"], "Hermes targets: 1")
             self.assertEqual(payload["settings"]["coding_handoff"]["label"], "Coding handoff: Codex")
             self.assertEqual(payload["settings"]["send_mode"]["label"], "Send mode: Ask before opening Codex")
+            menu_cards = payload["display"]["menu_cards"]
+            self.assertEqual([card["title"] for card in menu_cards], ["Overview", "Hermes", "Coding", "Evidence"])
+            self.assertIn("Process details appear only after an observed runtime overlay.", menu_cards[1]["footer"])
+            self.assertNotIn("PID", json.dumps(menu_cards))
 
             hermes_agents = payload["hermes_agents"]
             self.assertEqual(len(hermes_agents), 1)
@@ -189,6 +193,9 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertTrue(payload["external_coding_executors"][0]["pid_observed"])
             self.assertTrue(payload["external_coding_executors"][0]["status_observed"])
             self.assertEqual(payload["external_coding_executors"][0]["model"]["tooltip"], "gpt-5.5")
+            menu_cards = payload["display"]["menu_cards"]
+            self.assertIn("PID 4312", json.dumps(menu_cards[1]["rows"]))
+            self.assertIn("PID 9821", json.dumps(menu_cards[2]["rows"]))
 
             status, stdout, stderr = run_cli(
                 [
