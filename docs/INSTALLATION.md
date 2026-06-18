@@ -105,19 +105,19 @@ omh menubar status
 `hermes_agents` and `external_coding_executors` sections, friendly labels such
 as `OMH connection: Ready`, `Hermes targets: 2`, `Coding handoff: Codex`, and
 `Send mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
-text. It also includes `display.menu_cards`, a compact Overview/Hermes/Coding/
-Evidence card model for native menu bar surfaces. Codex and other coding tools
+text. It also includes `display.menu_cards`, a compact Connection/Agent Status/
+Coding Handoff/Evidence card model for native menu bar surfaces. The Agent
+Status card is a small `Agent | PID | Status` list. Codex and other coding tools
 are external executors, not Hermes agents. Without an explicit process overlay,
-the payload reports configured/prepared state only and leaves PID plus
-running/restarting unobserved.
+the payload reports configured/prepared state only and shows PID as not observed.
 
 On macOS, a normal user-scope `omh setup` also attempts to build and start the
 small OMH menu bar helper when `swiftc` is available. The helper lives under
 `~/.omh/menubar`, is started with a user LaunchAgent, and refreshes the same
 `omh menubar status` payload. The visible menu is intentionally grouped as
-Overview, Hermes, Coding, and Evidence cards instead of a raw text list, and it
-shows process/PID detail only when a fresh overlay observed that process. Use
-explicit commands when you want to manage it yourself:
+Connection, Agent Status, Coding Handoff, and Evidence sections instead of a raw
+text list, and it shows process/PID detail only when a fresh overlay observed
+that process. Use explicit commands when you want to manage it yourself:
 
 ```sh
 omh menubar install
