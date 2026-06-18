@@ -147,8 +147,8 @@ class OperationsArtifactTests(unittest.TestCase):
         plan = build_research_department_plan(
             "every morning watch competitor news and brief me if something changed",
             created_at="2026-06-17T00:00:00Z",
-            notebooklm="preferred",
-            obsidian="preferred",
+            synthesis_tool="team knowledge summarizer",
+            knowledge_store="markdown folder",
         )
 
         self.assertEqual(plan["schema_version"], "research_department_plan/v1")
@@ -162,12 +162,28 @@ class OperationsArtifactTests(unittest.TestCase):
         self.assertEqual(plan["briefing_status"]["schema_version"], "briefing_status/v1")
         self.assertIn("research-department", {item["skill"] for item in plan["skill_chain"]})
         self.assertIn("web-research", {item["skill"] for item in plan["skill_chain"]})
-        self.assertIn("notebooklm_query_executed", plan["not_evidence_until_observed"])
-        self.assertIn("obsidian_vault_written", plan["not_evidence_until_observed"])
+        self.assertIn("synthesis_tool_query_observed", plan["not_evidence_until_observed"])
+        self.assertIn("knowledge_store_write_observed", plan["not_evidence_until_observed"])
         self.assertIn("gateway_delivery_sent", plan["not_evidence_until_observed"])
         self.assertIn("source_retrieval_observed", plan["not_evidence_until_observed"])
         self.assertIn("projection metadata only", plan["prepared_is_not"])
-        self.assertFalse(plan["optional_integrations"]["notebooklm"]["execution_observed"])
+        self.assertEqual(plan["synthesis_tool"]["type"], "knowledge_summarizer")
+        self.assertEqual(plan["knowledge_store"]["type"], "markdown_folder")
+        self.assertFalse(plan["synthesis_tool"]["query_observed"])
+        self.assertFalse(plan["knowledge_store"]["write_observed"])
+        self.assertNotIn("compatibility_aliases", plan["optional_integrations"])
+        self.assertEqual(validate_research_department_plan(plan), [])
+
+    def test_research_department_request_vendor_mentions_stay_concept_first_without_adapter(self) -> None:
+        plan = build_research_department_plan(
+            "daily research department using NotebookLM and Obsidian if possible",
+            created_at="2026-06-17T00:00:00Z",
+        )
+
+        self.assertEqual(plan["synthesis_tool"]["type"], "hermes_synthesis")
+        self.assertEqual(plan["synthesis_tool"]["vendor_hint"], "")
+        self.assertEqual(plan["knowledge_store"]["type"], "local_markdown_folder")
+        self.assertEqual(plan["knowledge_store"]["vendor_hint"], "")
         self.assertEqual(validate_research_department_plan(plan), [])
 
     def test_research_department_source_boundaries_shape_lane_skills(self) -> None:
@@ -209,14 +225,60 @@ class OperationsArtifactTests(unittest.TestCase):
         plan = build_research_department_plan("daily competitor research", created_at="2026-06-17T00:00:00Z")
         plan["source_inbox"]["buckets"]["raw_findings"]["status"] = "observed"
         plan["briefing_status"]["lanes"]["briefer"]["status"] = "delivered"
-        plan["optional_integrations"]["notebooklm"]["execution_status"] = "completed"
+        plan["knowledge_store"]["write_observed"] = True
+        plan["synthesis_tool"]["query_observed"] = True
+        plan["synthesis_tool"]["workspace_observed"] = True
+        plan["optional_integrations"]["synthesis_tool"]["execution_status"] = "completed"
 
         errors = validate_research_department_plan(plan)
 
         rendered = "; ".join(errors)
         self.assertIn("$.source_inbox.buckets.raw_findings.status must remain prepared or not_observed", rendered)
         self.assertIn("briefing_status.lanes.briefer.status must remain prepared or not_observed", rendered)
-        self.assertIn("optional_integrations.notebooklm.execution_status must not claim observed", rendered)
+        self.assertIn("$.knowledge_store.write_observed must remain false in projection-only research plans", rendered)
+        self.assertIn("$.synthesis_tool.query_observed must remain false in projection-only research plans", rendered)
+        self.assertIn("$.synthesis_tool.workspace_observed must remain false in projection-only research plans", rendered)
+        self.assertIn("optional_integrations.synthesis_tool.execution_status must not claim observed", rendered)
+
+    def test_research_department_plan_accepts_legacy_tooling_aliases(self) -> None:
+        plan = build_research_department_plan("daily competitor research", created_at="2026-06-17T00:00:00Z")
+        plan.pop("knowledge_store")
+        plan.pop("synthesis_tool")
+        plan["optional_integrations"] = {
+            "notebooklm": {"status": "prepared", "execution_observed": False},
+            "obsidian": {"status": "prepared", "execution_observed": False},
+        }
+        plan["not_evidence_until_observed"] = [
+            "source_retrieval_observed",
+            "notebooklm_query_executed",
+            "notebooklm_notebook_created",
+            "obsidian_vault_written",
+            "host_cron_created",
+            "hermes_automation_enabled",
+            "gateway_delivery_sent",
+            "brief_delivered",
+            "human_verification_complete",
+            "paywall_or_access_resolved",
+            "conflict_resolution_complete",
+            "connector_invoked",
+        ]
+
+        self.assertEqual(validate_research_department_plan(plan), [])
+
+    def test_research_department_plan_rejects_legacy_observed_boolean_claims(self) -> None:
+        plan = build_research_department_plan("daily competitor research", created_at="2026-06-17T00:00:00Z")
+        plan.pop("knowledge_store")
+        plan.pop("synthesis_tool")
+        plan["optional_integrations"] = {
+            "notebooklm": {"status": "prepared", "execution_observed": True},
+            "obsidian": {"status": "prepared", "execution_observed": True},
+        }
+
+        errors = validate_research_department_plan(plan)
+
+        rendered = "; ".join(errors)
+        self.assertIn("$.optional_integrations.notebooklm.execution_observed must remain false", rendered)
+        self.assertIn("$.optional_integrations.obsidian.execution_observed must remain false", rendered)
 
     def test_research_department_example_fixture_matches_plan_schema(self) -> None:
         fixture = Path("examples/research-department/competitor-digest.json")
@@ -228,8 +290,8 @@ class OperationsArtifactTests(unittest.TestCase):
             delivery="Slack digest",
             storage="markdown folder",
             sources=["competitor news", "market updates"],
-            notebooklm="preferred",
-            obsidian="available",
+            synthesis_tool="team knowledge summarizer",
+            knowledge_store="markdown folder",
             source="example fixture",
             plan_id="20260617T000000Z-research-department-competitor-digest-example",
             created_at="2026-06-17T00:00:00Z",

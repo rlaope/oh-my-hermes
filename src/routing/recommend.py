@@ -97,12 +97,12 @@ _SKILL_POLICIES = {
     "research-department": RecommendationPolicy(
         next_action="prepare_research_department_plan",
         evidence_boundary=(
-            "A research department plan is not observed source retrieval, NotebookLM execution, Obsidian writes, "
+            "A research department plan is not observed source retrieval, synthesis-tool execution, knowledge-store writes, "
             "host cron creation, gateway delivery, conflict resolution, or verified briefing evidence."
         ),
         wrapper_guidance=(
             "Prepare research_department_plan/v1 with Scout, Analyst, and Briefer lanes, source_inbox/v1 buckets, "
-            "briefing_status/v1 counts, optional NotebookLM/Obsidian readiness, and observed-only evidence requirements."
+            "briefing_status/v1 counts, knowledge-store and synthesis-tool preferences, and observed-only evidence requirements."
         ),
     ),
     "reliability-review": RecommendationPolicy(

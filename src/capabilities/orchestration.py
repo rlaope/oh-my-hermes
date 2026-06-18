@@ -121,7 +121,7 @@ def orchestration_patterns() -> list[dict[str, object]]:
         _pattern(
             "research_department_workflow",
             "Use when Hermes should prepare ongoing research operations as Scout, Analyst, and Briefer lanes.",
-            "Do not claim source retrieval, NotebookLM, Obsidian, scheduler, gateway delivery, or verification evidence from the prepared plan.",
+            "Do not claim source retrieval, synthesis-tool, knowledge-store, scheduler, gateway delivery, or verification evidence from the prepared plan.",
             "researcher",
             ("research-department", "web-research", "research-brief", "best-practice-research", "report-package", "automation-blueprint"),
             ("show_research_department_plan", "revise_research_sources", "show_status"),

@@ -1,131 +1,12 @@
 {
-  "briefing_status": {
-    "created_at": "2026-06-17T00:00:00Z",
-    "headline": "Research department workflow prepared",
-    "lanes": {
-      "analyst": {
-        "count": 0,
-        "prepared_role": "synthesize processed notes",
-        "status": "not_observed"
-      },
-      "briefer": {
-        "count": 0,
-        "prepared_role": "prepare brief output",
-        "status": "not_observed"
-      },
-      "scout": {
-        "count": 0,
-        "prepared_role": "collect source candidates",
-        "status": "not_observed"
-      },
-      "verification": {
-        "conflicts": 0,
-        "needs_verification": 0,
-        "prepared_role": "flag conflicts and source-quality gaps",
-        "status": "not_observed"
-      }
-    },
-    "next": [
-      "confirm topic, source boundaries, cadence, delivery, and storage",
-      "record observed source retrieval before claiming collected findings",
-      "record observed synthesis or human review before marking briefs verified"
-    ],
-    "not_observed": [
-      "source_retrieval_observed",
-      "notebooklm_query_executed",
-      "notebooklm_notebook_created",
-      "obsidian_vault_written",
-      "host_cron_created",
-      "hermes_automation_enabled",
-      "gateway_delivery_sent",
-      "brief_delivered",
-      "human_verification_complete",
-      "paywall_or_access_resolved",
-      "conflict_resolution_complete",
-      "connector_invoked"
-    ],
-    "plan_id": "20260617T000000Z-research-department-competitor-digest-example",
-    "schema_version": "briefing_status/v1",
-    "summary_counts": {
-      "briefed": 0,
-      "collected": 0,
-      "conflicts": 0,
-      "needs_verification": 0,
-      "processed": 0
-    },
-    "updated_at": "2026-06-17T00:00:00Z"
-  },
-  "cadence_intent": {
-    "cadence": "daily",
-    "explicit_cadence": "every morning",
-    "matched_terms": [
-      "daily"
-    ],
-    "requires_confirmation": false,
-    "status": "prepared"
-  },
-  "created_at": "2026-06-17T00:00:00Z",
-  "delivery_intent": {
-    "explicit_delivery": "Slack digest",
-    "requires_observed_gateway_evidence": true,
-    "status": "prepared",
-    "surfaces": [
-      "slack",
-      "report"
-    ]
-  },
-  "kind": "research-department-workflow",
-  "next_action": "Present the research department plan in Hermes, confirm topic/source/cadence/storage, then record source retrieval, synthesis, storage, and delivery only from observed evidence.",
-  "not_evidence_until_observed": [
-    "source_retrieval_observed",
-    "notebooklm_query_executed",
-    "notebooklm_notebook_created",
-    "obsidian_vault_written",
-    "host_cron_created",
-    "hermes_automation_enabled",
-    "gateway_delivery_sent",
-    "brief_delivered",
-    "human_verification_complete",
-    "paywall_or_access_resolved",
-    "conflict_resolution_complete",
-    "connector_invoked"
-  ],
-  "observation_status": "prepared",
-  "observed_evidence_required": [
-    "Observed source retrieval records or supplied source artifacts before claiming collected findings.",
-    "Observed NotebookLM MCP/tool output before claiming notebook query or notebook creation.",
-    "Observed Obsidian file writes before claiming vault persistence.",
-    "Hermes host automation or cron listing before claiming scheduled wakeups.",
-    "Gateway or Hermes message delivery record before claiming a brief was delivered.",
-    "Human or verifier review record before claiming conflicts or source quality are verified."
-  ],
-  "optional_integrations": {
-    "notebooklm": {
-      "boundary": "notebooklm is optional; this plan does not invoke it or prove it is configured.",
-      "execution_observed": false,
-      "mode": "preferred",
-      "name": "notebooklm",
-      "purpose": "Analyst enrichment over curated notebooks when the operator has configured it.",
-      "readiness": "operator_prefers_if_available",
-      "status": "prepared"
-    },
-    "obsidian": {
-      "boundary": "obsidian is optional; this plan does not invoke it or prove it is configured.",
-      "execution_observed": false,
-      "mode": "available",
-      "name": "obsidian",
-      "purpose": "Source inbox and brief persistence to a vault when the operator has configured it.",
-      "readiness": "operator_supplied_available",
-      "status": "prepared"
-    }
-  },
-  "optional_runtime_capabilities": [
-    "NotebookLM MCP/tool access for curated notebook queries.",
-    "Obsidian vault access for persistent markdown storage.",
-    "Gateway delivery evidence when briefs leave the current Hermes thread."
-  ],
+  "schema_version": "research_department_plan/v1",
   "plan_id": "20260617T000000Z-research-department-competitor-digest-example",
-  "prepared_is_not": "A research-department plan is projection metadata only. It is not source retrieval, NotebookLM execution, Obsidian writes, host cron creation, gateway delivery, human verification, connector invocation, or brief delivery evidence.",
+  "kind": "research-department-workflow",
+  "title": "Research department: competitor digest",
+  "status": "prepared",
+  "observation_status": "prepared",
+  "created_at": "2026-06-17T00:00:00Z",
+  "updated_at": "2026-06-17T00:00:00Z",
   "projection": {
     "authority": "projection_only",
     "derived_from": [
@@ -142,194 +23,339 @@
       "src/hermes_ops.py"
     ]
   },
-  "prompt_outline": {
-    "missing_decisions": [
-      "confirm topic and source boundaries",
-      "confirm cadence and delivery target",
-      "confirm storage destination and optional NotebookLM/Obsidian readiness"
-    ],
-    "operator_prompt": "Prepare a research department workflow for: every morning check competitor news and send a Slack digest only if something changed. Use skills: research-department, web-research, research-brief, report-package, automation-blueprint. Map Scout to collection, Analyst to synthesis, and Briefer to reporting. Keep collected, synthesized, briefed, delivered, and verified states separate.",
-    "system_intent": "Hermes should prepare a research operations workflow, not claim the research has already run."
-  },
-  "request_summary": "every morning check competitor news and send a Slack digest only if something changed",
-  "required_runtime_capabilities": [
-    "Hermes research workflow skills for source scoping, synthesis, and status narration.",
-    "Observed source retrieval or supplied source artifacts before content claims.",
-    "A Hermes/governed scheduler only if the operator wants recurring wakeups."
-  ],
-  "roles": [
-    {
-      "label": "Scout",
-      "output_bucket": "raw_findings",
-      "primary_skills": [
-        "web-research",
-        "autoresearch-goal"
-      ],
-      "responsibility": "Collect source candidates and raw findings without claiming retrieval until observed.",
-      "role": "scout",
-      "status": "prepared"
-    },
-    {
-      "label": "Analyst",
-      "output_bucket": "processed_notes",
-      "primary_skills": [
-        "research-brief",
-        "best-practice-research"
-      ],
-      "responsibility": "Synthesize processed notes, conflicts, confidence, and missing evidence.",
-      "role": "analyst",
-      "status": "prepared"
-    },
-    {
-      "label": "Briefer",
-      "output_bucket": "briefs",
-      "primary_skills": [
-        "report-package",
-        "meeting-brief",
-        "operating-rhythm"
-      ],
-      "responsibility": "Prepare a digest, report, or meeting brief with unresolved gaps visible.",
-      "role": "briefer",
-      "status": "prepared"
-    }
-  ],
-  "schema_version": "research_department_plan/v1",
-  "skill_chain": [
-    {
-      "reason": "workflow pack owner",
-      "skill": "research-department"
-    },
-    {
-      "reason": "Scout lane for current/source-backed collection",
-      "skill": "web-research"
-    },
-    {
-      "reason": "Analyst lane for source-backed synthesis",
-      "skill": "research-brief"
-    },
-    {
-      "reason": "Briefer lane for digest/report output",
-      "skill": "report-package"
-    },
-    {
-      "reason": "cadence and delivery policy when recurring",
-      "skill": "automation-blueprint"
-    }
-  ],
   "source": "example fixture",
-  "source_inbox": {
-    "authority": "projection_only",
-    "boundary": "Empty or prepared inbox buckets are not source retrieval, synthesis, storage, or verification evidence.",
-    "buckets": {
-      "briefs": {
-        "items": [],
-        "status": "not_observed"
-      },
-      "conflicts": {
-        "items": [],
-        "status": "not_observed"
-      },
-      "needs_verification": {
-        "items": [],
-        "status": "not_observed"
-      },
-      "processed_notes": {
-        "items": [],
-        "status": "not_observed"
-      },
-      "raw_findings": {
-        "items": [],
-        "status": "not_observed"
-      }
-    },
-    "counts": {
-      "briefs": 0,
-      "conflicts": 0,
-      "needs_verification": 0,
-      "processed_notes": 0,
-      "raw_findings": 0
-    },
-    "created_at": "2026-06-17T00:00:00Z",
-    "plan_id": "20260617T000000Z-research-department-competitor-digest-example",
-    "schema_version": "source_inbox/v1",
-    "updated_at": "2026-06-17T00:00:00Z"
+  "request_summary": "every morning check competitor news and send a Slack digest only if something changed",
+  "topic_intent": {
+    "status": "prepared",
+    "topic": "competitor and market signals",
+    "explicit_topic": "",
+    "requires_confirmation": false
+  },
+  "cadence_intent": {
+    "status": "prepared",
+    "cadence": "daily",
+    "explicit_cadence": "every morning",
+    "matched_terms": [
+      "daily"
+    ],
+    "requires_confirmation": false
+  },
+  "delivery_intent": {
+    "status": "prepared",
+    "surfaces": [
+      "slack",
+      "report"
+    ],
+    "explicit_delivery": "Slack digest",
+    "requires_observed_gateway_evidence": true
+  },
+  "knowledge_store": {
+    "schema_version": "knowledge_store_intent/v1",
+    "status": "prepared",
+    "type": "markdown_folder",
+    "explicit_target": "markdown folder",
+    "vendor_hint": "",
+    "mode": "preferred",
+    "readiness": "operator_prefers_if_available",
+    "requested_capability": "persist source inboxes, notes, briefs, and unresolved verification gaps",
+    "write_observed": false,
+    "requires_observed_write_evidence": true,
+    "boundary": "A knowledge-store preference is not write evidence or proof that the store is configured."
+  },
+  "synthesis_tool": {
+    "schema_version": "synthesis_tool_intent/v1",
+    "status": "prepared",
+    "type": "knowledge_summarizer",
+    "explicit_target": "team knowledge summarizer",
+    "vendor_hint": "",
+    "mode": "preferred",
+    "readiness": "operator_prefers_if_available",
+    "requested_capability": "summarize curated sources, surface conflicts, and preserve missing evidence",
+    "query_observed": false,
+    "workspace_observed": false,
+    "boundary": "A synthesis-tool preference is not query evidence or proof that the tool is configured."
   },
   "source_policy": {
-    "conflict_policy": "preserve_conflicts_until_verified",
+    "status": "prepared",
+    "source_boundaries": [
+      "competitor news",
+      "market updates"
+    ],
     "detected_source_types": [
       "competitor",
       "market",
       "news"
     ],
-    "freshness_policy": "state_retrieval_date_when_observed",
     "paywall_policy": "flag_as_gap",
-    "requires_confirmation": false,
-    "source_boundaries": [
-      "competitor news",
-      "market updates"
-    ],
-    "status": "prepared"
+    "conflict_policy": "preserve_conflicts_until_verified",
+    "freshness_policy": "state_retrieval_date_when_observed",
+    "requires_confirmation": false
   },
-  "status": "prepared",
-  "storage_intent": {
-    "destinations": [
-      "markdown-folder"
-    ],
-    "explicit_storage": "markdown folder",
-    "requires_observed_write_evidence": false,
-    "status": "prepared"
-  },
-  "title": "Research department: competitor digest",
-  "topic_intent": {
-    "explicit_topic": "",
-    "requires_confirmation": false,
-    "status": "prepared",
-    "topic": "competitor and market signals"
-  },
-  "updated_at": "2026-06-17T00:00:00Z",
+  "roles": [
+    {
+      "role": "scout",
+      "label": "Scout",
+      "status": "prepared",
+      "responsibility": "Collect source candidates and raw findings without claiming retrieval until observed.",
+      "primary_skills": [
+        "web-research",
+        "autoresearch-goal"
+      ],
+      "output_bucket": "raw_findings"
+    },
+    {
+      "role": "analyst",
+      "label": "Analyst",
+      "status": "prepared",
+      "responsibility": "Synthesize processed notes, conflicts, confidence, and missing evidence.",
+      "primary_skills": [
+        "research-brief",
+        "best-practice-research"
+      ],
+      "output_bucket": "processed_notes"
+    },
+    {
+      "role": "briefer",
+      "label": "Briefer",
+      "status": "prepared",
+      "responsibility": "Prepare a digest, report, or meeting brief with unresolved gaps visible.",
+      "primary_skills": [
+        "report-package",
+        "meeting-brief",
+        "operating-rhythm"
+      ],
+      "output_bucket": "briefs"
+    }
+  ],
+  "skill_chain": [
+    {
+      "skill": "research-department",
+      "reason": "workflow pack owner"
+    },
+    {
+      "skill": "web-research",
+      "reason": "Scout lane for current/source-backed collection"
+    },
+    {
+      "skill": "research-brief",
+      "reason": "Analyst lane for source-backed synthesis"
+    },
+    {
+      "skill": "report-package",
+      "reason": "Briefer lane for digest/report output"
+    },
+    {
+      "skill": "automation-blueprint",
+      "reason": "cadence and delivery policy when recurring"
+    }
+  ],
   "workflow_chain": [
     {
-      "not_evidence": "source_retrieval_observed",
+      "stage": "collect",
       "owner": "scout",
-      "prepared_output": "source_inbox.raw_findings",
+      "status": "prepared",
       "skills": [
         "web-research",
         "autoresearch-goal"
       ],
-      "stage": "collect",
-      "status": "prepared"
+      "prepared_output": "source_inbox.raw_findings",
+      "not_evidence": "source_retrieval_observed"
     },
     {
-      "not_evidence": "notebooklm_query_executed",
+      "stage": "synthesize",
       "owner": "analyst",
-      "prepared_output": "source_inbox.processed_notes",
+      "status": "prepared",
       "skills": [
         "research-brief",
         "best-practice-research"
       ],
-      "stage": "synthesize",
-      "status": "prepared"
+      "prepared_output": "source_inbox.processed_notes",
+      "not_evidence": "synthesis_tool_query_observed"
     },
     {
-      "not_evidence": "brief_delivered",
+      "stage": "brief",
       "owner": "briefer",
-      "prepared_output": "source_inbox.briefs",
+      "status": "prepared",
       "skills": [
         "report-package",
         "meeting-brief",
         "operating-rhythm"
       ],
-      "stage": "brief",
-      "status": "prepared"
+      "prepared_output": "source_inbox.briefs",
+      "not_evidence": "brief_delivered"
     }
   ],
+  "source_inbox": {
+    "schema_version": "source_inbox/v1",
+    "plan_id": "20260617T000000Z-research-department-competitor-digest-example",
+    "created_at": "2026-06-17T00:00:00Z",
+    "updated_at": "2026-06-17T00:00:00Z",
+    "authority": "projection_only",
+    "buckets": {
+      "raw_findings": {
+        "status": "not_observed",
+        "items": []
+      },
+      "processed_notes": {
+        "status": "not_observed",
+        "items": []
+      },
+      "briefs": {
+        "status": "not_observed",
+        "items": []
+      },
+      "conflicts": {
+        "status": "not_observed",
+        "items": []
+      },
+      "needs_verification": {
+        "status": "not_observed",
+        "items": []
+      }
+    },
+    "counts": {
+      "raw_findings": 0,
+      "processed_notes": 0,
+      "briefs": 0,
+      "conflicts": 0,
+      "needs_verification": 0
+    },
+    "boundary": "Empty or prepared inbox buckets are not source retrieval, synthesis, storage, or verification evidence."
+  },
+  "briefing_status": {
+    "schema_version": "briefing_status/v1",
+    "plan_id": "20260617T000000Z-research-department-competitor-digest-example",
+    "created_at": "2026-06-17T00:00:00Z",
+    "updated_at": "2026-06-17T00:00:00Z",
+    "headline": "Research department workflow prepared",
+    "lanes": {
+      "scout": {
+        "status": "not_observed",
+        "prepared_role": "collect source candidates",
+        "count": 0
+      },
+      "analyst": {
+        "status": "not_observed",
+        "prepared_role": "synthesize processed notes",
+        "count": 0
+      },
+      "briefer": {
+        "status": "not_observed",
+        "prepared_role": "prepare brief output",
+        "count": 0
+      },
+      "verification": {
+        "status": "not_observed",
+        "prepared_role": "flag conflicts and source-quality gaps",
+        "conflicts": 0,
+        "needs_verification": 0
+      }
+    },
+    "summary_counts": {
+      "collected": 0,
+      "processed": 0,
+      "briefed": 0,
+      "conflicts": 0,
+      "needs_verification": 0
+    },
+    "not_observed": [
+      "source_retrieval_observed",
+      "synthesis_tool_query_observed",
+      "synthesis_tool_workspace_created",
+      "knowledge_store_write_observed",
+      "host_cron_created",
+      "hermes_automation_enabled",
+      "gateway_delivery_sent",
+      "brief_delivered",
+      "human_verification_complete",
+      "paywall_or_access_resolved",
+      "conflict_resolution_complete",
+      "connector_invoked"
+    ],
+    "next": [
+      "confirm topic, source boundaries, cadence, delivery, and storage",
+      "record observed source retrieval before claiming collected findings",
+      "record observed synthesis or human review before marking briefs verified"
+    ]
+  },
+  "optional_integrations": {
+    "knowledge_store": {
+      "schema_version": "knowledge_store_intent/v1",
+      "status": "prepared",
+      "type": "markdown_folder",
+      "explicit_target": "markdown folder",
+      "vendor_hint": "",
+      "mode": "preferred",
+      "readiness": "operator_prefers_if_available",
+      "requested_capability": "persist source inboxes, notes, briefs, and unresolved verification gaps",
+      "write_observed": false,
+      "requires_observed_write_evidence": true,
+      "boundary": "A knowledge-store preference is not write evidence or proof that the store is configured."
+    },
+    "synthesis_tool": {
+      "schema_version": "synthesis_tool_intent/v1",
+      "status": "prepared",
+      "type": "knowledge_summarizer",
+      "explicit_target": "team knowledge summarizer",
+      "vendor_hint": "",
+      "mode": "preferred",
+      "readiness": "operator_prefers_if_available",
+      "requested_capability": "summarize curated sources, surface conflicts, and preserve missing evidence",
+      "query_observed": false,
+      "workspace_observed": false,
+      "boundary": "A synthesis-tool preference is not query evidence or proof that the tool is configured."
+    }
+  },
+  "prompt_outline": {
+    "system_intent": "Hermes should prepare a research operations workflow, not claim the research has already run.",
+    "operator_prompt": "Prepare a research department workflow for: every morning check competitor news and send a Slack digest only if something changed. Use skills: research-department, web-research, research-brief, report-package, automation-blueprint. Map Scout to collection, Analyst to synthesis, and Briefer to reporting. Keep collected, synthesized, briefed, delivered, and verified states separate.",
+    "missing_decisions": [
+      "confirm topic and source boundaries",
+      "confirm cadence and delivery target",
+      "confirm knowledge-store destination and optional synthesis-tool readiness"
+    ]
+  },
   "wrapper_actions": [
     "show_research_department_plan",
     "revise_topic_or_sources",
-    "confirm_cadence_delivery_storage",
+    "confirm_cadence_delivery_tooling",
     "prepare_scout_research",
     "prepare_analyst_synthesis",
     "prepare_briefer_output",
     "record_observed_source_or_delivery_evidence"
-  ]
+  ],
+  "required_runtime_capabilities": [
+    "Hermes research workflow skills for source scoping, synthesis, and status narration.",
+    "Observed source retrieval or supplied source artifacts before content claims.",
+    "A Hermes/governed scheduler only if the operator wants recurring wakeups."
+  ],
+  "optional_runtime_capabilities": [
+    "A synthesis tool for curated knowledge summarization when the operator has configured one.",
+    "A knowledge store for persistent source inboxes, notes, and briefs when the operator has configured one.",
+    "Gateway delivery evidence when briefs leave the current Hermes thread."
+  ],
+  "not_evidence_until_observed": [
+    "source_retrieval_observed",
+    "synthesis_tool_query_observed",
+    "synthesis_tool_workspace_created",
+    "knowledge_store_write_observed",
+    "host_cron_created",
+    "hermes_automation_enabled",
+    "gateway_delivery_sent",
+    "brief_delivered",
+    "human_verification_complete",
+    "paywall_or_access_resolved",
+    "conflict_resolution_complete",
+    "connector_invoked"
+  ],
+  "observed_evidence_required": [
+    "Observed source retrieval records or supplied source artifacts before claiming collected findings.",
+    "Observed synthesis-tool output before claiming knowledge summarization or workspace queries.",
+    "Observed knowledge-store write records before claiming persistent notes, inboxes, or briefs were saved.",
+    "Hermes host automation or cron listing before claiming scheduled wakeups.",
+    "Gateway or Hermes message delivery record before claiming a brief was delivered.",
+    "Human or verifier review record before claiming conflicts or source quality are verified."
+  ],
+  "prepared_is_not": "A research-department plan is projection metadata only. It is not source retrieval, synthesis-tool execution, knowledge-store writes, host cron creation, gateway delivery, human verification, connector invocation, or brief delivery evidence.",
+  "next_action": "Present the research department plan in Hermes, confirm topic/source/cadence/tooling, then record source retrieval, synthesis-tool output, knowledge-store writes, and delivery only from observed evidence."
 }

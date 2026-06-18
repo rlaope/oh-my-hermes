@@ -563,25 +563,25 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Docs visibility: `primary_workflow_skill`
 - Compatibility alias: `false`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Keep the research operating model in Hermes. Map Scout to `web-research`/`autoresearch-goal`, Analyst to `research-brief`/`best-practice-research`, and Briefer to `report-package` or meeting/report workflows. Record retrieval, NotebookLM, Obsidian, delivery, and verification only from observed evidence.
-- Why this exists: `research-department` exists so Hermes users can start complex research-ops patterns without manually designing profiles, cron, NotebookLM, Obsidian, and delivery glue, while OMH keeps every runtime claim observed-only.
-- Use when: Use when Hermes should turn an ongoing or recurring research request into a prepared Scout -> Analyst -> Briefer workflow with source inbox, optional NotebookLM/Obsidian readiness, and briefing status without claiming research execution.
+- Handoff policy: Keep the research operating model in Hermes. Map Scout to `web-research`/`autoresearch-goal`, Analyst to `research-brief`/`best-practice-research`, and Briefer to `report-package` or meeting/report workflows. Record retrieval, synthesis-tool output, knowledge-store writes, delivery, and verification only from observed evidence.
+- Why this exists: `research-department` exists so Hermes users can start complex research-ops patterns without manually designing profiles, cron, knowledge storage, synthesis tooling, and delivery glue, while OMH keeps every runtime claim observed-only.
+- Use when: Use when Hermes should turn an ongoing or recurring research request into a prepared Scout -> Analyst -> Briefer workflow with source inbox, knowledge-store and synthesis-tool readiness, and briefing status without claiming research execution.
 - Do not use when:
   - The user only needs a one-off current-source lookup; use `web-research`.
   - The user only needs a one-off business synthesis; use `research-brief`.
   - The request is pure scheduling with no source collection or synthesis; use `automation-blueprint`.
   - The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.
-- Strong routing signals: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`, `competitor research department`, `market research department`, `paper review`, `weekly paper review`, `research paper review`, `paper research`, `notebooklm research`, `obsidian research vault`, `research inbox`, `source inbox`, `briefing status`, `리서치 부서`, `리서치 조직`, `리서치 운영`, `수집 합성 브리핑`, `경쟁사 리서치 부서`
+- Strong routing signals: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`, `competitor research department`, `market research department`, `paper review`, `weekly paper review`, `research paper review`, `paper research`, `notebooklm research`, `obsidian research vault`, `knowledge store`, `knowledge storage`, `synthesis tool`, `knowledge summarizer`, `research inbox`, `source inbox`, `briefing status`, `리서치 부서`, `리서치 조직`, `리서치 운영`, `수집 합성 브리핑`, `지식 저장소`, `요약 도구`, `경쟁사 리서치 부서`
 - Good example:
   - Prompt: research-department 매일 경쟁사와 시장 뉴스를 수집해서 변화가 있으면 브리핑해줘.
-  - Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, optional integration readiness, and observed-only evidence requirements.
+  - Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, knowledge-store and synthesis-tool readiness, and observed-only evidence requirements.
   - Why: The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.
 - Bad example:
-  - Prompt: research-department prove NotebookLM queried the notebook and posted the Slack brief.
-  - Expected behavior: Ask for observed NotebookLM and gateway delivery evidence or mark those states as not_observed.
+  - Prompt: research-department prove the synthesis tool queried the knowledge base and posted the Slack brief.
+  - Expected behavior: Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.
   - Why: The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.
 - Quality bar:
-  - Name topic, source boundaries, cadence, delivery target, storage destination, and optional integration readiness.
+  - Name topic, source boundaries, cadence, delivery target, knowledge-store destination, and synthesis-tool readiness.
   - Map Scout, Analyst, and Briefer lanes to concrete OMH skills and source inbox buckets.
   - Expose collected, synthesized, briefed, conflict, and verification counts as status, not execution proof.
   - List required evidence before claiming retrieval, synthesis, storage, delivery, or verification.
@@ -590,7 +590,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - source boundaries
   - cadence
   - delivery target
-  - storage preference
+  - knowledge-store preference
+  - synthesis-tool preference
 - Expected outputs:
   - research_department_plan/v1
   - source_inbox/v1
@@ -599,9 +600,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Artifact expectations:
   - research_department_plan/v1 under .omh/research-department/plans when a wrapper or CLI records it
 - Safety rules:
-  - Do not claim web retrieval, NotebookLM query, Obsidian write, cron creation, gateway delivery, or verification from a prepared plan.
+  - Do not claim web retrieval, synthesis-tool query, knowledge-store write, cron creation, gateway delivery, or verification from a prepared plan.
   - Keep raw findings, processed notes, briefs, conflicts, and verification needs in separate source inbox buckets.
-  - Treat NotebookLM and Obsidian as optional readiness hints unless observed integration evidence exists.
+  - Treat vendor-specific tool names as optional aliases for synthesis-tool and knowledge-store readiness unless observed evidence exists.
 
 ### strategy-brief
 
@@ -2924,16 +2925,17 @@ Prepare Scout, Analyst, and Briefer research operations with source inbox and br
 - Use when: Use when recurring or durable market, competitor, paper, news, or source-monitoring research should become a Hermes workflow pack.
 - Quality tier: `research-ops-gated`
 - Quality bar:
-  - Name topic, source boundaries, cadence, delivery target, storage destination, and optional integration readiness.
+  - Name topic, source boundaries, cadence, delivery target, knowledge-store destination, and synthesis-tool readiness.
   - Map Scout, Analyst, and Briefer lanes to concrete OMH skills and source inbox buckets.
   - Expose collected, synthesized, briefed, conflict, and verification counts as status, not execution proof.
-  - List required evidence before claiming retrieval, NotebookLM, Obsidian, delivery, or verification.
+  - List required evidence before claiming retrieval, synthesis-tool, knowledge-store, delivery, or verification.
 - Inputs:
   - topic or watch area
   - source boundaries
   - cadence
   - delivery target
-  - storage preference
+  - knowledge-store preference
+  - synthesis-tool preference
 - Outputs:
   - research_department_plan/v1
   - source_inbox/v1
@@ -2946,31 +2948,31 @@ Prepare Scout, Analyst, and Briefer research operations with source inbox and br
 - Verification:
   - validate research_department_plan/v1
   - check Scout/Analyst/Briefer lane mapping
-  - verify not_evidence_until_observed lists retrieval, NotebookLM, Obsidian, scheduler, and delivery claims
+  - verify not_evidence_until_observed lists retrieval, synthesis-tool, knowledge-store, scheduler, and delivery claims
 - Evidence ladder:
   - `research_plan_scope_recorded`
   - `source_inbox_prepared`
   - `briefing_status_prepared`
-  - `optional_integrations_classified`
+  - `tooling_readiness_prepared`
   - `observed_evidence_recorded_when_available`
 - Wrapper actions:
   - `show_research_department_plan`
   - `revise_research_sources`
-  - `confirm_cadence_delivery_storage`
+  - `confirm_cadence_delivery_tooling`
   - `record_source_observation`
   - `show_status`
 - Artifact events:
   - `research_plan_scope_recorded`
   - `source_inbox_prepared`
   - `briefing_status_prepared`
-  - `integration_readiness_prepared`
-- Delegation expectation: Record research department plans as Hermes-retained projection metadata; record source retrieval, NotebookLM, Obsidian, delivery, and verification only from observed evidence.
+  - `tooling_readiness_prepared`
+- Delegation expectation: Record research department plans as Hermes-retained projection metadata; record source retrieval, synthesis-tool output, knowledge-store writes, delivery, and verification only from observed evidence.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - A research_department_plan/v1 artifact is not source retrieval, NotebookLM execution, Obsidian writes, host cron creation, gateway delivery, or verification evidence.
+  - A research_department_plan/v1 artifact is not source retrieval, synthesis-tool execution, knowledge-store writes, host cron creation, gateway delivery, or verification evidence.
   - Source inbox buckets are not proof that source content was fetched or processed.
   - Briefing status counts are only prepared status until matching source, synthesis, storage, delivery, or review evidence exists.
-- Fallback: If topic, sources, cadence, delivery, or storage are missing, prepare the plan and ask for the smallest missing confirmation.
+- Fallback: If topic, sources, cadence, delivery, knowledge-store, or synthesis-tool preferences are missing, prepare the plan and ask for the smallest missing confirmation.
 
 ### reliability-review
 
