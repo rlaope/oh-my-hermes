@@ -250,6 +250,146 @@ _FORMAT_PROFILES = {
         "visual_metaphor": "stacked product cards, sparkle markers, release ribbon, update badge",
     },
 }
+_SECTION_TITLE_MAX_WORDS = 10
+_SECTION_TEXT_MAX_WORDS = 28
+_DEFAULT_VISUAL_MARK = "OMH generated"
+_DOMAIN_PROFILES = {
+    "security": {
+        "label": "security operations",
+        "keywords": (
+            "security",
+            "risk",
+            "login",
+            "auth",
+            "mfa",
+            "password",
+            "breach",
+            "injection",
+            "prompt injection",
+            "attack",
+            "threat",
+            "vulnerability",
+            "anomaly",
+            "containment",
+        ),
+        "style_family": "secure systems interface",
+        "background_scene": "security operations center, auth-log streams, access-control grid, terminal diagnostics, shield/lock geometry",
+        "motifs": ("auth log rows", "shield outline", "lock nodes", "red anomaly pulses", "network trace lines"),
+        "palette": "deep graphite, alert red, electric cyan, muted violet, restrained warning highlights",
+        "composition": "layer the content over a controlled security dashboard, with threat lanes and containment checkpoints instead of a generic card stack",
+    },
+    "commerce": {
+        "label": "commerce and shopping",
+        "keywords": (
+            "shopping",
+            "checkout",
+            "cart",
+            "coupon",
+            "wishlist",
+            "product",
+            "inventory",
+            "shipping",
+            "payment",
+            "price",
+            "retail",
+            "store",
+            "customer",
+            "purchase",
+        ),
+        "style_family": "retail product system",
+        "background_scene": "product shelf, checkout receipt, cart flow, price tags, package labels, clean storefront interface",
+        "motifs": ("product tiles", "receipt strips", "cart path", "price tags", "package labels"),
+        "palette": "warm off-white, retail green, checkout teal, soft gold, product-photo neutrals",
+        "composition": "make the reading path feel like a product journey from discovery to cart, with receipt and product-card details",
+    },
+    "sports": {
+        "label": "sports field and gear",
+        "keywords": (
+            "sports",
+            "basketball",
+            "running",
+            "runner",
+            "league",
+            "club",
+            "gear",
+            "team",
+            "race",
+            "court",
+            "track",
+            "athlete",
+            "sponsorship",
+            "recovery",
+            "compression",
+            "shoes",
+        ),
+        "style_family": "kinetic sports editorial",
+        "background_scene": "court markings, running-track lanes, jersey fabric, equipment silhouettes, scoreboard rhythm, motion streaks",
+        "motifs": ("court arcs", "track lanes", "scoreboard blocks", "gear silhouettes", "motion arrows"),
+        "palette": "stadium navy, court green, track orange, chalk white, energetic accent colors",
+        "composition": "use diagonal motion, scoreboard callouts, and field/court spatial cues so the card feels athletic rather than corporate",
+    },
+    "fashion": {
+        "label": "fashion editorial",
+        "keywords": (
+            "fashion",
+            "outfit",
+            "lookbook",
+            "runway",
+            "wear",
+            "apparel",
+            "streetwear",
+            "style",
+            "fabric",
+            "garment",
+            "collection",
+            "model",
+            "fit",
+            "sneaker",
+            "jacket",
+        ),
+        "style_family": "editorial lookbook",
+        "background_scene": "fashion editorial set, fabric swatches, runway light, garment tags, magazine spread, outfit annotations",
+        "motifs": ("fabric texture", "lookbook frame", "garment tag", "runway strip", "annotation pins"),
+        "palette": "soft studio white, ink black, muted blush, silver, one seasonal accent",
+        "composition": "treat sections like editorial callouts around a lookbook spread, not like software dashboard cards",
+    },
+    "finance": {
+        "label": "finance and metrics",
+        "keywords": ("finance", "revenue", "margin", "sales", "growth", "budget", "forecast", "roi", "metric", "kpi", "cost"),
+        "style_family": "executive metric board",
+        "background_scene": "financial dashboard, ledger grid, trend lines, clean KPI blocks, board-report surface",
+        "motifs": ("trend lines", "ledger rows", "KPI chips", "forecast bands", "approval stamp"),
+        "palette": "midnight blue, paper white, measured green, amber warning, steel gray",
+        "composition": "prioritize metric hierarchy, deltas, and decision boxes over decorative illustration",
+    },
+    "developer": {
+        "label": "developer workflow",
+        "keywords": ("github", "pr", "pull request", "merge", "ci", "test", "code", "deploy", "repo", "review", "branch"),
+        "style_family": "developer review system",
+        "background_scene": "developer workspace, code review panes, diff blocks, CI status rails, branch/merge graph, terminal grid",
+        "motifs": ("diff blocks", "merge arrows", "CI badges", "review comments", "branch graph"),
+        "palette": "dark slate, code blue, success green, review purple, CI amber",
+        "composition": "keep PR risk, tests, and reviewer focus visible as a review board rather than a marketing poster",
+    },
+    "research": {
+        "label": "research synthesis",
+        "keywords": ("research", "source", "survey", "competitor", "news", "briefing", "scan", "market", "finding", "evidence"),
+        "style_family": "research wall",
+        "background_scene": "source cards, evidence pins, synthesis map, memo paper, citation strips, analyst workspace",
+        "motifs": ("source pins", "citation strips", "synthesis nodes", "briefing memo", "confidence markers"),
+        "palette": "warm paper, ink navy, evidence blue, muted green, caution amber",
+        "composition": "show source-to-insight flow with clear caveats and next-scan space",
+    },
+    "operations": {
+        "label": "operations briefing",
+        "keywords": (),
+        "style_family": "operator briefing",
+        "background_scene": "clean command board, context panels, status rails, evidence footer, calm workspace",
+        "motifs": ("status rails", "context panels", "evidence chips", "next-action marker"),
+        "palette": "neutral paper, deep ink, OMH blue, soft teal, quiet gold",
+        "composition": "keep a clear briefing hierarchy while allowing the source kind to drive section shape",
+    },
+}
 _MIME_BY_SUFFIX = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -326,6 +466,7 @@ def build_visual_prompt_card(
         raise ValueError("provide at least one --section, positional source text, or --from-file input")
 
     resolved_headline = str(headline).strip() or _HEADLINES[source_kind]
+    domain_profile = _domain_profile_for_card(source_kind, resolved_headline, visual_sections, source_excerpt)
     record = {
         "schema_version": VISUAL_PROMPT_CARD_SCHEMA_VERSION,
         "card_id": "",
@@ -343,6 +484,12 @@ def build_visual_prompt_card(
             "sections": [section["role"] for section in visual_sections],
             "hierarchy": ", ".join(format_profile["structure"]),
             "recommended_aspect_ratio": format_profile["default_aspect_ratio"],
+            "brand_mark": _DEFAULT_VISUAL_MARK,
+            "composition_rule": (
+                "Preserve source label, headline, readable section modules, evidence footer, and a small OMH generated mark; "
+                "adapt background, motif, and layout rhythm to the detected domain."
+            ),
+            "density_rule": "If the supplied copy needs more room, extend the canvas or add rows rather than shrinking text.",
         },
         "format_profile": {
             "label": format_profile["label"],
@@ -350,15 +497,20 @@ def build_visual_prompt_card(
             "theme_direction": format_profile["theme_direction"],
             "visual_metaphor": format_profile["visual_metaphor"],
         },
+        "visual_theme": _public_domain_profile(domain_profile),
         "sections": visual_sections,
         "image_text": {
             "headline": _clip_words(resolved_headline, 12),
-            "footer": "Prepared by Hermes with OMH",
+            "footer": _DEFAULT_VISUAL_MARK,
+            "evidence_footer": "prepared, not evidence",
         },
         "style_direction": {
-            "mood": str(format_profile["theme_direction"]),
-            "typography": "readable labels, short lines, and enough canvas height for the selected format",
-            "palette": "controlled by wrapper or user preference",
+            "mood": f"{domain_profile['style_family']} over {format_profile['theme_direction']}",
+            "background": domain_profile["background_scene"],
+            "motifs": list(domain_profile["motifs"]),
+            "composition": domain_profile["composition"],
+            "typography": "readable labels, medium-density copy, and enough canvas height for the selected format",
+            "palette": domain_profile["palette"],
         },
         "generation_prompt": _generation_prompt(
             source_kind,
@@ -367,6 +519,7 @@ def build_visual_prompt_card(
             language,
             resolved_aspect_ratio,
             resolved_format,
+            domain_profile,
         ),
         "negative_prompt": (
             "Do not invent facts, owners, decisions, test results, approvals, or delivery claims. "
@@ -456,6 +609,16 @@ def validate_visual_prompt_card(record: dict[str, Any]) -> list[str]:
     profile = record.get("format_profile", {})
     if not isinstance(profile, dict) or not str(profile.get("theme_direction", "")).strip():
         errors.append("format_profile.theme_direction is required")
+    visual_theme = record.get("visual_theme", {})
+    if visual_theme:
+        if not isinstance(visual_theme, dict):
+            errors.append("visual_theme must be an object when supplied")
+        else:
+            for field in ("label", "style_family", "background_scene", "palette", "composition"):
+                if not str(visual_theme.get(field, "")).strip():
+                    errors.append(f"visual_theme.{field} is required")
+            if not isinstance(visual_theme.get("motifs"), list) or not visual_theme.get("motifs"):
+                errors.append("visual_theme.motifs must be a non-empty list")
     setup = record.get("capability_setup", {})
     if not isinstance(setup, dict) or setup.get("schema_version") != IMAGE_GENERATION_SETUP_SCHEMA_VERSION:
         errors.append("capability_setup.schema_version must be image_generation_setup/v1")
@@ -633,15 +796,15 @@ def summarize_visual_observation(record: dict[str, Any]) -> dict[str, str]:
 def _normalize_section(item: dict[str, str], index: int) -> dict[str, Any]:
     role = str(item.get("role", "")).strip()
     title = str(item.get("title", "")).strip()
-    text = _clip_words(str(item.get("image_text", "")).strip(), 18)
+    text = _clip_words(str(item.get("image_text", "")).strip(), _SECTION_TEXT_MAX_WORDS)
     if not role or not title or not text:
         raise ValueError("section role, title, and text are required")
     return {
         "role": _slugify(role),
-        "title": _clip_words(title, 8),
+        "title": _clip_words(title, _SECTION_TITLE_MAX_WORDS),
         "image_text": text,
         "priority": "primary" if index == 1 else ("secondary" if index <= 3 else "supporting"),
-        "max_words": 18,
+        "max_words": _SECTION_TEXT_MAX_WORDS,
     }
 
 
@@ -654,9 +817,9 @@ def _extractive_sections(kind: str, source_excerpt: str) -> list[dict[str, Any]]
             {
                 "role": role,
                 "title": title,
-                "image_text": _clip_words(text, 18),
+                "image_text": _clip_words(text, _SECTION_TEXT_MAX_WORDS),
                 "priority": "primary" if index == 1 else ("secondary" if index <= 3 else "supporting"),
-                "max_words": 18,
+                "max_words": _SECTION_TEXT_MAX_WORDS,
             }
         )
     return sections
@@ -670,11 +833,11 @@ def _source_snippets(source_excerpt: str) -> list[str]:
     seen: set[str] = set()
     snippets: list[str] = []
     for line in lines:
-        text = _clip_words(" ".join(line.split()), 18)
+        text = _clip_words(" ".join(line.split()), _SECTION_TEXT_MAX_WORDS)
         if text and text not in seen:
             snippets.append(text)
             seen.add(text)
-        if len(snippets) >= 4:
+        if len(snippets) >= 8:
             break
     return snippets or ["Needs review: provide source details."]
 
@@ -703,6 +866,7 @@ def _visual_card_identity_payload(record: dict[str, Any]) -> dict[str, Any]:
         "visual_format",
         "layout",
         "format_profile",
+        "visual_theme",
         "sections",
         "image_text",
         "style_direction",
@@ -727,6 +891,77 @@ def _languages(language: str) -> list[str]:
     return [language]
 
 
+def _domain_profile_for_card(
+    source_kind: str,
+    headline: str,
+    sections: list[dict[str, Any]],
+    source_excerpt: str,
+) -> dict[str, Any]:
+    text = " ".join(
+        str(part)
+        for part in (
+            source_kind,
+            headline,
+            source_excerpt,
+            " ".join(f"{section.get('title', '')} {section.get('image_text', '')}" for section in sections),
+        )
+        if str(part).strip()
+    ).lower()
+    keyword_text = re.sub(r"[_/-]+", " ", text)
+    scores: dict[str, int] = {}
+    for domain, profile in _DOMAIN_PROFILES.items():
+        score = 0
+        for keyword in profile["keywords"]:
+            if keyword and _keyword_matches(keyword, keyword_text):
+                score += 2 if " " in keyword else 1
+        if score:
+            scores[domain] = score
+    if scores:
+        best = max(scores.items(), key=lambda item: (item[1], _domain_tiebreak_rank(item[0], source_kind)))[0]
+        return _DOMAIN_PROFILES[best]
+    fallback_by_kind = {
+        "github_pr": "developer",
+        "research_briefing": "research",
+        "report_summary": "finance",
+        "issue_feedback": "operations",
+        "meeting": "operations",
+        "release_announcement": "operations",
+    }
+    return _DOMAIN_PROFILES[fallback_by_kind.get(source_kind, "operations")]
+
+
+def _keyword_matches(keyword: str, text: str) -> bool:
+    keyword = str(keyword).strip().lower()
+    if not keyword:
+        return False
+    if " " in keyword:
+        return keyword in text
+    return re.search(rf"\b{re.escape(keyword)}\b", text) is not None
+
+
+def _domain_tiebreak_rank(domain: str, source_kind: str) -> int:
+    if source_kind == "github_pr" and domain == "developer":
+        return -1
+    if source_kind == "research_briefing" and domain == "research":
+        return -1
+    return 0
+
+
+def _public_domain_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "label": profile["label"],
+        "style_family": profile["style_family"],
+        "background_scene": profile["background_scene"],
+        "motifs": list(profile["motifs"]),
+        "palette": profile["palette"],
+        "composition": profile["composition"],
+        "format_contract": (
+            "OMH format contract: keep source badge, headline, content modules, evidence footer, and small 'OMH generated' mark stable; "
+            "vary scene, motifs, palette, and layout density by domain."
+        ),
+    }
+
+
 def _generation_prompt(
     kind: str,
     headline: str,
@@ -734,6 +969,7 @@ def _generation_prompt(
     language: str,
     aspect_ratio: str,
     visual_format: str,
+    domain_profile: dict[str, Any],
 ) -> str:
     section_lines = "\n".join(
         f"- {section['title']}: {section['image_text']}"
@@ -743,12 +979,23 @@ def _generation_prompt(
     return (
         f"Create a {aspect_ratio} {profile['label']} for {kind}. "
         f"Use language mode {language}. Headline: {headline}. "
+        f"Detected visual domain: {domain_profile['label']} ({domain_profile['style_family']}). "
         f"Use this theme direction: {profile['theme_direction']}. "
         f"Use this visual metaphor: {profile['visual_metaphor']}. "
+        f"Use this domain background: {domain_profile['background_scene']}. "
+        f"Use these domain motifs: {', '.join(domain_profile['motifs'])}. "
+        f"Palette direction: {domain_profile['palette']}. "
+        f"Composition direction: {domain_profile['composition']}. "
         f"Common structure: {', '.join(profile['structure'])}. "
         f"{_aspect_guidance(aspect_ratio)} "
-        "Keep visible text short, readable, and faithful to the supplied copy. "
-        "Do not force every source kind into the same grid; adapt composition to the format.\n"
+        "Preserve the OMH img-summary format contract: source/category badge, headline, source-kind subtitle, "
+        "readable numbered or grouped content modules, evidence footer, and a small quiet label that reads exactly 'OMH generated' "
+        "near the top or bottom edge. "
+        "Visible text may be moderately dense when the source has real content; prefer extending the canvas, adding modules, "
+        "or using long-scroll composition over shrinking text. "
+        "Keep the copy readable and faithful to the supplied source. "
+        "Do not force every source kind into the same grid; adapt composition to the format and domain. "
+        "Do not reuse a generic dark glass card when the domain calls for sports, fashion, commerce, security, finance, or research-specific scenery.\n"
         f"Card copy:\n{section_lines}"
     )
 

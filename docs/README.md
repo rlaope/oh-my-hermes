@@ -79,7 +79,7 @@ selected.
 | `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring scheduled ops with cadence, delivery target, silence policy, skill chain, and observed-evidence requirements. | "Every morning, check competitor news and send a Slack digest only if something changed." |
 | `materials-package` / `report-package` | Prepare decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready materials while keeping binary export, render QA, formula checks, approval, and delivery observed-only. | "Turn the revenue spreadsheet into an Excel and PDF package with render QA." |
-| `img-summary` | Prepare provider-neutral visual prompt cards for meeting notes, PR summaries, issue triage, research briefings, and release announcements, with image-tool setup fallback and observed-only generation, QA, and delivery. | "Make a PR summary card for reviewers." |
+| `img-summary` | Prepare provider-neutral visual prompt cards for meeting notes, PR summaries, issue triage, research briefings, and release announcements, with source-specific formats, domain-aware visual themes, image-tool setup fallback, and observed-only generation, QA, and delivery. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, another runtime, or Hermes coding skills while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 
 ## Documentation Contracts

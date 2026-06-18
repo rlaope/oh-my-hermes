@@ -50,6 +50,9 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertEqual(card["visual_format"], "pr_review_infographic")
         self.assertEqual(card["layout"]["type"], "pr_review_infographic")
         self.assertIn("Review focus", card["format_profile"]["structure"])
+        self.assertEqual(card["image_text"]["footer"], "OMH generated")
+        self.assertIn("OMH generated", card["generation_prompt"])
+        self.assertIn("format contract", card["visual_theme"]["format_contract"])
         self.assertIn("generate_visual_image", card["available_actions"])
         self.assertEqual(card["capability_detection"]["state"], "connected")
         self.assertEqual(card["capability_setup"]["schema_version"], "image_generation_setup/v1")
@@ -124,6 +127,85 @@ class VisualSummaryTests(unittest.TestCase):
         self.assertIn("report dashboard", report["format_profile"]["theme_direction"])
         self.assertIn("long vertical document-style canvas", report["generation_prompt"])
         self.assertIn("Do not force every source kind into the same grid", report["generation_prompt"])
+
+    def test_visual_theme_adapts_to_domain_without_losing_common_format(self) -> None:
+        security = build_visual_prompt_card(
+            kind="issue",
+            headline="Security Risk Triage Card",
+            sections=[
+                {
+                    "role": "signal",
+                    "title": "Signal",
+                    "image_text": "Unusual admin login attempts spiked after a password reset and MFA failure campaign.",
+                }
+            ],
+        )
+        shopping = build_visual_prompt_card(
+            kind="github_pr",
+            headline="Checkout Feature Implementation Review",
+            sections=[
+                {
+                    "role": "summary",
+                    "title": "What changed",
+                    "image_text": "Cart now supports guest checkout, coupon validation, shipping estimates, and product inventory edge cases.",
+                }
+            ],
+        )
+        sports = build_visual_prompt_card(
+            kind="research",
+            headline="Sports Market Research Brief",
+            sections=[
+                {
+                    "role": "finding",
+                    "title": "Key finding",
+                    "image_text": "Youth basketball gear demand clusters around league-day shoes, compression wear, and team bundles.",
+                }
+            ],
+        )
+        fashion = build_visual_prompt_card(
+            kind="report",
+            headline="Fashion Lookbook Launch Digest",
+            sections=[
+                {
+                    "role": "summary",
+                    "title": "Editorial focus",
+                    "image_text": "The new streetwear collection needs outfit annotations, fabric swatches, and runway-ready release copy.",
+                }
+            ],
+        )
+
+        self.assertEqual(security["visual_theme"]["label"], "security operations")
+        self.assertIn("security operations center", security["generation_prompt"])
+        self.assertEqual(shopping["visual_theme"]["label"], "commerce and shopping")
+        self.assertIn("checkout receipt", shopping["generation_prompt"])
+        self.assertEqual(sports["visual_theme"]["label"], "sports field and gear")
+        self.assertIn("court markings", sports["generation_prompt"])
+        self.assertEqual(fashion["visual_theme"]["label"], "fashion editorial")
+        self.assertIn("fashion editorial set", fashion["generation_prompt"])
+
+        for card in (security, shopping, sports, fashion):
+            with self.subTest(card=card["card_id"]):
+                self.assertEqual(card["layout"]["brand_mark"], "OMH generated")
+                self.assertEqual(card["image_text"]["footer"], "OMH generated")
+                self.assertIn("evidence footer", card["layout"]["composition_rule"])
+                self.assertIn("Do not reuse a generic dark glass card", card["generation_prompt"])
+                self.assertEqual(validate_visual_prompt_card(card), [])
+
+    def test_visual_copy_can_be_denser_when_canvas_can_expand(self) -> None:
+        long_text = (
+            "A long research card should keep enough concrete source detail for the image generator "
+            "to render a useful briefing without shrinking the text into unreadable poster copy."
+        )
+        card = build_visual_prompt_card(
+            kind="research",
+            aspect_ratio="long_scroll",
+            sections=[{"role": "finding", "title": "Detailed finding", "image_text": long_text}],
+        )
+
+        self.assertGreater(card["sections"][0]["max_words"], 18)
+        self.assertIn("extend the canvas", card["layout"]["density_rule"])
+        self.assertIn("Visible text may be moderately dense", card["generation_prompt"])
+        self.assertIn("long vertical document-style canvas", card["generation_prompt"])
 
     def test_extractive_draft_uses_bounded_source_without_fabricated_claims(self) -> None:
         source = "\n".join(f"Observed line {index} from the supplied notes." for index in range(1, 80))

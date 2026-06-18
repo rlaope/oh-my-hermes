@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="941" height="1672" viewBox="0 0 941 1672" role="img" aria-labelledby="title desc">
+  <title id="title">OMH img-summary domain-aware visual prompt card</title>
+  <desc id="desc">Poster showing that img-summary keeps the OMH generated format mark while adapting security, commerce, sports, and fashion visual themes.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="0.52" stop-color="#eefaf8"/>
+      <stop offset="1" stop-color="#f9fbff"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071336"/>
+      <stop offset="1" stop-color="#0f3050"/>
+    </linearGradient>
+    <linearGradient id="security" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#120f24"/>
+      <stop offset="0.5" stop-color="#24152a"/>
+      <stop offset="1" stop-color="#43101d"/>
+    </linearGradient>
+    <linearGradient id="commerce" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff9ec"/>
+      <stop offset="1" stop-color="#d8f6eb"/>
+    </linearGradient>
+    <linearGradient id="sports" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#082339"/>
+      <stop offset="0.55" stop-color="#0a4c42"/>
+      <stop offset="1" stop-color="#f47c3c"/>
+    </linearGradient>
+    <linearGradient id="fashion" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf7f2"/>
+      <stop offset="0.5" stop-color="#f5dde2"/>
+      <stop offset="1" stop-color="#1d1d24"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#102030" flood-opacity="0.16"/>
+    </filter>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#7ab7ff" stroke-opacity="0.12"/>
+    </pattern>
+    <style>
+      .sans{font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif}
+      .h1{font-size:64px;font-weight:900;fill:#071336}
+      .h2{font-size:25px;font-weight:850;fill:#071336}
+      .body{font-size:18px;font-weight:560;fill:#2d3c59}
+      .small{font-size:13px;font-weight:800;fill:#657395;text-transform:uppercase}
+      .micro{font-size:12px;font-weight:800;fill:#657395}
+      .white{fill:#ffffff}
+      .mutedWhite{fill:#dcecff}
+      .chip{font-size:12px;font-weight:900;letter-spacing:.8px}
+      .cardTitle{font-size:25px;font-weight:900}
+      .cardBody{font-size:14px;font-weight:620}
+      .mark{font-size:12px;font-weight:900}
+      .mono{font-family:"SFMono-Regular", Consolas, monospace}
+    </style>
+  </defs>
+
+  <rect width="941" height="1672" rx="34" fill="url(#page)"/>
+  <rect x="1" y="1" width="939" height="1670" rx="33" fill="none" stroke="#1f82ff" stroke-width="2"/>
+  <rect width="941" height="1672" fill="url(#grid)" opacity=".34"/>
+
+  <g class="sans">
+    <g transform="translate(48 48)">
+      <rect x="0" y="0" width="274" height="44" rx="22" fill="#ffffff" stroke="#98bdff"/>
+      <circle cx="24" cy="22" r="14" fill="#eaf4ff" stroke="#1f72ff"/>
+      <path d="M24 10l-7 13h7l-3 11 10-16h-7z" fill="#1f72ff"/>
+      <text x="52" y="29" font-size="18" font-weight="900" fill="#1d63df">OMH workflow skill</text>
+    </g>
+
+    <text class="h1" x="48" y="154">img-summary</text>
+    <text class="h1" x="48" y="224">adapts by domain</text>
+    <text class="body" x="51" y="274">One stable card contract. Different visual worlds for the subject.</text>
+    <text class="body" x="51" y="305">Security can look like security. Sports can move. Fashion can feel editorial.</text>
+
+    <g transform="translate(618 58)">
+      <rect x="0" y="0" width="244" height="244" rx="48" fill="#e8f4ff" opacity=".8"/>
+      <rect x="34" y="38" width="158" height="118" rx="28" fill="#1f72ff" opacity=".78" transform="rotate(-10 113 97)"/>
+      <rect x="64" y="76" width="158" height="118" rx="28" fill="#33d2bd" opacity=".54" transform="rotate(-10 143 135)"/>
+      <path d="M74 94h80l-15 22h-65z" fill="#ffffff" opacity=".86"/>
+      <path d="M83 129h116M83 151h86" stroke="#ffffff" stroke-width="13" stroke-linecap="round" opacity=".88"/>
+      <text x="64" y="220" font-size="16" font-weight="900" fill="#3c64a0">visual_prompt_card/v1</text>
+    </g>
+
+    <g transform="translate(48 372)" filter="url(#shadow)">
+      <rect width="404" height="408" rx="26" fill="url(#security)"/>
+      <rect width="404" height="408" rx="26" fill="url(#grid)" opacity=".36"/>
+      <path d="M270 34c54 12 88 53 92 112-28 20-60 35-92 43-34-10-64-24-90-43 4-59 37-100 90-112z" fill="#ff4b6f" opacity=".18"/>
+      <rect x="26" y="26" width="116" height="30" rx="15" fill="#ffffff" opacity=".12"/>
+      <circle cx="44" cy="41" r="7" fill="#ff4b6f"/>
+      <text class="chip white" x="58" y="45">SECURITY</text>
+      <text class="mark mutedWhite" x="279" y="45">OMH generated</text>
+      <text class="cardTitle white" x="28" y="96">Login anomaly triage</text>
+      <text class="cardBody mutedWhite" x="28" y="125">issue_feedback · prepared, not evidence</text>
+      <path d="M28 147H376" stroke="#ff4b6f" stroke-width="3"/>
+      <g transform="translate(28 174)">
+        <rect width="348" height="62" rx="14" fill="#ffffff" opacity=".10" stroke="#ffffff" stroke-opacity=".16"/>
+        <text class="cardBody white" x="18" y="25">01 Signal</text>
+        <text class="cardBody mutedWhite" x="18" y="48">Admin login spikes after password reset.</text>
+      </g>
+      <g transform="translate(28 250)">
+        <rect width="348" height="62" rx="14" fill="#ffffff" opacity=".10" stroke="#ffffff" stroke-opacity=".16"/>
+        <text class="cardBody white" x="18" y="25">02 Check</text>
+        <text class="cardBody mutedWhite" x="18" y="48">Review source IP, MFA, and auth logs.</text>
+      </g>
+      <rect x="28" y="350" width="348" height="28" rx="14" fill="#120814" opacity=".55"/>
+      <text class="micro mutedWhite" x="44" y="369">not evidence yet · image · QA · delivery</text>
+    </g>
+
+    <g transform="translate(489 372)" filter="url(#shadow)">
+      <rect width="404" height="408" rx="26" fill="url(#commerce)"/>
+      <circle cx="318" cy="84" r="70" fill="#2fd6b6" opacity=".24"/>
+      <path d="M280 60h54l14 84h-82z" fill="#ffffff" opacity=".7" stroke="#26ad99"/>
+      <path d="M278 80h72" stroke="#26ad99" stroke-width="6" stroke-linecap="round"/>
+      <rect x="26" y="26" width="126" height="30" rx="15" fill="#0f766e" opacity=".14"/>
+      <circle cx="44" cy="41" r="7" fill="#2fd6b6"/>
+      <text class="chip" x="58" y="45" fill="#0f766e">COMMERCE</text>
+      <text class="mark" x="279" y="45" fill="#0f766e">OMH generated</text>
+      <text class="cardTitle" x="28" y="96" fill="#092e33">Checkout PR card</text>
+      <text class="cardBody" x="28" y="125" fill="#426266">github_pr · prepared, not evidence</text>
+      <path d="M28 147H376" stroke="#2fd6b6" stroke-width="3"/>
+      <g transform="translate(28 174)">
+        <rect width="168" height="112" rx="16" fill="#ffffff" stroke="#d4efe6"/>
+        <text class="cardBody" x="16" y="31" fill="#092e33">What changed</text>
+        <text class="cardBody" x="16" y="58" fill="#426266">Guest checkout,</text>
+        <text class="cardBody" x="16" y="80" fill="#426266">coupons, shipping.</text>
+      </g>
+      <g transform="translate(208 174)">
+        <rect width="168" height="112" rx="16" fill="#ffffff" stroke="#d4efe6"/>
+        <text class="cardBody" x="16" y="31" fill="#092e33">Review focus</text>
+        <text class="cardBody" x="16" y="58" fill="#426266">Pricing, expiry,</text>
+        <text class="cardBody" x="16" y="80" fill="#426266">inventory races.</text>
+      </g>
+      <rect x="28" y="326" width="348" height="52" rx="18" fill="#092e33" opacity=".9"/>
+      <text class="micro white" x="44" y="356">evidence footer · prepared, not evidence</text>
+    </g>
+
+    <g transform="translate(48 824)" filter="url(#shadow)">
+      <rect width="404" height="408" rx="26" fill="url(#sports)"/>
+      <path d="M0 238c100-42 202-42 404 0" fill="none" stroke="#ffffff" stroke-opacity=".22" stroke-width="18"/>
+      <path d="M40 332H364M88 332V382M316 332V382M202 304V386" stroke="#ffffff" stroke-opacity=".28" stroke-width="5"/>
+      <rect x="26" y="26" width="104" height="30" rx="15" fill="#ffffff" opacity=".13"/>
+      <circle cx="44" cy="41" r="7" fill="#8bf56f"/>
+      <text class="chip white" x="58" y="45">SPORTS</text>
+      <text class="mark white" x="279" y="45">OMH generated</text>
+      <text class="cardTitle white" x="28" y="96">Basketball gear scan</text>
+      <text class="cardBody mutedWhite" x="28" y="125">research_briefing · long scroll ready</text>
+      <path d="M28 147H376" stroke="#8bf56f" stroke-width="3"/>
+      <rect x="28" y="174" width="348" height="74" rx="18" fill="#071d2f" opacity=".68"/>
+      <text class="cardBody white" x="48" y="204">Topic</text>
+      <text class="cardBody mutedWhite" x="48" y="229">Youth league-day gear demand.</text>
+      <rect x="28" y="266" width="348" height="74" rx="18" fill="#071d2f" opacity=".68"/>
+      <text class="cardBody white" x="48" y="296">Finding</text>
+      <text class="cardBody mutedWhite" x="48" y="321">Shoes, compression, team bundles.</text>
+      <text class="micro white" x="48" y="372">field/court motifs · scoreboard rhythm · readable copy</text>
+    </g>
+
+    <g transform="translate(489 824)" filter="url(#shadow)">
+      <rect width="404" height="408" rx="26" fill="url(#fashion)"/>
+      <path d="M276 0h128v408H276z" fill="#11131c" opacity=".88"/>
+      <path d="M299 58c36 20 54 52 54 96s-18 76-54 96" fill="none" stroke="#f7d7df" stroke-width="14" opacity=".54"/>
+      <rect x="26" y="26" width="112" height="30" rx="15" fill="#11131c" opacity=".12"/>
+      <circle cx="44" cy="41" r="7" fill="#d86d8b"/>
+      <text class="chip" x="58" y="45" fill="#11131c">FASHION</text>
+      <text class="mark" x="279" y="45" fill="#ffffff">OMH generated</text>
+      <text class="cardTitle" x="28" y="92" fill="#11131c">Lookbook launch</text>
+      <text class="cardTitle" x="28" y="122" fill="#11131c">digest</text>
+      <text class="cardBody" x="28" y="151" fill="#5b4850">report_summary · editorial visual theme</text>
+      <path d="M28 170H376" stroke="#d86d8b" stroke-width="3"/>
+      <g transform="translate(28 194)">
+        <rect width="226" height="154" rx="18" fill="#ffffff" opacity=".78"/>
+        <text class="cardBody" x="18" y="34" fill="#11131c">Editorial focus</text>
+        <text class="cardBody" x="18" y="65" fill="#5b4850">Outfit annotations,</text>
+        <text class="cardBody" x="18" y="88" fill="#5b4850">fabric swatches,</text>
+        <text class="cardBody" x="18" y="111" fill="#5b4850">runway-ready copy.</text>
+      </g>
+      <rect x="26" y="350" width="235" height="30" rx="15" fill="#ffffff" opacity=".82"/>
+      <text class="micro" x="42" y="370" fill="#11131c">magazine spread · garment tags · proof footer</text>
+    </g>
+
+    <g transform="translate(48 1284)">
+      <rect width="845" height="214" rx="28" fill="#ffffff" stroke="#d6e4f5" filter="url(#shadow)"/>
+      <text class="h2" x="28" y="44">Rules the generator must keep</text>
+      <g transform="translate(28 74)">
+        <circle cx="16" cy="16" r="16" fill="#eaf4ff"/><text x="10" y="22" font-size="18" font-weight="900" fill="#1f72ff">1</text>
+        <text class="body" x="44" y="22">Stable format: source badge, headline, sections, evidence footer,</text>
+        <text class="body" x="44" y="48">and a small <tspan font-weight="900">OMH generated</tspan> mark.</text>
+      </g>
+      <g transform="translate(28 128)">
+        <circle cx="16" cy="16" r="16" fill="#e9fbf7"/><text x="10" y="22" font-size="18" font-weight="900" fill="#11998a">2</text>
+        <text class="body" x="44" y="22">Variable style: security systems, retail/product cues, sports motion,</text>
+        <text class="body" x="44" y="48">fashion editorial, finance dashboards, and research walls.</text>
+      </g>
+      <g transform="translate(28 182)">
+        <circle cx="16" cy="16" r="16" fill="#fff5dc"/><text x="10" y="22" font-size="18" font-weight="900" fill="#b36b16">3</text>
+        <text class="body" x="44" y="22">Longer copy is allowed: extend the canvas instead of shrinking text.</text>
+      </g>
+    </g>
+
+    <g transform="translate(48 1542)">
+      <text class="small" x="0" y="0">visual_prompt_card/v1 prepares the prompt · visual_observation/v1 records generated image, QA, or delivery</text>
+      <text class="small" x="314" y="58" fill="#7a87a6">✦ OMH generated</text>
+    </g>
+  </g>
+</svg>
