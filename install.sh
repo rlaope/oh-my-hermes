@@ -345,7 +345,7 @@ if [ -z "$OMH_PACKAGE_URL" ]; then
       ;;
     stable)
       if [ -z "$OMH_VERSION" ]; then
-        say "omh installer: OMH_CHANNEL=stable requires OMH_VERSION, for example OMH_VERSION=1.0.0."
+        say "omh installer: OMH_CHANNEL=stable requires OMH_VERSION, for example OMH_VERSION=1.0.1."
         exit 1
       fi
       case "$OMH_VERSION" in

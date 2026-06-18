@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
+from functools import lru_cache
 
 from ..skills.catalog import SkillDefinition, routable_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
@@ -49,6 +50,19 @@ class RecommendationPolicy:
     next_action: str
     evidence_boundary: str
     wrapper_guidance: str
+
+
+@dataclass(frozen=True)
+class _PreparedDefinition:
+    definition: SkillDefinition
+    trigger_phrases: tuple[str, ...]
+    trigger_tokens: frozenset[str]
+    name_phrase: str
+    description_phrase: str
+    use_when_phrase: str
+    category_phrase: str
+    phase_phrase: str
+    metadata_tokens: frozenset[str]
 
 
 _DEFAULT_POLICY = RecommendationPolicy(
@@ -411,11 +425,12 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     routing_text = prepare_routing_text(query)
     normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
-    definitions = list(routable_definitions())
+    prepared_definitions = _prepared_routable_definitions()
+    definitions = [prepared.definition for prepared in prepared_definitions]
     explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
     scored = [
-        _score_definition(definition, normalized_query, query_tokens, query, routing_text.locale_matches)
-        for definition in definitions
+        _score_definition(prepared, normalized_query, query_tokens, query, routing_text.locale_matches)
+        for prepared in prepared_definitions
     ]
     if explicit_skill != "automation-blueprint" and is_explicit_one_off_request(normalized_query, query_tokens):
         scored = [recommendation for recommendation in scored if recommendation.skill != "automation-blueprint"]
@@ -438,50 +453,63 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     return [recommendation.to_dict() for recommendation in matches[:limit]]
 
 
+@lru_cache(maxsize=1)
+def _prepared_routable_definitions() -> tuple[_PreparedDefinition, ...]:
+    return tuple(_prepare_definition(definition) for definition in routable_definitions())
+
+
+def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
+    return _PreparedDefinition(
+        definition=definition,
+        trigger_phrases=tuple(normalized_phrase(trigger) for trigger in definition.triggers),
+        trigger_tokens=frozenset(_tokens(" ".join(definition.triggers))),
+        name_phrase=normalized_phrase(definition.name),
+        description_phrase=normalized_phrase(definition.description),
+        use_when_phrase=normalized_phrase(definition.use_when),
+        category_phrase=normalized_phrase(definition.category),
+        phase_phrase=normalized_phrase(definition.phase),
+        metadata_tokens=frozenset(_tokens(" ".join((definition.name, definition.description, definition.use_when)))),
+    )
+
+
 def _score_definition(
-    definition: SkillDefinition,
+    prepared: _PreparedDefinition,
     normalized_query: str,
     query_tokens: set[str],
     original_query: str,
     locale_matches: tuple[str, ...],
 ) -> Recommendation:
+    definition = prepared.definition
     score = 0
     matched: set[str] = set()
 
-    for trigger in definition.triggers:
-        trigger_normalized = normalized_phrase(trigger)
-        if _phrase_match(normalized_query, trigger_normalized):
+    for trigger_phrase in prepared.trigger_phrases:
+        if _phrase_match(normalized_query, trigger_phrase):
             score += 6
-            matched.add(f"trigger:{trigger_normalized}")
+            matched.add(f"trigger:{trigger_phrase}")
 
-    name_normalized = normalized_phrase(definition.name)
-    if _phrase_match(normalized_query, name_normalized):
+    if _phrase_match(normalized_query, prepared.name_phrase):
         score += 5
-        matched.add(f"name:{name_normalized}")
+        matched.add(f"name:{prepared.name_phrase}")
 
-    description_normalized = normalized_phrase(definition.description)
-    if _phrase_match(normalized_query, description_normalized):
+    if _phrase_match(normalized_query, prepared.description_phrase):
         score += 3
         matched.add("description:phrase")
 
-    use_when_normalized = normalized_phrase(definition.use_when)
-    if _phrase_match(normalized_query, use_when_normalized):
+    if _phrase_match(normalized_query, prepared.use_when_phrase):
         score += 3
         matched.add("use_when:phrase")
 
-    for field_name, value in (("category", definition.category), ("phase", definition.phase)):
-        normalized_value = normalized_phrase(value)
+    for field_name, normalized_value in (("category", prepared.category_phrase), ("phase", prepared.phase_phrase)):
         if _phrase_match(normalized_query, normalized_value):
             score += 2
             matched.add(f"{field_name}:{normalized_value}")
 
-    trigger_tokens = _tokens(" ".join(definition.triggers))
-    for token in sorted(query_tokens & trigger_tokens):
+    for token in sorted(query_tokens & prepared.trigger_tokens):
         score += 3
         matched.add(f"trigger:{token}")
 
-    metadata_tokens = _tokens(" ".join((definition.name, definition.description, definition.use_when)))
-    for token in sorted(query_tokens & metadata_tokens):
+    for token in sorted(query_tokens & prepared.metadata_tokens):
         score += 1
         matched.add(f"metadata:{token}")
 

@@ -19,7 +19,7 @@ class HudCliTests(unittest.TestCase):
 
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
-            self.assertIn("[omh] v1.0.0", stdout)
+            self.assertIn("[omh] v1.0.1", stdout)
             self.assertIn("plugin:not-installed", stdout)
             self.assertIn("coding-agent:idle(ask)", stdout)
             self.assertNotIn("tokens:unobserved", stdout)
@@ -71,7 +71,7 @@ class HudCliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             self.assertEqual(payload["schema_version"], "omh_hud/v1")
-            self.assertEqual(payload["version"], "1.0.0")
+            self.assertEqual(payload["version"], "1.0.1")
             self.assertEqual(payload["plugin"]["status"], "ready")
             self.assertNotIn("skills", payload)
             self.assertEqual(payload["target_topology"]["mode"], "single_agent_target")
