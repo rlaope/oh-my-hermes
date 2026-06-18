@@ -5510,6 +5510,50 @@ class CliTests(unittest.TestCase):
             self.assertIn("Release state: updated", stdout)
             self.assertIn("OMH command: 1.0.1 -> 1.0.2 (updated)", stdout)
 
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.2",
+                    "--source-ref",
+                    "v1.0.2@rerun",
+                    "--command-package-updated",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Release version: 1.0.2 -> 1.0.2", stdout)
+            self.assertIn("Source ref: v1.0.2 -> v1.0.2@rerun", stdout)
+            self.assertIn("Release state: updated", stdout)
+            self.assertIn("OMH command: 1.0.2 (v1.0.2 -> v1.0.2@rerun) (updated)", stdout)
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.2",
+                    "--source-ref",
+                    "v1.0.2@rerun",
+                    "--command-package-updated",
+                ],
+                output_json=False,
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Release version: 1.0.2 -> 1.0.2", stdout)
+            self.assertIn("Source ref: v1.0.2@rerun -> v1.0.2@rerun", stdout)
+            self.assertIn("Release state: updated", stdout)
+            self.assertIn("OMH command: 1.0.2 -> 1.0.2 (updated)", stdout)
+
     def test_direct_update_source_ref_metadata_does_not_claim_command_package_update(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
