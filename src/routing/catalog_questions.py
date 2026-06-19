@@ -202,7 +202,7 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
-_CATALOG_COLLISION_MARKERS = _PLURAL_CATALOG_WORDS + ("명령", "명령어")
+_CATALOG_COLLISION_MARKERS = _CATALOG_COLLECTION_WORDS + ("명령어",)
 
 
 def is_skill_catalog_question(message: str) -> bool:

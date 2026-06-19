@@ -53,6 +53,7 @@ class CatalogQuestionTests(unittest.TestCase):
             "which files mention skill routing?",
             "list files that mention command injection",
             "이 파일에서 command injection 언급 목록 찾아줘",
+            "이 파일에서 기능 목록 찾아줘",
             "이 경로에서 workflow 언급 찾아줘",
         )
 
