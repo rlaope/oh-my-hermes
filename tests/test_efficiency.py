@@ -120,6 +120,10 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("img-summary", cards["materials_and_visuals"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
+        for card in cards.values():
+            self.assertTrue(card["label"])
+            self.assertTrue(card["user_examples"])
+            self.assertIn("evidence", card["first_response_shape"])
 
     def test_workflow_context_cards_cover_installable_workflow_families(self) -> None:
         workflow_skills = {definition.name for definition in builtin_definitions()} - {"oh-my-hermes", "cancel"}

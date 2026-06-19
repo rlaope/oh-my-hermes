@@ -48,37 +48,52 @@ LANE_CROSS_LANE_EXAMPLES = {
 WORKFLOW_CONTEXT_CARDS = (
     {
         "id": "intent_to_plan",
+        "label": "Intent to plan",
         "user_signal": "fuzzy goal, ambitious target, safe feature, or one-cycle delivery request",
         "omh_pattern": "clarify or plan first, then move to ultragoal, ultraprocess, loop, or handoff only when concrete",
         "representative_workflows": ("deep-interview", "ralplan", "ultragoal", "loop", "ultraprocess"),
+        "user_examples": ("Make onboarding feel smoother", "Make this repo star-worthy"),
+        "first_response_shape": "Name the ambiguity, choose clarify/plan/loop/process, then state the next concrete action and what is not evidence yet.",
         "not_evidence_until_observed": ("plan acceptance", "executor dispatch", "verification"),
     },
     {
         "id": "research_and_ops",
+        "label": "Research and ops",
         "user_signal": "customer signal, meeting notes, market question, strategy request, or operating record",
         "omh_pattern": "collect evidence, separate source notes from synthesis, then create a brief, decision, or status artifact",
         "representative_workflows": ("web-research", "research-department", "feedback-triage", "meeting-brief", "strategy-brief"),
+        "user_examples": ("Payment failures keep coming up", "Track competitor news every morning"),
+        "first_response_shape": "Name the source/synthesis split, pick the research or ops workflow, then ask for missing source evidence or cadence only when needed.",
         "not_evidence_until_observed": ("source retrieval", "decision approval", "delivery"),
     },
     {
         "id": "materials_and_visuals",
+        "label": "Materials and visuals",
         "user_signal": "deck, PDF, spreadsheet, document, HWP, report, image card, or shareable summary",
         "omh_pattern": "shape the deliverable contract, prepare prompts or package metadata, then record generation and QA only when observed",
         "representative_workflows": ("materials-package", "report-package", "deliverable-package", "img-summary"),
+        "user_examples": ("Turn this PR into a reviewer image card", "Make this spreadsheet a PDF report package"),
+        "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence, then offer revise/copy/generate/record actions.",
         "not_evidence_until_observed": ("file export", "image generation", "visual QA", "attachment"),
     },
     {
         "id": "automation_and_status",
+        "label": "Automation and status",
         "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, or runtime question",
         "omh_pattern": "prepare a schedule/status/repair card, name required tools, then keep observed runtime state separate",
         "representative_workflows": ("automation-blueprint", "agent-ops-review", "toolbelt-readiness", "doctor"),
+        "user_examples": ("Every morning send a digest if something changed", "What is currently blocked?"),
+        "first_response_shape": "Show the prepared status or schedule shape, name the missing connector/runtime evidence, and expose refresh or repair actions.",
         "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load"),
     },
     {
         "id": "coding_handoff",
+        "label": "Coding handoff",
         "user_signal": "risky code change, issue-to-PR, review, CI, merge, coding-agent progress, or Hermes coding request",
         "omh_pattern": "choose the coding owner, prepare executor-neutral handoff or Hermes coding team path, then track dispatch and result evidence",
         "representative_workflows": ("ultraprocess", "code-review", "team", "ultrawork", "ultraqa"),
+        "user_examples": ("Turn this issue into a PR-ready plan", "Is the Codex run done yet?"),
+        "first_response_shape": "State the selected coding owner or choice point, prepare the handoff/status, and keep dispatch, result, review, CI, and merge evidence separate.",
         "not_evidence_until_observed": ("dispatch", "implementation", "review", "CI", "merge"),
     },
 )
@@ -206,9 +221,12 @@ def workflow_context_cards() -> list[dict[str, object]]:
     return [
         {
             "id": card["id"],
+            "label": card["label"],
             "user_signal": card["user_signal"],
             "omh_pattern": card["omh_pattern"],
             "representative_workflows": list(card["representative_workflows"]),
+            "user_examples": list(card["user_examples"]),
+            "first_response_shape": card["first_response_shape"],
             "not_evidence_until_observed": list(card["not_evidence_until_observed"]),
         }
         for card in WORKFLOW_CONTEXT_CARDS
