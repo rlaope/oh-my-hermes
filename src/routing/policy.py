@@ -308,6 +308,42 @@ _MISSED_WORKFLOW_ACTION_PHRASES = (
     "놓쳤",
     "빠졌",
 )
+_MISSED_WORKFLOW_RESEARCH_TOKENS = _normalized_token_set(
+    {
+        "research",
+        "researching",
+        "source",
+        "sources",
+        "web",
+        "search",
+        "리서치",
+        "조사",
+        "자료",
+        "출처",
+        "웹서치",
+        "검색",
+    }
+)
+_MISSED_WORKFLOW_OPERATING_RECORD_TOKENS = _normalized_token_set(
+    {
+        "meeting",
+        "minutes",
+        "notes",
+        "summary",
+        "summarize",
+        "decision",
+        "decisions",
+        "action",
+        "actions",
+        "회의",
+        "회의록",
+        "요약",
+        "정리",
+        "결정",
+        "액션",
+        "기록",
+    }
+)
 _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "executor-runtime-readiness",
     "runtime readiness",
@@ -898,6 +934,24 @@ WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; web, source, or freshness requests should start with source-backed Hermes research.",
     activation_status="active",
 )
+MISSED_WORKFLOW_WEB_RESEARCH_GUARD = RoutingGuardRule(
+    id="missed_workflow_research_recovery",
+    rule="Missed-OMH feedback about research/source work should recover to web-research instead of broad router help.",
+    matched_label="guard:missed_workflow_research_recovery",
+    preferred_skills=("web-research",),
+    score_boost=32,
+    why="Matched guard/trigger metadata; missed OMH research feedback should recover to source-backed Hermes research.",
+    activation_status="active",
+)
+MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD = RoutingGuardRule(
+    id="missed_workflow_operating_record_recovery",
+    rule="Missed-OMH feedback about meeting notes or operating records should recover to operating-rhythm.",
+    matched_label="guard:missed_workflow_operating_record_recovery",
+    preferred_skills=("operating-rhythm",),
+    score_boost=34,
+    why="Matched guard/trigger metadata; missed OMH meeting/record feedback should prepare an operating record with evidence boundaries.",
+    activation_status="active",
+)
 DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     id="delivery_cycle_before_research_only",
     rule="Requests that ask for PR or delivery-cycle completion should route to Ultraprocess before research-only lanes.",
@@ -1030,6 +1084,8 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
+    MISSED_WORKFLOW_WEB_RESEARCH_GUARD,
+    MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD,
     GITHUB_EVENT_OPS_GUARD,
     MATERIALS_PACKAGE_GUARD,
     MEMORY_CURATION_GUARD,
@@ -1096,8 +1152,12 @@ def active_routing_guard_rules(
         and not research_department_applies
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
+    if _missed_workflow_operating_record_guard_applies(normalized_query, query_tokens):
+        rules.append(MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
+    if _missed_workflow_research_guard_applies(normalized_query, query_tokens):
+        rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
     if _materials_package_guard_applies(normalized_query, query_tokens):
@@ -1215,6 +1275,36 @@ def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -
             "자료 찾아",
         ),
     )
+
+
+def _missed_workflow_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        return False
+    if _research_department_guard_applies(normalized_query, query_tokens):
+        return False
+    if not _missed_omh_workflow_context_applies(normalized_query):
+        return False
+    return bool(_MISSED_WORKFLOW_RESEARCH_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query, ("리서치", "조사", "자료", "출처", "research")
+    )
+
+
+def _missed_workflow_operating_record_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if not _missed_omh_workflow_context_applies(normalized_query):
+        return False
+    meeting_context = bool(_MISSED_WORKFLOW_OPERATING_RECORD_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("회의록", "회의 요약", "meeting notes", "meeting minutes"),
+    )
+    if not meeting_context:
+        return False
+    file_package_context = bool(_MATERIALS_PACKAGE_FORMAT_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("ppt", "pdf", "deck", "slides", "엑셀", "피디에프"),
+    )
+    return not file_package_context
 
 
 def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool:
