@@ -23,6 +23,7 @@ class HookManifestTests(unittest.TestCase):
         self.assertTrue(tools["omh_capabilities"]["supported_by_cli_backend"])
         self.assertFalse(tools["omh_capabilities"]["observed_in_this_environment"])
         self.assertIn("pre_llm_call", hooks)
+        self.assertIn("omh_awareness_primer", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("bounded_status_context", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("executor_opened", events)
         self.assertIn("selected_executor_profile", events["executor_opened"]["payload_fields"])

@@ -64,7 +64,7 @@ def _wrapper_event(name: str, payload_fields: tuple[str, ...]) -> dict[str, obje
 
 def _hook_payload_fields(name: str) -> list[str]:
     if name == "pre_llm_call":
-        return ["bounded_status_context", "redacted"]
+        return ["omh_awareness_primer", "bounded_status_context", "redacted"]
     if name == "pre_tool_call":
         return ["tool_name", "claim_boundary"]
     if name == "on_session_end":

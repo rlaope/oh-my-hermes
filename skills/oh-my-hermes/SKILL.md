@@ -44,6 +44,22 @@ Bad example:
 - Expected behavior: Show the workflow picker or ask what the user wants to do next; do not infer a coding workflow.
 - Why: A bare product name is a picker or clarification signal, not implementation evidence.
 
+## OMH Awareness Primer
+
+When a request looks like planning, research, operations, materials, automation, image summary, coding delegation, review, status, or long-running loop work, consider OMH before treating it as a generic chat.
+
+Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+
+- **Intent -> plan**: `deep-interview`, `ralplan`, `ultragoal`, `ultraprocess`, `loop` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
+- **Research and company ops**: `web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department` - source-backed research, customer signals, product operations, and briefing workflows.
+- **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
+- **Automation and status**: `automation-blueprint`, `ops-observability-card`, `agent-ops-review`, `doctor` - scheduled ops blueprints, status cards, runtime health, and release/ops review.
+- **Coding handoff**: `request-to-handoff`, `executor selection`, `coding runtime handoff`, `code-review` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+
+If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing connection and offer a setup/selection fallback instead of claiming the action happened.
+
+Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Direct Picker Aliases
 
 If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview with exactly one top-level suggestion: `omh`. Selecting it should insert `./omh` or `/omh` and then open the workflow picker. Do not preview every installed workflow at the first `./` stage.

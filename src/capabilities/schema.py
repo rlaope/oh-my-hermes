@@ -9,6 +9,7 @@ ORCHESTRATION_PATTERN_SCHEMA_VERSION = "orchestration_pattern/v1"
 TOOL_REQUIREMENT_SCHEMA_VERSION = "tool_requirement_manifest/v1"
 
 CAPABILITY_SECTIONS = (
+    "omh_awareness",
     "agent_roles",
     "skills",
     "hooks",

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 
+from ..awareness import awareness_primer_payload
 from ..metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 
 STANDALONE_CAPABILITY_SECTIONS = (
+    "omh_awareness",
     "agent_roles",
     "skills",
     "hooks",
@@ -163,6 +165,7 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
 
 def _standalone_sections() -> dict[str, object]:
     return {
+        "omh_awareness": awareness_primer_payload(),
         "agent_roles": [
             {
                 "schema_version": "agent_role_capability/v1",
@@ -254,6 +257,7 @@ def _standalone_sections() -> dict[str, object]:
                 {
                     "name": name,
                     "supported_by_plugin_bundle": True,
+                    "payload_fields": _standalone_hook_payload_fields(name),
                     "claim_boundary": "Hook availability is not proof that Hermes loaded or invoked the plugin.",
                     "observed_in_this_environment": False,
                 }
@@ -318,6 +322,16 @@ def _standalone_matches(wanted: str, item: dict[str, object]) -> bool:
         *[str(alias) for alias in legacy_ids],
     }
     return wanted in values
+
+
+def _standalone_hook_payload_fields(name: str) -> list[str]:
+    if name == "pre_llm_call":
+        return ["omh_awareness_primer", "bounded_status_context", "redacted"]
+    if name == "pre_tool_call":
+        return ["tool_name", "claim_boundary"]
+    if name == "on_session_end":
+        return ["session_summary", "metadata_only"]
+    return []
 
 
 def _standalone_item_id(item: dict[str, object], fallback: str) -> str:
