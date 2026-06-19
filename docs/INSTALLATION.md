@@ -151,12 +151,15 @@ MCP bridge setup is also optional and intentionally conservative:
 
 ```sh
 omh setup --with-mcp
+omh mcp manifest
 ```
 
 This records `mcp_mode: bridge_requested` in setup state and keeps
 `observed: false` until a Hermes/MCP host records a concrete load or tool-call
-event. It is a preference/contract marker, not proof that an MCP runtime is
-active.
+event. `omh mcp manifest` prints a stdio MCP config snippet for the allowlisted
+`omh mcp serve` bridge. The bridge exposes only local `omh_status`,
+`omh_recommend`, and `omh_probe` tools; it is not arbitrary shell access,
+connector execution, coding dispatch, or proof that an MCP runtime is active.
 
 ## Install Path A: Hermes-Native Skill Tap
 
@@ -369,11 +372,15 @@ surface.
 `omh runtime status` should show the local runtime artifact directory and the
 latest install/apply/doctor state when those commands have run. `omh probe`
 reports observable Hermes capability surfaces without mutating Hermes internals.
-For MCP, `omh probe` reports the setup preference and host config separately:
+For MCP, `omh probe` reports the bridge server, setup preference, runtime tool
+call observation, and host config separately:
 `mcp_preference` means `omh setup --with-mcp` was requested in OMH local state,
-while `mcp_host_config` only means a Hermes MCP config file such as `.mcp.json`
-or `mcp.json` exists. Neither field proves an MCP host loaded OMH or called a
-tool unless separate runtime evidence records that event.
+`mcp_bridge_server` means the installed command package exposes `omh mcp serve`,
+`mcp_bridge_runtime` means OMH has observed a local MCP bridge tool call, and
+`mcp_host_config` only means a Hermes MCP config file such as `.mcp.json` or
+`mcp.json` exists. These fields do not prove connector invocation, coding
+dispatch, implementation, review, CI, merge, or host-specific MCP load unless
+separate runtime evidence records that event.
 After `omh setup` has run, `omh doctor` also checks the managed plugin manifest
 plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so
@@ -382,7 +389,7 @@ use.
 Use `omh probe --parity` when an operator wants the broader comparison against
 common oh-my runtime capability axes. It returns `omh_parity_matrix/v1` with
 available and partial rows for skills/plugins, roles, team/swarm workers,
-worktree isolation, HUD/session status, MCP/tool bridge preference, loop
+worktree isolation, HUD/session status, MCP/tool bridge, loop
 autopilot, and release maintenance. Partial rows are intentional evidence
 boundaries, not failures. The worktree row includes
 `worktree_session_isolation/v1` wrapper guidance when coding handoffs need same

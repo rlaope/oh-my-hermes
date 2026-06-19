@@ -243,8 +243,9 @@ way.
 | "Make this repo feel 10k-star quality." | Treat it as a north star, choose a smaller loopable goal, and keep the next verification visible. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
 
-Advanced team presets, plugin status helpers, MCP preferences, runtime
-observation, and release smoke commands are covered in the documentation below.
+Advanced team presets, plugin status helpers, the optional MCP bridge,
+runtime observation, and release smoke commands are covered in the
+documentation below.
 
 <br>
 

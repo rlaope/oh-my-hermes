@@ -109,15 +109,15 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
     ),
     ParityCapability(
         id="mcp_tool_bridge",
-        title="MCP and tool bridge preference",
+        title="MCP and tool bridge",
         common_pattern="Offer tool/MCP bridge configuration so the host agent can reach external capabilities through a controlled surface.",
-        omh_surface="`omh setup --with-mcp`, `omh probe`, and MCP preference/host-config separation.",
-        status="partial",
-        evidence=("src/commands/setup.py", "src/probe.py", "docs/INSTALLATION.md"),
-        missing_piece="OMH does not ship or auto-enable a real MCP server/tool bridge in v1.",
-        v1_decision="Record MCP intent and host-file evidence separately until a stable Hermes MCP bridge contract exists.",
-        user_value="Operators can prepare for MCP without accidentally claiming a tool host loaded or ran OMH.",
-        claim_boundary="MCP preference and MCP host config are not MCP tool-call evidence.",
+        omh_surface="`omh setup --with-mcp`, `omh mcp manifest`, `omh mcp serve`, `omh probe`, and MCP preference/host-config/runtime-call separation.",
+        status="available",
+        evidence=("src/mcp_bridge.py", "src/commands/mcp.py", "src/probe.py", "tests/test_mcp_bridge.py"),
+        missing_piece="OMH does not auto-enable a host MCP config or claim a specific Hermes host loaded the bridge.",
+        v1_decision="Ship a dependency-free stdio bridge with only allowlisted local status, recommendation, and probe tools.",
+        user_value="Operators can connect OMH to MCP-capable hosts without exposing arbitrary shell or hidden execution.",
+        claim_boundary="MCP bridge availability and host config are not connector invocation, coding dispatch, implementation, review, CI, merge, or host-load proof.",
     ),
     ParityCapability(
         id="loop_autopilot",
@@ -176,14 +176,14 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
                 "why": "Only add real workspace mutation if operators want OMH to create isolated worktrees instead of delegating that to the chosen runtime.",
             },
             {
-                "id": "mcp-bridge-contract",
-                "title": "Define a real OMH MCP bridge contract",
-                "why": "Turns MCP preference into an installable, testable bridge when Hermes support is stable enough.",
+                "id": "mcp-host-observation",
+                "title": "Add host-observed MCP load/session evidence",
+                "why": "Separates available stdio bridge tools from proof that a specific Hermes host loaded them.",
             },
         ],
         "claim_boundary": (
             "The parity matrix is a product and operator contract. It does not claim hidden worker launch, "
-            "worktree creation, MCP tool calls, plugin runtime load, executor execution, review, CI, or merge evidence."
+            "worktree creation, host-observed MCP load, plugin runtime load, executor execution, review, CI, or merge evidence."
         ),
     }
 
@@ -201,6 +201,8 @@ def _probe_alignment(probe_payload: dict[str, object]) -> dict[str, object]:
         "omh_plugin_bundle": by_name.get("omh_plugin_bundle", "unknown"),
         "plugin_register_smoke": by_name.get("plugin_register_smoke", "unknown"),
         "mcp_preference": by_name.get("mcp_preference", "unknown"),
+        "mcp_bridge_server": by_name.get("mcp_bridge_server", "unknown"),
+        "mcp_bridge_runtime": by_name.get("mcp_bridge_runtime", "unknown"),
         "mcp_host_config": by_name.get("mcp_host_config", "unknown"),
         "target_topology": by_name.get("target_topology", "unknown"),
         "wrapper_metadata": by_name.get("wrapper_metadata", "unknown"),

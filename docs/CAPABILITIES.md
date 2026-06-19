@@ -16,6 +16,7 @@ over existing OMH catalogs and contracts:
 - wrapper action ids from `src/wrapper/contract.py`
 - runtime observation events from `src/runtime/records.py`
 - plugin hook/tool metadata from `src/plugin_bundle/omh/*`
+- optional MCP bridge metadata from `omh mcp manifest`
 
 Use:
 
@@ -48,7 +49,7 @@ names shown below.
 | `keywords` | Explicit invocation prefixes, natural-language routing rules, locale aliases, conflict policy, and guard rules. |
 | `orchestration_patterns` | Safe workflow patterns such as clarify-then-plan, plan-execute-verify, team pipeline, worktree isolation, loop tick, and executor session handoff. |
 | `playbooks` | Situation-level workflow maps such as request-to-handoff, feedback triage, research department, materials processing, and idea-to-deploy, including owner/action hints for the first wrapper card. |
-| `tool_requirements` | Tool/MCP requirements when derivable. PR1 marks this as partial rather than inventing host requirements. |
+| `tool_requirements` | Tool/MCP requirements when derivable, plus setup guidance for the optional allowlisted OMH MCP bridge. |
 | `evidence_boundaries` | The shared prepared-vs-observed claim rule. |
 
 ## Claim Boundary
@@ -64,6 +65,10 @@ Workspace-isolation guidance uses `worktree_session_isolation/v1`. It can tell a
 wrapper to keep the same workspace, recommend a worktree, or require a worktree
 before opening a coding agent. It is still prepared guidance until a wrapper or
 runtime observes the workspace action.
+
+The optional MCP bridge uses `omh mcp serve` and exposes only `omh_status`,
+`omh_recommend`, and `omh_probe`. Bridge availability is not host-load evidence,
+and a host config file is not proof that any MCP tool was called.
 
 ## Why This Exists
 
