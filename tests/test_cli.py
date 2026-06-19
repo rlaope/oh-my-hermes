@@ -2720,6 +2720,14 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
                 self.assertIn("shell command", payload["chat_response"]["body"])
+                capability_summary = payload["chat_response"]["state"]["capability_summary"]
+                self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
+                lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
+                self.assertIn("intent_to_plan", lanes)
+                self.assertIn("materials_and_visuals", lanes)
+                self.assertIn("coding_handoff", lanes)
+                self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
+                self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
     def test_chat_interact_non_catalog_command_questions_do_not_open_picker(self) -> None:

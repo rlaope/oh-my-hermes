@@ -546,6 +546,18 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("feedback-triage", groups["company_product_ops"]["workflows"])
                 self.assertIn("code-review", groups["coding_and_runtime"]["workflows"])
                 self.assertIn("Prepared plans", primer["evidence_rule"])
+                capability_summary = payload["chat_response"]["state"]["capability_summary"]
+                self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
+                lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
+                self.assertTrue({"intent_to_plan", "materials_and_visuals", "coding_handoff"} <= lanes.keys())
+                self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
+                self.assertIn("ultraprocess", lanes["intent_to_plan"]["primary_skills"])
+                self.assertIn("code-review", lanes["coding_handoff"]["primary_skills"])
+                intent_playbooks = {playbook["id"] for playbook in lanes["intent_to_plan"]["representative_playbooks"]}
+                self.assertIn("request-to-handoff", intent_playbooks)
+                self.assertTrue(
+                    any("Prepared OMH capability" in boundary for boundary in capability_summary["evidence_boundary"])
+                )
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
     def test_non_catalog_command_and_skill_questions_do_not_open_picker(self) -> None:
@@ -565,6 +577,7 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertNotEqual(payload["next_action"], "choose_skill")
                 self.assertNotIn("catalog_question", payload["chat_response"]["state"])
+                self.assertNotIn("capability_summary", payload["chat_response"]["state"])
 
     def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
         cases = {

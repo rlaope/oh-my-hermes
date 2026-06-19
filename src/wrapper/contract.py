@@ -1510,6 +1510,17 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
     catalog_question = _is_skill_catalog_question(message)
     primer = _context_primer_state()
+    extra_state = {
+        "route_action": decision.get("action", "dispatch"),
+        "confidence": decision.get("confidence", "low"),
+        "selected_workflow": _ROUTER_SKILL,
+        "catalog_question": catalog_question,
+        "context_primer": primer,
+        "skill_picker": picker,
+        "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
+    }
+    if catalog_question:
+        extra_state["capability_summary"] = _catalog_capability_summary()
     return _chat_response(
         kind="skill_picker",
         headline="Here are the OMH workflows." if catalog_question else "Choose an OMH workflow.",
@@ -1536,15 +1547,7 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
             _action("show_status", "Show status", "secondary"),
         ],
         claim_boundary="Choosing a skill is routing intent only; it is not plan acceptance, dispatch, execution, review, CI, or verification evidence.",
-        extra_state={
-            "route_action": decision.get("action", "dispatch"),
-            "confidence": decision.get("confidence", "low"),
-            "selected_workflow": _ROUTER_SKILL,
-            "catalog_question": catalog_question,
-            "context_primer": primer,
-            "skill_picker": picker,
-            "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
-        },
+        extra_state=extra_state,
     )
 
 
@@ -1611,6 +1614,54 @@ def _context_primer_state() -> dict[str, object]:
         "evidence_rule": "Prepared plans, prompts, cards, or handoffs are not execution, file generation, delivery, review, CI, merge, or verification evidence.",
         "inventory_rule": "Render the picker for common choices and use search_skills for the full installed catalog.",
     }
+
+
+def _catalog_capability_summary() -> dict[str, object]:
+    from ..capabilities.registry import capability_summary
+
+    summary = capability_summary()
+    compact_lanes = []
+    for lane in summary.get("lanes", []):
+        if not isinstance(lane, dict):
+            continue
+        compact_lanes.append(
+            {
+                "id": lane.get("id", ""),
+                "label": lane.get("label", ""),
+                "owner_role": lane.get("owner_role", ""),
+                "use_for": lane.get("use_for", ""),
+                "primary_skills": list(lane.get("primary_skills", [])),
+                "representative_playbooks": [
+                    {
+                        "id": playbook.get("id", ""),
+                        "summary": playbook.get("summary", ""),
+                        "owner_role": playbook.get("owner_role", ""),
+                        "first_stage": playbook.get("first_stage", {}),
+                    }
+                    for playbook in lane.get("representative_playbooks", [])[:3]
+                    if isinstance(playbook, dict)
+                ],
+                "wrapper_actions": list(lane.get("wrapper_actions", []))[:6],
+                "examples": list(lane.get("examples", []))[:3],
+            }
+        )
+    return {
+        "schema_version": summary.get("schema_version", "omh_capability_summary/v1"),
+        "purpose": summary.get("purpose", ""),
+        "lanes": compact_lanes,
+        "direct_response_guidance": _as_string_list(summary.get("direct_response_guidance", [])),
+        "evidence_boundary": _as_string_list(summary.get("evidence_boundary", [])),
+    }
+
+
+def _as_string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, tuple):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
 
 
 def _first_token(message: str) -> str:

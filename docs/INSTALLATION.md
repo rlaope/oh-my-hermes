@@ -429,7 +429,10 @@ The backend flow is:
    wrapper still renders `chat_response.kind == skill_picker`. Do not ask the
    user to approve `omh list` for a catalog question; `omh_skill_picker/v1`
    already contains the workflow labels, direct invocation text, and
-   routing-only claim boundary.
+   routing-only claim boundary. The same response also carries
+   `omh_capability_summary/v1`, which lets Hermes explain the larger
+   capability lanes and representative playbooks without a second catalog
+   command.
 8. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
    `status_card` when present in the original channel or thread. The headline
    already starts with the visible OMH marker, such as `[omh] web-research`;
