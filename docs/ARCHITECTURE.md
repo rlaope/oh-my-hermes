@@ -439,7 +439,8 @@ observable local evidence for:
 - hook-like files
 - plugin and app paths
 - MCP bridge server availability, setup preference, runtime tool-call
-  observation, and MCP host config paths as separate capabilities
+  observation, host session observation, and MCP host config paths as separate
+  capabilities
 - wrapper observation artifacts
 - native skill metadata readiness
 
@@ -449,15 +450,19 @@ Hermes integration requires both a stable Hermes extension contract and runtime
 evidence that the extension ran.
 `mcp_bridge_server` is the installed stdio bridge command, `mcp_preference` is
 OMH setup state only, `mcp_bridge_runtime` is a local OMH-observed bridge tool
-call, and `mcp_host_config` is a host-file probe only. Keeping them separate
-prevents a requested bridge preference or config file from being mistaken for
-observed MCP host load, connector invocation, or coding execution.
+call, `mcp_host_session` is host/wrapper-supplied load or session evidence, and
+`mcp_host_config` is a host-file probe only. Keeping them separate prevents a
+requested bridge preference or config file from being mistaken for observed MCP
+host load, connector invocation, or coding execution.
 
 The MCP bridge is intentionally narrow. `omh mcp serve` speaks newline-delimited
 stdio JSON-RPC and exposes only `omh_status`, `omh_recommend`, and `omh_probe`.
 It does not expose arbitrary shell commands, mutate host MCP configuration,
 call external APIs, dispatch coding executors, or prove a specific Hermes host
 loaded the bridge.
+When a host or wrapper does observe bridge load or use, it can record
+`omh_mcp_host_session/v1` through `omh mcp observe-host`; observed records
+require an evidence reference and remain host-load/session evidence only.
 
 For terminal operators, `omh probe` prints a compact status summary by default.
 Wrappers and automation should request the full capability payload with
@@ -466,7 +471,7 @@ Wrappers and automation should request the full capability payload with
 `omh probe --parity` adds `omh_parity_matrix/v1`. That matrix compares common
 oh-my runtime capability axes with OMH's actual surfaces: skill/plugin
 distribution, specialist roles, team/swarm workers, worktree isolation, HUD and
-session observability, MCP/tool bridge preference, loop/autopilot workflow, and
+session observability, MCP/tool bridge, loop/autopilot workflow, and
 release maintenance. It is a product and operator contract, not a hidden runtime
 claim. A `partial` row means OMH has deterministic guidance, handoff metadata,
 or observation records for that axis, while the live worker, worktree, MCP tool,

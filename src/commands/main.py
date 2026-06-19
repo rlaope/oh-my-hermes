@@ -78,7 +78,7 @@ from .materials import (
 )
 from .menubar import _add_menubar_commands, cmd_menubar_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
-from .mcp import _add_mcp_commands, cmd_mcp_manifest, cmd_mcp_serve
+from .mcp import cmd_mcp_manifest, cmd_mcp_observe_host, cmd_mcp_serve, cmd_mcp_sessions, _add_mcp_commands
 from .ops import (
     _add_ops_commands,
     cmd_ops_agent_review,

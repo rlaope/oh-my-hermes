@@ -25,6 +25,7 @@ class McpBridgeTests(unittest.TestCase):
             self.assertEqual(payload["server"]["args"][-2:], ["mcp", "serve"])
             tools = {tool["name"] for tool in payload["tools"]}
             self.assertEqual(tools, {"omh_status", "omh_recommend", "omh_probe"})
+            self.assertIn("observe-host", payload["setup"]["host_observation_command"])
             self.assertIn("allowlisted local status", payload["claim_boundary"])
 
     def test_mcp_stdio_server_lists_and_calls_tools_without_stdout_noise(self) -> None:
@@ -101,6 +102,100 @@ class McpBridgeTests(unittest.TestCase):
             structured = payload["result"]["structuredContent"]
             self.assertEqual(structured["status"], "tool_error")
             self.assertIn("Unknown tool", structured["error"])
+
+    def test_mcp_host_observation_records_host_session_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "mcp",
+                    "observe-host",
+                    "--host",
+                    "hermes-agent",
+                    "--session",
+                    "session-123",
+                    "--event",
+                    "host_load",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertEqual(stdout, "")
+            self.assertIn("require at least one --evidence-ref", stderr)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "mcp",
+                    "observe-host",
+                    "--host",
+                    "hermes-agent",
+                    "--session",
+                    "session-123",
+                    "--event",
+                    "host_load",
+                    "--status",
+                    "observed",
+                    "--evidence-ref",
+                    "host-log:abc123",
+                    "--message",
+                    "Hermes host reported OMH MCP bridge loaded.",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            observation = json.loads(stdout)["observation"]
+            self.assertEqual(observation["schema_version"], "omh_mcp_host_session/v1")
+            self.assertTrue(observation["observed"])
+            self.assertEqual(observation["host"], "hermes-agent")
+            self.assertEqual(observation["evidence_refs"], ["host-log:abc123"])
+            self.assertIn("host-load/session evidence only", observation["claim_boundary"])
+
+            status, stdout, stderr = run_cli(base + ["mcp", "sessions", "--limit", "1"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            sessions = json.loads(stdout)["sessions"]
+            self.assertEqual(len(sessions), 1)
+            self.assertEqual(sessions[0]["session_id"], "session-123")
+
+            status, stdout, stderr = run_cli(base + ["probe", "--parity"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            caps = {capability["name"]: capability for capability in payload["capabilities"]}
+            self.assertTrue(payload["mcp_host_session_observed"])
+            self.assertEqual(caps["mcp_host_session"]["status"], "available")
+            self.assertIn("session-123", caps["mcp_host_session"]["message"])
+            self.assertEqual(payload["parity_matrix"]["probe_alignment"]["mcp_host_session"], "available")
+
+    def test_mcp_host_tool_call_observation_requires_tool_name(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "mcp",
+                    "observe-host",
+                    "--host",
+                    "hermes-agent",
+                    "--session",
+                    "session-123",
+                    "--event",
+                    "tool_call",
+                    "--evidence-ref",
+                    "host-log:tool",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertEqual(stdout, "")
+            self.assertIn("requires --tool", stderr)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from typing import Any, TextIO
 
 from . import __version__
 from .hud import build_hud_payload
+from .local_store import ensure_dir, ensure_file, read_jsonl_objects, utc_now
 from .paths import OmhPaths
 from .probe import probe_capabilities
 from .routing.recommend import recommend_skills
@@ -16,11 +17,20 @@ MCP_PROTOCOL_VERSION = "2025-06-18"
 MCP_BRIDGE_SCHEMA_VERSION = "omh_mcp_bridge/v1"
 MCP_TOOL_RESULT_SCHEMA_VERSION = "omh_mcp_tool_result/v1"
 MCP_OBSERVATION_SCHEMA_VERSION = "omh_mcp_observation/v1"
+MCP_HOST_SESSION_SCHEMA_VERSION = "omh_mcp_host_session/v1"
+MCP_HOST_SESSION_EVENTS = ("host_load", "session_start", "tool_call", "session_end", "host_unload")
+MCP_HOST_SESSION_STATUSES = ("observed", "not_observed", "blocked")
 
 MCP_BRIDGE_CLAIM_BOUNDARY = (
     "The OMH MCP bridge exposes allowlisted local status, recommendation, and probe tools only. "
     "It is not arbitrary shell access, connector execution, coding dispatch, implementation, "
     "verification, review, CI, merge, or proof that a specific Hermes host loaded the bridge."
+)
+
+MCP_HOST_SESSION_CLAIM_BOUNDARY = (
+    "An OMH MCP host session record is metadata supplied by a host or wrapper that observed bridge load/use. "
+    "It is host-load/session evidence only, not arbitrary connector execution, coding dispatch, "
+    "implementation, verification, review, CI, merge, or proof of any unrecorded tool call."
 )
 
 
@@ -114,10 +124,87 @@ def build_mcp_manifest(paths: OmhPaths, *, command: str = "omh", include_absolut
         "setup": {
             "operator_command": f"{command} mcp manifest",
             "server_command": " ".join([command, *args]),
+            "host_observation_command": (
+                f"{command} mcp observe-host --host <host> --session <session-id> "
+                "--event host_load --status observed --evidence-ref <host-log-or-session-ref>"
+            ),
             "normal_hermes_surface": "Use installed OMH skills in Hermes chat first; use this MCP bridge only when the host supports MCP tools.",
         },
         "claim_boundary": MCP_BRIDGE_CLAIM_BOUNDARY,
     }
+
+
+def record_mcp_host_session(
+    paths: OmhPaths,
+    *,
+    host: str,
+    session_id: str,
+    event: str,
+    status: str,
+    evidence_refs: list[str] | None = None,
+    message: str = "",
+    source: str = "wrapper",
+    tool: str = "",
+) -> dict[str, Any]:
+    host = host.strip()
+    session_id = session_id.strip()
+    event = event.strip()
+    status = status.strip()
+    source = source.strip() or "wrapper"
+    tool = tool.strip()
+    evidence_refs = [item.strip() for item in (evidence_refs or []) if item and item.strip()]
+    if not host:
+        raise ValueError("mcp host observation requires --host")
+    if not session_id:
+        raise ValueError("mcp host observation requires --session")
+    if event not in MCP_HOST_SESSION_EVENTS:
+        raise ValueError(f"mcp host observation event must be one of: {', '.join(MCP_HOST_SESSION_EVENTS)}")
+    if status not in MCP_HOST_SESSION_STATUSES:
+        raise ValueError(f"mcp host observation status must be one of: {', '.join(MCP_HOST_SESSION_STATUSES)}")
+    if status == "observed" and not evidence_refs:
+        raise ValueError("observed MCP host sessions require at least one --evidence-ref")
+    if event == "tool_call" and not tool:
+        raise ValueError("mcp host tool_call observation requires --tool")
+
+    recorded_at = utc_now()
+    record: dict[str, Any] = {
+        "schema_version": MCP_HOST_SESSION_SCHEMA_VERSION,
+        "host": host,
+        "session_id": session_id,
+        "event": event,
+        "status": status,
+        "observed": status == "observed",
+        "source": source,
+        "tool": tool,
+        "evidence_refs": evidence_refs,
+        "message": message.strip(),
+        "recorded_at": recorded_at,
+        "claim_boundary": MCP_HOST_SESSION_CLAIM_BOUNDARY,
+    }
+    if status == "observed":
+        record["observed_at"] = recorded_at
+    _append_mcp_host_session(paths, record)
+    patch: dict[str, Any] = {"last_mcp_host_session": record}
+    if record["observed"]:
+        patch["last_mcp_host_observed"] = record
+    update_state(paths, patch)
+    return record
+
+
+def read_mcp_host_sessions(paths: OmhPaths, *, limit: int | None = 20) -> tuple[list[dict[str, Any]], list[str]]:
+    records, errors = read_jsonl_objects(paths.runtime_mcp_host_sessions_path)
+    records = list(reversed(records))
+    if limit is not None:
+        records = records[:limit]
+    return records, errors
+
+
+def latest_observed_mcp_host_session(paths: OmhPaths) -> tuple[dict[str, Any] | None, list[str]]:
+    records, errors = read_jsonl_objects(paths.runtime_mcp_host_sessions_path)
+    for record in reversed(records):
+        if record.get("schema_version") == MCP_HOST_SESSION_SCHEMA_VERSION and record.get("observed"):
+            return record, errors
+    return None, errors
 
 
 def run_stdio_mcp_server(paths: OmhPaths, *, stdin: TextIO | None = None, stdout: TextIO | None = None, stderr: TextIO | None = None) -> int:
@@ -139,6 +226,13 @@ def run_stdio_mcp_server(paths: OmhPaths, *, stdin: TextIO | None = None, stdout
         output_stream.write(json.dumps(response, separators=(",", ":"), sort_keys=True) + "\n")
         output_stream.flush()
     return 0
+
+
+def _append_mcp_host_session(paths: OmhPaths, record: dict[str, Any]) -> None:
+    ensure_dir(paths.runtime_dir, private=True)
+    ensure_file(paths.runtime_mcp_host_sessions_path, private=True)
+    with paths.runtime_mcp_host_sessions_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def handle_mcp_message(paths: OmhPaths, message: Any) -> dict[str, Any] | None:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config_adapter import external_dirs, read_config
+from .local_store import read_jsonl_objects
 from .parity import build_parity_matrix
 from .paths import OmhPaths
 from .plugin_pack import inspect_plugin_bundle
@@ -11,6 +12,7 @@ from .runtime.artifacts import read_state_result
 from .targets import summarize_target_registry
 
 PROBE_STATUSES = ("available", "missing", "unknown", "unverified")
+MCP_HOST_SESSION_SCHEMA_VERSION = "omh_mcp_host_session/v1"
 
 
 @dataclass(frozen=True)
@@ -105,7 +107,7 @@ def _mcp_preference_capability(paths: OmhPaths) -> Capability:
         "mcp_preference",
         "unverified",
         evidence,
-        f"OMH MCP bridge preference was requested (mode={mode}), but no MCP host load or tool-call evidence is recorded",
+        f"OMH MCP bridge preference was requested (mode={mode}), but no MCP host session or tool-call evidence is recorded",
     )
 
 
@@ -142,6 +144,49 @@ def _mcp_bridge_runtime_capability(paths: OmhPaths) -> Capability:
         "available",
         evidence,
         f"OMH MCP bridge observed a local tool call ({tool}); host-specific load evidence remains separate",
+    )
+
+
+def _mcp_host_session_capability(paths: OmhPaths) -> Capability:
+    records, errors = read_jsonl_objects(paths.runtime_mcp_host_sessions_path)
+    evidence = str(paths.runtime_mcp_host_sessions_path)
+    if errors:
+        return Capability(
+            "mcp_host_session",
+            "unknown",
+            evidence,
+            f"Could not read OMH MCP host session observations: {'; '.join(errors[:3])}",
+        )
+    latest_observed = next(
+        (
+            record
+            for record in reversed(records)
+            if record.get("schema_version") == MCP_HOST_SESSION_SCHEMA_VERSION and record.get("observed")
+        ),
+        None,
+    )
+    if latest_observed:
+        host = str(latest_observed.get("host", "unknown"))
+        event = str(latest_observed.get("event", "unknown"))
+        session_id = str(latest_observed.get("session_id", "unknown"))
+        return Capability(
+            "mcp_host_session",
+            "available",
+            evidence,
+            f"MCP host session observed by {host} ({event}, session={session_id})",
+        )
+    if records:
+        return Capability(
+            "mcp_host_session",
+            "unverified",
+            evidence,
+            "MCP host session records exist, but none record observed host load or use",
+        )
+    return Capability(
+        "mcp_host_session",
+        "unverified",
+        evidence,
+        "No MCP host load or session observation has been recorded by a host or wrapper",
     )
 
 
@@ -207,6 +252,8 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
     capabilities.append(_mcp_preference_capability(paths))
     capabilities.append(_mcp_bridge_server_capability())
     capabilities.append(_mcp_bridge_runtime_capability(paths))
+    mcp_host_session = _mcp_host_session_capability(paths)
+    capabilities.append(mcp_host_session)
     capabilities.append(
         _marker_capability(
             "mcp_host_config",
@@ -301,6 +348,7 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
         "capabilities": [capability.to_dict() for capability in capabilities],
         "target_topology": target_topology,
         "plugin_distribution_ready": bool(plugin["plugin_distribution_ready"]),
+        "mcp_host_session_observed": mcp_host_session.status == "available",
         "native_integration_claim_ready": False,
         "claim_boundary": "Prompt-level routing is the default unless a future stable Hermes extension surface and runtime evidence prove deeper integration.",
     }
