@@ -182,6 +182,7 @@ I have prepared the handoff, but runtime start or executor/runtime dispatch is n
 observed yet.
 
 Status
+[ready]   Workspace isolation
 [ready]   Handoff
 [pending] Execution
 [pending] Verification
@@ -212,6 +213,10 @@ User-facing effect:
   action; showing the command is still not execution evidence. Executors
   without a deterministic local command expose prompt-copy guidance only, not a
   terminal command.
+- If `worktree_session_isolation/v1` says worktree recommended or required,
+  render `Prepare worktree` before the open button. The action prepares wrapper
+  UX and operator guidance; only `runtime_observation/v1` worktree evidence can
+  mark the worktree as observed.
 - Execution, verification, CI, merge-readiness, and merge stay separate.
 - The wrapper can keep editing the same thread as evidence arrives.
 

@@ -679,12 +679,20 @@ class WrapperSessionTests(unittest.TestCase):
             prepared_status = prepared["status"]["executor_session_status"]
             prepared_actions = {action["id"]: action for action in prepared_status["actions"]}
             self.assertEqual(prepared_status["coding_agent"], "prepared(codex)")
+            self.assertEqual(prepared_status["workspace_isolation"]["strategy"], "worktree_recommended")
+            self.assertEqual(prepared_status["workspace_isolation"]["status"], "prepared_not_observed")
             self.assertEqual(prepared_status["dispatch"], "not_observed")
             self.assertEqual(prepared_status["result"], "not_observed")
+            self.assertTrue(prepared_actions["prepare_worktree"]["enabled"])
+            self.assertEqual(prepared_actions["prepare_worktree"]["label"], "Prepare worktree")
+            self.assertEqual(prepared_actions["prepare_worktree"]["style"], "primary")
             self.assertTrue(prepared_actions["open_executor_session"]["enabled"])
             self.assertEqual(prepared_actions["open_executor_session"]["label"], "Open in Codex")
+            self.assertEqual(prepared_actions["open_executor_session"]["style"], "secondary")
             codex_launch = prepared_actions["open_executor_session"]["payload"]["launch"]
             self.assertEqual(codex_launch["schema_version"], "executor_launch/v1")
+            self.assertEqual(codex_launch["workspace_isolation"]["strategy"], "worktree_recommended")
+            self.assertIn("Prefer an isolated worktree", codex_launch["workspace_hint"])
             self.assertEqual(codex_launch["command_templates"][0]["argv_template"], ["codex", "{executor_prompt}"])
             self.assertEqual(codex_launch["command_templates"][0]["shell_command_template"], "codex {executor_prompt_shell_quoted}")
             self.assertEqual(codex_launch["command_templates"][1]["argv_template"], ["codex", "--cd", "{workspace_path}", "{executor_prompt}"])
@@ -695,9 +703,11 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(prepared_actions["attach_executor_session"]["payload"]["input_schema"]["required"], ["external_session_ref"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["chat_response"]["actions"]})
             self.assertEqual(prepared["status"]["status_card"]["executor_session_status"]["coding_agent"], "prepared(codex)")
-            self.assertEqual(prepared["status"]["status_card"]["executor_next_action_label"], "Open in Codex")
+            self.assertEqual(prepared["status"]["status_card"]["executor_next_action_label"], "Prepare worktree")
             self.assertIn("Coding agent is prepared in Codex.", prepared_status["display_status_lines"])
+            self.assertIn("Workspace isolation is recommended before opening the coding agent.", prepared_status["display_status_lines"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["status_card"]["executor_actions"]})
+            self.assertIn("prepare_worktree", {action["id"] for action in prepared["status"]["status_card"]["executor_actions"]})
             with self.assertRaisesRegex(ExecutorSessionError, "requires --observed"):
                 open_executor_session(paths, session_id, external_session_ref="codex-thread-1")
 
@@ -745,6 +755,31 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertIn("verification", briefing["pending_gaps"])
             self.assertIn("verification evidence is still needed", briefing["headline"])
             self.assertEqual(validate_runtime(paths)["ok"], True)
+
+    def test_required_worktree_isolation_disables_open_button_until_observed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "parallel team refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message)
+
+            prepared_status = prepared["status"]["executor_session_status"]
+            prepared_actions = {action["id"]: action for action in prepared_status["actions"]}
+
+            self.assertEqual(prepared_status["workspace_isolation"]["strategy"], "worktree_required")
+            self.assertEqual(prepared_status["workspace_isolation"]["next_action"], "prepare_worktree")
+            self.assertTrue(prepared_actions["prepare_worktree"]["enabled"])
+            self.assertEqual(prepared_actions["prepare_worktree"]["style"], "primary")
+            self.assertFalse(prepared_actions["open_executor_session"]["enabled"])
+            self.assertIn(
+                "Workspace isolation is required",
+                prepared_actions["open_executor_session"]["payload"]["disabled_reason"],
+            )
+            self.assertEqual(prepared["status"]["status_card"]["executor_next_action"], "prepare_worktree")
+            self.assertIn("Workspace isolation is required before opening the coding agent.", prepared_status["display_status_lines"])
 
     def test_coding_briefing_omits_optional_merge_gaps_when_merge_not_required(self) -> None:
         with TemporaryDirectory() as tmp:

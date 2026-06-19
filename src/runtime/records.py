@@ -19,6 +19,7 @@ from ..executors import (
     WORK_OWNER_MODES,
 )
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
+from ..isolation import ISOLATION_SCHEMA_VERSION
 from ..local_store import utc_now
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack
 
@@ -131,9 +132,28 @@ CODING_DELEGATION_RECORD_KEYS = (
     "executor_handoff",
     "runtime_handoff",
     "prompt_handoff",
+    "isolation_plan",
     "acceptance_criteria",
     "verification",
     "status",
+)
+ISOLATION_STRATEGIES = ("same_workspace_ok", "worktree_recommended", "worktree_required")
+ISOLATION_STATUSES = ("prepared_not_observed",)
+ISOLATION_RISK_LEVELS = ("low", "medium", "high")
+ISOLATION_PLAN_KEYS = (
+    "schema_version",
+    "status",
+    "strategy",
+    "risk_level",
+    "reason_codes",
+    "workspace_policy",
+    "session_binding",
+    "required_before",
+    "recommended_when",
+    "wrapper_actions",
+    "observation_events",
+    "not_observed_by_omh",
+    "claim_boundary",
 )
 CODING_EXECUTOR_HANDOFF_SCHEMA_VERSION = EXECUTOR_HANDOFF_SCHEMA_VERSION
 CODING_RUNTIME_HANDOFF_SCHEMA_VERSION = RUNTIME_HANDOFF_SCHEMA_VERSION
@@ -156,6 +176,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "dispatch_contract",
     "prompt_template",
     "execution_brief",
+    "isolation_plan",
     "scope",
     "non_goals",
     "acceptance_criteria",
@@ -178,6 +199,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "recording_contract",
     "dispatch_contract",
     "prompt_template",
+    "isolation_plan",
     "scope",
     "non_goals",
     "acceptance_criteria",
@@ -201,6 +223,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "dispatch_contract",
     "prompt_template",
     "runtime_brief",
+    "isolation_plan",
     "runtime_templates",
     "team_contract",
     "worktree_contract",
@@ -615,6 +638,9 @@ def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]
     prompt_handoff = _compact_prompt_handoff(delegation.get("prompt_handoff"))
     if prompt_handoff:
         record["prompt_handoff"] = prompt_handoff
+    isolation_plan = _compact_isolation_plan(delegation.get("isolation_plan"))
+    if isolation_plan:
+        record["isolation_plan"] = isolation_plan
     if not record["message_sha256"] and message_text:
         record["message_sha256"] = hashlib.sha256(message_text.encode("utf-8")).hexdigest()
     errors = validate_coding_delegation_record(record)
@@ -808,6 +834,7 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
         "dispatch_contract": str(value.get("dispatch_contract", "")),
         "prompt_template": str(value.get("prompt_template", "")),
         "execution_brief": _compact_execution_brief(value.get("execution_brief", {})),
+        "isolation_plan": _compact_isolation_plan(value.get("isolation_plan")),
         "scope": _compact_string_list(value.get("scope", [])),
         "non_goals": _compact_string_list(value.get("non_goals", [])),
         "acceptance_criteria": _compact_string_list(value.get("acceptance_criteria", [])),
@@ -850,6 +877,7 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
         "recording_contract": str(value.get("recording_contract", "")),
         "dispatch_contract": str(value.get("dispatch_contract", "")),
         "prompt_template": str(value.get("prompt_template", "")),
+        "isolation_plan": _compact_isolation_plan(value.get("isolation_plan")),
         "scope": _compact_string_list(value.get("scope", [])),
         "non_goals": _compact_string_list(value.get("non_goals", [])),
         "acceptance_criteria": _compact_string_list(value.get("acceptance_criteria", [])),
@@ -893,6 +921,7 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
         "dispatch_contract": str(value.get("dispatch_contract", "")),
         "prompt_template": str(value.get("prompt_template", "")),
         "runtime_brief": _compact_runtime_brief(value.get("runtime_brief", {})),
+        "isolation_plan": _compact_isolation_plan(value.get("isolation_plan")),
         "runtime_templates": _compact_runtime_templates(value.get("runtime_templates", [])),
         "team_contract": _compact_team_contract(value.get("team_contract", {})),
         "worktree_contract": _compact_worktree_contract(value.get("worktree_contract", {})),
@@ -1101,6 +1130,26 @@ def _compact_worktree_contract(value: Any) -> dict[str, Any]:
         "isolation": str(value.get("isolation", "")),
         "required_before": _compact_string_list(value.get("required_before", [])),
         "not_observed_by_omh": _compact_string_list(value.get("not_observed_by_omh", [])),
+    }
+
+
+def _compact_isolation_plan(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "status": str(value.get("status", "")),
+        "strategy": str(value.get("strategy", "")),
+        "risk_level": str(value.get("risk_level", "")),
+        "reason_codes": _compact_string_list(value.get("reason_codes", [])),
+        "workspace_policy": str(value.get("workspace_policy", "")),
+        "session_binding": str(value.get("session_binding", "")),
+        "required_before": _compact_string_list(value.get("required_before", [])),
+        "recommended_when": _compact_string_list(value.get("recommended_when", [])),
+        "wrapper_actions": _compact_string_list(value.get("wrapper_actions", [])),
+        "observation_events": _compact_string_list(value.get("observation_events", [])),
+        "not_observed_by_omh": _compact_string_list(value.get("not_observed_by_omh", [])),
+        "claim_boundary": str(value.get("claim_boundary", "")),
     }
 
 
@@ -1579,6 +1628,8 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
         errors.extend(validate_coding_runtime_handoff(delegation["runtime_handoff"]))
     if "prompt_handoff" in delegation:
         errors.extend(validate_coding_prompt_handoff(delegation["prompt_handoff"]))
+    if "isolation_plan" in delegation:
+        errors.extend(validate_isolation_plan(delegation["isolation_plan"], "coding_delegation isolation_plan"))
     if "harness_quality" in delegation:
         errors.extend(validate_harness_quality(delegation["harness_quality"], "coding_delegation harness_quality"))
     errors.extend(validate_coding_handoff_combination(delegation, "coding_delegation"))
@@ -1777,6 +1828,7 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
                 expected_profile=str(handoff.get("selected_executor_profile", "")),
             )
         )
+    errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation executor_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation executor_handoff"))
     return errors
 
@@ -2007,6 +2059,7 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
                 expected_profile=str(handoff.get("selected_executor_profile", "")),
             )
         )
+    errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation runtime_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation runtime_handoff"))
     return errors
 
@@ -2164,7 +2217,45 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
                 expected_profile=str(handoff.get("selected_executor_profile", "")),
             )
         )
+    errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation prompt_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation prompt_handoff"))
+    return errors
+
+
+def validate_isolation_plan(value: Any, label: str) -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(value, dict), errors, f"{label} must be an object")
+    if not isinstance(value, dict):
+        return errors
+    extra_keys = sorted(set(value) - set(ISOLATION_PLAN_KEYS))
+    missing_keys = sorted(set(ISOLATION_PLAN_KEYS) - set(value))
+    _require(not extra_keys, errors, f"{label} has unsupported keys: {extra_keys}")
+    _require(not missing_keys, errors, f"{label} is missing keys: {missing_keys}")
+    _require(value.get("schema_version") == ISOLATION_SCHEMA_VERSION, errors, f"{label} schema_version is invalid")
+    _require(value.get("status") in ISOLATION_STATUSES, errors, f"{label} status is invalid: {value.get('status')!r}")
+    _require(value.get("strategy") in ISOLATION_STRATEGIES, errors, f"{label} strategy is invalid: {value.get('strategy')!r}")
+    _require(value.get("risk_level") in ISOLATION_RISK_LEVELS, errors, f"{label} risk_level is invalid: {value.get('risk_level')!r}")
+    for key in ("workspace_policy", "session_binding", "claim_boundary"):
+        _require(isinstance(value.get(key), str), errors, f"{label} {key} must be a string")
+    _require("not proof" in str(value.get("claim_boundary", "")).lower(), errors, f"{label} claim_boundary must preserve observed-evidence boundary")
+    for key in ("reason_codes", "required_before", "recommended_when", "wrapper_actions", "observation_events", "not_observed_by_omh"):
+        _require(isinstance(value.get(key), list), errors, f"{label} {key} must be a list")
+        if isinstance(value.get(key), list):
+            for index, item in enumerate(value[key]):
+                _require(isinstance(item, str), errors, f"{label} {key}[{index}] must be a string")
+    if value.get("strategy") != "same_workspace_ok":
+        actions = value.get("wrapper_actions", [])
+        _require("prepare_worktree" in actions, errors, f"{label} wrapper_actions must include prepare_worktree when isolation is recommended")
+    _require(
+        "open_executor_session" in value.get("wrapper_actions", []),
+        errors,
+        f"{label} wrapper_actions must include open_executor_session",
+    )
+    _require(
+        "git worktree creation" in value.get("not_observed_by_omh", []),
+        errors,
+        f"{label} not_observed_by_omh must include git worktree creation",
+    )
     return errors
 
 

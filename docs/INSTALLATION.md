@@ -384,7 +384,10 @@ common oh-my runtime capability axes. It returns `omh_parity_matrix/v1` with
 available and partial rows for skills/plugins, roles, team/swarm workers,
 worktree isolation, HUD/session status, MCP/tool bridge preference, loop
 autopilot, and release maintenance. Partial rows are intentional evidence
-boundaries, not failures.
+boundaries, not failures. The worktree row includes
+`worktree_session_isolation/v1` wrapper guidance when coding handoffs need same
+workspace, recommended worktree, or required worktree status before opening a
+coding agent; it is still not proof that a Git worktree was created.
 
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see
@@ -688,6 +691,10 @@ Before calling the bot integration ready, verify these points:
   `omx-runtime` / `omo-runtime` / `omc-runtime` return a
   `coding_runtime_handoff/v1` payload with runtime, team/swarm,
   worker-protocol, and worktree guidance without creating a lifecycle run.
+- Coding handoffs include `worktree_session_isolation/v1` so wrappers can show
+  Prepare worktree before opening an executor when risk or parallelism calls for
+  isolation. The plan remains `prepared_not_observed` until matching runtime
+  evidence exists.
 - Executor-choice, runtime-handoff, clarify, fallback, and prompt-only handoffs
   return `runtime.recorded=false`; wrappers should not expect
   `runtime.run.run_id` for those paths.

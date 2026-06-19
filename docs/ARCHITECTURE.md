@@ -365,7 +365,11 @@ create a lifecycle run or observed execution evidence. Hermes, OMX, OMO, and OMC
 profiles return a `coding_runtime_handoff/v1` contract with runtime profile,
 team/swarm, worker-protocol, and worktree guidance. Runtime handoffs are still
 prepared state only: they do not mean Hermes, tmux, workers, subagents, or
-worktrees were started. That record stores a compact snapshot of the generated
+worktrees were started. All coding handoff modes also include
+`worktree_session_isolation/v1`, which tells wrappers whether the current
+workspace is acceptable, an isolated worktree is recommended, or an isolated
+worktree is required before opening an executor. That record stores a compact
+snapshot of the generated
 acceptance criteria, verification expectations, report contract, and evidence
 contract, runtime-specific invocation templates, and the
 `runtime_observation/v1` recording contract, but not the raw prompt body. With

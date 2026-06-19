@@ -44,7 +44,7 @@ from omh.runtime_artifacts import (
     write_runtime_observation,
     write_wrapper_contract,
 )
-from omh.runtime.records import RUNTIME_OBSERVATION_EVENTS, validate_coding_runtime_handoff
+from omh.runtime.records import RUNTIME_OBSERVATION_EVENTS, validate_coding_runtime_handoff, validate_isolation_plan
 
 
 class RuntimeArtifactTests(unittest.TestCase):
@@ -281,6 +281,8 @@ class RuntimeArtifactTests(unittest.TestCase):
         handoff = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
 
         self.assertEqual(validate_coding_runtime_handoff(handoff), [])
+        self.assertEqual(validate_isolation_plan(handoff["isolation_plan"], "isolation"), [])
+        self.assertEqual(handoff["isolation_plan"]["strategy"], "worktree_recommended")
         self.assertIn("runtime_templates", handoff)
         self.assertIn("$ultragoal {message}", {template["command_template"] for template in handoff["runtime_templates"]})
         self.assertEqual(handoff["observation_contract"]["record_schema"], "runtime_observation/v1")
@@ -301,6 +303,10 @@ class RuntimeArtifactTests(unittest.TestCase):
         missing_required_boundary = deepcopy(handoff)
         missing_required_boundary["evidence_contract"]["observed_required_for"].remove("worker_dispatch")
         self.assertIn("must include required boundaries", json.dumps(validate_coding_runtime_handoff(missing_required_boundary)))
+
+        missing_worktree_action = deepcopy(handoff["isolation_plan"])
+        missing_worktree_action["wrapper_actions"].remove("prepare_worktree")
+        self.assertIn("prepare_worktree", json.dumps(validate_isolation_plan(missing_worktree_action, "isolation")))
 
     def test_validate_hermes_team_path_requires_full_public_contract(self) -> None:
         handoff = build_coding_delegation_payload("coordinate a safe coding team", executor_target="hermes")["runtime_handoff"]
