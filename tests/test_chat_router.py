@@ -108,7 +108,10 @@ class ChatRouterTests(unittest.TestCase):
         for message in (
             "OMH로 할 수 있는 workflow가 뭐야?",
             "what can OMH do?",
+            "how can OMH help my team?",
+            "Can OMH help with planning, research, and coding?",
             "OMH로 뭐 할 수 있어?",
+            "OMH는 뭘 도와줘?",
         ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")

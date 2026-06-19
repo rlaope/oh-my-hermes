@@ -77,14 +77,28 @@ _EXPLICIT_OMH_CAPABILITY_PHRASES = (
     "what does oh-my-hermes do",
     "how can omh help",
     "how can oh-my-hermes help",
+    "can omh help with",
+    "can oh-my-hermes help with",
+    "what is omh useful for",
+    "what is oh-my-hermes useful for",
+    "how should i use omh",
+    "how should i use oh-my-hermes",
     "omh로 뭐 할 수",
     "omh로 무엇을 할 수",
     "oh-my-hermes로 뭐 할 수",
     "oh-my-hermes로 무엇을 할 수",
     "omh가 뭐 해",
     "omh가 무엇을 해",
+    "omh가 뭘 도와",
+    "omh가 무엇을 도와",
+    "omh가 어떻게 도와",
+    "omh가 우리 팀에서 어떻게 쓰",
     "omh는 뭐 해",
     "omh는 무엇을 해",
+    "omh는 뭘 도와",
+    "omh는 무엇을 도와",
+    "omh는 어떻게 쓰",
+    "omh를 어떻게 쓰",
     "omh 기능 뭐",
     "oh-my-hermes 기능 뭐",
 )
@@ -224,7 +238,40 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
+_PATH_REFERENCE_MARKERS = (
+    "/",
+    "\\",
+    ".py",
+    ".md",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".html",
+    ".css",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".svg",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    "readme",
+    "section",
+)
 _CATALOG_COLLISION_MARKERS = _CATALOG_COLLECTION_WORDS + ("명령어",)
+_OPERATOR_ACTION_QUESTION_MARKERS = (
+    "how can i",
+    "how do i",
+    "how should i",
+    "what can",
+    "can i",
+    "help me",
+    "어떻게",
+    "방법",
+)
 
 
 def is_skill_catalog_question(message: str) -> bool:
@@ -233,6 +280,8 @@ def is_skill_catalog_question(message: str) -> bool:
         return False
     search_texts = _catalog_search_texts(lowered)
     if _is_operator_command_question(search_texts):
+        return False
+    if _is_operator_action_question(search_texts):
         return False
     if _is_file_or_text_search_question(search_texts):
         return False
@@ -267,8 +316,18 @@ def _is_operator_command_question(search_texts: tuple[str, ...]) -> bool:
 
 
 def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
+    if _contains_catalog_token(search_texts, _PATH_REFERENCE_MARKERS):
+        return _contains_catalog_token(search_texts, _CONTEXT_MARKERS) or _contains_catalog_token(
+            search_texts, _CATALOG_COLLISION_MARKERS
+        )
     return _contains_catalog_token(search_texts, _FILE_OR_TEXT_MARKERS) and _contains_catalog_token(
         search_texts, _CATALOG_COLLISION_MARKERS
+    )
+
+
+def _is_operator_action_question(search_texts: tuple[str, ...]) -> bool:
+    return _contains_catalog_token(search_texts, _OPERATOR_ACTION_MARKERS) and _contains_catalog_token(
+        search_texts, _OPERATOR_ACTION_QUESTION_MARKERS
     )
 
 
