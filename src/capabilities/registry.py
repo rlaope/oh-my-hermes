@@ -6,6 +6,7 @@ from .agents import agent_role_capabilities
 from .hooks import hook_manifest
 from .keywords import keyword_detector_manifest
 from .orchestration import orchestration_patterns
+from .playbooks import playbook_capabilities
 from .schema import CAPABILITY_MANIFEST_SCHEMA_VERSION, CAPABILITY_SECTIONS, PREPARED_NOT_OBSERVED
 from .skills import skill_capabilities
 from .tools import tool_requirements_manifest
@@ -18,6 +19,7 @@ def capability_snapshot() -> dict[str, object]:
     hooks = hook_manifest()
     keywords = keyword_detector_manifest()
     patterns = orchestration_patterns()
+    playbooks = playbook_capabilities()
     tools = tool_requirements_manifest()
     awareness = awareness_primer_payload()
     snapshot = {
@@ -32,6 +34,7 @@ def capability_snapshot() -> dict[str, object]:
             "plugin_hooks": len(hooks["plugin_hooks"]),
             "keyword_rules": len(keywords["natural_language_rules"]),
             "orchestration_patterns": len(patterns),
+            "playbooks": len(playbooks),
             "tool_requirements": len(tools["items"]),
         },
         "omh_awareness": awareness,
@@ -40,6 +43,7 @@ def capability_snapshot() -> dict[str, object]:
         "hooks": hooks,
         "keywords": keywords,
         "orchestration_patterns": patterns,
+        "playbooks": playbooks,
         "tool_requirements": tools,
         "evidence_boundaries": evidence_boundaries(),
         "non_goals": [

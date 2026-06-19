@@ -10,6 +10,7 @@ import shutil
 from typing import Mapping, Sequence
 
 from . import __version__
+from .capabilities.playbooks import playbook_capabilities
 from .capabilities.skills import skill_capabilities
 from .catalogs.roles import role_definitions, role_file_markdown
 from .command_path import (
@@ -23,7 +24,11 @@ from .plugin_bundle.omh.awareness import (
     awareness_primer_payload,
     awareness_workflow_context_markdown,
 )
-from .plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_ids, standalone_skill_capability_items
+from .plugin_bundle.omh.tools.capability_tool import (
+    standalone_playbook_capability_items,
+    standalone_skill_capability_ids,
+    standalone_skill_capability_items,
+)
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
 
@@ -247,7 +252,7 @@ def release_readiness_checklist(
             "installed-command",
             True,
             False,
-            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, standalone plugin capability fallback coverage, bounded prompt context budgets, and bounded capability payload budgets.",
+            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, playbook capability context, standalone plugin capability fallback coverage, bounded prompt context budgets, and bounded capability payload budgets.",
             "This proves the installed OMH command package can render expected skill guidance; it does not prove Hermes loaded or selected it in chat.",
         ),
         ReleaseChecklistItem(
@@ -625,6 +630,8 @@ def skill_content_smoke() -> dict[str, object]:
     standalone_capability_skill_names = standalone_skill_capability_ids()
     standalone_capability_items = standalone_skill_capability_items()
     full_capability_items = skill_capabilities()
+    full_playbook_items = playbook_capabilities()
+    standalone_playbook_items = standalone_playbook_capability_items()
     full_capability_skill_names = {
         str(item.get("id") or "")
         for item in full_capability_items
@@ -643,6 +650,14 @@ def skill_content_smoke() -> dict[str, object]:
         "evidence_boundary",
         "cross_lane_examples",
     }
+    required_playbook_context_fields = {
+        "workflow_context_rule",
+        "chat_rule",
+        "fallback_rule",
+        "evidence_boundary",
+        "prepared_is_not",
+        "pipeline",
+    }
     missing_standalone_capability_context_skills = sorted(
         str(item.get("id") or "")
         for item in standalone_capability_items
@@ -655,6 +670,28 @@ def skill_content_smoke() -> dict[str, object]:
         if str(item.get("id") or "") in workflow_skill_names
         and any(not item.get(field) for field in required_standalone_context_fields)
     )
+    missing_playbook_context_playbooks = sorted(
+        str(item.get("id") or "")
+        for item in full_playbook_items
+        if any(not item.get(field) for field in required_playbook_context_fields)
+    )
+    missing_standalone_playbook_context_playbooks = sorted(
+        str(item.get("id") or "")
+        for item in standalone_playbook_items
+        if any(not item.get(field) for field in required_playbook_context_fields)
+    )
+    required_playbook_ids = {
+        "request-to-handoff",
+        "safe-feature-change",
+        "feedback-triage",
+        "research-department",
+        "materials-processing",
+        "idea-to-deploy",
+    }
+    full_playbook_ids = {str(item.get("id") or "") for item in full_playbook_items}
+    standalone_playbook_ids = {str(item.get("id") or "") for item in standalone_playbook_items}
+    missing_required_playbook_capabilities = sorted(required_playbook_ids - full_playbook_ids)
+    missing_required_standalone_playbook_capabilities = sorted(required_playbook_ids - standalone_playbook_ids)
     full_capability_skill_section_chars = len(json.dumps(full_capability_items, sort_keys=True, ensure_ascii=False))
     standalone_capability_skill_section_chars = len(
         json.dumps(standalone_capability_items, sort_keys=True, ensure_ascii=False)
@@ -751,9 +788,13 @@ def skill_content_smoke() -> dict[str, object]:
         and not unexpected_awareness_surfaces
         and not missing_full_capability_skills
         and not missing_full_capability_context_skills
+        and not missing_playbook_context_playbooks
+        and not missing_required_playbook_capabilities
         and not missing_standalone_capability_skills
         and not unexpected_standalone_capability_skills
         and not missing_standalone_capability_context_skills
+        and not missing_standalone_playbook_context_playbooks
+        and not missing_required_standalone_playbook_capabilities
         and not missing_role_context_roles
         and not missing_bundled_role_context_roles
         and not missing_bundled_role_files
@@ -780,6 +821,13 @@ def skill_content_smoke() -> dict[str, object]:
         "full_capability_skill_count": len(full_capability_skill_names),
         "missing_full_capability_skills": missing_full_capability_skills,
         "missing_full_capability_context_skills": missing_full_capability_context_skills,
+        "playbook_capability_count": len(full_playbook_items),
+        "standalone_playbook_capability_count": len(standalone_playbook_items),
+        "required_playbook_capability_ids": sorted(required_playbook_ids),
+        "missing_required_playbook_capabilities": missing_required_playbook_capabilities,
+        "missing_required_standalone_playbook_capabilities": missing_required_standalone_playbook_capabilities,
+        "missing_playbook_context_playbooks": missing_playbook_context_playbooks,
+        "missing_standalone_playbook_context_playbooks": missing_standalone_playbook_context_playbooks,
         "standalone_capability_skill_count": len(standalone_capability_skill_names),
         "missing_standalone_capability_skills": missing_standalone_capability_skills,
         "unexpected_standalone_capability_skills": unexpected_standalone_capability_skills,
@@ -794,6 +842,7 @@ def skill_content_smoke() -> dict[str, object]:
         "required_role_context_markers": list(ROLE_CONTEXT_MARKERS),
         "required_capability_context_fields": sorted(required_standalone_context_fields),
         "required_standalone_capability_context_fields": sorted(required_standalone_context_fields),
+        "required_playbook_context_fields": sorted(required_playbook_context_fields),
         "capability_context_char_limits": {
             "full_skill_section": FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT,
             "full_skill_item": FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT,

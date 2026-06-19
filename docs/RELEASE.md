@@ -142,10 +142,11 @@ checks that the command package can render the router awareness primer and the
 generated workflow context rails that keep direct skill invocation inside the
 broader OMH model. It also checks all-skill awareness lane coverage, full
 capability manifest context, bundled role context, standalone plugin capability
-fallback coverage, fallback routing/context/boundary fields, bounded prompt
-context budgets, and bounded capability payload budgets so the shared OMH mental
-model stays present without becoming prompt bloat or manifest bloat. It does not prove Hermes loaded those
-skills or selected them in chat.
+fallback coverage, playbook capability context, fallback routing/context/boundary
+fields, bounded prompt context budgets, and bounded capability payload budgets so
+the shared OMH mental model stays present without becoming prompt bloat or
+manifest bloat. It does not prove Hermes loaded those skills or selected them in
+chat.
 In short, this gate preserves bounded context budgets while still giving Hermes
 enough OMH workflow context to route well.
 

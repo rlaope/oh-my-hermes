@@ -291,9 +291,13 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
     unexpected_awareness = payload.get("unexpected_awareness_surfaces", [])
     missing_full = payload.get("missing_full_capability_skills", [])
     missing_full_context = payload.get("missing_full_capability_context_skills", [])
+    missing_playbook_context = payload.get("missing_playbook_context_playbooks", [])
+    missing_required_playbooks = payload.get("missing_required_playbook_capabilities", [])
     missing_standalone = payload.get("missing_standalone_capability_skills", [])
     unexpected_standalone = payload.get("unexpected_standalone_capability_skills", [])
     missing_standalone_context = payload.get("missing_standalone_capability_context_skills", [])
+    missing_standalone_playbook_context = payload.get("missing_standalone_playbook_context_playbooks", [])
+    missing_required_standalone_playbooks = payload.get("missing_required_standalone_playbook_capabilities", [])
     oversized_awareness = payload.get("oversized_awareness_contexts", [])
     missing_role_context = payload.get("missing_role_context_roles", [])
     missing_bundled_role_context = payload.get("missing_bundled_role_context_roles", [])
@@ -308,6 +312,13 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         f"{payload.get('full_capability_skill_count')} skill surface(s); "
         f"missing {len(missing_full) if isinstance(missing_full, list) else 0}; "
         f"context missing {len(missing_full_context) if isinstance(missing_full_context, list) else 0}"
+    )
+    print(
+        "Playbook capabilities: "
+        f"full {payload.get('playbook_capability_count')} playbook(s); "
+        f"fallback {payload.get('standalone_playbook_capability_count')}; "
+        f"context missing {len(missing_playbook_context) if isinstance(missing_playbook_context, list) else 0}/"
+        f"{len(missing_standalone_playbook_context) if isinstance(missing_standalone_playbook_context, list) else 0}"
     )
     print(
         "Plugin fallback capabilities: "
@@ -325,6 +336,10 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         print("Missing full capability skills: " + ", ".join(str(item) for item in missing_full))
     if missing_full_context:
         print("Missing full capability context: " + ", ".join(str(item) for item in missing_full_context))
+    if missing_required_playbooks:
+        print("Missing required playbook capabilities: " + ", ".join(str(item) for item in missing_required_playbooks))
+    if missing_playbook_context:
+        print("Missing playbook capability context: " + ", ".join(str(item) for item in missing_playbook_context))
     if missing_standalone:
         print("Missing standalone capability skills: " + ", ".join(str(item) for item in missing_standalone))
     if unexpected_standalone:
@@ -333,6 +348,16 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         print(
             "Missing standalone capability context: "
             + ", ".join(str(item) for item in missing_standalone_context)
+        )
+    if missing_required_standalone_playbooks:
+        print(
+            "Missing required standalone playbook capabilities: "
+            + ", ".join(str(item) for item in missing_required_standalone_playbooks)
+        )
+    if missing_standalone_playbook_context:
+        print(
+            "Missing standalone playbook capability context: "
+            + ", ".join(str(item) for item in missing_standalone_playbook_context)
         )
     if oversized_awareness:
         print("Oversized awareness contexts: " + ", ".join(str(item) for item in oversized_awareness))

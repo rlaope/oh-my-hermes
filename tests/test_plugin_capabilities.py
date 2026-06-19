@@ -117,6 +117,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 inspected_loop = json.loads(handler({{"action": "inspect", "section": "skills", "id": "loop"}}))
                 inspected_visual = json.loads(handler({{"action": "inspect", "section": "skills", "id": "img-summary"}}))
                 inspected_process = json.loads(handler({{"action": "inspect", "section": "skills", "id": "ultraprocess"}}))
+                inspected_playbook = json.loads(
+                    handler({{"action": "inspect", "section": "playbooks", "id": "research-department"}})
+                )
                 inspected_boundary = json.loads(
                     handler({{"action": "inspect", "section": "evidence_boundaries", "id": "prepared_is_not"}})
                 )
@@ -151,6 +154,12 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "visual_owner": inspected_visual["capability"]["primary_owner_role"],
                     "process_lane": inspected_process["capability"]["awareness_lane"],
                     "process_owner": inspected_process["capability"]["primary_owner_role"],
+                    "playbook_section": inspected_playbook["section"],
+                    "playbook_runtime_claim": inspected_playbook["capability"]["runtime_claim"],
+                    "playbook_context_rule": inspected_playbook["capability"]["workflow_context_rule"],
+                    "playbook_chat_rule": inspected_playbook["capability"]["chat_rule"],
+                    "playbook_pipeline": inspected_playbook["capability"]["pipeline"],
+                    "playbook_prepared_boundary": inspected_playbook["capability"]["prepared_is_not"],
                     "runtime_claim": inspected["capability"]["runtime_claim"],
                     "invalid_section_error": invalid_section["error"],
                     "degraded": inspected["degraded"],
@@ -204,6 +213,12 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["visual_owner"], "operator")
             self.assertEqual(payload["process_lane"], "intent_to_plan")
             self.assertEqual(payload["process_owner"], "planner")
+            self.assertEqual(payload["playbook_section"], "playbooks")
+            self.assertEqual(payload["playbook_runtime_claim"], "playbook_guidance_not_execution")
+            self.assertIn("situation-level workflow maps", payload["playbook_context_rule"])
+            self.assertIn("Normal users talk to Hermes", payload["playbook_chat_rule"])
+            self.assertIn("analysis_brief", payload["playbook_pipeline"])
+            self.assertIn("Prepared OMH capability", payload["playbook_prepared_boundary"])
             self.assertEqual(payload["runtime_claim"], "descriptor_not_runtime_agent")
             self.assertIn("unknown capability section", payload["invalid_section_error"])
             self.assertTrue(payload["degraded"])

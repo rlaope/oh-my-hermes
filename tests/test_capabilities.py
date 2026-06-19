@@ -39,6 +39,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("img-summary", json.dumps(first["omh_awareness"], sort_keys=True))
         self.assertGreaterEqual(first["summary"]["skills"], 30)
         self.assertGreaterEqual(first["summary"]["agent_roles"], 8)
+        self.assertGreaterEqual(first["summary"]["playbooks"], 20)
         self.assertIn("no runtime_topology schema in this PR", first["non_goals"])
         self.assertNotIn("runtime_topology", first)
         self.assertIn("Prepared OMH capability", first["evidence_boundaries"]["prepared_is_not"])
@@ -66,6 +67,8 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("omh_capabilities", sections["hooks"])
         self.assertIn("executor_session_handoff", sections["orchestration_patterns"])
         self.assertIn("hermes_coding_team_path", sections["orchestration_patterns"])
+        self.assertIn("request-to-handoff", sections["playbooks"])
+        self.assertIn("research-department", sections["playbooks"])
         self.assertIn("ultragoal", sections["tool_requirements"])
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
@@ -73,6 +76,7 @@ class CapabilityManifestTests(unittest.TestCase):
         hidden_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
         awareness = inspect_capability("omh_awareness", section="omh_awareness")["capability"]
         role = inspect_capability("handoff-guide", section="agent_roles")["capability"]
+        playbook = inspect_capability("request-to-handoff", section="playbooks")["capability"]
         legacy_role = inspect_capability("coding-handoff", section="agent_roles")
 
         self.assertEqual(skill["schema_version"], "skill_capability/v1")
@@ -97,6 +101,12 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("Normal users talk to Hermes", role["chat_rule"])
         self.assertIn("prepared guidance only", role["role_boundary_rule"])
         self.assertIn("executor_session_handoff", role["default_orchestration_patterns"])
+        self.assertEqual(playbook["schema_version"], "playbook_capability/v1")
+        self.assertEqual(playbook["runtime_claim"], "playbook_guidance_not_execution")
+        self.assertIn("situation-level workflow maps", playbook["workflow_context_rule"])
+        self.assertIn("Normal users talk to Hermes", playbook["chat_rule"])
+        self.assertIn("route_request", playbook["pipeline"])
+        self.assertIn("Prepared OMH capability", playbook["prepared_is_not"])
         self.assertEqual(legacy_role["requested_id"], "coding-handoff")
         self.assertEqual(legacy_role["resolved_id"], "handoff-guide")
         self.assertEqual(legacy_role["capability"]["id"], "handoff-guide")
@@ -131,6 +141,17 @@ class CapabilityManifestTests(unittest.TestCase):
         inspected = json.loads(stdout)
         self.assertEqual(inspected["section"], "orchestration_patterns")
         self.assertEqual(inspected["capability"]["owner_role"], "handoff-guide")
+
+        status, stdout, stderr = run_cli(
+            ["capabilities", "inspect", "request-to-handoff", "--section", "playbooks", "--json"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        playbook = json.loads(stdout)
+        self.assertEqual(playbook["section"], "playbooks")
+        self.assertEqual(playbook["capability"]["schema_version"], "playbook_capability/v1")
+        self.assertIn("status_card", playbook["capability"]["pipeline"])
 
         for alias, expected_role in LEGACY_ROLE_ALIASES.items():
             with self.subTest(alias=alias):

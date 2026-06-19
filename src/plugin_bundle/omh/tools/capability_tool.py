@@ -12,6 +12,7 @@ STANDALONE_CAPABILITY_SECTIONS = (
     "hooks",
     "keywords",
     "orchestration_patterns",
+    "playbooks",
     "tool_requirements",
     "evidence_boundaries",
 )
@@ -37,6 +38,11 @@ def standalone_skill_capability_ids() -> set[str]:
 def standalone_skill_capability_items() -> list[dict[str, object]]:
     """Return degraded plugin fallback skill capabilities for release/package smoke checks."""
     return _standalone_skill_capabilities()
+
+
+def standalone_playbook_capability_items() -> list[dict[str, object]]:
+    """Return degraded plugin fallback playbook capabilities for release/package smoke checks."""
+    return _standalone_playbook_capabilities()
 
 
 OMH_CAPABILITIES_SCHEMA = {
@@ -329,6 +335,7 @@ def _standalone_sections() -> dict[str, object]:
                 "prepared_is_not": _standalone_evidence_boundaries()["prepared_is_not"],
             },
         ],
+        "playbooks": _standalone_playbook_capabilities(),
         "tool_requirements": _standalone_tool_requirements(),
         "evidence_boundaries": _standalone_evidence_boundaries(),
     }
@@ -406,6 +413,151 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
                 }
             )
     return sorted(capabilities, key=lambda item: str(item["id"]))
+
+
+def _standalone_playbook_capabilities() -> list[dict[str, object]]:
+    awareness = awareness_primer_payload()
+    chat_rule = str(awareness.get("chat_rule") or "")
+    fallback_rule = str(awareness.get("fallback_rule") or "")
+    evidence_boundary = str(awareness.get("evidence_boundary") or "")
+    context_rule = (
+        "Use OMH playbooks as situation-level workflow maps: choose the nearest playbook for the user's request, "
+        "then route to the named skills, roles, harnesses, or wrapper actions without claiming hidden execution."
+    )
+    return [
+        _standalone_playbook(
+            "request-to-handoff",
+            "Request to handoff",
+            "Turn a plain Hermes request into a role-owned next action with an explicit evidence boundary.",
+            (
+                "Use when the user asks naturally and Hermes must decide whether to clarify, research, plan, "
+                "review, or prepare a coding handoff."
+            ),
+            ("route_request", "select_role", "plan_or_prepare", "handoff_or_retain", "status_card"),
+            "guide",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "safe-feature-change",
+            "Safe feature change",
+            "Shape a risky or meaningful feature request into scope, tests, review, and executor-ready work.",
+            "Use when a repo change should be safer than direct implementation.",
+            ("clarify_scope", "risk_plan", "prepare_executor_handoff", "verification_status"),
+            "planner",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "source-backed-research",
+            "Source-backed research",
+            "Keep research requests grounded in sources, caveats, synthesis, and decision-ready output.",
+            "Use when Hermes should research before recommending or planning.",
+            ("question", "source_gathering", "synthesis", "brief", "status_card"),
+            "researcher",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "feedback-triage",
+            "Feedback triage",
+            "Convert product feedback, bugs, and user signals into investigation, repro, priority, and next action.",
+            "Use when customers report issues such as payment failures, confusing UX, or recurring bugs.",
+            ("capture_signal", "triage", "investigation_plan", "handoff_or_record"),
+            "operator",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "scheduled-ops-blueprint",
+            "Scheduled ops blueprint",
+            "Prepare recurring work as a schedule, delivery policy, silence rule, and status-card boundary.",
+            "Use when the user asks Hermes to check something periodically or deliver recurring summaries.",
+            ("scope_schedule", "select_sources", "delivery_policy", "confirmation_card"),
+            "tracker",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "research-department",
+            "Research department",
+            "Map collection, synthesis, and briefing into a Scout -> Analyst -> Briefer style workflow pack.",
+            "Use when the user wants ongoing research operations without hand-building profiles, vaults, or cron first.",
+            ("topic_scope", "source_inbox", "analysis_brief", "delivery_status"),
+            "researcher",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "materials-processing",
+            "Materials processing",
+            "Shape decks, PDFs, spreadsheets, documents, Markdown, and upload-ready packages with observed-only export claims.",
+            "Use when the user asks Hermes to turn source material into a document, slide, report, or file package.",
+            ("source_inventory", "package_plan", "render_or_handoff", "qa_status"),
+            "operator",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "idea-to-deploy",
+            "Idea to deploy",
+            (
+                "Turn a product idea into scoped implementation, executor selection, verification, review, "
+                "and release-readiness tracking."
+            ),
+            "Use when the user wants an idea prepared for a real coding or delivery path.",
+            ("shape_idea", "acceptance_criteria", "executor_selection", "verification_review_release"),
+            "handoff-guide",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+    ]
+
+
+def _standalone_playbook(
+    playbook_id: str,
+    display_name: str,
+    summary: str,
+    use_when: str,
+    pipeline: tuple[str, ...],
+    owner_role: str,
+    workflow_context_rule: str,
+    chat_rule: str,
+    fallback_rule: str,
+    evidence_boundary: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": "playbook_capability/v1",
+        "id": playbook_id,
+        "display_name": display_name,
+        "runtime_claim": "playbook_guidance_not_execution",
+        "summary": summary,
+        "use_when": use_when,
+        "pipeline": list(pipeline),
+        "primary_owner_role": owner_role,
+        "workflow_context_rule": workflow_context_rule,
+        "chat_rule": chat_rule,
+        "fallback_rule": fallback_rule,
+        "evidence_boundary": evidence_boundary,
+        "prepared_is_not": _standalone_evidence_boundaries()["prepared_is_not"],
+        "degraded": True,
+    }
 
 
 def _standalone_tool_requirements() -> dict[str, object]:
