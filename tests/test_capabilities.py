@@ -10,7 +10,7 @@ from _local_package import load_local_package
 
 load_local_package()
 
-from omh.capabilities.registry import capability_snapshot, inspect_capability, list_capabilities
+from omh.capabilities.registry import capability_snapshot, capability_summary, inspect_capability, list_capabilities
 from omh.capabilities.schema import normalize_capability_section
 from omh.skills.catalog import installable_skill_names
 
@@ -74,6 +74,25 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(normalize_capability_section("roles"), "agent_roles")
         self.assertEqual(normalize_capability_section("patterns"), "orchestration_patterns")
         self.assertEqual(normalize_capability_section("tools"), "tool_requirements")
+
+    def test_capability_summary_is_human_facing_catalog_context(self) -> None:
+        summary = capability_summary()
+        lanes = {lane["id"]: lane for lane in summary["lanes"]}
+
+        self.assertEqual(summary["schema_version"], "omh_capability_summary/v1")
+        self.assertIn("without requiring shell catalog approval", summary["purpose"])
+        self.assertIn("Normal users talk to Hermes", summary["chat_rule"])
+        self.assertIn("workflow picker", " ".join(summary["direct_response_guidance"]))
+        self.assertEqual(summary["section_aliases"]["roles"], "agent_roles")
+        self.assertEqual(summary["section_aliases"]["tools"], "tool_requirements")
+        self.assertIn("Prepared OMH capability", summary["evidence_boundary"])
+        self.assertEqual(lanes["intent_to_plan"]["owner_role"], "planner")
+        self.assertIn("loop", lanes["intent_to_plan"]["primary_skills"])
+        self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
+        self.assertIn("research-department", lanes["research_and_ops"]["primary_skills"])
+        self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
+        self.assertIn("materials-processing", {item["id"] for item in lanes["materials_and_visuals"]["representative_playbooks"]})
+        self.assertTrue(lanes["coding_handoff"]["wrapper_actions"])
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]
@@ -144,6 +163,19 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertIn("OMH capabilities", stdout)
         self.assertIn("For machine-readable output", stdout)
+
+        status, stdout, stderr = run_cli(["capabilities", "summary"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertIn("OMH capability summary", stdout)
+        self.assertIn("Materials and visual summaries", stdout)
+
+        status, stdout, stderr = run_cli(["capabilities", "summary", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        summary = json.loads(stdout)
+        self.assertEqual(summary["schema_version"], "omh_capability_summary/v1")
+        self.assertIn("roles", summary["section_aliases"])
 
         status, stdout, stderr = run_cli(["capabilities", "inspect", "executor_session_handoff", "--json"], output_json=False)
 

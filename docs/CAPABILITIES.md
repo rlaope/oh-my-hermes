@@ -22,6 +22,7 @@ Use:
 ```sh
 omh capabilities export --json
 omh capabilities export --section keywords --json
+omh capabilities summary --json
 omh capabilities list
 omh capabilities inspect ultragoal --json
 omh capabilities inspect handoff-guide --section roles --json
@@ -30,6 +31,9 @@ omh capabilities inspect request-to-handoff --section playbooks --json
 
 The Hermes plugin exposes the same contract through the metadata-only
 `omh_capabilities` tool.
+Use `action=summary` when Hermes needs to answer "what can OMH do?" or render a
+small workflow picker/card without asking the user to approve a shell catalog
+command.
 Friendly section aliases such as `roles`, `agents`, `patterns`, `tools`, and
 `evidence` are accepted as input; JSON responses keep the canonical section
 names shown below.

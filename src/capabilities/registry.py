@@ -8,6 +8,7 @@ from .keywords import keyword_detector_manifest
 from .orchestration import orchestration_patterns
 from .playbooks import playbook_capabilities
 from .schema import (
+    CAPABILITY_SECTION_ALIASES,
     CAPABILITY_MANIFEST_SCHEMA_VERSION,
     CAPABILITY_SECTIONS,
     PREPARED_NOT_OBSERVED,
@@ -15,7 +16,52 @@ from .schema import (
 )
 from .skills import skill_capabilities
 from .tools import tool_requirements_manifest
-from ..plugin_bundle.omh.awareness import awareness_primer_payload
+from ..plugin_bundle.omh.awareness import awareness_lane_examples, awareness_primer_payload
+
+LANE_OWNER_ROLES = {
+    "intent_to_plan": "planner",
+    "research_and_ops": "researcher",
+    "materials_and_visuals": "operator",
+    "automation_and_status": "tracker",
+    "coding_handoff": "handoff-guide",
+}
+
+LANE_PLAYBOOK_IDS = {
+    "intent_to_plan": (
+        "request-to-handoff",
+        "deep-interview-to-plan",
+        "safe-feature-change",
+        "local-pipeline-buildout",
+    ),
+    "research_and_ops": (
+        "research-department",
+        "source-backed-research",
+        "feedback-triage",
+        "market-scan-to-strategy",
+        "research-to-strategy-brief",
+        "weekly-ops-review",
+    ),
+    "materials_and_visuals": (
+        "materials-processing",
+        "report-package",
+        "deliverable-package",
+        "meeting-prep-to-record",
+    ),
+    "automation_and_status": (
+        "scheduled-ops-blueprint",
+        "agent-board",
+        "memory-curation-review",
+        "toolbelt-readiness",
+        "ops-observability-card",
+    ),
+    "coding_handoff": (
+        "idea-to-deploy",
+        "github-event-ops",
+        "release-readiness-review",
+        "deploy-and-monitor",
+        "cto-loop",
+    ),
+}
 
 
 def capability_snapshot() -> dict[str, object]:
@@ -61,6 +107,38 @@ def capability_snapshot() -> dict[str, object]:
         ],
     }
     return deepcopy(snapshot)
+
+
+def capability_summary() -> dict[str, object]:
+    snapshot = capability_snapshot()
+    awareness = snapshot["omh_awareness"]
+    skills = {str(item.get("id")): item for item in snapshot["skills"] if isinstance(item, dict)}
+    playbooks = {str(item.get("id")): item for item in snapshot["playbooks"] if isinstance(item, dict)}
+    lanes = awareness.get("lanes", []) if isinstance(awareness, dict) else []
+    return {
+        "schema_version": "omh_capability_summary/v1",
+        "manifest_id": snapshot["manifest_id"],
+        "determinism": snapshot["determinism"],
+        "purpose": (
+            "Compact Hermes-facing summary for answering what OMH can do, choosing the nearest workflow, "
+            "and rendering a picker/card without requiring shell catalog approval."
+        ),
+        "chat_rule": awareness.get("chat_rule", "") if isinstance(awareness, dict) else "",
+        "totals": snapshot["summary"],
+        "lanes": [
+            _summary_lane(lane, skills, playbooks)
+            for lane in lanes
+            if isinstance(lane, dict)
+        ],
+        "direct_response_guidance": [
+            "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
+            "When a request matches a lane, name the likely workflow and the first safe next action.",
+            "When a request crosses lanes, name the adjacent workflow before preparing handoff or status.",
+            "Use friendly section aliases for input, but keep canonical names in machine-readable output.",
+        ],
+        "section_aliases": dict(sorted(CAPABILITY_SECTION_ALIASES.items())),
+        "evidence_boundary": snapshot["evidence_boundaries"]["prepared_is_not"],
+    }
 
 
 def evidence_boundaries() -> dict[str, object]:
@@ -135,6 +213,56 @@ def inspect_capability(identifier: str, section: str | None = None) -> dict[str,
                 "capability": found,
             }
     raise ValueError(f"capability not found: {identifier}")
+
+
+def _summary_lane(
+    lane: dict[str, object],
+    skills: dict[str, dict[str, object]],
+    playbooks: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    lane_id = str(lane.get("id") or "")
+    lane_skills = lane.get("skills", [])
+    if not isinstance(lane_skills, list):
+        lane_skills = []
+    skill_ids = [str(skill) for skill in lane_skills if str(skill) in skills]
+    representative_playbooks = [
+        _compact_playbook(playbooks[playbook_id])
+        for playbook_id in LANE_PLAYBOOK_IDS.get(lane_id, ())
+        if playbook_id in playbooks
+    ]
+    actions = sorted(
+        {
+            str(action)
+            for playbook in representative_playbooks
+            for action in playbook.get("available_wrapper_actions", [])
+        }
+    )
+    return {
+        "id": lane_id,
+        "label": str(lane.get("label") or lane_id),
+        "owner_role": LANE_OWNER_ROLES.get(lane_id, "guide"),
+        "use_for": str(lane.get("use_for") or ""),
+        "primary_skills": skill_ids,
+        "representative_playbooks": representative_playbooks,
+        "wrapper_actions": actions[:8],
+        "examples": awareness_lane_examples(lane_id),
+    }
+
+
+def _compact_playbook(playbook: dict[str, object]) -> dict[str, object]:
+    first_stage = playbook.get("first_stage")
+    return {
+        "id": str(playbook.get("id") or ""),
+        "display_name": str(playbook.get("display_name") or playbook.get("id") or ""),
+        "summary": str(playbook.get("summary") or ""),
+        "owner_role": str(playbook.get("primary_owner_role") or "guide"),
+        "first_stage": first_stage if isinstance(first_stage, dict) else {},
+        "available_wrapper_actions": [
+            str(action)
+            for action in playbook.get("available_wrapper_actions", [])
+            if str(action)
+        ][:8],
+    }
 
 
 def _section_ids(section: str, payload: object) -> list[str]:

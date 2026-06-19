@@ -70,6 +70,10 @@ Cross-lane examples:
 - daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence
 - accepted plan -> ultraprocess -> coding handoff -> review and CI evidence
 
+Tools:
+
+- Use `omh_capabilities` `action=summary` for workflow catalog questions; use `omh_status`/`omh_hud` for state and `omh_role` for responsibility.
+
 If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing connection and offer a setup/selection fallback instead of claiming the action happened.
 
 Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
@@ -133,7 +137,7 @@ omh chat route --source discord --record "risky refactor"
 
 Use `route.routing_prompt_template` with `{message}` replaced by the received chat message as the prompt forwarded to Hermes. If the wrapper does not log stdout and wants a pre-expanded prompt, pass `--include-message` and forward `route.routing_prompt`. A `dispatch` action targets the selected workflow skill; `clarify` and `fallback` target this router so Hermes can ask one concise follow-up instead of guessing.
 
-If the user asks what OMH commands, skills, or workflows are available, use `omh chat interact` and render `chat_response.kind == skill_picker`. Do not make the user approve `omh list` just to see the catalog; the picker response carries `omh_skill_picker/v1` options, direct invocation text, and a claim boundary that selection is routing intent only.
+If the user asks what OMH commands, skills, or workflows are available, prefer `omh_capabilities` with `action=summary` when the plugin/tool surface is available, or use `omh chat interact` and render `chat_response.kind == skill_picker` from a wrapper backend. Do not make the user approve `omh list` just to see the catalog; the summary and picker responses carry workflow options, direct invocation text, and a claim boundary that selection is routing intent only.
 
 This is a deterministic wrapper-side decision layer. By default, stdout and runtime artifacts avoid duplicating the raw prompt body. It does not patch Hermes core or require platform network access from `omh`.
 

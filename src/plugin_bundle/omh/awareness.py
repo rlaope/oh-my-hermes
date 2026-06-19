@@ -145,7 +145,8 @@ def awareness_primer_payload() -> dict[str, object]:
             "local artifacts and evidence records",
         ],
         "tool_hints": [
-            "Use omh_capabilities for the workflow catalog and capability manifest.",
+            "Use omh_capabilities action=summary when the user asks what OMH can do or which workflows are available.",
+            "Use omh_capabilities for detailed workflow catalog and capability manifest lookup.",
             "Use omh_status or omh_hud for metadata-only runtime state.",
             "Use omh_role for responsibility context when a role marker is present.",
             "Use wrapper cards/actions for user-facing choices instead of asking users to approve shell catalog commands.",
@@ -190,6 +191,7 @@ def awareness_primer_context() -> str:
             *lane_lines,
             (
                 "Tools: use omh_capabilities for workflow/playbook catalog context; "
+                "use action=summary for available-workflow questions; "
                 "omh_status or omh_hud for state; omh_role for responsibility context."
             ),
             str(payload["fallback_rule"]),
@@ -225,6 +227,10 @@ def awareness_primer_markdown() -> str:
             "Cross-lane examples:",
             "",
             *[f"- {example}" for example in payload["cross_lane_examples"]],
+            "",
+            "Tools:",
+            "",
+            "- Use `omh_capabilities` `action=summary` for workflow catalog questions; use `omh_status`/`omh_hud` for state and `omh_role` for responsibility.",
             "",
             str(payload["fallback_rule"]),
             "",

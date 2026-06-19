@@ -46,6 +46,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["section"], "keywords")
             self.assertIn("explicit_invocation_prefixes", payload["keywords"])
 
+            summary = json.loads(handler({"action": "summary"}))
+            summary_lanes = {lane["id"]: lane for lane in summary["lanes"]}
+            self.assertEqual(summary["schema_version"], "omh_capability_summary/v1")
+            self.assertFalse(summary.get("degraded", False))
+            self.assertIn("without requiring shell catalog approval", summary["purpose"])
+            self.assertIn("img-summary", summary_lanes["materials_and_visuals"]["primary_skills"])
+            self.assertIn("roles", summary["section_aliases"])
+
             inspected = json.loads(handler({"action": "inspect", "id": "handoff-guide"}))
             inspected_by_alias_section = json.loads(handler({"action": "inspect", "id": "handoff-guide", "section": "roles"}))
             legacy_inspected = json.loads(handler({"action": "inspect", "id": "coding-handoff"}))
@@ -106,6 +114,7 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 handler = ctx.tools["omh_capabilities"]["args"][2]
                 keywords = json.loads(handler({{"action": "export", "section": "keywords"}}))
                 exported = json.loads(handler({{"action": "export"}}))
+                summary = json.loads(handler({{"action": "summary"}}))
                 listed_tools = json.loads(handler({{"action": "list", "section": "tool_requirements"}}))
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
                 inspected = json.loads(handler({{"action": "inspect", "id": "handoff-guide"}}))
@@ -135,6 +144,21 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "plugin_tools": sorted(item["name"] for item in exported["hooks"]["plugin_tools"]),
                     "plugin_hooks": sorted(item["name"] for item in exported["hooks"]["plugin_hooks"]),
                     "source": exported["source"],
+                    "summary_schema": summary["schema_version"],
+                    "summary_source": summary["source"],
+                    "summary_lanes": [lane["id"] for lane in summary["lanes"]],
+                    "summary_visual_skills": [
+                        lane["primary_skills"]
+                        for lane in summary["lanes"]
+                        if lane["id"] == "materials_and_visuals"
+                    ][0],
+                    "summary_intent_playbooks": [
+                        playbook["id"]
+                        for lane in summary["lanes"]
+                        if lane["id"] == "intent_to_plan"
+                        for playbook in lane["representative_playbooks"]
+                    ],
+                    "summary_alias_roles": summary["section_aliases"]["roles"],
                     "keyword_schema": keywords["keywords"]["schema_version"],
                     "skill_ids": sorted(item["id"] for item in exported["skills"]),
                     "tool_requirement_schema": exported["tool_requirements"]["schema_version"],
@@ -194,6 +218,12 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["plugin_tools"], sorted(PROVIDED_TOOLS))
             self.assertEqual(payload["plugin_hooks"], sorted(PROVIDED_HOOKS))
             self.assertEqual(payload["source"], "standalone_plugin_bundle_fallback")
+            self.assertEqual(payload["summary_schema"], "omh_capability_summary/v1")
+            self.assertEqual(payload["summary_source"], "standalone_plugin_bundle_fallback")
+            self.assertIn("intent_to_plan", payload["summary_lanes"])
+            self.assertIn("img-summary", payload["summary_visual_skills"])
+            self.assertIn("request-to-handoff", payload["summary_intent_playbooks"])
+            self.assertEqual(payload["summary_alias_roles"], "agent_roles")
             self.assertEqual(payload["keyword_schema"], "keyword_detector_manifest/v1")
             for skill in (
                 "img-summary",

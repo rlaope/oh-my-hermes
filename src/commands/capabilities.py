@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from ..capabilities.registry import filtered_capability_snapshot, inspect_capability, list_capabilities
+from ..capabilities.registry import capability_summary, filtered_capability_snapshot, inspect_capability, list_capabilities
 from ..capabilities.schema import CAPABILITY_SECTION_CHOICES
 from ..installer import OmhError
 from .common import _print_json, _wants_json
@@ -32,6 +32,26 @@ def cmd_capabilities_list(args: argparse.Namespace) -> int:
             print(f"  {', '.join(str(item) for item in ids[:12])}")
             if len(ids) > 12:
                 print(f"  ... {len(ids) - 12} more")
+    print("For machine-readable output, rerun with `--json`.")
+    return 0
+
+
+def cmd_capabilities_summary(args: argparse.Namespace) -> int:
+    payload = capability_summary()
+    if _wants_json(args):
+        _print_json(payload)
+        return 0
+    print("OMH capability summary")
+    print("Use this when Hermes needs to explain what OMH can do without shell catalog approval.")
+    for lane in payload["lanes"]:
+        skills = lane["primary_skills"]
+        playbooks = lane["representative_playbooks"]
+        print(f"- {lane['label']} ({lane['owner_role']})")
+        print(f"  Use for: {lane['use_for']}")
+        print(f"  Skills: {', '.join(str(item) for item in skills[:8])}")
+        if playbooks:
+            print(f"  Playbooks: {', '.join(str(item['id']) for item in playbooks[:4])}")
+    print("Boundary: capability summary is routing context, not execution evidence.")
     print("For machine-readable output, rerun with `--json`.")
     return 0
 
@@ -68,6 +88,10 @@ def _add_capabilities_commands(sub) -> None:
     list_cmd.add_argument("--section", choices=CAPABILITY_SECTION_CHOICES, default=None)
     list_cmd.add_argument("--json", action="store_true", help="Print machine-readable capability id lists.")
     list_cmd.set_defaults(func=cmd_capabilities_list)
+
+    summary = capabilities_sub.add_parser("summary", help="Summarize OMH lanes, representative skills, and playbooks.")
+    summary.add_argument("--json", action="store_true", help="Print machine-readable capability summary.")
+    summary.set_defaults(func=cmd_capabilities_summary)
 
     inspect = capabilities_sub.add_parser("inspect", help="Inspect one capability by id.")
     inspect.add_argument("identifier")

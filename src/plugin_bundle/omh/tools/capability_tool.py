@@ -47,6 +47,13 @@ LANE_OWNER_ROLES = {
     "automation_and_status": "tracker",
     "coding_handoff": "handoff-guide",
 }
+STANDALONE_LANE_PLAYBOOK_IDS = {
+    "intent_to_plan": ("request-to-handoff", "safe-feature-change"),
+    "research_and_ops": ("research-department", "source-backed-research", "feedback-triage"),
+    "materials_and_visuals": ("materials-processing",),
+    "automation_and_status": ("scheduled-ops-blueprint",),
+    "coding_handoff": ("idea-to-deploy",),
+}
 
 
 def standalone_skill_capability_ids() -> set[str]:
@@ -75,7 +82,7 @@ OMH_CAPABILITIES_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["export", "list", "inspect"],
+                "enum": ["summary", "export", "list", "inspect"],
                 "description": "Capability action to perform.",
             },
             "section": {
@@ -104,6 +111,8 @@ def omh_capabilities_handler(args: dict, **kwargs) -> str:
 def _handle_capability_action(action: str, section: str | None, capability_id: str) -> dict[str, object]:
     registry = _load_package_registry()
     if registry:
+        if action == "summary":
+            return registry["capability_summary"]()
         if action == "export":
             return registry["filtered_capability_snapshot"](section)
         if action == "list":
@@ -111,6 +120,8 @@ def _handle_capability_action(action: str, section: str | None, capability_id: s
         if action == "inspect":
             return registry["inspect_capability"](capability_id, section=section)
         return {"error": f"unknown action: {action}"}
+    if action == "summary":
+        return _standalone_capability_summary()
     if action == "export":
         return _standalone_capability_snapshot(section)
     if action == "list":
@@ -122,13 +133,98 @@ def _handle_capability_action(action: str, section: str | None, capability_id: s
 
 def _load_package_registry() -> dict[str, object]:
     try:
-        from omh.capabilities.registry import filtered_capability_snapshot, inspect_capability, list_capabilities
-    except ModuleNotFoundError:
+        from omh.capabilities.registry import capability_summary, filtered_capability_snapshot, inspect_capability, list_capabilities
+    except ImportError:
         return {}
     return {
+        "capability_summary": capability_summary,
         "filtered_capability_snapshot": filtered_capability_snapshot,
         "inspect_capability": inspect_capability,
         "list_capabilities": list_capabilities,
+    }
+
+
+def _standalone_capability_summary() -> dict[str, object]:
+    awareness = awareness_primer_payload()
+    sections = _standalone_sections()
+    skills = {str(item.get("id")): item for item in _standalone_items(sections["skills"])}
+    playbooks = {str(item.get("id")): item for item in _standalone_items(sections["playbooks"])}
+    lanes = [
+        _standalone_summary_lane(lane, skills, playbooks)
+        for lane in awareness.get("lanes", [])
+        if isinstance(lane, dict)
+    ]
+    return {
+        "schema_version": "omh_capability_summary/v1",
+        "source": "standalone_plugin_bundle_fallback",
+        "degraded": True,
+        "determinism": "static_plugin_metadata_no_runtime_clock",
+        "purpose": (
+            "Compact Hermes-facing summary for answering what OMH can do, choosing the nearest workflow, "
+            "and rendering a picker/card without requiring shell catalog approval."
+        ),
+        "chat_rule": str(awareness.get("chat_rule") or ""),
+        "totals": {
+            "skills": len(skills),
+            "playbooks": len(playbooks),
+            "agent_roles": len(_standalone_items(sections["agent_roles"])),
+        },
+        "lanes": lanes,
+        "direct_response_guidance": [
+            "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
+            "When a request matches a lane, name the likely workflow and the first safe next action.",
+            "Use friendly section aliases for input, but keep canonical names in machine-readable output.",
+        ],
+        "section_aliases": dict(sorted(STANDALONE_CAPABILITY_SECTION_ALIASES.items())),
+        "evidence_boundary": _standalone_evidence_boundaries()["prepared_is_not"],
+    }
+
+
+def _standalone_summary_lane(
+    lane: dict[str, object],
+    skills: dict[str, dict[str, object]],
+    playbooks: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    lane_id = str(lane.get("id") or "")
+    lane_skills = lane.get("skills", [])
+    if not isinstance(lane_skills, list):
+        lane_skills = []
+    representative_playbooks = [
+        _standalone_compact_playbook(playbooks[playbook_id])
+        for playbook_id in STANDALONE_LANE_PLAYBOOK_IDS.get(lane_id, ())
+        if playbook_id in playbooks
+    ]
+    return {
+        "id": lane_id,
+        "label": str(lane.get("label") or lane_id),
+        "owner_role": LANE_OWNER_ROLES.get(lane_id, "guide"),
+        "use_for": str(lane.get("use_for") or ""),
+        "primary_skills": [str(skill) for skill in lane_skills if str(skill) in skills],
+        "representative_playbooks": representative_playbooks,
+        "wrapper_actions": sorted(
+            {
+                str(action)
+                for playbook in representative_playbooks
+                for action in playbook.get("available_wrapper_actions", [])
+            }
+        )[:8],
+        "examples": awareness_lane_examples(lane_id),
+    }
+
+
+def _standalone_compact_playbook(playbook: dict[str, object]) -> dict[str, object]:
+    first_stage = playbook.get("first_stage")
+    return {
+        "id": str(playbook.get("id") or ""),
+        "display_name": str(playbook.get("display_name") or playbook.get("id") or ""),
+        "summary": str(playbook.get("summary") or ""),
+        "owner_role": str(playbook.get("primary_owner_role") or "guide"),
+        "first_stage": first_stage if isinstance(first_stage, dict) else {},
+        "available_wrapper_actions": [
+            str(action)
+            for action in playbook.get("available_wrapper_actions", [])
+            if str(action)
+        ][:8],
     }
 
 
