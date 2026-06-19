@@ -86,6 +86,22 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["action"], "dispatch")
                 self.assertEqual(decision["selected_skill"], skill)
                 self.assertEqual(decision["selected_harness"], harness)
+        self.assertEqual(decision["confidence"], "high")
+
+    def test_visual_summary_chat_dispatches_to_img_summary(self) -> None:
+        cases = (
+            "이미지 요약 카드 만들어줘",
+            "이 내용을 공유용 요약 카드로 만들어줘",
+            "Create an image summary card from these notes.",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "img-summary")
+                self.assertEqual(decision["selected_harness"], "img-summary")
                 self.assertEqual(decision["confidence"], "high")
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:

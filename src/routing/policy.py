@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .localization import normalized_phrase
+from .localization import normalized_phrase, routing_tokens
 
 
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
@@ -18,7 +18,19 @@ _PREFIXED_SKILL_ALIASES = {
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
-_SCHEDULED_OPS_STRONG_TOKENS = frozenset(
+
+
+def _normalized_token_set(values: set[str]) -> frozenset[str]:
+    tokens: set[str] = set()
+    for value in values:
+        normalized = normalized_phrase(value)
+        if normalized:
+            tokens.add(normalized)
+        tokens.update(routing_tokens(value, stopwords=set()))
+    return frozenset(tokens)
+
+
+_SCHEDULED_OPS_STRONG_TOKENS = _normalized_token_set(
     {
         "cron",
         "recurring",
@@ -27,7 +39,7 @@ _SCHEDULED_OPS_STRONG_TOKENS = frozenset(
         "반복",
     }
 )
-_SCHEDULED_OPS_CADENCE_TOKENS = frozenset(
+_SCHEDULED_OPS_CADENCE_TOKENS = _normalized_token_set(
     {
         "daily",
         "weekly",
@@ -37,7 +49,7 @@ _SCHEDULED_OPS_CADENCE_TOKENS = frozenset(
         "매월",
     }
 )
-_SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
+_SCHEDULED_OPS_CONTEXT_TOKENS = _normalized_token_set(
     {
         "check",
         "checks",
@@ -81,7 +93,7 @@ _SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
         "조용히",
     }
 )
-_RESEARCH_DEPARTMENT_STRONG_TOKENS = frozenset(
+_RESEARCH_DEPARTMENT_STRONG_TOKENS = _normalized_token_set(
     {
         "research",
         "competitor",
@@ -102,7 +114,7 @@ _RESEARCH_DEPARTMENT_STRONG_TOKENS = frozenset(
         "옵시디언",
     }
 )
-_RESEARCH_DEPARTMENT_SUPPORT_TOKENS = frozenset(
+_RESEARCH_DEPARTMENT_SUPPORT_TOKENS = _normalized_token_set(
     {
         "news",
         "source",
@@ -136,7 +148,7 @@ _RESEARCH_DEPARTMENT_PHRASES = (
     "시장 리서치",
     "수집 합성 브리핑",
 )
-_VISUAL_SUMMARY_MODALITY_TOKENS = frozenset(
+_VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
     {
         "visual",
         "image",
@@ -147,8 +159,8 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = frozenset(
         "인포그래픽",
     }
 )
-_VISUAL_SUMMARY_CARD_TOKENS = frozenset({"card", "카드"})
-_VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = frozenset(
+_VISUAL_SUMMARY_CARD_TOKENS = _normalized_token_set({"card", "카드"})
+_VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
     {
         "debug",
         "fix",
@@ -163,7 +175,7 @@ _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = frozenset(
         "assets",
     }
 )
-_VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = frozenset(
+_VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = _normalized_token_set(
     {
         "summary",
         "announcement",
@@ -207,7 +219,9 @@ _VISUAL_SUMMARY_PHRASES = (
     "visual summary",
     "visual prompt card",
     "image card",
+    "image summary card",
     "summary image",
+    "summary card",
     "explainer image",
     "feature explainer image",
     "feature explanation image",
@@ -242,7 +256,9 @@ _VISUAL_SUMMARY_PHRASES = (
     "기능 소개 이미지",
     "인포그래픽",
     "인포그래픽 만들어줘",
+    "이미지 요약 카드",
     "요약 이미지",
+    "요약 카드",
     "카드 이미지",
     "공유용 이미지",
     "안내 이미지",
@@ -250,7 +266,7 @@ _VISUAL_SUMMARY_PHRASES = (
     "이미지로 설명",
     "이미지 하나 만들어줘",
 )
-_DELIVERABLE_STRONG_TOKENS = frozenset(
+_DELIVERABLE_STRONG_TOKENS = _normalized_token_set(
     {
         "attachment",
         "attachments",
@@ -262,7 +278,7 @@ _DELIVERABLE_STRONG_TOKENS = frozenset(
         "전달",
     }
 )
-_DELIVERABLE_FILE_TOKENS = frozenset(
+_DELIVERABLE_FILE_TOKENS = _normalized_token_set(
     {
         "file",
         "files",
@@ -300,7 +316,7 @@ _DELIVERABLE_PHRASES = (
     "첨부 상태",
     "전달 상태",
 )
-_DELIVERABLE_GATEWAY_CONTEXT_TOKENS = frozenset(
+_DELIVERABLE_GATEWAY_CONTEXT_TOKENS = _normalized_token_set(
     {
         "gateway",
         "platform",
@@ -337,7 +353,7 @@ _DELIVERABLE_GATEWAY_CONTEXT_PHRASES = (
     "gateway status",
     "platform delivery",
 )
-_RISKY_REFACTOR_TOKENS = frozenset(
+_RISKY_REFACTOR_TOKENS = _normalized_token_set(
     {
         "risky",
         "risk",
@@ -374,7 +390,7 @@ _RISKY_REFACTOR_RISK_PHRASES = (
     "feels risky",
     "seems risky",
 )
-_CODING_HANDOFF_EXECUTOR_TOKENS = frozenset(
+_CODING_HANDOFF_EXECUTOR_TOKENS = _normalized_token_set(
     {
         "codex",
         "claude",
@@ -388,7 +404,7 @@ _CODING_HANDOFF_EXECUTOR_TOKENS = frozenset(
         "클로드",
     }
 )
-_CODING_HANDOFF_WORK_TOKENS = frozenset(
+_CODING_HANDOFF_WORK_TOKENS = _normalized_token_set(
     {
         "implement",
         "implementation",
@@ -404,7 +420,7 @@ _CODING_HANDOFF_WORK_TOKENS = frozenset(
         "이슈",
     }
 )
-_CODING_HANDOFF_CONTROL_TOKENS = frozenset(
+_CODING_HANDOFF_CONTROL_TOKENS = _normalized_token_set(
     {
         "delegate",
         "handoff",
@@ -468,7 +484,7 @@ _SCHEDULED_OPS_PHRASES = (
     "바뀐 게 없으면",
     "조용히",
 )
-_ONE_OFF_TOKENS = frozenset(
+_ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
         "일회성",

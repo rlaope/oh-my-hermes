@@ -192,7 +192,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `operating-rhythm`: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`
 - `report-package`: `report-package`, `report package`, `weekly report`, `monthly report`, `executive report`
 - `materials-package`: `materials-package`, `material package`, `materials package`, `document package`, `deck file`
-- `img-summary`: `img-summary`, `img summary`, `visual prompt card`, `image card`, `summary image`
+- `img-summary`: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image summary card`
 - `automation-blueprint`: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`
 - `reliability-review`: `reliability-review`, `reliability review`, `incident review`, `incident postmortem`, `postmortem`
 - `idea-to-deploy`: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`
