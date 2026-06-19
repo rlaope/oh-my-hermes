@@ -10,6 +10,8 @@ def is_skill_catalog_question(message: str) -> bool:
     search_texts = _catalog_search_texts(lowered)
     if _is_operator_command_question(search_texts):
         return False
+    if _is_file_or_text_search_question(search_texts):
+        return False
     explicit_catalog_phrases = (
         "what commands are available",
         "which commands are available",
@@ -245,6 +247,39 @@ def _is_operator_command_question(search_texts: tuple[str, ...]) -> bool:
     )
     return _contains_catalog_token(search_texts, command_question_markers) and _contains_catalog_token(
         search_texts, operator_action_markers
+    )
+
+
+def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
+    file_or_text_markers = (
+        "file",
+        "files",
+        "path",
+        "paths",
+        "grep",
+        "rg",
+        "mention",
+        "mentions",
+        "containing",
+        "contains",
+        "파일",
+        "경로",
+        "언급",
+        "포함",
+        "찾아",
+        "검색",
+    )
+    catalog_collision_markers = (
+        "command injection",
+        "workflow file",
+        "skill file",
+        "command file",
+        "명령어 파일",
+        "워크플로 파일",
+        "스킬 파일",
+    )
+    return _contains_catalog_token(search_texts, file_or_text_markers) and _contains_catalog_token(
+        search_texts, catalog_collision_markers
     )
 
 
