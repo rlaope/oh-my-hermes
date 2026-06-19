@@ -17,9 +17,6 @@ from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
 from omh.skill_pack import builtin_skill_templates
-from omh.workflow_learning import build_improvement_candidate_review_card
-
-
 class CliTests(unittest.TestCase):
     def test_no_arg_cli_shows_welcome_instead_of_error(self) -> None:
         status, stdout, stderr = run_cli([], output_json=False)
@@ -135,11 +132,40 @@ class CliTests(unittest.TestCase):
             self.assertTrue(recorded_candidate_payload["recorded"])
             recorded_candidate = recorded_candidate_payload["candidate"]
             candidate_id = recorded_candidate["candidate_id"]
-            candidate_path = root / ".omh" / "learning" / "candidates" / f"{candidate_id}.json"
-            recorded_candidate["status"] = "accepted"
-            recorded_candidate["human_gate"]["decision"] = "approve"
-            recorded_candidate["review_card"] = build_improvement_candidate_review_card(recorded_candidate)
-            candidate_path.write_text(json.dumps(recorded_candidate), encoding="utf-8")
+
+            status, stdout, stderr = run_cli(base + ["learning", "review"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            review_queue = json.loads(stdout)
+            self.assertEqual(review_queue["schema_version"], "workflow_learning_review_queue/v1")
+            self.assertEqual(review_queue["status"], "needs_review")
+            self.assertEqual(review_queue["entries"][0]["candidate_id"], candidate_id)
+            self.assertEqual(review_queue["entries"][0]["primary_action"], "review_improvement")
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "learning",
+                    "review-candidate",
+                    candidate_id,
+                    "--decision",
+                    "approve",
+                    "--review-note",
+                    "private approval note",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            review_payload = json.loads(stdout)
+            self.assertEqual(review_payload["schema_version"], "learning_candidate_review_result/v1")
+            self.assertEqual(review_payload["decision"], "approve")
+            self.assertEqual(review_payload["candidate"]["status"], "accepted")
+            self.assertEqual(review_payload["candidate"]["human_gate"]["decision"], "approve")
+            self.assertEqual(review_payload["next_action"], f"omh learning proposal {candidate_id}")
+            self.assertIn("review_note_sha256", review_payload["candidate"]["human_gate"])
+            self.assertNotIn("private approval note", json.dumps(review_payload))
 
             status, stdout, stderr = run_cli(base + ["learning", "proposal", candidate_id])
 
@@ -152,6 +178,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(blocked_proposal["proposal"]["status"], "needs_regression_case")
             self.assertEqual(blocked_proposal["proposal"]["primary_action"], "add_regression_case")
             self.assertEqual(blocked_proposal["proposal"]["regression_gate"]["snapshot"], [])
+
+            status, stdout, stderr = run_cli(base + ["learning", "review"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            proposal_queue = json.loads(stdout)
+            self.assertEqual(proposal_queue["entries"][0]["status"], "needs_regression_case")
+            self.assertEqual(proposal_queue["entries"][0]["primary_action"], "add_regression_case")
 
             status, stdout, stderr = run_cli(
                 base
@@ -181,6 +215,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(ready_proposal["proposal"]["status"], "ready_for_human_patch")
             self.assertEqual(ready_proposal["proposal"]["primary_action"], "copy_patch_handoff")
             self.assertIn("source patch applied", ready_proposal["proposal"]["not_evidence_yet"])
+
+            status, stdout, stderr = run_cli(base + ["learning", "review"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            ready_queue = json.loads(stdout)
+            self.assertEqual(ready_queue["status"], "ready")
+            self.assertEqual(ready_queue["summary"]["ready_patch_proposals"], 1)
+            self.assertEqual(ready_queue["entries"][0]["primary_action"], "copy_patch_handoff")
 
             status, stdout, stderr = run_cli(base + ["learning", "regression", "replay"])
 

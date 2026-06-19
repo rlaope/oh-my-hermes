@@ -60,6 +60,7 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
@@ -206,6 +207,7 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Workflow docs generation status.
 - Harness catalog validation status.
 - Runtime validation status.
+- Workflow learning review queue status when workflow-learning contracts changed.
 - Capability probe status.
 - Install script smoke status, including whether it was plan-only or live.
 - Hermes CLI install smoke status, including whether it was plan-only or live.

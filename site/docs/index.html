@@ -122,6 +122,20 @@
               <span class="mini-check"></span>
             </span>
           </a>
+          <a class="doc-tile doc-tile--quality" href="#quality">
+            <span class="doc-tile__label">Learning</span>
+            <strong>Review queue</strong>
+            <span>Inspect trace evals, improvement candidates, regression gaps, and patch handoff proposals.</span>
+            <span class="doc-tile__visual" aria-hidden="true">
+              <span class="mini-ladder">
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+              </span>
+              <span class="mini-check"></span>
+            </span>
+          </a>
           <a class="doc-tile doc-tile--imagegen" href="image-gen/">
             <span class="doc-tile__label">Image gen</span>
             <strong>Visual prompt cards</strong>
@@ -241,6 +255,15 @@
                 Prepare source-specific meeting, report, PR, issue, research,
                 and release cards while generation, QA, and delivery remain
                 observed-only.
+              </p>
+            </a>
+            <a class="flagship-item flagship-item--docs" href="#quality">
+              <span>Workflow learning</span>
+              <h3><code>workflow-learning</code></h3>
+              <p>
+                Record metadata-only traces, evals, human-review candidates,
+                regression cases, and patch handoff proposals without automatic
+                model training or hidden skill mutation.
               </p>
             </a>
             <a class="flagship-item flagship-item--docs" href="executor-handoff/">
@@ -612,6 +635,10 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
             <article class="card">
               <h3>harness_progress/v1</h3>
               <p>Evidence-based progress ladder that advances only when required observations are present.</p>
+            </article>
+            <article class="card">
+              <h3>workflow_learning_review_queue/v1</h3>
+              <p>Human-review queue for learning traces, candidates, regression gaps, and non-applying patch proposals.</p>
             </article>
           </div>
         </section>

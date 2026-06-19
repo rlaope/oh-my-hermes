@@ -30,6 +30,7 @@
 - [ ] `python3 -m omh.cli release hermes-smoke`
 - [ ] `omh --help`
 - [ ] `omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke`
+- [ ] Relevant workflow-learning review queue smoke, when learning contracts changed:
 - [ ] Relevant dry-run or smoke command:
 - [ ] Manual Hermes/TUI check, or explicit reason it was not run:
 

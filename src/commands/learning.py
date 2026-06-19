@@ -11,6 +11,7 @@ from ..workflow_learning import (
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
     build_improvement_patch_proposal,
+    build_workflow_learning_review_queue,
     build_workflow_learning_audit,
     build_learning_export_bundle,
     build_regression_case_from_trace,
@@ -21,9 +22,11 @@ from ..workflow_learning import (
     learning_export_ref,
     learning_export_path,
     learning_trace_ref,
+    latest_workflow_eval_result,
     list_learning_traces,
     rebuild_learning_index,
     replay_regression_cases,
+    review_improvement_candidate,
     show_improvement_candidate,
     show_learning_trace,
     write_improvement_candidate,
@@ -139,10 +142,15 @@ def cmd_learning_candidate(args: argparse.Namespace) -> int:
     try:
         paths = _paths(args)
         trace = show_learning_trace(paths, args.trace_id)
-        eval_result = build_workflow_eval_result(trace, rubric_id=args.rubric)
+        existing_eval = latest_workflow_eval_result(paths, args.trace_id, rubric_id=args.rubric)
+        eval_result = existing_eval or build_workflow_eval_result(
+            trace,
+            rubric_id=args.rubric,
+        )
         candidate = build_improvement_candidate(trace, eval_result, target_type=args.target_type, title=args.title or "")
         if not args.dry_run:
-            write_workflow_eval(paths, eval_result)
+            if existing_eval is None:
+                write_workflow_eval(paths, eval_result)
             write_improvement_candidate(paths, candidate)
     except FileNotFoundError as exc:
         raise OmhError(f"learning trace not found: {args.trace_id}") from exc
@@ -181,6 +189,44 @@ def cmd_learning_proposal(args: argparse.Namespace) -> int:
             "claim_boundary": (
                 "The patch proposal is handoff material only. OMH did not edit source files, "
                 "run tests, pass review, or prove future behavior changed."
+            ),
+        }
+    )
+    return 0
+
+
+def cmd_learning_review(args: argparse.Namespace) -> int:
+    try:
+        payload = build_workflow_learning_review_queue(_paths(args), limit=None if args.all else args.limit)
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_learning_review_candidate(args: argparse.Namespace) -> int:
+    try:
+        candidate = review_improvement_candidate(
+            _paths(args),
+            args.candidate_id,
+            decision=args.decision,
+            reviewer_ref=args.reviewer_ref or "operator",
+            review_note=args.review_note or "",
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"improvement candidate not found: {args.candidate_id}") from exc
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "learning_candidate_review_result/v1",
+            "recorded": True,
+            "decision": args.decision,
+            "candidate": candidate,
+            "next_action": f"omh learning proposal {args.candidate_id}" if args.decision == "approve" else "review_improvement",
+            "claim_boundary": (
+                "The candidate review records a human gate decision only. OMH did not apply source edits, "
+                "run tests, pass CI, or prove future behavior changed."
             ),
         }
     )
@@ -335,6 +381,25 @@ def _add_learning_commands(sub) -> None:
     proposal.add_argument("candidate_id")
     proposal.add_argument("--dry-run", action="store_true")
     proposal.set_defaults(func=cmd_learning_proposal)
+
+    review = learning_sub.add_parser("review", help="Show the local workflow learning human-review queue.")
+    review.add_argument("--limit", type=int, default=20, help="Maximum review queue entries to return.")
+    review.add_argument("--all", action="store_true", help="Return the full review queue.")
+    review.set_defaults(func=cmd_learning_review)
+
+    review_candidate = learning_sub.add_parser(
+        "review-candidate",
+        help="Record a human review decision for an improvement candidate.",
+    )
+    review_candidate.add_argument("candidate_id")
+    review_candidate.add_argument("--decision", choices=("approve", "revise", "reject"), required=True)
+    review_candidate.add_argument("--reviewer-ref", default="operator")
+    review_candidate.add_argument(
+        "--review-note",
+        default="",
+        help="Optional operator note; OMH stores only its hash and length, not the note text.",
+    )
+    review_candidate.set_defaults(func=cmd_learning_review_candidate)
 
     export = learning_sub.add_parser("export", help="Create a redacted workflow learning review bundle.")
     export.add_argument("--trace-id", action="append", default=[], help="Trace id to include; may be repeated.")

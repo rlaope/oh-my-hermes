@@ -16,6 +16,7 @@ WORKFLOW_EVAL_RESULT_SCHEMA_VERSION = "workflow_eval_result/v1"
 IMPROVEMENT_CANDIDATE_SCHEMA_VERSION = "improvement_candidate/v1"
 IMPROVEMENT_CANDIDATE_REVIEW_CARD_SCHEMA_VERSION = "improvement_candidate_review_card/v1"
 IMPROVEMENT_PATCH_PROPOSAL_SCHEMA_VERSION = "improvement_patch_proposal/v1"
+WORKFLOW_LEARNING_REVIEW_QUEUE_SCHEMA_VERSION = "workflow_learning_review_queue/v1"
 REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
 WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
@@ -373,6 +374,17 @@ def write_workflow_eval(paths: OmhPaths, result: dict[str, Any]) -> dict[str, An
     return result
 
 
+def latest_workflow_eval_result(paths: OmhPaths, trace_id: str, *, rubric_id: str = "default") -> dict[str, Any] | None:
+    matches = [
+        result
+        for result in _read_valid_learning_records(paths.learning_evals_dir, validate_workflow_eval_result)
+        if str(result.get("trace_id", "")) == trace_id and str(result.get("rubric_id", "")) == rubric_id
+    ]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: (str(item.get("created_at", "")), str(item.get("eval_id", ""))))[-1]
+
+
 def build_improvement_candidate(
     trace: dict[str, Any],
     eval_result: dict[str, Any],
@@ -496,6 +508,40 @@ def show_improvement_candidate(paths: OmhPaths, candidate_id: str) -> dict[str, 
         raise FileNotFoundError(candidate_id)
     validate_improvement_candidate(candidate)
     return candidate
+
+
+def review_improvement_candidate(
+    paths: OmhPaths,
+    candidate_id: str,
+    *,
+    decision: str,
+    reviewer_ref: str = "operator",
+    review_note: str = "",
+) -> dict[str, Any]:
+    if decision not in {"approve", "revise", "reject"}:
+        raise WorkflowLearningError("candidate review decision must be approve, revise, or reject")
+    candidate = show_improvement_candidate(paths, candidate_id)
+    reviewed = json.loads(json.dumps(candidate))
+    now = utc_now()
+    gate = _object(reviewed.get("human_gate"))
+    gate["decision"] = decision
+    gate["reviewed_at"] = now
+    gate["reviewer_ref"] = reviewer_ref or "operator"
+    gate.pop("review_note_sha256", None)
+    gate.pop("review_note_length", None)
+    if review_note:
+        gate["review_note_sha256"] = hashlib.sha256(review_note.encode("utf-8")).hexdigest()
+        gate["review_note_length"] = len(review_note)
+    reviewed["human_gate"] = gate
+    reviewed["updated_at"] = now
+    reviewed["status"] = {
+        "approve": "accepted",
+        "revise": "proposed",
+        "reject": "rejected",
+    }[decision]
+    reviewed["review_card"] = build_improvement_candidate_review_card(reviewed)
+    write_improvement_candidate(paths, reviewed)
+    return reviewed
 
 
 def build_improvement_patch_proposal(
@@ -987,6 +1033,123 @@ def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) ->
     return payload
 
 
+def build_workflow_learning_review_queue(paths: OmhPaths, *, limit: int | None = 20) -> dict[str, Any]:
+    scanned = _scan_learning_records(paths)
+    candidates = _read_valid_learning_records(paths.learning_candidates_dir, validate_improvement_candidate)
+    patch_proposals = _read_valid_learning_records(paths.learning_patch_proposals_dir, validate_improvement_patch_proposal)
+    proposals_by_candidate = _patch_proposals_by_candidate(patch_proposals)
+    entries: list[dict[str, Any]] = []
+
+    for invalid in _list(scanned.get("invalid_records")):
+        if not isinstance(invalid, dict):
+            continue
+        entries.append(
+            _learning_review_queue_entry(
+                kind="invalid_record",
+                status="blocked",
+                severity="blocking",
+                priority=0,
+                title="Repair invalid learning record",
+                detail=str(invalid.get("error", "")),
+                primary_action="check_learning_index",
+                next_command="omh learning index check",
+                refs=[str(invalid.get("path", ""))],
+                created_at=f"invalid:{invalid.get('path', '')}",
+            )
+        )
+
+    candidate_ids = {str(candidate.get("candidate_id", "")) for candidate in candidates}
+    for candidate in sorted(candidates, key=lambda item: (str(item.get("created_at", "")), str(item.get("candidate_id", "")))):
+        candidate_id = str(candidate.get("candidate_id", ""))
+        decision = str(_nested(candidate, "human_gate", "decision") or "pending")
+        latest_proposal = _latest_patch_proposal(proposals_by_candidate.get(candidate_id, []))
+        entry = _candidate_review_queue_entry(candidate, decision=decision, latest_proposal=latest_proposal)
+        if entry:
+            entries.append(entry)
+
+    for proposal in sorted(patch_proposals, key=lambda item: (str(item.get("created_at", "")), str(item.get("proposal_id", "")))):
+        candidate_id = str(proposal.get("candidate_id", ""))
+        if candidate_id not in candidate_ids:
+            entries.append(
+                _learning_review_queue_entry(
+                    kind="orphan_patch_proposal",
+                    status="blocked",
+                    severity="blocking",
+                    priority=1,
+                    title="Patch proposal has no valid candidate",
+                    detail="Repair or remove the orphan proposal before treating the learning corpus as review-ready.",
+                    primary_action="check_learning_index",
+                    next_command="omh learning index check",
+                    refs=[_record_ref("patch_proposal", str(proposal.get("proposal_id", "")))],
+                    created_at=str(proposal.get("created_at", "")),
+                    candidate_id=candidate_id,
+                    proposal_id=str(proposal.get("proposal_id", "")),
+                    trace_id=str(proposal.get("trace_id", "")),
+                )
+            )
+
+    entries = sorted(entries, key=lambda item: (int(item.get("priority", 99)), str(item.get("created_at", "")), str(item.get("entry_id", ""))))
+    limited_entries = entries if limit is None else entries[: max(limit, 0)]
+    payload = {
+        "schema_version": WORKFLOW_LEARNING_REVIEW_QUEUE_SCHEMA_VERSION,
+        "status": _learning_review_queue_status(entries),
+        "generated_at": utc_now(),
+        "scope": {
+            "limit": "all" if limit is None else limit,
+            "learning_dir": str(paths.learning_dir),
+        },
+        "summary": {
+            "open_items": len(entries),
+            "returned_items": len(limited_entries),
+            "pending_candidates": sum(1 for item in entries if item.get("status") == "needs_candidate_review"),
+            "approved_without_proposal": sum(1 for item in entries if item.get("status") == "needs_patch_proposal"),
+            "ready_patch_proposals": sum(1 for item in entries if item.get("status") == "ready_for_human_patch"),
+            "blocked_items": sum(1 for item in entries if item.get("severity") == "blocking"),
+            "resolved_candidates": sum(
+                1
+                for candidate in candidates
+                if str(_nested(candidate, "human_gate", "decision")) in {"reject"}
+            ),
+        },
+        "entries": limited_entries,
+        "primary_action": str(_object(limited_entries[0]).get("primary_action", "record_workflow_learning_trace")) if limited_entries else "record_workflow_learning_trace",
+        "wrapper_actions": [
+            "record_workflow_learning_trace",
+            "show_learning_review_queue",
+            "review_improvement",
+            "approve_improvement",
+            "revise_improvement",
+            "reject_improvement",
+            "prepare_patch_proposal",
+            "show_patch_proposal",
+            "copy_patch_handoff",
+            "add_regression_case",
+            "replay_regression_cases",
+            "audit_learning_readiness",
+            "export_learning_bundle",
+            "check_learning_index",
+            "show_status",
+        ],
+        "not_evidence_yet": [
+            "source patch applied",
+            "skill or routing behavior changed",
+            "regression replay after a future patch",
+            "future workflow behavior fixed",
+            "model training",
+            "workflow execution",
+            "review approval beyond recorded human gate",
+            "CI",
+            "merge",
+        ],
+        "claim_boundary": (
+            "Workflow learning review queues summarize local candidates and patch proposals. "
+            "They do not apply source edits, execute workflows, train models, pass CI, or prove future behavior changed."
+        ),
+    }
+    validate_workflow_learning_review_queue(payload)
+    return payload
+
+
 def build_learning_audit_card(audit: dict[str, Any]) -> dict[str, Any]:
     status = str(audit.get("status", "needs_attention"))
     blocking = [] if status == "no_records" else _list(audit.get("blocking_issues"))
@@ -1106,6 +1269,66 @@ def validate_learning_audit_card(card: dict[str, Any]) -> None:
     if not not_evidence_yet or any(not isinstance(item, str) or not item for item in not_evidence_yet):
         raise WorkflowLearningError("learning audit card not_evidence_yet must be non-empty strings")
     _reject_forbidden_payload_keys(card)
+
+
+def validate_workflow_learning_review_queue(queue: dict[str, Any]) -> None:
+    _require_schema(queue, WORKFLOW_LEARNING_REVIEW_QUEUE_SCHEMA_VERSION)
+    if queue.get("status") not in {"ready", "empty", "needs_review", "blocked"}:
+        raise WorkflowLearningError("workflow learning review queue status is invalid")
+    for key in ("generated_at", "primary_action", "claim_boundary"):
+        _require_string(queue, key)
+    if not isinstance(queue.get("scope"), dict) or not isinstance(queue.get("summary"), dict):
+        raise WorkflowLearningError("workflow learning review queue scope and summary must be objects")
+    summary = _object(queue.get("summary"))
+    for key in ("open_items", "returned_items", "pending_candidates", "ready_patch_proposals", "blocked_items"):
+        if not isinstance(summary.get(key), int) or summary.get(key) < 0:
+            raise WorkflowLearningError(f"workflow learning review queue summary.{key} must be non-negative integer")
+    entries = _list(queue.get("entries"))
+    if summary.get("returned_items") != len(entries):
+        raise WorkflowLearningError("workflow learning review queue returned_items must match entries")
+    allowed_kinds = {
+        "invalid_record",
+        "candidate_review",
+        "candidate_revision",
+        "candidate_patch_gap",
+        "patch_proposal",
+        "orphan_patch_proposal",
+    }
+    allowed_statuses = {
+        "blocked",
+        "needs_candidate_review",
+        "needs_revision",
+        "needs_patch_proposal",
+        "needs_regression_case",
+        "needs_regression_replay",
+        "ready_for_human_patch",
+        "rejected",
+    }
+    allowed_severities = {"blocking", "review", "warning", "ready"}
+    for entry in entries:
+        item = _object(entry)
+        for key in ("entry_id", "kind", "status", "severity", "title", "detail", "primary_action", "next_command"):
+            _require_string(item, key)
+        if item.get("kind") not in allowed_kinds:
+            raise WorkflowLearningError("workflow learning review queue entry kind is invalid")
+        if item.get("status") not in allowed_statuses:
+            raise WorkflowLearningError("workflow learning review queue entry status is invalid")
+        if item.get("severity") not in allowed_severities:
+            raise WorkflowLearningError("workflow learning review queue entry severity is invalid")
+        if not isinstance(item.get("priority"), int) or item.get("priority") < 0:
+            raise WorkflowLearningError("workflow learning review queue entry priority must be non-negative integer")
+        refs = _list(item.get("refs"))
+        if any(not isinstance(ref, str) or not ref for ref in refs):
+            raise WorkflowLearningError("workflow learning review queue entry refs must be strings")
+    wrapper_actions = _list(queue.get("wrapper_actions"))
+    if not wrapper_actions or any(not isinstance(action, str) or not action for action in wrapper_actions):
+        raise WorkflowLearningError("workflow learning review queue wrapper_actions must be non-empty strings")
+    if str(queue.get("primary_action", "")) not in set(_strings(queue.get("wrapper_actions"))):
+        raise WorkflowLearningError("workflow learning review queue primary_action must be listed in wrapper_actions")
+    not_evidence_yet = _list(queue.get("not_evidence_yet"))
+    if not not_evidence_yet or any(not isinstance(item, str) or not item for item in not_evidence_yet):
+        raise WorkflowLearningError("workflow learning review queue not_evidence_yet must be non-empty strings")
+    _reject_forbidden_payload_keys(queue)
 
 
 def validate_workflow_eval_result(result: dict[str, Any]) -> None:
@@ -2582,6 +2805,221 @@ def _learning_audit_next_actions(
     if not actions:
         actions.append({"id": "continue_recording", "command": "omh learning record <message or --from-runtime-run>"})
     return actions
+
+
+def _patch_proposals_by_candidate(proposals: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for proposal in proposals:
+        candidate_id = str(proposal.get("candidate_id", ""))
+        if not candidate_id:
+            continue
+        grouped.setdefault(candidate_id, []).append(proposal)
+    for candidate_id, items in list(grouped.items()):
+        grouped[candidate_id] = sorted(
+            items,
+            key=lambda item: (
+                str(item.get("created_at", "")),
+                _patch_proposal_progress_rank(str(item.get("status", ""))),
+                str(item.get("proposal_id", "")),
+            ),
+        )
+    return grouped
+
+
+def _latest_patch_proposal(proposals: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not proposals:
+        return None
+    return proposals[-1]
+
+
+def _patch_proposal_progress_rank(status: str) -> int:
+    return {
+        "needs_candidate_review": 0,
+        "needs_regression_case": 1,
+        "needs_regression_replay": 2,
+        "ready_for_human_patch": 3,
+        "rejected": 4,
+    }.get(status, -1)
+
+
+def _candidate_review_queue_entry(
+    candidate: dict[str, Any],
+    *,
+    decision: str,
+    latest_proposal: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    candidate_id = str(candidate.get("candidate_id", ""))
+    trace_id = str(candidate.get("trace_id", ""))
+    eval_id = str(candidate.get("eval_id", ""))
+    title = str(candidate.get("title", "Workflow improvement candidate"))
+    target_ref = str(candidate.get("target_ref", ""))
+    if decision == "pending":
+        return _learning_review_queue_entry(
+            kind="candidate_review",
+            status="needs_candidate_review",
+            severity="review",
+            priority=10,
+            title=title,
+            detail=f"Human review is required before changing {target_ref}.",
+            primary_action="review_improvement",
+            next_command=f"omh learning review-candidate {candidate_id} --decision approve|revise|reject",
+            refs=[
+                _record_ref("candidate", candidate_id),
+                learning_trace_ref(trace_id),
+                _record_ref("eval", eval_id),
+            ],
+            created_at=str(candidate.get("created_at", "")),
+            candidate_id=candidate_id,
+            trace_id=trace_id,
+            eval_id=eval_id,
+        )
+    if decision == "revise":
+        return _learning_review_queue_entry(
+            kind="candidate_revision",
+            status="needs_revision",
+            severity="warning",
+            priority=15,
+            title=title,
+            detail=f"The improvement candidate needs revision before it can target {target_ref}.",
+            primary_action="revise_improvement",
+            next_command=f"omh learning candidate {trace_id} --target-type {candidate.get('target_type', 'workflow_rubric')}",
+            refs=[
+                _record_ref("candidate", candidate_id),
+                learning_trace_ref(trace_id),
+                _record_ref("eval", eval_id),
+            ],
+            created_at=str(candidate.get("created_at", "")),
+            candidate_id=candidate_id,
+            trace_id=trace_id,
+            eval_id=eval_id,
+        )
+    if decision == "approve":
+        if latest_proposal is None:
+            return _learning_review_queue_entry(
+                kind="candidate_patch_gap",
+                status="needs_patch_proposal",
+                severity="warning",
+                priority=20,
+                title=title,
+                detail="The candidate is approved, but no patch proposal snapshot has been prepared yet.",
+                primary_action="prepare_patch_proposal",
+                next_command=f"omh learning proposal {candidate_id}",
+                refs=[
+                    _record_ref("candidate", candidate_id),
+                    learning_trace_ref(trace_id),
+                    _record_ref("eval", eval_id),
+                ],
+                created_at=str(candidate.get("created_at", "")),
+                candidate_id=candidate_id,
+                trace_id=trace_id,
+                eval_id=eval_id,
+            )
+        return _patch_proposal_queue_entry(latest_proposal, candidate_title=title)
+    return None
+
+
+def _patch_proposal_queue_entry(proposal: dict[str, Any], *, candidate_title: str = "") -> dict[str, Any]:
+    status = str(proposal.get("status", "needs_candidate_review"))
+    severity = {
+        "ready_for_human_patch": "ready",
+        "needs_candidate_review": "review",
+        "needs_regression_case": "warning",
+        "needs_regression_replay": "warning",
+        "rejected": "blocking",
+    }.get(status, "warning")
+    priority = {
+        "ready_for_human_patch": 30,
+        "needs_candidate_review": 10,
+        "needs_regression_case": 20,
+        "needs_regression_replay": 25,
+        "rejected": 90,
+    }.get(status, 40)
+    title = candidate_title or str(proposal.get("problem_statement", "Workflow learning patch proposal"))
+    primary_action = str(proposal.get("primary_action", "show_patch_proposal"))
+    next_command = {
+        "review_improvement": f"omh learning review-candidate {proposal.get('candidate_id', '')} --decision approve|revise|reject",
+        "add_regression_case": f"omh learning regression add {proposal.get('trace_id', '')} --fixture-message <redacted fixture>",
+        "replay_regression_cases": "omh learning regression replay",
+        "copy_patch_handoff": f"omh learning proposal {proposal.get('candidate_id', '')}",
+    }.get(primary_action, "omh learning audit")
+    return _learning_review_queue_entry(
+        kind="patch_proposal",
+        status=status,
+        severity=severity,
+        priority=priority,
+        title=title,
+        detail=str(proposal.get("proposed_change_summary", "")) or "Patch proposal is review material only.",
+        primary_action=primary_action,
+        next_command=next_command,
+        refs=[
+            _record_ref("patch_proposal", str(proposal.get("proposal_id", ""))),
+            _record_ref("candidate", str(proposal.get("candidate_id", ""))),
+            learning_trace_ref(str(proposal.get("trace_id", ""))),
+        ],
+        created_at=str(proposal.get("created_at", "")),
+        candidate_id=str(proposal.get("candidate_id", "")),
+        proposal_id=str(proposal.get("proposal_id", "")),
+        trace_id=str(proposal.get("trace_id", "")),
+        eval_id=str(proposal.get("eval_id", "")),
+    )
+
+
+def _learning_review_queue_entry(
+    *,
+    kind: str,
+    status: str,
+    severity: str,
+    priority: int,
+    title: str,
+    detail: str,
+    primary_action: str,
+    next_command: str,
+    refs: list[str],
+    created_at: str = "",
+    candidate_id: str = "",
+    proposal_id: str = "",
+    trace_id: str = "",
+    eval_id: str = "",
+) -> dict[str, Any]:
+    seed = json.dumps(
+        {
+            "kind": kind,
+            "status": status,
+            "candidate_id": candidate_id,
+            "proposal_id": proposal_id,
+            "trace_id": trace_id,
+            "eval_id": eval_id,
+            "refs": refs,
+        },
+        sort_keys=True,
+    )
+    return {
+        "entry_id": _id("wlq", seed),
+        "kind": kind,
+        "status": status,
+        "severity": severity,
+        "priority": priority,
+        "created_at": created_at or utc_now(),
+        "title": title,
+        "detail": detail,
+        "primary_action": primary_action,
+        "next_command": next_command,
+        "refs": refs,
+        "candidate_id": candidate_id,
+        "proposal_id": proposal_id,
+        "trace_id": trace_id,
+        "eval_id": eval_id,
+    }
+
+
+def _learning_review_queue_status(entries: list[dict[str, Any]]) -> str:
+    if not entries:
+        return "empty"
+    if any(entry.get("severity") == "blocking" for entry in entries):
+        return "blocked"
+    if any(entry.get("status") != "ready_for_human_patch" for entry in entries):
+        return "needs_review"
+    return "ready"
 
 
 def _coverage_percent(covered: int, total: int) -> int:
