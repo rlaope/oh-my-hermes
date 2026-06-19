@@ -12,6 +12,7 @@ from ..release import (
     release_readiness_checklist,
     run_hermes_release_smoke,
     run_installed_command_smoke,
+    skill_content_smoke,
 )
 from ..release_install_smoke import install_script_smoke_plan, run_install_script_smoke
 from .common import _print_json, _wants_json
@@ -109,6 +110,15 @@ def cmd_release_install_smoke(args: argparse.Namespace) -> int:
     return 0 if payload["ok"] else 1
 
 
+def cmd_release_skill_content_smoke(args: argparse.Namespace) -> int:
+    payload = skill_content_smoke()
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_skill_content_smoke_summary(payload)
+    return 0 if payload["ok"] else 1
+
+
 def _add_release_commands(sub) -> None:
     release = sub.add_parser("release", help="Plan or run release smoke checks for real Hermes installation paths.")
     release_sub = release.add_subparsers(dest="release_command", required=True)
@@ -180,6 +190,13 @@ def _add_release_commands(sub) -> None:
     install_smoke.add_argument("--json", action="store_true", help="Print the machine-readable install smoke payload.")
     install_smoke.set_defaults(func=cmd_release_install_smoke)
 
+    skill_content = release_sub.add_parser(
+        "skill-content-smoke",
+        help="Verify generated OMH skill guidance in the current command package.",
+    )
+    skill_content.add_argument("--json", action="store_true", help="Print the machine-readable skill content smoke payload.")
+    skill_content.set_defaults(func=cmd_release_skill_content_smoke)
+
 
 def _print_release_checklist_summary(payload: dict[str, object]) -> None:
     print(f"OMH release checklist for {payload['version']} ({payload['tag']})")
@@ -235,4 +252,24 @@ def _print_install_smoke_summary(payload: dict[str, object]) -> None:
         print(f"    Boundary: {step.get('proof_boundary', '')}")
     print("")
     print(f"Next: {payload.get('recommended_next_action')}")
+    print("For machine-readable output, rerun with `--json`.")
+
+
+def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
+    print("OMH skill content smoke")
+    print(f"Status: {'ok' if payload.get('ok') else 'failed'}")
+    print(f"Skills checked: {payload.get('skill_count')}")
+    print(f"Markers checked: {payload.get('checked_marker_count')}")
+    failed = payload.get("failed_checks", [])
+    missing = payload.get("missing_representative_skills", [])
+    if missing:
+        print("Missing representative skills: " + ", ".join(str(item) for item in missing))
+    if isinstance(failed, list) and failed:
+        print("Failed markers:")
+        for check in failed[:12]:
+            if isinstance(check, dict):
+                print(f"  - {check.get('skill')}: {check.get('marker')}")
+        if len(failed) > 12:
+            print(f"  ... {len(failed) - 12} more")
+    print(f"Boundary: {payload.get('proof_boundary')}")
     print("For machine-readable output, rerun with `--json`.")

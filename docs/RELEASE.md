@@ -59,6 +59,7 @@ python3 -m compileall src
 python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
+python3 -m omh.cli release skill-content-smoke --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
@@ -71,6 +72,7 @@ uv build
 python3 -m venv /tmp/omh-wheel-smoke
 /tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes-1.0.1-py3-none-any.whl
 /tmp/omh-wheel-smoke/bin/omh --help
+/tmp/omh-wheel-smoke/bin/omh release skill-content-smoke --json
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home release hermes-smoke --install-path setup --omh-command /tmp/omh-wheel-smoke/bin/omh --include-command-smoke
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.1
 OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.1-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin sh install.sh
@@ -131,8 +133,15 @@ Run the installed command smoke in CI or a release shell after installing OMH:
 ```sh
 command -v omh
 omh --help
+omh release skill-content-smoke --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
+
+`release skill-content-smoke` is non-mutating package-content evidence. It
+checks that the command package can render the router awareness primer and the
+generated workflow context rails that keep direct skill invocation inside the
+broader OMH model. It does not prove Hermes loaded those skills or selected
+them in chat.
 
 For release candidates, run exactly one live smoke against the target Hermes
 profile and paste the JSON result into the release note. Use the native tap

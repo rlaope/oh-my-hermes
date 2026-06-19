@@ -10,6 +10,7 @@ from omh.release import (
     hermes_release_smoke_plan,
     release_readiness_checklist,
     run_hermes_release_smoke,
+    skill_content_smoke,
 )
 from omh.release_install_smoke import install_script_smoke_plan, run_install_script_smoke
 from omh.release_smoke_core import CommandResult, subprocess_runner, subprocess_runner_exact_env
@@ -27,12 +28,15 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("does not run commands", payload["proof_boundary"])
         items = {item["id"]: item for item in payload["items"]}
         self.assertIn("unit_tests", items)
+        self.assertIn("skill_content_smoke", items)
         self.assertIn("installed_command_smoke", items)
         self.assertIn("installed_command_path", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
         self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
         self.assertEqual(items["installed_command_help"]["command"], "/tmp/omh --help")
+        self.assertEqual(items["skill_content_smoke"]["command"], "/tmp/omh release skill-content-smoke --json")
+        self.assertIn("generated workflow context rails", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("--include-command-smoke", items["installed_command_smoke"]["command"])
         self.assertIn("dist/oh_my_hermes-1.0.0-py3-none-any.whl", items["wheel_install"]["command"])
         self.assertIn("wheel_setup_dry_run", items)
@@ -54,8 +58,23 @@ class ReleaseSmokeTests(unittest.TestCase):
         items = {item["id"]: item for item in payload["items"]}
         self.assertEqual(items["installed_command_help"]["command"], "'/tmp/omh command' --help")
         self.assertEqual(items["installed_command_path"]["command"], "command -v '/tmp/omh command'")
+        self.assertEqual(items["skill_content_smoke"]["command"], "'/tmp/omh command' release skill-content-smoke --json")
         self.assertIn("--omh-command '/tmp/omh command'", items["installed_command_smoke"]["command"])
         self.assertIn("'/tmp/omh command' release hermes-smoke --live", items["live_tap_smoke"]["command"])
+
+    def test_skill_content_smoke_checks_router_and_workflow_context(self) -> None:
+        payload = skill_content_smoke()
+
+        self.assertEqual(payload["schema_version"], "skill_content_smoke/v1")
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["observed"])
+        self.assertEqual(payload["router_skill"], "oh-my-hermes")
+        self.assertIn("img-summary", payload["representative_skills"])
+        self.assertEqual(payload["missing_representative_skills"], [])
+        self.assertEqual(payload["failed_checks"], [])
+        self.assertGreaterEqual(payload["skill_count"], 40)
+        self.assertGreaterEqual(payload["checked_marker_count"], 100)
+        self.assertIn("does not prove the target Hermes profile", payload["proof_boundary"])
 
     def test_release_readiness_checklist_rejects_empty_version(self) -> None:
         with self.assertRaises(ValueError):
@@ -87,6 +106,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertFalse(payload["installed_command_smoke"]["path_check"]["observed"])
         installed_commands = [step["command"] for step in payload["installed_command_smoke"]["steps"]]
         self.assertEqual(installed_commands[0], ["omh", "--help"])
+        self.assertIn(["omh", "release", "skill-content-smoke", "--json"], installed_commands)
         self.assertIn(
             ["omh", "--omh-home", omh_home, "--hermes-home", hermes_home, "release", "hermes-smoke", "--install-path", "setup", "--omh-command", "omh"],
             installed_commands,
@@ -122,6 +142,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertNotIn(["hermes", "skills", "inspect", "oh-my-hermes"], commands)
         installed_commands = [step["command"] for step in payload["installed_command_smoke"]["steps"]]
         self.assertEqual(installed_commands[0], ["omh-dev", "--help"])
+        self.assertIn(["omh-dev", "release", "skill-content-smoke", "--json"], installed_commands)
         self.assertIn(
             [
                 "omh-dev",
@@ -356,6 +377,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertTrue(payload["installed_command_smoke"]["path_check"]["ok"])
         self.assertEqual(payload["installed_command_smoke"]["path_check"]["mode"], "live")
         self.assertIn(["omh-dev", "--help"], seen)
+        self.assertIn(["omh-dev", "release", "skill-content-smoke", "--json"], seen)
         self.assertIn(
             [
                 "omh-dev",
@@ -386,6 +408,20 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["failed_step"], "installed_command_smoke")
         self.assertEqual(payload["installed_command_smoke"]["failed_step"], "installed_omh_help")
         self.assertIn("console script", payload["recommended_next_action"])
+
+    def test_installed_command_smoke_failure_from_skill_content_marks_release_smoke_failed(self) -> None:
+        def runner(command, _timeout, _env):
+            if list(command) == ["omh-dev", "release", "skill-content-smoke", "--json"]:
+                return CommandResult(command, 1, '{"ok": false}', "missing context rail")
+            return CommandResult(command, 0, "ok", "")
+
+        with patch("omh.release.shutil.which", return_value="/usr/local/bin/hermes"):
+            payload = run_hermes_release_smoke(runner=runner, omh_command="omh-dev", include_command_smoke=True)
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["failed_step"], "installed_command_smoke")
+        self.assertEqual(payload["installed_command_smoke"]["failed_step"], "installed_omh_skill_content")
+        self.assertIn("skill-content-smoke", payload["installed_command_smoke"]["recommended_next_action"])
 
     def test_installed_command_smoke_fails_before_help_when_omh_is_not_on_path(self) -> None:
         def runner(command, _timeout, _env):  # pragma: no cover - path check should stop first

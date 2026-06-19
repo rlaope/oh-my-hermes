@@ -117,10 +117,11 @@ selected.
 - Harness catalog changes should pass `omh harness validate`, and user-facing
   harness examples should stay backed by conformance tests.
 - Release checks should include `omh release checklist --json`,
-  `omh release hermes-smoke`, `omh release install-smoke`, and installed
-  command smoke (`omh --help`). Use `release install-smoke --live` for an
-  isolated first-time downloader check, and use `hermes-smoke --live` only from
-  the target Hermes profile when an operator wants real Hermes profile evidence.
+  `omh release skill-content-smoke --json`, `omh release hermes-smoke`,
+  `omh release install-smoke`, and installed command smoke (`omh --help`). Use
+  `release install-smoke --live` for an isolated first-time downloader check,
+  and use `hermes-smoke --live` only from the target Hermes profile when an
+  operator wants real Hermes profile evidence.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
 - Parity docs should map common oh-my runtime capability axes to OMH's
