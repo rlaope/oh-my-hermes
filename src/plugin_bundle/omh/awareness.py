@@ -82,6 +82,53 @@ WORKFLOW_CONTEXT_CARDS = (
         "not_evidence_until_observed": ("dispatch", "implementation", "review", "CI", "merge"),
     },
 )
+_WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
+    "deep-interview": "intent_to_plan",
+    "plan": "intent_to_plan",
+    "ralplan": "intent_to_plan",
+    "ralph": "intent_to_plan",
+    "ultragoal": "intent_to_plan",
+    "loop": "intent_to_plan",
+    "ultraprocess": "intent_to_plan",
+    "performance-goal": "intent_to_plan",
+    "web-research": "research_and_ops",
+    "research-department": "research_and_ops",
+    "research-brief": "research_and_ops",
+    "best-practice-research": "research_and_ops",
+    "autoresearch-goal": "research_and_ops",
+    "feedback-triage": "research_and_ops",
+    "meeting-brief": "research_and_ops",
+    "strategy-brief": "research_and_ops",
+    "operating-rhythm": "research_and_ops",
+    "materials-package": "materials_and_visuals",
+    "report-package": "materials_and_visuals",
+    "deliverable-package": "materials_and_visuals",
+    "img-summary": "materials_and_visuals",
+    "automation-blueprint": "automation_and_status",
+    "agent-board": "automation_and_status",
+    "agent-ops-review": "automation_and_status",
+    "doctor": "automation_and_status",
+    "gateway-intent-card": "automation_and_status",
+    "memory-curation-review": "automation_and_status",
+    "ops-observability-card": "automation_and_status",
+    "ops-review": "automation_and_status",
+    "reliability-review": "automation_and_status",
+    "skill": "automation_and_status",
+    "toolbelt-readiness": "automation_and_status",
+    "voice-operator": "automation_and_status",
+    "wiki": "automation_and_status",
+    "ai-slop-cleaner": "coding_handoff",
+    "ask": "coding_handoff",
+    "code-review": "coding_handoff",
+    "cto-loop": "coding_handoff",
+    "deploy-and-monitor": "coding_handoff",
+    "executor-runtime-readiness": "coding_handoff",
+    "github-event-ops": "coding_handoff",
+    "idea-to-deploy": "coding_handoff",
+    "team": "coding_handoff",
+    "ultraqa": "coding_handoff",
+    "ultrawork": "coding_handoff",
+}
 _AWARENESS_MESSAGE_MARKERS = (
     "oh-my-hermes",
     "pull request",
@@ -166,6 +213,24 @@ def workflow_context_cards() -> list[dict[str, object]]:
         }
         for card in WORKFLOW_CONTEXT_CARDS
     ]
+
+
+def workflow_context_card_for_workflow(workflow: str) -> dict[str, object]:
+    """Return the OMH pattern card that should frame one selected workflow."""
+    workflow_key = workflow.strip().casefold()
+    card_id = _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW.get(workflow_key, "")
+    if not card_id:
+        for card in WORKFLOW_CONTEXT_CARDS:
+            representative_workflows = {str(item).casefold() for item in card["representative_workflows"]}
+            if workflow_key in representative_workflows:
+                card_id = str(card["id"])
+                break
+    if not card_id:
+        return {}
+    for card in workflow_context_cards():
+        if card["id"] == card_id:
+            return card
+    return {}
 
 
 def awareness_context_matches_message(message: str) -> bool:
