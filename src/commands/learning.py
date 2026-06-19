@@ -10,6 +10,7 @@ from ..workflow_learning import (
     WorkflowLearningError,
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
+    build_improvement_patch_proposal,
     build_workflow_learning_audit,
     build_learning_export_bundle,
     build_regression_case_from_trace,
@@ -23,8 +24,10 @@ from ..workflow_learning import (
     list_learning_traces,
     rebuild_learning_index,
     replay_regression_cases,
+    show_improvement_candidate,
     show_learning_trace,
     write_improvement_candidate,
+    write_improvement_patch_proposal,
     write_learning_export,
     write_learning_trace,
     write_regression_case,
@@ -151,6 +154,34 @@ def cmd_learning_candidate(args: argparse.Namespace) -> int:
             "recorded": not args.dry_run,
             "eval": eval_result,
             "candidate": candidate,
+        }
+    )
+    return 0
+
+
+def cmd_learning_proposal(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        candidate = show_improvement_candidate(paths, args.candidate_id)
+        proposal = build_improvement_patch_proposal(paths, candidate)
+        recorded = False
+        if not args.dry_run:
+            write_improvement_patch_proposal(paths, proposal)
+            recorded = True
+    except FileNotFoundError as exc:
+        raise OmhError(f"improvement candidate not found: {args.candidate_id}") from exc
+    except (OSError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "learning_patch_proposal_result/v1",
+            "recorded": recorded,
+            "dry_run": args.dry_run,
+            "proposal": proposal,
+            "claim_boundary": (
+                "The patch proposal is handoff material only. OMH did not edit source files, "
+                "run tests, pass review, or prove future behavior changed."
+            ),
         }
     )
     return 0
@@ -296,6 +327,14 @@ def _add_learning_commands(sub) -> None:
     candidate.add_argument("--title", default="")
     candidate.add_argument("--dry-run", action="store_true")
     candidate.set_defaults(func=cmd_learning_candidate)
+
+    proposal = learning_sub.add_parser(
+        "proposal",
+        help="Create a non-applying patch proposal from an approved improvement candidate.",
+    )
+    proposal.add_argument("candidate_id")
+    proposal.add_argument("--dry-run", action="store_true")
+    proposal.set_defaults(func=cmd_learning_proposal)
 
     export = learning_sub.add_parser("export", help="Create a redacted workflow learning review bundle.")
     export.add_argument("--trace-id", action="append", default=[], help="Trace id to include; may be repeated.")

@@ -17,6 +17,7 @@ from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
 from omh.skill_pack import builtin_skill_templates
+from omh.workflow_learning import build_improvement_candidate_review_card
 
 
 class CliTests(unittest.TestCase):
@@ -126,6 +127,32 @@ class CliTests(unittest.TestCase):
             self.assertIn("do not apply patches", candidate["claim_boundary"])
             self.assertNotIn(message, json.dumps(candidate))
 
+            status, stdout, stderr = run_cli(base + ["learning", "candidate", trace_id])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            recorded_candidate_payload = json.loads(stdout)
+            self.assertTrue(recorded_candidate_payload["recorded"])
+            recorded_candidate = recorded_candidate_payload["candidate"]
+            candidate_id = recorded_candidate["candidate_id"]
+            candidate_path = root / ".omh" / "learning" / "candidates" / f"{candidate_id}.json"
+            recorded_candidate["status"] = "accepted"
+            recorded_candidate["human_gate"]["decision"] = "approve"
+            recorded_candidate["review_card"] = build_improvement_candidate_review_card(recorded_candidate)
+            candidate_path.write_text(json.dumps(recorded_candidate), encoding="utf-8")
+
+            status, stdout, stderr = run_cli(base + ["learning", "proposal", candidate_id])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            blocked_proposal = json.loads(stdout)
+            self.assertEqual(blocked_proposal["schema_version"], "learning_patch_proposal_result/v1")
+            self.assertTrue(blocked_proposal["recorded"])
+            self.assertEqual(blocked_proposal["proposal"]["schema_version"], "improvement_patch_proposal/v1")
+            self.assertEqual(blocked_proposal["proposal"]["status"], "needs_regression_case")
+            self.assertEqual(blocked_proposal["proposal"]["primary_action"], "add_regression_case")
+            self.assertEqual(blocked_proposal["proposal"]["regression_gate"]["snapshot"], [])
+
             status, stdout, stderr = run_cli(
                 base
                 + [
@@ -144,6 +171,16 @@ class CliTests(unittest.TestCase):
             self.assertEqual(regression["regression_case"]["schema_version"], "regression_case/v1")
             self.assertEqual(regression["regression_case"]["fixture"]["fixture_text"], "safely add a feature to this repo")
             self.assertFalse(regression["regression_case"]["fixture"]["privacy"]["redaction_provable_by_omh"])
+
+            status, stdout, stderr = run_cli(base + ["learning", "proposal", candidate_id])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            ready_proposal = json.loads(stdout)
+            self.assertTrue(ready_proposal["recorded"])
+            self.assertEqual(ready_proposal["proposal"]["status"], "ready_for_human_patch")
+            self.assertEqual(ready_proposal["proposal"]["primary_action"], "copy_patch_handoff")
+            self.assertIn("source patch applied", ready_proposal["proposal"]["not_evidence_yet"])
 
             status, stdout, stderr = run_cli(base + ["learning", "regression", "replay"])
 
@@ -174,6 +211,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(export_preview["export"]["status"], "ready")
             self.assertEqual(export_preview["export"]["summary"]["counts"]["traces"], 1)
             self.assertEqual(export_preview["export"]["summary"]["counts"]["evals"], 1)
+            self.assertEqual(export_preview["export"]["summary"]["counts"]["patch_proposals"], 2)
             self.assertEqual(export_preview["export"]["summary"]["counts"]["regression_cases"], 1)
             self.assertNotIn(message, json.dumps(export_preview["export"]))
             self.assertNotIn("safely add a feature to this repo", json.dumps(export_preview["export"]))
@@ -197,6 +235,7 @@ class CliTests(unittest.TestCase):
             audit = json.loads(stdout)
             self.assertEqual(audit["schema_version"], "workflow_learning_audit/v1")
             self.assertEqual(audit["status"], "ready")
+            self.assertEqual(audit["counts"]["patch_proposals"], 2)
             self.assertEqual(audit["coverage"]["eval_coverage_percent"], 100)
             self.assertEqual(audit["coverage"]["regression_coverage_percent"], 100)
             self.assertEqual(audit["regression_replay"]["status"], "passed")

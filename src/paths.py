@@ -147,6 +147,10 @@ class OmhPaths:
         return self.learning_dir / "candidates"
 
     @property
+    def learning_patch_proposals_dir(self) -> Path:
+        return self.learning_dir / "patch-proposals"
+
+    @property
     def learning_regressions_dir(self) -> Path:
         return self.learning_dir / "regressions"
 

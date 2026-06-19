@@ -113,12 +113,19 @@ contract shaped like this:
   review card is the Hermes-facing surface for approve/revise/reject decisions,
   regression-case follow-up, and status narration. It is not a source patch,
   automatic skill mutation, or proof that future behavior changed.
+- `omh learning proposal <candidate-id>` records an
+  `improvement_patch_proposal/v1` snapshot for the candidate's current review
+  and regression state. Draft statuses such as `needs_regression_case` remain
+  durable learning records; `ready_for_human_patch` requires approval plus
+  passing regression replay. The proposal is a non-applying patch handoff for
+  human review; it is not a source patch, automatic skill mutation, or proof
+  that future behavior changed.
 - `omh learning export` creates a redacted `workflow_learning_export/v1` review
   bundle from selected traces plus related evals, candidates, and regression
-  cases. The bundle omits raw prompts and fixture text; it is review material,
-  not model training, automatic skill patching, execution, review, CI, merge, or
-  proof that future routing improved. Export bundles are derived artifacts and
-  are not part of the canonical learning index repair loop.
+  cases, and patch proposals. The bundle omits raw prompts and fixture text; it
+  is review material, not model training, automatic skill patching, execution,
+  review, CI, merge, or proof that future routing improved. Export bundles are
+  derived artifacts and are not part of the canonical learning index repair loop.
 
 ## Wrapper Rules
 

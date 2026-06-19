@@ -249,6 +249,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("workflow_eval_result/v1", response["state"]["artifact_schemas"])
         self.assertIn("improvement_candidate/v1", response["state"]["artifact_schemas"])
         self.assertIn("improvement_candidate_review_card/v1", response["state"]["artifact_schemas"])
+        self.assertIn("improvement_patch_proposal/v1", response["state"]["artifact_schemas"])
         self.assertIn("regression_case/v1", response["state"]["artifact_schemas"])
         self.assertIn("workflow_learning_export/v1", response["state"]["artifact_schemas"])
         self.assertEqual(
@@ -262,6 +263,8 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("show_learning_eval", actions)
         self.assertIn("propose_skill_improvement", actions)
         self.assertIn("review_improvement", actions)
+        self.assertIn("show_patch_proposal", actions)
+        self.assertIn("copy_patch_handoff", actions)
         self.assertIn("add_regression_case", actions)
         self.assertIn("export_learning_bundle", actions)
         self.assertIn("replay_regression_cases", actions)
@@ -270,6 +273,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("show_status", actions)
         self.assertIn("automatic skill patch", response["state"]["evidence_not_observed"])
         self.assertIn("not model training", response["claim_boundary"])
+        self.assertIn("prepare_patch_proposal", response["state"]["learning_flow"])
         self.assertIn("human_review_improvement_candidate", response["state"]["learning_flow"])
         self.assertNotIn(message, serialized)
 
