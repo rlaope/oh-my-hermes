@@ -188,6 +188,10 @@ def awareness_primer_context() -> str:
             str(payload["skill_coverage"]),
             str(payload["chat_rule"]),
             *lane_lines,
+            (
+                "Tools: use omh_capabilities for workflow/playbook catalog context; "
+                "omh_status or omh_hud for state; omh_role for responsibility context."
+            ),
             str(payload["fallback_rule"]),
             "Boundary: " + str(payload["evidence_boundary"]),
         ]

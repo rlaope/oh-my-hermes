@@ -87,6 +87,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("across every OMH skill", skill["workflow_context_rule"])
         self.assertIn("Normal users talk to Hermes", skill["chat_rule"])
         self.assertIn("missing", skill["fallback_rule"])
+        self.assertIn("omh_capabilities", awareness["tool_hints"][0])
         self.assertIn("ambitious goal -> loopability check", " ".join(skill["cross_lane_examples"]))
         self.assertEqual(hidden_surface["exposure"], "harness_only")
         self.assertEqual(awareness["schema_version"], "omh_awareness/v1")
