@@ -106,6 +106,11 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("situation-level workflow maps", playbook["workflow_context_rule"])
         self.assertIn("Normal users talk to Hermes", playbook["chat_rule"])
         self.assertIn("route_request", playbook["pipeline"])
+        self.assertEqual(playbook["primary_owner_role"], "planner")
+        self.assertIn("handoff-guide", playbook["stage_owners"])
+        self.assertIn("show_recommendation", playbook["available_wrapper_actions"])
+        self.assertEqual(playbook["first_stage"]["id"], "route_request")
+        self.assertEqual(playbook["first_stage"]["contract"], "playbook_recommendation/v1")
         self.assertIn("Prepared OMH capability", playbook["prepared_is_not"])
         self.assertEqual(legacy_role["requested_id"], "coding-handoff")
         self.assertEqual(legacy_role["resolved_id"], "handoff-guide")
@@ -152,6 +157,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(playbook["section"], "playbooks")
         self.assertEqual(playbook["capability"]["schema_version"], "playbook_capability/v1")
         self.assertIn("status_card", playbook["capability"]["pipeline"])
+        self.assertIn("first_stage", playbook["capability"])
 
         for alias, expected_role in LEGACY_ROLE_ALIASES.items():
             with self.subTest(alias=alias):

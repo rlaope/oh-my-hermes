@@ -657,6 +657,10 @@ def skill_content_smoke() -> dict[str, object]:
         "evidence_boundary",
         "prepared_is_not",
         "pipeline",
+        "primary_owner_role",
+        "stage_owners",
+        "available_wrapper_actions",
+        "first_stage",
     }
     missing_standalone_capability_context_skills = sorted(
         str(item.get("id") or "")

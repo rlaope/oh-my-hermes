@@ -159,6 +159,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "playbook_context_rule": inspected_playbook["capability"]["workflow_context_rule"],
                     "playbook_chat_rule": inspected_playbook["capability"]["chat_rule"],
                     "playbook_pipeline": inspected_playbook["capability"]["pipeline"],
+                    "playbook_owner": inspected_playbook["capability"]["primary_owner_role"],
+                    "playbook_actions": inspected_playbook["capability"]["available_wrapper_actions"],
+                    "playbook_first_stage": inspected_playbook["capability"]["first_stage"],
                     "playbook_prepared_boundary": inspected_playbook["capability"]["prepared_is_not"],
                     "runtime_claim": inspected["capability"]["runtime_claim"],
                     "invalid_section_error": invalid_section["error"],
@@ -218,6 +221,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("situation-level workflow maps", payload["playbook_context_rule"])
             self.assertIn("Normal users talk to Hermes", payload["playbook_chat_rule"])
             self.assertIn("analysis_brief", payload["playbook_pipeline"])
+            self.assertEqual(payload["playbook_owner"], "researcher")
+            self.assertIn("show_status", payload["playbook_actions"])
+            self.assertEqual(payload["playbook_first_stage"]["id"], "topic_scope")
             self.assertIn("Prepared OMH capability", payload["playbook_prepared_boundary"])
             self.assertEqual(payload["runtime_claim"], "descriptor_not_runtime_agent")
             self.assertIn("unknown capability section", payload["invalid_section_error"])
