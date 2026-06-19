@@ -39,6 +39,10 @@ class OmhPaths:
         return self.runtime_dir / "mcp_host_sessions.jsonl"
 
     @property
+    def runtime_worktrees_path(self) -> Path:
+        return self.runtime_dir / "worktrees.jsonl"
+
+    @property
     def operations_dir(self) -> Path:
         return self.omh_home / "operations"
 

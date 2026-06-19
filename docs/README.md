@@ -60,8 +60,10 @@ verification, review, CI, or merge ladder events.
 
 Coding handoffs also include `worktree_session_isolation/v1`. Hermes can show
 same workspace ok, worktree recommended, or worktree required before opening a
-coding agent, but worktree creation is still not evidence until a wrapper or
-runtime records it.
+coding agent. When a wrapper or operator chooses to proceed, `omh worktree
+prepare` can create the local Git worktree and write
+`omh_worktree_observation/v1`. That record proves workspace isolation only; the
+executor session and runtime ladder still need separate observed evidence.
 
 Executor session buttons use `executor_session/v1` records when a wrapper
 observes Open in Codex, Open in Claude Code, Attach session, Record completed,
@@ -130,7 +132,9 @@ selected.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
 - Worktree/session isolation docs should describe `worktree_session_isolation/v1`
-  as prepared workspace guidance and wrapper UX, not as Git worktree creation.
+  as prepared workspace guidance and wrapper UX, and `omh worktree prepare` as
+  explicit opt-in Git worktree creation that records workspace-isolation
+  evidence only.
 - Workflow learning docs should state that `workflow_learning_trace/v1` records
   are metadata-only process evidence. They can feed evals, readiness audits,
   review-only improvement candidates, human-review queues, regression cases,
@@ -138,11 +142,11 @@ selected.
   automatic training, hidden skill patches, or proof that future behavior is
   fixed.
 - Parity docs should map common oh-my runtime capability axes to OMH's
-  Hermes-native evidence model instead of promising hidden workers, worktrees,
-  unrecorded MCP host load, arbitrary MCP tools, or plugin runtime load without
-  observation. The local MCP bridge may expose only allowlisted status,
-  recommendation, and probe tools; host/wrapper-observed load is recorded as
-  `omh_mcp_host_session/v1`.
+  Hermes-native evidence model instead of promising hidden workers, automatic
+  worktrees, unrecorded MCP host load, arbitrary MCP tools, or plugin runtime
+  load without observation. The local MCP bridge may expose only allowlisted
+  status, recommendation, and probe tools; host/wrapper-observed load is
+  recorded as `omh_mcp_host_session/v1`.
 - Goal execution docs should describe `.omh/goals` metadata-only ledgers,
   `goal_completion_gate/v1`, `goal_status_card/v1`, and
   `goal_continuation/v1` as wrapper contracts that name the next action before

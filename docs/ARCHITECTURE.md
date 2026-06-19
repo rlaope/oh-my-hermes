@@ -369,7 +369,12 @@ worktrees were started. All coding handoff modes also include
 `worktree_session_isolation/v1`, which tells wrappers whether the current
 workspace is acceptable, an isolated worktree is recommended, or an isolated
 worktree is required before opening an executor. That record stores a compact
-snapshot of the generated
+snapshot of the generated workspace policy. When a wrapper or operator chooses
+the explicit workspace action, `omh worktree prepare` creates a local Git
+worktree and records `omh_worktree_observation/v1`; that observation is
+workspace-isolation evidence only. Runtime ladders still need a separate
+`runtime_observation/v1` `worktree_creation` event when the created worktree is
+attached to a prepared runtime handoff. The coding handoff also stores
 acceptance criteria, verification expectations, report contract, and evidence
 contract, runtime-specific invocation templates, and the
 `runtime_observation/v1` recording contract, but not the raw prompt body. With
@@ -474,9 +479,11 @@ distribution, specialist roles, team/swarm workers, worktree isolation, HUD and
 session observability, MCP/tool bridge, loop/autopilot workflow, and
 release maintenance. It is a product and operator contract, not a hidden runtime
 claim. A `partial` row means OMH has deterministic guidance, handoff metadata,
-or observation records for that axis, while the live worker, worktree, MCP tool,
-or plugin runtime event still belongs to Hermes, the selected executor, or a
-future observed integration.
+or observation records for that axis, while the live worker, executor session,
+MCP host load, or plugin runtime event still belongs to Hermes, the selected
+executor, or a future observed integration. Worktree isolation is available only
+for the explicit `omh worktree prepare/list` backend and its local
+`omh_worktree_observation/v1` ledger; it does not auto-launch an executor.
 
 ## Harness Contract
 

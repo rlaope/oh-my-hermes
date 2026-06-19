@@ -690,19 +690,20 @@ class CliTests(unittest.TestCase):
             payload = json.loads(stdout)
             matrix = payload["parity_matrix"]
             self.assertEqual(matrix["schema_version"], "omh_parity_matrix/v1")
-            self.assertGreaterEqual(matrix["summary"]["available"], 4)
-            self.assertGreaterEqual(matrix["summary"]["partial"], 2)
+            self.assertGreaterEqual(matrix["summary"]["available"], 5)
+            self.assertGreaterEqual(matrix["summary"]["partial"], 1)
             capabilities = {item["id"]: item for item in matrix["capabilities"]}
             self.assertEqual(capabilities["skill_plugin_distribution"]["status"], "available")
             self.assertEqual(capabilities["team_swarm_workers"]["status"], "partial")
-            self.assertEqual(capabilities["worktree_isolation"]["status"], "partial")
+            self.assertEqual(capabilities["worktree_isolation"]["status"], "available")
             self.assertEqual(capabilities["mcp_tool_bridge"]["status"], "available")
             self.assertIn("not worker dispatch", capabilities["team_swarm_workers"]["claim_boundary"])
-            self.assertIn("not a created worktree", capabilities["worktree_isolation"]["claim_boundary"])
+            self.assertIn("workspace-isolation evidence only", capabilities["worktree_isolation"]["claim_boundary"])
             self.assertEqual(matrix["probe_alignment"]["managed_skills"], "available")
             self.assertEqual(matrix["probe_alignment"]["omh_plugin_bundle"], "available")
             self.assertEqual(matrix["probe_alignment"]["mcp_bridge_server"], "available")
             self.assertEqual(matrix["probe_alignment"]["mcp_host_session"], "unverified")
+            self.assertEqual(matrix["probe_alignment"]["worktree_creator"], "available")
             self.assertIn("does not claim hidden worker launch", matrix["claim_boundary"])
 
             status, stdout, stderr = run_cli(base + ["probe", "--parity"], output_json=False)
@@ -712,7 +713,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH capability probe", stdout)
             self.assertIn("Parity matrix", stdout)
             self.assertIn("Team, swarm, and worker protocol: partial", stdout)
-            self.assertIn("Worktree and project-session isolation: partial", stdout)
+            self.assertIn("Worktree and project-session isolation: available", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)

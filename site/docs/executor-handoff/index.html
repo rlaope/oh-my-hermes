@@ -66,7 +66,8 @@
           Before a wrapper opens Codex, Claude Code, an oh-my runtime, or a
           Hermes coding path, OMH can prepare a
           <code>worktree_session_isolation/v1</code> plan. It keeps workspace
-          risk visible without pretending a Git worktree already exists.
+          risk visible, then lets the wrapper invoke an explicit local worktree
+          creator when isolation is selected.
         </p>
         <div class="usecase-grid">
           <article class="case-card">
@@ -77,12 +78,12 @@
           <article class="case-card">
             <span>Worktree recommended</span>
             <h3>Risky or multi-file work gets a pause.</h3>
-            <p>The first button becomes Prepare worktree, then the open action carries a workspace hint.</p>
+            <p>The first button becomes Prepare worktree; the backend can create the Git worktree before the open action.</p>
           </article>
           <article class="case-card">
             <span>Worktree required</span>
             <h3>Parallel, team, or swarm work needs isolation.</h3>
-            <p>OMH waits for wrapper or runtime evidence before treating worktree creation as observed.</p>
+            <p>OMH records worktree creation as workspace evidence only; executor progress still needs separate runtime evidence.</p>
           </article>
         </div>
       </section>
