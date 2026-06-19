@@ -220,8 +220,9 @@ def awareness_primer_payload() -> dict[str, object]:
             "show status, and hand off without hiding unobserved execution."
         ),
         "first_turn_rule": (
-            "When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, "
-            "review, status, or long-running loops, consider OMH before generic chat or generic tools."
+            "When a request asks for planning, research, ops records, files/materials, visual summaries, image cards, "
+            "automation, coding delegation, review, status, or long-running loops, consider OMH before generic chat "
+            "or generic tools."
         ),
         "all_skill_context_rule": (
             "Carry this across every OMH skill: match intent to a lane, name adjacent "
@@ -234,6 +235,32 @@ def awareness_primer_payload() -> dict[str, object]:
             example
             for lane_examples in LANE_CROSS_LANE_EXAMPLES.values()
             for example in lane_examples[:1]
+        ],
+        "workflow_cues": [
+            {
+                "cue": "meeting notes, retros, decisions, or follow-ups",
+                "route": "operating-rhythm or meeting-brief before generic summarization",
+            },
+            {
+                "cue": "PR, issue, bug, customer feedback, or release summaries",
+                "route": "github-event-ops, feedback-triage, report-package, or img-summary by output shape",
+            },
+            {
+                "cue": "current sources, market/news research, or evidence-backed answers",
+                "route": "web-research, research-brief, or research-department before unsupported recall",
+            },
+            {
+                "cue": "decks, PDFs, spreadsheets, docs, HWP, or upload-ready files",
+                "route": "materials-package or report-package before ad hoc file narration",
+            },
+            {
+                "cue": "image cards, infographics, briefing posters, or shareable visuals",
+                "route": "img-summary before generic image generation or local rendering",
+            },
+            {
+                "cue": "coding, risky changes, executor status, review, CI, or merge state",
+                "route": "ultraprocess, coding handoff, code-review, or agent-ops-review with observed evidence boundaries",
+            },
         ],
         "context_surfaces": [
             "installed skills and workflow picker",
@@ -275,10 +302,11 @@ def awareness_primer_payload() -> dict[str, object]:
 def awareness_primer_context() -> str:
     payload = awareness_primer_payload()
     lane_lines = [
-        f"- {lane['label']}: {', '.join(lane['skills'])}."
+        f"- {lane['label']}: {lane['use_for']}."
         for lane in payload["lanes"]
         if isinstance(lane, dict)
     ]
+    cue_map = _compact_workflow_cue_line()
     return "\n".join(
         [
             "[OMH Awareness]",
@@ -288,6 +316,7 @@ def awareness_primer_context() -> str:
             str(payload["skill_coverage"]),
             str(payload["chat_rule"]),
             *lane_lines,
+            f"Common cues: {cue_map}.",
             (
                 "Tools: omh_capabilities for workflow/playbook catalog context; action=summary for catalog "
                 "questions; omh_status or omh_hud for state; omh_role for responsibility context."
@@ -304,8 +333,10 @@ def awareness_primer_markdown() -> str:
     for lane in payload["lanes"]:
         if not isinstance(lane, dict):
             continue
-        skills = "`, `".join(str(skill) for skill in lane["skills"])
-        lane_lines.append(f"- **{lane['label']}**: `{skills}` - {lane['use_for']}.")
+        skills = [str(skill) for skill in lane["skills"][:4]]
+        lane_lines.append(
+            f"- **{lane['label']}**: {lane['use_for']}. Key: `{'`, `'.join(skills)}`."
+        )
     return "\n".join(
         [
             "## OMH Awareness Primer",
@@ -321,6 +352,10 @@ def awareness_primer_markdown() -> str:
             str(payload["chat_rule"]),
             "",
             *lane_lines,
+            "",
+            "Common cues before generic tools:",
+            "",
+            _compact_workflow_cue_line() + ".",
             "",
             "Cross-lane examples:",
             "",
@@ -357,6 +392,15 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
             f"- {payload['chat_rule']}",
             f"- Boundary: {payload['evidence_boundary']}",
         ]
+    )
+
+
+def _compact_workflow_cue_line() -> str:
+    return (
+        "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
+        "feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; "
+        "decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
+        "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review"
     )
 
 
