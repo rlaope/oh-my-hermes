@@ -15,6 +15,7 @@ WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION = "workflow_learning_trace/v1"
 WORKFLOW_EVAL_RESULT_SCHEMA_VERSION = "workflow_eval_result/v1"
 IMPROVEMENT_CANDIDATE_SCHEMA_VERSION = "improvement_candidate/v1"
 IMPROVEMENT_CANDIDATE_REVIEW_CARD_SCHEMA_VERSION = "improvement_candidate_review_card/v1"
+IMPROVEMENT_PATCH_PROPOSAL_SCHEMA_VERSION = "improvement_patch_proposal/v1"
 REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
 WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
@@ -489,6 +490,133 @@ def write_improvement_candidate(paths: OmhPaths, candidate: dict[str, Any]) -> d
     return candidate
 
 
+def show_improvement_candidate(paths: OmhPaths, candidate_id: str) -> dict[str, Any]:
+    candidate = read_json_object(candidate_path(paths, candidate_id))
+    if not candidate:
+        raise FileNotFoundError(candidate_id)
+    validate_improvement_candidate(candidate)
+    return candidate
+
+
+def build_improvement_patch_proposal(
+    paths: OmhPaths,
+    candidate: dict[str, Any],
+    *,
+    proposal_id: str | None = None,
+) -> dict[str, Any]:
+    validate_improvement_candidate(candidate)
+    trace_id = str(candidate.get("trace_id", ""))
+    related_regressions = _read_related_regression_cases(paths, trace_id)
+    replay = _replay_related_regression_cases(related_regressions)
+    decision = str(_nested(candidate, "human_gate", "decision") or "pending")
+    status = _patch_proposal_status(
+        decision=decision,
+        regression_count=len(related_regressions),
+        replay_status=str(replay.get("status", "")),
+    )
+    now = utc_now()
+    target_type = str(candidate.get("target_type", ""))
+    target_ref = str(candidate.get("target_ref", ""))
+    regression_snapshot = _patch_regression_snapshot(related_regressions, replay)
+    seed = json.dumps(
+        {
+            "candidate_id": str(candidate.get("candidate_id", "")),
+            "decision": decision,
+            "target_ref": target_ref,
+            "replay_status": replay.get("status", ""),
+            "regression_snapshot": regression_snapshot,
+        },
+        sort_keys=True,
+    )
+    proposal = {
+        "schema_version": IMPROVEMENT_PATCH_PROPOSAL_SCHEMA_VERSION,
+        "record_type": "improvement_patch_proposal",
+        "proposal_id": proposal_id or _id("wlp", seed),
+        "candidate_id": str(candidate.get("candidate_id", "")),
+        "trace_id": trace_id,
+        "eval_id": str(candidate.get("eval_id", "")),
+        "created_at": now,
+        "status": status,
+        "target": {
+            "type": target_type,
+            "ref": target_ref,
+            "source_files": _patch_target_files(target_type, target_ref),
+        },
+        "source_refs": {
+            "candidate_ref": _record_ref("candidate", str(candidate.get("candidate_id", ""))),
+            "trace_ref": learning_trace_ref(trace_id),
+            "eval_ref": _record_ref("eval", str(candidate.get("eval_id", ""))),
+            "regression_case_refs": [
+                _record_ref("regression_case", str(case.get("case_id", ""))) for case in related_regressions
+            ],
+        },
+        "review_gate": {
+            "candidate_decision": decision,
+            "human_approval_required": True,
+            "ready_for_patch_work": status == "ready_for_human_patch",
+        },
+        "problem_statement": str(_nested(candidate, "proposal", "problem_summary") or ""),
+        "proposed_change_summary": str(_nested(candidate, "proposal", "suggested_change") or ""),
+        "patch_scope": {
+            "mode": "proposal_only",
+            "apply_path_available": False,
+            "allowed_target_types": ["skill", "routing", "workflow_rubric", "docs", "validator", "playbook"],
+            "change_owner": "future explicit human-approved PR or executor handoff",
+        },
+        "regression_gate": {
+            "required": True,
+            "case_count": len(related_regressions),
+            "replay_status": str(replay.get("status", "")),
+            "passed": replay.get("status") == "passed",
+            "snapshot": regression_snapshot,
+            "results": _patch_replay_results(replay),
+        },
+        "required_gates": _patch_required_gates(status),
+        "verification_commands": [
+            "PYTHONPATH=tests uv run python -m unittest tests/test_workflow_learning.py tests/test_cli.py tests/test_wrapper_contract.py -v",
+            "uv run python -m compileall -q src tests",
+            "uv run python -m src.cli docs workflows --check",
+            "uv run python -m src.cli harness validate",
+            "git diff --check",
+        ],
+        "steps": _patch_proposal_steps(status),
+        "primary_action": _patch_proposal_primary_action(status),
+        "wrapper_actions": [
+            "show_patch_proposal",
+            "copy_patch_handoff",
+            "add_regression_case",
+            "replay_regression_cases",
+            "review_improvement",
+            "approve_improvement",
+            "audit_learning_readiness",
+            "show_status",
+        ],
+        "not_evidence_yet": [
+            "source patch applied",
+            "generated skill updated",
+            "routing behavior changed",
+            "regression replay after patch",
+            "code review passed",
+            "CI passed",
+            "future workflow behavior fixed",
+            "model training",
+        ],
+        "claim_boundary": (
+            "Improvement patch proposals are review and handoff material only. "
+            "They do not edit source files, regenerate skills, run tests, pass review, or prove future behavior changed."
+        ),
+    }
+    validate_improvement_patch_proposal(proposal, candidate=candidate)
+    return proposal
+
+
+def write_improvement_patch_proposal(paths: OmhPaths, proposal: dict[str, Any]) -> dict[str, Any]:
+    validate_improvement_patch_proposal(proposal)
+    atomic_write_json(patch_proposal_path(paths, str(proposal["proposal_id"])), proposal, private=True)
+    _update_learning_index(paths, proposal, "patch_proposal")
+    return proposal
+
+
 def build_regression_case_from_trace(
     trace: dict[str, Any],
     *,
@@ -648,6 +776,10 @@ def build_learning_export_bundle(
         _export_candidate_projection(record)
         for record in _related_export_records(paths, "candidate", validate_improvement_candidate, trace_id_set)
     ]
+    patch_proposals = [
+        _export_patch_proposal_projection(record)
+        for record in _related_export_records(paths, "patch_proposal", validate_improvement_patch_proposal, trace_id_set)
+    ]
     regression_cases = [
         _redacted_regression_case(case)
         for case in _related_export_records(paths, "regression_case", validate_regression_case, trace_id_set)
@@ -687,6 +819,7 @@ def build_learning_export_bundle(
             "source_trace_count": len(traces),
             "source_eval_count": len(evals),
             "source_candidate_count": len(candidates),
+            "source_patch_proposal_count": len(patch_proposals),
             "source_regression_case_count": len(regression_cases),
             "canonical_learning_index_includes_exports": False,
             "source_payloads_projected": True,
@@ -695,6 +828,7 @@ def build_learning_export_bundle(
             traces=traces,
             evals=evals,
             candidates=candidates,
+            patch_proposals=patch_proposals,
             regression_cases=regression_cases,
         ),
         "study_cards": [
@@ -702,6 +836,7 @@ def build_learning_export_bundle(
                 trace,
                 evals=[record for record in evals if record.get("trace_id") == trace.get("trace_id")],
                 candidates=[record for record in candidates if record.get("trace_id") == trace.get("trace_id")],
+                patch_proposals=[record for record in patch_proposals if record.get("trace_id") == trace.get("trace_id")],
                 regression_cases=[
                     record for record in regression_cases if record.get("trace_id") == trace.get("trace_id")
                 ],
@@ -712,10 +847,12 @@ def build_learning_export_bundle(
             "traces": traces,
             "evals": evals,
             "candidates": candidates,
+            "patch_proposals": patch_proposals,
             "regression_cases": regression_cases,
         },
         "operator_notes": [
             "Use this bundle to review process quality, routing decisions, evidence gaps, and improvement candidates.",
+            "Use patch proposals as human-reviewed handoff material; they do not apply source edits.",
             "Use regression cases to replay deterministic routing expectations before applying future changes.",
             "Review candidate proposals manually; this bundle does not apply patches.",
         ],
@@ -742,6 +879,7 @@ def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) ->
     traces = _apply_limit(_read_valid_learning_records(paths.learning_traces_dir, validate_workflow_learning_trace), limit)
     evals = _read_valid_learning_records(paths.learning_evals_dir, validate_workflow_eval_result)
     candidates = _read_valid_learning_records(paths.learning_candidates_dir, validate_improvement_candidate)
+    patch_proposals = _read_valid_learning_records(paths.learning_patch_proposals_dir, validate_improvement_patch_proposal)
     regression_cases = _read_valid_learning_records(paths.learning_regressions_dir, validate_regression_case)
     exports = _read_valid_learning_records(paths.learning_exports_dir, validate_workflow_learning_export)
     replay = (
@@ -799,6 +937,7 @@ def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) ->
             "traces": len(traces),
             "evals": len(evals),
             "candidates": len(candidates),
+            "patch_proposals": len(patch_proposals),
             "regression_cases": len(regression_cases),
             "exports": len(exports),
             "invalid_records": len(scanned["invalid_records"]),
@@ -1066,6 +1205,118 @@ def validate_improvement_candidate_review_card(card: dict[str, Any], *, candidat
     _reject_export_payload_keys(card)
 
 
+def validate_improvement_patch_proposal(proposal: dict[str, Any], *, candidate: dict[str, Any] | None = None) -> None:
+    _require_schema(proposal, IMPROVEMENT_PATCH_PROPOSAL_SCHEMA_VERSION)
+    for key in (
+        "proposal_id",
+        "candidate_id",
+        "trace_id",
+        "eval_id",
+        "created_at",
+        "status",
+        "problem_statement",
+        "proposed_change_summary",
+        "primary_action",
+        "claim_boundary",
+    ):
+        _require_string(proposal, key)
+    if proposal.get("status") not in {
+        "needs_candidate_review",
+        "needs_regression_case",
+        "needs_regression_replay",
+        "ready_for_human_patch",
+        "rejected",
+    }:
+        raise WorkflowLearningError("improvement patch proposal status is invalid")
+    target = _object(proposal.get("target"))
+    _require_string(target, "type")
+    _require_string(target, "ref")
+    files = _list(target.get("source_files"))
+    if not files or any(not isinstance(path, str) or not path for path in files):
+        raise WorkflowLearningError("improvement patch proposal target.source_files must be non-empty strings")
+    refs = _object(proposal.get("source_refs"))
+    for key in ("candidate_ref", "trace_ref", "eval_ref"):
+        _require_string(refs, key)
+    if any(not isinstance(ref, str) or not ref for ref in _list(refs.get("regression_case_refs"))):
+        raise WorkflowLearningError("improvement patch proposal regression refs must be strings")
+    gate = _object(proposal.get("review_gate"))
+    if gate.get("human_approval_required") is not True:
+        raise WorkflowLearningError("improvement patch proposal must require human approval")
+    if gate.get("candidate_decision") not in {"pending", "approve", "revise", "reject"}:
+        raise WorkflowLearningError("improvement patch proposal candidate decision is invalid")
+    if bool(gate.get("ready_for_patch_work")) != (proposal.get("status") == "ready_for_human_patch"):
+        raise WorkflowLearningError("improvement patch proposal ready flag must match status")
+    scope = _object(proposal.get("patch_scope"))
+    if scope.get("apply_path_available") is not False or scope.get("mode") != "proposal_only":
+        raise WorkflowLearningError("improvement patch proposal must be proposal_only and non-applying")
+    regression = _object(proposal.get("regression_gate"))
+    if regression.get("required") is not True:
+        raise WorkflowLearningError("improvement patch proposal regression gate is required")
+    if not isinstance(regression.get("case_count"), int) or regression.get("case_count") < 0:
+        raise WorkflowLearningError("improvement patch proposal regression case_count must be non-negative")
+    if regression.get("replay_status") not in {"passed", "failed", "skipped", "incomplete", "no_cases"}:
+        raise WorkflowLearningError("improvement patch proposal regression replay status is invalid")
+    if bool(regression.get("passed")) != (regression.get("replay_status") == "passed"):
+        raise WorkflowLearningError("improvement patch proposal regression passed flag must match replay status")
+    snapshot = _list(regression.get("snapshot"))
+    if any(not isinstance(item, dict) for item in snapshot):
+        raise WorkflowLearningError("improvement patch proposal regression snapshot must contain objects")
+    if len(snapshot) != regression.get("case_count"):
+        raise WorkflowLearningError("improvement patch proposal regression snapshot must match case_count")
+    if len(_list(refs.get("regression_case_refs"))) != regression.get("case_count"):
+        raise WorkflowLearningError("improvement patch proposal regression refs must match case_count")
+    expected_status = _patch_proposal_status(
+        decision=str(gate.get("candidate_decision", "")),
+        regression_count=int(regression.get("case_count", 0) or 0),
+        replay_status=str(regression.get("replay_status", "")),
+    )
+    if proposal.get("status") != expected_status:
+        raise WorkflowLearningError("improvement patch proposal status must match review and regression gates")
+    for gate_record in _list(proposal.get("required_gates")):
+        item = _object(gate_record)
+        for key in ("id", "state", "detail"):
+            _require_string(item, key)
+        if item.get("state") not in {"pending", "blocked", "complete"}:
+            raise WorkflowLearningError("improvement patch proposal required gate state is invalid")
+        if not isinstance(item.get("required"), bool):
+            raise WorkflowLearningError("improvement patch proposal required gate required flag must be boolean")
+    for key in ("verification_commands", "wrapper_actions", "not_evidence_yet"):
+        values = _list(proposal.get(key))
+        if not values or any(not isinstance(item, str) or not item.strip() for item in values):
+            raise WorkflowLearningError(f"improvement patch proposal {key} must be non-empty strings")
+    if not _list(proposal.get("required_gates")):
+        raise WorkflowLearningError("improvement patch proposal required_gates must be non-empty")
+    if not _list(proposal.get("steps")):
+        raise WorkflowLearningError("improvement patch proposal steps must be non-empty")
+    if str(proposal.get("primary_action", "")) not in set(_strings(proposal.get("wrapper_actions"))):
+        raise WorkflowLearningError("improvement patch proposal primary_action must be listed in wrapper_actions")
+    for step in _list(proposal.get("steps")):
+        item = _object(step)
+        for key in ("id", "label", "state", "detail"):
+            _require_string(item, key)
+        if item.get("state") not in {"pending", "ready", "blocked", "complete"}:
+            raise WorkflowLearningError("improvement patch proposal step state is invalid")
+    if candidate is not None:
+        for key in ("candidate_id", "trace_id", "eval_id"):
+            if str(proposal.get(key, "")) != str(candidate.get(key, "")):
+                raise WorkflowLearningError(f"improvement patch proposal {key} must match candidate")
+        if str(target.get("type", "")) != str(candidate.get("target_type", "")):
+            raise WorkflowLearningError("improvement patch proposal target.type must match candidate")
+        if str(target.get("ref", "")) != str(candidate.get("target_ref", "")):
+            raise WorkflowLearningError("improvement patch proposal target.ref must match candidate")
+        decision = str(_nested(candidate, "human_gate", "decision") or "pending")
+        if gate.get("candidate_decision") != decision:
+            raise WorkflowLearningError("improvement patch proposal review gate must match candidate decision")
+        expected_status = _patch_proposal_status(
+            decision=decision,
+            regression_count=int(regression.get("case_count", 0) or 0),
+            replay_status=str(regression.get("replay_status", "")),
+        )
+        if proposal.get("status") != expected_status:
+            raise WorkflowLearningError("improvement patch proposal status must match candidate and regression gate")
+    _reject_export_payload_keys(proposal)
+
+
 def validate_regression_case(case: dict[str, Any]) -> None:
     _require_schema(case, REGRESSION_CASE_SCHEMA_VERSION)
     _require_string(case, "case_id")
@@ -1110,6 +1361,10 @@ def validate_workflow_learning_export(bundle: dict[str, Any]) -> None:
         if not isinstance(candidate, dict):
             raise WorkflowLearningError("learning export candidate record must be an object")
         _validate_export_candidate_projection(candidate)
+    for proposal in _list(records.get("patch_proposals")):
+        if not isinstance(proposal, dict):
+            raise WorkflowLearningError("learning export patch proposal record must be an object")
+        _validate_export_patch_proposal_projection(proposal)
     for case in _list(records.get("regression_cases")):
         if not isinstance(case, dict):
             raise WorkflowLearningError("learning export regression case record must be an object")
@@ -1148,6 +1403,34 @@ def _validate_export_candidate_projection(candidate: dict[str, Any]) -> None:
         raise WorkflowLearningError("learning export candidate diff_preview.available must be boolean")
 
 
+def _validate_export_patch_proposal_projection(proposal: dict[str, Any]) -> None:
+    _require_schema(proposal, IMPROVEMENT_PATCH_PROPOSAL_SCHEMA_VERSION)
+    for key in ("proposal_id", "candidate_id", "trace_id", "eval_id", "status", "primary_action", "claim_boundary"):
+        _require_string(proposal, key)
+    if proposal.get("status") not in {
+        "needs_candidate_review",
+        "needs_regression_case",
+        "needs_regression_replay",
+        "ready_for_human_patch",
+        "rejected",
+    }:
+        raise WorkflowLearningError("learning export patch proposal status is invalid")
+    if not isinstance(proposal.get("target"), dict):
+        raise WorkflowLearningError("learning export patch proposal target must be an object")
+    target = _object(proposal.get("target"))
+    _require_string(target, "type")
+    _require_string(target, "ref")
+    if not isinstance(proposal.get("source_file_count"), int):
+        raise WorkflowLearningError("learning export patch proposal source_file_count must be an integer")
+    regression = _object(proposal.get("regression_gate"))
+    if not isinstance(regression.get("case_count"), int):
+        raise WorkflowLearningError("learning export patch proposal regression case_count must be an integer")
+    if regression.get("replay_status") not in {"passed", "failed", "skipped", "incomplete", "no_cases"}:
+        raise WorkflowLearningError("learning export patch proposal replay status is invalid")
+    if not isinstance(regression.get("snapshot_count"), int):
+        raise WorkflowLearningError("learning export patch proposal regression snapshot_count must be an integer")
+
+
 def trace_path(paths: OmhPaths, trace_id: str) -> Path:
     return paths.learning_traces_dir / f"{_safe_id(trace_id)}.json"
 
@@ -1158,6 +1441,10 @@ def eval_path(paths: OmhPaths, eval_id: str) -> Path:
 
 def candidate_path(paths: OmhPaths, candidate_id: str) -> Path:
     return paths.learning_candidates_dir / f"{_safe_id(candidate_id)}.json"
+
+
+def patch_proposal_path(paths: OmhPaths, proposal_id: str) -> Path:
+    return paths.learning_patch_proposals_dir / f"{_safe_id(proposal_id)}.json"
 
 
 def regression_case_path(paths: OmhPaths, case_id: str) -> Path:
@@ -1404,6 +1691,139 @@ def _improvement_review_step(step_id: str, label: str, state: str, detail: str) 
     }
 
 
+def _patch_proposal_status(*, decision: str, regression_count: int, replay_status: str) -> str:
+    if decision == "reject":
+        return "rejected"
+    if decision != "approve":
+        return "needs_candidate_review"
+    if regression_count <= 0:
+        return "needs_regression_case"
+    if replay_status != "passed":
+        return "needs_regression_replay"
+    return "ready_for_human_patch"
+
+
+def _patch_target_files(target_type: str, target_ref: str) -> list[str]:
+    normalized = str(target_type or "").strip().lower().replace("-", "_")
+    target = str(target_ref or "")
+    if normalized in {"skill", "workflow_skill"}:
+        workflow = target.split(":", 1)[1] if ":" in target else target
+        return ["src/skills/catalog.py", "src/skills/render.py", f"skills/{workflow}/SKILL.md", "docs/WORKFLOWS.md"]
+    if normalized in {"routing", "router", "route"}:
+        return ["src/routing/recommend.py", "src/chat_router.py", "tests/test_chat_router.py", "tests/test_cli.py"]
+    if normalized in {"rubric", "workflow_rubric", "eval", "validator"}:
+        return ["src/workflow_learning.py", "tests/test_workflow_learning.py", "tests/test_cli.py"]
+    if normalized == "docs":
+        return ["README.md", "docs/WORKFLOWS.md", "docs/HARNESS_QUALITY.md"]
+    if normalized == "playbook":
+        return ["src/catalogs/playbooks.py", "docs/PLAYBOOKS.md", "tests/test_cli.py"]
+    return ["src/skills/catalog.py", "docs/WORKFLOWS.md", "tests/test_cli.py"]
+
+
+def _patch_required_gates(status: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "candidate_approval",
+            "required": True,
+            "state": "complete" if status in {"needs_regression_case", "needs_regression_replay", "ready_for_human_patch"} else "blocked",
+            "detail": "Human approval must exist before any source patch is prepared as work.",
+        },
+        {
+            "id": "regression_case",
+            "required": True,
+            "state": "complete" if status in {"needs_regression_replay", "ready_for_human_patch"} else "pending",
+            "detail": "A minimized regression case should exist before changing routing, skill, rubric, docs, or validator behavior.",
+        },
+        {
+            "id": "regression_replay",
+            "required": True,
+            "state": "complete" if status == "ready_for_human_patch" else "pending",
+            "detail": "Replay must pass before the proposal is treated as ready for an implementation PR.",
+        },
+        {
+            "id": "implementation_review",
+            "required": True,
+            "state": "pending",
+            "detail": "A future PR must still run tests and code review after any source edits.",
+        },
+    ]
+
+
+def _patch_proposal_steps(status: str) -> list[dict[str, str]]:
+    return [
+        _improvement_review_step(
+            "review_candidate",
+            "Review candidate",
+            "complete" if status != "needs_candidate_review" else "pending",
+            "Approve, revise, or reject the candidate before creating source work.",
+        ),
+        _improvement_review_step(
+            "record_regression",
+            "Record regression",
+            "complete" if status in {"needs_regression_replay", "ready_for_human_patch"} else "pending",
+            "Capture a minimized fixture so the old failure can be replayed.",
+        ),
+        _improvement_review_step(
+            "replay_regression",
+            "Replay regression",
+            "complete" if status == "ready_for_human_patch" else "pending",
+            "Pass the deterministic replay before treating this as PR-ready.",
+        ),
+        _improvement_review_step(
+            "prepare_pr",
+            "Prepare PR",
+            "ready" if status == "ready_for_human_patch" else "blocked",
+            "Use the proposal as handoff material; OMH has not edited files.",
+        ),
+    ]
+
+
+def _patch_proposal_primary_action(status: str) -> str:
+    if status == "needs_candidate_review":
+        return "review_improvement"
+    if status == "needs_regression_case":
+        return "add_regression_case"
+    if status == "needs_regression_replay":
+        return "replay_regression_cases"
+    if status == "ready_for_human_patch":
+        return "copy_patch_handoff"
+    return "show_status"
+
+
+def _patch_replay_results(replay: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "case_id": str(item.get("case_id", "")),
+            "status": str(item.get("status", "")),
+            "failure_count": len(_list(item.get("failures"))),
+        }
+        for item in _list(replay.get("results"))
+        if isinstance(item, dict)
+    ]
+
+
+def _patch_regression_snapshot(cases: list[dict[str, Any]], replay: dict[str, Any]) -> list[dict[str, Any]]:
+    results_by_id = {
+        str(item.get("case_id", "")): item
+        for item in _list(replay.get("results"))
+        if isinstance(item, dict)
+    }
+    snapshots: list[dict[str, Any]] = []
+    for case in cases:
+        case_id = str(case.get("case_id", ""))
+        result = _object(results_by_id.get(case_id))
+        snapshots.append(
+            {
+                "case_id": case_id,
+                "expected_workflow": str(_nested(case, "expected", "selected_workflow") or ""),
+                "expected_harness": str(_nested(case, "expected", "selected_harness") or ""),
+                "status": str(result.get("status", "missing")),
+                "failure_count": len(_list(result.get("failures"))),
+            }
+        )
+    return snapshots
+
+
 def _select_export_traces(paths: OmhPaths, *, trace_ids: list[str], limit: int | None) -> list[dict[str, Any]]:
     if trace_ids:
         traces = []
@@ -1436,6 +1856,7 @@ def _related_export_records(
     directory = {
         "eval": paths.learning_evals_dir,
         "candidate": paths.learning_candidates_dir,
+        "patch_proposal": paths.learning_patch_proposals_dir,
         "regression_case": paths.learning_regressions_dir,
         "export": paths.learning_exports_dir,
     }[kind]
@@ -1596,6 +2017,39 @@ def _export_candidate_projection(candidate: dict[str, Any]) -> dict[str, Any]:
     return projection
 
 
+def _export_patch_proposal_projection(proposal: dict[str, Any]) -> dict[str, Any]:
+    validate_improvement_patch_proposal(proposal)
+    target = _object(proposal.get("target"))
+    regression = _object(proposal.get("regression_gate"))
+    projection = {
+        "schema_version": IMPROVEMENT_PATCH_PROPOSAL_SCHEMA_VERSION,
+        "record_type": "improvement_patch_proposal",
+        "proposal_id": str(proposal.get("proposal_id", "")),
+        "candidate_id": str(proposal.get("candidate_id", "")),
+        "trace_id": str(proposal.get("trace_id", "")),
+        "eval_id": str(proposal.get("eval_id", "")),
+        "created_at": str(proposal.get("created_at", "")),
+        "status": str(proposal.get("status", "")),
+        "target": {
+            "type": str(target.get("type", "")),
+            "ref": str(target.get("ref", "")),
+        },
+        "source_file_count": len(_strings(target.get("source_files"))),
+        "regression_gate": {
+            "case_count": int(regression.get("case_count", 0) or 0),
+            "replay_status": str(regression.get("replay_status", "")),
+            "passed": regression.get("passed") is True,
+            "snapshot_count": len(_list(regression.get("snapshot"))),
+        },
+        "required_gate_count": len(_list(proposal.get("required_gates"))),
+        "verification_command_count": len(_strings(proposal.get("verification_commands"))),
+        "primary_action": str(proposal.get("primary_action", "")),
+        "claim_boundary": str(proposal.get("claim_boundary", "")),
+    }
+    _validate_export_patch_proposal_projection(projection)
+    return projection
+
+
 def _export_privacy_projection(privacy: dict[str, Any]) -> dict[str, Any]:
     projected = _sanitize_export_record(privacy)
     projected.setdefault("mode", PRIVACY_MODE)
@@ -1683,6 +2137,7 @@ def _learning_export_summary(
     traces: list[dict[str, Any]],
     evals: list[dict[str, Any]],
     candidates: list[dict[str, Any]],
+    patch_proposals: list[dict[str, Any]],
     regression_cases: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
@@ -1690,6 +2145,7 @@ def _learning_export_summary(
             "traces": len(traces),
             "evals": len(evals),
             "candidates": len(candidates),
+            "patch_proposals": len(patch_proposals),
             "regression_cases": len(regression_cases),
         },
         "workflows": sorted({str(_nested(trace, "workflow", "selected_workflow")) for trace in traces if _nested(trace, "workflow", "selected_workflow")}),
@@ -1697,6 +2153,7 @@ def _learning_export_summary(
         "outcomes": sorted({str(_nested(trace, "status", "outcome")) for trace in traces if _nested(trace, "status", "outcome")}),
         "eval_statuses": sorted({str(result.get("status", "")) for result in evals if result.get("status")}),
         "candidate_statuses": sorted({str(candidate.get("status", "")) for candidate in candidates if candidate.get("status")}),
+        "patch_proposal_statuses": sorted({str(proposal.get("status", "")) for proposal in patch_proposals if proposal.get("status")}),
     }
 
 
@@ -1705,6 +2162,7 @@ def _learning_study_card(
     *,
     evals: list[dict[str, Any]],
     candidates: list[dict[str, Any]],
+    patch_proposals: list[dict[str, Any]],
     regression_cases: list[dict[str, Any]],
 ) -> dict[str, Any]:
     failed_or_warned = [
@@ -1740,6 +2198,9 @@ def _learning_study_card(
         "eval_statuses": [str(result.get("status", "")) for result in evals],
         "failed_or_warning_checks": failed_or_warned,
         "candidate_refs": [_record_ref("candidate", str(candidate.get("candidate_id", ""))) for candidate in candidates],
+        "patch_proposal_refs": [
+            _record_ref("patch_proposal", str(proposal.get("proposal_id", ""))) for proposal in patch_proposals
+        ],
         "regression_case_refs": [
             _record_ref("regression_case", str(case.get("case_id", ""))) for case in regression_cases
         ],
@@ -1764,6 +2225,30 @@ def _read_regression_cases(paths: OmhPaths) -> list[dict[str, Any]]:
             validate_regression_case(case)
             cases.append(case)
     return cases
+
+
+def _read_related_regression_cases(paths: OmhPaths, trace_id: str) -> list[dict[str, Any]]:
+    return sorted(
+        [case for case in _read_regression_cases(paths) if str(case.get("trace_id", "")) == trace_id],
+        key=lambda case: str(case.get("case_id", "")),
+    )
+
+
+def _replay_related_regression_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    results = [_replay_regression_case(case) for case in cases]
+    failed = [item for item in results if item["status"] == "failed"]
+    skipped = [item for item in results if item["status"] == "skipped"]
+    passed = [item for item in results if item["status"] == "passed"]
+    return {
+        "schema_version": "workflow_regression_replay/v1",
+        "status": _regression_replay_status(total=len(results), failed=len(failed), skipped=len(skipped)),
+        "total": len(results),
+        "passed": len(passed),
+        "failed": len(failed),
+        "skipped": len(skipped),
+        "results": results,
+        "claim_boundary": "Related regression replay checks deterministic routing contracts only; it does not execute workflows or patch skills.",
+    }
 
 
 def _read_valid_learning_records(
@@ -2219,6 +2704,7 @@ def _scan_learning_records(paths: OmhPaths) -> dict[str, Any]:
         ("trace", paths.learning_traces_dir, validate_workflow_learning_trace),
         ("eval", paths.learning_evals_dir, validate_workflow_eval_result),
         ("candidate", paths.learning_candidates_dir, validate_improvement_candidate),
+        ("patch_proposal", paths.learning_patch_proposals_dir, validate_improvement_patch_proposal),
         ("regression_case", paths.learning_regressions_dir, validate_regression_case),
     ]
     entries: list[dict[str, Any]] = []
@@ -2339,6 +2825,8 @@ def _record_identifier(record: dict[str, Any], kind: str) -> str:
         return str(record.get("eval_id", ""))
     if kind == "candidate":
         return str(record.get("candidate_id", ""))
+    if kind == "patch_proposal":
+        return str(record.get("proposal_id", ""))
     if kind == "regression_case":
         return str(record.get("case_id", ""))
     return str(record.get("id", ""))

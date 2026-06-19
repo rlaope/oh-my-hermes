@@ -14,6 +14,7 @@ from omh.workflow_learning import (
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
     build_improvement_candidate_review_card,
+    build_improvement_patch_proposal,
     build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
@@ -25,11 +26,13 @@ from omh.workflow_learning import (
     rebuild_learning_index,
     replay_regression_cases,
     validate_improvement_candidate_review_card,
+    validate_improvement_patch_proposal,
     validate_learning_audit_card,
     validate_workflow_learning_trace,
     validate_workflow_learning_export,
     write_learning_trace,
     write_improvement_candidate,
+    write_improvement_patch_proposal,
     write_learning_export,
     write_workflow_eval,
     write_regression_case,
@@ -82,8 +85,6 @@ class WorkflowLearningTests(unittest.TestCase):
             trace = write_learning_trace(paths, build_trace_from_chat_interaction(interaction))
             eval_result = build_workflow_eval_result(trace)
             candidate = build_improvement_candidate(trace, eval_result)
-            case = write_regression_case(paths, build_regression_case_from_trace(trace, redacted_message=fixture))
-            replay = replay_regression_cases(paths)
 
             self.assertEqual(candidate["schema_version"], "improvement_candidate/v1")
             self.assertTrue(candidate["human_gate"]["required"])
@@ -119,6 +120,22 @@ class WorkflowLearningTests(unittest.TestCase):
             stale_candidate["human_gate"]["decision"] = "approve"
             with self.assertRaises(WorkflowLearningError):
                 validate_improvement_candidate_review_card(stale_candidate["review_card"], candidate=stale_candidate)
+            pending_proposal = build_improvement_patch_proposal(paths, candidate)
+            self.assertEqual(pending_proposal["schema_version"], "improvement_patch_proposal/v1")
+            self.assertEqual(pending_proposal["status"], "needs_candidate_review")
+            self.assertEqual(pending_proposal["primary_action"], "review_improvement")
+            self.assertIn("source patch applied", pending_proposal["not_evidence_yet"])
+            self.assertFalse(pending_proposal["patch_scope"]["apply_path_available"])
+            approved_without_regression = json.loads(json.dumps(candidate))
+            approved_without_regression["status"] = "accepted"
+            approved_without_regression["human_gate"]["decision"] = "approve"
+            approved_without_regression["review_card"] = build_improvement_candidate_review_card(approved_without_regression)
+            no_regression_proposal = build_improvement_patch_proposal(paths, approved_without_regression)
+            self.assertEqual(no_regression_proposal["status"], "needs_regression_case")
+            self.assertEqual(no_regression_proposal["primary_action"], "add_regression_case")
+            self.assertEqual(no_regression_proposal["regression_gate"]["snapshot"], [])
+            case = write_regression_case(paths, build_regression_case_from_trace(trace, redacted_message=fixture))
+            replay = replay_regression_cases(paths)
             self.assertEqual(case["schema_version"], "regression_case/v1")
             self.assertEqual(case["fixture"]["fixture_text"], fixture)
             self.assertFalse(case["fixture"]["privacy"]["raw_prompt_stored"])
@@ -126,6 +143,38 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertFalse(case["fixture"]["privacy"]["redaction_provable_by_omh"])
             self.assertEqual(replay["status"], "passed")
             self.assertEqual(replay["passed"], 1)
+            ready_proposal = build_improvement_patch_proposal(paths, approved_without_regression)
+            self.assertEqual(ready_proposal["status"], "ready_for_human_patch")
+            self.assertEqual(ready_proposal["primary_action"], "copy_patch_handoff")
+            self.assertEqual(ready_proposal["regression_gate"]["replay_status"], "passed")
+            self.assertNotEqual(ready_proposal["proposal_id"], no_regression_proposal["proposal_id"])
+            self.assertEqual(ready_proposal["regression_gate"]["snapshot"][0]["status"], "passed")
+            self.assertIn("src/workflow_learning.py", ready_proposal["target"]["source_files"])
+            validate_improvement_patch_proposal(ready_proposal, candidate=approved_without_regression)
+            raw_proposal = json.loads(json.dumps(ready_proposal))
+            raw_proposal["debug"] = {"event_json": "RAW PATCH EVENT SHOULD FAIL"}
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_patch_proposal(raw_proposal, candidate=approved_without_regression)
+            inconsistent_review_gate = json.loads(json.dumps(ready_proposal))
+            inconsistent_review_gate["review_gate"]["candidate_decision"] = "pending"
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_patch_proposal(inconsistent_review_gate)
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_patch_proposal(inconsistent_review_gate, candidate=approved_without_regression)
+            applying_proposal = json.loads(json.dumps(ready_proposal))
+            applying_proposal["patch_scope"]["apply_path_available"] = True
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_patch_proposal(applying_proposal, candidate=approved_without_regression)
+            loose_action_proposal = json.loads(json.dumps(ready_proposal))
+            loose_action_proposal["wrapper_actions"].append(7)
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_patch_proposal(loose_action_proposal, candidate=approved_without_regression)
+            mismatched_regression_proposal = json.loads(json.dumps(ready_proposal))
+            mismatched_regression_proposal["regression_gate"]["passed"] = False
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_patch_proposal(mismatched_regression_proposal, candidate=approved_without_regression)
+            write_improvement_candidate(paths, approved_without_regression)
+            write_improvement_patch_proposal(paths, ready_proposal)
             self.assertEqual(list_learning_traces(paths, limit=0), [])
             limited_replay = replay_regression_cases(paths, limit=0)
             self.assertEqual(limited_replay["status"], "no_cases")
@@ -145,6 +194,43 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(replay["total"], 1)
             self.assertEqual(replay["passed"], 0)
             self.assertEqual(replay["skipped"], 1)
+
+    def test_patch_proposal_regression_snapshot_is_order_stable(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            interaction = build_chat_interaction_payload("I want to safely add a feature to this repo", source="discord")
+            trace = write_learning_trace(paths, build_trace_from_chat_interaction(interaction))
+            candidate = build_improvement_candidate(trace, build_workflow_eval_result(trace))
+            candidate["status"] = "accepted"
+            candidate["human_gate"]["decision"] = "approve"
+            candidate["review_card"] = build_improvement_candidate_review_card(candidate)
+            write_regression_case(
+                paths,
+                build_regression_case_from_trace(
+                    trace,
+                    case_id="case_b",
+                    redacted_message="I want to safely add a feature to this repo",
+                ),
+            )
+            write_regression_case(
+                paths,
+                build_regression_case_from_trace(
+                    trace,
+                    case_id="case_a",
+                    redacted_message="safely add a feature to this repo",
+                ),
+            )
+
+            proposal = build_improvement_patch_proposal(paths, candidate)
+
+            self.assertEqual(
+                [item["case_id"] for item in proposal["regression_gate"]["snapshot"]],
+                ["case_a", "case_b"],
+            )
+            self.assertEqual(
+                proposal["source_refs"]["regression_case_refs"],
+                ["omh-learning-regression_case:case_a", "omh-learning-regression_case:case_b"],
+            )
 
     def test_regression_case_id_includes_fixture_and_expected_shape(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -1,6 +1,6 @@
 ---
 name: workflow-learning
-description: [omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, readiness audit, repairable learning index, and redacted review export.
+description: [omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, non-applying patch proposal, regression case, readiness audit, repairable learning index, and redacted review export.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, optimization]
@@ -51,7 +51,7 @@ Bad example:
 
 ## Use When
 
-Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, auditable for learning readiness, reusable as a future regression, exportable for review, or repairable after local index drift without storing raw prompts.
+Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, auditable for learning readiness, reusable as a future regression, convertible into a human-reviewed patch handoff, exportable for review, or repairable after local index drift without storing raw prompts.
 
     Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning audit`, `audit learning`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`
 
@@ -91,7 +91,7 @@ Artifact expectations:
 
 Safety rules:
 
-- A workflow learning trace or export is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
+- A workflow learning trace, patch proposal, or export is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
