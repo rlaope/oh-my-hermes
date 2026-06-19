@@ -111,6 +111,42 @@ class CliTests(unittest.TestCase):
             self.assertEqual(replay["status"], "passed")
             self.assertEqual(replay["passed"], 1)
 
+            status, stdout, stderr = run_cli(base + ["learning", "index", "check"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            index_check = json.loads(stdout)
+            self.assertEqual(index_check["schema_version"], "workflow_learning_index_check/v1")
+            self.assertEqual(index_check["status"], "passed")
+
+            index_path = root / ".omh" / "learning" / "index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            index["records"] = [item for item in index["records"] if item["kind"] != "regression_case"]
+            index_path.write_text(json.dumps(index), encoding="utf-8")
+
+            status, stdout, stderr = run_cli(base + ["learning", "index", "check"])
+
+            self.assertEqual(status, 1)
+            self.assertEqual(stderr, "")
+            stale_check = json.loads(stdout)
+            self.assertEqual(stale_check["status"], "stale")
+            self.assertEqual(len(stale_check["missing_records"]), 1)
+
+            status, stdout, stderr = run_cli(base + ["learning", "index", "rebuild"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            rebuild = json.loads(stdout)
+            self.assertEqual(rebuild["schema_version"], "workflow_learning_index_rebuild/v1")
+            self.assertEqual(rebuild["status"], "rebuilt")
+            self.assertTrue(rebuild["wrote"])
+
+            status, stdout, stderr = run_cli(base + ["learning", "index", "check"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertEqual(json.loads(stdout)["status"], "passed")
+
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

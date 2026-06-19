@@ -96,6 +96,10 @@ contract shaped like this:
   why a workflow was chosen, what was prepared, what was observed, which
   deterministic checks passed, and what improvement candidate still needs human
   approval.
+- `omh learning index check` and `omh learning index rebuild` keep the local
+  workflow-learning index repairable if metadata records exist but the pointer
+  index drifts. Rebuilding the index is not workflow execution, skill mutation,
+  or proof that a future workflow improved.
 
 ## Wrapper Rules
 

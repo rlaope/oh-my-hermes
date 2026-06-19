@@ -221,7 +221,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`
 - `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`
-- `workflow-learning`: `workflow-learning`, `workflow learning`, `learning trace`, `execution trace`, `skill improvement`
+- `workflow-learning`: `workflow-learning`, `workflow learning`, `learning trace`, `learning index`, `index rebuild`
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.
 
@@ -262,7 +262,7 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `toolbelt-readiness`: Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools for a workflow. Tier `tool-readiness-gated`. Ladder: `workflow_tools_scoped` -> `tool_requirements_listed` -> `installed_state_recorded_when_available` -> `credential_gaps_recorded`. Actions: `show_toolbelt`, `open_setup`, `record_tool_check`, `prepare_handoff`, `show_status`. Privacy `metadata_only`.
 - `ops-observability-card`: Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries. Tier `observability-gated`. Ladder: `telemetry_scope_recorded` -> `local_metrics_summarized` -> `failure_modes_checked` -> `provider_truth_observed_when_available`. Actions: `show_observability`, `record_metric`, `record_failure_mode`, `show_status`. Privacy `metadata_only`.
 - `agent-ops-review`: Prepare a manager-facing quality and throughput review for AI-agent research, coding, review, and status work. Tier `manager-review-gated`. Ladder: `manager_scope_recorded` -> `quality_lanes_prepared` -> `evidence_gaps_named` -> `next_action_selected`. Actions: `show_agent_ops_review`, `choose_ops_lane`, `prepare_research_lane`, `prepare_coding_lane`, `prepare_review_lane`. Privacy `metadata_only`.
-- `workflow-learning`: Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, and regression cases. Tier `learning-gated`. Ladder: `trace_recorded` -> `eval_recorded` -> `improvement_candidate_reviewed` -> `regression_case_recorded`. Actions: `record_workflow_learning_trace`, `show_learning_eval`, `propose_skill_improvement`, `add_regression_case`, `replay_regression_cases`. Privacy `metadata_only`.
+- `workflow-learning`: Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, regression cases, and a repairable learning index. Tier `learning-gated`. Ladder: `trace_recorded` -> `eval_recorded` -> `improvement_candidate_reviewed` -> `regression_case_recorded`. Actions: `record_workflow_learning_trace`, `show_learning_eval`, `propose_skill_improvement`, `add_regression_case`, `replay_regression_cases`. Privacy `metadata_only`.
 
 Harness priority:
 

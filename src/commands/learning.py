@@ -14,8 +14,10 @@ from ..workflow_learning import (
     build_trace_from_chat_interaction,
     build_trace_from_runtime_run,
     build_workflow_eval_result,
+    check_learning_index,
     learning_trace_ref,
     list_learning_traces,
+    rebuild_learning_index,
     replay_regression_cases,
     show_learning_trace,
     write_improvement_candidate,
@@ -187,6 +189,24 @@ def cmd_learning_regression_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_learning_index_check(args: argparse.Namespace) -> int:
+    try:
+        payload = check_learning_index(_paths(args))
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_learning_index_rebuild(args: argparse.Namespace) -> int:
+    try:
+        payload = rebuild_learning_index(_paths(args), dry_run=args.dry_run)
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0 if payload.get("status") in {"rebuilt", "dry_run"} else 1
+
+
 def _add_learning_commands(sub) -> None:
     learning = sub.add_parser(
         "learning",
@@ -253,3 +273,13 @@ def _add_learning_commands(sub) -> None:
     regression_replay = regression_sub.add_parser("replay", help="Replay local workflow regression cases.")
     regression_replay.add_argument("--limit", type=int, default=None)
     regression_replay.set_defaults(func=cmd_learning_regression_replay)
+
+    index = learning_sub.add_parser("index", help="Check or rebuild the local workflow learning index.")
+    index_sub = index.add_subparsers(dest="index_command", required=True)
+
+    index_check = index_sub.add_parser("check", help="Validate learning_index.json against local learning records.")
+    index_check.set_defaults(func=cmd_learning_index_check)
+
+    index_rebuild = index_sub.add_parser("rebuild", help="Rebuild learning_index.json from local learning records.")
+    index_rebuild.add_argument("--dry-run", action="store_true")
+    index_rebuild.set_defaults(func=cmd_learning_index_rebuild)

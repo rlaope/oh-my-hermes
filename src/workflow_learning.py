@@ -19,6 +19,7 @@ WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 PRIVACY_MODE = "metadata_only"
 LEARNING_EVENT_KIND = "workflow_learning"
+LEARNING_INDEX_MAX_RECORDS = 500
 FORBIDDEN_TRACE_KEYS = {
     "message",
     "raw_message",
@@ -480,6 +481,52 @@ def replay_regression_cases(paths: OmhPaths, *, limit: int | None = None) -> dic
     }
 
 
+def check_learning_index(paths: OmhPaths) -> dict[str, Any]:
+    scanned = _scan_learning_records(paths)
+    current = read_json_object(paths.learning_index_path)
+    if not current:
+        status = (
+            "failed"
+            if scanned["invalid_records"]
+            else ("no_records" if not scanned["entries"] else "missing")
+        )
+        return _learning_index_check_payload(paths, scanned=scanned, status=status, current_records=[])
+    if current.get("schema_version") != WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION:
+        return _learning_index_check_payload(
+            paths,
+            scanned=scanned,
+            status="failed",
+            current_records=[],
+            schema_error="unexpected index schema",
+        )
+    current_records = [_normal_index_entry(item) for item in _list(current.get("records")) if isinstance(item, dict)]
+    return _learning_index_check_payload(paths, scanned=scanned, current_records=current_records)
+
+
+def rebuild_learning_index(paths: OmhPaths, *, dry_run: bool = False) -> dict[str, Any]:
+    scanned = _scan_learning_records(paths)
+    index = _learning_index_from_entries(scanned["entries"])
+    status = "failed" if scanned["invalid_records"] else ("dry_run" if dry_run else "rebuilt")
+    if status == "rebuilt":
+        atomic_write_json(paths.learning_index_path, index, private=True)
+    return {
+        "schema_version": "workflow_learning_index_rebuild/v1",
+        "status": status,
+        "dry_run": dry_run,
+        "wrote": status == "rebuilt",
+        "would_write": status == "dry_run",
+        "index_path": str(paths.learning_index_path),
+        "records_total": len(index["records"]),
+        "counts": scanned["counts"],
+        "invalid_records": scanned["invalid_records"],
+        "index": index,
+        "claim_boundary": (
+            "Index rebuild scans local workflow-learning metadata records only. "
+            "It does not replay workflows, call networks, patch skills, or add observed execution evidence."
+        ),
+    }
+
+
 def attach_learning_trace_ref_to_interaction(interaction: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
     validate_workflow_learning_trace(trace)
     enriched = json.loads(json.dumps(interaction))
@@ -800,28 +847,146 @@ def _apply_limit(records: list[dict[str, Any]], limit: int | None) -> list[dict[
 
 
 def _update_learning_index(paths: OmhPaths, record: dict[str, Any], kind: str) -> None:
-    current = read_json_object(paths.learning_index_path) or {
-        "schema_version": WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION,
-        "updated_at": "",
-        "records": [],
-    }
+    current = read_json_object(paths.learning_index_path) or _empty_learning_index()
     records = [item for item in _list(current.get("records")) if isinstance(item, dict)]
     identifier = _record_identifier(record, kind)
-    entry = {
-        "kind": kind,
-        "id": identifier,
-        "schema_version": str(record.get("schema_version", "")),
-        "updated_at": utc_now(),
-        "ref": _record_ref(kind, identifier),
-    }
+    entry = _index_entry(record, kind, updated_at=utc_now())
     records = [item for item in records if not (item.get("kind") == kind and item.get("id") == identifier)]
     records.append(entry)
     index = {
         "schema_version": WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION,
         "updated_at": entry["updated_at"],
-        "records": records[-500:],
+        "records": records[-LEARNING_INDEX_MAX_RECORDS:],
     }
     atomic_write_json(paths.learning_index_path, index, private=True)
+
+
+def _empty_learning_index() -> dict[str, Any]:
+    return {
+        "schema_version": WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION,
+        "updated_at": "",
+        "records": [],
+    }
+
+
+def _learning_index_from_entries(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "schema_version": WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION,
+        "updated_at": utc_now(),
+        "records": sorted(entries, key=lambda item: (item["kind"], item["id"]))[-LEARNING_INDEX_MAX_RECORDS:],
+    }
+
+
+def _scan_learning_records(paths: OmhPaths) -> dict[str, Any]:
+    specs = [
+        ("trace", paths.learning_traces_dir, validate_workflow_learning_trace),
+        ("eval", paths.learning_evals_dir, validate_workflow_eval_result),
+        ("candidate", paths.learning_candidates_dir, validate_improvement_candidate),
+        ("regression_case", paths.learning_regressions_dir, validate_regression_case),
+    ]
+    entries: list[dict[str, Any]] = []
+    invalid: list[dict[str, str]] = []
+    counts = {kind: 0 for kind, _, _ in specs}
+    for kind, directory, validator in specs:
+        if not directory.exists():
+            continue
+        for path in sorted(directory.glob("*.json")):
+            try:
+                record = read_json_object(path)
+                if not record:
+                    raise WorkflowLearningError("record is empty")
+                validator(record)
+                identifier = _record_identifier(record, kind)
+                if not identifier:
+                    raise WorkflowLearningError(f"{kind} record is missing its identifier")
+                entries.append(_index_entry(record, kind, path=path))
+                counts[kind] += 1
+            except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+                invalid.append({"kind": kind, "path": str(path), "error": str(exc)})
+    return {
+        "entries": entries,
+        "counts": counts,
+        "invalid_records": invalid,
+    }
+
+
+def _index_entry(
+    record: dict[str, Any],
+    kind: str,
+    *,
+    updated_at: str | None = None,
+    path: Path | None = None,
+) -> dict[str, Any]:
+    identifier = _record_identifier(record, kind)
+    entry = {
+        "kind": kind,
+        "id": identifier,
+        "schema_version": str(record.get("schema_version", "")),
+        "updated_at": updated_at or str(record.get("updated_at") or record.get("created_at") or ""),
+        "ref": _record_ref(kind, identifier),
+    }
+    if path is not None:
+        entry["path"] = str(path)
+    return entry
+
+
+def _normal_index_entry(entry: dict[str, Any]) -> dict[str, str]:
+    return {
+        "kind": str(entry.get("kind", "")),
+        "id": str(entry.get("id", "")),
+        "schema_version": str(entry.get("schema_version", "")),
+        "ref": str(entry.get("ref", "")),
+    }
+
+
+def _learning_index_check_payload(
+    paths: OmhPaths,
+    *,
+    scanned: dict[str, Any],
+    current_records: list[dict[str, str]],
+    status: str | None = None,
+    schema_error: str = "",
+) -> dict[str, Any]:
+    expected_records = [_normal_index_entry(entry) for entry in scanned["entries"]]
+    current_keys = {(item["kind"], item["id"]) for item in current_records if item["kind"] and item["id"]}
+    expected_keys = {(item["kind"], item["id"]) for item in expected_records if item["kind"] and item["id"]}
+    missing = [item for item in expected_records if (item["kind"], item["id"]) not in current_keys]
+    extra = [item for item in current_records if (item["kind"], item["id"]) not in expected_keys]
+    schema_mismatches = [
+        expected
+        for expected in expected_records
+        for current in current_records
+        if expected["kind"] == current["kind"]
+        and expected["id"] == current["id"]
+        and expected["schema_version"] != current["schema_version"]
+    ]
+    if status is None:
+        if scanned["invalid_records"]:
+            status = "failed"
+        elif missing or extra or schema_mismatches:
+            status = "stale"
+        else:
+            status = "passed"
+    return {
+        "schema_version": "workflow_learning_index_check/v1",
+        "status": status,
+        "ok": status in {"passed", "no_records"},
+        "index_path": str(paths.learning_index_path),
+        "counts": scanned["counts"],
+        "records_total": len(expected_records),
+        "current_records_total": len(current_records),
+        "missing_records": missing,
+        "extra_records": extra,
+        "schema_mismatches": schema_mismatches,
+        "invalid_records": scanned["invalid_records"],
+        "schema_error": schema_error,
+        "repair_hint": (
+            "Run `omh learning index rebuild` to rewrite the local learning index."
+            if status in {"missing", "stale", "failed"}
+            else ""
+        ),
+        "claim_boundary": "Index checks validate local metadata pointers only; they do not prove workflow execution or skill improvement.",
+    }
 
 
 def _record_ref(kind: str, identifier: str) -> str:

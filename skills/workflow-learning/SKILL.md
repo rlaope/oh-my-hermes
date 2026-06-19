@@ -1,6 +1,6 @@
 ---
 name: workflow-learning
-description: [omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, and regression case.
+description: [omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, and repairable learning index.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, optimization]
@@ -51,9 +51,9 @@ Bad example:
 
 ## Use When
 
-Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, and reusable as a future regression without storing raw prompts.
+Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, reusable as a future regression, or repairable after local index drift without storing raw prompts.
 
-    Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`
+    Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`
 
 ## Catalog Metadata
 
