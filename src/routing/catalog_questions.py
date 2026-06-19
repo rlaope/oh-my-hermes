@@ -102,7 +102,46 @@ _EXPLICIT_OMH_CAPABILITY_PHRASES = (
     "omh 기능 뭐",
     "oh-my-hermes 기능 뭐",
 )
-_CONTEXT_MARKERS = ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스")
+_OMH_CONTEXT_MARKERS = ("omh", "oh-my-hermes", "oh my hermes")
+_CONTEXT_MARKERS = _OMH_CONTEXT_MARKERS + ("hermes", "헤르메스")
+_CONTEXT_CAPABILITY_MARKERS = (
+    "help",
+    "use",
+    "useful",
+    "support",
+    "helpful",
+    "도와",
+    "쓰",
+    "활용",
+    "할 수",
+    "가능",
+)
+_NAMED_WORKFLOW_MARKERS = (
+    "deep-interview",
+    "ralplan",
+    "ultragoal",
+    "loop",
+    "ultraprocess",
+    "web-research",
+    "research-department",
+    "feedback-triage",
+    "materials-package",
+    "img-summary",
+    "automation-blueprint",
+    "code-review",
+)
+_WORKFLOW_EXPLANATION_MARKERS = (
+    "what",
+    "which",
+    "explain",
+    "describe",
+    "how",
+    "뭐",
+    "무엇",
+    "어떤",
+    "설명",
+    "무슨",
+)
 _CATALOG_COLLECTION_WORDS = (
     "skills",
     "skill",
@@ -239,8 +278,18 @@ _FILE_OR_TEXT_MARKERS = (
     "검색",
 )
 _PATH_REFERENCE_MARKERS = (
-    "/",
-    "\\",
+    "src/",
+    "tests/",
+    "docs/",
+    "site/",
+    "assets/",
+    "skills/",
+    ".omh/",
+    ".omx/",
+    "~/",
+    "../",
+    "/users/",
+    "c:\\",
     ".py",
     ".md",
     ".txt",
@@ -287,6 +336,10 @@ def is_skill_catalog_question(message: str) -> bool:
         return False
     if _contains_catalog_token(search_texts, _EXPLICIT_OMH_CAPABILITY_PHRASES):
         return True
+    if _is_named_workflow_catalog_question(search_texts):
+        return True
+    if _is_context_capability_question(search_texts):
+        return True
     has_context = _contains_catalog_token(search_texts, _CONTEXT_MARKERS)
     has_catalog_word = _contains_catalog_token(search_texts, _CATALOG_WORDS)
     if not has_catalog_word:
@@ -300,6 +353,13 @@ def is_skill_catalog_question(message: str) -> bool:
         return True
     words = lowered.replace("?", " ").replace("!", " ").split()
     return has_context and len(words) <= 4 and _contains_catalog_token(search_texts, _PLURAL_CATALOG_WORDS)
+
+
+def is_file_or_text_lookup_question(message: str) -> bool:
+    lowered = message.strip().lower()
+    if not lowered:
+        return False
+    return _is_file_or_text_search_question(_catalog_search_texts(lowered))
 
 
 def _catalog_search_texts(lowered: str) -> tuple[str, ...]:
@@ -319,9 +379,23 @@ def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
     if _contains_catalog_token(search_texts, _PATH_REFERENCE_MARKERS):
         return _contains_catalog_token(search_texts, _CONTEXT_MARKERS) or _contains_catalog_token(
             search_texts, _CATALOG_COLLISION_MARKERS
-        )
+        ) or _contains_catalog_token(search_texts, _NAMED_WORKFLOW_MARKERS)
     return _contains_catalog_token(search_texts, _FILE_OR_TEXT_MARKERS) and _contains_catalog_token(
         search_texts, _CATALOG_COLLISION_MARKERS
+    )
+
+
+def _is_named_workflow_catalog_question(search_texts: tuple[str, ...]) -> bool:
+    return (
+        _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS)
+        and _contains_catalog_token(search_texts, _NAMED_WORKFLOW_MARKERS)
+        and _contains_catalog_token(search_texts, _WORKFLOW_EXPLANATION_MARKERS)
+    )
+
+
+def _is_context_capability_question(search_texts: tuple[str, ...]) -> bool:
+    return _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS) and _contains_catalog_token(
+        search_texts, _CONTEXT_CAPABILITY_MARKERS
     )
 
 

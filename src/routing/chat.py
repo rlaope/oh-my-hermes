@@ -5,7 +5,7 @@ import hashlib
 from typing import Any
 
 from ..ingress import CHAT_SOURCES, extract_message_text
-from .catalog_questions import is_skill_catalog_question
+from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
@@ -72,6 +72,7 @@ def route_chat_message(
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
     catalog_question = is_skill_catalog_question(message)
+    file_or_text_lookup = is_file_or_text_lookup_question(message)
 
     if explicit_skill:
         selected_skill = explicit_skill
@@ -86,6 +87,15 @@ def route_chat_message(
         candidate_confidence = "high"
         action = "dispatch"
         reason = "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
+        ambiguous = False
+    elif file_or_text_lookup:
+        selected_skill = "oh-my-hermes"
+        candidate_skill = selected_skill
+        candidate_harness = primary_harness_for_skill(candidate_skill)
+        candidate_score = 0
+        candidate_confidence = "low"
+        action = "fallback"
+        reason = "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
         ambiguous = False
     elif candidate_score == 0:
         selected_skill = "oh-my-hermes"

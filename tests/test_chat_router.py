@@ -110,8 +110,12 @@ class ChatRouterTests(unittest.TestCase):
             "what can OMH do?",
             "how can OMH help my team?",
             "Can OMH help with planning, research, and coding?",
+            "what can OMH do for planning/research/coding?",
+            "Can OMH help with planning/research/coding?",
             "OMH로 뭐 할 수 있어?",
             "OMH는 뭘 도와줘?",
+            "OMH로 계획/리서치/코딩까지 도와줄 수 있어?",
+            "OMH에서 deep-interview/ralplan/loop는 뭐야?",
         ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
@@ -121,6 +125,21 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "coding-handling")
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("Catalog question", decision["reason"])
+
+    def test_file_lookup_does_not_dispatch_to_workflow_keyword(self) -> None:
+        for message in (
+            "search docs/WORKFLOWS.md for loop",
+            "show img-summary in README.md",
+            "what does OMH do in docs/ARCHITECTURE.md?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "fallback")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["selected_harness"], "coding-handling")
+                self.assertEqual(decision["confidence"], "low")
+                self.assertIn("File or text lookup", decision["reason"])
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (
