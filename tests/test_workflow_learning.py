@@ -13,6 +13,7 @@ from omh.workflow_learning import (
     WorkflowLearningError,
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
+    build_improvement_candidate_review_card,
     build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
@@ -23,6 +24,7 @@ from omh.workflow_learning import (
     list_learning_traces,
     rebuild_learning_index,
     replay_regression_cases,
+    validate_improvement_candidate_review_card,
     validate_learning_audit_card,
     validate_workflow_learning_trace,
     validate_workflow_learning_export,
@@ -87,6 +89,36 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertTrue(candidate["human_gate"]["required"])
             self.assertEqual(candidate["human_gate"]["decision"], "pending")
             self.assertFalse(candidate["diff_preview"]["available"])
+            review_card = candidate["review_card"]
+            self.assertEqual(review_card["schema_version"], "improvement_candidate_review_card/v1")
+            self.assertEqual(review_card["status"], "review_required")
+            self.assertEqual(review_card["primary_action"], "review_improvement")
+            self.assertEqual(review_card["review_gate"]["decision"], "pending")
+            self.assertIn("approve_improvement", review_card["wrapper_actions"])
+            self.assertIn("reject_improvement", review_card["wrapper_actions"])
+            self.assertIn("source patch applied", review_card["not_evidence_yet"])
+            self.assertIn("human review", json.dumps(review_card).lower())
+            validate_improvement_candidate_review_card(review_card, candidate=candidate)
+            broken_card = dict(review_card)
+            broken_card["primary_action"] = "missing_action"
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_candidate_review_card(broken_card, candidate=candidate)
+            raw_card = json.loads(json.dumps(review_card))
+            raw_card["debug"] = {"event_json": "RAW EVENT SHOULD FAIL"}
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_candidate_review_card(raw_card, candidate=candidate)
+            raw_payload_card = json.loads(json.dumps(review_card))
+            raw_payload_card["debug"] = {"rawPayload": "RAW PAYLOAD SHOULD FAIL"}
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_candidate_review_card(raw_payload_card, candidate=candidate)
+            raw_candidate = json.loads(json.dumps(candidate))
+            raw_candidate["debug"] = {"platform_event": "RAW PLATFORM EVENT SHOULD FAIL"}
+            with self.assertRaises(WorkflowLearningError):
+                write_improvement_candidate(paths, raw_candidate)
+            stale_candidate = json.loads(json.dumps(candidate))
+            stale_candidate["human_gate"]["decision"] = "approve"
+            with self.assertRaises(WorkflowLearningError):
+                validate_improvement_candidate_review_card(stale_candidate["review_card"], candidate=stale_candidate)
             self.assertEqual(case["schema_version"], "regression_case/v1")
             self.assertEqual(case["fixture"]["fixture_text"], fixture)
             self.assertFalse(case["fixture"]["privacy"]["raw_prompt_stored"])
@@ -287,7 +319,6 @@ class WorkflowLearningTests(unittest.TestCase):
             eval_path.write_text(json.dumps(stored_eval), encoding="utf-8")
             candidate_path = paths.learning_candidates_dir / f"{candidate['candidate_id']}.json"
             stored_candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
-            stored_candidate["notes"] = {"event_json": "RAW CANDIDATE EVENT SHOULD NOT EXPORT"}
             stored_candidate["title"] = "PRIVATE CANDIDATE TITLE SHOULD NOT EXPORT"
             stored_candidate["proposal"]["problem_summary"] = "PRIVATE CANDIDATE PROBLEM SHOULD NOT EXPORT"
             stored_candidate["proposal"]["suggested_change"] = "PRIVATE CANDIDATE CHANGE SHOULD NOT EXPORT"
@@ -415,6 +446,18 @@ class WorkflowLearningTests(unittest.TestCase):
                 paths,
                 build_regression_case_from_trace(trace, redacted_message="safely add a feature"),
             )
+            pending_candidate = write_improvement_candidate(paths, build_improvement_candidate(trace, build_workflow_eval_result(trace)))
+            pending_audit = build_workflow_learning_audit(paths)
+            self.assertEqual(pending_audit["status"], "needs_attention")
+            self.assertIn("pending_improvement_candidate", {item["id"] for item in pending_audit["warnings"]})
+            self.assertEqual(pending_audit["learning_audit_card"]["primary_action"], "review_improvement")
+            self.assertIn("review_improvement", pending_audit["learning_audit_card"]["wrapper_actions"])
+            self.assertIn("reject_improvement", pending_audit["learning_audit_card"]["wrapper_actions"])
+            self.assertEqual(pending_candidate["review_card"]["primary_action"], "review_improvement")
+            pending_candidate["status"] = "accepted"
+            pending_candidate["human_gate"]["decision"] = "approve"
+            pending_candidate["review_card"] = build_improvement_candidate_review_card(pending_candidate)
+            write_improvement_candidate(paths, pending_candidate)
             write_learning_export(paths, build_learning_export_bundle(paths, trace_ids=[trace["trace_id"]]))
 
             ready = build_workflow_learning_audit(paths)

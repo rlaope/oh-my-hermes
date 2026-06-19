@@ -110,6 +110,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(eval_payload["eval"]["schema_version"], "workflow_eval_result/v1")
             self.assertIn(eval_payload["eval"]["status"], {"passed", "warning"})
 
+            status, stdout, stderr = run_cli(base + ["learning", "candidate", trace_id, "--dry-run"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            candidate_preview = json.loads(stdout)
+            self.assertEqual(candidate_preview["schema_version"], "learning_candidate_result/v1")
+            self.assertFalse(candidate_preview["recorded"])
+            candidate = candidate_preview["candidate"]
+            self.assertEqual(candidate["schema_version"], "improvement_candidate/v1")
+            self.assertEqual(candidate["review_card"]["schema_version"], "improvement_candidate_review_card/v1")
+            self.assertEqual(candidate["review_card"]["primary_action"], "review_improvement")
+            self.assertEqual(candidate["review_card"]["review_gate"]["decision"], "pending")
+            self.assertIn("approve_improvement", candidate["review_card"]["wrapper_actions"])
+            self.assertIn("do not apply patches", candidate["claim_boundary"])
+            self.assertNotIn(message, json.dumps(candidate))
+
             status, stdout, stderr = run_cli(
                 base
                 + [

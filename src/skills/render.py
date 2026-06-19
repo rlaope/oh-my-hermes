@@ -140,7 +140,8 @@ def _trigger_table(definitions: list[SkillDefinition]) -> str:
 
 def _harness_summary(harness: HarnessDefinition) -> str:
     evidence_ladder = " -> ".join(f"`{step}`" for step in harness.evidence_ladder[:6])
-    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions[:6])
+    action_limit = 10 if harness.name == "workflow-learning" else 6
+    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions[:action_limit])
     return (
         f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "
         f"Ladder: {evidence_ladder}. Actions: {wrapper_actions or '`show_status`'}. "

@@ -108,6 +108,11 @@ contract shaped like this:
   replay, index-check, and index-rebuild actions. The audit is readiness
   evidence for the learning corpus only; it does not patch skills, execute
   workflows, or prove future behavior improved.
+- `omh learning candidate <trace-id>` returns an
+  `improvement_candidate/v1` plus `improvement_candidate_review_card/v1`. The
+  review card is the Hermes-facing surface for approve/revise/reject decisions,
+  regression-case follow-up, and status narration. It is not a source patch,
+  automatic skill mutation, or proof that future behavior changed.
 - `omh learning export` creates a redacted `workflow_learning_export/v1` review
   bundle from selected traces plus related evals, candidates, and regression
   cases. The bundle omits raw prompts and fixture text; it is review material,
