@@ -141,11 +141,28 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = frozenset(
         "visual",
         "image",
         "vertical",
+        "infographic",
         "이미지",
         "세로",
+        "인포그래픽",
     }
 )
 _VISUAL_SUMMARY_CARD_TOKENS = frozenset({"card", "카드"})
+_VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = frozenset(
+    {
+        "debug",
+        "fix",
+        "failure",
+        "failures",
+        "bug",
+        "error",
+        "errors",
+        "upload",
+        "uploads",
+        "asset",
+        "assets",
+    }
+)
 _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = frozenset(
     {
         "summary",
@@ -159,10 +176,20 @@ _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = frozenset(
         "pr",
         "pull",
         "request",
+        "explain",
+        "explainer",
+        "explanation",
+        "feature",
+        "workflow",
         "research",
         "news",
         "competitor",
         "요약",
+        "설명",
+        "소개",
+        "기능",
+        "안내",
+        "워크플로우",
         "브리핑",
         "발표",
         "트리아지",
@@ -181,6 +208,18 @@ _VISUAL_SUMMARY_PHRASES = (
     "visual prompt card",
     "image card",
     "summary image",
+    "explainer image",
+    "feature explainer image",
+    "feature explanation image",
+    "product explainer image",
+    "product explainer card",
+    "infographic",
+    "one-page infographic",
+    "workflow image",
+    "workflow card",
+    "shareable image",
+    "explain this as an image",
+    "make an image explaining",
     "vertical card",
     "vertical summary image",
     "pr summary card",
@@ -197,6 +236,19 @@ _VISUAL_SUMMARY_PHRASES = (
     "이슈 트리아지 카드",
     "경쟁사 뉴스 브리핑 카드",
     "릴리즈 노트 발표 이미지",
+    "설명 이미지",
+    "설명하는 인포그래픽",
+    "기능 설명 이미지",
+    "기능 소개 이미지",
+    "인포그래픽",
+    "인포그래픽 만들어줘",
+    "요약 이미지",
+    "카드 이미지",
+    "공유용 이미지",
+    "안내 이미지",
+    "워크플로우 이미지",
+    "이미지로 설명",
+    "이미지 하나 만들어줘",
 )
 _SCHEDULED_OPS_PHRASES = (
     "every morning",
@@ -520,16 +572,21 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
 
 
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if (_VISUAL_SUMMARY_MODALITY_TOKENS | _VISUAL_SUMMARY_CARD_TOKENS) & query_tokens and (
-        _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens
-    ):
+    explicit_visual_phrase = _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
+    if explicit_visual_phrase:
+        return True
+    if _VISUAL_SUMMARY_CARD_TOKENS & query_tokens and _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens:
+        return True
+    if _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS & query_tokens:
+        return False
+    if _VISUAL_SUMMARY_MODALITY_TOKENS & query_tokens and _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens:
         return True
     if _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens and _contains_phrase(
         normalized_query,
         ("summary image", "summary card", "briefing card", "announcement image", "요약 이미지", "요약 카드"),
     ):
         return True
-    return _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
+    return False
 
 
 def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
