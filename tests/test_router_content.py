@@ -86,7 +86,7 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(f"`{skill_name}`", router.content)
             self.assertIn(f"`{skill_name}`", WORKSPACE_SNIPPET)
         self.assertIn("OMH Awareness Primer", router.content)
-        self.assertIn("consider OMH before treating it as a generic chat", router.content)
+        self.assertIn("consider OMH before generic chat or generic tools", router.content)
         self.assertIn("Materials and visual summaries", router.content)
         self.assertIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
         self.assertIn("Coding handoff", router.content)

@@ -704,6 +704,29 @@ def build_chat_response_from_route(
             claim_boundary="No execution has started.",
             extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
         )
+    if action == "fallback" and _is_file_lookup_fallback(decision):
+        return _chat_response(
+            kind="clarification",
+            headline="This looks like a file or text lookup.",
+            body=str(
+                decision.get("clarification")
+                or "Answer this as a file or text lookup, or ask for the target file/path if it is missing."
+            ),
+            phase="clarifying",
+            next_action="answer_file_lookup",
+            thread_key=thread_key,
+            actions=[
+                _action("answer:file_lookup", "Answer file lookup", "primary"),
+                _action("cancel", "Cancel", "secondary"),
+            ],
+            claim_boundary="No OMH workflow, execution, or file inspection has started.",
+            extra_state={
+                "route_action": action,
+                "confidence": decision.get("confidence", "low"),
+                "lookup_kind": "file_or_text",
+                "routing_instruction": decision.get("routing_instruction", ""),
+            },
+        )
     return _chat_response(
         kind="clarification",
         headline="I need to understand the goal before routing this.",
@@ -715,6 +738,14 @@ def build_chat_response_from_route(
         claim_boundary="No execution has started.",
         extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
     )
+
+
+def _is_file_lookup_fallback(decision: dict[str, object]) -> bool:
+    text = " ".join(
+        str(decision.get(key, "") or "")
+        for key in ("reason", "clarification", "routing_instruction")
+    ).lower()
+    return "file or text lookup" in text or "file/text lookup" in text
 
 
 def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key: str = "") -> dict[str, object]:

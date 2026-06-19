@@ -44,7 +44,7 @@ Bad example:
 - Product context: OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, surface status, and hand off to tools or coding agents without hiding unobserved execution.
 - Current lane: **Research and company ops** (`web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`, `meeting-brief`, `operating-rhythm`, `ops-review`, `reliability-review`) - source-backed research, customer signals, product operations, and briefing workflows.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
-- Cross-skill context: Carry this context across every OMH skill, not only image or coding skills: match the user's intent to the nearest workflow lane, name adjacent OMH workflows when the request crosses lanes, and keep the next action clear.
+- Cross-skill context: Carry this across every OMH skill, not only image or coding: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
 - Coverage: Every generated workflow skill carries an OMH Context Rail derived from this awareness payload.
 - Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
 - Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.

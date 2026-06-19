@@ -48,9 +48,9 @@ Bad example:
 
 OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, surface status, and hand off to tools or coding agents without hiding unobserved execution.
 
-When a request looks like planning, research, operations, materials, automation, image summary, coding delegation, review, status, or long-running loop work, consider OMH before treating it as a generic chat.
+When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
 
-Carry this context across every OMH skill, not only image or coding skills: match the user's intent to the nearest workflow lane, name adjacent OMH workflows when the request crosses lanes, and keep the next action clear.
+Carry this across every OMH skill, not only image or coding: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
 
 Every generated workflow skill carries an OMH Context Rail derived from this awareness payload.
 

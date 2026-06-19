@@ -2640,6 +2640,21 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("ask one concise clarification", route["routing_instruction"])
         self.assertNotEqual(route["recommendations"][0]["skill"], route["selected_skill"])
 
+    def test_chat_interact_file_lookup_fallback_uses_lookup_card(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["mode"], "clarify")
+        self.assertEqual(payload["route"]["action"], "fallback")
+        self.assertEqual(payload["next_action"], "answer_file_lookup")
+        response = payload["chat_response"]
+        self.assertEqual(response["kind"], "clarification")
+        self.assertIn("file or text lookup", response["body"])
+        self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
+        self.assertNotIn("choose the right workflow", response["body"])
+
     def test_chat_interact_safe_feature_presents_plan_and_disabled_handoff(self) -> None:
         message = "I want to safely add a feature to this repo"
         status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])

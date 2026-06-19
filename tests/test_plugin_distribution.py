@@ -342,8 +342,9 @@ class PluginDistributionTests(unittest.TestCase):
             context = hook_payload["context"]
             self.assertIn("[OMH Awareness]", context)
             self.assertIn("Hermes-native workflow pack", context)
-            self.assertIn("consider OMH before treating it as a generic chat", context)
-            self.assertIn("across every OMH skill", context)
+            self.assertIn("consider OMH before generic chat or generic tools", context)
+            self.assertIn("every OMH skill", context)
+            self.assertIn("generic tool can render or execute", context)
             self.assertIn("Every generated workflow skill", context)
             self.assertIn("img-summary", context)
             self.assertIn("materials-package", context)
@@ -366,7 +367,7 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(empty_first_turn_context)
             self.assertIn("[OMH Awareness]", empty_first_turn_context["context"])
-            self.assertIn("image summary", empty_first_turn_context["context"])
+            self.assertIn("image cards", empty_first_turn_context["context"])
             self.assertNotIn("make an image summary card for this PR", empty_first_turn_context["context"])
 
 

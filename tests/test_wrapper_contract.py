@@ -599,6 +599,22 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("catalog_question", payload["chat_response"]["state"])
                 self.assertNotIn("capability_summary", payload["chat_response"]["state"])
 
+    def test_file_lookup_fallback_card_uses_lookup_copy(self) -> None:
+        payload = build_chat_interaction_payload("search docs/WORKFLOWS.md for loop", source="discord")
+
+        self.assertEqual(payload["mode"], "clarify")
+        self.assertEqual(payload["route"]["action"], "fallback")
+        self.assertEqual(payload["next_action"], "answer_file_lookup")
+        response = payload["chat_response"]
+        self.assertEqual(response["kind"], "clarification")
+        self.assertIn("file or text lookup", response["body"])
+        self.assertIn("file or text lookup", response["state"]["routing_instruction"])
+        self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
+        self.assertNotIn("choose the right workflow", response["body"])
+        actions = {action["id"]: action for action in response["actions"]}
+        self.assertIn("answer:file_lookup", actions)
+        self.assertTrue(actions["answer:file_lookup"]["enabled"])
+
     def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
         cases = {
             "./": "./omh",
