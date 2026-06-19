@@ -18,6 +18,7 @@ REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
 WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
 WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION = "workflow_learning_audit/v1"
+LEARNING_AUDIT_CARD_SCHEMA_VERSION = "learning_audit_card/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
@@ -715,7 +716,7 @@ def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) ->
         warnings=warnings,
         replay=replay,
     )
-    return {
+    payload = {
         "schema_version": WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION,
         "status": status,
         "ok": status in {"ready", "no_records"},
@@ -774,6 +775,53 @@ def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) ->
             "or upgrade prepared artifacts into observed evidence."
         ),
     }
+    payload["learning_audit_card"] = build_learning_audit_card(payload)
+    return payload
+
+
+def build_learning_audit_card(audit: dict[str, Any]) -> dict[str, Any]:
+    status = str(audit.get("status", "needs_attention"))
+    blocking = [] if status == "no_records" else _list(audit.get("blocking_issues"))
+    warnings = [] if status == "no_records" else _list(audit.get("warnings"))
+    card = {
+        "schema_version": LEARNING_AUDIT_CARD_SCHEMA_VERSION,
+        "status": status,
+        "severity": _learning_audit_card_severity(status),
+        "headline": _learning_audit_card_headline(status),
+        "summary": _learning_audit_card_summary(audit),
+        "primary_action": _learning_audit_primary_action(audit),
+        "steps": _learning_audit_card_steps(audit),
+        "counts": _object(audit.get("counts")),
+        "coverage": _object(audit.get("coverage")),
+        "regression_replay": _object(audit.get("regression_replay")),
+        "blocking_issue_count": len(blocking),
+        "warning_count": len(warnings),
+        "next_actions": _list(audit.get("next_actions")),
+        "wrapper_actions": [
+            "record_workflow_learning_trace",
+            "show_learning_eval",
+            "propose_skill_improvement",
+            "add_regression_case",
+            "audit_learning_readiness",
+            "export_learning_bundle",
+            "replay_regression_cases",
+            "check_learning_index",
+            "rebuild_learning_index",
+            "show_status",
+        ],
+        "not_evidence_yet": [
+            "model training",
+            "automatic skill patch",
+            "workflow execution",
+            "future behavior fixed",
+            "review approval",
+            "CI",
+            "merge",
+        ],
+        "claim_boundary": str(audit.get("claim_boundary", "")),
+    }
+    validate_learning_audit_card(card)
+    return card
 
 
 def attach_learning_trace_ref_to_interaction(interaction: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
@@ -812,6 +860,40 @@ def validate_workflow_learning_trace(trace: dict[str, Any]) -> None:
     if status.get("outcome") not in _LEARNING_OUTCOMES:
         raise WorkflowLearningError("trace status.outcome is invalid")
     _reject_forbidden_payload_keys(trace)
+
+
+def validate_learning_audit_card(card: dict[str, Any]) -> None:
+    _require_schema(card, LEARNING_AUDIT_CARD_SCHEMA_VERSION)
+    if card.get("status") not in {"ready", "no_records", "needs_attention", "blocked"}:
+        raise WorkflowLearningError("learning audit card status is invalid")
+    if card.get("severity") not in {"ok", "empty", "warning", "blocking"}:
+        raise WorkflowLearningError("learning audit card severity is invalid")
+    for key in ("headline", "summary", "primary_action", "claim_boundary"):
+        _require_string(card, key)
+    for key in ("counts", "coverage", "regression_replay"):
+        if not isinstance(card.get(key), dict):
+            raise WorkflowLearningError(f"learning audit card {key} must be an object")
+    for key in ("blocking_issue_count", "warning_count"):
+        if not isinstance(card.get(key), int) or card.get(key) < 0:
+            raise WorkflowLearningError(f"learning audit card {key} must be a non-negative integer")
+    steps = _list(card.get("steps"))
+    if not steps:
+        raise WorkflowLearningError("learning audit card steps must be a non-empty list")
+    for step in steps:
+        item = _object(step)
+        for key in ("id", "label", "state", "detail"):
+            _require_string(item, key)
+        if item.get("state") not in {"ready", "missing", "blocked"}:
+            raise WorkflowLearningError("learning audit card step state is invalid")
+    wrapper_actions = _list(card.get("wrapper_actions"))
+    if not wrapper_actions or any(not isinstance(action, str) or not action for action in wrapper_actions):
+        raise WorkflowLearningError("learning audit card wrapper_actions must be non-empty strings")
+    if str(card.get("primary_action", "")) not in set(wrapper_actions):
+        raise WorkflowLearningError("learning audit card primary_action must be listed in wrapper_actions")
+    not_evidence_yet = _list(card.get("not_evidence_yet"))
+    if not not_evidence_yet or any(not isinstance(item, str) or not item for item in not_evidence_yet):
+        raise WorkflowLearningError("learning audit card not_evidence_yet must be non-empty strings")
+    _reject_forbidden_payload_keys(card)
 
 
 def validate_workflow_eval_result(result: dict[str, Any]) -> None:
@@ -1591,6 +1673,126 @@ def _learning_audit_status(
     if warnings or replay.get("status") not in {"passed", "no_cases"}:
         return "needs_attention"
     return "ready"
+
+
+def _learning_audit_card_severity(status: str) -> str:
+    return {
+        "ready": "ok",
+        "no_records": "empty",
+        "needs_attention": "warning",
+        "blocked": "blocking",
+    }.get(status, "warning")
+
+
+def _learning_audit_card_headline(status: str) -> str:
+    return {
+        "ready": "Workflow learning is ready for review.",
+        "no_records": "No workflow learning records yet.",
+        "needs_attention": "Workflow learning needs one more step.",
+        "blocked": "Workflow learning is blocked.",
+    }.get(status, "Workflow learning needs review.")
+
+
+def _learning_audit_card_summary(audit: dict[str, Any]) -> str:
+    counts = _object(audit.get("counts"))
+    coverage = _object(audit.get("coverage"))
+    replay = _object(audit.get("regression_replay"))
+    status = str(audit.get("status", "needs_attention"))
+    if status == "no_records":
+        return "Record a metadata-only trace before evaluating, replaying, or exporting workflow learning material."
+    if status == "blocked":
+        return "Repair invalid records, failed evals, or the learning index before treating this corpus as learning-ready."
+    return (
+        f"{int(counts.get('traces', 0) or 0)} trace(s), "
+        f"{int(coverage.get('eval_coverage_percent', 0) or 0)}% eval coverage, "
+        f"{int(coverage.get('regression_coverage_percent', 0) or 0)}% regression coverage, "
+        f"replay {replay.get('status', 'unknown')}."
+    )
+
+
+def _learning_audit_primary_action(audit: dict[str, Any]) -> str:
+    status = str(audit.get("status", "needs_attention"))
+    if status == "no_records":
+        return "record_workflow_learning_trace"
+    next_actions = _list(audit.get("next_actions"))
+    if next_actions:
+        action_id = str(_object(next_actions[0]).get("id", ""))
+        return {
+            "rebuild_learning_index": "rebuild_learning_index",
+            "evaluate_trace": "show_learning_eval",
+            "add_regression_case": "add_regression_case",
+            "create_candidate": "propose_skill_improvement",
+            "review_candidate": "propose_skill_improvement",
+            "write_learning_export": "export_learning_bundle",
+        }.get(action_id, "audit_learning_readiness")
+    return "audit_learning_readiness"
+
+
+def _learning_audit_card_steps(audit: dict[str, Any]) -> list[dict[str, Any]]:
+    counts = _object(audit.get("counts"))
+    coverage = _object(audit.get("coverage"))
+    index = _object(audit.get("index"))
+    replay = _object(audit.get("regression_replay"))
+    warnings = {str(item.get("id", "")) for item in _list(audit.get("warnings")) if isinstance(item, dict)}
+    blocking = {str(item.get("id", "")) for item in _list(audit.get("blocking_issues")) if isinstance(item, dict)}
+    trace_count = int(counts.get("traces", 0) or 0)
+    return [
+        _learning_audit_step(
+            "trace",
+            "Trace",
+            "ready" if trace_count else "missing",
+            f"{trace_count} metadata-only trace(s).",
+        ),
+        _learning_audit_step(
+            "eval",
+            "Eval",
+            _learning_audit_step_state("trace_without_eval", warnings, blocking, int(coverage.get("eval_coverage_percent", 0) or 0)),
+            f"{int(coverage.get('eval_coverage_percent', 0) or 0)}% of summarized traces have evals.",
+        ),
+        _learning_audit_step(
+            "regression",
+            "Regression",
+            _learning_audit_step_state("trace_without_regression_case", warnings, blocking, int(coverage.get("regression_coverage_percent", 0) or 0)),
+            f"{int(coverage.get('regression_coverage_percent', 0) or 0)}% of summarized traces have replay cases.",
+        ),
+        _learning_audit_step(
+            "index",
+            "Index",
+            "ready" if index.get("ok") is True else "blocked",
+            f"Index status: {index.get('status', 'unknown')}.",
+        ),
+        _learning_audit_step(
+            "replay",
+            "Replay",
+            "ready" if replay.get("status") in {"passed", "no_cases"} else "blocked",
+            f"Replay status: {replay.get('status', 'unknown')}.",
+        ),
+        _learning_audit_step(
+            "export",
+            "Export",
+            "missing" if "no_learning_export_bundle" in warnings else "ready",
+            f"{int(counts.get('exports', 0) or 0)} redacted review export(s).",
+        ),
+    ]
+
+
+def _learning_audit_step_state(issue_id: str, warnings: set[str], blocking: set[str], coverage_percent: int) -> str:
+    if issue_id in blocking:
+        return "blocked"
+    if issue_id in warnings:
+        return "missing"
+    if coverage_percent >= 100:
+        return "ready"
+    return "missing"
+
+
+def _learning_audit_step(step_id: str, label: str, state: str, detail: str) -> dict[str, Any]:
+    return {
+        "id": step_id,
+        "label": label,
+        "state": state,
+        "detail": detail,
+    }
 
 
 def _learning_audit_replay_blocked(scanned: dict[str, Any]) -> dict[str, Any]:

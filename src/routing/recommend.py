@@ -115,6 +115,17 @@ _SKILL_POLICIES = {
             "a GPT image tool, existing Hermes connector, generic image tool, or prompt-only path."
         ),
     ),
+    "workflow-learning": RecommendationPolicy(
+        next_action="audit_learning_readiness",
+        evidence_boundary=(
+            "A workflow learning trace, eval, audit, candidate, regression case, or export is process-review evidence only; "
+            "it is not model training, skill mutation, workflow execution, verification, CI, merge, or proof that future behavior is fixed."
+        ),
+        wrapper_guidance=(
+            "Show the workflow learning card: record trace, run eval, add regression case, audit readiness, export a redacted review bundle, "
+            "and keep human-reviewed improvement separate from automatic self-modification."
+        ),
+    ),
     "automation-blueprint": RecommendationPolicy(
         next_action="prepare_scheduled_ops_blueprint",
         evidence_boundary=(
