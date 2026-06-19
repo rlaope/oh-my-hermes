@@ -168,10 +168,10 @@ not the source of truth. The payload separates `hermes_agents` from
 coding tools cannot be rendered as Hermes agents by accident. Compact surfaces
 receive source and model `icon_id` values plus tooltip text rather than Markdown
 tables or prose-only labels. `display.menu_cards` is the human-facing card model
-for the native menu bar helper, grouping the same contract into Connection,
-Agent Status, Coding Handoff, and Evidence sections so compact UI surfaces do
-not need to render raw JSON-like text. The Agent Status section uses an explicit
-`Agent | PID | Status` row shape.
+for the native menu bar helper, grouping the same contract into Agent Status,
+Coding Agent, and Evidence sections so compact UI surfaces do not need to render
+raw JSON-like text. The Agent Status section uses an explicit `Agent | PID |
+Status` row shape.
 
 `current_external_coding_executor` names the selected row explicitly, preferring
 `runtime/state.json` `last_run_id` when it matches the recent executor list, so
@@ -180,12 +180,11 @@ settings and compact summaries do not rely on an unnamed list-order convention.
 The menu bar status contract reports configured Hermes targets and prepared
 handoffs without inventing process state. PID, `running`, and `restarting`
 values are applied only from a caller-provided `menubar_process_overlay/v1`
-payload, normally produced by a native macOS MenuBarExtra app or test harness.
-That overlay is app-local, expires after a short TTL, and applies restarting
-state only inside its restart window. OMH does not scan processes, launch
-agents, infer runtime health, or turn prepared handoffs into observed
-execution. The native macOS helper consumes the card model and keeps PID/process
-detail hidden until that overlay is fresh.
+payload or an explicit `omh menubar status --observe-local-processes` request
+from the native macOS helper. That observation is app-local, expires after a
+short TTL, and applies restarting state only inside its restart window. OMH does
+not turn prepared handoffs into observed execution, review, CI, or merge
+evidence. Plain `omh menubar status` remains metadata-only.
 
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
 top-level error handling, and the public command handler re-export surface.

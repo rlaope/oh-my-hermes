@@ -18,6 +18,7 @@ def cmd_menubar_status(args: argparse.Namespace) -> int:
             _paths(args),
             limit=args.limit,
             process_overlay=overlay,
+            observe_local_processes=bool(args.observe_local_processes),
             now=args.now,
         )
     )
@@ -60,6 +61,11 @@ def _add_menubar_commands(sub) -> None:
     status = menubar_sub.add_parser("status", help="Print the macOS menu bar agent-status view model.")
     status.add_argument("--limit", type=int, default=3, help="Maximum recent runtime runs to inspect.")
     status.add_argument("--overlay", default=None, help="Optional menubar_process_overlay/v1 JSON from the menu bar app.")
+    status.add_argument(
+        "--observe-local-processes",
+        action="store_true",
+        help="Opt in to local Hermes process observation for the native menu bar helper.",
+    )
     status.add_argument("--now", default=None, help="Optional ISO timestamp for deterministic overlay TTL evaluation.")
     status.set_defaults(func=cmd_menubar_status)
 

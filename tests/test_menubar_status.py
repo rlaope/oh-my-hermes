@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from _cli_harness import run_cli
 from _local_package import load_local_package
@@ -56,22 +58,22 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertFalse(payload["versions"]["hermes"]["observed"])
             self.assertEqual(payload["settings"]["omh_connection"]["label"], "OMH connection: Ready")
             self.assertEqual(payload["settings"]["hermes_targets"]["label"], "Hermes targets: 1")
-            self.assertEqual(payload["settings"]["coding_handoff"]["label"], "Coding handoff: Codex")
-            self.assertEqual(payload["settings"]["send_mode"]["label"], "Send mode: Ask before opening Codex")
+            self.assertEqual(payload["settings"]["coding_handoff"]["label"], "Coding agent: Codex")
+            self.assertEqual(payload["settings"]["send_mode"]["label"], "Open mode: Ask before opening Codex")
             menu_cards = payload["display"]["menu_cards"]
             self.assertEqual(
                 [card["title"] for card in menu_cards],
-                ["Connection", "Agent Status", "Coding Handoff", "Evidence"],
+                ["Agent Status", "Coding Agent", "Evidence"],
             )
-            self.assertEqual(menu_cards[1]["columns"], ["Agent", "PID", "Status"])
-            self.assertIn("PID is shown only after an observed runtime overlay.", menu_cards[1]["footer"])
-            self.assertEqual(menu_cards[1]["rows"][0]["kind"], "agent_status")
-            self.assertEqual(menu_cards[1]["rows"][0]["agent"], ".hermes")
-            self.assertEqual(menu_cards[1]["rows"][0]["pid"], "not observed")
-            self.assertEqual(menu_cards[1]["rows"][0]["status"], "Configured")
+            self.assertEqual(menu_cards[0]["columns"], ["Agent", "PID", "Status"])
+            self.assertIn("PID appears after overlay or explicit local observation.", menu_cards[0]["footer"])
+            self.assertEqual(menu_cards[0]["rows"][0]["kind"], "agent_status")
+            self.assertEqual(menu_cards[0]["rows"][0]["agent"], ".hermes")
+            self.assertEqual(menu_cards[0]["rows"][0]["pid"], "not observed")
+            self.assertEqual(menu_cards[0]["rows"][0]["status"], "Configured")
             self.assertNotIn("4312", json.dumps(menu_cards))
-            self.assertEqual(menu_cards[2]["rows"][0]["label"], "Agent")
-            self.assertEqual(menu_cards[2]["rows"][0]["value"], "Codex")
+            self.assertEqual(menu_cards[1]["rows"][0]["label"], "Agent")
+            self.assertEqual(menu_cards[1]["rows"][0]["value"], "Codex")
 
             hermes_agents = payload["hermes_agents"]
             self.assertEqual(len(hermes_agents), 1)
@@ -204,10 +206,10 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertTrue(payload["external_coding_executors"][0]["status_observed"])
             self.assertEqual(payload["external_coding_executors"][0]["model"]["tooltip"], "gpt-5.5")
             menu_cards = payload["display"]["menu_cards"]
-            self.assertEqual(menu_cards[1]["rows"][0]["pid"], "4312")
-            self.assertEqual(menu_cards[1]["rows"][0]["status"], "Running")
-            self.assertEqual(menu_cards[2]["rows"][2]["label"], "PID")
-            self.assertEqual(menu_cards[2]["rows"][2]["value"], "9821")
+            self.assertEqual(menu_cards[0]["rows"][0]["pid"], "4312")
+            self.assertEqual(menu_cards[0]["rows"][0]["status"], "Running")
+            self.assertEqual(menu_cards[1]["rows"][2]["label"], "PID")
+            self.assertEqual(menu_cards[1]["rows"][2]["value"], "9821")
 
             status, stdout, stderr = run_cli(
                 [
@@ -381,6 +383,43 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertEqual(observed_rows[0]["evidence"]["run_id"], current["run_id"])
             self.assertEqual(observed_rows[0]["pid"], 2222)
             self.assertEqual(exact["process_overlay"]["applied_count"], 1)
+
+    def test_local_process_observation_applies_real_hermes_pid_without_false_path_matches(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes-a")
+            record_target_observation(paths, source="setup")
+
+            ps_output = "\n".join(
+                [
+                    " 101 S /Applications/Codex.app/Contents/MacOS/Codex /Users/rlaope/Desktop/khope/hermes-agent",
+                    " 22064 S /Users/rlaope/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace",
+                ]
+            )
+
+            with patch(
+                "omh.menubar_status.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["ps"],
+                    returncode=0,
+                    stdout=ps_output,
+                    stderr="",
+                ),
+            ):
+                payload = build_menubar_status_payload(
+                    paths,
+                    observe_local_processes=True,
+                    now="2026-06-18T00:00:05Z",
+                )
+
+            self.assertEqual(payload["process_overlay"]["status"], "applied")
+            self.assertEqual(payload["process_overlay"]["applied_count"], 1)
+            self.assertEqual(payload["hermes_agents"][0]["pid"], 22064)
+            self.assertEqual(payload["hermes_agents"][0]["status"], "running")
+            self.assertTrue(payload["hermes_agents"][0]["pid_observed"])
+            menu_cards = payload["display"]["menu_cards"]
+            self.assertEqual(menu_cards[0]["rows"][0]["pid"], "22064")
+            self.assertEqual(menu_cards[0]["rows"][0]["status"], "Running")
 
     def test_menubar_status_reports_multi_target_source_icons_without_process_claims(self) -> None:
         with TemporaryDirectory() as tmp:
