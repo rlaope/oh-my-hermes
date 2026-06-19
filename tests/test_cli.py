@@ -833,6 +833,7 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(["hermes", "skills", "inspect", "oh-my-hermes"], commands)
         installed_commands = [step["command"] for step in payload["installed_command_smoke"]["steps"]]
         self.assertEqual(installed_commands[0], ["omh-dev", "--help"])
+        self.assertIn(["omh-dev", "release", "skill-content-smoke", "--json"], installed_commands)
         self.assertIn(
             [
                 "omh-dev",
@@ -883,8 +884,31 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["observed"])
         items = {item["id"]: item for item in payload["items"]}
         self.assertIn("uv build", items["build_artifacts"]["command"])
+        self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
+
+    def test_release_skill_content_smoke_cli_checks_generated_guidance(self) -> None:
+        status, stdout, stderr = run_cli(["release", "skill-content-smoke", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "skill_content_smoke/v1")
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["observed"])
+        self.assertEqual(payload["failed_checks"], [])
+        self.assertIn("img-summary", payload["representative_skills"])
+
+        status, stdout, stderr = run_cli(["release", "skill-content-smoke"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn("OMH skill content smoke", stdout)
+        self.assertIn("Status: ok", stdout)
+        self.assertIn("For machine-readable output", stdout)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
 
     def test_release_install_smoke_defaults_to_human_plan_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -976,6 +1000,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["installed_command_smoke"]["mode"], "live")
         self.assertTrue(payload["installed_command_smoke"]["ok"])
         self.assertEqual(payload["installed_command_smoke"]["results"][0]["command"], [str(fake_omh), "--help"])
+        self.assertEqual(
+            payload["installed_command_smoke"]["results"][1]["command"],
+            [str(fake_omh), "release", "skill-content-smoke", "--json"],
+        )
         self.assertFalse(payload["first_use_status_smoke"]["observed"])
 
     def test_release_hermes_smoke_cli_fails_when_installed_command_is_not_on_path(self) -> None:

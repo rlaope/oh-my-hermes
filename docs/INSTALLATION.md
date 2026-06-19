@@ -232,11 +232,14 @@ After installing OMH into the target runtime, verify the command path too:
 ```sh
 command -v omh
 omh --help
+omh release skill-content-smoke --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 
-When an operator explicitly wants live evidence from the target Hermes profile,
-run one of these:
+`release skill-content-smoke` checks the installed command package's generated
+skill guidance, including router awareness and workflow context rails. It is
+not Hermes chat-load evidence. When an operator explicitly wants live evidence
+from the target Hermes profile, run one of these:
 
 ```sh
 omh release hermes-smoke --live --install-path tap --target-confirmed

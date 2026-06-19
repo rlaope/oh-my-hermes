@@ -14,6 +14,7 @@ from .command_path import (
     path_check_kind,
 )
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
+from .skill_pack import builtin_skill_templates
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
@@ -21,11 +22,15 @@ HERMES_SMOKE_SCHEMA = "hermes_release_smoke/v1"
 RELEASE_CHECKLIST_SCHEMA = "release_readiness_checklist/v1"
 INSTALLED_COMMAND_SMOKE_SCHEMA = "installed_omh_command_smoke/v1"
 FIRST_USE_STATUS_SMOKE_SCHEMA = "first_use_status_smoke/v1"
+SKILL_CONTENT_SMOKE_SCHEMA = "skill_content_smoke/v1"
 RELEASE_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*(?:[-_+.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$")
 DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
 DEFAULT_HERMES_SKILL = "oh-my-hermes"
 DEFAULT_FIRST_USE_MESSAGE = "I want to safely add a feature to this repo"
 INSTALL_PATHS = ("tap", "setup")
+REPRESENTATIVE_CONTEXT_RAIL_SKILLS = ("img-summary", "loop", "ultraprocess", "web-research", "materials-package")
+ROUTER_CONTENT_MARKERS = ("OMH Awareness Primer", "img-summary", "Normal users talk to Hermes")
+WORKFLOW_CONTEXT_MARKERS = ("OMH Context Rail", "not a standalone executor", "Prepared OMH routing")
 
 
 @dataclass(frozen=True)
@@ -215,6 +220,16 @@ def release_readiness_checklist(
             "This proves console-script importability only.",
         ),
         ReleaseChecklistItem(
+            "skill_content_smoke",
+            "Check installed command package skill content",
+            f"{omh_display} release skill-content-smoke --json",
+            "installed-command",
+            True,
+            False,
+            "Skill content smoke reports ok=true for router awareness and generated workflow context rails.",
+            "This proves the installed OMH command package can render expected skill guidance; it does not prove Hermes loaded or selected it in chat.",
+        ),
+        ReleaseChecklistItem(
             "installed_command_smoke",
             "Observe installed command smoke without Hermes mutation",
             (
@@ -224,8 +239,8 @@ def release_readiness_checklist(
             "installed-command",
             True,
             False,
-            "Nested installed_command_smoke is mode=live, observed=true, and ok=true.",
-            "This observes the installed OMH command path while keeping the outer Hermes profile smoke plan-only.",
+            "Nested installed_command_smoke is mode=live, observed=true, ok=true, and includes installed skill content smoke.",
+            "This observes the installed OMH command path and generated skill guidance while keeping the outer Hermes profile smoke plan-only.",
         ),
         ReleaseChecklistItem(
             "build_artifacts",
@@ -536,6 +551,16 @@ def installed_command_smoke_plan(
             proof_boundary="Verifies the installed OMH console script is importable and runnable from the current PATH.",
         ),
         HermesSmokeStep(
+            "installed_omh_skill_content",
+            (omh_command, "release", "skill-content-smoke", "--json"),
+            "verify",
+            False,
+            proof_boundary=(
+                "Verifies the installed OMH command package can render router awareness and workflow context rails. "
+                "This is package-content evidence only, not Hermes runtime-load evidence."
+            ),
+        ),
+        HermesSmokeStep(
             "installed_omh_setup_plan",
             _omh_release_plan_command(
                 omh_command,
@@ -564,6 +589,52 @@ def installed_command_smoke_plan(
             "--include-command-smoke to observe PATH resolution and the installed OMH executable."
         ),
         "steps": [step.to_payload() for step in steps],
+    }
+
+
+def skill_content_smoke() -> dict[str, object]:
+    templates = {template.name: template.content for template in builtin_skill_templates()}
+    checks: list[dict[str, object]] = []
+
+    def add_check(name: str, marker: str, ok: bool, *, scope: str) -> None:
+        checks.append(
+            {
+                "scope": scope,
+                "skill": name,
+                "marker": marker,
+                "ok": ok,
+            }
+        )
+
+    router = templates.get(DEFAULT_HERMES_SKILL, "")
+    for marker in ROUTER_CONTENT_MARKERS:
+        add_check(DEFAULT_HERMES_SKILL, marker, marker in router, scope="router_awareness")
+
+    missing_representative = [name for name in REPRESENTATIVE_CONTEXT_RAIL_SKILLS if name not in templates]
+    for name, content in sorted(templates.items()):
+        if name == DEFAULT_HERMES_SKILL:
+            continue
+        for marker in WORKFLOW_CONTEXT_MARKERS:
+            add_check(name, marker, marker in content, scope="workflow_context_rail")
+
+    failed_checks = [check for check in checks if not check["ok"]]
+    ok = not failed_checks and not missing_representative
+    return {
+        "schema_version": SKILL_CONTENT_SMOKE_SCHEMA,
+        "mode": "live",
+        "ok": ok,
+        "observed": True,
+        "skill_count": len(templates),
+        "router_skill": DEFAULT_HERMES_SKILL,
+        "workflow_skill_count": max(len(templates) - 1, 0),
+        "representative_skills": list(REPRESENTATIVE_CONTEXT_RAIL_SKILLS),
+        "missing_representative_skills": missing_representative,
+        "checked_marker_count": len(checks),
+        "failed_checks": failed_checks,
+        "proof_boundary": (
+            "This validates generated skill guidance inside the current OMH command package. "
+            "It does not prove the target Hermes profile installed, loaded, selected, or used those skills in chat."
+        ),
     }
 
 
@@ -932,7 +1003,7 @@ def run_installed_command_smoke(
             command_under_test=omh_command,
         ),
         "proof_boundary": (
-            "Installed command smoke observes the OMH console script and plan rendering only. "
+            "Installed command smoke observes the OMH console script, generated skill guidance, and plan rendering only. "
             "It does not mutate Hermes or prove live chat usage."
         ),
     }
@@ -1020,7 +1091,11 @@ def _hermes_smoke_next_action(ok: bool, failed_step: str) -> str:
     if failed_step == "setup_doctor":
         return "Run `omh doctor` manually and repair the OMH-managed skill registration reported there."
     if failed_step == "installed_command_smoke":
-        return "Repair the installed `omh` console script path, then rerun the smoke with --include-command-smoke."
+        return (
+            "Inspect installed_command_smoke.failed_step, then repair the installed `omh` command path, "
+            "console script importability, generated skill content, or setup plan rendering before rerunning "
+            "with --include-command-smoke."
+        )
     if failed_step in {"tap_list", "skills_list", "skill_check", "skill_inspect"}:
         return "Inspect the failing Hermes skills command output and confirm the target Hermes profile is the one OMH was installed into."
     return "Inspect the failed Hermes release smoke step and rerun after repair."
@@ -1047,6 +1122,8 @@ def _installed_command_smoke_next_action(
         )
     if failed_step == "installed_omh_help":
         return "Check PATH, package installation, and console-script importability for `omh`."
+    if failed_step == "installed_omh_skill_content":
+        return "Run `omh release skill-content-smoke --json` directly and inspect missing router awareness or workflow context rail markers."
     if failed_step == "installed_omh_setup_plan":
         return "Run `omh release hermes-smoke --install-path setup` directly and inspect the console-script error."
     return "Inspect the failed installed command smoke step and rerun after repair."
