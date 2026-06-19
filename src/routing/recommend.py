@@ -100,7 +100,7 @@ _SKILL_POLICIES = {
     "img-summary": RecommendationPolicy(
         next_action="prepare_visual_prompt_card",
         evidence_boundary=(
-            "A visual prompt card is not generated image, visual QA, sharing, posting, attachment, or delivery evidence."
+            "A prepared image-card brief is not generated image, visual QA, sharing, posting, attachment, or delivery evidence."
         ),
         wrapper_guidance=(
             "Prepare visual_prompt_card/v1 with short image-safe copy, generation prompt, negative prompt, "

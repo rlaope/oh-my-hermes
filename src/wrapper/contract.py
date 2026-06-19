@@ -533,14 +533,15 @@ def build_chat_response_from_route(
                 },
             )
         if selected == "img-summary" or policy_next_action == "prepare_visual_prompt_card":
-            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A visual prompt card is not generated image evidence."
-            body = str(policy.get("wrapper_guidance", "")) or (
-                "I will prepare a readable visual prompt card. Image generation, visual QA, and delivery stay unobserved "
-                "until a wrapper or user records evidence."
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A prepared image-card brief is not generated image evidence."
+            body = (
+                "I will turn the source into a shareable image-card brief: audience, layout, on-image copy, "
+                "generation prompt, negative prompt, and a quick QA checklist. If no image tool is connected, "
+                "I will ask which tool to use instead of pretending an image was generated."
             )
             return _chat_response(
                 kind="img_summary",
-                headline="I can prepare an img-summary card for this.",
+                headline="I can prepare a shareable image card for this.",
                 body=body,
                 phase="visual_prompt_prepared",
                 next_action="prepare_visual_prompt_card",
