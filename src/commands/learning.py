@@ -10,6 +10,7 @@ from ..workflow_learning import (
     WorkflowLearningError,
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
+    build_workflow_learning_audit,
     build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
@@ -240,6 +241,15 @@ def cmd_learning_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_learning_audit(args: argparse.Namespace) -> int:
+    try:
+        payload = build_workflow_learning_audit(_paths(args), limit=None if args.all else args.limit)
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0 if payload.get("status") in {"ready", "no_records", "needs_attention"} else 1
+
+
 def _add_learning_commands(sub) -> None:
     learning = sub.add_parser(
         "learning",
@@ -293,6 +303,11 @@ def _add_learning_commands(sub) -> None:
     export.add_argument("--all", action="store_true", help="Include all traces when no trace id is provided.")
     export.add_argument("--dry-run", action="store_true")
     export.set_defaults(func=cmd_learning_export)
+
+    audit = learning_sub.add_parser("audit", help="Audit local workflow learning readiness without mutating records.")
+    audit.add_argument("--limit", type=int, default=20, help="Maximum recent traces to summarize.")
+    audit.add_argument("--all", action="store_true", help="Audit and summarize all traces.")
+    audit.set_defaults(func=cmd_learning_audit)
 
     regression = learning_sub.add_parser("regression", help="Manage deterministic workflow regression cases.")
     regression_sub = regression.add_subparsers(dest="regression_command", required=True)

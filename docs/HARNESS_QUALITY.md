@@ -100,6 +100,11 @@ contract shaped like this:
   workflow-learning index repairable if metadata records exist but the pointer
   index drifts. Rebuilding the index is not workflow execution, skill mutation,
   or proof that a future workflow improved.
+- `omh learning audit` reads the local learning corpus and returns
+  `workflow_learning_audit/v1`: trace/eval/regression/export counts, coverage,
+  stale-index blockers, regression replay status, and the next repair or review
+  action. The audit is readiness evidence for the learning corpus only; it does
+  not patch skills, execute workflows, or prove future behavior improved.
 - `omh learning export` creates a redacted `workflow_learning_export/v1` review
   bundle from selected traces plus related evals, candidates, and regression
   cases. The bundle omits raw prompts and fixture text; it is review material,

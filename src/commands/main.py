@@ -54,6 +54,7 @@ from .hermes import _add_hermes_commands, cmd_hermes_plan
 from .hud import _add_hud_commands, cmd_hud
 from .learning import (
     _add_learning_commands,
+    cmd_learning_audit,
     cmd_learning_candidate,
     cmd_learning_eval,
     cmd_learning_export,
