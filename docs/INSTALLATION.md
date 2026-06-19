@@ -438,6 +438,10 @@ The backend flow is:
    already starts with the visible OMH marker, such as `[omh] web-research`;
    adapters can read `chat_response.usage_trace` for the selected workflow,
    harness, executor, and evidence boundary without parsing prose.
+   `chat_response.state.workflow_explanation` gives the same surface a compact
+   why/next/not-evidence card so Hermes can explain why OMH selected this
+   workflow, what the user or wrapper should do next, and which claims are
+   still not observed evidence.
 9. Adapters apply `chat_response.messenger_rendering` for the selected surface:
    Discord, Slack, and Telegram default to `limited_markdown`, while Hermes TUI,
    web, and generic rich Markdown surfaces default to `rich_markdown`. Render
