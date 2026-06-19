@@ -111,6 +111,7 @@ VISIBLE_ACTIONS = (
     "show_learning_eval",
     "propose_skill_improvement",
     "add_regression_case",
+    "export_learning_bundle",
     "replay_regression_cases",
     "cancel",
 )

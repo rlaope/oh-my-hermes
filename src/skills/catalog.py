@@ -2589,11 +2589,13 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "workflow-learning",
-        "Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, and repairable learning index.",
+        "Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, repairable learning index, and redacted review export.",
         (
             "workflow-learning",
             "workflow learning",
             "learning trace",
+            "learning export",
+            "export bundle",
             "learning index",
             "index rebuild",
             "execution trace",
@@ -2610,12 +2612,13 @@ _FEATURE_SURFACE_SKILLS = (
             "회귀 케이스",
             "실행 기록",
             "학습 기록",
+            "학습 내보내기",
         ),
-        "Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, reusable as a future regression, or repairable after local index drift without storing raw prompts.",
+        "Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, reusable as a future regression, exportable for review, or repairable after local index drift without storing raw prompts.",
         category="optimization",
         phase="workflow-learning",
         next_action="record_workflow_learning_trace",
-        boundary="A workflow learning trace is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.",
+        boundary="A workflow learning trace or export is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.",
         good_prompt="workflow-learning record why this request went to plan and make a regression case.",
         bad_prompt="workflow-learning silently patch the skill and claim future behavior is fixed.",
     ),
@@ -2728,7 +2731,7 @@ _SURFACE_EXPOSURES = (
         ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
         True,
         "primary_workflow_skill",
-        "Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, or create a regression case.",
+        "Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, create a regression case, or export a redacted review bundle.",
     ),
 )
 
@@ -3739,10 +3742,16 @@ _FEATURE_SURFACE_HARNESSES = (
     ),
     _feature_surface_harness(
         "workflow-learning",
-        "Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, regression cases, and a repairable learning index.",
-        "Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification, or when the local learning index needs check/rebuild.",
+        "Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, regression cases, a repairable learning index, and redacted review exports.",
+        "Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification, when the local learning index needs check/rebuild, or when a reviewer needs a metadata-only learning bundle.",
         ("source trace or run id", "selected workflow", "observed evidence refs when available", "feedback or failure summary"),
-        ("workflow_learning_trace/v1", "workflow_eval_result/v1", "improvement_candidate/v1", "regression_case/v1"),
+        (
+            "workflow_learning_trace/v1",
+            "workflow_eval_result/v1",
+            "improvement_candidate/v1",
+            "regression_case/v1",
+            "workflow_learning_export/v1",
+        ),
         quality_tier="learning-gated",
         evidence_ladder=(
             "trace_recorded",
@@ -3750,6 +3759,7 @@ _FEATURE_SURFACE_HARNESSES = (
             "improvement_candidate_reviewed",
             "regression_case_recorded",
             "learning_index_checked",
+            "learning_export_recorded",
             "future_replay_passed_when_available",
         ),
         wrapper_actions=(
@@ -3757,12 +3767,13 @@ _FEATURE_SURFACE_HARNESSES = (
             "show_learning_eval",
             "propose_skill_improvement",
             "add_regression_case",
+            "export_learning_bundle",
             "replay_regression_cases",
             "check_learning_index",
             "rebuild_learning_index",
             "show_status",
         ),
-        overclaim_guard="A workflow learning artifact is not automatic model training, skill mutation, execution, verification, review, CI, merge, or proof that future behavior is fixed.",
+        overclaim_guard="A workflow learning artifact or export bundle is not automatic model training, skill mutation, execution, verification, review, CI, merge, or proof that future behavior is fixed.",
     ),
 )
 

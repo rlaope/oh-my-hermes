@@ -119,6 +119,42 @@ class CliTests(unittest.TestCase):
             self.assertEqual(index_check["schema_version"], "workflow_learning_index_check/v1")
             self.assertEqual(index_check["status"], "passed")
 
+            status, stdout, stderr = run_cli(base + ["learning", "export", "--trace-id", trace_id, "--dry-run"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            export_preview = json.loads(stdout)
+            self.assertEqual(export_preview["schema_version"], "learning_export_result/v1")
+            self.assertFalse(export_preview["recorded"])
+            self.assertTrue(export_preview["dry_run"])
+            self.assertEqual(export_preview["export"]["schema_version"], "workflow_learning_export/v1")
+            self.assertEqual(export_preview["export"]["status"], "ready")
+            self.assertEqual(export_preview["export"]["summary"]["counts"]["traces"], 1)
+            self.assertEqual(export_preview["export"]["summary"]["counts"]["evals"], 1)
+            self.assertEqual(export_preview["export"]["summary"]["counts"]["regression_cases"], 1)
+            self.assertNotIn(message, json.dumps(export_preview["export"]))
+            self.assertNotIn("safely add a feature to this repo", json.dumps(export_preview["export"]))
+
+            status, stdout, stderr = run_cli(base + ["learning", "export", "--trace-id", trace_id])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            export_payload = json.loads(stdout)
+            self.assertTrue(export_payload["recorded"])
+            self.assertFalse(export_payload["dry_run"])
+            self.assertTrue(export_payload["learning_export_ref"].startswith("omh-learning-export:"))
+            self.assertEqual(export_payload["export"]["privacy"]["mode"], "metadata_only")
+            self.assertFalse(export_payload["export"]["privacy"]["fixture_text_stored"])
+            self.assertTrue(Path(export_payload["export_path"]).exists())
+
+            status, stdout, stderr = run_cli(base + ["learning", "index", "check"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            index_check = json.loads(stdout)
+            self.assertEqual(index_check["status"], "passed")
+            self.assertNotIn("export", index_check["counts"])
+
             index_path = root / ".omh" / "learning" / "index.json"
             index = json.loads(index_path.read_text(encoding="utf-8"))
             index["records"] = [item for item in index["records"] if item["kind"] != "regression_case"]

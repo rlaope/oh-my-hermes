@@ -151,6 +151,10 @@ class OmhPaths:
         return self.learning_dir / "regressions"
 
     @property
+    def learning_exports_dir(self) -> Path:
+        return self.learning_dir / "exports"
+
+    @property
     def learning_index_path(self) -> Path:
         return self.learning_dir / "index.json"
 

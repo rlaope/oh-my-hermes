@@ -100,6 +100,12 @@ contract shaped like this:
   workflow-learning index repairable if metadata records exist but the pointer
   index drifts. Rebuilding the index is not workflow execution, skill mutation,
   or proof that a future workflow improved.
+- `omh learning export` creates a redacted `workflow_learning_export/v1` review
+  bundle from selected traces plus related evals, candidates, and regression
+  cases. The bundle omits raw prompts and fixture text; it is review material,
+  not model training, automatic skill patching, execution, review, CI, merge, or
+  proof that future routing improved. Export bundles are derived artifacts and
+  are not part of the canonical learning index repair loop.
 
 ## Wrapper Rules
 

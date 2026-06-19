@@ -2361,7 +2361,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### workflow-learning
 
-[omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, and repairable learning index.
+[omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, repairable learning index, and redacted review export.
 
 - Category: `optimization`
 - Phase: `workflow-learning`
@@ -2371,15 +2371,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Install visibility: `true`
 - Docs visibility: `primary_workflow_skill`
 - Compatibility alias: `false`
-- Preferred usage: Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, or create a regression case.
+- Preferred usage: Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, create a regression case, or export a redacted review bundle.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, reusable as a future regression, or repairable after local index drift without storing raw prompts.
+- Use when: Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, reusable as a future regression, exportable for review, or repairable after local index drift without storing raw prompts.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`
+- Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 내보내기`
 - Good example:
   - Prompt: workflow-learning record why this request went to plan and make a regression case.
   - Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
@@ -2404,7 +2404,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Artifact expectations:
   - workflow-learning/v1 metadata-only runtime or wrapper card when recorded
 - Safety rules:
-  - A workflow learning trace is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
+  - A workflow learning trace or export is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Representative Harnesses
@@ -4159,9 +4159,9 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 
 ### workflow-learning
 
-Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, regression cases, and a repairable learning index.
+Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, regression cases, a repairable learning index, and redacted review exports.
 
-- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification, or when the local learning index needs check/rebuild.
+- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification, when the local learning index needs check/rebuild, or when a reviewer needs a metadata-only learning bundle.
 - Quality tier: `learning-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
@@ -4177,6 +4177,7 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - workflow_eval_result/v1
   - improvement_candidate/v1
   - regression_case/v1
+  - workflow_learning_export/v1
 - Stop conditions:
   - card is prepared or a missing decision is surfaced
   - observed evidence is separated from prepared guidance
@@ -4190,12 +4191,14 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - `improvement_candidate_reviewed`
   - `regression_case_recorded`
   - `learning_index_checked`
+  - `learning_export_recorded`
   - `future_replay_passed_when_available`
 - Wrapper actions:
   - `record_workflow_learning_trace`
   - `show_learning_eval`
   - `propose_skill_improvement`
   - `add_regression_case`
+  - `export_learning_bundle`
   - `replay_regression_cases`
   - `check_learning_index`
   - `rebuild_learning_index`
@@ -4207,5 +4210,5 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
 - Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - A workflow learning artifact is not automatic model training, skill mutation, execution, verification, review, CI, merge, or proof that future behavior is fixed.
+  - A workflow learning artifact or export bundle is not automatic model training, skill mutation, execution, verification, review, CI, merge, or proof that future behavior is fixed.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
