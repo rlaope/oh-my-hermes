@@ -97,7 +97,10 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("materials-processing", {item["id"] for item in lanes["materials_and_visuals"]["representative_playbooks"]})
         self.assertTrue(lanes["coding_handoff"]["wrapper_actions"])
         self.assertIn("feedback-triage", context_cards["research_and_ops"]["representative_workflows"])
+        self.assertEqual(context_cards["research_and_ops"]["label"], "Research and ops")
+        self.assertIn("Payment failures keep coming up", context_cards["research_and_ops"]["user_examples"])
         self.assertIn("img-summary", context_cards["materials_and_visuals"]["representative_workflows"])
+        self.assertIn("revise/copy/generate/record", context_cards["materials_and_visuals"]["first_response_shape"])
         self.assertIn("implementation", context_cards["coding_handoff"]["not_evidence_until_observed"])
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:

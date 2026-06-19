@@ -1341,6 +1341,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh_native_command_render/v1", text)
         self.assertIn("chat_response.state.workflow_explanation.why_this_workflow", text)
         self.assertIn("chat_response.state.workflow_explanation.workflow_context_card", text)
+        self.assertIn("first_response_shape", text)
         self.assertIn("chat_response.state.workflow_explanation.not_evidence_yet", text)
         self.assertIn("Telegram can register the `omh` bot command menu", text)
         self.assertIn("Startup Product Triage", text)
