@@ -105,13 +105,19 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["confidence"], "high")
 
     def test_catalog_question_dispatches_to_router_without_shell_approval(self) -> None:
-        decision = route_chat_message("OMH로 할 수 있는 workflow가 뭐야?", source="discord")
+        for message in (
+            "OMH로 할 수 있는 workflow가 뭐야?",
+            "what can OMH do?",
+            "OMH로 뭐 할 수 있어?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
 
-        self.assertEqual(decision["action"], "dispatch")
-        self.assertEqual(decision["selected_skill"], "oh-my-hermes")
-        self.assertEqual(decision["selected_harness"], "coding-handling")
-        self.assertEqual(decision["confidence"], "high")
-        self.assertIn("Catalog question", decision["reason"])
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["selected_harness"], "coding-handling")
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn("Catalog question", decision["reason"])
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (

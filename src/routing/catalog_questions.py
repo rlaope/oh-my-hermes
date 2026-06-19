@@ -66,6 +66,28 @@ _EXPLICIT_CATALOG_PHRASES = (
     "목록",
     "리스트",
 )
+_EXPLICIT_OMH_CAPABILITY_PHRASES = (
+    "what can omh do",
+    "what can oh-my-hermes do",
+    "what can i do with omh",
+    "what can i do with oh-my-hermes",
+    "what can you do with omh",
+    "what can you do with oh-my-hermes",
+    "what does omh do",
+    "what does oh-my-hermes do",
+    "how can omh help",
+    "how can oh-my-hermes help",
+    "omh로 뭐 할 수",
+    "omh로 무엇을 할 수",
+    "oh-my-hermes로 뭐 할 수",
+    "oh-my-hermes로 무엇을 할 수",
+    "omh가 뭐 해",
+    "omh가 무엇을 해",
+    "omh는 뭐 해",
+    "omh는 무엇을 해",
+    "omh 기능 뭐",
+    "oh-my-hermes 기능 뭐",
+)
 _CONTEXT_MARKERS = ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스")
 _CATALOG_COLLECTION_WORDS = (
     "skills",
@@ -214,6 +236,8 @@ def is_skill_catalog_question(message: str) -> bool:
         return False
     if _is_file_or_text_search_question(search_texts):
         return False
+    if _contains_catalog_token(search_texts, _EXPLICIT_OMH_CAPABILITY_PHRASES):
+        return True
     has_context = _contains_catalog_token(search_texts, _CONTEXT_MARKERS)
     has_catalog_word = _contains_catalog_token(search_texts, _CATALOG_WORDS)
     if not has_catalog_word:

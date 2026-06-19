@@ -11,6 +11,11 @@ from omh.routing.catalog_questions import is_skill_catalog_question
 class CatalogQuestionTests(unittest.TestCase):
     def test_workflow_catalog_questions_are_detected(self) -> None:
         cases = (
+            "what can OMH do?",
+            "what can I do with OMH?",
+            "what does OMH do?",
+            "OMH로 뭐 할 수 있어?",
+            "OMH가 뭐 해줄 수 있어?",
             "OMH로 할 수 있는 workflow가 뭐야?",
             "OMH 명령어 뭐 있어?",
             "skill들은 뭐 있어?",
