@@ -232,6 +232,40 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("observed status", payload["chat_response"]["body"])
         self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
+    def test_workflow_learning_route_exposes_audit_card_actions(self) -> None:
+        message = "learn from this workflow run"
+
+        payload = build_chat_interaction_payload(message, source="discord")
+
+        serialized = json.dumps(payload)
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
+        self.assertEqual(payload["next_action"], "audit_learning_readiness")
+        response = payload["chat_response"]
+        self.assertEqual(response["kind"], "workflow_learning")
+        self.assertEqual(response["state"]["learning_audit_card_schema"], "learning_audit_card/v1")
+        self.assertTrue(response["state"]["human_gate_required"])
+        self.assertIn("workflow_learning_trace/v1", response["state"]["artifact_schemas"])
+        self.assertIn("workflow_eval_result/v1", response["state"]["artifact_schemas"])
+        self.assertIn("regression_case/v1", response["state"]["artifact_schemas"])
+        self.assertIn("workflow_learning_export/v1", response["state"]["artifact_schemas"])
+        actions = {action["id"]: action for action in response["actions"]}
+        self.assertTrue(actions["audit_learning_readiness"]["enabled"])
+        self.assertEqual(actions["audit_learning_readiness"]["style"], "primary")
+        self.assertIn("record_workflow_learning_trace", actions)
+        self.assertIn("show_learning_eval", actions)
+        self.assertIn("propose_skill_improvement", actions)
+        self.assertIn("add_regression_case", actions)
+        self.assertIn("export_learning_bundle", actions)
+        self.assertIn("replay_regression_cases", actions)
+        self.assertIn("check_learning_index", actions)
+        self.assertIn("rebuild_learning_index", actions)
+        self.assertIn("show_status", actions)
+        self.assertIn("automatic skill patch", response["state"]["evidence_not_observed"])
+        self.assertIn("not model training", response["claim_boundary"])
+        self.assertIn("human_review_improvement_candidate", response["state"]["learning_flow"])
+        self.assertNotIn(message, serialized)
+
     def test_route_mode_exposes_visible_omh_usage_trace_for_web_research(self) -> None:
         payload = build_chat_interaction_payload(
             "web-research로 Hermes Agent와 Oh My Codex/OpenCode 계열을 비교해서 OMHM 포지셔닝 근거를 찾아줘.",

@@ -111,8 +111,11 @@ VISIBLE_ACTIONS = (
     "show_learning_eval",
     "propose_skill_improvement",
     "add_regression_case",
+    "audit_learning_readiness",
     "export_learning_bundle",
     "replay_regression_cases",
+    "check_learning_index",
+    "rebuild_learning_index",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
@@ -679,6 +682,71 @@ def build_chat_response_from_route(
                     "blockers": status_card.get("blockers", []),
                     "throughput_levers": card.get("throughput_levers", []),
                     "evidence_not_observed": card.get("not_evidence_until_observed", []),
+                },
+            )
+        if selected == "workflow-learning":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or (
+                "Workflow learning records are process-review evidence only; they are not automatic improvement evidence."
+            )
+            body = (
+                "I will turn the workflow attempt into learning material without storing raw prompts: "
+                "record the trace, run deterministic evals, add a regression case, audit readiness, "
+                "and export a redacted review bundle when useful. Any skill or routing improvement still needs human review."
+            )
+            return _chat_response(
+                kind="workflow_learning",
+                headline="I can inspect this workflow for learning readiness.",
+                body=body,
+                phase="workflow_learning_prepared",
+                next_action="audit_learning_readiness",
+                thread_key=thread_key,
+                actions=[
+                    _action("record_workflow_learning_trace", "Record trace", "secondary"),
+                    _action("show_learning_eval", "Run eval", "secondary"),
+                    _action("propose_skill_improvement", "Propose improvement", "secondary"),
+                    _action("add_regression_case", "Add regression", "secondary"),
+                    _action("audit_learning_readiness", "Audit readiness", "primary"),
+                    _action("export_learning_bundle", "Export bundle", "secondary"),
+                    _action("replay_regression_cases", "Replay cases", "secondary"),
+                    _action("check_learning_index", "Check index", "secondary"),
+                    _action("rebuild_learning_index", "Rebuild index", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schemas": [
+                        "workflow_learning_trace/v1",
+                        "workflow_eval_result/v1",
+                        "regression_case/v1",
+                        "workflow_learning_audit/v1",
+                        "learning_audit_card/v1",
+                        "workflow_learning_export/v1",
+                    ],
+                    "learning_audit_card_schema": "learning_audit_card/v1",
+                    "human_gate_required": True,
+                    "evidence_not_observed": [
+                        "raw prompt storage",
+                        "model training",
+                        "automatic skill patch",
+                        "workflow execution",
+                        "future behavior fixed",
+                        "review approval",
+                        "CI",
+                        "merge",
+                    ],
+                    "learning_flow": [
+                        "record_trace",
+                        "run_eval",
+                        "add_regression_case",
+                        "audit_readiness",
+                        "export_redacted_bundle",
+                        "human_review_improvement_candidate",
+                    ],
                 },
             )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"

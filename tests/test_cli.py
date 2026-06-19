@@ -53,6 +53,33 @@ class CliTests(unittest.TestCase):
         self.assertIn("release smoke", help_text)
         self.assertIn("memory, ops, materials, state", help_text)
 
+    def test_chat_interact_routes_workflow_learning_to_audit_actions(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "learn from this workflow run"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_interaction/v1")
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
+        self.assertEqual(payload["next_action"], "audit_learning_readiness")
+        self.assertEqual(payload["chat_response"]["kind"], "workflow_learning")
+        self.assertEqual(payload["chat_response"]["state"]["learning_audit_card_schema"], "learning_audit_card/v1")
+        action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
+        self.assertTrue(
+            {
+                "record_workflow_learning_trace",
+                "propose_skill_improvement",
+                "audit_learning_readiness",
+                "export_learning_bundle",
+                "show_status",
+            }
+            <= action_ids
+        )
+
     def test_learning_record_eval_and_regression_replay(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -158,6 +185,13 @@ class CliTests(unittest.TestCase):
             self.assertEqual(audit["coverage"]["regression_coverage_percent"], 100)
             self.assertEqual(audit["regression_replay"]["status"], "passed")
             self.assertEqual(audit["warnings"], [])
+            card = audit["learning_audit_card"]
+            self.assertEqual(card["schema_version"], "learning_audit_card/v1")
+            self.assertEqual(card["status"], "ready")
+            self.assertEqual(card["primary_action"], "audit_learning_readiness")
+            self.assertEqual(card["coverage"]["eval_coverage_percent"], 100)
+            self.assertIn("export_learning_bundle", card["wrapper_actions"])
+            self.assertIn("automatic skill patch", card["not_evidence_yet"])
             self.assertNotIn(message, json.dumps(audit))
             self.assertNotIn("safely add a feature to this repo", json.dumps(audit))
 
@@ -190,6 +224,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stale_audit["status"], "blocked")
             self.assertEqual(stale_audit["index"]["status"], "stale")
             self.assertIn("rebuild_learning_index", {item["id"] for item in stale_audit["next_actions"]})
+            self.assertEqual(stale_audit["learning_audit_card"]["status"], "blocked")
+            self.assertEqual(stale_audit["learning_audit_card"]["primary_action"], "rebuild_learning_index")
 
             status, stdout, stderr = run_cli(base + ["learning", "index", "rebuild"])
 

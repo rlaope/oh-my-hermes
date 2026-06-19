@@ -23,6 +23,7 @@ from omh.workflow_learning import (
     list_learning_traces,
     rebuild_learning_index,
     replay_regression_cases,
+    validate_learning_audit_card,
     validate_workflow_learning_trace,
     validate_workflow_learning_export,
     write_learning_trace,
@@ -382,6 +383,15 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(empty["schema_version"], "workflow_learning_audit/v1")
             self.assertEqual(empty["status"], "no_records")
             self.assertTrue(empty["ok"])
+            self.assertEqual(empty["learning_audit_card"]["schema_version"], "learning_audit_card/v1")
+            self.assertEqual(empty["learning_audit_card"]["status"], "no_records")
+            self.assertEqual(empty["learning_audit_card"]["primary_action"], "record_workflow_learning_trace")
+            self.assertEqual(empty["learning_audit_card"]["warning_count"], 0)
+            self.assertIn("record_workflow_learning_trace", empty["learning_audit_card"]["wrapper_actions"])
+            self.assertIn("propose_skill_improvement", empty["learning_audit_card"]["wrapper_actions"])
+            self.assertIn("show_status", empty["learning_audit_card"]["wrapper_actions"])
+            self.assertIn("automatic skill patch", empty["learning_audit_card"]["not_evidence_yet"])
+            validate_learning_audit_card(empty["learning_audit_card"])
 
             trace = write_learning_trace(
                 paths,
@@ -392,6 +402,11 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(attention["counts"]["traces"], 1)
             self.assertEqual(attention["coverage"]["eval_coverage_percent"], 0)
             self.assertIn("trace_without_eval", {item["id"] for item in attention["warnings"]})
+            self.assertEqual(attention["learning_audit_card"]["status"], "needs_attention")
+            self.assertEqual(attention["learning_audit_card"]["primary_action"], "show_learning_eval")
+            attention_steps = {step["id"]: step for step in attention["learning_audit_card"]["steps"]}
+            self.assertEqual(attention_steps["trace"]["state"], "ready")
+            self.assertEqual(attention_steps["eval"]["state"], "missing")
             self.assertNotIn(message, json.dumps(attention))
             self.assertNotIn("secret-token-123", json.dumps(attention))
 
@@ -410,7 +425,32 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(ready["coverage"]["regression_coverage_percent"], 100)
             self.assertEqual(ready["regression_replay"]["status"], "passed")
             self.assertEqual(ready["warnings"], [])
+            card = ready["learning_audit_card"]
+            self.assertEqual(card["schema_version"], "learning_audit_card/v1")
+            self.assertEqual(card["status"], "ready")
+            self.assertEqual(card["severity"], "ok")
+            self.assertEqual(card["primary_action"], "audit_learning_readiness")
+            self.assertEqual(card["blocking_issue_count"], 0)
+            self.assertEqual(card["warning_count"], 0)
+            self.assertEqual(card["coverage"]["eval_coverage_percent"], 100)
+            self.assertEqual(card["regression_replay"]["status"], "passed")
+            self.assertTrue(
+                {"audit_learning_readiness", "propose_skill_improvement", "export_learning_bundle", "replay_regression_cases"}
+                <= set(card["wrapper_actions"])
+            )
+            ready_steps = {step["id"]: step for step in card["steps"]}
+            self.assertEqual(ready_steps["eval"]["state"], "ready")
+            self.assertEqual(ready_steps["regression"]["state"], "ready")
+            self.assertEqual(ready_steps["export"]["state"], "ready")
+            self.assertIn("model training", card["not_evidence_yet"])
+            self.assertIn("automatic skill patch", card["not_evidence_yet"])
+            validate_learning_audit_card(card)
             self.assertNotIn("safely add a feature", json.dumps(ready))
+
+            broken_card = json.loads(json.dumps(card))
+            broken_card["primary_action"] = "missing_action"
+            with self.assertRaises(WorkflowLearningError):
+                validate_learning_audit_card(broken_card)
 
     def test_learning_audit_blocks_on_stale_index(self) -> None:
         with TemporaryDirectory() as tmp:

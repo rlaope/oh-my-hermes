@@ -103,8 +103,11 @@ contract shaped like this:
 - `omh learning audit` reads the local learning corpus and returns
   `workflow_learning_audit/v1`: trace/eval/regression/export counts, coverage,
   stale-index blockers, regression replay status, and the next repair or review
-  action. The audit is readiness evidence for the learning corpus only; it does
-  not patch skills, execute workflows, or prove future behavior improved.
+  action. The same payload includes `learning_audit_card/v1` so Hermes wrappers
+  can render a compact review card with record, eval, regression, audit, export,
+  replay, index-check, and index-rebuild actions. The audit is readiness
+  evidence for the learning corpus only; it does not patch skills, execute
+  workflows, or prove future behavior improved.
 - `omh learning export` creates a redacted `workflow_learning_export/v1` review
   bundle from selected traces plus related evals, candidates, and regression
   cases. The bundle omits raw prompts and fixture text; it is review material,
