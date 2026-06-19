@@ -2698,6 +2698,13 @@ class CliTests(unittest.TestCase):
             ("./loop make this project a 10k star OSS", "loop", "loop", "reframe_north_star"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
+            ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "ack", "prepare_github_event_ops_card"),
+            ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
+            ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "ack", "prepare_material_package"),
+            ("Codex 작업이 어디까지 진행됐는지 알려줘", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
+            ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "ack", "prepare_executor_runtime_readiness"),
+            ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "ack", "prepare_agent_board_card"),
+            ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:

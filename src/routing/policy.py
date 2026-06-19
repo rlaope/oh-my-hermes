@@ -284,8 +284,12 @@ _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "codex와 claude",
     "codex와 claude code",
     "claude code 중",
+    "claude code로 넘길지 codex",
+    "codex로 넘길지 claude",
     "런타임으로 넘겨",
     "어떤 런타임",
+    "넘길지 codex",
+    "넘길지 claude",
     "코덱스랑 클로드",
     "코덱스와 클로드",
     "코덱스 클로드",
@@ -304,8 +308,227 @@ _EXECUTOR_RUNTIME_READINESS_TOKENS = _normalized_token_set(
         "런타임",
         "실행",
         "위임",
+        "넘길",
+        "넘길지",
+        "정해",
         "코덱스",
         "클로드",
+    }
+)
+_MATERIALS_PACKAGE_PHRASES = (
+    "ppt and pdf",
+    "pdf and ppt",
+    "ppt/pdf",
+    "pdf/ppt",
+    "spreadsheet to pdf",
+    "excel to pdf",
+    "monthly report pdf",
+    "attached spreadsheet",
+    "첨부한 엑셀",
+    "엑셀을 월간 보고서",
+    "pdf랑 ppt",
+    "ppt랑 pdf",
+    "ppt와 pdf",
+    "pdf와 ppt",
+    "pdf랑 ppt로",
+    "ppt로 만들",
+    "pdf로 만들",
+)
+_MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
+    {
+        "pdf",
+        "ppt",
+        "pptx",
+        "spreadsheet",
+        "excel",
+        "xlsx",
+        "docx",
+        "hwp",
+        "document",
+        "피디에프",
+        "엑셀",
+        "문서",
+        "자료",
+        "첨부",
+    }
+)
+_MATERIALS_PACKAGE_ACTION_TOKENS = _normalized_token_set(
+    {
+        "make",
+        "create",
+        "turn",
+        "prepare",
+        "package",
+        "export",
+        "share",
+        "render",
+        "만들",
+        "정리",
+        "공유",
+        "준비",
+        "생성",
+        "변환",
+    }
+)
+_MEMORY_CURATION_PHRASES = (
+    "memory curation",
+    "memory review",
+    "memory inspect",
+    "context cleanup",
+    "stale project context",
+    "old project context",
+    "hermes remembers",
+    "기억하고 있는",
+    "기억하고 있는 프로젝트 맥락",
+    "프로젝트 맥락이 오래된",
+    "오래된 맥락",
+    "오래된 기억",
+    "맥락이 오래된",
+)
+_MEMORY_CURATION_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "memory",
+        "context",
+        "remember",
+        "remembers",
+        "stale",
+        "old",
+        "duplicate",
+        "cleanup",
+        "curate",
+        "기억",
+        "맥락",
+        "메모리",
+        "오래된",
+        "중복",
+        "정리",
+    }
+)
+_AGENT_BOARD_PHRASES = (
+    "agent board",
+    "multi agent board",
+    "multiple hermes agents",
+    "multiple hermes profiles",
+    "roles and board",
+    "role board",
+    "task board",
+    "kanban board",
+    "hermes agent 여러 명",
+    "여러 명이 같이 일",
+    "역할과 보드",
+    "역할 보드",
+    "작업 보드",
+)
+_AGENT_BOARD_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "agent",
+        "agents",
+        "profile",
+        "profiles",
+        "multi",
+        "multiple",
+        "board",
+        "kanban",
+        "role",
+        "roles",
+        "team",
+        "hermes",
+        "에이전트",
+        "여러",
+        "보드",
+        "역할",
+        "팀",
+        "같이",
+    }
+)
+_CODING_PROGRESS_STATUS_PHRASES = (
+    "coding progress",
+    "codex progress",
+    "codex status",
+    "coding agent status",
+    "where is codex",
+    "codex 작업",
+    "codex 작업이 어디까지",
+    "코덱스 작업",
+    "작업이 어디까지",
+    "진행됐는지",
+    "진행되었는지",
+)
+_CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
+    {
+        "codex",
+        "claude",
+        "coding",
+        "agent",
+        "executor",
+        "progress",
+        "status",
+        "running",
+        "session",
+        "작업",
+        "진행",
+        "진행상황",
+        "상태",
+        "코덱스",
+        "클로드",
+        "세션",
+    }
+)
+_GITHUB_EVENT_OPS_PHRASES = (
+    "github issue to pr",
+    "issue opened",
+    "pr opened",
+    "github issue",
+    "github pr",
+    "github issue 들어온",
+)
+_GITHUB_EVENT_OPS_TOKENS = _normalized_token_set(
+    {
+        "github",
+        "issue",
+        "pr",
+        "pull",
+        "request",
+        "review",
+        "ci",
+        "label",
+        "깃허브",
+        "이슈",
+        "리뷰",
+        "라벨",
+        "실패",
+    }
+)
+_RELEASE_CLAIM_REVIEW_PHRASES = (
+    "readme claim",
+    "readme claims",
+    "readme 주장",
+    "claim matches actual",
+    "docs match code",
+    "release claim review",
+    "릴리즈 전에 readme",
+    "readme 주장과 실제",
+    "실제 기능이 맞는지",
+    "doctor/harness",
+)
+_RELEASE_CLAIM_REVIEW_TOKENS = _normalized_token_set(
+    {
+        "readme",
+        "claim",
+        "claims",
+        "docs",
+        "doctor",
+        "harness",
+        "release",
+        "review",
+        "verify",
+        "검토",
+        "릴리즈",
+        "주장",
+        "실제",
+        "기능",
+        "맞는지",
+        "통과",
     }
 )
 _VOICE_OPERATOR_PHRASES = (
@@ -665,6 +888,60 @@ EXECUTOR_RUNTIME_READINESS_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; executor/runtime comparison should show tool gaps and handoff mode before selection.",
     activation_status="active",
 )
+MATERIALS_PACKAGE_GUARD = RoutingGuardRule(
+    id="materials_package_before_report_or_clarify",
+    rule="Multi-format document, spreadsheet, deck, or PDF packaging requests should route to materials-package before generic report planning.",
+    matched_label="guard:materials_package",
+    preferred_skills=("materials-package",),
+    score_boost=24,
+    why="Matched guard/trigger metadata; material processing requests should prepare a target-format package and QA ladder.",
+    activation_status="active",
+)
+MEMORY_CURATION_GUARD = RoutingGuardRule(
+    id="memory_curation_before_generic_clarification",
+    rule="Hermes memory/context cleanup requests should route to memory-curation-review before generic clarification.",
+    matched_label="guard:memory_curation",
+    preferred_skills=("memory-curation-review",),
+    score_boost=28,
+    why="Matched guard/trigger metadata; stale or conflicting Hermes context should become a human-approved memory curation review.",
+    activation_status="active",
+)
+AGENT_BOARD_GUARD = RoutingGuardRule(
+    id="agent_board_before_generic_clarification",
+    rule="Multi-agent role, board, kanban, heartbeat, or blocker coordination requests should route to agent-board.",
+    matched_label="guard:agent_board",
+    preferred_skills=("agent-board",),
+    score_boost=26,
+    why="Matched guard/trigger metadata; multiple Hermes targets need a board/status contract before work is claimed.",
+    activation_status="active",
+)
+CODING_PROGRESS_STATUS_GUARD = RoutingGuardRule(
+    id="coding_progress_status_before_clarify",
+    rule="Executor or coding-agent progress/status requests should route to agent-ops-review before generic clarification.",
+    matched_label="guard:coding_progress_status",
+    preferred_skills=("agent-ops-review",),
+    score_boost=28,
+    why="Matched guard/trigger metadata; coding progress questions should render a manager-facing status card with observed gaps.",
+    activation_status="active",
+)
+GITHUB_EVENT_OPS_GUARD = RoutingGuardRule(
+    id="github_event_ops_before_generic_planning",
+    rule="GitHub PR, issue, CI, and issue-to-PR requests should route to github-event-ops before generic planning.",
+    matched_label="guard:github_event_ops",
+    preferred_skills=("github-event-ops",),
+    score_boost=24,
+    why="Matched guard/trigger metadata; GitHub event and issue-to-PR requests should create an event ops card before plan or handoff claims.",
+    activation_status="active",
+)
+RELEASE_CLAIM_REVIEW_GUARD = RoutingGuardRule(
+    id="release_claim_review_before_file_lookup",
+    rule="Release claim and README-vs-code review requests should route to review before file lookup fallback.",
+    matched_label="guard:release_claim_review",
+    preferred_skills=("code-review",),
+    score_boost=20,
+    why="Matched guard/trigger metadata; release claim checks need review boundaries instead of plain file lookup.",
+    activation_status="active",
+)
 VOICE_OPERATOR_GUARD = RoutingGuardRule(
     id="voice_operator_before_generic_clarification",
     rule="Voice, mobile, or terse accessibility-sensitive requests should route to voice-operator before generic clarification.",
@@ -716,6 +993,12 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
+    GITHUB_EVENT_OPS_GUARD,
+    MATERIALS_PACKAGE_GUARD,
+    MEMORY_CURATION_GUARD,
+    AGENT_BOARD_GUARD,
+    CODING_PROGRESS_STATUS_GUARD,
+    RELEASE_CLAIM_REVIEW_GUARD,
     EXECUTOR_RUNTIME_READINESS_GUARD,
     VOICE_OPERATOR_GUARD,
     VISUAL_SUMMARY_GUARD,
@@ -778,6 +1061,18 @@ def active_routing_guard_rules(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        rules.append(GITHUB_EVENT_OPS_GUARD)
+    if _materials_package_guard_applies(normalized_query, query_tokens):
+        rules.append(MATERIALS_PACKAGE_GUARD)
+    if _memory_curation_guard_applies(normalized_query, query_tokens):
+        rules.append(MEMORY_CURATION_GUARD)
+    if _agent_board_guard_applies(normalized_query, query_tokens):
+        rules.append(AGENT_BOARD_GUARD)
+    if _coding_progress_status_guard_applies(normalized_query, query_tokens):
+        rules.append(CODING_PROGRESS_STATUS_GUARD)
+    if _release_claim_review_guard_applies(normalized_query, query_tokens):
+        rules.append(RELEASE_CLAIM_REVIEW_GUARD)
     if _executor_runtime_readiness_guard_applies(normalized_query, query_tokens):
         rules.append(EXECUTOR_RUNTIME_READINESS_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
@@ -928,12 +1223,89 @@ def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: se
     return explicit_phrase or (executor and work and control)
 
 
+def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _GITHUB_EVENT_OPS_PHRASES):
+        return True
+    github_context = _contains_phrase(normalized_query, ("github", "깃허브"))
+    issue_or_pr = bool(_GITHUB_EVENT_OPS_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("issue", "pull request", "pr", "이슈"),
+    )
+    event_or_pr_prep = _contains_phrase(
+        normalized_query,
+        ("opened", "failed ci", "ci failed", "label", "review", "to pr", "into a pr", "pr 만들", "pr로", "들어온"),
+    )
+    event_context = _contains_phrase(normalized_query, ("opened", "failed ci", "ci failed", "label", "들어온"))
+    return issue_or_pr and event_or_pr_prep and (github_context or event_context)
+
+
+def _materials_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _MATERIALS_PACKAGE_PHRASES):
+        return True
+    format_hits = len(_MATERIALS_PACKAGE_FORMAT_TOKENS & query_tokens)
+    action = bool(_MATERIALS_PACKAGE_ACTION_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("make", "turn into", "prepare", "export", "만들", "정리", "준비", "공유"),
+    )
+    return format_hits >= 2 and action
+
+
+def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _MEMORY_CURATION_PHRASES):
+        return True
+    context = bool(_MEMORY_CURATION_CONTEXT_TOKENS & query_tokens)
+    hermes_context = _contains_phrase(normalized_query, ("hermes", "헤르메스"))
+    cleanup = _contains_phrase(normalized_query, ("cleanup", "curate", "review", "inspect", "정리", "점검", "검토"))
+    stale = _contains_phrase(normalized_query, ("stale", "old", "duplicate", "conflicting", "오래된", "중복", "충돌"))
+    return context and (hermes_context or stale) and cleanup
+
+
+def _agent_board_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _AGENT_BOARD_PHRASES):
+        return True
+    multi_agent = _contains_phrase(
+        normalized_query,
+        ("multiple agents", "multi agent", "multiple hermes", "여러 에이전트", "여러 명", "agent 여러"),
+    )
+    board_or_roles = bool({"board", "kanban", "role", "roles", "보드", "역할", "칸반"} & query_tokens)
+    team_context = bool(_AGENT_BOARD_CONTEXT_TOKENS & query_tokens)
+    return team_context and multi_agent and board_or_roles
+
+
+def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _CODING_PROGRESS_STATUS_PHRASES):
+        return True
+    executor = _contains_phrase(
+        normalized_query,
+        ("codex", "claude code", "coding agent", "executor", "코덱스", "클로드", "코딩 에이전트"),
+    )
+    progress = bool(_CODING_PROGRESS_STATUS_TOKENS & query_tokens) and _contains_phrase(
+        normalized_query,
+        ("progress", "status", "running", "where", "어디까지", "진행", "상태"),
+    )
+    return executor and progress
+
+
+def _release_claim_review_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _RELEASE_CLAIM_REVIEW_PHRASES):
+        return True
+    review_intent = bool(_RELEASE_CLAIM_REVIEW_TOKENS & query_tokens)
+    claim_or_release = _contains_phrase(
+        normalized_query,
+        ("claim", "readme", "release", "doctor", "harness", "주장", "릴리즈"),
+    )
+    compare_or_verify = _contains_phrase(normalized_query, ("match", "matches", "verify", "review", "맞는지", "검토", "통과"))
+    return review_intent and claim_or_release and compare_or_verify
+
+
 def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _EXECUTOR_RUNTIME_READINESS_PHRASES):
         return True
     runtime_intent = bool(_EXECUTOR_RUNTIME_READINESS_TOKENS & query_tokens) or _contains_phrase(
         normalized_query,
-        ("runtime", "executor", "handoff", "런타임", "실행", "위임"),
+        ("runtime", "executor", "handoff", "런타임", "실행", "위임", "넘길", "넘길지"),
     )
     named_executor = _contains_phrase(
         normalized_query,
@@ -941,7 +1313,7 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
     )
     selection = _contains_phrase(
         normalized_query,
-        ("which", "choose", "compare", "vs", "중 어떤", "어떤", "골라", "선택"),
+        ("which", "choose", "compare", "vs", "중 어떤", "어떤", "골라", "선택", "정해", "할까", "넘길지"),
     )
     return runtime_intent and named_executor and selection
 

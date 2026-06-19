@@ -789,32 +789,78 @@ class WrapperContractTests(unittest.TestCase):
                 "Codex랑 Claude Code 중 어떤 런타임으로 넘겨야 해?",
                 "executor-runtime-readiness",
                 "prepare_executor_runtime_readiness",
+                "ack",
             ),
             (
                 "음성으로 짧게 말한 요청을 안전하게 정리해줘",
                 "voice-operator",
                 "prepare_voice_operator_card",
+                "ack",
             ),
             (
                 "GitHub PR이 열리면 리뷰하고 CI 실패 원인을 정리해줘",
                 "github-event-ops",
                 "prepare_github_event_ops_card",
+                "ack",
             ),
             (
                 "우리 팀 Hermes agent 여러 명으로 작업 보드 관리하고 싶어",
                 "agent-board",
                 "prepare_agent_board_card",
+                "ack",
+            ),
+            (
+                "GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘",
+                "github-event-ops",
+                "prepare_github_event_ops_card",
+                "ack",
+            ),
+            (
+                "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
+                "memory-curation-review",
+                "prepare_memory_curation_review",
+                "ack",
+            ),
+            (
+                "첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘",
+                "materials-package",
+                "prepare_material_package",
+                "ack",
+            ),
+            (
+                "Codex 작업이 어디까지 진행됐는지 알려줘",
+                "agent-ops-review",
+                "show_agent_ops_review",
+                "agent_ops_review",
+            ),
+            (
+                "Claude Code로 넘길지 Codex로 넘길지 정해줘",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "ack",
+            ),
+            (
+                "우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘",
+                "agent-board",
+                "prepare_agent_board_card",
+                "ack",
+            ),
+            (
+                "릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘",
+                "code-review",
+                "prepare_review_or_followup_handoff",
+                "ack",
             ),
         )
 
-        for message, selected_workflow, next_action in cases:
+        for message, selected_workflow, next_action, response_kind in cases:
             with self.subTest(message=message):
                 payload = build_chat_interaction_payload(message, source="discord")
 
                 self.assertEqual(payload["mode"], "route")
                 self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
                 self.assertEqual(payload["next_action"], next_action)
-                self.assertEqual(payload["chat_response"]["kind"], "ack")
+                self.assertEqual(payload["chat_response"]["kind"], response_kind)
                 self.assertIn(selected_workflow, payload["chat_response"]["headline"])
 
     def test_ack_workflow_chat_copy_stays_human_friendly(self) -> None:
