@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Route implementation to a plan or selected executor/runtime handoff after action items are accepted.
 - Why: Operating records can capture follow-ups, but implementation is a separate observed work stream.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.

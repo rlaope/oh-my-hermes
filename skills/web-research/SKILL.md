@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Route to `ultraprocess` because the user asked for a bounded delivery cycle, not a research-only lane.
 - Why: Research is only one stage of the requested delivery process.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Research and company ops** (`web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`) - source-backed research, customer signals, product operations, and briefing workflows.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when the user needs current web evidence, links, citations, source diversity, or source comparison before planning or handoff.

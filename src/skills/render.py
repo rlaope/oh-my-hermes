@@ -17,7 +17,7 @@ from .catalog import (
     surface_exposure_for_skill,
     workflow_reference_definitions,
 )
-from ..plugin_bundle.omh.awareness import awareness_primer_markdown
+from ..plugin_bundle.omh.awareness import awareness_primer_markdown, awareness_workflow_context_markdown
 
 
 @dataclass(frozen=True)
@@ -406,6 +406,8 @@ def workflow_skill(name: str) -> SkillTemplate:
 This is a Hermes-native `{name}` workflow skill.
 
 {_quality_rubric_sections(definition)}
+
+{awareness_workflow_context_markdown(name)}
 
 ## Use When
 

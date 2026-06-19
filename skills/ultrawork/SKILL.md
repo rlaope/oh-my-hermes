@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Keep one owner or re-plan boundaries before parallelization.
 - Why: Shared core logic makes parallel edits likely to conflict or hide regressions.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when an accepted implementation plan can be split into independent, reviewable work lanes.

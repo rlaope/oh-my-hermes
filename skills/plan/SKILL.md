@@ -37,6 +37,14 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.

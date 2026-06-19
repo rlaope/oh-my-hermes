@@ -37,6 +37,14 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `strategy-brief`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Research and company ops** (`web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`) - source-backed research, customer signals, product operations, and briefing workflows.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.

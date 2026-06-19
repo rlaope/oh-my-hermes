@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Route implementation to a selected executor/runtime after review findings are established.
 - Why: Review can identify the issue, but code mutation is a separate execution step.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Coding handoff** (`request-to-handoff`, `executor selection`, `coding runtime handoff`, `code-review`) - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use for review-shaped requests; findings come first and must cite concrete evidence.

@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Route to `loop` or ask for a bounded goal rather than promise endless delivery.
 - Why: Popularity and indefinite improvement need long-horizon loop management, not one PR-ready cycle.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Intent -> plan** (`deep-interview`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`) - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when the user asks Hermes to take a concrete task through one full delivery cycle: research/codebase context, reviewed plan, selected implementation handoff, code review, docs sync when needed, and PR preparation.

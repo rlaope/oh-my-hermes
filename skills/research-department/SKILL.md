@@ -39,6 +39,14 @@ Bad example:
 - Expected behavior: Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.
 - Why: The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Research and company ops** (`web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`) - source-backed research, customer signals, product operations, and briefing workflows.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should turn an ongoing or recurring research request into a prepared Scout -> Analyst -> Briefer workflow with source inbox, knowledge-store and synthesis-tool readiness, and briefing status without claiming research execution.
