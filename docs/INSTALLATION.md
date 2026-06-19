@@ -152,6 +152,8 @@ MCP bridge setup is also optional and intentionally conservative:
 ```sh
 omh setup --with-mcp
 omh mcp manifest
+# wrapper/host adapters can record observed host load when they see it:
+omh mcp observe-host --host hermes-agent --session <session-id> --event host_load --evidence-ref <host-log-ref>
 ```
 
 This records `mcp_mode: bridge_requested` in setup state and keeps
@@ -160,6 +162,9 @@ event. `omh mcp manifest` prints a stdio MCP config snippet for the allowlisted
 `omh mcp serve` bridge. The bridge exposes only local `omh_status`,
 `omh_recommend`, and `omh_probe` tools; it is not arbitrary shell access,
 connector execution, coding dispatch, or proof that an MCP runtime is active.
+`omh mcp observe-host` is for host/wrapper adapters that already observed
+bridge load or use and can attach a stable evidence reference. It records
+`omh_mcp_host_session/v1` metadata; it does not discover or force host loading.
 
 ## Install Path A: Hermes-Native Skill Tap
 
@@ -373,14 +378,15 @@ surface.
 latest install/apply/doctor state when those commands have run. `omh probe`
 reports observable Hermes capability surfaces without mutating Hermes internals.
 For MCP, `omh probe` reports the bridge server, setup preference, runtime tool
-call observation, and host config separately:
+call observation, host session observation, and host config separately:
 `mcp_preference` means `omh setup --with-mcp` was requested in OMH local state,
 `mcp_bridge_server` means the installed command package exposes `omh mcp serve`,
 `mcp_bridge_runtime` means OMH has observed a local MCP bridge tool call, and
-`mcp_host_config` only means a Hermes MCP config file such as `.mcp.json` or
-`mcp.json` exists. These fields do not prove connector invocation, coding
-dispatch, implementation, review, CI, merge, or host-specific MCP load unless
-separate runtime evidence records that event.
+`mcp_host_session` means a host or wrapper recorded load/session evidence with
+`omh mcp observe-host`. `mcp_host_config` only means a Hermes MCP config file
+such as `.mcp.json` or `mcp.json` exists. These fields do not prove connector
+invocation, coding dispatch, implementation, review, CI, merge, or unrecorded
+host-specific MCP load unless separate runtime evidence records that event.
 After `omh setup` has run, `omh doctor` also checks the managed plugin manifest
 plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so
@@ -809,6 +815,7 @@ Record the optional MCP bridge preference during setup:
 
 ```sh
 omh setup --with-mcp
+omh mcp manifest
 ```
 
 Use project-local OMH/Hermes paths during setup:

@@ -2180,6 +2180,10 @@ def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
         "bridge": {
             "manifest_command": "omh mcp manifest",
             "server_command": "omh mcp serve",
+            "host_observation_command": (
+                "omh mcp observe-host --host <host> --session <session-id> "
+                "--event host_load --evidence-ref <host-log-or-session-ref>"
+            ),
             "transport": "stdio",
             "tools": ["omh_status", "omh_recommend", "omh_probe"],
         },
@@ -2190,7 +2194,7 @@ def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
         "next_action": (
             "Use Hermes skills as the normal surface. If the host supports MCP, export `omh mcp manifest` and "
             "wire the stdio `omh mcp serve` bridge. Treat host load as unobserved until a Hermes/MCP host "
-            "records a concrete load or tool-call event."
+            "records a concrete load or tool-call event with `omh mcp observe-host`."
         ),
     }
 

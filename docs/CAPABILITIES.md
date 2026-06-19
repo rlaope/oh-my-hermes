@@ -68,7 +68,10 @@ runtime observes the workspace action.
 
 The optional MCP bridge uses `omh mcp serve` and exposes only `omh_status`,
 `omh_recommend`, and `omh_probe`. Bridge availability is not host-load evidence,
-and a host config file is not proof that any MCP tool was called.
+and a host config file is not proof that any MCP tool was called. A host or
+wrapper that actually observes bridge load or use can record
+`omh_mcp_host_session/v1` with `omh mcp observe-host`; that remains session
+evidence only.
 
 ## Why This Exists
 

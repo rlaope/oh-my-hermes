@@ -139,10 +139,10 @@ selected.
   fixed.
 - Parity docs should map common oh-my runtime capability axes to OMH's
   Hermes-native evidence model instead of promising hidden workers, worktrees,
-  host-observed MCP load, arbitrary MCP tools, or plugin runtime load without
+  unrecorded MCP host load, arbitrary MCP tools, or plugin runtime load without
   observation. The local MCP bridge may expose only allowlisted status,
-  recommendation, and probe tools unless a future explicit integration expands
-  that surface.
+  recommendation, and probe tools; host/wrapper-observed load is recorded as
+  `omh_mcp_host_session/v1`.
 - Goal execution docs should describe `.omh/goals` metadata-only ledgers,
   `goal_completion_gate/v1`, `goal_status_card/v1`, and
   `goal_continuation/v1` as wrapper contracts that name the next action before

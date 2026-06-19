@@ -702,6 +702,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(matrix["probe_alignment"]["managed_skills"], "available")
             self.assertEqual(matrix["probe_alignment"]["omh_plugin_bundle"], "available")
             self.assertEqual(matrix["probe_alignment"]["mcp_bridge_server"], "available")
+            self.assertEqual(matrix["probe_alignment"]["mcp_host_session"], "unverified")
             self.assertIn("does not claim hidden worker launch", matrix["claim_boundary"])
 
             status, stdout, stderr = run_cli(base + ["probe", "--parity"], output_json=False)
@@ -822,6 +823,7 @@ class CliTests(unittest.TestCase):
             self.assertFalse(mcp["observed"])
             self.assertEqual(mcp["bridge"]["manifest_command"], "omh mcp manifest")
             self.assertEqual(mcp["bridge"]["server_command"], "omh mcp serve")
+            self.assertIn("observe-host", mcp["bridge"]["host_observation_command"])
             self.assertIn("omh_probe", mcp["bridge"]["tools"])
             self.assertIn("does not prove an MCP host loaded OMH", mcp["claim_boundary"])
             state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
