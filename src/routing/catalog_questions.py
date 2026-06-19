@@ -116,6 +116,31 @@ _CONTEXT_CAPABILITY_MARKERS = (
     "할 수",
     "가능",
 )
+_MISSED_WORKFLOW_MARKERS = (
+    "did not use",
+    "didn't use",
+    "didnt use",
+    "does not use",
+    "doesn't use",
+    "doesnt use",
+    "not using",
+    "without omh",
+    "missed omh",
+    "skipped omh",
+    "forgot omh",
+    "not aware",
+    "did not know",
+    "didn't know",
+    "does not know",
+    "몰랐",
+    "모르",
+    "안 썼",
+    "안 써",
+    "안쓰",
+    "안 쓰",
+    "놓쳤",
+    "빠졌",
+)
 _NAMED_WORKFLOW_MARKERS = (
     "deep-interview",
     "ralplan",
@@ -353,6 +378,8 @@ def is_skill_catalog_question(message: str) -> bool:
         return False
     if _is_file_or_text_search_question(search_texts):
         return False
+    if _is_missed_workflow_feedback(search_texts):
+        return False
     if _contains_catalog_token(search_texts, _EXPLICIT_OMH_CAPABILITY_PHRASES):
         return True
     if _is_named_workflow_catalog_question(search_texts):
@@ -417,6 +444,12 @@ def _is_named_workflow_catalog_question(search_texts: tuple[str, ...]) -> bool:
 def _is_context_capability_question(search_texts: tuple[str, ...]) -> bool:
     return _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS) and _contains_catalog_token(
         search_texts, _CONTEXT_CAPABILITY_MARKERS
+    )
+
+
+def _is_missed_workflow_feedback(search_texts: tuple[str, ...]) -> bool:
+    return _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS) and _contains_catalog_token(
+        search_texts, _MISSED_WORKFLOW_MARKERS
     )
 
 

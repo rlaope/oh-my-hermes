@@ -750,6 +750,7 @@ class WrapperContractTests(unittest.TestCase):
             "Make a PR summary card",
             "크론 기능 설명 이미지 하나 만들어줘",
             "이 회의록을 세로 이미지 카드로 만들어줘",
+            "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
         )
 
         for message in cases:
