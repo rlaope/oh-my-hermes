@@ -31,6 +31,9 @@ state:
 - "A coding handoff is prepared, but execution is not observed yet" for coding
   lanes.
 - "Review or CI is still missing" before merge-ready status is shown.
+- "This workflow attempt is now a learning trace" when Hermes records the route,
+  next action, missing evidence, eval result, and future regression case without
+  storing the raw prompt or silently patching a skill.
 
 The wrapper can choose buttons from `wrapper_actions`, show progress from
 `evidence_ladder`, and avoid false claims with `overclaim_guards`.
@@ -88,6 +91,11 @@ contract shaped like this:
 - `omh runtime delegation-status --run <run-id>` includes
   `harness_progress/v1`, which marks ladder steps complete only when the
   corresponding runtime or wrapper evidence is observed.
+- `omh learning record`, `omh learning eval`, and `omh learning regression
+  replay` expose the `workflow-learning` harness for process-supervision data:
+  why a workflow was chosen, what was prepared, what was observed, which
+  deterministic checks passed, and what improvement candidate still needs human
+  approval.
 
 ## Wrapper Rules
 

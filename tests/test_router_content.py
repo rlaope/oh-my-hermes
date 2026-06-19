@@ -60,6 +60,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "toolbelt-readiness": ("harness_only", False),
     "ops-observability-card": ("harness_only", False),
     "agent-ops-review": ("workflow_skill", True),
+    "workflow-learning": ("workflow_skill", True),
 }
 
 
@@ -353,6 +354,7 @@ class RouterContentTests(unittest.TestCase):
                 "toolbelt-readiness",
                 "ops-observability-card",
                 "agent-ops-review",
+                "workflow-learning",
             },
             harnesses,
         )

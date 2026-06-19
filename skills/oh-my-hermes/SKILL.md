@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `workflow-learning`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
@@ -64,11 +64,11 @@ Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrappe
 
 Workflow context cards:
 
-intent -> deep-interview/ralplan/loop/ultraprocess; signals -> web-research/research-department/feedback-triage/meeting-brief; materials -> materials-package/report-package/img-summary; automation/status -> automation-blueprint/agent-ops-review/doctor; code -> ultraprocess/code-review/team/ultrawork/ultraqa.
+intent -> deep-interview/ralplan/loop/ultraprocess; signals -> web-research/research-department/feedback-triage/meeting-brief; materials -> materials-package/report-package/img-summary; automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; code -> ultraprocess/code-review/team/ultrawork/ultraqa.
 
 Common cues before generic tools:
 
-notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review.
+notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; trace/improve/regression -> workflow-learning.
 
 Tools:
 
@@ -112,7 +112,7 @@ Use installed primary workflow skills plus compatibility surfaces in this regist
 - `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
 - `researcher`: `web-research`, `research-brief`, `research-department`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `ultraqa`, `code-review`, `ask`
-- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`
+- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `workflow-learning`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
 General rule: Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration. This role metadata is advisory unless a wrapper/runtime artifact records observed enforcement. When the accepted next action mutates code, the wrapper should ask for or apply the selected executor/runtime profile, prepare the matching handoff, and track only evidence it actually observes instead of implying code ran secretly.
@@ -221,6 +221,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`
 - `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`
+- `workflow-learning`: `workflow-learning`, `workflow learning`, `learning trace`, `execution trace`, `skill improvement`
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.
 
@@ -261,6 +262,7 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `toolbelt-readiness`: Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools for a workflow. Tier `tool-readiness-gated`. Ladder: `workflow_tools_scoped` -> `tool_requirements_listed` -> `installed_state_recorded_when_available` -> `credential_gaps_recorded`. Actions: `show_toolbelt`, `open_setup`, `record_tool_check`, `prepare_handoff`, `show_status`. Privacy `metadata_only`.
 - `ops-observability-card`: Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries. Tier `observability-gated`. Ladder: `telemetry_scope_recorded` -> `local_metrics_summarized` -> `failure_modes_checked` -> `provider_truth_observed_when_available`. Actions: `show_observability`, `record_metric`, `record_failure_mode`, `show_status`. Privacy `metadata_only`.
 - `agent-ops-review`: Prepare a manager-facing quality and throughput review for AI-agent research, coding, review, and status work. Tier `manager-review-gated`. Ladder: `manager_scope_recorded` -> `quality_lanes_prepared` -> `evidence_gaps_named` -> `next_action_selected`. Actions: `show_agent_ops_review`, `choose_ops_lane`, `prepare_research_lane`, `prepare_coding_lane`, `prepare_review_lane`. Privacy `metadata_only`.
+- `workflow-learning`: Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, and regression cases. Tier `learning-gated`. Ladder: `trace_recorded` -> `eval_recorded` -> `improvement_candidate_reviewed` -> `regression_case_recorded`. Actions: `record_workflow_learning_trace`, `show_learning_eval`, `propose_skill_improvement`, `add_regression_case`, `replay_regression_cases`. Privacy `metadata_only`.
 
 Harness priority:
 

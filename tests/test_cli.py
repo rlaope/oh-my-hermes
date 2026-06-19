@@ -53,6 +53,64 @@ class CliTests(unittest.TestCase):
         self.assertIn("release smoke", help_text)
         self.assertIn("memory, ops, materials, state", help_text)
 
+    def test_learning_record_eval_and_regression_replay(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "I want to safely add a feature to this repo"
+
+            status, stdout, stderr = run_cli(base + ["learning", "record", message, "--source", "discord"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            record = json.loads(stdout)
+            trace = record["trace"]
+            trace_id = trace["trace_id"]
+            self.assertEqual(record["schema_version"], "learning_record_result/v1")
+            self.assertEqual(trace["schema_version"], "workflow_learning_trace/v1")
+            self.assertEqual(trace["privacy"]["mode"], "metadata_only")
+            self.assertFalse(trace["privacy"]["raw_prompt_stored"])
+            self.assertEqual(trace["workflow"]["selected_workflow"], "plan")
+            self.assertEqual(record["interaction"]["chat_response"]["state"]["learning_trace_ref"], record["learning_trace_ref"])
+            self.assertNotIn(message, json.dumps(trace))
+
+            status, stdout, stderr = run_cli(base + ["learning", "eval", trace_id])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            eval_payload = json.loads(stdout)
+            self.assertTrue(eval_payload["recorded"])
+            self.assertEqual(eval_payload["eval"]["schema_version"], "workflow_eval_result/v1")
+            self.assertIn(eval_payload["eval"]["status"], {"passed", "warning"})
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "learning",
+                    "regression",
+                    "add",
+                    trace_id,
+                    "--fixture-message",
+                    "safely add a feature to this repo",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            regression = json.loads(stdout)
+            self.assertEqual(regression["regression_case"]["schema_version"], "regression_case/v1")
+            self.assertEqual(regression["regression_case"]["fixture"]["fixture_text"], "safely add a feature to this repo")
+            self.assertFalse(regression["regression_case"]["fixture"]["privacy"]["redaction_provable_by_omh"])
+
+            status, stdout, stderr = run_cli(base + ["learning", "regression", "replay"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            replay = json.loads(stdout)
+            self.assertEqual(replay["schema_version"], "workflow_regression_replay/v1")
+            self.assertEqual(replay["status"], "passed")
+            self.assertEqual(replay["passed"], 1)
+
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

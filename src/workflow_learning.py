@@ -1,0 +1,936 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from pathlib import Path
+from typing import Any, Callable
+
+from .local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
+from .paths import OmhPaths
+from .runtime.artifacts import show_run
+
+
+WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION = "workflow_learning_trace/v1"
+WORKFLOW_EVAL_RESULT_SCHEMA_VERSION = "workflow_eval_result/v1"
+IMPROVEMENT_CANDIDATE_SCHEMA_VERSION = "improvement_candidate/v1"
+REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
+WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
+TRACE_REF_PREFIX = "omh-learning-trace"
+PRIVACY_MODE = "metadata_only"
+LEARNING_EVENT_KIND = "workflow_learning"
+FORBIDDEN_TRACE_KEYS = {
+    "message",
+    "raw_message",
+    "prompt",
+    "raw_prompt",
+    "prompt_body",
+    "body_text",
+    "body_preview",
+    "routing_prompt",
+    "dispatch_text_template",
+}
+_OBSERVED_STATES = {"observed", "verified", "complete", "completed", "ready", "merged"}
+_LEARNING_OUTCOMES = {"unknown", "useful", "not_useful", "blocked", "failed"}
+
+
+class WorkflowLearningError(ValueError):
+    pass
+
+
+def learning_trace_ref(trace_id: str) -> str:
+    return f"{TRACE_REF_PREFIX}:{trace_id}"
+
+
+def build_trace_from_chat_interaction(
+    interaction: dict[str, Any],
+    *,
+    source_ref: str = "",
+    outcome: str = "unknown",
+    feedback_summary: str = "",
+    trace_id: str | None = None,
+) -> dict[str, Any]:
+    if interaction.get("schema_version") != "chat_interaction/v1":
+        raise WorkflowLearningError("learning trace requires chat_interaction/v1")
+    if outcome not in _LEARNING_OUTCOMES:
+        raise WorkflowLearningError(f"unsupported learning outcome: {outcome}")
+
+    route = _object(interaction.get("route"))
+    chat_response = _object(interaction.get("chat_response"))
+    state = _object(chat_response.get("state"))
+    explanation = _object(state.get("workflow_explanation"))
+    usage_trace = _object(chat_response.get("usage_trace"))
+    selected_workflow = _first_nonempty(
+        explanation.get("selected_workflow"),
+        usage_trace.get("selected_workflow"),
+        state.get("selected_workflow"),
+        route.get("selected_skill"),
+        "unknown",
+    )
+    selected_harness = _first_nonempty(
+        explanation.get("selected_harness"),
+        usage_trace.get("selected_harness"),
+        route.get("selected_harness"),
+        "unknown",
+    )
+    evidence_state = _first_nonempty(
+        usage_trace.get("evidence_state"),
+        state.get("observation_status"),
+        _nested(interaction, "delegation", "status"),
+        "prepared_not_observed",
+    )
+    now = utc_now()
+    source = {
+        "kind": "chat_interaction",
+        "source": str(interaction.get("source", "generic")),
+        "source_ref": source_ref,
+        "thread_key": str(interaction.get("thread_key", "")),
+        "message_sha256": str(interaction.get("message_sha256", "")),
+        "message_length": int(interaction.get("message_length", 0) or 0),
+        "source_metadata": _safe_metadata(_object(interaction.get("source_metadata"))),
+    }
+    seed = json.dumps(
+        {
+            "source": source,
+            "workflow": selected_workflow,
+            "harness": selected_harness,
+            "next_action": interaction.get("next_action", ""),
+            "source_ref": source_ref,
+        },
+        sort_keys=True,
+    )
+    trace = {
+        "schema_version": WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION,
+        "record_type": "workflow_learning_trace",
+        "trace_id": trace_id or _id("wlt", seed),
+        "created_at": now,
+        "updated_at": now,
+        "privacy": {
+            "mode": PRIVACY_MODE,
+            "raw_prompt_stored": False,
+            "raw_platform_event_stored": False,
+            "redaction_policy": str(interaction.get("redaction_policy", PRIVACY_MODE)),
+            "stored_fields": [
+                "message hash",
+                "message length",
+                "source metadata",
+                "route summary",
+                "workflow explanation",
+                "evidence references",
+            ],
+        },
+        "source": source,
+        "route": {
+            "action": str(route.get("action", "")),
+            "selected_workflow": str(selected_workflow),
+            "selected_harness": str(selected_harness),
+            "confidence": str(route.get("confidence", "")),
+            "score": route.get("score", 0),
+            "matched": _list(route.get("matched")),
+        },
+        "workflow": {
+            "selected_workflow": str(selected_workflow),
+            "selected_harness": str(selected_harness),
+            "workflow_context_id": str(explanation.get("workflow_context_id") or usage_trace.get("workflow_context_id") or ""),
+            "phase": str(usage_trace.get("phase") or state.get("phase") or ""),
+            "next_action": str(interaction.get("next_action") or usage_trace.get("next_action") or state.get("next_action") or ""),
+        },
+        "reasoning_summary": {
+            "why_this_workflow": str(explanation.get("why_this_workflow", "")),
+            "next_action": str(explanation.get("next_action") or state.get("next_action") or interaction.get("next_action") or ""),
+            "not_evidence_yet": _strings(explanation.get("not_evidence_yet") or state.get("evidence_not_observed") or []),
+            "claim_boundary": str(explanation.get("claim_boundary") or chat_response.get("claim_boundary") or ""),
+        },
+        "prepared_refs": _prepared_refs(interaction),
+        "observed_refs": [],
+        "status": {
+            "evidence_state": str(evidence_state),
+            "learning_state": "recorded",
+            "outcome": outcome,
+            "feedback_summary": feedback_summary,
+        },
+        "improvement": {
+            "candidate_available": False,
+            "candidate_refs": [],
+            "regression_case_refs": [],
+        },
+        "overclaim_guard": _strings(interaction.get("overclaim_guard"))
+        or [
+            "Prepared workflow artifacts are not observed execution evidence.",
+            "Learning traces are review material, not automatic skill patches.",
+        ],
+    }
+    validate_workflow_learning_trace(trace)
+    return trace
+
+
+def build_trace_from_runtime_run(
+    paths: OmhPaths,
+    run_id: str,
+    *,
+    outcome: str = "unknown",
+    feedback_summary: str = "",
+    trace_id: str | None = None,
+) -> dict[str, Any]:
+    if outcome not in _LEARNING_OUTCOMES:
+        raise WorkflowLearningError(f"unsupported learning outcome: {outcome}")
+    shown = show_run(paths, run_id)
+    run = _object(shown.get("run"))
+    routing = _object(shown.get("routing"))
+    coding = _object(shown.get("coding_delegation"))
+    wrapper = _object(shown.get("wrapper"))
+    observations = [record for record in _list(shown.get("runtime_observations")) if isinstance(record, dict)]
+    selected_workflow = _first_nonempty(coding.get("recommended_workflow"), routing.get("selected_skill"), run.get("skill"), "unknown")
+    selected_harness = _first_nonempty(coding.get("recommended_harness"), routing.get("selected_harness"), run.get("harness"), "unknown")
+    evidence_state = str(run.get("observation_status") or coding.get("status") or "prepared_not_observed")
+    observed_refs = [
+        {
+            "kind": "runtime_observation",
+            "ref": f"runtime:{run_id}:{record.get('event_type', 'unknown')}",
+            "event_type": str(record.get("event_type", "")),
+            "status": str(record.get("status", "")),
+            "evidence_refs": _strings(record.get("evidence_refs")),
+        }
+        for record in observations
+    ]
+    if any(ref["status"] == "observed" for ref in observed_refs):
+        evidence_state = "observed"
+    now = utc_now()
+    trace = {
+        "schema_version": WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION,
+        "record_type": "workflow_learning_trace",
+        "trace_id": trace_id or _id("wlt", f"runtime:{run_id}:{selected_workflow}:{selected_harness}"),
+        "created_at": now,
+        "updated_at": now,
+        "privacy": {
+            "mode": PRIVACY_MODE,
+            "raw_prompt_stored": False,
+            "raw_platform_event_stored": False,
+            "redaction_policy": PRIVACY_MODE,
+            "stored_fields": ["run id", "route summary", "runtime observation refs", "evidence refs"],
+        },
+        "source": {
+            "kind": "runtime_run",
+            "source": str(coding.get("source") or run.get("trigger") or "runtime"),
+            "source_ref": f"runtime:{run_id}",
+            "thread_key": "",
+            "message_sha256": str(coding.get("message_sha256") or routing.get("message_sha256") or ""),
+            "message_length": int(coding.get("message_length") or routing.get("message_length") or 0),
+            "source_metadata": _safe_metadata(_object(coding.get("source_metadata") or routing.get("source_metadata"))),
+        },
+        "route": {
+            "action": str(coding.get("action") or routing.get("action") or ""),
+            "selected_workflow": str(selected_workflow),
+            "selected_harness": str(selected_harness),
+            "confidence": str(routing.get("confidence", "")),
+            "score": routing.get("score", 0),
+            "matched": _strings(routing.get("matched")),
+        },
+        "workflow": {
+            "selected_workflow": str(selected_workflow),
+            "selected_harness": str(selected_harness),
+            "workflow_context_id": "",
+            "phase": str(run.get("phase") or "runtime"),
+            "next_action": "show_status",
+        },
+        "reasoning_summary": {
+            "why_this_workflow": "Projected from a local runtime run artifact.",
+            "next_action": "review_trace_or_record_more_evidence",
+            "not_evidence_yet": _runtime_not_evidence_yet(shown),
+            "claim_boundary": (
+                "Runtime traces include only observed runtime_observation/v1 records. "
+                "Missing ladder steps remain unobserved."
+            ),
+        },
+        "prepared_refs": _runtime_prepared_refs(run_id, shown),
+        "observed_refs": observed_refs,
+        "status": {
+            "evidence_state": evidence_state,
+            "learning_state": "recorded",
+            "outcome": outcome,
+            "feedback_summary": feedback_summary or str(wrapper.get("summary", "")),
+        },
+        "improvement": {
+            "candidate_available": False,
+            "candidate_refs": [],
+            "regression_case_refs": [],
+        },
+        "overclaim_guard": [
+            "Runtime traces do not prove missing review, CI, merge-readiness, or merge events.",
+            "Learning traces are review material, not automatic skill patches.",
+        ],
+    }
+    validate_workflow_learning_trace(trace)
+    return trace
+
+
+def write_learning_trace(paths: OmhPaths, trace: dict[str, Any]) -> dict[str, Any]:
+    validate_workflow_learning_trace(trace)
+    path = trace_path(paths, str(trace["trace_id"]))
+    atomic_write_json(path, trace, private=True)
+    _update_learning_index(paths, trace, "trace")
+    return trace
+
+
+def list_learning_traces(paths: OmhPaths, *, limit: int | None = None) -> list[dict[str, Any]]:
+    indexed = [_trace_summary(trace) for trace in _records_from_index(paths, "trace", trace_path, validate_workflow_learning_trace)]
+    if indexed:
+        return _apply_limit(indexed, limit)
+    if not paths.learning_traces_dir.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(paths.learning_traces_dir.glob("*.json")):
+        item = read_json_object(path)
+        if item:
+            validate_workflow_learning_trace(item)
+            records.append(_trace_summary(item))
+    return _apply_limit(records, limit)
+
+
+def show_learning_trace(paths: OmhPaths, trace_id: str) -> dict[str, Any]:
+    trace = read_json_object(trace_path(paths, trace_id))
+    if not trace:
+        raise FileNotFoundError(trace_id)
+    validate_workflow_learning_trace(trace)
+    return trace
+
+
+def build_workflow_eval_result(
+    trace: dict[str, Any],
+    *,
+    rubric_id: str = "default",
+    eval_id: str | None = None,
+) -> dict[str, Any]:
+    validate_workflow_learning_trace(trace)
+    checks = [
+        _check(
+            "schema_valid",
+            "passed",
+            "workflow_learning_trace/v1 validated.",
+            [learning_trace_ref(str(trace["trace_id"]))],
+        ),
+        _privacy_check(trace),
+        _routing_check(trace),
+        _boundary_check(trace),
+        _workflow_specific_check(trace),
+    ]
+    failed = any(check["status"] == "failed" for check in checks)
+    warnings = [check for check in checks if check["status"] == "warning"]
+    now = utc_now()
+    result = {
+        "schema_version": WORKFLOW_EVAL_RESULT_SCHEMA_VERSION,
+        "record_type": "workflow_eval_result",
+        "eval_id": eval_id or _id("wle", f"{trace['trace_id']}:{rubric_id}:{now}"),
+        "trace_id": str(trace["trace_id"]),
+        "created_at": now,
+        "rubric_id": rubric_id,
+        "status": "failed" if failed else ("warning" if warnings else "passed"),
+        "checks": checks,
+        "summary": _eval_summary(failed=failed, warnings=warnings),
+        "claim_boundary": "Workflow evals judge recorded metadata and evidence refs only; they do not execute workflows or patch skills.",
+    }
+    validate_workflow_eval_result(result)
+    return result
+
+
+def write_workflow_eval(paths: OmhPaths, result: dict[str, Any]) -> dict[str, Any]:
+    validate_workflow_eval_result(result)
+    atomic_write_json(eval_path(paths, str(result["eval_id"])), result, private=True)
+    _update_learning_index(paths, result, "eval")
+    return result
+
+
+def build_improvement_candidate(
+    trace: dict[str, Any],
+    eval_result: dict[str, Any],
+    *,
+    candidate_id: str | None = None,
+    target_type: str = "workflow_rubric",
+    title: str = "",
+) -> dict[str, Any]:
+    validate_workflow_learning_trace(trace)
+    validate_workflow_eval_result(eval_result)
+    failed_or_warned = [check for check in _list(eval_result.get("checks")) if isinstance(check, dict) and check.get("status") in {"failed", "warning"}]
+    now = utc_now()
+    candidate = {
+        "schema_version": IMPROVEMENT_CANDIDATE_SCHEMA_VERSION,
+        "record_type": "improvement_candidate",
+        "candidate_id": candidate_id or _id("wic", f"{trace['trace_id']}:{eval_result['eval_id']}:{now}"),
+        "trace_id": str(trace["trace_id"]),
+        "eval_id": str(eval_result["eval_id"]),
+        "created_at": now,
+        "target_type": target_type,
+        "title": title or _candidate_title(trace, failed_or_warned),
+        "status": "proposed",
+        "human_gate": {
+            "required": True,
+            "decision": "pending",
+            "allowed_decisions": ["approve", "revise", "reject"],
+        },
+        "proposal": {
+            "problem_summary": _candidate_problem_summary(failed_or_warned),
+            "suggested_change": _candidate_suggested_change(trace, failed_or_warned),
+            "regression_case_recommended": True,
+        },
+        "diff_preview": {
+            "available": False,
+            "reason": "v1 records a reviewable candidate only; it does not mutate skill files or routing tables.",
+        },
+        "claim_boundary": "Improvement candidates are review material. They do not apply patches until a later explicit human-approved workflow exists.",
+    }
+    validate_improvement_candidate(candidate)
+    return candidate
+
+
+def write_improvement_candidate(paths: OmhPaths, candidate: dict[str, Any]) -> dict[str, Any]:
+    validate_improvement_candidate(candidate)
+    atomic_write_json(candidate_path(paths, str(candidate["candidate_id"])), candidate, private=True)
+    _update_learning_index(paths, candidate, "candidate")
+    return candidate
+
+
+def build_regression_case_from_trace(
+    trace: dict[str, Any],
+    *,
+    case_id: str | None = None,
+    redacted_message: str = "",
+    expected_workflow: str | None = None,
+    expected_harness: str | None = None,
+    expected_next_action: str | None = None,
+) -> dict[str, Any]:
+    validate_workflow_learning_trace(trace)
+    workflow = _object(trace.get("workflow"))
+    reasoning = _object(trace.get("reasoning_summary"))
+    source = _object(trace.get("source"))
+    fixture_text = redacted_message
+    fixture_sha256 = hashlib.sha256(fixture_text.encode("utf-8")).hexdigest() if fixture_text else ""
+    expected = {
+        "selected_workflow": expected_workflow or str(workflow.get("selected_workflow", "")),
+        "selected_harness": expected_harness or str(workflow.get("selected_harness", "")),
+        "next_action": expected_next_action or str(workflow.get("next_action", "")),
+        "claim_boundary_contains": _first_sentence(str(reasoning.get("claim_boundary", ""))),
+        "not_evidence_yet_includes": _strings(reasoning.get("not_evidence_yet"))[:5],
+    }
+    case_seed = json.dumps(
+        {
+            "trace_id": str(trace["trace_id"]),
+            "fixture_sha256": fixture_sha256,
+            "expected": expected,
+        },
+        sort_keys=True,
+    )
+    now = utc_now()
+    case = {
+        "schema_version": REGRESSION_CASE_SCHEMA_VERSION,
+        "record_type": "regression_case",
+        "case_id": case_id or _id("wrc", case_seed),
+        "trace_id": str(trace["trace_id"]),
+        "created_at": now,
+        "fixture": {
+            "source": str(source.get("source", "generic")),
+            "fixture_text": fixture_text,
+            "fixture_sha256": fixture_sha256,
+            "message_sha256": str(source.get("message_sha256", "")),
+            "message_length": int(source.get("message_length", 0) or 0),
+            "privacy": {
+                "mode": "operator_provided_minimized_fixture" if fixture_text else "missing_fixture",
+                "raw_prompt_stored": False,
+                "operator_must_redact_private_content": True,
+                "redaction_provable_by_omh": False,
+            },
+        },
+        "expected": expected,
+        "replay_policy": {
+            "mode": "deterministic_router",
+            "requires_fixture_text": True,
+            "skip_reason": "" if fixture_text else "No operator-provided minimized fixture was provided.",
+        },
+        "claim_boundary": (
+            "Regression cases replay only operator-provided minimized fixture text. "
+            "OMH cannot prove that the fixture is redacted, and it must not be treated "
+            "as raw prompt storage or observed workflow execution."
+        ),
+    }
+    validate_regression_case(case)
+    return case
+
+
+def write_regression_case(paths: OmhPaths, case: dict[str, Any]) -> dict[str, Any]:
+    validate_regression_case(case)
+    atomic_write_json(regression_case_path(paths, str(case["case_id"])), case, private=True)
+    _update_learning_index(paths, case, "regression_case")
+    return case
+
+
+def replay_regression_cases(paths: OmhPaths, *, limit: int | None = None) -> dict[str, Any]:
+    cases = _apply_limit(_read_regression_cases(paths), limit)
+    results = [_replay_regression_case(case) for case in cases]
+    failed = [item for item in results if item["status"] == "failed"]
+    skipped = [item for item in results if item["status"] == "skipped"]
+    passed = [item for item in results if item["status"] == "passed"]
+    return {
+        "schema_version": "workflow_regression_replay/v1",
+        "status": _regression_replay_status(total=len(results), failed=len(failed), skipped=len(skipped)),
+        "total": len(results),
+        "passed": len(passed),
+        "failed": len(failed),
+        "skipped": len(skipped),
+        "results": results,
+        "claim_boundary": "Replay checks deterministic routing contracts only; it does not execute workflows, call networks, or patch skills.",
+    }
+
+
+def attach_learning_trace_ref_to_interaction(interaction: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
+    validate_workflow_learning_trace(trace)
+    enriched = json.loads(json.dumps(interaction))
+    ref = learning_trace_ref(str(trace["trace_id"]))
+    enriched["learning_trace_ref"] = ref
+    chat_response = _object(enriched.get("chat_response"))
+    state = _object(chat_response.get("state"))
+    state["learning_trace_ref"] = ref
+    chat_response["state"] = state
+    enriched["chat_response"] = chat_response
+    return enriched
+
+
+def validate_workflow_learning_trace(trace: dict[str, Any]) -> None:
+    _require_schema(trace, WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION)
+    _require_string(trace, "trace_id")
+    _require_string(trace, "created_at")
+    _require_string(trace, "updated_at")
+    for key in ("privacy", "source", "route", "workflow", "reasoning_summary", "status"):
+        if not isinstance(trace.get(key), dict):
+            raise WorkflowLearningError(f"trace.{key} must be an object")
+    privacy = _object(trace["privacy"])
+    if privacy.get("mode") != PRIVACY_MODE:
+        raise WorkflowLearningError("trace privacy mode must be metadata_only")
+    if privacy.get("raw_prompt_stored") is not False or privacy.get("raw_platform_event_stored") is not False:
+        raise WorkflowLearningError("learning traces must not store raw prompts or platform events")
+    source = _object(trace["source"])
+    if str(source.get("kind", "")) not in {"chat_interaction", "runtime_run"}:
+        raise WorkflowLearningError("trace source.kind must be chat_interaction or runtime_run")
+    workflow = _object(trace["workflow"])
+    if not workflow.get("selected_workflow"):
+        raise WorkflowLearningError("trace workflow.selected_workflow is required")
+    status = _object(trace["status"])
+    if status.get("outcome") not in _LEARNING_OUTCOMES:
+        raise WorkflowLearningError("trace status.outcome is invalid")
+    _reject_forbidden_payload_keys(trace)
+
+
+def validate_workflow_eval_result(result: dict[str, Any]) -> None:
+    _require_schema(result, WORKFLOW_EVAL_RESULT_SCHEMA_VERSION)
+    _require_string(result, "eval_id")
+    _require_string(result, "trace_id")
+    if result.get("status") not in {"passed", "warning", "failed"}:
+        raise WorkflowLearningError("eval status must be passed, warning, or failed")
+    checks = result.get("checks")
+    if not isinstance(checks, list) or not checks:
+        raise WorkflowLearningError("eval checks must be a non-empty list")
+    for check in checks:
+        if not isinstance(check, dict):
+            raise WorkflowLearningError("eval check must be an object")
+        if check.get("status") not in {"passed", "warning", "failed", "not_applicable"}:
+            raise WorkflowLearningError("eval check status is invalid")
+
+
+def validate_improvement_candidate(candidate: dict[str, Any]) -> None:
+    _require_schema(candidate, IMPROVEMENT_CANDIDATE_SCHEMA_VERSION)
+    _require_string(candidate, "candidate_id")
+    _require_string(candidate, "trace_id")
+    if candidate.get("status") not in {"proposed", "accepted", "rejected", "superseded"}:
+        raise WorkflowLearningError("candidate status is invalid")
+    gate = _object(candidate.get("human_gate"))
+    if gate.get("required") is not True or gate.get("decision") not in {"pending", "approve", "revise", "reject"}:
+        raise WorkflowLearningError("candidate human_gate must require a pending/approve/revise/reject decision")
+    diff = _object(candidate.get("diff_preview"))
+    if diff.get("available") is not False:
+        raise WorkflowLearningError("v1 candidates must not include applied diff previews")
+
+
+def validate_regression_case(case: dict[str, Any]) -> None:
+    _require_schema(case, REGRESSION_CASE_SCHEMA_VERSION)
+    _require_string(case, "case_id")
+    _require_string(case, "trace_id")
+    if not isinstance(case.get("fixture"), dict) or not isinstance(case.get("expected"), dict):
+        raise WorkflowLearningError("regression case fixture and expected must be objects")
+    fixture = _object(case.get("fixture"))
+    privacy = _object(fixture.get("privacy"))
+    fixture_text = str(fixture.get("fixture_text") or fixture.get("redacted_message") or "")
+    if fixture_text:
+        if privacy.get("raw_prompt_stored") is not False:
+            raise WorkflowLearningError("regression fixture privacy.raw_prompt_stored must be false")
+        if privacy.get("operator_must_redact_private_content") is not True:
+            raise WorkflowLearningError("regression fixture privacy must require operator redaction")
+
+
+def trace_path(paths: OmhPaths, trace_id: str) -> Path:
+    return paths.learning_traces_dir / f"{_safe_id(trace_id)}.json"
+
+
+def eval_path(paths: OmhPaths, eval_id: str) -> Path:
+    return paths.learning_evals_dir / f"{_safe_id(eval_id)}.json"
+
+
+def candidate_path(paths: OmhPaths, candidate_id: str) -> Path:
+    return paths.learning_candidates_dir / f"{_safe_id(candidate_id)}.json"
+
+
+def regression_case_path(paths: OmhPaths, case_id: str) -> Path:
+    return paths.learning_regressions_dir / f"{_safe_id(case_id)}.json"
+
+
+def _prepared_refs(interaction: dict[str, Any]) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    for key in (
+        "chat_response",
+        "plan",
+        "delegation",
+        "loop_start_card",
+        "status_card",
+        "target_notice",
+        "target_topology",
+    ):
+        if key in interaction:
+            schema = _object(interaction.get(key)).get("schema_version", "")
+            if key == "plan":
+                schema = _nested(interaction, "plan", "schema_version") or _nested(interaction, "plan", "plan", "schema_version")
+            refs.append({"kind": key, "ref": key, "schema_version": str(schema)})
+    return refs
+
+
+def _runtime_prepared_refs(run_id: str, shown: dict[str, Any]) -> list[dict[str, str]]:
+    refs = [{"kind": "run", "ref": f"runtime:{run_id}:run", "schema_version": str(_nested(shown, "run", "schema_version") or "")}]
+    for key in ("routing", "coding_delegation", "delegation", "wrapper", "review", "ci", "merge"):
+        if isinstance(shown.get(key), dict):
+            refs.append({"kind": key, "ref": f"runtime:{run_id}:{key}", "schema_version": str(_nested(shown, key, "schema_version") or "")})
+    return refs
+
+
+def _runtime_not_evidence_yet(shown: dict[str, Any]) -> list[str]:
+    missing = []
+    if not shown.get("delegation"):
+        missing.append("executor result")
+    if not shown.get("review"):
+        missing.append("review")
+    if not shown.get("ci"):
+        missing.append("CI")
+    if not shown.get("merge"):
+        missing.append("merge")
+    return missing
+
+
+def _privacy_check(trace: dict[str, Any]) -> dict[str, Any]:
+    privacy = _object(trace.get("privacy"))
+    if privacy.get("mode") == PRIVACY_MODE and privacy.get("raw_prompt_stored") is False:
+        return _check("privacy_metadata_only", "passed", "Trace stores metadata and refs only.", [learning_trace_ref(str(trace["trace_id"]))])
+    return _check("privacy_metadata_only", "failed", "Trace must stay metadata-only and raw_prompt_stored=false.", [])
+
+
+def _routing_check(trace: dict[str, Any]) -> dict[str, Any]:
+    workflow = _object(trace.get("workflow"))
+    selected = str(workflow.get("selected_workflow", ""))
+    if selected and selected != "unknown":
+        return _check("route_selected", "passed", f"Workflow selected: {selected}.", [])
+    return _check("route_selected", "warning", "No concrete workflow was selected.", [])
+
+
+def _boundary_check(trace: dict[str, Any]) -> dict[str, Any]:
+    state = str(_nested(trace, "status", "evidence_state"))
+    observed_refs = _list(trace.get("observed_refs"))
+    if state in _OBSERVED_STATES and not observed_refs:
+        return _check(
+            "prepared_vs_observed_boundary",
+            "failed",
+            f"Evidence state is {state}, but no observed evidence refs were recorded.",
+            [],
+        )
+    return _check(
+        "prepared_vs_observed_boundary",
+        "passed",
+        "Prepared and observed evidence remain separated.",
+        [str(ref.get("ref", "")) for ref in observed_refs if isinstance(ref, dict)],
+    )
+
+
+def _workflow_specific_check(trace: dict[str, Any]) -> dict[str, Any]:
+    selected = str(_nested(trace, "workflow", "selected_workflow"))
+    reasoning = _object(trace.get("reasoning_summary"))
+    not_evidence = _strings(reasoning.get("not_evidence_yet"))
+    if selected in {"plan", "ralplan", "ultragoal", "ultraprocess", "loop", "idea-to-deploy"} and not not_evidence:
+        return _check("workflow_rubric", "warning", "Planning/coding lanes should name what is not evidence yet.", [])
+    if selected in {"img-summary", "materials-package"} and any("generated" in str(ref).lower() for ref in trace.get("observed_refs", [])):
+        return _check("workflow_rubric", "passed", "Deliverable/image lane has explicit observed refs.", [])
+    return _check("workflow_rubric", "passed", "Workflow-specific rubric has no blocking gap.", [])
+
+
+def _check(check_id: str, status: str, summary: str, evidence_refs: list[str]) -> dict[str, Any]:
+    return {
+        "id": check_id,
+        "status": status,
+        "summary": summary,
+        "evidence_refs": [ref for ref in evidence_refs if ref],
+    }
+
+
+def _eval_summary(*, failed: bool, warnings: list[dict[str, Any]]) -> str:
+    if failed:
+        return "Workflow trace has a blocking learning/evidence contract issue."
+    if warnings:
+        return "Workflow trace is usable for learning, with non-blocking rubric warnings."
+    return "Workflow trace is valid and safe to use as learning material."
+
+
+def _candidate_title(trace: dict[str, Any], failed_or_warned: list[dict[str, Any]]) -> str:
+    selected = str(_nested(trace, "workflow", "selected_workflow") or "workflow")
+    if failed_or_warned:
+        return f"Improve {selected} after {failed_or_warned[0]['id']}"
+    return f"Review {selected} workflow learning signal"
+
+
+def _candidate_problem_summary(failed_or_warned: list[dict[str, Any]]) -> str:
+    if not failed_or_warned:
+        return "No failing eval checks were found; candidate is a manual review placeholder."
+    return "; ".join(str(check.get("summary", "")) for check in failed_or_warned)
+
+
+def _candidate_suggested_change(trace: dict[str, Any], failed_or_warned: list[dict[str, Any]]) -> str:
+    selected = str(_nested(trace, "workflow", "selected_workflow") or "workflow")
+    check_ids = {str(check.get("id", "")) for check in failed_or_warned}
+    if "prepared_vs_observed_boundary" in check_ids:
+        return f"Tighten {selected} status copy or observation recording so prepared work cannot be reported as observed."
+    if "workflow_rubric" in check_ids:
+        return f"Add clearer not-evidence-yet guidance to the {selected} workflow or its wrapper response."
+    if "route_selected" in check_ids:
+        return "Improve routing metadata so the selected workflow and harness are always explicit."
+    return f"Review the {selected} workflow for a possible routing, rubric, or status-card improvement."
+
+
+def _read_regression_cases(paths: OmhPaths) -> list[dict[str, Any]]:
+    indexed = _records_from_index(paths, "regression_case", regression_case_path, validate_regression_case)
+    if indexed:
+        return indexed
+    if not paths.learning_regressions_dir.exists():
+        return []
+    cases: list[dict[str, Any]] = []
+    for path in sorted(paths.learning_regressions_dir.glob("*.json")):
+        case = read_json_object(path)
+        if case:
+            validate_regression_case(case)
+            cases.append(case)
+    return cases
+
+
+def _replay_regression_case(case: dict[str, Any]) -> dict[str, Any]:
+    fixture = _object(case.get("fixture"))
+    expected = _object(case.get("expected"))
+    fixture_text = str(fixture.get("fixture_text") or fixture.get("redacted_message") or "")
+    if not fixture_text:
+        return {
+            "case_id": case["case_id"],
+            "status": "skipped",
+            "reason": "No operator-provided minimized fixture was provided.",
+        }
+    from .wrapper.contract import build_chat_interaction_payload
+
+    payload = build_chat_interaction_payload(fixture_text, source=str(fixture.get("source", "generic")))
+    actual_workflow = str(_nested(payload, "chat_response", "state", "selected_workflow") or _nested(payload, "route", "selected_skill"))
+    actual_harness = str(_nested(payload, "route", "selected_harness") or _nested(payload, "chat_response", "usage_trace", "selected_harness"))
+    actual_next_action = str(payload.get("next_action", ""))
+    failures = []
+    if expected.get("selected_workflow") and actual_workflow != expected.get("selected_workflow"):
+        failures.append(f"selected_workflow expected {expected.get('selected_workflow')} got {actual_workflow}")
+    if expected.get("selected_harness") and actual_harness != expected.get("selected_harness"):
+        failures.append(f"selected_harness expected {expected.get('selected_harness')} got {actual_harness}")
+    if expected.get("next_action") and actual_next_action != expected.get("next_action"):
+        failures.append(f"next_action expected {expected.get('next_action')} got {actual_next_action}")
+    return {
+        "case_id": case["case_id"],
+        "status": "failed" if failures else "passed",
+        "actual": {
+            "selected_workflow": actual_workflow,
+            "selected_harness": actual_harness,
+            "next_action": actual_next_action,
+        },
+        "failures": failures,
+    }
+
+
+def _regression_replay_status(*, total: int, failed: int, skipped: int) -> str:
+    if failed:
+        return "failed"
+    if total == 0:
+        return "no_cases"
+    if skipped == total:
+        return "skipped"
+    if skipped:
+        return "incomplete"
+    return "passed"
+
+
+def _records_from_index(
+    paths: OmhPaths,
+    kind: str,
+    path_for_id: Callable[[OmhPaths, str], Path],
+    validator: Callable[[dict[str, Any]], None],
+) -> list[dict[str, Any]]:
+    index = read_json_object(paths.learning_index_path) or {}
+    if index.get("schema_version") != WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION:
+        return []
+    records: list[dict[str, Any]] = []
+    for entry in _list(index.get("records")):
+        if not isinstance(entry, dict) or entry.get("kind") != kind:
+            continue
+        identifier = str(entry.get("id", ""))
+        if not identifier:
+            continue
+        payload = read_json_object(path_for_id(paths, identifier))
+        if payload:
+            validator(payload)
+            records.append(payload)
+    return records
+
+
+def _apply_limit(records: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
+    if limit is None:
+        return records
+    if limit <= 0:
+        return []
+    return records[-limit:]
+
+
+def _update_learning_index(paths: OmhPaths, record: dict[str, Any], kind: str) -> None:
+    current = read_json_object(paths.learning_index_path) or {
+        "schema_version": WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION,
+        "updated_at": "",
+        "records": [],
+    }
+    records = [item for item in _list(current.get("records")) if isinstance(item, dict)]
+    identifier = _record_identifier(record, kind)
+    entry = {
+        "kind": kind,
+        "id": identifier,
+        "schema_version": str(record.get("schema_version", "")),
+        "updated_at": utc_now(),
+        "ref": _record_ref(kind, identifier),
+    }
+    records = [item for item in records if not (item.get("kind") == kind and item.get("id") == identifier)]
+    records.append(entry)
+    index = {
+        "schema_version": WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION,
+        "updated_at": entry["updated_at"],
+        "records": records[-500:],
+    }
+    atomic_write_json(paths.learning_index_path, index, private=True)
+
+
+def _record_ref(kind: str, identifier: str) -> str:
+    if kind == "trace":
+        return learning_trace_ref(identifier)
+    return f"omh-learning-{kind}:{identifier}"
+
+
+def _record_identifier(record: dict[str, Any], kind: str) -> str:
+    if kind == "trace":
+        return str(record.get("trace_id", ""))
+    if kind == "eval":
+        return str(record.get("eval_id", ""))
+    if kind == "candidate":
+        return str(record.get("candidate_id", ""))
+    if kind == "regression_case":
+        return str(record.get("case_id", ""))
+    return str(record.get("id", ""))
+
+
+def _trace_summary(trace: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": "workflow_learning_trace_summary/v1",
+        "trace_id": trace.get("trace_id", ""),
+        "created_at": trace.get("created_at", ""),
+        "source_kind": _nested(trace, "source", "kind"),
+        "source": _nested(trace, "source", "source"),
+        "selected_workflow": _nested(trace, "workflow", "selected_workflow"),
+        "selected_harness": _nested(trace, "workflow", "selected_harness"),
+        "evidence_state": _nested(trace, "status", "evidence_state"),
+        "outcome": _nested(trace, "status", "outcome"),
+        "learning_trace_ref": learning_trace_ref(str(trace.get("trace_id", ""))),
+    }
+
+
+def _id(prefix: str, seed: str) -> str:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:20]
+    return f"{prefix}-{digest}"
+
+
+def _safe_id(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_.:-]+", "-", value).strip("-")[:120] or "record"
+
+
+def _first_nonempty(*values: object) -> object:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def _first_sentence(value: str) -> str:
+    return value.split(".", 1)[0].strip() if value else ""
+
+
+def _object(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list(value: object) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _strings(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, tuple):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
+
+
+def _nested(data: object, *keys: str) -> object:
+    current: object = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return ""
+        current = current.get(key, "")
+    return current
+
+
+def _safe_metadata(value: dict[str, Any]) -> dict[str, str]:
+    safe: dict[str, str] = {}
+    for key, raw in value.items():
+        key_text = str(key)
+        if key_text.startswith("raw") or key_text in FORBIDDEN_TRACE_KEYS:
+            continue
+        safe[key_text] = str(raw)
+    return safe
+
+
+def _require_schema(payload: dict[str, Any], expected: str) -> None:
+    if payload.get("schema_version") != expected:
+        raise WorkflowLearningError(f"expected {expected}")
+
+
+def _require_string(payload: dict[str, Any], key: str) -> None:
+    if not isinstance(payload.get(key), str) or not payload[key]:
+        raise WorkflowLearningError(f"{key} is required")
+
+
+def _reject_forbidden_payload_keys(value: object, *, path: str = "") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key)
+            if key_text in FORBIDDEN_TRACE_KEYS:
+                raise WorkflowLearningError(f"learning trace contains forbidden raw field: {path + key_text}")
+            _reject_forbidden_payload_keys(child, path=f"{path}{key_text}.")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_forbidden_payload_keys(child, path=f"{path}{index}.")

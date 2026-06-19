@@ -107,6 +107,11 @@ VISIBLE_ACTIONS = (
     "prepare_review_lane",
     "refresh_agent_ops_status",
     "record_agent_ops_observation",
+    "record_workflow_learning_trace",
+    "show_learning_eval",
+    "propose_skill_improvement",
+    "add_regression_case",
+    "replay_regression_cases",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
