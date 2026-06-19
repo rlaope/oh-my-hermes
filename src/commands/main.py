@@ -56,6 +56,7 @@ from .learning import (
     _add_learning_commands,
     cmd_learning_candidate,
     cmd_learning_eval,
+    cmd_learning_export,
     cmd_learning_index_check,
     cmd_learning_index_rebuild,
     cmd_learning_list,

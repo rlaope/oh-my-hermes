@@ -10,17 +10,21 @@ from ..workflow_learning import (
     WorkflowLearningError,
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
+    build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
     build_trace_from_runtime_run,
     build_workflow_eval_result,
     check_learning_index,
+    learning_export_ref,
+    learning_export_path,
     learning_trace_ref,
     list_learning_traces,
     rebuild_learning_index,
     replay_regression_cases,
     show_learning_trace,
     write_improvement_candidate,
+    write_learning_export,
     write_learning_trace,
     write_regression_case,
     write_workflow_eval,
@@ -207,6 +211,35 @@ def cmd_learning_index_rebuild(args: argparse.Namespace) -> int:
     return 0 if payload.get("status") in {"rebuilt", "dry_run"} else 1
 
 
+def cmd_learning_export(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        limit = None if args.all else args.limit
+        bundle = build_learning_export_bundle(paths, trace_ids=args.trace_id or [], limit=limit)
+        export_path = learning_export_path(paths, str(bundle["export_id"]))
+        recorded = False
+        if not args.dry_run and bundle.get("status") == "ready":
+            write_learning_export(paths, bundle)
+            recorded = True
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "learning_export_result/v1",
+            "recorded": recorded,
+            "dry_run": args.dry_run,
+            "learning_export_ref": learning_export_ref(str(bundle["export_id"])),
+            "export_path": str(export_path),
+            "export": bundle,
+            "claim_boundary": (
+                "The export is a metadata-only review bundle. It is not model training, "
+                "automatic skill improvement, workflow execution, or observed runtime evidence."
+            ),
+        }
+    )
+    return 0
+
+
 def _add_learning_commands(sub) -> None:
     learning = sub.add_parser(
         "learning",
@@ -253,6 +286,13 @@ def _add_learning_commands(sub) -> None:
     candidate.add_argument("--title", default="")
     candidate.add_argument("--dry-run", action="store_true")
     candidate.set_defaults(func=cmd_learning_candidate)
+
+    export = learning_sub.add_parser("export", help="Create a redacted workflow learning review bundle.")
+    export.add_argument("--trace-id", action="append", default=[], help="Trace id to include; may be repeated.")
+    export.add_argument("--limit", type=int, default=20, help="Maximum recent traces to include when no trace id is provided.")
+    export.add_argument("--all", action="store_true", help="Include all traces when no trace id is provided.")
+    export.add_argument("--dry-run", action="store_true")
+    export.set_defaults(func=cmd_learning_export)
 
     regression = learning_sub.add_parser("regression", help="Manage deterministic workflow regression cases.")
     regression_sub = regression.add_subparsers(dest="regression_command", required=True)

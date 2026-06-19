@@ -133,14 +133,14 @@ def _trigger_table(definitions: list[SkillDefinition]) -> str:
     for definition in definitions:
         if definition.name == "oh-my-hermes":
             continue
-        triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers[:5])
+        triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers[:7])
         lines.append(f"- `{definition.name}`: {triggers}")
     return "\n".join(lines)
 
 
 def _harness_summary(harness: HarnessDefinition) -> str:
-    evidence_ladder = " -> ".join(f"`{step}`" for step in harness.evidence_ladder[:4])
-    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions[:5])
+    evidence_ladder = " -> ".join(f"`{step}`" for step in harness.evidence_ladder[:6])
+    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions[:6])
     return (
         f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "
         f"Ladder: {evidence_ladder}. Actions: {wrapper_actions or '`show_status`'}. "

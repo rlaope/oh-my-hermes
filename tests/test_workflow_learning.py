@@ -10,8 +10,10 @@ from _local_package import load_local_package
 load_local_package()
 from omh.paths import resolve_paths
 from omh.workflow_learning import (
+    WorkflowLearningError,
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
+    build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
     build_workflow_eval_result,
@@ -21,7 +23,11 @@ from omh.workflow_learning import (
     rebuild_learning_index,
     replay_regression_cases,
     validate_workflow_learning_trace,
+    validate_workflow_learning_export,
     write_learning_trace,
+    write_improvement_candidate,
+    write_learning_export,
+    write_workflow_eval,
     write_regression_case,
 )
 from omh.wrapper.contract import build_chat_interaction_payload
@@ -241,6 +247,130 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(check["status"], "no_records")
             self.assertTrue(check["ok"])
             self.assertEqual(check["records_total"], 0)
+
+    def test_learning_export_bundle_is_metadata_only_and_redacts_fixture_text(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "I want to safely add a feature with secret-token-123"
+            interaction = build_chat_interaction_payload(message, source="discord")
+            trace = write_learning_trace(paths, build_trace_from_chat_interaction(interaction))
+            eval_result = write_workflow_eval(paths, build_workflow_eval_result(trace))
+            candidate = write_improvement_candidate(paths, build_improvement_candidate(trace, eval_result))
+            case = write_regression_case(
+                paths,
+                build_regression_case_from_trace(trace, redacted_message="feature request with secret-token-123"),
+            )
+            trace_path = paths.learning_traces_dir / f"{trace['trace_id']}.json"
+            stored_trace = json.loads(trace_path.read_text(encoding="utf-8"))
+            stored_trace["source"]["raw_text"] = "RAW SECRET PROMPT SHOULD NOT EXPORT"
+            stored_trace["route"]["matched"] = ["PRIVATE MATCHED ROUTE TEXT SHOULD NOT EXPORT"]
+            stored_trace["workflow"]["next_action"] = "PRIVATE NEXT ACTION SHOULD NOT EXPORT"
+            stored_trace["reasoning_summary"]["why_this_workflow"] = "PRIVATE ROUTING REASON SHOULD NOT EXPORT"
+            stored_trace["reasoning_summary"]["next_action"] = "PRIVATE REASONING ACTION SHOULD NOT EXPORT"
+            stored_trace["reasoning_summary"]["not_evidence_yet"] = [
+                "PRIVATE NOT EVIDENCE TEXT SHOULD NOT EXPORT"
+            ]
+            stored_trace["reasoning_summary"]["claim_boundary"] = "PRIVATE CLAIM BOUNDARY SHOULD NOT EXPORT"
+            stored_trace["prepared_refs"] = [{"kind": "handoff", "ref": "PRIVATE PREPARED REF SHOULD NOT EXPORT"}]
+            stored_trace["observed_refs"] = [{"kind": "review", "ref": "PRIVATE OBSERVED REF SHOULD NOT EXPORT"}]
+            stored_trace["status"]["feedback_summary"] = "PRIVATE USER FEEDBACK SHOULD NOT EXPORT"
+            stored_trace["overclaim_guard"] = ["PRIVATE OVERCLAIM GUARD SHOULD NOT EXPORT"]
+            trace_path.write_text(json.dumps(stored_trace), encoding="utf-8")
+            eval_path = paths.learning_evals_dir / f"{eval_result['eval_id']}.json"
+            stored_eval = json.loads(eval_path.read_text(encoding="utf-8"))
+            stored_eval["diagnostics"] = {"rawPayload": "RAW EVAL PAYLOAD SHOULD NOT EXPORT"}
+            stored_eval["summary"] = "PRIVATE EVAL SUMMARY SHOULD NOT EXPORT"
+            stored_eval["checks"][0]["summary"] = "PRIVATE CHECK SUMMARY SHOULD NOT EXPORT"
+            stored_eval["checks"][0]["evidence_refs"] = ["PRIVATE EVAL EVIDENCE REF SHOULD NOT EXPORT"]
+            eval_path.write_text(json.dumps(stored_eval), encoding="utf-8")
+            candidate_path = paths.learning_candidates_dir / f"{candidate['candidate_id']}.json"
+            stored_candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            stored_candidate["notes"] = {"event_json": "RAW CANDIDATE EVENT SHOULD NOT EXPORT"}
+            stored_candidate["title"] = "PRIVATE CANDIDATE TITLE SHOULD NOT EXPORT"
+            stored_candidate["proposal"]["problem_summary"] = "PRIVATE CANDIDATE PROBLEM SHOULD NOT EXPORT"
+            stored_candidate["proposal"]["suggested_change"] = "PRIVATE CANDIDATE CHANGE SHOULD NOT EXPORT"
+            candidate_path.write_text(json.dumps(stored_candidate), encoding="utf-8")
+            case_path = paths.learning_regressions_dir / f"{case['case_id']}.json"
+            stored_case = json.loads(case_path.read_text(encoding="utf-8"))
+            stored_case["expected"]["claim_boundary_contains"] = "PRIVATE REGRESSION CLAIM SHOULD NOT EXPORT"
+            stored_case["expected"]["not_evidence_yet_includes"] = [
+                "PRIVATE REGRESSION NOT EVIDENCE SHOULD NOT EXPORT"
+            ]
+            stored_case["replay_policy"]["skip_reason"] = "PRIVATE REGRESSION SKIP SHOULD NOT EXPORT"
+            case_path.write_text(json.dumps(stored_case), encoding="utf-8")
+
+            bundle = build_learning_export_bundle(paths, trace_ids=[trace["trace_id"]])
+            written = write_learning_export(paths, bundle)
+            serialized = json.dumps(written)
+            index_check = check_learning_index(paths)
+
+            validate_workflow_learning_export(written)
+            self.assertEqual(written["schema_version"], "workflow_learning_export/v1")
+            self.assertEqual(written["status"], "ready")
+            self.assertEqual(written["privacy"]["mode"], "metadata_only")
+            self.assertFalse(written["privacy"]["raw_prompt_stored"])
+            self.assertFalse(written["privacy"]["fixture_text_stored"])
+            self.assertEqual(written["summary"]["counts"]["traces"], 1)
+            self.assertEqual(written["summary"]["counts"]["evals"], 1)
+            self.assertEqual(written["summary"]["counts"]["candidates"], 1)
+            self.assertEqual(written["summary"]["counts"]["regression_cases"], 1)
+            self.assertEqual(written["study_cards"][0]["candidate_refs"], [f"omh-learning-candidate:{candidate['candidate_id']}"])
+            self.assertEqual(written["study_cards"][0]["why_this_workflow"], "omitted_from_metadata_export")
+            self.assertEqual(written["study_cards"][0]["next_action"], "omitted_free_text")
+            self.assertTrue(written["study_cards"][0]["not_evidence_yet_omitted"])
+            self.assertEqual(written["records"]["traces"][0]["route"]["matched_count"], 1)
+            self.assertTrue(written["records"]["traces"][0]["route"]["matched_values_omitted"])
+            self.assertEqual(written["records"]["traces"][0]["reasoning_summary"]["why_this_workflow"], "omitted_from_metadata_export")
+            self.assertEqual(written["records"]["traces"][0]["reasoning_summary"]["next_action"], "omitted_free_text")
+            self.assertTrue(written["records"]["traces"][0]["reasoning_summary"]["not_evidence_yet_omitted"])
+            self.assertTrue(written["records"]["traces"][0]["prepared_refs"][0]["ref_value_omitted"])
+            self.assertTrue(written["records"]["traces"][0]["observed_refs"][0]["ref_value_omitted"])
+            self.assertEqual(written["records"]["regression_cases"][0]["case_id"], case["case_id"])
+            self.assertTrue(written["records"]["regression_cases"][0]["fixture"]["fixture_text_omitted"])
+            self.assertNotIn("fixture_text", written["records"]["regression_cases"][0]["fixture"])
+            self.assertNotIn("redacted_message", written["records"]["regression_cases"][0]["fixture"])
+            self.assertFalse(written["provenance"]["canonical_learning_index_includes_exports"])
+            self.assertNotIn(message, serialized)
+            self.assertNotIn("secret-token-123", serialized)
+            self.assertNotIn("feature request with secret-token-123", serialized)
+            self.assertNotIn("RAW SECRET PROMPT SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE MATCHED ROUTE TEXT SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE NEXT ACTION SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE ROUTING REASON SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE REASONING ACTION SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE NOT EVIDENCE TEXT SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE CLAIM BOUNDARY SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE PREPARED REF SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE OBSERVED REF SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE USER FEEDBACK SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE OVERCLAIM GUARD SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("RAW EVAL PAYLOAD SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE EVAL SUMMARY SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE CHECK SUMMARY SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE EVAL EVIDENCE REF SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("RAW CANDIDATE EVENT SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE CANDIDATE TITLE SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE CANDIDATE PROBLEM SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE CANDIDATE CHANGE SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE REGRESSION CLAIM SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE REGRESSION NOT EVIDENCE SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("PRIVATE REGRESSION SKIP SHOULD NOT EXPORT", serialized)
+            self.assertNotIn("raw_text", serialized)
+            self.assertNotIn("rawPayload", serialized)
+            self.assertNotIn("event_json", serialized)
+            self.assertEqual(index_check["status"], "passed")
+            self.assertTrue((paths.learning_exports_dir / f"{written['export_id']}.json").exists())
+
+    def test_learning_export_bundle_empty_state_is_not_written(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            bundle = build_learning_export_bundle(paths)
+
+            validate_workflow_learning_export(bundle)
+            self.assertEqual(bundle["status"], "no_records")
+            with self.assertRaises(WorkflowLearningError):
+                write_learning_export(paths, bundle)
 
 
 if __name__ == "__main__":

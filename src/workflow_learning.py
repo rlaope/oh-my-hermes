@@ -16,7 +16,9 @@ WORKFLOW_EVAL_RESULT_SCHEMA_VERSION = "workflow_eval_result/v1"
 IMPROVEMENT_CANDIDATE_SCHEMA_VERSION = "improvement_candidate/v1"
 REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
 WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
+WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
+EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
 LEARNING_EVENT_KIND = "workflow_learning"
 LEARNING_INDEX_MAX_RECORDS = 500
@@ -30,6 +32,28 @@ FORBIDDEN_TRACE_KEYS = {
     "body_preview",
     "routing_prompt",
     "dispatch_text_template",
+    "fixture_text",
+    "redacted_message",
+}
+EXPORT_ALLOWED_RAW_FLAG_KEYS = {
+    "raw_prompt_stored",
+    "raw_platform_event_stored",
+}
+EXPORT_FORBIDDEN_PAYLOAD_KEYS = FORBIDDEN_TRACE_KEYS | {
+    "raw_text",
+    "rawText",
+    "raw_payload",
+    "rawPayload",
+    "raw_platform_event",
+    "rawPlatformEvent",
+    "platform_event",
+    "platformEvent",
+    "event_json",
+    "eventJson",
+    "transcript",
+    "conversation",
+    "stdout",
+    "stderr",
 }
 _OBSERVED_STATES = {"observed", "verified", "complete", "completed", "ready", "merged"}
 _LEARNING_OUTCOMES = {"unknown", "useful", "not_useful", "blocked", "failed"}
@@ -41,6 +65,10 @@ class WorkflowLearningError(ValueError):
 
 def learning_trace_ref(trace_id: str) -> str:
     return f"{TRACE_REF_PREFIX}:{trace_id}"
+
+
+def learning_export_ref(export_id: str) -> str:
+    return f"{EXPORT_REF_PREFIX}:{export_id}"
 
 
 def build_trace_from_chat_interaction(
@@ -527,6 +555,116 @@ def rebuild_learning_index(paths: OmhPaths, *, dry_run: bool = False) -> dict[st
     }
 
 
+def build_learning_export_bundle(
+    paths: OmhPaths,
+    *,
+    trace_ids: list[str] | None = None,
+    limit: int | None = 20,
+    export_id: str | None = None,
+) -> dict[str, Any]:
+    scanned = _scan_learning_records(paths)
+    if scanned["invalid_records"]:
+        invalid = "; ".join(f"{item['kind']}:{item['path']}" for item in scanned["invalid_records"][:5])
+        raise WorkflowLearningError(f"cannot export while invalid learning records exist: {invalid}")
+
+    traces = [_export_trace_projection(trace) for trace in _select_export_traces(paths, trace_ids=trace_ids or [], limit=limit)]
+    trace_id_set = {str(trace["trace_id"]) for trace in traces}
+    evals = [
+        _export_eval_projection(record)
+        for record in _related_export_records(paths, "eval", validate_workflow_eval_result, trace_id_set)
+    ]
+    candidates = [
+        _export_candidate_projection(record)
+        for record in _related_export_records(paths, "candidate", validate_improvement_candidate, trace_id_set)
+    ]
+    regression_cases = [
+        _redacted_regression_case(case)
+        for case in _related_export_records(paths, "regression_case", validate_regression_case, trace_id_set)
+    ]
+    now = utc_now()
+    seed = json.dumps({"trace_ids": sorted(trace_id_set), "created_at": now}, sort_keys=True)
+    resolved_export_id = export_id or _id("wlex", seed)
+    bundle = {
+        "schema_version": WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION,
+        "record_type": "workflow_learning_export",
+        "export_id": resolved_export_id,
+        "created_at": now,
+        "status": "ready" if traces else "no_records",
+        "privacy": {
+            "mode": PRIVACY_MODE,
+            "raw_prompt_stored": False,
+            "raw_platform_event_stored": False,
+            "fixture_text_stored": False,
+            "stored_fields": [
+                "message hash",
+                "message length",
+                "workflow route summary",
+                "evidence references",
+                "eval checks",
+                "candidate review state",
+                "regression case expectations without fixture text",
+            ],
+        },
+        "scope": {
+            "trace_ids": sorted(trace_id_set),
+            "requested_trace_ids": trace_ids or [],
+            "limit": "all" if limit is None else limit,
+            "related_records": True,
+        },
+        "provenance": {
+            "learning_export_ref": learning_export_ref(resolved_export_id),
+            "source_trace_count": len(traces),
+            "source_eval_count": len(evals),
+            "source_candidate_count": len(candidates),
+            "source_regression_case_count": len(regression_cases),
+            "canonical_learning_index_includes_exports": False,
+            "source_payloads_projected": True,
+        },
+        "summary": _learning_export_summary(
+            traces=traces,
+            evals=evals,
+            candidates=candidates,
+            regression_cases=regression_cases,
+        ),
+        "study_cards": [
+            _learning_study_card(
+                trace,
+                evals=[record for record in evals if record.get("trace_id") == trace.get("trace_id")],
+                candidates=[record for record in candidates if record.get("trace_id") == trace.get("trace_id")],
+                regression_cases=[
+                    record for record in regression_cases if record.get("trace_id") == trace.get("trace_id")
+                ],
+            )
+            for trace in traces
+        ],
+        "records": {
+            "traces": traces,
+            "evals": evals,
+            "candidates": candidates,
+            "regression_cases": regression_cases,
+        },
+        "operator_notes": [
+            "Use this bundle to review process quality, routing decisions, evidence gaps, and improvement candidates.",
+            "Use regression cases to replay deterministic routing expectations before applying future changes.",
+            "Review candidate proposals manually; this bundle does not apply patches.",
+        ],
+        "claim_boundary": (
+            "Workflow learning exports are redacted review bundles. They are not model training, "
+            "automatic GEPA improvement, skill mutation, workflow execution, review, CI, merge, or future-behavior proof."
+        ),
+    }
+    validate_workflow_learning_export(bundle)
+    return bundle
+
+
+def write_learning_export(paths: OmhPaths, bundle: dict[str, Any]) -> dict[str, Any]:
+    validate_workflow_learning_export(bundle)
+    if bundle.get("status") != "ready":
+        raise WorkflowLearningError("only ready learning export bundles can be written")
+    atomic_write_json(learning_export_path(paths, str(bundle["export_id"])), bundle, private=True)
+    return bundle
+
+
 def attach_learning_trace_ref_to_interaction(interaction: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
     validate_workflow_learning_trace(trace)
     enriched = json.loads(json.dumps(interaction))
@@ -611,6 +749,72 @@ def validate_regression_case(case: dict[str, Any]) -> None:
             raise WorkflowLearningError("regression fixture privacy must require operator redaction")
 
 
+def validate_workflow_learning_export(bundle: dict[str, Any]) -> None:
+    _require_schema(bundle, WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION)
+    _require_string(bundle, "export_id")
+    _require_string(bundle, "created_at")
+    if bundle.get("status") not in {"ready", "no_records"}:
+        raise WorkflowLearningError("learning export status must be ready or no_records")
+    privacy = _object(bundle.get("privacy"))
+    if privacy.get("mode") != PRIVACY_MODE:
+        raise WorkflowLearningError("learning export privacy mode must be metadata_only")
+    if (
+        privacy.get("raw_prompt_stored") is not False
+        or privacy.get("raw_platform_event_stored") is not False
+        or privacy.get("fixture_text_stored") is not False
+    ):
+        raise WorkflowLearningError("learning exports must not store raw prompts, platform events, or fixture text")
+    records = _object(bundle.get("records"))
+    for trace in _list(records.get("traces")):
+        if not isinstance(trace, dict):
+            raise WorkflowLearningError("learning export trace record must be an object")
+        validate_workflow_learning_trace(trace)
+    for result in _list(records.get("evals")):
+        if not isinstance(result, dict):
+            raise WorkflowLearningError("learning export eval record must be an object")
+        _validate_export_eval_projection(result)
+    for candidate in _list(records.get("candidates")):
+        if not isinstance(candidate, dict):
+            raise WorkflowLearningError("learning export candidate record must be an object")
+        _validate_export_candidate_projection(candidate)
+    for case in _list(records.get("regression_cases")):
+        if not isinstance(case, dict):
+            raise WorkflowLearningError("learning export regression case record must be an object")
+        validate_regression_case(case)
+    _reject_export_payload_keys(bundle)
+
+
+def _validate_export_eval_projection(result: dict[str, Any]) -> None:
+    _require_schema(result, WORKFLOW_EVAL_RESULT_SCHEMA_VERSION)
+    _require_string(result, "eval_id")
+    _require_string(result, "trace_id")
+    if result.get("status") not in {"passed", "warning", "failed"}:
+        raise WorkflowLearningError("learning export eval status must be passed, warning, or failed")
+    checks = result.get("checks")
+    if not isinstance(checks, list) or not checks:
+        raise WorkflowLearningError("learning export eval checks must be a non-empty list")
+    for check in checks:
+        if not isinstance(check, dict):
+            raise WorkflowLearningError("learning export eval check must be an object")
+        if check.get("status") not in {"passed", "warning", "failed", "not_applicable"}:
+            raise WorkflowLearningError("learning export eval check status is invalid")
+
+
+def _validate_export_candidate_projection(candidate: dict[str, Any]) -> None:
+    _require_schema(candidate, IMPROVEMENT_CANDIDATE_SCHEMA_VERSION)
+    _require_string(candidate, "candidate_id")
+    _require_string(candidate, "trace_id")
+    _require_string(candidate, "eval_id")
+    if candidate.get("status") not in {"proposed", "accepted", "rejected", "superseded"}:
+        raise WorkflowLearningError("learning export candidate status is invalid")
+    gate = _object(candidate.get("human_gate"))
+    if gate.get("required") is not True or gate.get("decision") not in {"pending", "approve", "revise", "reject"}:
+        raise WorkflowLearningError("learning export candidate human_gate is invalid")
+    diff = _object(candidate.get("diff_preview"))
+    if not isinstance(diff.get("available"), bool):
+        raise WorkflowLearningError("learning export candidate diff_preview.available must be boolean")
+
+
 def trace_path(paths: OmhPaths, trace_id: str) -> Path:
     return paths.learning_traces_dir / f"{_safe_id(trace_id)}.json"
 
@@ -625,6 +829,10 @@ def candidate_path(paths: OmhPaths, candidate_id: str) -> Path:
 
 def regression_case_path(paths: OmhPaths, case_id: str) -> Path:
     return paths.learning_regressions_dir / f"{_safe_id(case_id)}.json"
+
+
+def learning_export_path(paths: OmhPaths, export_id: str) -> Path:
+    return paths.learning_exports_dir / f"{_safe_id(export_id)}.json"
 
 
 def _prepared_refs(interaction: dict[str, Any]) -> list[dict[str, str]]:
@@ -751,6 +959,353 @@ def _candidate_suggested_change(trace: dict[str, Any], failed_or_warned: list[di
     if "route_selected" in check_ids:
         return "Improve routing metadata so the selected workflow and harness are always explicit."
     return f"Review the {selected} workflow for a possible routing, rubric, or status-card improvement."
+
+
+def _select_export_traces(paths: OmhPaths, *, trace_ids: list[str], limit: int | None) -> list[dict[str, Any]]:
+    if trace_ids:
+        traces = []
+        for trace_id in trace_ids:
+            try:
+                traces.append(show_learning_trace(paths, trace_id))
+            except FileNotFoundError as exc:
+                raise WorkflowLearningError(f"learning trace not found for export: {trace_id}") from exc
+        return traces
+    traces = []
+    if not paths.learning_traces_dir.exists():
+        return []
+    for path in sorted(paths.learning_traces_dir.glob("*.json")):
+        record = read_json_object(path)
+        if record:
+            validate_workflow_learning_trace(record)
+            traces.append(record)
+    traces = sorted(traces, key=lambda item: (str(item.get("created_at", "")), str(item.get("trace_id", ""))))
+    return _apply_limit(traces, limit)
+
+
+def _related_export_records(
+    paths: OmhPaths,
+    kind: str,
+    validator: Callable[[dict[str, Any]], None],
+    trace_ids: set[str],
+) -> list[dict[str, Any]]:
+    if not trace_ids:
+        return []
+    directory = {
+        "eval": paths.learning_evals_dir,
+        "candidate": paths.learning_candidates_dir,
+        "regression_case": paths.learning_regressions_dir,
+        "export": paths.learning_exports_dir,
+    }[kind]
+    if not directory.exists():
+        return []
+    records = []
+    for path in sorted(directory.glob("*.json")):
+        record = read_json_object(path)
+        if not record:
+            continue
+        validator(record)
+        if str(record.get("trace_id", "")) in trace_ids:
+            records.append(record)
+    return sorted(records, key=lambda item: (str(item.get("created_at", "")), _record_identifier(item, kind)))
+
+
+def _redacted_regression_case(case: dict[str, Any]) -> dict[str, Any]:
+    validate_regression_case(case)
+    fixture = _object(case.get("fixture"))
+    redacted = {
+        "schema_version": REGRESSION_CASE_SCHEMA_VERSION,
+        "record_type": "regression_case",
+        "case_id": str(case.get("case_id", "")),
+        "trace_id": str(case.get("trace_id", "")),
+        "created_at": str(case.get("created_at", "")),
+        "fixture": {
+            "source": str(fixture.get("source", "")),
+            "fixture_sha256": str(fixture.get("fixture_sha256", "")),
+            "message_sha256": str(fixture.get("message_sha256", "")),
+            "message_length": int(fixture.get("message_length", 0) or 0),
+            "fixture_text_omitted": True,
+            "fixture_text_stored_in_export": False,
+            "privacy": _export_privacy_projection(_object(fixture.get("privacy"))),
+        },
+        "expected": _export_regression_expected(_object(case.get("expected"))),
+        "replay_policy": _export_replay_policy(_object(case.get("replay_policy"))),
+        "claim_boundary": "Regression case export omits fixture text and free-form claim prose.",
+    }
+    validate_regression_case(redacted)
+    return redacted
+
+
+def _export_trace_projection(trace: dict[str, Any]) -> dict[str, Any]:
+    validate_workflow_learning_trace(trace)
+    source = _object(trace.get("source"))
+    route = _object(trace.get("route"))
+    workflow = _object(trace.get("workflow"))
+    improvement = _object(trace.get("improvement"))
+    status = _object(trace.get("status"))
+    projection = {
+        "schema_version": WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION,
+        "record_type": "workflow_learning_trace",
+        "trace_id": str(trace.get("trace_id", "")),
+        "created_at": str(trace.get("created_at", "")),
+        "updated_at": str(trace.get("updated_at", "")),
+        "privacy": _export_privacy_projection(_object(trace.get("privacy"))),
+        "source": {
+            "kind": str(source.get("kind", "")),
+            "source": str(source.get("source", "")),
+            "source_ref": str(source.get("source_ref", "")),
+            "thread_key": str(source.get("thread_key", "")),
+            "message_sha256": str(source.get("message_sha256", "")),
+            "message_length": int(source.get("message_length", 0) or 0),
+            "source_metadata_keys": sorted(str(key) for key in _object(source.get("source_metadata")).keys()),
+        },
+        "route": {
+            "action": _export_token(route.get("action")),
+            "selected_workflow": _export_token(route.get("selected_workflow")),
+            "selected_harness": _export_token(route.get("selected_harness")),
+            "confidence": _export_token(route.get("confidence")),
+            "score": route.get("score", 0) if isinstance(route.get("score"), (int, float)) else 0,
+            "matched_count": len(_list(route.get("matched"))),
+            "matched_values_omitted": bool(_list(route.get("matched"))),
+        },
+        "workflow": {
+            "selected_workflow": _export_token(workflow.get("selected_workflow")),
+            "selected_harness": _export_token(workflow.get("selected_harness")),
+            "workflow_context_id": _export_token(workflow.get("workflow_context_id")),
+            "phase": _export_token(workflow.get("phase")),
+            "next_action": _export_token(workflow.get("next_action")),
+        },
+        "reasoning_summary": _export_reasoning_summary(trace),
+        "prepared_refs": _export_refs(_list(trace.get("prepared_refs"))),
+        "observed_refs": _export_refs(_list(trace.get("observed_refs"))),
+        "status": {
+            "evidence_state": str(status.get("evidence_state", "")),
+            "learning_state": str(status.get("learning_state", "")),
+            "outcome": str(status.get("outcome", "")),
+        },
+        "improvement": {
+            "candidate_available": improvement.get("candidate_available") is True,
+            "candidate_ref_count": len(_strings(improvement.get("candidate_refs"))),
+            "regression_case_ref_count": len(_strings(improvement.get("regression_case_refs"))),
+            "free_form_values_omitted": True,
+        },
+        "overclaim_guard": {
+            "count": len(_strings(trace.get("overclaim_guard"))),
+            "values_omitted": bool(_strings(trace.get("overclaim_guard"))),
+        },
+    }
+    validate_workflow_learning_trace(projection)
+    return projection
+
+
+def _export_eval_projection(result: dict[str, Any]) -> dict[str, Any]:
+    validate_workflow_eval_result(result)
+    projection = {
+        "schema_version": WORKFLOW_EVAL_RESULT_SCHEMA_VERSION,
+        "record_type": "workflow_eval_result",
+        "eval_id": str(result.get("eval_id", "")),
+        "trace_id": str(result.get("trace_id", "")),
+        "created_at": str(result.get("created_at", "")),
+        "rubric_id": str(result.get("rubric_id", "")),
+        "status": str(result.get("status", "")),
+        "checks": [
+            {
+                "id": str(check.get("id", "")),
+                "status": str(check.get("status", "")),
+                "evidence_refs": _export_ref_values(_strings(check.get("evidence_refs"))),
+            }
+            for check in _list(result.get("checks"))
+            if isinstance(check, dict)
+        ],
+        "claim_boundary": str(result.get("claim_boundary", "")),
+    }
+    _validate_export_eval_projection(projection)
+    return projection
+
+
+def _export_candidate_projection(candidate: dict[str, Any]) -> dict[str, Any]:
+    validate_improvement_candidate(candidate)
+    gate = _object(candidate.get("human_gate"))
+    proposal = _object(candidate.get("proposal"))
+    diff_preview = _object(candidate.get("diff_preview"))
+    projection = {
+        "schema_version": IMPROVEMENT_CANDIDATE_SCHEMA_VERSION,
+        "record_type": "improvement_candidate",
+        "candidate_id": str(candidate.get("candidate_id", "")),
+        "trace_id": str(candidate.get("trace_id", "")),
+        "eval_id": str(candidate.get("eval_id", "")),
+        "created_at": str(candidate.get("created_at", "")),
+        "target_type": str(candidate.get("target_type", "")),
+        "status": str(candidate.get("status", "")),
+        "human_gate": {
+            "required": gate.get("required") is True,
+            "decision": str(gate.get("decision", "")),
+            "allowed_decisions": _strings(gate.get("allowed_decisions")),
+        },
+        "proposal": {
+            "regression_case_recommended": proposal.get("regression_case_recommended") is True,
+        },
+        "diff_preview": {
+            "available": diff_preview.get("available") is True,
+        },
+        "claim_boundary": str(candidate.get("claim_boundary", "")),
+    }
+    _validate_export_candidate_projection(projection)
+    return projection
+
+
+def _export_privacy_projection(privacy: dict[str, Any]) -> dict[str, Any]:
+    projected = _sanitize_export_record(privacy)
+    projected.setdefault("mode", PRIVACY_MODE)
+    if "raw_prompt_stored" in privacy:
+        projected["raw_prompt_stored"] = privacy.get("raw_prompt_stored") is True
+    if "raw_platform_event_stored" in privacy:
+        projected["raw_platform_event_stored"] = privacy.get("raw_platform_event_stored") is True
+    if "fixture_text_stored" in privacy:
+        projected["fixture_text_stored"] = privacy.get("fixture_text_stored") is True
+    return projected
+
+
+def _export_reasoning_summary(trace: dict[str, Any]) -> dict[str, Any]:
+    reasoning = _object(trace.get("reasoning_summary"))
+    workflow = _object(trace.get("workflow"))
+    not_evidence = _strings(reasoning.get("not_evidence_yet"))
+    return {
+        "why_this_workflow": "omitted_from_metadata_export" if reasoning.get("why_this_workflow") else "",
+        "next_action": _export_token(workflow.get("next_action") or reasoning.get("next_action")),
+        "not_evidence_yet": [],
+        "not_evidence_yet_count": len(not_evidence),
+        "not_evidence_yet_omitted": bool(not_evidence),
+        "claim_boundary": "omitted_from_metadata_export" if reasoning.get("claim_boundary") else "",
+        "claim_boundary_omitted": bool(reasoning.get("claim_boundary")),
+    }
+
+
+def _export_refs(values: list[Any]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        kind = _export_token(value.get("kind") or value.get("type"))
+        ref = str(value.get("ref") or value.get("path") or value.get("id") or "")
+        refs.append(
+            {
+                "kind": kind,
+                "ref_sha256": hashlib.sha256(ref.encode("utf-8")).hexdigest() if ref else "",
+                "ref_length": len(ref),
+                "ref_value_omitted": bool(ref),
+            }
+        )
+    return refs
+
+
+def _export_ref_values(values: list[str]) -> list[str]:
+    return [f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()[:16]}" for value in values if value]
+
+
+def _export_regression_expected(expected: dict[str, Any]) -> dict[str, Any]:
+    not_evidence = _strings(expected.get("not_evidence_yet_includes"))
+    return {
+        "selected_workflow": _export_token(expected.get("selected_workflow")),
+        "selected_harness": _export_token(expected.get("selected_harness")),
+        "next_action": _export_token(expected.get("next_action")),
+        "claim_boundary_contains": "omitted_from_metadata_export"
+        if expected.get("claim_boundary_contains")
+        else "",
+        "not_evidence_yet_includes": [],
+        "not_evidence_yet_count": len(not_evidence),
+        "not_evidence_yet_omitted": bool(not_evidence),
+    }
+
+
+def _export_replay_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mode": _export_token(policy.get("mode")),
+        "requires_fixture_text": policy.get("requires_fixture_text") is True,
+        "skip_reason": "omitted_from_metadata_export" if policy.get("skip_reason") else "",
+        "skip_reason_omitted": bool(policy.get("skip_reason")),
+    }
+
+
+def _export_token(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", text):
+        return text
+    return "omitted_free_text"
+
+
+def _learning_export_summary(
+    *,
+    traces: list[dict[str, Any]],
+    evals: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    regression_cases: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "counts": {
+            "traces": len(traces),
+            "evals": len(evals),
+            "candidates": len(candidates),
+            "regression_cases": len(regression_cases),
+        },
+        "workflows": sorted({str(_nested(trace, "workflow", "selected_workflow")) for trace in traces if _nested(trace, "workflow", "selected_workflow")}),
+        "evidence_states": sorted({str(_nested(trace, "status", "evidence_state")) for trace in traces if _nested(trace, "status", "evidence_state")}),
+        "outcomes": sorted({str(_nested(trace, "status", "outcome")) for trace in traces if _nested(trace, "status", "outcome")}),
+        "eval_statuses": sorted({str(result.get("status", "")) for result in evals if result.get("status")}),
+        "candidate_statuses": sorted({str(candidate.get("status", "")) for candidate in candidates if candidate.get("status")}),
+    }
+
+
+def _learning_study_card(
+    trace: dict[str, Any],
+    *,
+    evals: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    regression_cases: list[dict[str, Any]],
+) -> dict[str, Any]:
+    failed_or_warned = [
+        {
+            "eval_id": result.get("eval_id", ""),
+            "status": result.get("status", ""),
+            "checks": [
+                {
+                    "id": check.get("id", ""),
+                    "status": check.get("status", ""),
+                    "summary": check.get("summary", ""),
+                }
+                for check in _list(result.get("checks"))
+                if isinstance(check, dict) and check.get("status") in {"failed", "warning"}
+            ],
+        }
+        for result in evals
+        if result.get("status") in {"failed", "warning"}
+    ]
+    return {
+        "schema_version": "workflow_learning_study_card/v1",
+        "trace_id": trace.get("trace_id", ""),
+        "learning_trace_ref": learning_trace_ref(str(trace.get("trace_id", ""))),
+        "source_kind": _nested(trace, "source", "kind"),
+        "selected_workflow": _nested(trace, "workflow", "selected_workflow"),
+        "selected_harness": _nested(trace, "workflow", "selected_harness"),
+        "why_this_workflow": "omitted_from_metadata_export",
+        "next_action": _nested(trace, "workflow", "next_action"),
+        "not_evidence_yet_count": int(_nested(trace, "reasoning_summary", "not_evidence_yet_count") or 0),
+        "not_evidence_yet_omitted": _nested(trace, "reasoning_summary", "not_evidence_yet_omitted") is True,
+        "evidence_state": _nested(trace, "status", "evidence_state"),
+        "outcome": _nested(trace, "status", "outcome"),
+        "eval_statuses": [str(result.get("status", "")) for result in evals],
+        "failed_or_warning_checks": failed_or_warned,
+        "candidate_refs": [_record_ref("candidate", str(candidate.get("candidate_id", ""))) for candidate in candidates],
+        "regression_case_refs": [
+            _record_ref("regression_case", str(case.get("case_id", ""))) for case in regression_cases
+        ],
+        "reflection_questions": [
+            "Was the selected workflow the right lane for the original request?",
+            "Did the response clearly separate prepared work from observed evidence?",
+            "Which candidate or regression case should a human review before changing a skill or routing rule?",
+        ],
+    }
 
 
 def _read_regression_cases(paths: OmhPaths) -> list[dict[str, Any]]:
@@ -1099,3 +1654,38 @@ def _reject_forbidden_payload_keys(value: object, *, path: str = "") -> None:
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _reject_forbidden_payload_keys(child, path=f"{path}{index}.")
+
+
+def _sanitize_export_record(value: object) -> Any:
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, child in value.items():
+            key_text = str(key)
+            if _is_export_raw_payload_key(key_text):
+                continue
+            sanitized[key_text] = _sanitize_export_record(child)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_export_record(item) for item in value]
+    return value
+
+
+def _reject_export_payload_keys(value: object, *, path: str = "") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key)
+            if _is_export_raw_payload_key(key_text):
+                raise WorkflowLearningError(f"learning export contains forbidden raw field: {path + key_text}")
+            _reject_export_payload_keys(child, path=f"{path}{key_text}.")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_export_payload_keys(child, path=f"{path}{index}.")
+
+
+def _is_export_raw_payload_key(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "", key.lower())
+    allowed = {re.sub(r"[^a-z0-9]+", "", item.lower()) for item in EXPORT_ALLOWED_RAW_FLAG_KEYS}
+    forbidden = {re.sub(r"[^a-z0-9]+", "", item.lower()) for item in EXPORT_FORBIDDEN_PAYLOAD_KEYS}
+    if normalized in allowed:
+        return False
+    return normalized in forbidden or normalized.startswith("raw")
