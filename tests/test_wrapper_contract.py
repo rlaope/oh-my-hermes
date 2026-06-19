@@ -251,6 +251,10 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(explanation["schema_version"], "omh_workflow_explanation/v1")
         self.assertEqual(explanation["selected_workflow"], "web-research")
         self.assertEqual(explanation["selected_harness"], "research")
+        self.assertEqual(explanation["workflow_context_id"], "research_and_ops")
+        self.assertEqual(explanation["workflow_context_card"]["id"], "research_and_ops")
+        self.assertIn("web-research", explanation["workflow_context_card"]["representative_workflows"])
+        self.assertEqual(trace["workflow_context_id"], "research_and_ops")
         self.assertIn("why_this_workflow", explanation)
         self.assertEqual(explanation["next_action"], "run_hermes_research")
         self.assertTrue(explanation["not_evidence_yet"])
@@ -754,6 +758,8 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
                 explanation = payload["chat_response"]["state"]["workflow_explanation"]
                 self.assertEqual(explanation["selected_workflow"], "ultraprocess")
+                self.assertEqual(explanation["workflow_context_id"], "intent_to_plan")
+                self.assertIn("ultraprocess", explanation["workflow_context_card"]["representative_workflows"])
                 self.assertIn("PR creation", explanation["not_evidence_yet"])
                 actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
                 self.assertTrue(actions["start_ultraprocess"]["enabled"])
@@ -800,6 +806,8 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("visual QA", payload["chat_response"]["state"]["evidence_not_observed"])
                 explanation = payload["chat_response"]["state"]["workflow_explanation"]
                 self.assertEqual(explanation["selected_workflow"], "img-summary")
+                self.assertEqual(explanation["workflow_context_id"], "materials_and_visuals")
+                self.assertEqual(explanation["workflow_context_card"]["id"], "materials_and_visuals")
                 self.assertIn("workflow's triggers", explanation["why_this_workflow"])
                 self.assertIn("image_generation_setup/v1", explanation["why_this_workflow"])
                 self.assertIn("visual QA", explanation["not_evidence_yet"])
@@ -887,6 +895,10 @@ class WrapperContractTests(unittest.TestCase):
                     payload["chat_response"]["state"]["workflow_explanation"]["selected_workflow"],
                     selected_workflow,
                 )
+                self.assertIn(
+                    "workflow_context_card",
+                    payload["chat_response"]["state"]["workflow_explanation"],
+                )
 
     def test_ack_workflow_chat_copy_stays_human_friendly(self) -> None:
         cases = (
@@ -925,6 +937,7 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertEqual(payload["chat_response"]["kind"], "ack")
                 self.assertIn(body_marker, payload["chat_response"]["body"])
+                self.assertIn("workflow_context_id", payload["chat_response"]["usage_trace"])
                 self.assertNotIn("/v1", payload["chat_response"]["body"])
                 self.assertNotIn("schema", payload["chat_response"]["body"].lower())
                 self.assertNotIn("artifact", payload["chat_response"]["body"].lower())

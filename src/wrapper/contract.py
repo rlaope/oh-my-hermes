@@ -11,7 +11,7 @@ from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..operator_productivity import build_agent_operator_productivity_card
-from ..plugin_bundle.omh.awareness import workflow_context_cards
+from ..plugin_bundle.omh.awareness import workflow_context_card_for_workflow, workflow_context_cards
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
@@ -1637,7 +1637,7 @@ def workflow_explanation_payload(
     workflow = _usage_workflow(state)
     label = workflow or _usage_label(state, kind=kind, phase=phase, next_action=next_action)
     harness = primary_harness_for_skill(workflow) if workflow else ""
-    return {
+    payload: dict[str, object] = {
         "schema_version": WORKFLOW_EXPLANATION_SCHEMA_VERSION,
         "selected_workflow": workflow,
         "label": label,
@@ -1649,6 +1649,11 @@ def workflow_explanation_payload(
         "claim_boundary": claim_boundary,
         "rendering_hint": "Show this as a compact why/next/not-evidence card in chat surfaces.",
     }
+    context_card = workflow_context_card_for_workflow(workflow)
+    if context_card:
+        payload["workflow_context_card"] = context_card
+        payload["workflow_context_id"] = context_card["id"]
+    return payload
 
 
 def _workflow_explanation_reason(state: dict[str, object], *, workflow: str, label: str) -> str:
@@ -1714,6 +1719,9 @@ def usage_trace_payload(*, kind: str, phase: str, next_action: str, state: dict[
     runtime_family = str(state.get("runtime_family") or "")
     if runtime_family:
         trace["runtime_family"] = runtime_family
+    context_card = workflow_context_card_for_workflow(workflow)
+    if context_card:
+        trace["workflow_context_id"] = context_card["id"]
     return trace
 
 

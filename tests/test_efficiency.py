@@ -27,6 +27,7 @@ from omh.plugin_bundle.omh.awareness import (
     awareness_primer_context,
     awareness_primer_markdown,
     awareness_workflow_context_markdown,
+    workflow_context_card_for_workflow,
 )
 from omh.skills.catalog import (
     builtin_harnesses,
@@ -119,6 +120,16 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("img-summary", cards["materials_and_visuals"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
+
+    def test_workflow_context_cards_cover_installable_workflow_families(self) -> None:
+        workflow_skills = {definition.name for definition in builtin_definitions()} - {"oh-my-hermes", "cancel"}
+        unmapped = sorted(name for name in workflow_skills if not workflow_context_card_for_workflow(name))
+
+        self.assertEqual(unmapped, [])
+        self.assertEqual(workflow_context_card_for_workflow("img-summary")["id"], "materials_and_visuals")
+        self.assertEqual(workflow_context_card_for_workflow("feedback-triage")["id"], "research_and_ops")
+        self.assertEqual(workflow_context_card_for_workflow("automation-blueprint")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("code-review")["id"], "coding_handoff")
 
     def test_mid_session_awareness_detector_is_bounded(self) -> None:
         self.assertTrue(awareness_context_matches_message("회의록을 세로 요약 이미지 카드로 만들어줘"))
