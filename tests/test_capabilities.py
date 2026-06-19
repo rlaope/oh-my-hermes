@@ -11,6 +11,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.capabilities.registry import capability_snapshot, inspect_capability, list_capabilities
+from omh.capabilities.schema import normalize_capability_section
 from omh.skills.catalog import installable_skill_names
 
 
@@ -70,6 +71,9 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("request-to-handoff", sections["playbooks"])
         self.assertIn("research-department", sections["playbooks"])
         self.assertIn("ultragoal", sections["tool_requirements"])
+        self.assertEqual(normalize_capability_section("roles"), "agent_roles")
+        self.assertEqual(normalize_capability_section("patterns"), "orchestration_patterns")
+        self.assertEqual(normalize_capability_section("tools"), "tool_requirements")
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]
@@ -147,6 +151,23 @@ class CapabilityManifestTests(unittest.TestCase):
         inspected = json.loads(stdout)
         self.assertEqual(inspected["section"], "orchestration_patterns")
         self.assertEqual(inspected["capability"]["owner_role"], "handoff-guide")
+
+        status, stdout, stderr = run_cli(
+            ["capabilities", "inspect", "handoff-guide", "--section", "roles", "--json"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        role = json.loads(stdout)
+        self.assertEqual(role["section"], "agent_roles")
+        self.assertEqual(role["resolved_id"], "handoff-guide")
+
+        status, stdout, stderr = run_cli(["capabilities", "list", "--section", "agents", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        role_list = json.loads(stdout)
+        self.assertEqual(role_list["sections"][0]["section"], "agent_roles")
+        self.assertIn("planner", role_list["sections"][0]["ids"])
 
         status, stdout, stderr = run_cli(
             ["capabilities", "inspect", "request-to-handoff", "--section", "playbooks", "--json"],

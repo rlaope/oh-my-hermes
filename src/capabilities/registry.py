@@ -7,7 +7,12 @@ from .hooks import hook_manifest
 from .keywords import keyword_detector_manifest
 from .orchestration import orchestration_patterns
 from .playbooks import playbook_capabilities
-from .schema import CAPABILITY_MANIFEST_SCHEMA_VERSION, CAPABILITY_SECTIONS, PREPARED_NOT_OBSERVED
+from .schema import (
+    CAPABILITY_MANIFEST_SCHEMA_VERSION,
+    CAPABILITY_SECTIONS,
+    PREPARED_NOT_OBSERVED,
+    normalize_capability_section,
+)
 from .skills import skill_capabilities
 from .tools import tool_requirements_manifest
 from ..plugin_bundle.omh.awareness import awareness_primer_payload
@@ -78,21 +83,23 @@ def evidence_boundaries() -> dict[str, object]:
 
 def filtered_capability_snapshot(section: str | None = None) -> dict[str, object]:
     snapshot = capability_snapshot()
-    if not section:
+    canonical_section = normalize_capability_section(section)
+    if not canonical_section:
         return snapshot
-    if section not in CAPABILITY_SECTIONS:
+    if canonical_section not in CAPABILITY_SECTIONS:
         raise ValueError(f"unknown capability section: {section}")
     return {
         "schema_version": snapshot["schema_version"],
         "manifest_id": snapshot["manifest_id"],
-        "section": section,
-        section: snapshot[section],
+        "section": canonical_section,
+        canonical_section: snapshot[canonical_section],
     }
 
 
 def list_capabilities(section: str | None = None) -> dict[str, object]:
     snapshot = capability_snapshot()
-    sections = [section] if section else list(CAPABILITY_SECTIONS)
+    canonical_section = normalize_capability_section(section)
+    sections = [canonical_section] if canonical_section else list(CAPABILITY_SECTIONS)
     unknown = [item for item in sections if item not in CAPABILITY_SECTIONS]
     if unknown:
         raise ValueError(f"unknown capability section: {unknown[0]}")
@@ -112,7 +119,8 @@ def inspect_capability(identifier: str, section: str | None = None) -> dict[str,
     if not identifier:
         raise ValueError("capabilities inspect requires an id")
     snapshot = capability_snapshot()
-    sections = [section] if section else list(CAPABILITY_SECTIONS)
+    canonical_section = normalize_capability_section(section)
+    sections = [canonical_section] if canonical_section else list(CAPABILITY_SECTIONS)
     for name in sections:
         if name not in CAPABILITY_SECTIONS:
             raise ValueError(f"unknown capability section: {name}")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from ..capabilities.registry import filtered_capability_snapshot, inspect_capability, list_capabilities
-from ..capabilities.schema import CAPABILITY_SECTIONS
+from ..capabilities.schema import CAPABILITY_SECTION_CHOICES
 from ..installer import OmhError
 from .common import _print_json, _wants_json
 
@@ -60,17 +60,17 @@ def _add_capabilities_commands(sub) -> None:
     capabilities_sub = capabilities.add_subparsers(dest="capabilities_command", required=True)
 
     export = capabilities_sub.add_parser("export", help="Export the deterministic OMH capability manifest.")
-    export.add_argument("--section", choices=CAPABILITY_SECTIONS, default=None)
+    export.add_argument("--section", choices=CAPABILITY_SECTION_CHOICES, default=None)
     export.add_argument("--json", action="store_true", help="Accepted for consistency; export is always machine-readable JSON.")
     export.set_defaults(func=cmd_capabilities_export)
 
     list_cmd = capabilities_sub.add_parser("list", help="List capability ids by section.")
-    list_cmd.add_argument("--section", choices=CAPABILITY_SECTIONS, default=None)
+    list_cmd.add_argument("--section", choices=CAPABILITY_SECTION_CHOICES, default=None)
     list_cmd.add_argument("--json", action="store_true", help="Print machine-readable capability id lists.")
     list_cmd.set_defaults(func=cmd_capabilities_list)
 
     inspect = capabilities_sub.add_parser("inspect", help="Inspect one capability by id.")
     inspect.add_argument("identifier")
-    inspect.add_argument("--section", choices=CAPABILITY_SECTIONS, default=None)
+    inspect.add_argument("--section", choices=CAPABILITY_SECTION_CHOICES, default=None)
     inspect.add_argument("--json", action="store_true", help="Print the full machine-readable capability.")
     inspect.set_defaults(func=cmd_capabilities_inspect)

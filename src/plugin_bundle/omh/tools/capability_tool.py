@@ -16,6 +16,25 @@ STANDALONE_CAPABILITY_SECTIONS = (
     "tool_requirements",
     "evidence_boundaries",
 )
+STANDALONE_CAPABILITY_SECTION_ALIASES = {
+    "awareness": "omh_awareness",
+    "agent": "agent_roles",
+    "agents": "agent_roles",
+    "role": "agent_roles",
+    "roles": "agent_roles",
+    "hook": "hooks",
+    "keyword": "keywords",
+    "pattern": "orchestration_patterns",
+    "patterns": "orchestration_patterns",
+    "orchestration": "orchestration_patterns",
+    "playbook": "playbooks",
+    "tool": "tool_requirements",
+    "tools": "tool_requirements",
+    "tooling": "tool_requirements",
+    "boundary": "evidence_boundaries",
+    "boundaries": "evidence_boundaries",
+    "evidence": "evidence_boundaries",
+}
 CONCEPTUAL_AWARENESS_SURFACES = {
     "request-to-handoff",
     "executor selection",
@@ -114,6 +133,7 @@ def _load_package_registry() -> dict[str, object]:
 
 
 def _standalone_capability_snapshot(section: str | None = None) -> dict[str, object]:
+    canonical_section = _standalone_normalize_section(section)
     payload: dict[str, object] = {
         "schema_version": "omh_capability_manifest/v1",
         "source": "standalone_plugin_bundle_fallback",
@@ -127,25 +147,26 @@ def _standalone_capability_snapshot(section: str | None = None) -> dict[str, obj
         ],
     }
     sections = _standalone_sections()
-    if section:
-        if section not in sections:
+    if canonical_section:
+        if canonical_section not in sections:
             raise ValueError(f"unknown capability section: {section}")
-        payload["section"] = section
-        payload[section] = sections[section]
+        payload["section"] = canonical_section
+        payload[canonical_section] = sections[canonical_section]
         return payload
     payload.update(sections)
     return payload
 
 
 def _standalone_capability_list(section: str | None = None) -> dict[str, object]:
+    canonical_section = _standalone_normalize_section(section)
     sections = _standalone_sections()
-    if section:
-        if section not in sections:
+    if canonical_section:
+        if canonical_section not in sections:
             raise ValueError(f"unknown capability section: {section}")
         return {
             "schema_version": "omh_capability_list/v1",
-            "section": section,
-            "ids": _standalone_ids(sections[section]),
+            "section": canonical_section,
+            "ids": _standalone_ids(sections[canonical_section]),
             "degraded": True,
         }
     return {
@@ -162,10 +183,11 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
     wanted = str(capability_id or "").strip()
     if not wanted:
         raise ValueError("capabilities inspect requires an id")
+    canonical_section = _standalone_normalize_section(section)
     sections = _standalone_sections()
-    if section and section not in sections:
+    if canonical_section and canonical_section not in sections:
         raise ValueError(f"unknown capability section: {section}")
-    search = {section: sections[section]} if section else sections
+    search = {canonical_section: sections[canonical_section]} if canonical_section else sections
     for section_name, values in search.items():
         for item in _standalone_items(values):
             if _standalone_matches(wanted, item):
@@ -189,6 +211,13 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
                 "degraded": True,
             }
     raise ValueError(f"unknown capability id: {wanted}")
+
+
+def _standalone_normalize_section(section: str | None) -> str | None:
+    if not section:
+        return None
+    normalized = section.strip()
+    return STANDALONE_CAPABILITY_SECTION_ALIASES.get(normalized, normalized)
 
 
 def _standalone_sections() -> dict[str, object]:

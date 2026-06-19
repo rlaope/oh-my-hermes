@@ -47,8 +47,11 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("explicit_invocation_prefixes", payload["keywords"])
 
             inspected = json.loads(handler({"action": "inspect", "id": "handoff-guide"}))
+            inspected_by_alias_section = json.loads(handler({"action": "inspect", "id": "handoff-guide", "section": "roles"}))
             legacy_inspected = json.loads(handler({"action": "inspect", "id": "coding-handoff"}))
             self.assertEqual(inspected["section"], "agent_roles")
+            self.assertEqual(inspected_by_alias_section["section"], "agent_roles")
+            self.assertEqual(inspected_by_alias_section["resolved_id"], "handoff-guide")
             self.assertEqual(inspected["capability"]["runtime_claim"], "descriptor_not_runtime_agent")
             self.assertEqual(legacy_inspected["section"], "agent_roles")
             self.assertEqual(legacy_inspected["requested_id"], "coding-handoff")
@@ -107,6 +110,8 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
                 inspected = json.loads(handler({{"action": "inspect", "id": "handoff-guide"}}))
                 alias_results = {{}}
+                alias_section = json.loads(handler({{"action": "inspect", "id": "handoff-guide", "section": "roles"}}))
+                alias_list = json.loads(handler({{"action": "list", "section": "agents"}}))
                 for alias in {LEGACY_ROLE_ALIASES!r}:
                     alias_results[alias] = json.loads(
                         handler({{"action": "inspect", "id": alias, "section": "agent_roles"}})
@@ -137,6 +142,10 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "evidence_section": evidence["section"],
                     "prepared_boundary": inspected_boundary["capability"],
                     "inspect_section": inspected["section"],
+                    "alias_section": alias_section["section"],
+                    "alias_section_resolved": alias_section["resolved_id"],
+                    "alias_list_section": alias_list["section"],
+                    "alias_list_ids": alias_list["ids"],
                     "alias_results": {{
                         alias: result["resolved_id"]
                         for alias, result in alias_results.items()
@@ -202,6 +211,10 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["evidence_section"], "evidence_boundaries")
             self.assertIn("Prepared OMH capability", payload["prepared_boundary"])
             self.assertEqual(payload["inspect_section"], "agent_roles")
+            self.assertEqual(payload["alias_section"], "agent_roles")
+            self.assertEqual(payload["alias_section_resolved"], "handoff-guide")
+            self.assertEqual(payload["alias_list_section"], "agent_roles")
+            self.assertIn("planner", payload["alias_list_ids"])
             self.assertEqual(payload["alias_results"], LEGACY_ROLE_ALIASES)
             self.assertIn("unknown capability id: retained-cognition", payload["retained_error"])
             self.assertEqual(payload["loop_section"], "skills")
