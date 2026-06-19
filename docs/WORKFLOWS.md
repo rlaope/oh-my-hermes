@@ -4176,8 +4176,10 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - workflow_learning_trace/v1
   - workflow_eval_result/v1
   - improvement_candidate/v1
+  - improvement_candidate_review_card/v1
   - regression_case/v1
   - workflow_learning_audit/v1
+  - learning_audit_card/v1
   - workflow_learning_export/v1
 - Stop conditions:
   - card is prepared or a missing decision is surfaced
@@ -4199,6 +4201,10 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - `record_workflow_learning_trace`
   - `show_learning_eval`
   - `propose_skill_improvement`
+  - `review_improvement`
+  - `approve_improvement`
+  - `revise_improvement`
+  - `reject_improvement`
   - `add_regression_case`
   - `audit_learning_readiness`
   - `export_learning_bundle`

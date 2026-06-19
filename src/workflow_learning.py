@@ -14,6 +14,7 @@ from .runtime.artifacts import show_run
 WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION = "workflow_learning_trace/v1"
 WORKFLOW_EVAL_RESULT_SCHEMA_VERSION = "workflow_eval_result/v1"
 IMPROVEMENT_CANDIDATE_SCHEMA_VERSION = "improvement_candidate/v1"
+IMPROVEMENT_CANDIDATE_REVIEW_CARD_SCHEMA_VERSION = "improvement_candidate_review_card/v1"
 REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
 WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
@@ -391,6 +392,7 @@ def build_improvement_candidate(
         "eval_id": str(eval_result["eval_id"]),
         "created_at": now,
         "target_type": target_type,
+        "target_ref": _candidate_target_ref(target_type, trace, eval_result),
         "title": title or _candidate_title(trace, failed_or_warned),
         "status": "proposed",
         "human_gate": {
@@ -409,8 +411,75 @@ def build_improvement_candidate(
         },
         "claim_boundary": "Improvement candidates are review material. They do not apply patches until a later explicit human-approved workflow exists.",
     }
+    candidate["review_card"] = build_improvement_candidate_review_card(candidate)
     validate_improvement_candidate(candidate)
     return candidate
+
+
+def build_improvement_candidate_review_card(candidate: dict[str, Any]) -> dict[str, Any]:
+    _validate_improvement_candidate_core(candidate)
+    gate = _object(candidate.get("human_gate"))
+    proposal = _object(candidate.get("proposal"))
+    diff_preview = _object(candidate.get("diff_preview"))
+    decision = str(gate.get("decision", "pending"))
+    status = _improvement_review_status(decision)
+    card = {
+        "schema_version": IMPROVEMENT_CANDIDATE_REVIEW_CARD_SCHEMA_VERSION,
+        "record_type": "improvement_candidate_review_card",
+        "candidate_id": str(candidate.get("candidate_id", "")),
+        "trace_id": str(candidate.get("trace_id", "")),
+        "eval_id": str(candidate.get("eval_id", "")),
+        "status": status,
+        "severity": _improvement_review_severity(status),
+        "headline": _improvement_review_headline(status),
+        "summary": _improvement_review_summary(candidate),
+        "target": {
+            "type": str(candidate.get("target_type", "")),
+            "ref": str(candidate.get("target_ref", "")),
+        },
+        "review_gate": {
+            "required": gate.get("required") is True,
+            "decision": decision,
+            "allowed_decisions": _strings(gate.get("allowed_decisions")),
+            "human_approval_required": True,
+        },
+        "problem_statement": str(proposal.get("problem_summary", "")),
+        "proposed_change_summary": str(proposal.get("suggested_change", "")),
+        "diff_preview": {
+            "available": diff_preview.get("available") is True,
+            "reason": str(diff_preview.get("reason", "")),
+        },
+        "review_questions": [
+            "Does the problem statement match the recorded eval failure or warning?",
+            "Is the target surface the right source of truth for this workflow issue?",
+            "Should a regression case exist before approving any future source change?",
+        ],
+        "steps": _improvement_review_steps(candidate),
+        "primary_action": _improvement_review_primary_action(status),
+        "wrapper_actions": [
+            "review_improvement",
+            "approve_improvement",
+            "revise_improvement",
+            "reject_improvement",
+            "add_regression_case",
+            "show_learning_eval",
+            "audit_learning_readiness",
+            "export_learning_bundle",
+            "show_status",
+        ],
+        "not_evidence_yet": [
+            "source patch applied",
+            "skill or routing behavior changed",
+            "regression case recorded",
+            "regression replay passed",
+            "future workflow behavior fixed",
+            "model training",
+            "workflow execution",
+        ],
+        "claim_boundary": str(candidate.get("claim_boundary", "")),
+    }
+    validate_improvement_candidate_review_card(card, candidate=candidate)
+    return card
 
 
 def write_improvement_candidate(paths: OmhPaths, candidate: dict[str, Any]) -> dict[str, Any]:
@@ -801,6 +870,10 @@ def build_learning_audit_card(audit: dict[str, Any]) -> dict[str, Any]:
             "record_workflow_learning_trace",
             "show_learning_eval",
             "propose_skill_improvement",
+            "review_improvement",
+            "approve_improvement",
+            "revise_improvement",
+            "reject_improvement",
             "add_regression_case",
             "audit_learning_readiness",
             "export_learning_bundle",
@@ -912,7 +985,7 @@ def validate_workflow_eval_result(result: dict[str, Any]) -> None:
             raise WorkflowLearningError("eval check status is invalid")
 
 
-def validate_improvement_candidate(candidate: dict[str, Any]) -> None:
+def _validate_improvement_candidate_core(candidate: dict[str, Any]) -> None:
     _require_schema(candidate, IMPROVEMENT_CANDIDATE_SCHEMA_VERSION)
     _require_string(candidate, "candidate_id")
     _require_string(candidate, "trace_id")
@@ -924,6 +997,73 @@ def validate_improvement_candidate(candidate: dict[str, Any]) -> None:
     diff = _object(candidate.get("diff_preview"))
     if diff.get("available") is not False:
         raise WorkflowLearningError("v1 candidates must not include applied diff previews")
+
+
+def validate_improvement_candidate(candidate: dict[str, Any]) -> None:
+    _validate_improvement_candidate_core(candidate)
+    card = candidate.get("review_card")
+    if card is not None:
+        validate_improvement_candidate_review_card(_object(card), candidate=candidate)
+    _reject_export_payload_keys(candidate)
+
+
+def validate_improvement_candidate_review_card(card: dict[str, Any], *, candidate: dict[str, Any] | None = None) -> None:
+    _require_schema(card, IMPROVEMENT_CANDIDATE_REVIEW_CARD_SCHEMA_VERSION)
+    for key in ("candidate_id", "trace_id", "eval_id", "headline", "summary", "primary_action", "claim_boundary"):
+        _require_string(card, key)
+    if card.get("status") not in {"review_required", "approved", "revision_requested", "rejected"}:
+        raise WorkflowLearningError("improvement candidate review card status is invalid")
+    if card.get("severity") not in {"review", "ok", "warning", "blocked"}:
+        raise WorkflowLearningError("improvement candidate review card severity is invalid")
+    target = _object(card.get("target"))
+    _require_string(target, "type")
+    _require_string(target, "ref")
+    gate = _object(card.get("review_gate"))
+    if gate.get("required") is not True or gate.get("human_approval_required") is not True:
+        raise WorkflowLearningError("improvement review gate must require human approval")
+    if gate.get("decision") not in {"pending", "approve", "revise", "reject"}:
+        raise WorkflowLearningError("improvement review gate decision is invalid")
+    if not _strings(gate.get("allowed_decisions")):
+        raise WorkflowLearningError("improvement review gate allowed_decisions must be non-empty")
+    diff = _object(card.get("diff_preview"))
+    if diff.get("available") is not False:
+        raise WorkflowLearningError("improvement review card must not include applied diff previews")
+    for key in ("problem_statement", "proposed_change_summary"):
+        _require_string(card, key)
+    for key in ("review_questions", "wrapper_actions", "not_evidence_yet"):
+        values = _list(card.get(key))
+        if not values or any(not isinstance(item, str) or not item for item in values):
+            raise WorkflowLearningError(f"improvement review card {key} must be non-empty strings")
+    if str(card.get("primary_action", "")) not in set(_strings(card.get("wrapper_actions"))):
+        raise WorkflowLearningError("improvement review card primary_action must be listed in wrapper_actions")
+    steps = _list(card.get("steps"))
+    if not steps:
+        raise WorkflowLearningError("improvement review card steps must be non-empty")
+    for step in steps:
+        item = _object(step)
+        for key in ("id", "label", "state", "detail"):
+            _require_string(item, key)
+        if item.get("state") not in {"pending", "ready", "blocked", "complete"}:
+            raise WorkflowLearningError("improvement review card step state is invalid")
+    if candidate is not None:
+        for key in ("candidate_id", "trace_id", "eval_id"):
+            if str(card.get(key, "")) != str(candidate.get(key, "")):
+                raise WorkflowLearningError(f"improvement review card {key} must match candidate")
+        if str(target.get("type", "")) != str(candidate.get("target_type", "")):
+            raise WorkflowLearningError("improvement review card target.type must match candidate")
+        if str(target.get("ref", "")) != str(candidate.get("target_ref", "")):
+            raise WorkflowLearningError("improvement review card target.ref must match candidate")
+        decision = str(_object(candidate.get("human_gate")).get("decision", "pending"))
+        status = _improvement_review_status(decision)
+        if gate.get("decision") != decision:
+            raise WorkflowLearningError("improvement review card decision must match candidate")
+        if card.get("status") != status:
+            raise WorkflowLearningError("improvement review card status must match candidate decision")
+        if card.get("severity") != _improvement_review_severity(status):
+            raise WorkflowLearningError("improvement review card severity must match candidate decision")
+        if card.get("primary_action") != _improvement_review_primary_action(status):
+            raise WorkflowLearningError("improvement review card primary_action must match candidate decision")
+    _reject_export_payload_keys(card)
 
 
 def validate_regression_case(case: dict[str, Any]) -> None:
@@ -1152,6 +1292,116 @@ def _candidate_suggested_change(trace: dict[str, Any], failed_or_warned: list[di
     if "route_selected" in check_ids:
         return "Improve routing metadata so the selected workflow and harness are always explicit."
     return f"Review the {selected} workflow for a possible routing, rubric, or status-card improvement."
+
+
+def _candidate_target_ref(target_type: str, trace: dict[str, Any], eval_result: dict[str, Any]) -> str:
+    selected = str(_nested(trace, "workflow", "selected_workflow") or "unknown")
+    normalized = str(target_type or "").strip().lower().replace("-", "_")
+    if normalized in {"skill", "workflow_skill"}:
+        return f"skill:{selected}"
+    if normalized in {"routing", "router", "route"}:
+        return "routing:recommendation-policy"
+    if normalized in {"rubric", "workflow_rubric", "eval"}:
+        return f"rubric:{eval_result.get('rubric_id', 'default')}"
+    if normalized == "docs":
+        return f"docs:workflow:{selected}"
+    if normalized == "validator":
+        return "validator:workflow-learning"
+    if normalized == "playbook":
+        return f"playbook:{selected}"
+    return f"workflow:{selected}"
+
+
+def _improvement_review_status(decision: str) -> str:
+    return {
+        "pending": "review_required",
+        "approve": "approved",
+        "revise": "revision_requested",
+        "reject": "rejected",
+    }.get(decision, "review_required")
+
+
+def _improvement_review_severity(status: str) -> str:
+    return {
+        "review_required": "review",
+        "approved": "ok",
+        "revision_requested": "warning",
+        "rejected": "blocked",
+    }.get(status, "review")
+
+
+def _improvement_review_headline(status: str) -> str:
+    return {
+        "review_required": "Improvement candidate needs human review.",
+        "approved": "Improvement candidate is approved for a later explicit change.",
+        "revision_requested": "Improvement candidate needs revision.",
+        "rejected": "Improvement candidate was rejected.",
+    }.get(status, "Improvement candidate needs review.")
+
+
+def _improvement_review_summary(candidate: dict[str, Any]) -> str:
+    target = str(candidate.get("target_ref", "unknown"))
+    title = str(candidate.get("title", "workflow improvement"))
+    return f"{title} targets {target}; review is required before any source change or regression claim."
+
+
+def _improvement_review_primary_action(status: str) -> str:
+    if status == "approved":
+        return "add_regression_case"
+    if status == "revision_requested":
+        return "revise_improvement"
+    if status == "rejected":
+        return "show_status"
+    return "review_improvement"
+
+
+def _improvement_review_steps(candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    gate = _object(candidate.get("human_gate"))
+    decision = str(gate.get("decision", "pending"))
+    approved = decision == "approve"
+    rejected = decision == "reject"
+    revised = decision == "revise"
+    return [
+        _improvement_review_step(
+            "eval",
+            "Eval",
+            "ready",
+            f"Eval {candidate.get('eval_id', '')} is the source signal for this candidate.",
+        ),
+        _improvement_review_step(
+            "proposal",
+            "Proposal",
+            "ready",
+            "Problem and suggested change are review material only.",
+        ),
+        _improvement_review_step(
+            "human_review",
+            "Human review",
+            "complete" if approved or rejected or revised else "pending",
+            f"Current decision: {decision}.",
+        ),
+        _improvement_review_step(
+            "regression",
+            "Regression",
+            "pending" if approved else "blocked",
+            "Record or replay a regression case before treating the improvement as durable.",
+        ),
+        _improvement_review_step(
+            "apply",
+            "Apply",
+            "blocked",
+            "No source patch is applied by v1 candidate creation.",
+        ),
+    ]
+
+
+def _improvement_review_step(step_id: str, label: str, state: str, detail: str) -> dict[str, Any]:
+    return {
+        "id": step_id,
+        "label": label,
+        "state": state,
+        "detail": detail,
+    }
 
 
 def _select_export_traces(paths: OmhPaths, *, trace_ids: list[str], limit: int | None) -> list[dict[str, Any]]:
@@ -1722,7 +1972,7 @@ def _learning_audit_primary_action(audit: dict[str, Any]) -> str:
             "evaluate_trace": "show_learning_eval",
             "add_regression_case": "add_regression_case",
             "create_candidate": "propose_skill_improvement",
-            "review_candidate": "propose_skill_improvement",
+            "review_candidate": "review_improvement",
             "write_learning_export": "export_learning_bundle",
         }.get(action_id, "audit_learning_readiness")
     return "audit_learning_readiness"

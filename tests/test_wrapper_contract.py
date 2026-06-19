@@ -247,14 +247,21 @@ class WrapperContractTests(unittest.TestCase):
         self.assertTrue(response["state"]["human_gate_required"])
         self.assertIn("workflow_learning_trace/v1", response["state"]["artifact_schemas"])
         self.assertIn("workflow_eval_result/v1", response["state"]["artifact_schemas"])
+        self.assertIn("improvement_candidate/v1", response["state"]["artifact_schemas"])
+        self.assertIn("improvement_candidate_review_card/v1", response["state"]["artifact_schemas"])
         self.assertIn("regression_case/v1", response["state"]["artifact_schemas"])
         self.assertIn("workflow_learning_export/v1", response["state"]["artifact_schemas"])
+        self.assertEqual(
+            response["state"]["improvement_candidate_review_card_schema"],
+            "improvement_candidate_review_card/v1",
+        )
         actions = {action["id"]: action for action in response["actions"]}
         self.assertTrue(actions["audit_learning_readiness"]["enabled"])
         self.assertEqual(actions["audit_learning_readiness"]["style"], "primary")
         self.assertIn("record_workflow_learning_trace", actions)
         self.assertIn("show_learning_eval", actions)
         self.assertIn("propose_skill_improvement", actions)
+        self.assertIn("review_improvement", actions)
         self.assertIn("add_regression_case", actions)
         self.assertIn("export_learning_bundle", actions)
         self.assertIn("replay_regression_cases", actions)
