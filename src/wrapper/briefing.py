@@ -216,6 +216,7 @@ def _work_summary(session: dict[str, Any], runtime_status: dict[str, Any]) -> di
         "handoff_contract": {
             "execution_brief": _object(handoff.get("execution_brief")),
             "runtime_brief": _object(handoff.get("runtime_brief")),
+            "isolation_plan": _isolation_plan_summary(_object(handoff.get("isolation_plan"))),
             "report_contract": _object(handoff.get("report_contract")),
             "evidence_contract": _object(handoff.get("evidence_contract")),
             "coding_team_path": _coding_team_path_summary(_object(handoff.get("hermes_coding_team_path"))),
@@ -269,6 +270,7 @@ def _progress_steps(
     runtime_observation: dict[str, Any],
 ) -> list[dict[str, Any]]:
     handoff_prepared = _handoff_prepared(session, runtime_status, executor_status)
+    isolation_status = _object(executor_status.get("workspace_isolation"))
     dispatch_observed = _bool_path(runtime_status, "execution", "observed") or str(executor_status.get("dispatch")) == "observed"
     result = str(executor_status.get("result") or _object(runtime_status.get("execution")).get("status") or "not_observed")
     result_observed = result in {"completed", "blocked", "failed"}
@@ -294,6 +296,12 @@ def _progress_steps(
     return [
         _step("plan", "Plan", _state(bool(session.get("plan")), False), "Compact route and plan metadata are recorded."),
         _step("handoff", "Handoff", _state(handoff_prepared, False), "A coding-agent handoff is prepared."),
+        _step(
+            "workspace_isolation",
+            "Workspace isolation",
+            _workspace_isolation_state(isolation_status, runtime_observation),
+            "Worktree/session isolation guidance is prepared separately from observed worktree creation.",
+        ),
         _step(
             "dispatch",
             "Dispatch",
@@ -390,6 +398,13 @@ def _user_facing_lines(
     if safe_summary and safe_summary not in lines:
         lines.append(safe_summary)
     team_path = _object(_object(work_summary.get("handoff_contract")).get("coding_team_path"))
+    isolation_plan = _object(_object(work_summary.get("handoff_contract")).get("isolation_plan"))
+    if isolation_plan:
+        strategy = str(isolation_plan.get("strategy", "same_workspace_ok"))
+        if strategy == "worktree_required":
+            lines.append("Workspace isolation is required before opening the coding agent.")
+        elif strategy == "worktree_recommended":
+            lines.append("Workspace isolation is recommended before opening the coding agent.")
     if team_path:
         observed = [str(step["id"]) for step in runtime_milestones if step.get("state") == "complete"]
         remaining = [str(step["id"]) for step in runtime_milestones if step.get("state") in {"pending", "blocked", "in_progress"}]
@@ -472,6 +487,21 @@ def _context_pack_summary(context_pack: dict[str, Any]) -> dict[str, Any]:
         "blocked_by_conflicts_count": len(_list_value(context_pack.get("blocked_by_conflicts"))),
         "redaction_policy": str(context_pack.get("redaction_policy", "")),
         "claim_boundary": str(context_pack.get("claim_boundary", "")),
+    }
+
+
+def _isolation_plan_summary(plan: dict[str, Any]) -> dict[str, Any]:
+    if not plan:
+        return {}
+    return {
+        "schema_version": str(plan.get("schema_version", "")),
+        "status": str(plan.get("status", "")),
+        "strategy": str(plan.get("strategy", "")),
+        "risk_level": str(plan.get("risk_level", "")),
+        "workspace_policy": str(plan.get("workspace_policy", "")),
+        "required_before": _string_list(plan.get("required_before")),
+        "wrapper_actions": _string_list(plan.get("wrapper_actions")),
+        "claim_boundary": str(plan.get("claim_boundary", "")),
     }
 
 
@@ -558,6 +588,19 @@ def _runtime_event_observed(runtime_observation: dict[str, Any], event_type: str
 
 def _runtime_event_failed_or_blocked(runtime_observation: dict[str, Any], event_type: str) -> bool:
     return event_type in set(_string_list(runtime_observation.get("failed_events")) + _string_list(runtime_observation.get("blocked_events")))
+
+
+def _workspace_isolation_state(isolation_status: dict[str, Any], runtime_observation: dict[str, Any]) -> str:
+    if _runtime_event_failed_or_blocked(runtime_observation, "worktree_creation"):
+        return "blocked"
+    if _runtime_event_observed(runtime_observation, "worktree_creation"):
+        return "complete"
+    status = str(isolation_status.get("status", "not_applicable"))
+    if status in {"observed", "not_required"}:
+        return "complete"
+    if status == "prepared_not_observed":
+        return "pending"
+    return "pending"
 
 
 def _state(done: bool, available: bool) -> str:

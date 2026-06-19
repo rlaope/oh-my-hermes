@@ -58,6 +58,11 @@ Runtime handoffs for Hermes/OMX/OMO/OMC use `runtime_observation/v1` records
 when wrappers or operators later observe runtime start, worktree, worker,
 verification, review, CI, or merge ladder events.
 
+Coding handoffs also include `worktree_session_isolation/v1`. Hermes can show
+same workspace ok, worktree recommended, or worktree required before opening a
+coding agent, but worktree creation is still not evidence until a wrapper or
+runtime records it.
+
 Executor session buttons use `executor_session/v1` records when a wrapper
 observes Open in Codex, Open in Claude Code, Attach session, Record completed,
 Record blocked, or Ask Hermes to verify. They update chat status without
@@ -124,6 +129,8 @@ selected.
   operator wants real Hermes profile evidence.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
+- Worktree/session isolation docs should describe `worktree_session_isolation/v1`
+  as prepared workspace guidance and wrapper UX, not as Git worktree creation.
 - Workflow learning docs should state that `workflow_learning_trace/v1` records
   are metadata-only process evidence. They can feed evals, readiness audits,
   review-only improvement candidates, human-review queues, regression cases,

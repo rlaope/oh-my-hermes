@@ -111,7 +111,10 @@ Selected coding executors/runtimes own:
    run-backed lifecycle path. Claude Code and generic agents can use portable
    prompt handoffs. Hermes, OMX, OMO, and OMC can use `coding_runtime_handoff/v1`
    contracts with team/swarm, worker-protocol, and worktree guidance while still
-   preserving prepared-vs-observed boundaries.
+   preserving prepared-vs-observed boundaries. Coding handoffs should also
+   carry `worktree_session_isolation/v1` so wrappers know whether to continue in
+   the same workspace, recommend a worktree, or require a worktree before
+   opening the selected coding agent.
 
 5. Prefer local deterministic artifacts over hidden magic.
    Runtime records, wrapper sessions, and plans should be inspectable,

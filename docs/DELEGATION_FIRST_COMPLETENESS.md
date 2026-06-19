@@ -33,6 +33,7 @@ evidence exists.
 | `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
 | `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, and runtime contracts without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
+| `worktree_session_isolation/v1` | Adds deterministic workspace-isolation guidance to coding handoffs and executor-session status: same workspace ok, worktree recommended, or worktree required. | `src/isolation.py`, `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py` |
 | `omh coding lifecycle` | Tracks Codex-selected handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
 | `omh memory inspect/pack/apply` | Reviews OMH-local and wrapper-supplied context, creates `memory_review_card/v1`, and attaches only conflict-free `handoff_context_pack/v1` summaries to executor handoffs. | `src/memory.py`, `tests/test_memory.py` |
 | `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime/artifacts.py`, `README.md` |
@@ -58,13 +59,20 @@ The strongest existing path is:
    includes `hermes_coding_team_path/v1` so chat surfaces can show solo,
    durable-goal, team, and swarm start choices. Runtime handoffs include
    runtime-specific templates and a `runtime_observation/v1` contract so
-   wrappers know exactly which events must be observed later.
+   wrappers know exactly which events must be observed later. Coding handoffs
+   also include `worktree_session_isolation/v1`, which tells the wrapper
+   whether the current workspace is acceptable, an isolated worktree is
+   recommended, or an isolated worktree is required before opening an executor.
 6. The wrapper renders executor-session buttons instead of asking the user to
    type backend commands. Open buttons carry `executor_launch/v1` with
    copyable Codex and Claude Code command templates, while attach/record
-   buttons stay metadata-only. When the wrapper observes Open in Codex, Attach
-   session, Record completed, Record blocked, or Ask Hermes to verify, it writes
+   buttons stay metadata-only. If isolation is recommended or required, the
+   first action is `prepare_worktree`; the later launch payload carries a
+   workspace hint for the selected executor. When the wrapper observes Prepare
+   worktree, Open in Codex, Attach session, Record completed, Record blocked,
+   or Ask Hermes to verify, it writes
    `executor_session/v1` metadata and derives status lines such as
+   `workspace-isolation: worktree_recommended(prepared_not_observed)`,
    `coding-agent: running(codex)`, `dispatch: observed`, and
    `verification: requested`.
 7. Separate wrapper/runtime evidence is required before OMH can say execution,
@@ -99,6 +107,11 @@ Expected behavior:
 - Runtime-profile executor selections return a runtime handoff contract with
   team/swarm, worker-protocol, and worktree guidance, but still do not create a
   lifecycle run.
+- All executor, prompt-only, and runtime coding handoffs include
+  `worktree_session_isolation/v1`. It is a prepared wrapper contract, not a Git
+  worktree creator. It can add `prepare_worktree` as the next visible action
+  before `open_executor_session` when the request is risky, parallel,
+  multi-agent, or runtime-owned.
 - Runtime handoff contracts include safe invocation templates such as
   `$ultragoal {message}`, `$team {message}`, `$ultrawork {message}`, or
   Hermes retained coding-skill prompts, plus an observation contract explaining
@@ -119,6 +132,7 @@ Expected behavior:
   - a prompt template, instruction payload, or runtime contract for the selected coding owner
   - runtime-specific templates when an oh-my or Hermes runtime is selected
   - a runtime observation contract for runtime handoffs
+  - a worktree/session isolation plan for wrapper UX
   - scope and non-goals
   - acceptance criteria
   - verification expectations
@@ -152,11 +166,14 @@ Wrappers should be able to express the chain in human terms:
    Hermes coding team path, or prepares a Codex lifecycle handoff.
 3. Runtime handoff templates show the selected runtime what to run, but the
    runtime observation ladder still starts empty.
-4. Executor execution is pending, running, blocked, completed, or not observed
+4. Workspace isolation is shown as same workspace ok, worktree recommended, or
+   worktree required. It remains prepared-only until matching worktree/session
+   evidence is recorded.
+5. Executor execution is pending, running, blocked, completed, or not observed
    according to wrapper evidence.
-5. Review, verification, CI, and merge status stay separate from prepared
+6. Review, verification, CI, and merge status stay separate from prepared
    delegation until observed.
-6. Status readers evaluate the full run ledger conservatively. A later
+7. Status readers evaluate the full run ledger conservatively. A later
    `merge.json` cannot make a run look merge-ready if verification, review, or
    CI is missing, failed, blocked, or contradictory.
 
@@ -189,8 +206,8 @@ argv arrays, or shell text.
 Planning payloads include `quality_gate` and `deep_interview` blocks so a
 wrapper can distinguish a draft plan from an approved plan and a blocked request
 from a guessed plan. Status payloads include `status_card/v1` so a wrapper can
-render handoff, execution, verification, review, CI, merge-ready, and merged
-steps without parsing prose.
+render workspace isolation, handoff, execution, verification, review, CI,
+merge-ready, and merged steps without parsing prose.
 
 ## Success Criteria
 

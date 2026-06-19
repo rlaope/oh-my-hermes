@@ -779,6 +779,7 @@ def _handoff_contract_summary(handoff: dict[str, Any]) -> dict[str, Any]:
         "selected_executor_profile": handoff.get("selected_executor_profile", handoff.get("executor_target", "")),
         "execution_brief": _object_or_empty(handoff.get("execution_brief")),
         "runtime_brief": _object_or_empty(handoff.get("runtime_brief")),
+        "isolation_plan": _isolation_plan_summary(_object_or_empty(handoff.get("isolation_plan"))),
         "report_contract": _object_or_empty(handoff.get("report_contract")),
         "evidence_contract": _object_or_empty(handoff.get("evidence_contract")),
         "acceptance_criteria": _string_list(handoff.get("acceptance_criteria")),
@@ -804,6 +805,25 @@ def _context_pack_summary(context_pack: dict[str, Any]) -> dict[str, Any]:
         "blocked_by_conflicts_count": len(_list_or_empty(context_pack.get("blocked_by_conflicts"))),
         "redaction_policy": context_pack.get("redaction_policy", ""),
         "claim_boundary": context_pack.get("claim_boundary", ""),
+    }
+
+
+def _isolation_plan_summary(plan: dict[str, Any]) -> dict[str, Any]:
+    if not plan:
+        return {}
+    return {
+        "schema_version": plan.get("schema_version", ""),
+        "status": plan.get("status", ""),
+        "strategy": plan.get("strategy", ""),
+        "risk_level": plan.get("risk_level", ""),
+        "workspace_policy": plan.get("workspace_policy", ""),
+        "required_before": [str(item) for item in plan.get("required_before", []) if str(item)]
+        if isinstance(plan.get("required_before"), list)
+        else [],
+        "wrapper_actions": [str(item) for item in plan.get("wrapper_actions", []) if str(item)]
+        if isinstance(plan.get("wrapper_actions"), list)
+        else [],
+        "claim_boundary": plan.get("claim_boundary", ""),
     }
 
 

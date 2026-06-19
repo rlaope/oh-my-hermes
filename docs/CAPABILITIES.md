@@ -60,6 +60,11 @@ changed, review passed, CI passed, or a PR was merged.
 Those claims require matching local wrapper or runtime artifacts such as
 `runtime_observation/v1`.
 
+Workspace-isolation guidance uses `worktree_session_isolation/v1`. It can tell a
+wrapper to keep the same workspace, recommend a worktree, or require a worktree
+before opening a coding agent. It is still prepared guidance until a wrapper or
+runtime observes the workspace action.
+
 ## Why This Exists
 
 Hermes and wrapper surfaces should not need to scrape README prose to know which

@@ -31,6 +31,7 @@ EXECUTOR_SESSION_STATUSES = ("not_started", "prepared", "running", "completed", 
 EXECUTOR_SESSION_RESULTS = ("not_observed", "completed", "blocked", "failed")
 EXECUTOR_SESSION_VERIFICATION_STATUSES = ("not_requested", "requested", "observed")
 EXECUTOR_SESSION_ACTION_IDS = (
+    "prepare_worktree",
     "open_executor_session",
     "attach_executor_session",
     "refresh_executor_status",
@@ -69,6 +70,7 @@ def build_executor_session_status(
     executor = _selected_executor(session, record)
     attached = bool(record.get("attached", False))
     status_blocker = record_error or linked_status_error or ""
+    isolation_status = _isolation_status(paths, session, linked_status, runtime_status)
     status = {
         "schema_version": EXECUTOR_SESSION_STATUS_SCHEMA_VERSION,
         "session_id": session_id,
@@ -81,6 +83,7 @@ def build_executor_session_status(
         "dispatch": "observed" if dispatch_observed else "not_observed",
         "result": result_status,
         "verification": verification_status,
+        "workspace_isolation": isolation_status,
         "external_session_ref": str(record.get("external_session_ref", "")),
         "actions": build_executor_session_actions(
             session,
@@ -88,9 +91,11 @@ def build_executor_session_status(
             dispatch_observed=dispatch_observed,
             result_status=result_status,
             status_blocker=status_blocker,
+            isolation_status=isolation_status,
         ),
         "status_lines": [
             f"coding-agent: {agent_state}({executor})",
+            f"workspace-isolation: {isolation_status['strategy']}({isolation_status['status']})",
             f"executor-session: {'attached' if attached else 'not_attached'}",
             f"handoff: {_handoff_state(session)}",
             f"dispatch: {'observed' if dispatch_observed else 'not_observed'}",
@@ -106,6 +111,7 @@ def build_executor_session_status(
             result_status=result_status,
             verification_status=verification_status,
             status_blocker=status_blocker,
+            isolation_status=isolation_status,
         ),
         "claim_boundary": (
             "Executor session status is wrapper/operator metadata. It does not prove execution, "
@@ -136,6 +142,7 @@ def build_executor_session_actions(
     dispatch_observed: bool | None = None,
     result_status: str | None = None,
     status_blocker: str = "",
+    isolation_status: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
     record = record or _default_executor_session(session)
     executor = _selected_executor(session, record)
@@ -144,6 +151,12 @@ def build_executor_session_actions(
     if dispatch_observed is None:
         dispatch_observed = bool(record.get("dispatch_observed", False))
     result_status = result_status or str(record.get("result", "not_observed"))
+    isolation_status = isolation_status or _default_isolation_status()
+    isolation_next_action = str(isolation_status.get("next_action", ""))
+    isolation_strategy = str(isolation_status.get("strategy", "same_workspace_ok"))
+    open_blocker = status_blocker
+    if isolation_strategy == "worktree_required" and isolation_next_action == "prepare_worktree":
+        open_blocker = open_blocker or "Workspace isolation is required before opening the coding agent."
     base_payload = {
         "schema_version": "executor_session_action/v1",
         "session_id": session_id,
@@ -161,13 +174,15 @@ def build_executor_session_actions(
                 payload={**base_payload, "backend_action": "status"},
             )
         ]
+    isolation_action = _isolation_action(session, base_payload, isolation_status, status_blocker=status_blocker, result_status=result_status)
     return [
+        *([isolation_action] if isolation_action else []),
         _action(
             "open_executor_session",
             _open_label(executor),
-            "primary",
+            "secondary" if isolation_next_action == "prepare_worktree" else "primary",
             enabled=(
-                not status_blocker
+                not open_blocker
                 and _handoff_state(session) == "prepared"
                 and result_status == "not_observed"
                 and not attached
@@ -176,8 +191,8 @@ def build_executor_session_actions(
             payload={
                 **base_payload,
                 "backend_action": "open-executor",
-                "disabled_reason": status_blocker,
-                "launch": _executor_launch_contract(executor, session),
+                "disabled_reason": open_blocker,
+                "launch": _executor_launch_contract(executor, session, isolation_status=isolation_status),
             },
         ),
         _action(
@@ -388,6 +403,7 @@ def enhance_chat_response_with_executor_session(
         "schema_version": executor_status.get("schema_version", EXECUTOR_SESSION_STATUS_SCHEMA_VERSION),
         "coding_agent": executor_status.get("coding_agent", ""),
         "executor_session": executor_status.get("executor_session", ""),
+        "workspace_isolation": executor_status.get("workspace_isolation", {}),
         "dispatch": executor_status.get("dispatch", ""),
         "result": executor_status.get("result", ""),
         "verification": executor_status.get("verification", ""),
@@ -417,6 +433,7 @@ def enhance_status_card_with_executor_session(
 ) -> dict[str, object]:
     updated = dict(status_card)
     updated["executor_session_status"] = _executor_status_summary(executor_status)
+    updated["workspace_isolation"] = executor_status.get("workspace_isolation", {})
     updated["executor_status_lines"] = list(executor_status.get("status_lines", [])) if isinstance(executor_status.get("status_lines"), list) else []
     updated["executor_display_status_lines"] = (
         list(executor_status.get("display_status_lines", [])) if isinstance(executor_status.get("display_status_lines"), list) else []
@@ -447,6 +464,12 @@ def build_executor_session_status_card(executor_status: dict[str, object]) -> di
         "primary_action_label": next_action_label,
         "steps": [
             _card_step("handoff", "Handoff", "complete" if executor_status.get("handoff") == "prepared" else "pending", "Executor handoff prepared by Hermes."),
+            _card_step(
+                "workspace_isolation",
+                "Workspace",
+                _isolation_step_state(executor_status.get("workspace_isolation")),
+                "Worktree/session isolation guidance is prepared separately from observed worktree creation.",
+            ),
             _card_step("dispatch", "Dispatch", "complete" if dispatch == "observed" else "pending", "Observed wrapper open or attach event."),
             _card_step("result", "Result", _result_step_state(result), "Observed executor result."),
             _card_step("verification", "Verification", _verification_step_state(verification), "Hermes verification request or observed verification evidence."),
@@ -484,6 +507,19 @@ def _default_executor_session(session: dict[str, Any]) -> dict[str, Any]:
         "evidence_refs": [],
         "summary": "",
         "claim_boundary": _claim_boundary(),
+    }
+
+
+def _default_isolation_status() -> dict[str, object]:
+    return {
+        "schema_version": "worktree_session_isolation_status/v1",
+        "status": "not_applicable",
+        "strategy": "same_workspace_ok",
+        "risk_level": "low",
+        "next_action": "open_executor_session",
+        "observed": False,
+        "plan": {},
+        "claim_boundary": "No workspace isolation claim is made without a prepared isolation plan.",
     }
 
 
@@ -694,6 +730,63 @@ def _runtime_status(paths: OmhPaths, session: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _isolation_status(
+    paths: OmhPaths,
+    session: dict[str, Any],
+    linked_status: dict[str, Any],
+    runtime_status: dict[str, Any],
+) -> dict[str, object]:
+    plan = _isolation_plan_for_session(paths, session, linked_status)
+    if not plan:
+        return _default_isolation_status()
+    strategy = str(plan.get("strategy", "same_workspace_ok"))
+    observed_events = runtime_status.get("observed_events", []) if isinstance(runtime_status, dict) else []
+    observed = isinstance(observed_events, list) and "worktree_creation" in observed_events
+    if observed:
+        status = "observed"
+        next_action = "open_executor_session"
+    elif strategy == "same_workspace_ok":
+        status = "not_required"
+        next_action = "open_executor_session"
+    else:
+        status = "prepared_not_observed"
+        next_action = "prepare_worktree"
+    return {
+        "schema_version": "worktree_session_isolation_status/v1",
+        "status": status,
+        "strategy": strategy,
+        "risk_level": str(plan.get("risk_level", "")),
+        "next_action": next_action,
+        "observed": observed,
+        "plan": plan,
+        "claim_boundary": (
+            "Workspace isolation status is derived from prepared handoff metadata and observed runtime records. "
+            "Prepared isolation is not proof that a worktree, branch, worker, or executor exists."
+        ),
+    }
+
+
+def _isolation_plan_for_session(
+    paths: OmhPaths,
+    session: dict[str, Any],
+    linked_status: dict[str, Any],
+) -> dict[str, Any]:
+    for key in ("prompt_handoff", "runtime_handoff"):
+        handoff = session.get(key)
+        if isinstance(handoff, dict) and isinstance(handoff.get("isolation_plan"), dict):
+            return dict(handoff["isolation_plan"])
+    run_id = str(session.get("current_run_id", "") or linked_status.get("run_id", ""))
+    if run_id:
+        coding = read_json_object(paths.runtime_runs_dir / run_id / "coding_delegation.json")
+        if isinstance(coding, dict):
+            if isinstance(coding.get("isolation_plan"), dict):
+                return dict(coding["isolation_plan"])
+            handoff = coding.get("executor_handoff")
+            if isinstance(handoff, dict) and isinstance(handoff.get("isolation_plan"), dict):
+                return dict(handoff["isolation_plan"])
+    return {}
+
+
 def _dispatch_observed(
     record: dict[str, Any],
     linked_status: dict[str, Any],
@@ -782,7 +875,12 @@ def _open_label(executor: str) -> str:
     return f"Open {executor_label(executor)}"
 
 
-def _executor_launch_contract(executor: str, session: dict[str, Any]) -> dict[str, object]:
+def _executor_launch_contract(
+    executor: str,
+    session: dict[str, Any],
+    *,
+    isolation_status: dict[str, object] | None = None,
+) -> dict[str, object]:
     label = _surface_executor_label(executor, handoff_state=_handoff_state(session))
     prompt_placeholder = "{executor_prompt}"
     shell_placeholder = "{executor_prompt_shell_quoted}"
@@ -795,6 +893,7 @@ def _executor_launch_contract(executor: str, session: dict[str, Any]) -> dict[st
         workspace_placeholder,
         workspace_shell_placeholder,
     )
+    isolation_status = isolation_status or _default_isolation_status()
     return {
         "schema_version": EXECUTOR_LAUNCH_SCHEMA_VERSION,
         "selected_executor_profile": executor,
@@ -807,6 +906,8 @@ def _executor_launch_contract(executor: str, session: dict[str, Any]) -> dict[st
         "prompt_source": "prepared handoff prompt or original chat message held by the wrapper at click time",
         "workspace_placeholder": workspace_placeholder,
         "workspace_shell_placeholder": workspace_shell_placeholder,
+        "workspace_isolation": isolation_status,
+        "workspace_hint": _workspace_hint(isolation_status),
         "command_templates": templates,
         "copy_blocks": _launch_copy_blocks(label, prompt_placeholder, templates),
         "after_launch_backend_action": "open-executor",
@@ -891,6 +992,53 @@ def _launch_copy_blocks(
     return blocks
 
 
+def _isolation_action(
+    session: dict[str, Any],
+    base_payload: dict[str, object],
+    isolation_status: dict[str, object],
+    *,
+    status_blocker: str,
+    result_status: str,
+) -> dict[str, object] | None:
+    if str(isolation_status.get("next_action", "")) != "prepare_worktree":
+        return None
+    return _action(
+        "prepare_worktree",
+        "Prepare worktree",
+        "primary",
+        enabled=not status_blocker and _handoff_state(session) == "prepared" and result_status == "not_observed",
+        payload={
+            **base_payload,
+            "backend_action": "prepare-worktree",
+            "disabled_reason": status_blocker,
+            "isolation_plan": isolation_status.get("plan", {}),
+            "claim_boundary": isolation_status.get("claim_boundary", ""),
+        },
+    )
+
+
+def _workspace_hint(isolation_status: dict[str, object]) -> str:
+    strategy = str(isolation_status.get("strategy", "same_workspace_ok"))
+    status = str(isolation_status.get("status", "not_applicable"))
+    if status == "observed":
+        return "Use the observed isolated workspace when opening or attaching the coding agent."
+    if strategy == "worktree_required":
+        return "Prepare an isolated worktree before opening the coding agent."
+    if strategy == "worktree_recommended":
+        return "Prefer an isolated worktree before opening the coding agent; reuse current workspace only by operator choice."
+    return "The current workspace is acceptable unless the wrapper later observes parallel or risky edits."
+
+
+def _isolation_step_state(value: object) -> str:
+    if not isinstance(value, dict):
+        return "pending"
+    if value.get("status") in {"observed", "not_required"}:
+        return "complete"
+    if value.get("status") == "prepared_not_observed":
+        return "pending"
+    return "pending"
+
+
 def _open_summary(session: dict[str, Any], *, observed: bool) -> str:
     if observed:
         return "Wrapper observed an executor open action. This records dispatch/open only, not executor result."
@@ -907,6 +1055,7 @@ def _display_status_lines(
     result_status: str,
     verification_status: str,
     status_blocker: str,
+    isolation_status: dict[str, object],
 ) -> list[str]:
     coding_agent_line = (
         "Coding agent is not selected yet."
@@ -915,6 +1064,7 @@ def _display_status_lines(
     )
     lines = [
         coding_agent_line,
+        _isolation_display_line(isolation_status),
         "Executor session is attached." if attached else "Executor session is not attached yet.",
         "Handoff is ready." if handoff_state == "prepared" else "Handoff is not ready yet.",
         "Dispatch/open has been observed." if dispatch_observed else "Dispatch/open has not been observed yet.",
@@ -924,6 +1074,20 @@ def _display_status_lines(
     if status_blocker:
         lines.append(f"Action is blocked until OMH can read valid evidence: {status_blocker}")
     return lines
+
+
+def _isolation_display_line(isolation_status: dict[str, object]) -> str:
+    strategy = str(isolation_status.get("strategy", "same_workspace_ok"))
+    status = str(isolation_status.get("status", "not_applicable"))
+    if status == "observed":
+        return "Workspace isolation is observed."
+    if status == "not_required":
+        return "Workspace isolation is not required for this prepared handoff."
+    if strategy == "worktree_required":
+        return "Workspace isolation is required before opening the coding agent."
+    if strategy == "worktree_recommended":
+        return "Workspace isolation is recommended before opening the coding agent."
+    return "Workspace isolation has no active requirement."
 
 
 def _surface_executor_label(executor: str, *, handoff_state: str) -> str:
@@ -975,6 +1139,7 @@ def _executor_status_summary(executor_status: dict[str, object]) -> dict[str, ob
         "coding_agent": executor_status.get("coding_agent", ""),
         "executor_session": executor_status.get("executor_session", ""),
         "handoff": executor_status.get("handoff", ""),
+        "workspace_isolation": executor_status.get("workspace_isolation", {}),
         "dispatch": executor_status.get("dispatch", ""),
         "result": executor_status.get("result", ""),
         "verification": executor_status.get("verification", ""),
@@ -984,6 +1149,9 @@ def _executor_status_summary(executor_status: dict[str, object]) -> dict[str, ob
 def _next_executor_action(executor_status: dict[str, object]) -> str:
     if str(executor_status.get("handoff", "")) != "prepared":
         return "show_status"
+    isolation_status = executor_status.get("workspace_isolation")
+    if isinstance(isolation_status, dict) and isolation_status.get("next_action") == "prepare_worktree":
+        return "prepare_worktree"
     dispatch = str(executor_status.get("dispatch", "not_observed"))
     result = str(executor_status.get("result", "not_observed"))
     verification = str(executor_status.get("verification", "not_requested"))

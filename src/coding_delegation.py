@@ -28,6 +28,7 @@ from .executor_readiness import (
 )
 from .harness_quality import with_wrapper_actions
 from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
+from .isolation import build_isolation_plan
 from .memory import validate_handoff_context_blocked, validate_handoff_context_pack
 from .routing.recommend import recommend_skills
 from .skills.catalog import (
@@ -121,6 +122,17 @@ def build_coding_delegation_payload(
         "recommendations": recommendations,
     }
     selection = executor_selection_for_target(executor_target, action=delegation.action)
+    isolation_plan = (
+        build_isolation_plan(
+            message,
+            intent=delegation.intent,
+            workflow=delegation.recommended_workflow,
+            work_owner_mode=selection.work_owner_mode,
+            selected_executor_profile=selection.selected_executor_profile,
+        )
+        if delegation.action == "delegate"
+        else {}
+    )
     payload.update(
         {
             "work_owner_mode": selection.work_owner_mode,
@@ -138,14 +150,16 @@ def build_coding_delegation_payload(
             },
         }
     )
+    if isolation_plan:
+        payload["isolation_plan"] = isolation_plan
     if selection.selected_executor_profile == "codex" and delegation.action == "delegate":
-        payload["executor_handoff"] = _executor_handoff(executor_target, delegation)
+        payload["executor_handoff"] = _executor_handoff(executor_target, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["executor_handoff"], context_pack)
     elif selection.work_owner_mode == "runtime_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
-        payload["runtime_handoff"] = _runtime_handoff(selection.selected_executor_profile, delegation)
+        payload["runtime_handoff"] = _runtime_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["runtime_handoff"], context_pack)
     elif selection.work_owner_mode == "prompt_only_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
-        payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation)
+        payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
     payload["harness_quality"] = _public_harness_quality(
         harness,
@@ -255,6 +269,8 @@ def coding_delegation_record_payload(
     for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
         if isinstance(payload.get(key), dict):
             record[key] = payload[key]
+    if isinstance(payload.get("isolation_plan"), dict):
+        record["isolation_plan"] = payload["isolation_plan"]
     return record
 
 
@@ -364,7 +380,12 @@ def _verification(intent: str, action: str, workflow: str) -> tuple[str, ...]:
     return checks
 
 
-def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dict[str, object]:
+def _executor_handoff(
+    executor_target: str,
+    delegation: CodingDelegation,
+    *,
+    isolation_plan: dict[str, object],
+) -> dict[str, object]:
     if executor_target != "codex":
         raise ValueError(f"unsupported coding delegate executor: {executor_target}")
     codex_skill = _codex_skill_for_workflow(delegation.recommended_workflow)
@@ -408,6 +429,7 @@ def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dic
                 "prepared versus observed evidence boundaries",
             ],
         },
+        "isolation_plan": isolation_plan,
         "scope": [
             "Use the original task message as the implementation request.",
             f"Invoke the Codex-side workflow with `{codex_skill}` unless the executor has stronger local routing evidence.",
@@ -454,7 +476,12 @@ def _executor_handoff(executor_target: str, delegation: CodingDelegation) -> dic
     }
 
 
-def _prompt_handoff(profile: str, delegation: CodingDelegation) -> dict[str, object]:
+def _prompt_handoff(
+    profile: str,
+    delegation: CodingDelegation,
+    *,
+    isolation_plan: dict[str, object],
+) -> dict[str, object]:
     invocation = prompt_invocation_for_profile(profile)
     label = executor_label(profile)
     return {
@@ -468,6 +495,7 @@ def _prompt_handoff(profile: str, delegation: CodingDelegation) -> dict[str, obj
         "dispatch_contract": "prompt_only_no_dispatch",
         "executor_readiness": executor_readiness_contract(profile),
         "prompt_template": _prompt_only_template(delegation, profile=profile, label=label),
+        "isolation_plan": isolation_plan,
         "scope": [
             "Use the original task message as the executor request.",
             f"Give the prompt to {label} only after the user chooses that executor.",
@@ -504,7 +532,12 @@ def _prompt_handoff(profile: str, delegation: CodingDelegation) -> dict[str, obj
     }
 
 
-def _runtime_handoff(profile: str, delegation: CodingDelegation) -> dict[str, object]:
+def _runtime_handoff(
+    profile: str,
+    delegation: CodingDelegation,
+    *,
+    isolation_plan: dict[str, object],
+) -> dict[str, object]:
     invocation = runtime_invocation_for_profile(profile)
     contract = runtime_profile_contract(profile)
     label = executor_label(profile)
@@ -540,6 +573,7 @@ def _runtime_handoff(profile: str, delegation: CodingDelegation) -> dict[str, ob
                 "status narration from observed runtime artifacts",
             ],
         },
+        "isolation_plan": isolation_plan,
         "runtime_templates": runtime_templates_for_profile(profile),
         "team_contract": {
             "modes": ["solo", "team", "swarm"],

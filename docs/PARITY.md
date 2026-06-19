@@ -39,33 +39,31 @@ implementation or claim runtime behavior it did not observe.
 | Specialist role/profile system | Available | Skill catalog metadata, operating models, optional visible profile packs, wrapper role narration, plugin `omh_role`, and `[omh-role:name]` context injection. | Observed role execution still requires wrapper or runtime evidence; role context is not a hidden live agent. |
 | Bounded evidence probe | Available | Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as doctor, harness validation, docs checks, unittest, compileall, and whitespace checks. | It is not a general shell, executor dispatch, PR review, CI, merge, or live Hermes plugin-load signal. |
 | Team, swarm, and worker protocol | Partial | `team`, `ultrawork`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | OMH does not launch hidden tmux teams, spawn workers, or manage panes by itself. |
-| Worktree and project-session isolation | Partial | Coding runtime handoff contracts, loop queue metadata, and runtime observations for worktree creation. | OMH records and requests isolation but does not create Git worktrees in v1. |
+| Worktree and project-session isolation | Partial | `worktree_session_isolation/v1` plans in coding handoffs, wrapper Prepare worktree actions, executor-session status cards, loop queue metadata, and runtime observations for worktree creation. | OMH prepares and tracks isolation intent but does not create Git worktrees in v1. |
 | HUD, status, and session observability | Available | `omh hud`, plugin `omh_hud`/`omh_status`, wrapper sessions, runtime runs, and status cards. | Live host HUD rendering depends on Hermes/plugin support. |
 | MCP and tool bridge preference | Partial | `omh setup --with-mcp`, setup state, and `omh probe` host-config separation. | OMH does not ship or auto-enable a real MCP server/tool bridge in v1. |
 | Loop and autopilot workflow | Available | `loop`, `ultraprocess`, `ralplan`, `ultragoal`, loop queue ticks, verification tiers, and failure-mode cards. | Scheduling, connector I/O, worktree creation, and subagent execution remain prepared or delegated until observed. |
 | Doctor, update, uninstall, and release smoke | Available | `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh release checklist`, `omh release install-smoke`, and `omh release hermes-smoke`. | Installer smoke can run live in an isolated temp HOME; live Hermes profile smoke still needs an explicit target Hermes profile or operator confirmation before mutation. |
 
-## Implementation Plan
+## Implemented Slices
 
-This PR implements the first vertical slice:
-
-- Add a deterministic parity catalog in `src/parity.py`.
-- Add `omh probe --parity` so operators and wrappers can inspect the matrix
-  beside the current local capability probe.
-- Harden the plugin bridge with native role context lookup, role marker
-  injection, delegate marker validation, and session-end checkpoints.
-- Add a bounded `omh_gather_evidence` plugin tool for explicit allowlisted
-  local verification probes.
-- Keep the default `omh probe` output unchanged unless `--parity` is passed.
-- Document the comparison, non-goals, and next implementation slices.
-- Add unit tests that lock the JSON schema, human summary, and conservative
-  claim boundaries.
+- A deterministic parity catalog in `src/parity.py`.
+- `omh probe --parity` so operators and wrappers can inspect the matrix beside
+  the current local capability probe.
+- A plugin bridge with native role context lookup, role marker injection,
+  delegate marker validation, session-end checkpoints, and bounded
+  `omh_gather_evidence` probes.
+- `worktree_session_isolation/v1`, which gives coding handoffs and wrapper
+  status cards a concrete same-workspace/worktree-recommended/worktree-required
+  contract before any executor is opened.
+- Unit tests that lock JSON schema shape, human summaries, conservative claim
+  boundaries, and wrapper-visible Prepare worktree actions.
 
 Next PR candidates:
 
 | Next PR | Why it matters |
 | --- | --- |
-| Worktree/session isolation runbooks and smoke fixtures | Makes executor-neutral worktree guidance operational before any creator command exists. |
+| Explicit opt-in worktree creator evaluation | Only add real workspace mutation if operators want OMH to create isolated worktrees instead of delegating that to the chosen runtime. |
 | Real OMH MCP bridge contract | Turns MCP preference into an installable, testable bridge when Hermes support is stable enough. |
 | Live Hermes plugin-load smoke evidence | Separates installed/importable plugin payloads from host-observed plugin runtime use. |
 
