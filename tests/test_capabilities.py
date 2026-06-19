@@ -29,6 +29,9 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first["schema_version"], "omh_capability_manifest/v1")
         self.assertEqual(first["determinism"], "static_projection_no_runtime_clock")
+        self.assertEqual(first["omh_awareness"]["schema_version"], "omh_awareness/v1")
+        self.assertIn("workflow-shaped requests", first["omh_awareness"]["purpose"])
+        self.assertIn("img-summary", json.dumps(first["omh_awareness"], sort_keys=True))
         self.assertGreaterEqual(first["summary"]["skills"], 30)
         self.assertGreaterEqual(first["summary"]["agent_roles"], 8)
         self.assertIn("no runtime_topology schema in this PR", first["non_goals"])
@@ -39,6 +42,7 @@ class CapabilityManifestTests(unittest.TestCase):
         listing = list_capabilities()
         sections = {section["section"]: section["ids"] for section in listing["sections"]}
 
+        self.assertIn("omh_awareness", sections["omh_awareness"])
         self.assertIn("handoff-guide", sections["agent_roles"])
         self.assertIn("ultragoal", sections["skills"])
         self.assertIn("omh_capabilities", sections["hooks"])
@@ -49,6 +53,7 @@ class CapabilityManifestTests(unittest.TestCase):
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]
         hidden_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
+        awareness = inspect_capability("omh_awareness", section="omh_awareness")["capability"]
         role = inspect_capability("handoff-guide", section="agent_roles")["capability"]
         legacy_role = inspect_capability("coding-handoff", section="agent_roles")
 
@@ -56,6 +61,8 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(skill["tool_requirements"]["derivation_status"], "partial")
         self.assertIn("prepared_not_observed", skill["evidence_boundary"])
         self.assertEqual(hidden_surface["exposure"], "harness_only")
+        self.assertEqual(awareness["schema_version"], "omh_awareness/v1")
+        self.assertIn("materials", awareness["first_turn_rule"])
         self.assertFalse(hidden_surface["install_visibility"])
         self.assertTrue(hidden_surface["compatibility_alias"])
         self.assertIn("preferred_usage", hidden_surface)

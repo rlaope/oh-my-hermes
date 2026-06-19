@@ -78,6 +78,11 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
+        self.assertIn("OMH Awareness Primer", router.content)
+        self.assertIn("consider OMH before treating it as a generic chat", router.content)
+        self.assertIn("Materials and visual summaries", router.content)
+        self.assertIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
+        self.assertIn("Coding handoff", router.content)
         self.assertIn("omh chat route", router.content)
         self.assertIn("omh coding delegate", router.content)
         self.assertIn("deterministic wrapper-side decision layer", router.content)

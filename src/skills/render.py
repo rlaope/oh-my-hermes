@@ -17,6 +17,7 @@ from .catalog import (
     surface_exposure_for_skill,
     workflow_reference_definitions,
 )
+from ..plugin_bundle.omh.awareness import awareness_primer_markdown
 
 
 @dataclass(frozen=True)
@@ -258,6 +259,8 @@ This is best-effort Hermes prompt guidance. It does not override Hermes core rou
 Normal users should talk to Hermes Agent or invoke installed Hermes skills through Hermes' own skill surface. Do not ask chat users to run `omh` commands for ordinary workflow use. The `omh` command is bootstrap, maintenance, verification, and wrapper/backend infrastructure.
 
 {_quality_rubric_sections(_definitions_by_name()["oh-my-hermes"])}
+
+{awareness_primer_markdown()}
 
 ## Direct Picker Aliases
 

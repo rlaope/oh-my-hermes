@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ..awareness import awareness_primer_context
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..runtime_reader import read_omh_hud, read_omh_status
 
@@ -19,6 +20,8 @@ def pre_llm_call(**kwargs) -> dict[str, str] | None:
     """Inject bounded OMH role/status context without storing prompts."""
     context_parts: list[str] = []
     if bool(kwargs.get("is_first_turn", False)):
+        if kwargs.get("include_omh_awareness", True) is not False:
+            context_parts.append(awareness_primer_context())
         marker = extract_role_marker(str(kwargs.get("user_message", "") or ""))
         if marker:
             role_payload = role_context_payload(marker)

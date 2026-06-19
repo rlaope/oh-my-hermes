@@ -9,6 +9,7 @@ from .orchestration import orchestration_patterns
 from .schema import CAPABILITY_MANIFEST_SCHEMA_VERSION, CAPABILITY_SECTIONS, PREPARED_NOT_OBSERVED
 from .skills import skill_capabilities
 from .tools import tool_requirements_manifest
+from ..plugin_bundle.omh.awareness import awareness_primer_payload
 
 
 def capability_snapshot() -> dict[str, object]:
@@ -18,11 +19,13 @@ def capability_snapshot() -> dict[str, object]:
     keywords = keyword_detector_manifest()
     patterns = orchestration_patterns()
     tools = tool_requirements_manifest()
+    awareness = awareness_primer_payload()
     snapshot = {
         "schema_version": CAPABILITY_MANIFEST_SCHEMA_VERSION,
         "manifest_id": "omh_capabilities",
         "determinism": "static_projection_no_runtime_clock",
         "summary": {
+            "omh_awareness": 1,
             "agent_roles": len(agent_roles),
             "skills": len(skills),
             "plugin_tools": len(hooks["plugin_tools"]),
@@ -31,6 +34,7 @@ def capability_snapshot() -> dict[str, object]:
             "orchestration_patterns": len(patterns),
             "tool_requirements": len(tools["items"]),
         },
+        "omh_awareness": awareness,
         "agent_roles": agent_roles,
         "skills": skills,
         "hooks": hooks,
@@ -122,6 +126,8 @@ def inspect_capability(identifier: str, section: str | None = None) -> dict[str,
 
 
 def _section_ids(section: str, payload: object) -> list[str]:
+    if section == "omh_awareness":
+        return ["omh_awareness", "first_turn_rule", "workflow_lanes", "fallback_rule", "evidence_boundary"]
     if section == "hooks" and isinstance(payload, dict):
         return sorted(
             [
@@ -146,6 +152,8 @@ def _find_in_section(identifier: str, payload: object) -> object | None:
             if isinstance(item, dict) and _matches_identifier(identifier, item):
                 return item
     if isinstance(payload, dict):
+        if _matches_identifier(identifier, payload):
+            return payload
         for key in ("plugin_tools", "plugin_hooks", "items", "natural_language_rules"):
             values = payload.get(key)
             if isinstance(values, list):

@@ -338,9 +338,26 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(hook_payload)
             context = hook_payload["context"]
+            self.assertIn("[OMH Awareness]", context)
+            self.assertIn("consider OMH before treating it as a generic chat", context)
+            self.assertIn("img-summary", context)
+            self.assertIn("materials-package", context)
+            self.assertIn("ultraprocess", context)
+            self.assertIn("loop", context)
+            self.assertIn("external image tool", context)
             self.assertIn("[omh]", context)
             self.assertIn("prepared handoffs are not execution", context)
             self.assertNotIn("this raw prompt should not leak", context)
+
+            empty_first_turn_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="make an image summary card for this PR",
+                is_first_turn=True,
+            )
+            self.assertIsNotNone(empty_first_turn_context)
+            self.assertIn("[OMH Awareness]", empty_first_turn_context["context"])
+            self.assertIn("image summary", empty_first_turn_context["context"])
+            self.assertNotIn("make an image summary card for this PR", empty_first_turn_context["context"])
 
 
 if __name__ == "__main__":
