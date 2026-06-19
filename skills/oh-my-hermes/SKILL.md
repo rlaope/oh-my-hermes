@@ -46,21 +46,21 @@ Bad example:
 
 ## OMH Awareness Primer
 
-OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, surface status, and hand off to tools or coding agents without hiding unobserved execution.
+OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off without hiding unobserved execution.
 
 When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
 
-Carry this across every OMH skill, not only image or coding: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
+Carry this across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
 
-Every generated workflow skill carries an OMH Context Rail derived from this awareness payload.
+Every generated workflow skill carries this rail.
 
-Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
 
-- **Intent -> plan**: `deep-interview`, `plan`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`, `ralph`, `performance-goal` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
+- **Intent -> plan**: `oh-my-hermes`, `deep-interview`, `plan`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`, `ralph`, `performance-goal` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
 - **Research and company ops**: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`, `meeting-brief`, `operating-rhythm`, `ops-review`, `reliability-review` - source-backed research, customer signals, product operations, and briefing workflows.
 - **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
-- **Automation and status**: `automation-blueprint`, `agent-ops-review`, `memory-curation-review`, `doctor`, `skill`, `ask`, `cancel` - scheduled ops blueprints, status cards, runtime health, and release/ops review.
-- **Coding handoff**: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`, `ultrawork`, `team`, `ultraqa`, `ai-slop-cleaner`, `request-to-handoff`, `executor selection`, `coding runtime handoff` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+- **Automation and status**: `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `memory-curation-review`, `doctor`, `skill`, `ask`, `cancel` - scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review.
+- **Coding handoff**: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`, `ultrawork`, `team`, `ultraqa`, `ai-slop-cleaner`, `executor-runtime-readiness`, `request-to-handoff`, `executor selection`, `coding runtime handoff` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
 
 Cross-lane examples:
 
@@ -72,9 +72,9 @@ Cross-lane examples:
 
 Tools:
 
-- Use `omh_capabilities` `action=summary` for workflow catalog questions; use `omh_status`/`omh_hud` for state and `omh_role` for responsibility.
+- Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.
 
-If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing connection and offer a setup/selection fallback instead of claiming the action happened.
+If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback instead of claiming the action happened.
 
 Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
 

@@ -749,6 +749,7 @@ class WrapperContractTests(unittest.TestCase):
         cases = (
             "Make a PR summary card",
             "크론 기능 설명 이미지 하나 만들어줘",
+            "이 회의록을 세로 이미지 카드로 만들어줘",
         )
 
         for message in cases:
@@ -781,6 +782,40 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("generate_visual_image", actions)
                 self.assertIn("not generated image", payload["chat_response"]["claim_boundary"])
                 self.assertIn("visual QA", payload["chat_response"]["state"]["evidence_not_observed"])
+
+    def test_complex_operator_patterns_route_to_dedicated_surfaces(self) -> None:
+        cases = (
+            (
+                "Codex랑 Claude Code 중 어떤 런타임으로 넘겨야 해?",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+            ),
+            (
+                "음성으로 짧게 말한 요청을 안전하게 정리해줘",
+                "voice-operator",
+                "prepare_voice_operator_card",
+            ),
+            (
+                "GitHub PR이 열리면 리뷰하고 CI 실패 원인을 정리해줘",
+                "github-event-ops",
+                "prepare_github_event_ops_card",
+            ),
+            (
+                "우리 팀 Hermes agent 여러 명으로 작업 보드 관리하고 싶어",
+                "agent-board",
+                "prepare_agent_board_card",
+            ),
+        )
+
+        for message, selected_workflow, next_action in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
+                self.assertEqual(payload["next_action"], next_action)
+                self.assertEqual(payload["chat_response"]["kind"], "ack")
+                self.assertIn(selected_workflow, payload["chat_response"]["headline"])
 
     def test_ack_workflow_chat_copy_stays_human_friendly(self) -> None:
         cases = (

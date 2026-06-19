@@ -952,7 +952,8 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("workflow_context_rule", payload["required_standalone_capability_context_fields"])
         self.assertIn("fallback_rule", payload["required_standalone_capability_context_fields"])
-        self.assertEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertGreaterEqual(payload["catalog_skill_count"], payload["skill_count"])
+        self.assertGreaterEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
         self.assertLessEqual(
             payload["max_workflow_context_chars"],
             payload["awareness_context_char_limits"]["workflow_context"],

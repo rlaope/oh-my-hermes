@@ -112,7 +112,8 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("first_stage", payload["required_playbook_context_fields"])
         self.assertIn("workflow_routing_hint", payload["required_standalone_capability_context_fields"])
         self.assertIn("evidence_boundary", payload["required_standalone_capability_context_fields"])
-        self.assertEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertGreaterEqual(payload["catalog_skill_count"], payload["skill_count"])
+        self.assertGreaterEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
         self.assertLessEqual(
             payload["full_capability_skill_section_chars"],
             payload["capability_context_char_limits"]["full_skill_section"],

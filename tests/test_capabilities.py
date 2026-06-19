@@ -12,7 +12,7 @@ load_local_package()
 
 from omh.capabilities.registry import capability_snapshot, capability_summary, inspect_capability, list_capabilities
 from omh.capabilities.schema import normalize_capability_section
-from omh.skills.catalog import installable_skill_names
+from omh.skills.catalog import builtin_definitions, installable_skill_names
 
 
 LEGACY_ROLE_ALIASES = {
@@ -46,18 +46,19 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertNotIn("runtime_topology", first)
         self.assertIn("Prepared OMH capability", first["evidence_boundaries"]["prepared_is_not"])
 
-    def test_awareness_lanes_cover_every_generated_workflow_skill(self) -> None:
+    def test_awareness_lanes_cover_every_catalog_workflow_surface(self) -> None:
         awareness = capability_snapshot()["omh_awareness"]
         lane_skills = {
             str(skill)
             for lane in awareness["lanes"]
             for skill in lane["skills"]
         }
-        generated_skills = set(installable_skill_names()) - {"oh-my-hermes"}
+        generated_skills = set(installable_skill_names())
+        catalog_surfaces = {definition.name for definition in builtin_definitions()}
         conceptual_surfaces = {"request-to-handoff", "executor selection", "coding runtime handoff"}
 
         self.assertFalse(generated_skills - lane_skills)
-        self.assertLessEqual(lane_skills - generated_skills, conceptual_surfaces)
+        self.assertLessEqual(lane_skills - catalog_surfaces, conceptual_surfaces)
 
     def test_capability_sections_have_expected_ids(self) -> None:
         listing = list_capabilities()

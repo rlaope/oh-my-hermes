@@ -134,7 +134,17 @@ def awareness_primer_payload() -> dict[str, object]:
         {
             "id": "intent_to_plan",
             "label": "Intent -> plan",
-            "skills": ["deep-interview", "plan", "ralplan", "ultragoal", "ultraprocess", "loop", "ralph", "performance-goal"],
+            "skills": [
+                "oh-my-hermes",
+                "deep-interview",
+                "plan",
+                "ralplan",
+                "ultragoal",
+                "ultraprocess",
+                "loop",
+                "ralph",
+                "performance-goal",
+            ],
             "use_for": "ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects",
         },
         {
@@ -164,8 +174,22 @@ def awareness_primer_payload() -> dict[str, object]:
         {
             "id": "automation_and_status",
             "label": "Automation and status",
-            "skills": ["automation-blueprint", "agent-ops-review", "memory-curation-review", "doctor", "skill", "ask", "cancel"],
-            "use_for": "scheduled ops blueprints, status cards, runtime health, and release/ops review",
+            "skills": [
+                "automation-blueprint",
+                "github-event-ops",
+                "agent-board",
+                "gateway-intent-card",
+                "voice-operator",
+                "toolbelt-readiness",
+                "ops-observability-card",
+                "agent-ops-review",
+                "memory-curation-review",
+                "doctor",
+                "skill",
+                "ask",
+                "cancel",
+            ],
+            "use_for": "scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review",
         },
         {
             "id": "coding_handoff",
@@ -179,6 +203,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "team",
                 "ultraqa",
                 "ai-slop-cleaner",
+                "executor-runtime-readiness",
                 "request-to-handoff",
                 "executor selection",
                 "coding runtime handoff",
@@ -192,18 +217,18 @@ def awareness_primer_payload() -> dict[str, object]:
         "purpose": "Give Hermes a compact first-turn mental model for using OMH across all workflow-shaped requests.",
         "product_context": (
             "OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, "
-            "surface status, and hand off to tools or coding agents without hiding unobserved execution."
+            "show status, and hand off without hiding unobserved execution."
         ),
         "first_turn_rule": (
             "When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, "
             "review, status, or long-running loops, consider OMH before generic chat or generic tools."
         ),
         "all_skill_context_rule": (
-            "Carry this across every OMH skill, not only image or coding: match intent to a lane, name adjacent "
+            "Carry this across every OMH skill: match intent to a lane, name adjacent "
             "workflows, and do not dismiss OMH just because a generic tool can render or execute the final step."
         ),
-        "skill_coverage": "Every generated workflow skill carries an OMH Context Rail derived from this awareness payload.",
-        "chat_rule": "Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.",
+        "skill_coverage": "Every generated workflow skill carries this rail.",
+        "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
         "lanes": lanes,
         "cross_lane_examples": [
             example
@@ -230,8 +255,8 @@ def awareness_primer_payload() -> dict[str, object]:
             "delivery, review, CI, merge-readiness, or merge evidence."
         ),
         "fallback_rule": (
-            "If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing "
-            "connection and offer a setup/selection fallback instead of claiming the action happened."
+            "If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection "
+            "fallback instead of claiming the action happened."
         ),
         "non_goals": [
             "no hidden executor dispatch",
@@ -264,9 +289,8 @@ def awareness_primer_context() -> str:
             str(payload["chat_rule"]),
             *lane_lines,
             (
-                "Tools: use omh_capabilities for workflow/playbook catalog context; "
-                "use action=summary for available-workflow questions; "
-                "omh_status or omh_hud for state; omh_role for responsibility context."
+                "Tools: omh_capabilities for workflow/playbook catalog context; action=summary for catalog "
+                "questions; omh_status or omh_hud for state; omh_role for responsibility context."
             ),
             str(payload["fallback_rule"]),
             "Boundary: " + str(payload["evidence_boundary"]),
@@ -304,7 +328,7 @@ def awareness_primer_markdown() -> str:
             "",
             "Tools:",
             "",
-            "- Use `omh_capabilities` `action=summary` for workflow catalog questions; use `omh_status`/`omh_hud` for state and `omh_role` for responsibility.",
+            "- Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.",
             "",
             str(payload["fallback_rule"]),
             "",

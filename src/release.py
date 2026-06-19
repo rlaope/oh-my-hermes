@@ -31,6 +31,7 @@ from .plugin_bundle.omh.tools.capability_tool import (
 )
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
+from .skills.catalog import builtin_definitions
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
@@ -625,8 +626,9 @@ def skill_content_smoke() -> dict[str, object]:
     bundled_role_contexts = _bundled_role_contexts()
     awareness = awareness_primer_payload()
     lane_skill_names = _awareness_lane_skill_names(awareness)
+    catalog_skill_names = {definition.name for definition in builtin_definitions()}
     missing_awareness_skills = sorted(workflow_skill_names - lane_skill_names)
-    unexpected_awareness_surfaces = sorted(lane_skill_names - workflow_skill_names - set(CONCEPTUAL_AWARENESS_SURFACES))
+    unexpected_awareness_surfaces = sorted(lane_skill_names - catalog_skill_names - set(CONCEPTUAL_AWARENESS_SURFACES))
     standalone_capability_skill_names = standalone_skill_capability_ids()
     standalone_capability_items = standalone_skill_capability_items()
     full_capability_items = skill_capabilities()
@@ -640,7 +642,7 @@ def skill_content_smoke() -> dict[str, object]:
     missing_full_capability_skills = sorted(workflow_skill_names - full_capability_skill_names)
     missing_standalone_capability_skills = sorted(workflow_skill_names - standalone_capability_skill_names)
     unexpected_standalone_capability_skills = sorted(
-        standalone_capability_skill_names - workflow_skill_names - set(CONCEPTUAL_AWARENESS_SURFACES)
+        standalone_capability_skill_names - catalog_skill_names - set(CONCEPTUAL_AWARENESS_SURFACES)
     )
     required_standalone_context_fields = {
         "workflow_routing_hint",
@@ -814,8 +816,10 @@ def skill_content_smoke() -> dict[str, object]:
         "ok": ok,
         "observed": True,
         "skill_count": len(templates),
+        "catalog_skill_count": len(catalog_skill_names),
         "router_skill": DEFAULT_HERMES_SKILL,
         "workflow_skill_count": max(len(templates) - 1, 0),
+        "non_installed_catalog_surface_count": len(catalog_skill_names - set(templates)),
         "representative_skills": list(REPRESENTATIVE_CONTEXT_RAIL_SKILLS),
         "missing_representative_skills": missing_representative,
         "awareness_lane_skill_count": len(lane_skill_names),

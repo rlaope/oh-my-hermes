@@ -23,6 +23,7 @@ from omh.capabilities.skills import skill_capabilities
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh.awareness import (
     awareness_context_matches_message,
+    awareness_primer_payload,
     awareness_primer_context,
     awareness_primer_markdown,
     awareness_workflow_context_markdown,
@@ -97,6 +98,18 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(max(workflow_context_lengths.values()), AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT)
         self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
         self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
+
+    def test_omh_awareness_lanes_cover_installable_skills(self) -> None:
+        payload = awareness_primer_payload()
+        lane_skills = {
+            str(skill)
+            for lane in payload["lanes"]
+            if isinstance(lane, dict)
+            for skill in lane.get("skills", [])
+        }
+        installable_skills = {definition.name for definition in builtin_definitions()}
+
+        self.assertFalse(installable_skills - lane_skills)
 
     def test_mid_session_awareness_detector_is_bounded(self) -> None:
         self.assertTrue(awareness_context_matches_message("회의록을 세로 요약 이미지 카드로 만들어줘"))

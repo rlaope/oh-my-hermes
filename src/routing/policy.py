@@ -236,6 +236,7 @@ _VISUAL_SUMMARY_PHRASES = (
     "make an image explaining",
     "vertical card",
     "vertical summary image",
+    "vertical image card",
     "pr summary card",
     "pull request card",
     "issue triage card",
@@ -250,6 +251,10 @@ _VISUAL_SUMMARY_PHRASES = (
     "이슈 트리아지 카드",
     "경쟁사 뉴스 브리핑 카드",
     "릴리즈 노트 발표 이미지",
+    "세로 이미지 카드",
+    "이미지 카드",
+    "회의록 이미지 카드",
+    "회의록을 세로 이미지 카드",
     "설명 이미지",
     "설명하는 인포그래픽",
     "기능 설명 이미지",
@@ -265,6 +270,71 @@ _VISUAL_SUMMARY_PHRASES = (
     "워크플로우 이미지",
     "이미지로 설명",
     "이미지 하나 만들어줘",
+)
+_EXECUTOR_RUNTIME_READINESS_PHRASES = (
+    "executor-runtime-readiness",
+    "runtime readiness",
+    "codex readiness",
+    "claude code readiness",
+    "codex or claude",
+    "codex and claude",
+    "codex vs claude",
+    "codex랑 claude",
+    "codex랑 claude code",
+    "codex와 claude",
+    "codex와 claude code",
+    "claude code 중",
+    "런타임으로 넘겨",
+    "어떤 런타임",
+    "코덱스랑 클로드",
+    "코덱스와 클로드",
+    "코덱스 클로드",
+)
+_EXECUTOR_RUNTIME_READINESS_TOKENS = _normalized_token_set(
+    {
+        "codex",
+        "claude",
+        "runtime",
+        "executor",
+        "handoff",
+        "agent",
+        "omx",
+        "omo",
+        "omc",
+        "런타임",
+        "실행",
+        "위임",
+        "코덱스",
+        "클로드",
+    }
+)
+_VOICE_OPERATOR_PHRASES = (
+    "voice operator",
+    "voice-first",
+    "mobile command",
+    "spoken request",
+    "short voice",
+    "hands free",
+    "음성",
+    "음성으로",
+    "음성 명령",
+    "짧은 명령",
+    "짧게 말한 요청",
+    "모바일 요청",
+)
+_VOICE_OPERATOR_TOKENS = _normalized_token_set(
+    {
+        "voice",
+        "mobile",
+        "spoken",
+        "short",
+        "terse",
+        "accessibility",
+        "음성",
+        "모바일",
+        "짧은",
+        "접근성",
+    }
 )
 _DELIVERABLE_STRONG_TOKENS = _normalized_token_set(
     {
@@ -586,6 +656,24 @@ CODING_HANDOFF_STATUS_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; executor-named coding handoff and status requests should prepare a tracked one-cycle handoff without claiming execution.",
     activation_status="active",
 )
+EXECUTOR_RUNTIME_READINESS_GUARD = RoutingGuardRule(
+    id="executor_runtime_readiness_before_generic_advice",
+    rule="Executor/runtime comparison requests should route to executor-runtime-readiness before generic advice.",
+    matched_label="guard:executor_runtime_readiness",
+    preferred_skills=("executor-runtime-readiness",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; executor/runtime comparison should show tool gaps and handoff mode before selection.",
+    activation_status="active",
+)
+VOICE_OPERATOR_GUARD = RoutingGuardRule(
+    id="voice_operator_before_generic_clarification",
+    rule="Voice, mobile, or terse accessibility-sensitive requests should route to voice-operator before generic clarification.",
+    matched_label="guard:voice_operator",
+    preferred_skills=("voice-operator",),
+    score_boost=24,
+    why="Matched guard/trigger metadata; voice/mobile-style requests need concise clarify/plan/status UX with confirmation boundaries.",
+    activation_status="active",
+)
 VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     id="img_summary_before_materials_or_delivery",
     rule="Image, card, or img-summary requests should route to img-summary before materials or PR delivery-cycle lanes.",
@@ -628,6 +716,8 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
+    EXECUTOR_RUNTIME_READINESS_GUARD,
+    VOICE_OPERATOR_GUARD,
     VISUAL_SUMMARY_GUARD,
     DELIVERABLE_PACKAGE_GUARD,
     DELIVERY_CYCLE_GUARD,
@@ -688,6 +778,10 @@ def active_routing_guard_rules(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
+    if _executor_runtime_readiness_guard_applies(normalized_query, query_tokens):
+        rules.append(EXECUTOR_RUNTIME_READINESS_GUARD)
+    if _voice_operator_guard_applies(normalized_query, query_tokens):
+        rules.append(VOICE_OPERATOR_GUARD)
     if _visual_summary_guard_applies(normalized_query, query_tokens):
         rules.append(VISUAL_SUMMARY_GUARD)
     if _deliverable_package_guard_applies(normalized_query, query_tokens):
@@ -832,6 +926,33 @@ def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: se
     work = bool(_CODING_HANDOFF_WORK_TOKENS & query_tokens)
     control = bool(_CODING_HANDOFF_CONTROL_TOKENS & query_tokens)
     return explicit_phrase or (executor and work and control)
+
+
+def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _EXECUTOR_RUNTIME_READINESS_PHRASES):
+        return True
+    runtime_intent = bool(_EXECUTOR_RUNTIME_READINESS_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("runtime", "executor", "handoff", "런타임", "실행", "위임"),
+    )
+    named_executor = _contains_phrase(
+        normalized_query,
+        ("codex", "claude code", "coding agent", "omx", "omo", "omc", "코덱스", "클로드"),
+    )
+    selection = _contains_phrase(
+        normalized_query,
+        ("which", "choose", "compare", "vs", "중 어떤", "어떤", "골라", "선택"),
+    )
+    return runtime_intent and named_executor and selection
+
+
+def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _VOICE_OPERATOR_PHRASES):
+        return True
+    return bool(_VOICE_OPERATOR_TOKENS & query_tokens) and _contains_phrase(
+        normalized_query,
+        ("clarify", "summarize", "route", "safe", "confirm", "정리", "안전", "확인", "라우팅"),
+    )
 
 
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
