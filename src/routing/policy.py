@@ -250,6 +250,93 @@ _VISUAL_SUMMARY_PHRASES = (
     "이미지로 설명",
     "이미지 하나 만들어줘",
 )
+_DELIVERABLE_STRONG_TOKENS = frozenset(
+    {
+        "attachment",
+        "attachments",
+        "attach",
+        "attached",
+        "deliverable",
+        "deliverables",
+        "첨부",
+        "전달",
+    }
+)
+_DELIVERABLE_FILE_TOKENS = frozenset(
+    {
+        "file",
+        "files",
+        "pdf",
+        "ppt",
+        "pptx",
+        "xlsx",
+        "docx",
+        "hwp",
+        "markdown",
+        "report",
+        "deck",
+        "document",
+        "파일",
+        "보고서",
+        "자료",
+        "문서",
+        "피디에프",
+        "엑셀",
+    }
+)
+_DELIVERABLE_PHRASES = (
+    "attach file",
+    "file attachment",
+    "attachment status",
+    "file delivery",
+    "deliverable package",
+    "generated file",
+    "make it attachable",
+    "ready to attach",
+    "파일로 만들어",
+    "파일로 만들어서 첨부",
+    "첨부할 수 있게",
+    "첨부 가능",
+    "첨부 상태",
+    "전달 상태",
+)
+_DELIVERABLE_GATEWAY_CONTEXT_TOKENS = frozenset(
+    {
+        "gateway",
+        "platform",
+        "thread",
+        "silent",
+        "silently",
+        "discord",
+        "slack",
+        "telegram",
+        "message",
+        "messages",
+        "status",
+        "updates",
+        "게이트웨이",
+        "플랫폼",
+        "스레드",
+        "조용히",
+        "디스코드",
+        "슬랙",
+        "텔레그램",
+        "메시지",
+        "상태",
+        "업데이트",
+    }
+)
+_DELIVERABLE_GATEWAY_CONTEXT_PHRASES = (
+    "gateway thread",
+    "discord gateway",
+    "slack gateway",
+    "telegram gateway",
+    "silent attachment status",
+    "silent status update",
+    "status updates",
+    "gateway status",
+    "platform delivery",
+)
 _SCHEDULED_OPS_PHRASES = (
     "every morning",
     "every day",
@@ -352,6 +439,15 @@ VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",
 )
+DELIVERABLE_PACKAGE_GUARD = RoutingGuardRule(
+    id="deliverable_package_for_file_attachment",
+    rule="Requests that combine generated files or reports with attachment/delivery status should route to deliverable-package.",
+    matched_label="guard:deliverable_package",
+    preferred_skills=("deliverable-package",),
+    score_boost=28,
+    why="Matched guard/trigger metadata; file attachment or delivery-status requests should prepare a deliverable package before claiming output.",
+    activation_status="active",
+)
 SCHEDULED_OPS_BLUEPRINT_GUARD = RoutingGuardRule(
     id="scheduled_ops_blueprint_before_reliability_or_research",
     rule="Recurring schedule, delivery, or silence-policy requests should route to the scheduled ops blueprint lane before one-off review/research lanes.",
@@ -377,6 +473,7 @@ ROUTING_GUARD_RULES = (
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     VISUAL_SUMMARY_GUARD,
+    DELIVERABLE_PACKAGE_GUARD,
     DELIVERY_CYCLE_GUARD,
 )
 
@@ -436,6 +533,8 @@ def active_routing_guard_rules(
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
     if _visual_summary_guard_applies(normalized_query, query_tokens):
         rules.append(VISUAL_SUMMARY_GUARD)
+    if _deliverable_package_guard_applies(normalized_query, query_tokens):
+        rules.append(DELIVERABLE_PACKAGE_GUARD)
     if delivery_cycle_applies:
         rules.append(DELIVERY_CYCLE_GUARD)
     return tuple(rules)
@@ -587,6 +686,31 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
     ):
         return True
     return False
+
+
+def _deliverable_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _deliverable_gateway_context_applies(normalized_query, query_tokens):
+        return False
+    explicit_phrase = _contains_phrase(normalized_query, _DELIVERABLE_PHRASES)
+    if explicit_phrase:
+        return True
+    if _DELIVERABLE_STRONG_TOKENS & query_tokens and _DELIVERABLE_FILE_TOKENS & query_tokens:
+        return True
+    return False
+
+
+def _deliverable_gateway_context_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    gateway_context = bool(_DELIVERABLE_GATEWAY_CONTEXT_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query, _DELIVERABLE_GATEWAY_CONTEXT_PHRASES
+    )
+    if not gateway_context:
+        return False
+    deliverable_file_context = bool(_DELIVERABLE_FILE_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query, ("generated pdf", "generated file", "file attachment", "attach file")
+    )
+    return not deliverable_file_context
 
 
 def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

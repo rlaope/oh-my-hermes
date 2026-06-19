@@ -25,6 +25,7 @@ CHAT_RESPONSE_SCHEMA_VERSION = "chat_response/v1"
 STATUS_CARD_SCHEMA_VERSION = "status_card/v1"
 SKILL_PICKER_SCHEMA_VERSION = "omh_skill_picker/v1"
 COMMAND_PREVIEW_SCHEMA_VERSION = "omh_command_preview/v1"
+CONTEXT_PRIMER_SCHEMA_VERSION = "omh_context_primer/v1"
 USAGE_TRACE_SCHEMA_VERSION = "omh_usage_trace/v1"
 MESSENGER_RENDERING_SCHEMA_VERSION = "omh_messenger_rendering/v1"
 RENDER_PROFILE_LIMITED_MARKDOWN = "limited_markdown"
@@ -128,6 +129,32 @@ _SKILL_PICKER_ENTRIES = (
     ("img-summary", "Img Summary", "Prepare image-generation-ready summary cards.", "./img-summary <source>"),
     ("automation-blueprint", "Automation Blueprint", "Prepare recurring Hermes scheduled-ops workflows.", "./automation-blueprint <intent>"),
     ("doctor", "Doctor", "Check OMH install and Hermes registration health.", "./doctor"),
+)
+_CONTEXT_PRIMER_GROUPS = (
+    {
+        "id": "intent_to_plan",
+        "label": "Intent to plan",
+        "workflows": ("deep-interview", "ralplan", "ultragoal", "loop", "ultraprocess"),
+        "use_when": "The user has a fuzzy goal, a large goal, or one delivery cycle that needs research, planning, execution, review, and sync.",
+    },
+    {
+        "id": "company_product_ops",
+        "label": "Company and product ops",
+        "workflows": ("feedback-triage", "research-department", "web-research", "strategy-brief", "automation-blueprint"),
+        "use_when": "The user needs customer-signal triage, source-backed research, recurring ops, meeting/report work, or strategy synthesis.",
+    },
+    {
+        "id": "deliverables_and_visuals",
+        "label": "Deliverables and visuals",
+        "workflows": ("materials-package", "deliverable-package", "img-summary", "report-package"),
+        "use_when": "The user wants files, decks, PDFs, reports, image-summary cards, or attachment-ready delivery states.",
+    },
+    {
+        "id": "coding_and_runtime",
+        "label": "Coding and runtime tracking",
+        "workflows": ("idea-to-deploy", "agent-ops-review", "code-review", "ops-observability-card"),
+        "use_when": "The user wants Hermes to prepare coding handoffs, explain executor status, review evidence, CI, or merge readiness.",
+    },
 )
 _RETAINED_DELEGATION_SKILLS = set(retained_delegation_skill_names())
 _DIRECT_WORKFLOW_SKILLS = {
@@ -237,6 +264,25 @@ _STATUS_COPY = {
         "This has been merged.",
         "Execution, verification, review, CI, and merge evidence are observed.",
         "Merged status is backed by runtime ledger evidence.",
+    ),
+}
+_HUMAN_ACK_BODY_BY_SKILL = {
+    "automation-blueprint": (
+        "I will prepare this as a recurring Hermes ops workflow: schedule, source inputs, delivery target, "
+        "silence policy, and the confirmation card. Creating the actual schedule or sending messages still "
+        "needs observed runtime evidence."
+    ),
+    "research-department": (
+        "I will shape this into a research workflow: what to watch, how raw findings move into analysis, "
+        "how the briefing should be delivered, and what still needs source or delivery evidence."
+    ),
+    "materials-package": (
+        "I will shape this into a material package: target files, source inputs, missing data, outline, "
+        "generation owner, and QA checks. I will not claim the files exist until export evidence is observed."
+    ),
+    "deliverable-package": (
+        "I will prepare the deliverable path: which files are needed, who generates them, what QA must pass, "
+        "and how attachment or delivery status should be recorded."
     ),
 }
 
@@ -625,7 +671,10 @@ def build_chat_response_from_route(
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"
         wrapper_guidance = str(policy.get("wrapper_guidance", ""))
         evidence_boundary = str(policy.get("evidence_boundary", "")) or "Routing is not execution evidence."
-        body = wrapper_guidance or f"I will prepare a safe next step for `{selected}` before claiming any work happened."
+        body = _HUMAN_ACK_BODY_BY_SKILL.get(
+            selected,
+            wrapper_guidance or f"I will prepare a safe next step for `{selected}` before claiming any work happened.",
+        )
         return _chat_response(
             kind="ack",
             headline="I know which workflow should handle this.",
@@ -1460,11 +1509,12 @@ def _command_preview_prefix(token: str) -> str:
 def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
     catalog_question = _is_skill_catalog_question(message)
+    primer = _context_primer_state()
     return _chat_response(
         kind="skill_picker",
         headline="Here are the OMH workflows." if catalog_question else "Choose an OMH workflow.",
         body=(
-            "You do not need to run a shell command for this. Pick a workflow here, or choose Route for me and Hermes will select the safest next step."
+            "You do not need to run a shell command for this. OMH covers planning, ops, deliverables, coding handoffs, loops, and status. Pick a workflow here, or choose Route for me and Hermes will select the safest next step."
             if catalog_question
             else "Pick a workflow, or choose Route for me and Hermes will select the safest next step from the request."
         ),
@@ -1491,6 +1541,7 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
             "confidence": decision.get("confidence", "low"),
             "selected_workflow": _ROUTER_SKILL,
             "catalog_question": catalog_question,
+            "context_primer": primer,
             "skill_picker": picker,
             "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
         },
@@ -1531,6 +1582,34 @@ def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
             "hermes_tui": "Render options as a compact command list; keep real skill names unchanged.",
         },
         "claim_boundary": "This picker records routing intent only; selected workflows still need their own plan, handoff, or observed evidence.",
+    }
+
+
+def _context_primer_state() -> dict[str, object]:
+    installed = {definition.name for definition in installable_skill_definitions()}
+    groups = []
+    for group in _CONTEXT_PRIMER_GROUPS:
+        workflows = tuple(workflow for workflow in group["workflows"] if workflow in installed)
+        if not workflows:
+            continue
+        groups.append(
+            {
+                "id": group["id"],
+                "label": group["label"],
+                "workflows": workflows,
+                "use_when": group["use_when"],
+            }
+        )
+    return {
+        "schema_version": CONTEXT_PRIMER_SCHEMA_VERSION,
+        "summary": (
+            "OMH is a Hermes workflow layer. It helps Hermes route natural-language work into skills, plans, "
+            "deliverables, coding handoffs, loops, and status updates without treating prepared guidance as observed work."
+        ),
+        "workflow_groups": groups,
+        "routing_rule": "Use Route for me when the user did not choose a workflow; use explicit workflow names when the user did.",
+        "evidence_rule": "Prepared plans, prompts, cards, or handoffs are not execution, file generation, delivery, review, CI, merge, or verification evidence.",
+        "inventory_rule": "Render the picker for common choices and use search_skills for the full installed catalog.",
     }
 
 

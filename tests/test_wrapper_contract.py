@@ -532,9 +532,20 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
                 self.assertIn("shell command", payload["chat_response"]["body"])
+                self.assertIn("planning, ops, deliverables, coding handoffs, loops, and status", payload["chat_response"]["body"])
                 picker = payload["chat_response"]["state"]["skill_picker"]
                 option_ids = {option["id"] for option in picker["options"]}
                 self.assertTrue({"oh-my-hermes", "loop", "ultraprocess"} <= option_ids)
+                primer = payload["chat_response"]["state"]["context_primer"]
+                self.assertEqual(primer["schema_version"], "omh_context_primer/v1")
+                self.assertIn("Hermes workflow layer", primer["summary"])
+                groups = {group["id"]: group for group in primer["workflow_groups"]}
+                self.assertTrue({"intent_to_plan", "company_product_ops", "deliverables_and_visuals", "coding_and_runtime"} <= groups.keys())
+                self.assertIn("img-summary", groups["deliverables_and_visuals"]["workflows"])
+                self.assertIn("loop", groups["intent_to_plan"]["workflows"])
+                self.assertIn("feedback-triage", groups["company_product_ops"]["workflows"])
+                self.assertIn("code-review", groups["coding_and_runtime"]["workflows"])
+                self.assertIn("Prepared plans", primer["evidence_rule"])
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
     def test_non_catalog_command_and_skill_questions_do_not_open_picker(self) -> None:
@@ -716,6 +727,47 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("generate_visual_image", actions)
                 self.assertIn("not generated image", payload["chat_response"]["claim_boundary"])
                 self.assertIn("visual QA", payload["chat_response"]["state"]["evidence_not_observed"])
+
+    def test_ack_workflow_chat_copy_stays_human_friendly(self) -> None:
+        cases = (
+            (
+                "매일 아침 릴리즈 위험을 확인하고 변화가 있으면 슬랙에 알려줘",
+                "automation-blueprint",
+                "prepare_scheduled_ops_blueprint",
+                "recurring Hermes ops workflow",
+            ),
+            (
+                "내 경쟁사 시장 뉴스를 매일 수집하고 분석해서 브리핑해줘",
+                "research-department",
+                "prepare_research_department_plan",
+                "research workflow",
+            ),
+            (
+                "이 회의록을 PPT와 PDF로 정리해줘",
+                "materials-package",
+                "prepare_material_package",
+                "material package",
+            ),
+            (
+                "이 보고서를 파일로 만들어서 첨부할 수 있게 준비해줘",
+                "deliverable-package",
+                "prepare_deliverable_package",
+                "deliverable path",
+            ),
+        )
+
+        for message, selected_workflow, next_action, body_marker in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
+                self.assertEqual(payload["next_action"], next_action)
+                self.assertEqual(payload["chat_response"]["kind"], "ack")
+                self.assertIn(body_marker, payload["chat_response"]["body"])
+                self.assertNotIn("/v1", payload["chat_response"]["body"])
+                self.assertNotIn("schema", payload["chat_response"]["body"].lower())
+                self.assertNotIn("artifact", payload["chat_response"]["body"].lower())
 
     def test_cancel_routes_to_control_action_without_plan_ui(self) -> None:
         payload = build_chat_interaction_payload("cancel", source="discord")
