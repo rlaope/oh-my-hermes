@@ -2361,7 +2361,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### workflow-learning
 
-[omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, and regression case.
+[omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, regression case, and repairable learning index.
 
 - Category: `optimization`
 - Phase: `workflow-learning`
@@ -2374,12 +2374,12 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Preferred usage: Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, or create a regression case.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, and reusable as a future regression without storing raw prompts.
+- Use when: Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, reusable as a future regression, or repairable after local index drift without storing raw prompts.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`
+- Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`
 - Good example:
   - Prompt: workflow-learning record why this request went to plan and make a regression case.
   - Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
@@ -4159,9 +4159,9 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 
 ### workflow-learning
 
-Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, and regression cases.
+Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, regression cases, and a repairable learning index.
 
-- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification.
+- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification, or when the local learning index needs check/rebuild.
 - Quality tier: `learning-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
@@ -4189,6 +4189,7 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - `eval_recorded`
   - `improvement_candidate_reviewed`
   - `regression_case_recorded`
+  - `learning_index_checked`
   - `future_replay_passed_when_available`
 - Wrapper actions:
   - `record_workflow_learning_trace`
@@ -4196,6 +4197,8 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - `propose_skill_improvement`
   - `add_regression_case`
   - `replay_regression_cases`
+  - `check_learning_index`
+  - `rebuild_learning_index`
   - `show_status`
 - Artifact events:
   - `workflow-learning_scoped`

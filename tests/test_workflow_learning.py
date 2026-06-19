@@ -15,8 +15,10 @@ from omh.workflow_learning import (
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
     build_workflow_eval_result,
+    check_learning_index,
     learning_trace_ref,
     list_learning_traces,
+    rebuild_learning_index,
     replay_regression_cases,
     validate_workflow_learning_trace,
     write_learning_trace,
@@ -161,6 +163,84 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual([trace["trace_id"] for trace in traces], [first_trace["trace_id"]])
             self.assertEqual(replay["status"], "skipped")
             self.assertEqual(replay["results"][0]["case_id"], second_case["case_id"])
+
+    def test_learning_index_rebuild_repairs_stale_index(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            first_trace = write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(build_chat_interaction_payload("safely add a feature", source="discord")),
+            )
+            second_trace = write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(build_chat_interaction_payload("diagnose installation health", source="discord")),
+            )
+            first_case = write_regression_case(
+                paths,
+                build_regression_case_from_trace(first_trace, redacted_message="safely add a feature"),
+            )
+            second_case = write_regression_case(
+                paths,
+                build_regression_case_from_trace(second_trace, redacted_message="diagnose installation health"),
+            )
+            stale_index = json.loads(paths.learning_index_path.read_text(encoding="utf-8"))
+            stale_index["records"] = [
+                record
+                for record in stale_index["records"]
+                if not (
+                    (record["kind"] == "trace" and record["id"] == second_trace["trace_id"])
+                    or (record["kind"] == "regression_case" and record["id"] == first_case["case_id"])
+                )
+            ]
+            paths.learning_index_path.write_text(json.dumps(stale_index), encoding="utf-8")
+
+            stale_check = check_learning_index(paths)
+            dry_run = rebuild_learning_index(paths, dry_run=True)
+
+            self.assertEqual(stale_check["status"], "stale")
+            self.assertEqual(dry_run["status"], "dry_run")
+            self.assertFalse(dry_run["wrote"])
+            self.assertEqual([trace["trace_id"] for trace in list_learning_traces(paths)], [first_trace["trace_id"]])
+
+            rebuilt = rebuild_learning_index(paths)
+            repaired_check = check_learning_index(paths)
+            replay = replay_regression_cases(paths)
+
+            self.assertEqual(rebuilt["status"], "rebuilt")
+            self.assertTrue(rebuilt["wrote"])
+            self.assertEqual(rebuilt["counts"]["trace"], 2)
+            self.assertEqual(rebuilt["counts"]["regression_case"], 2)
+            self.assertEqual(repaired_check["status"], "passed")
+            self.assertEqual(replay["status"], "passed")
+            self.assertEqual({item["case_id"] for item in replay["results"]}, {first_case["case_id"], second_case["case_id"]})
+
+    def test_learning_index_rebuild_reports_invalid_records_without_writing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(build_chat_interaction_payload("safely add a feature", source="discord")),
+            )
+            before = paths.learning_index_path.read_text(encoding="utf-8")
+            bad_path = paths.learning_traces_dir / "broken.json"
+            bad_path.write_text('{"schema_version":"wrong"}', encoding="utf-8")
+
+            rebuilt = rebuild_learning_index(paths)
+
+            self.assertEqual(rebuilt["status"], "failed")
+            self.assertFalse(rebuilt["wrote"])
+            self.assertEqual(paths.learning_index_path.read_text(encoding="utf-8"), before)
+            self.assertEqual(rebuilt["invalid_records"][0]["kind"], "trace")
+
+    def test_learning_index_check_allows_empty_first_install_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            check = check_learning_index(paths)
+
+            self.assertEqual(check["status"], "no_records")
+            self.assertTrue(check["ok"])
+            self.assertEqual(check["records_total"], 0)
 
 
 if __name__ == "__main__":
