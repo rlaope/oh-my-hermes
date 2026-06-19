@@ -920,7 +920,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user only needs a weekly/monthly report outline; use `report-package`.
   - The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.
   - The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.
-- Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `PDF`, `한글 문서`, `HWP`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`
+- Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `ppt and pdf`, `pdf and ppt`, `ppt/pdf`, `pdf/ppt`, `spreadsheet to pdf`, `excel to pdf`, `monthly report pdf`, `attached spreadsheet`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `PDF`, `한글 문서`, `HWP`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`, `첨부한 엑셀`, `엑셀을 월간 보고서`, `PDF랑 PPT`, `PPT랑 PDF`, `PDF와 PPT`, `PPT와 PDF`, `PDF랑 PPT로`
 - Good example:
   - Prompt: materials-package 엑셀 매출 리포트를 PDF로 공유할 수 있게 준비해줘.
   - Expected behavior: Create a material plan with xlsx/pdf target formats, source inputs, missing metrics, QA checks, and a generation handoff boundary.
@@ -1899,7 +1899,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`, `pull request webhook`, `github webhook`, `auto review pr`, `label issue`, `ci analysis`, `깃허브`, `이슈 라벨`, `pr 리뷰`, `ci 실패`
+- Strong routing signals: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`, `pull request webhook`, `github webhook`, `github issue`, `github issue to pr`, `auto review pr`, `label issue`, `ci analysis`, `깃허브`, `github issue 들어온`, `이슈 라벨`, `pr 리뷰`, `ci 실패`
 - Good example:
   - Prompt: github-event-ops PR opened with failing CI; triage whether this needs review or fix handoff.
   - Expected behavior: Produce `prepare_github_event_ops_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -1947,7 +1947,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `agent-board`, `agent board`, `kanban`, `multi agent board`, `hermes profiles`, `task board`, `heartbeat`, `blocker`, `handoff board`, `칸반`, `여러 에이전트`, `작업 보드`
+- Strong routing signals: `agent-board`, `agent board`, `kanban`, `multi agent board`, `multiple hermes agents`, `multiple hermes profiles`, `hermes profiles`, `task board`, `roles and board`, `role board`, `heartbeat`, `blocker`, `handoff board`, `칸반`, `여러 에이전트`, `Hermes agent 여러 명`, `여러 명이 같이 일`, `작업 보드`, `역할과 보드`, `역할 보드`
 - Good example:
   - Prompt: agent-board coordinate PM, CTO, QA, and release agents on this launch checklist.
   - Expected behavior: Produce `prepare_agent_board_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -1995,7 +1995,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`, `context review`, `context cleanup`, `context curation`, `curate memory`, `stale memory`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억 점검`, `기억 정리`, `기억하는 맥락`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
+- Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`, `context review`, `context cleanup`, `context curation`, `curate memory`, `stale memory`, `stale project context`, `old project context`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `프로젝트 맥락`, `프로젝트 맥락이 오래된`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `기억하는 맥락`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
 - Good example:
   - Prompt: memory-curation-review inspect stale project memories and ask me what to keep.
   - Expected behavior: Produce `prepare_memory_curation_review` with required context, wrapper actions, and not-evidence boundaries.
@@ -2091,7 +2091,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`, `missing tools`, `handoff mode`, `codex or claude`, `codex vs claude`, `codex랑 claude`, `claude code 중`, `runtime migration`, `omx`, `omc`, `omo`, `코덱스`, `클로드 코드`, `실행 런타임`, `어떤 런타임`, `런타임으로 넘겨`
+- Strong routing signals: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`, `missing tools`, `handoff mode`, `codex or claude`, `codex vs claude`, `codex로 넘길지 claude`, `claude code로 넘길지 codex`, `codex랑 claude`, `claude code 중`, `넘길지 codex`, `넘길지 claude`, `runtime migration`, `omx`, `omc`, `omo`, `코덱스`, `클로드 코드`, `실행 런타임`, `어떤 런타임`, `런타임으로 넘겨`
 - Good example:
   - Prompt: executor-runtime-readiness can this task run in Codex, Claude Code, or Hermes coding?
   - Expected behavior: Produce `prepare_executor_runtime_readiness` with required context, wrapper actions, and not-evidence boundaries.
@@ -2331,7 +2331,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `research coding review status`, `ai agent manager`, `third-party manager`, `관리자 입장`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `리서치 코딩 리뷰`
+- Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `codex progress`, `codex status`, `coding agent status`, `where is codex`, `research coding review status`, `ai agent manager`, `third-party manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `리서치 코딩 리뷰`
 - Good example:
   - Prompt: agent-ops-review show me quality, blockers, and throughput for AI-agent research, coding, and review work.
   - Expected behavior: Produce `prepare_agent_ops_review` with required context, wrapper actions, and not-evidence boundaries.

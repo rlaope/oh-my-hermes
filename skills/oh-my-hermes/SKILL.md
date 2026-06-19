@@ -212,7 +212,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `skill`: `skill`, `$skill`, `skills`, `manage skills`
 - `doctor`: `doctor`, `$doctor`, `diagnose omh`, `installation health`
 - `github-event-ops`: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`
-- `agent-board`: `agent-board`, `agent board`, `kanban`, `multi agent board`, `hermes profiles`
+- `agent-board`: `agent-board`, `agent board`, `kanban`, `multi agent board`, `multiple hermes agents`
 - `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`
 - `gateway-intent-card`: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`
 - `executor-runtime-readiness`: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`

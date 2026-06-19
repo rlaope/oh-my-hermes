@@ -277,6 +277,25 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
+_WORKFLOW_REVIEW_INTENT_MARKERS = (
+    "claim",
+    "claims",
+    "release",
+    "review",
+    "verify",
+    "verification",
+    "doctor",
+    "harness",
+    "matches",
+    "match",
+    "주장",
+    "릴리즈",
+    "검토",
+    "검증",
+    "실제",
+    "맞는지",
+    "통과",
+)
 _PATH_REFERENCE_MARKERS = (
     "src/",
     "tests/",
@@ -376,6 +395,8 @@ def _is_operator_command_question(search_texts: tuple[str, ...]) -> bool:
 
 
 def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
+    if _contains_catalog_token(search_texts, _WORKFLOW_REVIEW_INTENT_MARKERS):
+        return False
     if _contains_catalog_token(search_texts, _PATH_REFERENCE_MARKERS):
         return _contains_catalog_token(search_texts, _CONTEXT_MARKERS) or _contains_catalog_token(
             search_texts, _CATALOG_COLLISION_MARKERS

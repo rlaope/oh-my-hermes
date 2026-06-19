@@ -5,7 +5,7 @@ import unittest
 from _local_package import load_local_package
 
 load_local_package()
-from omh.routing.catalog_questions import is_skill_catalog_question
+from omh.routing.catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
 
 
 class CatalogQuestionTests(unittest.TestCase):
@@ -79,6 +79,12 @@ class CatalogQuestionTests(unittest.TestCase):
         for message in cases:
             with self.subTest(message=message):
                 self.assertFalse(is_skill_catalog_question(message))
+
+    def test_release_claim_review_is_not_file_lookup_fallback(self) -> None:
+        message = "릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘"
+
+        self.assertFalse(is_skill_catalog_question(message))
+        self.assertFalse(is_file_or_text_lookup_question(message))
 
 
 if __name__ == "__main__":
