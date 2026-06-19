@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Use `report-package` unless the report specifically asks for reliability evidence review.
 - Why: Report packaging and reliability validation are independent operations surfaces.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should review incident notes, SLOs, error budgets, or service reliability evidence while keeping remediation and closure claims observed.

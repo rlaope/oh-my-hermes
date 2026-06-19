@@ -622,9 +622,16 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Hermes role: `handoff-guide`", skills["ultragoal"].content)
         self.assertIn("Handoff policy:", skills["ultragoal"].content)
         self.assertIn("Runtime Evidence", skills["ultragoal"].content)
+        self.assertIn("OMH Context Rail", skills["ultragoal"].content)
+        self.assertIn("part of OMH's Hermes workflow layer", skills["ultragoal"].content)
+        self.assertIn("Current lane: **Intent -> plan**", skills["ultragoal"].content)
+        self.assertIn("hand back to `oh-my-hermes`", skills["ultragoal"].content)
+        self.assertIn("Prepared OMH routing", skills["ultragoal"].content)
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
         self.assertIn("active_agent_count", skills["ultragoal"].content)
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
+        self.assertIn("Current lane: **Materials and visual summaries**", skills["img-summary"].content)
+        self.assertIn("Current lane: **Research and company ops**", skills["web-research"].content)
         self.assertIn("loop_cycle/v1", skills["loop"].content)
         self.assertIn("permission profile", skills["loop"].content)
         self.assertIn("verification_plan", skills["loop"].content)
@@ -635,6 +642,13 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("code-review gate", skills["ultraprocess"].content)
         self.assertIn("docs-specialist", skills["ultraprocess"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
+
+        for name, skill in skills.items():
+            if name == "oh-my-hermes":
+                continue
+            with self.subTest(skill=name):
+                self.assertIn("OMH Context Rail", skill.content)
+                self.assertIn("not a standalone executor", skill.content)
 
     def test_coding_handoff_skills_include_executor_readiness_fallback(self) -> None:
         templates = {template.name: template.content for template in builtin_skill_templates()}

@@ -40,6 +40,14 @@ Bad example:
 - Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
 - Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Intent -> plan** (`deep-interview`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`) - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when the user explicitly starts a high-level goal that is concrete enough to verify, open-ended enough to require iterative discovery, and should be shaped from task/project/ambition into a bounded loop before cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.

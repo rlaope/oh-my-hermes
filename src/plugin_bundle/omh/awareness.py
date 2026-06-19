@@ -117,3 +117,36 @@ def awareness_primer_markdown() -> str:
             f"Boundary: {payload['evidence_boundary']}",
         ]
     )
+
+
+def awareness_workflow_context_markdown(skill_name: str) -> str:
+    payload = awareness_primer_payload()
+    lane = _lane_for_skill(skill_name, payload["lanes"])
+    lane_line = "Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes."
+    if lane:
+        skills = "`, `".join(str(skill) for skill in lane["skills"])
+        lane_line = f"Current lane: **{lane['label']}** (`{skills}`) - {lane['use_for']}."
+    return "\n".join(
+        [
+            "## OMH Context Rail",
+            "",
+            f"- This skill is part of OMH's Hermes workflow layer, not a standalone executor.",
+            f"- {lane_line}",
+            "- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.",
+            f"- {payload['chat_rule']}",
+            f"- Boundary: {payload['evidence_boundary']}",
+        ]
+    )
+
+
+def _lane_for_skill(skill_name: str, lanes: object) -> dict[str, object] | None:
+    if not isinstance(lanes, list):
+        return None
+    normalized = skill_name.strip()
+    for lane in lanes:
+        if not isinstance(lane, dict):
+            continue
+        skills = lane.get("skills", [])
+        if isinstance(skills, list) and normalized in {str(skill) for skill in skills}:
+            return lane
+    return None

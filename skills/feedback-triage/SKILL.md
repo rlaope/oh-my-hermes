@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Route to planning or coding handoff instead of re-triaging.
 - Why: The decision is already accepted, so triage would add delay without improving evidence.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Research and company ops** (`web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`) - source-backed research, customer signals, product operations, and briefing workflows.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should classify feedback, bug reports, and feature asks before deciding whether research, planning, or coding handoff is needed.

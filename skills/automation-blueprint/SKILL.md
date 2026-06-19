@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Ask for observed Hermes/gateway delivery evidence or report the delivery as not_observed instead of claiming it happened.
 - Why: A blueprint can prepare the scheduled operation, but it cannot prove runtime execution or delivery.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Automation and status** (`automation-blueprint`, `ops-observability-card`, `agent-ops-review`, `doctor`) - scheduled ops blueprints, status cards, runtime health, and release/ops review.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should turn a natural recurring/cron-like request into a scheduled ops blueprint without claiming host automation, platform delivery, source retrieval, or no-agent execution.

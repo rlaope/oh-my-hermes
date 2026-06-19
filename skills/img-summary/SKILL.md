@@ -38,6 +38,14 @@ Bad example:
 - Expected behavior: Ask for visual_observation/v1 delivery evidence or report delivery as not_observed.
 - Why: A prompt card cannot prove generated image, QA, or delivery evidence.
 
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Current lane: **Materials and visual summaries** (`materials-package`, `img-summary`, `report-package`, `deliverable-package`) - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Use When
 
 Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, premium background plate, material texture, camera treatment, lighting, motifs, and poster design grammar adapt without claiming image generation.
