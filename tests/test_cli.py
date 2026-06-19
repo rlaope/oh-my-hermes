@@ -2014,11 +2014,17 @@ class CliTests(unittest.TestCase):
             "Summarize this bug as a triage card.",
             "Make a competitor-news briefing card.",
             "Create a release announcement image.",
+            "Make a feature explainer image for cron automation.",
+            "Explain this workflow as a shareable image.",
+            "Create a one-page infographic for the automation feature.",
             "회의록을 세로 요약 이미지로 만들어줘",
             "PR 요약 카드",
             "이슈 트리아지 카드",
             "경쟁사 뉴스 브리핑 카드",
             "릴리즈 노트 발표 이미지",
+            "크론 기능 설명 이미지 하나 만들어줘",
+            "이 기능을 설명하는 인포그래픽 만들어줘",
+            "워크플로우 이미지로 설명해줘",
         )
 
         for message in cases:
@@ -2048,6 +2054,7 @@ class CliTests(unittest.TestCase):
             "fix the credit card payment bug",
             "investigate the image upload bug report",
             "prepare image assets package",
+            "debug image upload failures before release",
         )
 
         for message in cases:
