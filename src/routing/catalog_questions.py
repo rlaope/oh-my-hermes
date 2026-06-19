@@ -270,13 +270,17 @@ def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
         "검색",
     )
     catalog_collision_markers = (
-        "command injection",
-        "workflow file",
-        "skill file",
-        "command file",
-        "명령어 파일",
-        "워크플로 파일",
-        "스킬 파일",
+        "command",
+        "commands",
+        "skill",
+        "skills",
+        "workflow",
+        "workflows",
+        "명령",
+        "명령어",
+        "스킬",
+        "워크플로",
+        "워크플로우",
     )
     return _contains_catalog_token(search_texts, file_or_text_markers) and _contains_catalog_token(
         search_texts, catalog_collision_markers

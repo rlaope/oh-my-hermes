@@ -48,8 +48,12 @@ class CatalogQuestionTests(unittest.TestCase):
         cases = (
             "what skills are needed to debug this Python error?",
             "which workflow should I use for this bug?",
+            "list commands in this file",
+            "show workflows mentioned in docs/WORKFLOWS.md",
+            "which files mention skill routing?",
             "list files that mention command injection",
             "이 파일에서 command injection 언급 목록 찾아줘",
+            "이 경로에서 workflow 언급 찾아줘",
         )
 
         for message in cases:
