@@ -283,6 +283,8 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(role_payload["role"], "planner")
             self.assertEqual(role_payload["resolved_role"], "planner")
             self.assertIn("Planner", role_payload["context"])
+            self.assertIn("OMH Role Context", role_payload["context"])
+            self.assertIn("OMH workflow-layer responsibility context", role_payload["context"])
             self.assertIn("not runtime delegation", role_payload["claim_boundary"])
             legacy_role_payload = json.loads(role_handler({"action": "read", "role": "planning-lead"}))
             self.assertEqual(legacy_role_payload["status"], "available")
@@ -339,11 +341,20 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIsNotNone(hook_payload)
             context = hook_payload["context"]
             self.assertIn("[OMH Awareness]", context)
-            self.assertIn("consider OMH before treating it as a generic chat", context)
+            self.assertIn("Hermes-native workflow pack", context)
+            self.assertIn("consider OMH before generic chat or generic tools", context)
+            self.assertIn("every OMH skill", context)
+            self.assertIn("generic tool can render or execute", context)
+            self.assertIn("Every generated workflow skill", context)
             self.assertIn("img-summary", context)
             self.assertIn("materials-package", context)
             self.assertIn("ultraprocess", context)
             self.assertIn("loop", context)
+            self.assertIn("meeting-brief", context)
+            self.assertIn("feedback-triage", context)
+            self.assertIn("omh_capabilities", context)
+            self.assertIn("workflow/playbook catalog context", context)
+            self.assertIn("omh_role for responsibility context", context)
             self.assertIn("external image tool", context)
             self.assertIn("[omh]", context)
             self.assertIn("prepared handoffs are not execution", context)
@@ -356,8 +367,44 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(empty_first_turn_context)
             self.assertIn("[OMH Awareness]", empty_first_turn_context["context"])
-            self.assertIn("image summary", empty_first_turn_context["context"])
+            self.assertIn("image cards", empty_first_turn_context["context"])
             self.assertNotIn("make an image summary card for this PR", empty_first_turn_context["context"])
+
+            mid_session_visual_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="회의록을 세로 요약 이미지 카드로 만들어줘",
+                is_first_turn=False,
+            )
+            self.assertIsNotNone(mid_session_visual_context)
+            self.assertIn("[OMH Awareness]", mid_session_visual_context["context"])
+            self.assertIn("img-summary", mid_session_visual_context["context"])
+            self.assertIn("generic tool can render or execute", mid_session_visual_context["context"])
+            self.assertNotIn("회의록을 세로 요약 이미지 카드로 만들어줘", mid_session_visual_context["context"])
+
+            mid_session_generic_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="tell me a short joke",
+                is_first_turn=False,
+            )
+            self.assertIsNone(mid_session_generic_context)
+
+            suppressed_awareness_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="make a PR summary image card",
+                is_first_turn=False,
+                include_omh_awareness=False,
+            )
+            self.assertIsNone(suppressed_awareness_context)
+
+            mid_session_role_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="[omh-role:planner] do not leak this mid-session prompt",
+                is_first_turn=False,
+                include_omh_awareness=False,
+            )
+            self.assertIsNotNone(mid_session_role_context)
+            self.assertIn("[OMH Role: planner]", mid_session_role_context["context"])
+            self.assertNotIn("do not leak this mid-session prompt", mid_session_role_context["context"])
 
 
 if __name__ == "__main__":

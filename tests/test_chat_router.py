@@ -86,7 +86,66 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["action"], "dispatch")
                 self.assertEqual(decision["selected_skill"], skill)
                 self.assertEqual(decision["selected_harness"], harness)
+        self.assertEqual(decision["confidence"], "high")
+
+    def test_visual_summary_chat_dispatches_to_img_summary(self) -> None:
+        cases = (
+            "이미지 요약 카드 만들어줘",
+            "이 내용을 공유용 요약 카드로 만들어줘",
+            "Create an image summary card from these notes.",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "img-summary")
+                self.assertEqual(decision["selected_harness"], "img-summary")
                 self.assertEqual(decision["confidence"], "high")
+
+    def test_catalog_question_dispatches_to_router_without_shell_approval(self) -> None:
+        for message in (
+            "OMH로 할 수 있는 workflow가 뭐야?",
+            "what can OMH do?",
+            "how can OMH help my team?",
+            "Can OMH help with planning, research, and coding?",
+            "what can OMH do for planning/research/coding?",
+            "Can OMH help with planning/research/coding?",
+            "OMH로 뭐 할 수 있어?",
+            "OMH는 뭘 도와줘?",
+            "OMH로 계획/리서치/코딩까지 도와줄 수 있어?",
+            "OMH에서 deep-interview/ralplan/loop는 뭐야?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["selected_harness"], "coding-handling")
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn("Catalog question", decision["reason"])
+
+    def test_file_lookup_does_not_dispatch_to_workflow_keyword(self) -> None:
+        for message in (
+            "search docs/WORKFLOWS.md for loop",
+            "show img-summary in README.md",
+            "what does OMH do in docs/ARCHITECTURE.md?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "fallback")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["selected_harness"], "coding-handling")
+                self.assertEqual(decision["confidence"], "low")
+                self.assertIn("File or text lookup", decision["reason"])
+                self.assertIn("file or text lookup", decision["clarification"])
+                self.assertIn("do not dispatch to a workflow keyword", decision["routing_prompt"])
+
+                public_payload = public_route_payload(decision)
+                self.assertIn("file or text lookup", public_payload["routing_instruction"])
+                self.assertNotIn("ask one concise clarification", public_payload["routing_instruction"])
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (
@@ -111,6 +170,8 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             "daily research plan implement and open a PR",
             "every morning competitor research then prepare a PR",
+            "codex로 이 기능 구현 맡겨줘",
+            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
         )
 
         for message in cases:
@@ -121,6 +182,14 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_skill"], "ultraprocess")
                 self.assertEqual(decision["selected_harness"], "goal-execution")
                 self.assertEqual(decision["confidence"], "high")
+
+    def test_memory_context_chat_dispatches_to_curation_review(self) -> None:
+        decision = route_chat_message("Hermes가 기억하는 맥락을 점검하고 정리해줘", source="discord")
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "memory-curation-review")
+        self.assertEqual(decision["selected_harness"], "memory-curation-review")
+        self.assertEqual(decision["confidence"], "high")
 
     def test_event_text_extraction_supports_discord_slack_and_generic_shapes(self) -> None:
         self.assertEqual(extract_message_text({"message": {"content": "risky refactor"}}), "risky refactor")

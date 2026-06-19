@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import unicodedata
 from typing import Any
 
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
+from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_route_payload, route_chat_message
 from ..coding_delegation import build_coding_delegation_payload
 from ..executors import executor_label
@@ -704,6 +704,29 @@ def build_chat_response_from_route(
             claim_boundary="No execution has started.",
             extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
         )
+    if action == "fallback" and _is_file_lookup_fallback(decision):
+        return _chat_response(
+            kind="clarification",
+            headline="This looks like a file or text lookup.",
+            body=str(
+                decision.get("clarification")
+                or "Answer this as a file or text lookup, or ask for the target file/path if it is missing."
+            ),
+            phase="clarifying",
+            next_action="answer_file_lookup",
+            thread_key=thread_key,
+            actions=[
+                _action("answer:file_lookup", "Answer file lookup", "primary"),
+                _action("cancel", "Cancel", "secondary"),
+            ],
+            claim_boundary="No OMH workflow, execution, or file inspection has started.",
+            extra_state={
+                "route_action": action,
+                "confidence": decision.get("confidence", "low"),
+                "lookup_kind": "file_or_text",
+                "routing_instruction": decision.get("routing_instruction", ""),
+            },
+        )
     return _chat_response(
         kind="clarification",
         headline="I need to understand the goal before routing this.",
@@ -715,6 +738,14 @@ def build_chat_response_from_route(
         claim_boundary="No execution has started.",
         extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
     )
+
+
+def _is_file_lookup_fallback(decision: dict[str, object]) -> bool:
+    text = " ".join(
+        str(decision.get(key, "") or "")
+        for key in ("reason", "clarification", "routing_instruction")
+    ).lower()
+    return "file or text lookup" in text or "file/text lookup" in text
 
 
 def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key: str = "") -> dict[str, object]:
@@ -1225,196 +1256,6 @@ def _is_skill_picker_invocation(message: str) -> bool:
     return rest in _SKILL_PICKER_HELP_TOKENS
 
 
-def _is_skill_catalog_question(message: str) -> bool:
-    lowered = message.strip().lower()
-    if not lowered:
-        return False
-    search_texts = _catalog_search_texts(lowered)
-    explicit_catalog_phrases = (
-        "what commands are available",
-        "which commands are available",
-        "commands do you have",
-        "what skills are available",
-        "which skills are available",
-        "skills do you have",
-        "what workflows are available",
-        "which workflows are available",
-        "workflows do you have",
-        "available commands",
-        "available skills",
-        "available workflows",
-        "list commands",
-        "list skills",
-        "list workflows",
-        "show commands",
-        "show skills",
-        "show workflows",
-        "command menu",
-        "skill menu",
-        "workflow menu",
-        "skill picker",
-        "workflow picker",
-        "catalog",
-        "comandos disponibles",
-        "habilidades disponibles",
-        "flujos de trabajo disponibles",
-        "commandes disponibles",
-        "competences disponibles",
-        "fluxos de trabalho disponiveis",
-        "comandos disponiveis",
-        "verfugbare befehle",
-        "verfugbare workflows",
-        "befehle verfugbar",
-        "workflows verfugbar",
-        "使えるスキル",
-        "利用可能なスキル",
-        "利用可能なワークフロー",
-        "有哪些命令",
-        "有哪些技能",
-        "有哪些工作流",
-        "可用命令",
-        "可用技能",
-        "可用工作流",
-        "доступные команды",
-        "доступные навыки",
-        "доступные рабочие процессы",
-        "список команд",
-        "목록",
-        "리스트",
-    )
-    context_markers = ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스")
-    catalog_words = (
-        "skill",
-        "skills",
-        "workflow",
-        "workflows",
-        "command",
-        "commands",
-        "스킬",
-        "워크플로",
-        "워크플로우",
-        "명령",
-        "기능",
-        "comandos",
-        "habilidades",
-        "flujos de trabajo",
-        "fluxos de trabalho",
-        "commandes",
-        "competences",
-        "befehle",
-        "workflows",
-        "スキル",
-        "ワークフロー",
-        "コマンド",
-        "技能",
-        "工作流",
-        "命令",
-        "команды",
-        "навыки",
-        "рабочие процессы",
-    )
-    has_context = _contains_catalog_token(search_texts, context_markers)
-    has_catalog_word = _contains_catalog_token(search_texts, catalog_words)
-    if not has_catalog_word:
-        return False
-    if _contains_catalog_token(search_texts, explicit_catalog_phrases):
-        return True
-    catalog_collection_words = (
-        "skills",
-        "skill들",
-        "workflows",
-        "commands",
-        "스킬",
-        "워크플로",
-        "워크플로우",
-        "명령",
-        "기능",
-        "comandos",
-        "habilidades",
-        "flujos de trabajo",
-        "fluxos de trabalho",
-        "commandes",
-        "competences",
-        "befehle",
-        "スキル",
-        "ワークフロー",
-        "コマンド",
-        "技能",
-        "工作流",
-        "命令",
-        "команды",
-        "навыки",
-        "рабочие процессы",
-    )
-    has_catalog_collection_word = _contains_catalog_token(search_texts, catalog_collection_words)
-    availability_markers = (
-        "available",
-        "do you have",
-        "are there",
-        "can i use",
-        "can you do",
-        "menu",
-        "picker",
-        "disponible",
-        "disponibles",
-        "disponivel",
-        "disponiveis",
-        "liste",
-        "lista",
-        "mostrar",
-        "afficher",
-        "anzeigen",
-        "gibt es",
-        "verfugbar",
-        "verfuegbar",
-        "使える",
-        "利用可能",
-        "一覧",
-        "有哪些",
-        "可用",
-        "列表",
-        "доступ",
-        "список",
-        "متاحة",
-        "قائمة",
-        "उपलब्ध",
-        "danh sach",
-        "có những",
-        "tersedia",
-        "daftar",
-        "뭐",
-        "무엇",
-        "어떤",
-        "알려",
-        "보여",
-        "있어",
-        "있나요",
-        "가능",
-        "목록",
-        "리스트",
-    )
-    if not has_context and has_catalog_collection_word and _contains_catalog_token(search_texts, availability_markers):
-        return True
-    if has_context and has_catalog_collection_word and _contains_catalog_token(search_texts, availability_markers):
-        return True
-    words = lowered.replace("?", " ").replace("!", " ").split()
-    plural_catalog_words = ("commands", "skills", "workflows", "워크플로", "워크플로우", "스킬")
-    return has_context and len(words) <= 4 and _contains_catalog_token(search_texts, plural_catalog_words)
-
-
-def _catalog_search_texts(lowered: str) -> tuple[str, ...]:
-    folded = "".join(
-        character
-        for character in unicodedata.normalize("NFKD", lowered)
-        if not unicodedata.combining(character)
-    )
-    return (lowered,) if folded == lowered else (lowered, folded)
-
-
-def _contains_catalog_token(search_texts: tuple[str, ...], tokens: tuple[str, ...]) -> bool:
-    return any(token in text for text in search_texts for token in tokens)
-
-
 def _is_command_preview_invocation(message: str) -> bool:
     token = _first_token(message).lower()
     if not token:
@@ -1510,6 +1351,17 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
     catalog_question = _is_skill_catalog_question(message)
     primer = _context_primer_state()
+    extra_state = {
+        "route_action": decision.get("action", "dispatch"),
+        "confidence": decision.get("confidence", "low"),
+        "selected_workflow": _ROUTER_SKILL,
+        "catalog_question": catalog_question,
+        "context_primer": primer,
+        "skill_picker": picker,
+        "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
+    }
+    if catalog_question:
+        extra_state["capability_summary"] = _catalog_capability_summary()
     return _chat_response(
         kind="skill_picker",
         headline="Here are the OMH workflows." if catalog_question else "Choose an OMH workflow.",
@@ -1536,15 +1388,7 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
             _action("show_status", "Show status", "secondary"),
         ],
         claim_boundary="Choosing a skill is routing intent only; it is not plan acceptance, dispatch, execution, review, CI, or verification evidence.",
-        extra_state={
-            "route_action": decision.get("action", "dispatch"),
-            "confidence": decision.get("confidence", "low"),
-            "selected_workflow": _ROUTER_SKILL,
-            "catalog_question": catalog_question,
-            "context_primer": primer,
-            "skill_picker": picker,
-            "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
-        },
+        extra_state=extra_state,
     )
 
 
@@ -1611,6 +1455,54 @@ def _context_primer_state() -> dict[str, object]:
         "evidence_rule": "Prepared plans, prompts, cards, or handoffs are not execution, file generation, delivery, review, CI, merge, or verification evidence.",
         "inventory_rule": "Render the picker for common choices and use search_skills for the full installed catalog.",
     }
+
+
+def _catalog_capability_summary() -> dict[str, object]:
+    from ..capabilities.registry import capability_summary
+
+    summary = capability_summary()
+    compact_lanes = []
+    for lane in summary.get("lanes", []):
+        if not isinstance(lane, dict):
+            continue
+        compact_lanes.append(
+            {
+                "id": lane.get("id", ""),
+                "label": lane.get("label", ""),
+                "owner_role": lane.get("owner_role", ""),
+                "use_for": lane.get("use_for", ""),
+                "primary_skills": list(lane.get("primary_skills", [])),
+                "representative_playbooks": [
+                    {
+                        "id": playbook.get("id", ""),
+                        "summary": playbook.get("summary", ""),
+                        "owner_role": playbook.get("owner_role", ""),
+                        "first_stage": playbook.get("first_stage", {}),
+                    }
+                    for playbook in lane.get("representative_playbooks", [])[:3]
+                    if isinstance(playbook, dict)
+                ],
+                "wrapper_actions": list(lane.get("wrapper_actions", []))[:6],
+                "examples": list(lane.get("examples", []))[:3],
+            }
+        )
+    return {
+        "schema_version": summary.get("schema_version", "omh_capability_summary/v1"),
+        "purpose": summary.get("purpose", ""),
+        "lanes": compact_lanes,
+        "direct_response_guidance": _as_string_list(summary.get("direct_response_guidance", [])),
+        "evidence_boundary": _as_string_list(summary.get("evidence_boundary", [])),
+    }
+
+
+def _as_string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, tuple):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
 
 
 def _first_token(message: str) -> str:

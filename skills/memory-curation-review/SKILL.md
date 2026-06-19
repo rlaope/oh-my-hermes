@@ -41,16 +41,19 @@ Bad example:
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.
-- Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes.
+- Product context: OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off without hiding unobserved execution.
+- Current lane: **Automation and status** (`automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `memory-curation-review`, `doctor`, `skill`, `ask`, `cancel`) - scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
-- Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+- Cross-skill context: Carry this across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
+- Coverage: Every generated workflow skill carries this rail.
+- Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
 - Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
 
 ## Use When
 
 Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
 
-    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `curate memory`, `stale memory`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억 정리`, `메모리 정리`, `중복 스킬`
+    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`, `context review`, `context cleanup`, `context curation`, `curate memory`, `stale memory`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억 점검`, `기억 정리`, `기억하는 맥락`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
 
 ## Catalog Metadata
 

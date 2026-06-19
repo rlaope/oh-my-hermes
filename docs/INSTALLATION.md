@@ -237,9 +237,15 @@ omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smo
 ```
 
 `release skill-content-smoke` checks the installed command package's generated
-skill guidance, including router awareness and workflow context rails. It is
-not Hermes chat-load evidence. When an operator explicitly wants live evidence
-from the target Hermes profile, run one of these:
+skill guidance, including router awareness and workflow context rails. It also
+checks bundled role context, all-skill awareness lane coverage, full capability
+manifest context, playbook capability context, standalone plugin capability
+fallback coverage, fallback routing/context/boundary fields, bounded prompt
+context budgets, and bounded capability payload budgets.
+In short, it preserves bounded context budgets while still giving Hermes enough
+OMH workflow context to route well.
+It is not Hermes chat-load evidence. When an operator explicitly wants live
+evidence from the target Hermes profile, run one of these:
 
 ```sh
 omh release hermes-smoke --live --install-path tap --target-confirmed
@@ -423,7 +429,10 @@ The backend flow is:
    wrapper still renders `chat_response.kind == skill_picker`. Do not ask the
    user to approve `omh list` for a catalog question; `omh_skill_picker/v1`
    already contains the workflow labels, direct invocation text, and
-   routing-only claim boundary.
+   routing-only claim boundary. The same response also carries
+   `omh_capability_summary/v1`, which lets Hermes explain the larger
+   capability lanes and representative playbooks without a second catalog
+   command.
 8. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
    `status_card` when present in the original channel or thread. The headline
    already starts with the visible OMH marker, such as `[omh] web-research`;

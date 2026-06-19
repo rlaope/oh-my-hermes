@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ..awareness import awareness_primer_payload
+from ..awareness import awareness_lane_examples, awareness_primer_payload
 from ..metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 
 STANDALONE_CAPABILITY_SECTIONS = (
@@ -12,9 +12,63 @@ STANDALONE_CAPABILITY_SECTIONS = (
     "hooks",
     "keywords",
     "orchestration_patterns",
+    "playbooks",
     "tool_requirements",
     "evidence_boundaries",
 )
+STANDALONE_CAPABILITY_SECTION_ALIASES = {
+    "awareness": "omh_awareness",
+    "agent": "agent_roles",
+    "agents": "agent_roles",
+    "role": "agent_roles",
+    "roles": "agent_roles",
+    "hook": "hooks",
+    "keyword": "keywords",
+    "pattern": "orchestration_patterns",
+    "patterns": "orchestration_patterns",
+    "orchestration": "orchestration_patterns",
+    "playbook": "playbooks",
+    "tool": "tool_requirements",
+    "tools": "tool_requirements",
+    "tooling": "tool_requirements",
+    "boundary": "evidence_boundaries",
+    "boundaries": "evidence_boundaries",
+    "evidence": "evidence_boundaries",
+}
+CONCEPTUAL_AWARENESS_SURFACES = {
+    "request-to-handoff",
+    "executor selection",
+    "coding runtime handoff",
+}
+LANE_OWNER_ROLES = {
+    "intent_to_plan": "planner",
+    "research_and_ops": "researcher",
+    "materials_and_visuals": "operator",
+    "automation_and_status": "tracker",
+    "coding_handoff": "handoff-guide",
+}
+STANDALONE_LANE_PLAYBOOK_IDS = {
+    "intent_to_plan": ("request-to-handoff", "safe-feature-change"),
+    "research_and_ops": ("research-department", "source-backed-research", "feedback-triage"),
+    "materials_and_visuals": ("materials-processing",),
+    "automation_and_status": ("scheduled-ops-blueprint",),
+    "coding_handoff": ("idea-to-deploy",),
+}
+
+
+def standalone_skill_capability_ids() -> set[str]:
+    """Return degraded plugin fallback skill ids for release/package smoke checks."""
+    return {str(item["id"]) for item in _standalone_skill_capabilities()}
+
+
+def standalone_skill_capability_items() -> list[dict[str, object]]:
+    """Return degraded plugin fallback skill capabilities for release/package smoke checks."""
+    return _standalone_skill_capabilities()
+
+
+def standalone_playbook_capability_items() -> list[dict[str, object]]:
+    """Return degraded plugin fallback playbook capabilities for release/package smoke checks."""
+    return _standalone_playbook_capabilities()
 
 
 OMH_CAPABILITIES_SCHEMA = {
@@ -28,7 +82,7 @@ OMH_CAPABILITIES_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["export", "list", "inspect"],
+                "enum": ["summary", "export", "list", "inspect"],
                 "description": "Capability action to perform.",
             },
             "section": {
@@ -57,6 +111,8 @@ def omh_capabilities_handler(args: dict, **kwargs) -> str:
 def _handle_capability_action(action: str, section: str | None, capability_id: str) -> dict[str, object]:
     registry = _load_package_registry()
     if registry:
+        if action == "summary":
+            return registry["capability_summary"]()
         if action == "export":
             return registry["filtered_capability_snapshot"](section)
         if action == "list":
@@ -64,6 +120,8 @@ def _handle_capability_action(action: str, section: str | None, capability_id: s
         if action == "inspect":
             return registry["inspect_capability"](capability_id, section=section)
         return {"error": f"unknown action: {action}"}
+    if action == "summary":
+        return _standalone_capability_summary()
     if action == "export":
         return _standalone_capability_snapshot(section)
     if action == "list":
@@ -75,17 +133,103 @@ def _handle_capability_action(action: str, section: str | None, capability_id: s
 
 def _load_package_registry() -> dict[str, object]:
     try:
-        from omh.capabilities.registry import filtered_capability_snapshot, inspect_capability, list_capabilities
-    except ModuleNotFoundError:
+        from omh.capabilities.registry import capability_summary, filtered_capability_snapshot, inspect_capability, list_capabilities
+    except ImportError:
         return {}
     return {
+        "capability_summary": capability_summary,
         "filtered_capability_snapshot": filtered_capability_snapshot,
         "inspect_capability": inspect_capability,
         "list_capabilities": list_capabilities,
     }
 
 
+def _standalone_capability_summary() -> dict[str, object]:
+    awareness = awareness_primer_payload()
+    sections = _standalone_sections()
+    skills = {str(item.get("id")): item for item in _standalone_items(sections["skills"])}
+    playbooks = {str(item.get("id")): item for item in _standalone_items(sections["playbooks"])}
+    lanes = [
+        _standalone_summary_lane(lane, skills, playbooks)
+        for lane in awareness.get("lanes", [])
+        if isinstance(lane, dict)
+    ]
+    return {
+        "schema_version": "omh_capability_summary/v1",
+        "source": "standalone_plugin_bundle_fallback",
+        "degraded": True,
+        "determinism": "static_plugin_metadata_no_runtime_clock",
+        "purpose": (
+            "Compact Hermes-facing summary for answering what OMH can do, choosing the nearest workflow, "
+            "and rendering a picker/card without requiring shell catalog approval."
+        ),
+        "chat_rule": str(awareness.get("chat_rule") or ""),
+        "totals": {
+            "skills": len(skills),
+            "playbooks": len(playbooks),
+            "agent_roles": len(_standalone_items(sections["agent_roles"])),
+        },
+        "lanes": lanes,
+        "direct_response_guidance": [
+            "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
+            "When a request matches a lane, name the likely workflow and the first safe next action.",
+            "Use friendly section aliases for input, but keep canonical names in machine-readable output.",
+        ],
+        "section_aliases": dict(sorted(STANDALONE_CAPABILITY_SECTION_ALIASES.items())),
+        "evidence_boundary": _standalone_evidence_boundaries()["prepared_is_not"],
+    }
+
+
+def _standalone_summary_lane(
+    lane: dict[str, object],
+    skills: dict[str, dict[str, object]],
+    playbooks: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    lane_id = str(lane.get("id") or "")
+    lane_skills = lane.get("skills", [])
+    if not isinstance(lane_skills, list):
+        lane_skills = []
+    representative_playbooks = [
+        _standalone_compact_playbook(playbooks[playbook_id])
+        for playbook_id in STANDALONE_LANE_PLAYBOOK_IDS.get(lane_id, ())
+        if playbook_id in playbooks
+    ]
+    return {
+        "id": lane_id,
+        "label": str(lane.get("label") or lane_id),
+        "owner_role": LANE_OWNER_ROLES.get(lane_id, "guide"),
+        "use_for": str(lane.get("use_for") or ""),
+        "primary_skills": [str(skill) for skill in lane_skills if str(skill) in skills],
+        "representative_playbooks": representative_playbooks,
+        "wrapper_actions": sorted(
+            {
+                str(action)
+                for playbook in representative_playbooks
+                for action in playbook.get("available_wrapper_actions", [])
+            }
+        )[:8],
+        "examples": awareness_lane_examples(lane_id),
+    }
+
+
+def _standalone_compact_playbook(playbook: dict[str, object]) -> dict[str, object]:
+    first_stage = playbook.get("first_stage")
+    return {
+        "id": str(playbook.get("id") or ""),
+        "display_name": str(playbook.get("display_name") or playbook.get("id") or ""),
+        "summary": str(playbook.get("summary") or ""),
+        "owner_role": str(playbook.get("primary_owner_role") or "guide"),
+        "first_stage": first_stage if isinstance(first_stage, dict) else {},
+        "available_wrapper_actions": [
+            str(action)
+            for action in playbook.get("available_wrapper_actions", [])
+            if str(action)
+        ][:8],
+    }
+
+
 def _standalone_capability_snapshot(section: str | None = None) -> dict[str, object]:
+    canonical_section = _standalone_normalize_section(section)
     payload: dict[str, object] = {
         "schema_version": "omh_capability_manifest/v1",
         "source": "standalone_plugin_bundle_fallback",
@@ -99,25 +243,26 @@ def _standalone_capability_snapshot(section: str | None = None) -> dict[str, obj
         ],
     }
     sections = _standalone_sections()
-    if section:
-        if section not in sections:
+    if canonical_section:
+        if canonical_section not in sections:
             raise ValueError(f"unknown capability section: {section}")
-        payload["section"] = section
-        payload[section] = sections[section]
+        payload["section"] = canonical_section
+        payload[canonical_section] = sections[canonical_section]
         return payload
     payload.update(sections)
     return payload
 
 
 def _standalone_capability_list(section: str | None = None) -> dict[str, object]:
+    canonical_section = _standalone_normalize_section(section)
     sections = _standalone_sections()
-    if section:
-        if section not in sections:
+    if canonical_section:
+        if canonical_section not in sections:
             raise ValueError(f"unknown capability section: {section}")
         return {
             "schema_version": "omh_capability_list/v1",
-            "section": section,
-            "ids": _standalone_ids(sections[section]),
+            "section": canonical_section,
+            "ids": _standalone_ids(sections[canonical_section]),
             "degraded": True,
         }
     return {
@@ -134,10 +279,11 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
     wanted = str(capability_id or "").strip()
     if not wanted:
         raise ValueError("capabilities inspect requires an id")
+    canonical_section = _standalone_normalize_section(section)
     sections = _standalone_sections()
-    if section and section not in sections:
+    if canonical_section and canonical_section not in sections:
         raise ValueError(f"unknown capability section: {section}")
-    search = {section: sections[section]} if section else sections
+    search = {canonical_section: sections[canonical_section]} if canonical_section else sections
     for section_name, values in search.items():
         for item in _standalone_items(values):
             if _standalone_matches(wanted, item):
@@ -161,6 +307,13 @@ def _standalone_capability_inspect(capability_id: str, section: str | None = Non
                 "degraded": True,
             }
     raise ValueError(f"unknown capability id: {wanted}")
+
+
+def _standalone_normalize_section(section: str | None) -> str | None:
+    if not section:
+        return None
+    normalized = section.strip()
+    return STANDALONE_CAPABILITY_SECTION_ALIASES.get(normalized, normalized)
 
 
 def _standalone_sections() -> dict[str, object]:
@@ -307,6 +460,7 @@ def _standalone_sections() -> dict[str, object]:
                 "prepared_is_not": _standalone_evidence_boundaries()["prepared_is_not"],
             },
         ],
+        "playbooks": _standalone_playbook_capabilities(),
         "tool_requirements": _standalone_tool_requirements(),
         "evidence_boundaries": _standalone_evidence_boundaries(),
     }
@@ -339,56 +493,205 @@ def _standalone_item_id(item: dict[str, object], fallback: str) -> str:
 
 
 def _standalone_skill_capabilities() -> list[dict[str, object]]:
+    capabilities: list[dict[str, object]] = []
+    seen: set[str] = set()
+    awareness = awareness_primer_payload()
+    chat_rule = str(awareness.get("chat_rule") or "")
+    context_rule = str(awareness.get("all_skill_context_rule") or "")
+    evidence_boundary = str(awareness.get("evidence_boundary") or "")
+    fallback_rule = str(awareness.get("fallback_rule") or "")
+    for lane in awareness["lanes"]:
+        if not isinstance(lane, dict):
+            continue
+        lane_id = str(lane.get("id") or "")
+        lane_label = str(lane.get("label") or lane_id)
+        owner_role = LANE_OWNER_ROLES.get(lane_id, "guide")
+        skills = lane.get("skills", [])
+        if not isinstance(skills, list):
+            continue
+        for skill in skills:
+            skill_id = str(skill)
+            if skill_id in seen or skill_id in CONCEPTUAL_AWARENESS_SURFACES:
+                continue
+            seen.add(skill_id)
+            capabilities.append(
+                {
+                    "schema_version": "skill_capability/v1",
+                    "id": skill_id,
+                    "display_name": skill_id.replace("-", " ").title(),
+                    "runtime_claim": "skill_guidance_not_execution",
+                    "primary_owner_role": owner_role,
+                    "awareness_lane": lane_id,
+                    "awareness_lane_label": lane_label,
+                    "use_for": str(lane.get("use_for") or ""),
+                    "workflow_routing_hint": (
+                        f"Use `{skill_id}` when the request fits {lane_label}: "
+                        f"{lane.get('use_for') or 'OMH workflow guidance'}. "
+                        "If the request crosses lanes, name the adjacent OMH workflow first."
+                    ),
+                    "workflow_context_rule": context_rule,
+                    "chat_rule": chat_rule,
+                    "fallback_rule": fallback_rule,
+                    "evidence_boundary": evidence_boundary,
+                    "cross_lane_examples": awareness_lane_examples(lane_id),
+                    "degraded": True,
+                }
+            )
+    return sorted(capabilities, key=lambda item: str(item["id"]))
+
+
+def _standalone_playbook_capabilities() -> list[dict[str, object]]:
+    awareness = awareness_primer_payload()
+    chat_rule = str(awareness.get("chat_rule") or "")
+    fallback_rule = str(awareness.get("fallback_rule") or "")
+    evidence_boundary = str(awareness.get("evidence_boundary") or "")
+    context_rule = (
+        "Use OMH playbooks as situation-level workflow maps: choose the nearest playbook for the user's request, "
+        "then route to the named skills, roles, harnesses, or wrapper actions without claiming hidden execution."
+    )
     return [
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "deep-interview",
-            "display_name": "Deep Interview",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planner",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "ralplan",
-            "display_name": "Ralplan",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planner",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "ultragoal",
-            "display_name": "Ultragoal",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "handoff-guide",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "loop",
-            "display_name": "Loop",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planner",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "code-review",
-            "display_name": "Code Review",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "reviewer",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "feedback-triage",
-            "display_name": "Feedback Triage",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "operator",
-            "degraded": True,
-        },
+        _standalone_playbook(
+            "request-to-handoff",
+            "Request to handoff",
+            "Turn a plain Hermes request into a role-owned next action with an explicit evidence boundary.",
+            (
+                "Use when the user asks naturally and Hermes must decide whether to clarify, research, plan, "
+                "review, or prepare a coding handoff."
+            ),
+            ("route_request", "select_role", "plan_or_prepare", "handoff_or_retain", "status_card"),
+            "guide",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "safe-feature-change",
+            "Safe feature change",
+            "Shape a risky or meaningful feature request into scope, tests, review, and executor-ready work.",
+            "Use when a repo change should be safer than direct implementation.",
+            ("clarify_scope", "risk_plan", "prepare_executor_handoff", "verification_status"),
+            "planner",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "source-backed-research",
+            "Source-backed research",
+            "Keep research requests grounded in sources, caveats, synthesis, and decision-ready output.",
+            "Use when Hermes should research before recommending or planning.",
+            ("question", "source_gathering", "synthesis", "brief", "status_card"),
+            "researcher",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "feedback-triage",
+            "Feedback triage",
+            "Convert product feedback, bugs, and user signals into investigation, repro, priority, and next action.",
+            "Use when customers report issues such as payment failures, confusing UX, or recurring bugs.",
+            ("capture_signal", "triage", "investigation_plan", "handoff_or_record"),
+            "operator",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "scheduled-ops-blueprint",
+            "Scheduled ops blueprint",
+            "Prepare recurring work as a schedule, delivery policy, silence rule, and status-card boundary.",
+            "Use when the user asks Hermes to check something periodically or deliver recurring summaries.",
+            ("scope_schedule", "select_sources", "delivery_policy", "confirmation_card"),
+            "tracker",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "research-department",
+            "Research department",
+            "Map collection, synthesis, and briefing into a Scout -> Analyst -> Briefer style workflow pack.",
+            "Use when the user wants ongoing research operations without hand-building profiles, vaults, or cron first.",
+            ("topic_scope", "source_inbox", "analysis_brief", "delivery_status"),
+            "researcher",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "materials-processing",
+            "Materials processing",
+            "Shape decks, PDFs, spreadsheets, documents, Markdown, and upload-ready packages with observed-only export claims.",
+            "Use when the user asks Hermes to turn source material into a document, slide, report, or file package.",
+            ("source_inventory", "package_plan", "render_or_handoff", "qa_status"),
+            "operator",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "idea-to-deploy",
+            "Idea to deploy",
+            (
+                "Turn a product idea into scoped implementation, executor selection, verification, review, "
+                "and release-readiness tracking."
+            ),
+            "Use when the user wants an idea prepared for a real coding or delivery path.",
+            ("shape_idea", "acceptance_criteria", "executor_selection", "verification_review_release"),
+            "handoff-guide",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
     ]
+
+
+def _standalone_playbook(
+    playbook_id: str,
+    display_name: str,
+    summary: str,
+    use_when: str,
+    pipeline: tuple[str, ...],
+    owner_role: str,
+    workflow_context_rule: str,
+    chat_rule: str,
+    fallback_rule: str,
+    evidence_boundary: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": "playbook_capability/v1",
+        "id": playbook_id,
+        "display_name": display_name,
+        "runtime_claim": "playbook_guidance_not_execution",
+        "summary": summary,
+        "use_when": use_when,
+        "pipeline": list(pipeline),
+        "primary_owner_role": owner_role,
+        "stage_owners": [owner_role],
+        "available_wrapper_actions": ["ask_followup", "show_status", "revise_plan"],
+        "first_stage": {
+            "id": pipeline[0] if pipeline else "scope_request",
+            "title": "Scope the request",
+            "owner": owner_role,
+            "contract": "playbook_capability/v1",
+            "wrapper_actions": ["ask_followup", "show_status"],
+        },
+        "workflow_context_rule": workflow_context_rule,
+        "chat_rule": chat_rule,
+        "fallback_rule": fallback_rule,
+        "evidence_boundary": evidence_boundary,
+        "prepared_is_not": _standalone_evidence_boundaries()["prepared_is_not"],
+        "degraded": True,
+    }
 
 
 def _standalone_tool_requirements() -> dict[str, object]:

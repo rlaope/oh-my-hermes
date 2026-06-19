@@ -87,8 +87,11 @@ Route for me and Hermes will select the safest next step.
 ```
 
 The wrapper should not ask the user to approve `omh list` merely to show the
-catalog. `omh_skill_picker/v1` already carries the workflow labels, direct
-invocation text, harness names, and routing-only claim boundary.
+catalog. `omh_skill_picker/v1` carries the workflow labels, direct invocation
+text, harness names, and routing-only claim boundary. Catalog-question
+responses also include `omh_capability_summary/v1`, so Hermes can summarize the
+larger lanes, representative playbooks, and evidence boundary before or beside
+the picker.
 
 ## Discord-Style Plan Response
 

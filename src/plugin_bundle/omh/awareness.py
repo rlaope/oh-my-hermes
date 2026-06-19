@@ -1,6 +1,131 @@
 from __future__ import annotations
 
+import re
+import unicodedata
+
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
+ROUTER_KEYWORD_SKILLS = (
+    "deep-interview",
+    "ralplan",
+    "ultragoal",
+    "loop",
+    "ultraprocess",
+    "web-research",
+    "research-department",
+    "feedback-triage",
+    "materials-package",
+    "img-summary",
+    "automation-blueprint",
+    "code-review",
+    "team",
+    "ultrawork",
+    "ultraqa",
+    "doctor",
+)
+
+LANE_CROSS_LANE_EXAMPLES = {
+    "intent_to_plan": [
+        "ambitious goal -> loopability check -> loop or ultraprocess -> verification status",
+        "fuzzy feature request -> deep-interview -> ralplan -> accepted plan",
+    ],
+    "research_and_ops": [
+        "customer signal -> feedback-triage -> investigation plan -> coding handoff -> status",
+        "market topic -> web-research -> research-brief -> strategy-brief -> operating-rhythm",
+    ],
+    "materials_and_visuals": [
+        "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
+        "source spreadsheet -> materials-package -> report-package -> observed export evidence",
+    ],
+    "automation_and_status": [
+        "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
+        "runtime confusion -> doctor or agent-ops-review -> status card -> next repair action",
+    ],
+    "coding_handoff": [
+        "accepted plan -> ultraprocess -> coding handoff -> review and CI evidence",
+        "risky change -> ralplan -> executor selection -> observed coding-agent status",
+    ],
+}
+_AWARENESS_MESSAGE_MARKERS = (
+    "oh-my-hermes",
+    "pull request",
+    "image card",
+    "summary card",
+    "계획",
+    "리서치",
+    "회의",
+    "회의록",
+    "피드백",
+    "이슈",
+    "버그",
+    "상태",
+    "자동화",
+    "루프",
+    "코딩",
+    "리뷰",
+    "릴리즈",
+    "보고서",
+    "자료",
+    "이미지",
+    "요약 카드",
+)
+_AWARENESS_TOKEN_MARKERS = frozenset(
+    {
+        "omh",
+        "workflow",
+        "workflows",
+        "skill",
+        "skills",
+        "plan",
+        "planning",
+        "research",
+        "brief",
+        "meeting",
+        "feedback",
+        "issue",
+        "bug",
+        "pr",
+        "status",
+        "automation",
+        "cron",
+        "schedule",
+        "loop",
+        "handoff",
+        "coding",
+        "codex",
+        "claude",
+        "review",
+        "release",
+        "deck",
+        "ppt",
+        "pdf",
+        "spreadsheet",
+        "image",
+        "visual",
+        "deliverable",
+        "material",
+    }
+)
+
+
+def router_keyword_summary() -> str:
+    """Return representative workflow keywords for router/snippet guidance."""
+    return ", ".join(f"`{skill}`" for skill in ROUTER_KEYWORD_SKILLS)
+
+
+def awareness_lane_examples(lane_id: str) -> list[str]:
+    """Return compact examples relevant to one OMH awareness lane."""
+    return list(LANE_CROSS_LANE_EXAMPLES.get(lane_id, []))
+
+
+def awareness_context_matches_message(message: str) -> bool:
+    """Return true when a non-first-turn message should refresh OMH context."""
+    text = unicodedata.normalize("NFKC", message).casefold()
+    if not text.strip():
+        return False
+    tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", text))
+    return bool(tokens & _AWARENESS_TOKEN_MARKERS) or any(
+        marker in text for marker in _AWARENESS_MESSAGE_MARKERS
+    )
 
 
 def awareness_primer_payload() -> dict[str, object]:
@@ -9,31 +134,80 @@ def awareness_primer_payload() -> dict[str, object]:
         {
             "id": "intent_to_plan",
             "label": "Intent -> plan",
-            "skills": ["deep-interview", "ralplan", "ultragoal", "ultraprocess", "loop"],
+            "skills": [
+                "oh-my-hermes",
+                "deep-interview",
+                "plan",
+                "ralplan",
+                "ultragoal",
+                "ultraprocess",
+                "loop",
+                "ralph",
+                "performance-goal",
+            ],
             "use_for": "ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects",
         },
         {
             "id": "research_and_ops",
             "label": "Research and company ops",
-            "skills": ["web-research", "research-brief", "strategy-brief", "feedback-triage", "research-department"],
+            "skills": [
+                "web-research",
+                "best-practice-research",
+                "autoresearch-goal",
+                "research-brief",
+                "strategy-brief",
+                "feedback-triage",
+                "research-department",
+                "meeting-brief",
+                "operating-rhythm",
+                "ops-review",
+                "reliability-review",
+            ],
             "use_for": "source-backed research, customer signals, product operations, and briefing workflows",
         },
         {
             "id": "materials_and_visuals",
             "label": "Materials and visual summaries",
-            "skills": ["materials-package", "img-summary", "report-package", "deliverable-package"],
+            "skills": ["materials-package", "img-summary", "report-package", "deliverable-package", "wiki"],
             "use_for": "decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages",
         },
         {
             "id": "automation_and_status",
             "label": "Automation and status",
-            "skills": ["automation-blueprint", "ops-observability-card", "agent-ops-review", "doctor"],
-            "use_for": "scheduled ops blueprints, status cards, runtime health, and release/ops review",
+            "skills": [
+                "automation-blueprint",
+                "github-event-ops",
+                "agent-board",
+                "gateway-intent-card",
+                "voice-operator",
+                "toolbelt-readiness",
+                "ops-observability-card",
+                "agent-ops-review",
+                "memory-curation-review",
+                "doctor",
+                "skill",
+                "ask",
+                "cancel",
+            ],
+            "use_for": "scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review",
         },
         {
             "id": "coding_handoff",
             "label": "Coding handoff",
-            "skills": ["request-to-handoff", "executor selection", "coding runtime handoff", "code-review"],
+            "skills": [
+                "idea-to-deploy",
+                "cto-loop",
+                "deploy-and-monitor",
+                "code-review",
+                "ultrawork",
+                "team",
+                "ultraqa",
+                "ai-slop-cleaner",
+                "executor-runtime-readiness",
+                "request-to-handoff",
+                "executor selection",
+                "coding runtime handoff",
+            ],
             "use_for": "Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking",
         },
     ]
@@ -41,14 +215,37 @@ def awareness_primer_payload() -> dict[str, object]:
         "schema_version": OMH_AWARENESS_SCHEMA_VERSION,
         "id": "omh_awareness",
         "purpose": "Give Hermes a compact first-turn mental model for using OMH across all workflow-shaped requests.",
-        "first_turn_rule": (
-            "When a request looks like planning, research, operations, materials, automation, image summary, "
-            "coding delegation, review, status, or long-running loop work, consider OMH before treating it as a generic chat."
+        "product_context": (
+            "OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, "
+            "show status, and hand off without hiding unobserved execution."
         ),
-        "chat_rule": "Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.",
+        "first_turn_rule": (
+            "When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, "
+            "review, status, or long-running loops, consider OMH before generic chat or generic tools."
+        ),
+        "all_skill_context_rule": (
+            "Carry this across every OMH skill: match intent to a lane, name adjacent "
+            "workflows, and do not dismiss OMH just because a generic tool can render or execute the final step."
+        ),
+        "skill_coverage": "Every generated workflow skill carries this rail.",
+        "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
         "lanes": lanes,
+        "cross_lane_examples": [
+            example
+            for lane_examples in LANE_CROSS_LANE_EXAMPLES.values()
+            for example in lane_examples[:1]
+        ],
+        "context_surfaces": [
+            "installed skills and workflow picker",
+            "capability manifest",
+            "runtime status and HUD",
+            "roles and operating model",
+            "wrapper cards and actions",
+            "local artifacts and evidence records",
+        ],
         "tool_hints": [
-            "Use omh_capabilities for the workflow catalog and capability manifest.",
+            "Use omh_capabilities action=summary when the user asks what OMH can do or which workflows are available.",
+            "Use omh_capabilities for detailed workflow catalog and capability manifest lookup.",
             "Use omh_status or omh_hud for metadata-only runtime state.",
             "Use omh_role for responsibility context when a role marker is present.",
             "Use wrapper cards/actions for user-facing choices instead of asking users to approve shell catalog commands.",
@@ -58,8 +255,8 @@ def awareness_primer_payload() -> dict[str, object]:
             "delivery, review, CI, merge-readiness, or merge evidence."
         ),
         "fallback_rule": (
-            "If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing "
-            "connection and offer a setup/selection fallback instead of claiming the action happened."
+            "If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection "
+            "fallback instead of claiming the action happened."
         ),
         "non_goals": [
             "no hidden executor dispatch",
@@ -85,9 +282,16 @@ def awareness_primer_context() -> str:
     return "\n".join(
         [
             "[OMH Awareness]",
+            str(payload["product_context"]),
             str(payload["first_turn_rule"]),
+            str(payload["all_skill_context_rule"]),
+            str(payload["skill_coverage"]),
             str(payload["chat_rule"]),
             *lane_lines,
+            (
+                "Tools: omh_capabilities for workflow/playbook catalog context; action=summary for catalog "
+                "questions; omh_status or omh_hud for state; omh_role for responsibility context."
+            ),
             str(payload["fallback_rule"]),
             "Boundary: " + str(payload["evidence_boundary"]),
         ]
@@ -106,11 +310,25 @@ def awareness_primer_markdown() -> str:
         [
             "## OMH Awareness Primer",
             "",
+            str(payload["product_context"]),
+            "",
             str(payload["first_turn_rule"]),
+            "",
+            str(payload["all_skill_context_rule"]),
+            "",
+            str(payload["skill_coverage"]),
             "",
             str(payload["chat_rule"]),
             "",
             *lane_lines,
+            "",
+            "Cross-lane examples:",
+            "",
+            *[f"- {example}" for example in payload["cross_lane_examples"]],
+            "",
+            "Tools:",
+            "",
+            "- Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.",
             "",
             str(payload["fallback_rule"]),
             "",
@@ -131,8 +349,11 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
             "## OMH Context Rail",
             "",
             f"- This skill is part of OMH's Hermes workflow layer, not a standalone executor.",
+            f"- Product context: {payload['product_context']}",
             f"- {lane_line}",
             "- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.",
+            f"- Cross-skill context: {payload['all_skill_context_rule']}",
+            f"- Coverage: {payload['skill_coverage']}",
             f"- {payload['chat_rule']}",
             f"- Boundary: {payload['evidence_boundary']}",
         ]

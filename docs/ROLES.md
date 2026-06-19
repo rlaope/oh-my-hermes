@@ -6,6 +6,14 @@ Use roles inside the flagship `request-to-handoff` path:
 
 `plain request -> responsible role -> plan/status/handoff action -> observed evidence boundary`
 
+## OMH Role Context
+
+Use this role as OMH workflow-layer responsibility context: route the user's request to the nearest skill, name adjacent OMH workflows when the work crosses lanes, and keep status/evidence boundaries visible.
+
+Normal users talk to Hermes; role names help Hermes explain ownership and next action without making the user learn backend OMH commands.
+
+Role selection is prepared guidance only. It is not worker dispatch, tool execution, file generation, delivery, review, CI, merge-readiness, or merge evidence.
+
 ## Operating Models
 
 Operating models are lighter than role profile packs. They record the default

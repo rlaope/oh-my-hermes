@@ -260,10 +260,123 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
     print(f"Status: {'ok' if payload.get('ok') else 'failed'}")
     print(f"Skills checked: {payload.get('skill_count')}")
     print(f"Markers checked: {payload.get('checked_marker_count')}")
+    limits = payload.get("awareness_context_char_limits", {})
+    if isinstance(limits, dict):
+        primer_limit = limits.get("primer_context")
+        workflow_limit = limits.get("workflow_context")
+        print(
+            "Awareness context: "
+            f"primer {payload.get('awareness_primer_context_chars')}/{primer_limit} chars; "
+            f"workflow max {payload.get('max_workflow_context_chars')}/{workflow_limit} chars"
+        )
+        role_limit = limits.get("role_context")
+        print(
+            "Role context: "
+            f"{payload.get('role_context_count')} role surface(s); "
+            f"bundled {payload.get('bundled_role_context_count')}; "
+            f"max {payload.get('max_role_context_chars')}/{role_limit} chars"
+        )
+    capability_limits = payload.get("capability_context_char_limits", {})
+    if isinstance(capability_limits, dict):
+        print(
+            "Capability payload: "
+            f"full skills {payload.get('full_capability_skill_section_chars')}/"
+            f"{capability_limits.get('full_skill_section')} chars; "
+            f"fallback skills {payload.get('standalone_capability_skill_section_chars')}/"
+            f"{capability_limits.get('standalone_skill_section')} chars"
+        )
     failed = payload.get("failed_checks", [])
     missing = payload.get("missing_representative_skills", [])
+    missing_awareness = payload.get("missing_awareness_lane_skills", [])
+    unexpected_awareness = payload.get("unexpected_awareness_surfaces", [])
+    missing_full = payload.get("missing_full_capability_skills", [])
+    missing_full_context = payload.get("missing_full_capability_context_skills", [])
+    missing_playbook_context = payload.get("missing_playbook_context_playbooks", [])
+    missing_required_playbooks = payload.get("missing_required_playbook_capabilities", [])
+    missing_standalone = payload.get("missing_standalone_capability_skills", [])
+    unexpected_standalone = payload.get("unexpected_standalone_capability_skills", [])
+    missing_standalone_context = payload.get("missing_standalone_capability_context_skills", [])
+    missing_standalone_playbook_context = payload.get("missing_standalone_playbook_context_playbooks", [])
+    missing_required_standalone_playbooks = payload.get("missing_required_standalone_playbook_capabilities", [])
+    oversized_awareness = payload.get("oversized_awareness_contexts", [])
+    missing_role_context = payload.get("missing_role_context_roles", [])
+    missing_bundled_role_context = payload.get("missing_bundled_role_context_roles", [])
+    missing_bundled_role_files = payload.get("missing_bundled_role_files", [])
+    unexpected_bundled_role_files = payload.get("unexpected_bundled_role_files", [])
+    stale_bundled_role_context = payload.get("stale_bundled_role_context_roles", [])
+    oversized_role_contexts = payload.get("oversized_role_contexts", [])
+    role_context_budget_failures = payload.get("role_context_budget_failures", [])
+    capability_budget_failures = payload.get("capability_budget_failures", [])
+    print(
+        "Full capability manifest: "
+        f"{payload.get('full_capability_skill_count')} skill surface(s); "
+        f"missing {len(missing_full) if isinstance(missing_full, list) else 0}; "
+        f"context missing {len(missing_full_context) if isinstance(missing_full_context, list) else 0}"
+    )
+    print(
+        "Playbook capabilities: "
+        f"full {payload.get('playbook_capability_count')} playbook(s); "
+        f"fallback {payload.get('standalone_playbook_capability_count')}; "
+        f"context missing {len(missing_playbook_context) if isinstance(missing_playbook_context, list) else 0}/"
+        f"{len(missing_standalone_playbook_context) if isinstance(missing_standalone_playbook_context, list) else 0}"
+    )
+    print(
+        "Plugin fallback capabilities: "
+        f"{payload.get('standalone_capability_skill_count')} workflow skill(s); "
+        f"missing {len(missing_standalone) if isinstance(missing_standalone, list) else 0}; "
+        f"context missing {len(missing_standalone_context) if isinstance(missing_standalone_context, list) else 0}"
+    )
     if missing:
         print("Missing representative skills: " + ", ".join(str(item) for item in missing))
+    if missing_awareness:
+        print("Missing awareness lane skills: " + ", ".join(str(item) for item in missing_awareness))
+    if unexpected_awareness:
+        print("Unexpected awareness surfaces: " + ", ".join(str(item) for item in unexpected_awareness))
+    if missing_full:
+        print("Missing full capability skills: " + ", ".join(str(item) for item in missing_full))
+    if missing_full_context:
+        print("Missing full capability context: " + ", ".join(str(item) for item in missing_full_context))
+    if missing_required_playbooks:
+        print("Missing required playbook capabilities: " + ", ".join(str(item) for item in missing_required_playbooks))
+    if missing_playbook_context:
+        print("Missing playbook capability context: " + ", ".join(str(item) for item in missing_playbook_context))
+    if missing_standalone:
+        print("Missing standalone capability skills: " + ", ".join(str(item) for item in missing_standalone))
+    if unexpected_standalone:
+        print("Unexpected standalone capability skills: " + ", ".join(str(item) for item in unexpected_standalone))
+    if missing_standalone_context:
+        print(
+            "Missing standalone capability context: "
+            + ", ".join(str(item) for item in missing_standalone_context)
+        )
+    if missing_required_standalone_playbooks:
+        print(
+            "Missing required standalone playbook capabilities: "
+            + ", ".join(str(item) for item in missing_required_standalone_playbooks)
+        )
+    if missing_standalone_playbook_context:
+        print(
+            "Missing standalone playbook capability context: "
+            + ", ".join(str(item) for item in missing_standalone_playbook_context)
+        )
+    if oversized_awareness:
+        print("Oversized awareness contexts: " + ", ".join(str(item) for item in oversized_awareness))
+    if missing_role_context:
+        print("Missing role context: " + ", ".join(str(item) for item in missing_role_context))
+    if missing_bundled_role_context:
+        print("Missing bundled role context: " + ", ".join(str(item) for item in missing_bundled_role_context))
+    if missing_bundled_role_files:
+        print("Missing bundled role files: " + ", ".join(str(item) for item in missing_bundled_role_files))
+    if unexpected_bundled_role_files:
+        print("Unexpected bundled role files: " + ", ".join(str(item) for item in unexpected_bundled_role_files))
+    if stale_bundled_role_context:
+        print("Stale bundled role context: " + ", ".join(str(item) for item in stale_bundled_role_context))
+    if oversized_role_contexts:
+        print("Oversized role contexts: " + ", ".join(str(item) for item in oversized_role_contexts))
+    if role_context_budget_failures:
+        print("Role context budget failures: " + ", ".join(str(item) for item in role_context_budget_failures))
+    if capability_budget_failures:
+        print("Capability budget failures: " + ", ".join(str(item) for item in capability_budget_failures))
     if isinstance(failed, list) and failed:
         print("Failed markers:")
         for check in failed[:12]:

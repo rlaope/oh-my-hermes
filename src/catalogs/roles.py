@@ -4,6 +4,18 @@ from dataclasses import dataclass
 
 
 ROLE_CONTRACT_VERSION = "omh_role_surface/v1"
+ROLE_WORKFLOW_CONTEXT_RULE = (
+    "Use this role as OMH workflow-layer responsibility context: route the user's request to the nearest skill, "
+    "name adjacent OMH workflows when the work crosses lanes, and keep status/evidence boundaries visible."
+)
+ROLE_CHAT_RULE = (
+    "Normal users talk to Hermes; role names help Hermes explain ownership and next action without making the user "
+    "learn backend OMH commands."
+)
+ROLE_BOUNDARY_RULE = (
+    "Role selection is prepared guidance only. It is not worker dispatch, tool execution, file generation, delivery, "
+    "review, CI, merge-readiness, or merge evidence."
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +41,9 @@ class RoleDefinition:
             "primary_skills": list(self.primary_skills),
             "primary_harnesses": list(self.primary_harnesses),
             "wrapper_actions": list(self.wrapper_actions),
+            "workflow_context_rule": ROLE_WORKFLOW_CONTEXT_RULE,
+            "chat_rule": ROLE_CHAT_RULE,
+            "role_boundary_rule": ROLE_BOUNDARY_RULE,
             "evidence_boundary": self.evidence_boundary,
             "runtime_claim": "descriptor_not_runtime_agent",
         }
@@ -211,6 +226,14 @@ def role_file_markdown(role: RoleDefinition) -> str:
             "",
             role.purpose,
             "",
+            "## OMH Role Context",
+            "",
+            ROLE_WORKFLOW_CONTEXT_RULE,
+            "",
+            ROLE_CHAT_RULE,
+            "",
+            ROLE_BOUNDARY_RULE,
+            "",
             "## Legacy Aliases",
             "",
             *([f"- `{item}`" for item in role.legacy_ids] if role.legacy_ids else ["- none"]),
@@ -248,6 +271,14 @@ def roles_reference_markdown() -> str:
         "Use roles inside the flagship `request-to-handoff` path:",
         "",
         "`plain request -> responsible role -> plan/status/handoff action -> observed evidence boundary`",
+        "",
+        "## OMH Role Context",
+        "",
+        ROLE_WORKFLOW_CONTEXT_RULE,
+        "",
+        ROLE_CHAT_RULE,
+        "",
+        ROLE_BOUNDARY_RULE,
         "",
         "## Operating Models",
         "",

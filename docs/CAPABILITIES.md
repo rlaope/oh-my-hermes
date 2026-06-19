@@ -10,6 +10,7 @@ The manifests are not a new source of truth. They are deterministic projections
 over existing OMH catalogs and contracts:
 
 - skill metadata from `src/skills/catalog.py`
+- situation playbooks from `src/catalogs/playbooks.py`
 - role descriptors from `src/catalogs/roles.py`
 - routing and locale policy from `src/routing/*`
 - wrapper action ids from `src/wrapper/contract.py`
@@ -21,12 +22,21 @@ Use:
 ```sh
 omh capabilities export --json
 omh capabilities export --section keywords --json
+omh capabilities summary --json
 omh capabilities list
 omh capabilities inspect ultragoal --json
+omh capabilities inspect handoff-guide --section roles --json
+omh capabilities inspect request-to-handoff --section playbooks --json
 ```
 
 The Hermes plugin exposes the same contract through the metadata-only
 `omh_capabilities` tool.
+Use `action=summary` when Hermes needs to answer "what can OMH do?" or render a
+small workflow picker/card without asking the user to approve a shell catalog
+command.
+Friendly section aliases such as `roles`, `agents`, `patterns`, `tools`, and
+`evidence` are accepted as input; JSON responses keep the canonical section
+names shown below.
 
 ## Sections
 
@@ -37,6 +47,7 @@ The Hermes plugin exposes the same contract through the metadata-only
 | `hooks` | Plugin tools/hooks plus wrapper event contracts and whether each surface is only supported or actually observed. |
 | `keywords` | Explicit invocation prefixes, natural-language routing rules, locale aliases, conflict policy, and guard rules. |
 | `orchestration_patterns` | Safe workflow patterns such as clarify-then-plan, plan-execute-verify, team pipeline, worktree isolation, loop tick, and executor session handoff. |
+| `playbooks` | Situation-level workflow maps such as request-to-handoff, feedback triage, research department, materials processing, and idea-to-deploy, including owner/action hints for the first wrapper card. |
 | `tool_requirements` | Tool/MCP requirements when derivable. PR1 marks this as partial rather than inventing host requirements. |
 | `evidence_boundaries` | The shared prepared-vs-observed claim rule. |
 

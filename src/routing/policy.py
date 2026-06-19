@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .localization import normalized_phrase
+from .localization import normalized_phrase, routing_tokens
 
 
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
@@ -18,7 +18,19 @@ _PREFIXED_SKILL_ALIASES = {
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
-_SCHEDULED_OPS_STRONG_TOKENS = frozenset(
+
+
+def _normalized_token_set(values: set[str]) -> frozenset[str]:
+    tokens: set[str] = set()
+    for value in values:
+        normalized = normalized_phrase(value)
+        if normalized:
+            tokens.add(normalized)
+        tokens.update(routing_tokens(value, stopwords=set()))
+    return frozenset(tokens)
+
+
+_SCHEDULED_OPS_STRONG_TOKENS = _normalized_token_set(
     {
         "cron",
         "recurring",
@@ -27,7 +39,7 @@ _SCHEDULED_OPS_STRONG_TOKENS = frozenset(
         "반복",
     }
 )
-_SCHEDULED_OPS_CADENCE_TOKENS = frozenset(
+_SCHEDULED_OPS_CADENCE_TOKENS = _normalized_token_set(
     {
         "daily",
         "weekly",
@@ -37,7 +49,7 @@ _SCHEDULED_OPS_CADENCE_TOKENS = frozenset(
         "매월",
     }
 )
-_SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
+_SCHEDULED_OPS_CONTEXT_TOKENS = _normalized_token_set(
     {
         "check",
         "checks",
@@ -81,7 +93,7 @@ _SCHEDULED_OPS_CONTEXT_TOKENS = frozenset(
         "조용히",
     }
 )
-_RESEARCH_DEPARTMENT_STRONG_TOKENS = frozenset(
+_RESEARCH_DEPARTMENT_STRONG_TOKENS = _normalized_token_set(
     {
         "research",
         "competitor",
@@ -102,7 +114,7 @@ _RESEARCH_DEPARTMENT_STRONG_TOKENS = frozenset(
         "옵시디언",
     }
 )
-_RESEARCH_DEPARTMENT_SUPPORT_TOKENS = frozenset(
+_RESEARCH_DEPARTMENT_SUPPORT_TOKENS = _normalized_token_set(
     {
         "news",
         "source",
@@ -136,7 +148,7 @@ _RESEARCH_DEPARTMENT_PHRASES = (
     "시장 리서치",
     "수집 합성 브리핑",
 )
-_VISUAL_SUMMARY_MODALITY_TOKENS = frozenset(
+_VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
     {
         "visual",
         "image",
@@ -147,8 +159,8 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = frozenset(
         "인포그래픽",
     }
 )
-_VISUAL_SUMMARY_CARD_TOKENS = frozenset({"card", "카드"})
-_VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = frozenset(
+_VISUAL_SUMMARY_CARD_TOKENS = _normalized_token_set({"card", "카드"})
+_VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
     {
         "debug",
         "fix",
@@ -163,7 +175,7 @@ _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = frozenset(
         "assets",
     }
 )
-_VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = frozenset(
+_VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = _normalized_token_set(
     {
         "summary",
         "announcement",
@@ -207,7 +219,9 @@ _VISUAL_SUMMARY_PHRASES = (
     "visual summary",
     "visual prompt card",
     "image card",
+    "image summary card",
     "summary image",
+    "summary card",
     "explainer image",
     "feature explainer image",
     "feature explanation image",
@@ -222,6 +236,7 @@ _VISUAL_SUMMARY_PHRASES = (
     "make an image explaining",
     "vertical card",
     "vertical summary image",
+    "vertical image card",
     "pr summary card",
     "pull request card",
     "issue triage card",
@@ -236,13 +251,19 @@ _VISUAL_SUMMARY_PHRASES = (
     "이슈 트리아지 카드",
     "경쟁사 뉴스 브리핑 카드",
     "릴리즈 노트 발표 이미지",
+    "세로 이미지 카드",
+    "이미지 카드",
+    "회의록 이미지 카드",
+    "회의록을 세로 이미지 카드",
     "설명 이미지",
     "설명하는 인포그래픽",
     "기능 설명 이미지",
     "기능 소개 이미지",
     "인포그래픽",
     "인포그래픽 만들어줘",
+    "이미지 요약 카드",
     "요약 이미지",
+    "요약 카드",
     "카드 이미지",
     "공유용 이미지",
     "안내 이미지",
@@ -250,7 +271,72 @@ _VISUAL_SUMMARY_PHRASES = (
     "이미지로 설명",
     "이미지 하나 만들어줘",
 )
-_DELIVERABLE_STRONG_TOKENS = frozenset(
+_EXECUTOR_RUNTIME_READINESS_PHRASES = (
+    "executor-runtime-readiness",
+    "runtime readiness",
+    "codex readiness",
+    "claude code readiness",
+    "codex or claude",
+    "codex and claude",
+    "codex vs claude",
+    "codex랑 claude",
+    "codex랑 claude code",
+    "codex와 claude",
+    "codex와 claude code",
+    "claude code 중",
+    "런타임으로 넘겨",
+    "어떤 런타임",
+    "코덱스랑 클로드",
+    "코덱스와 클로드",
+    "코덱스 클로드",
+)
+_EXECUTOR_RUNTIME_READINESS_TOKENS = _normalized_token_set(
+    {
+        "codex",
+        "claude",
+        "runtime",
+        "executor",
+        "handoff",
+        "agent",
+        "omx",
+        "omo",
+        "omc",
+        "런타임",
+        "실행",
+        "위임",
+        "코덱스",
+        "클로드",
+    }
+)
+_VOICE_OPERATOR_PHRASES = (
+    "voice operator",
+    "voice-first",
+    "mobile command",
+    "spoken request",
+    "short voice",
+    "hands free",
+    "음성",
+    "음성으로",
+    "음성 명령",
+    "짧은 명령",
+    "짧게 말한 요청",
+    "모바일 요청",
+)
+_VOICE_OPERATOR_TOKENS = _normalized_token_set(
+    {
+        "voice",
+        "mobile",
+        "spoken",
+        "short",
+        "terse",
+        "accessibility",
+        "음성",
+        "모바일",
+        "짧은",
+        "접근성",
+    }
+)
+_DELIVERABLE_STRONG_TOKENS = _normalized_token_set(
     {
         "attachment",
         "attachments",
@@ -262,7 +348,7 @@ _DELIVERABLE_STRONG_TOKENS = frozenset(
         "전달",
     }
 )
-_DELIVERABLE_FILE_TOKENS = frozenset(
+_DELIVERABLE_FILE_TOKENS = _normalized_token_set(
     {
         "file",
         "files",
@@ -300,7 +386,7 @@ _DELIVERABLE_PHRASES = (
     "첨부 상태",
     "전달 상태",
 )
-_DELIVERABLE_GATEWAY_CONTEXT_TOKENS = frozenset(
+_DELIVERABLE_GATEWAY_CONTEXT_TOKENS = _normalized_token_set(
     {
         "gateway",
         "platform",
@@ -337,6 +423,137 @@ _DELIVERABLE_GATEWAY_CONTEXT_PHRASES = (
     "gateway status",
     "platform delivery",
 )
+_RISKY_REFACTOR_TOKENS = _normalized_token_set(
+    {
+        "risky",
+        "risk",
+        "dangerous",
+        "unsafe",
+        "risque",
+        "risquee",
+        "dangereux",
+        "dangereuse",
+        "peligroso",
+        "peligrosa",
+        "riesgoso",
+        "riesgosa",
+        "inseguro",
+        "insegura",
+        "gefahrlich",
+        "gefaehrlich",
+        "riskant",
+        "riskante",
+        "riskantes",
+    }
+)
+_RISKY_REFACTOR_EXPLICIT_PHRASES = (
+    "위험한 리팩터링",
+    "위험한 리팩토링",
+    "위험한 refactor",
+    "위험한 refactoring",
+    "리팩터링 위험",
+    "리팩토링 위험",
+    "refactor 위험",
+    "refactoring 위험",
+)
+_RISKY_REFACTOR_RISK_PHRASES = (
+    "feels risky",
+    "seems risky",
+)
+_CODING_HANDOFF_EXECUTOR_TOKENS = _normalized_token_set(
+    {
+        "codex",
+        "claude",
+        "claude-code",
+        "claudecode",
+        "omx",
+        "omo",
+        "omc",
+        "executor",
+        "codex로",
+        "codex에게",
+        "claude로",
+        "claude에게",
+        "코덱스",
+        "코덱스로",
+        "코덱스에게",
+        "클로드",
+        "클로드로",
+        "클로드에게",
+    }
+)
+_CODING_HANDOFF_WORK_TOKENS = _normalized_token_set(
+    {
+        "implement",
+        "implementation",
+        "code",
+        "coding",
+        "fix",
+        "issue",
+        "pr",
+        "feature",
+        "구현",
+        "코딩",
+        "기능",
+        "수정",
+        "고쳐",
+        "이슈",
+    }
+)
+_CODING_HANDOFF_CONTROL_TOKENS = _normalized_token_set(
+    {
+        "delegate",
+        "handoff",
+        "dispatch",
+        "assign",
+        "track",
+        "tracking",
+        "status",
+        "progress",
+        "session",
+        "attach",
+        "맡기고",
+        "맡기",
+        "맡겨",
+        "맡겨줘",
+        "맡겨주세요",
+        "넘기",
+        "넘겨",
+        "넘겨줘",
+        "위임",
+        "추적",
+        "진행상태",
+        "진행",
+        "상태",
+        "세션",
+    }
+)
+_CODING_HANDOFF_PHRASES = (
+    "delegate to codex",
+    "send to codex",
+    "codex implement",
+    "codex implementation",
+    "codex handoff",
+    "codex progress tracking",
+    "codex session tracking",
+    "codex로 이 기능 구현",
+    "codex로 구현 맡겨",
+    "codex로 맡겨",
+    "track coding progress",
+    "coding agent progress",
+    "open in codex",
+    "attach codex session",
+    "claude code handoff",
+    "codex로 구현",
+    "코덱스로 구현",
+    "codex에게 맡기",
+    "codex로 맡기",
+    "코덱스에게 맡기",
+    "코딩 에이전트에게 맡기",
+    "구현하게 맡기고 진행상태 추적",
+    "진행상태 추적",
+    "진행 상태 추적",
+)
 _SCHEDULED_OPS_PHRASES = (
     "every morning",
     "every day",
@@ -355,7 +572,7 @@ _SCHEDULED_OPS_PHRASES = (
     "바뀐 게 없으면",
     "조용히",
 )
-_ONE_OFF_TOKENS = frozenset(
+_ONE_OFF_TOKENS = _normalized_token_set(
     {
         "once",
         "일회성",
@@ -430,6 +647,33 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; PR or delivery-cycle requests need the one-cycle process lane rather than research-only routing.",
     activation_status="active",
 )
+CODING_HANDOFF_STATUS_GUARD = RoutingGuardRule(
+    id="coding_handoff_status_before_clarify",
+    rule="Executor-named coding handoff plus progress/status tracking should route to Ultraprocess instead of generic clarification.",
+    matched_label="guard:coding_handoff_status",
+    preferred_skills=("ultraprocess",),
+    score_boost=26,
+    why="Matched guard/trigger metadata; executor-named coding handoff and status requests should prepare a tracked one-cycle handoff without claiming execution.",
+    activation_status="active",
+)
+EXECUTOR_RUNTIME_READINESS_GUARD = RoutingGuardRule(
+    id="executor_runtime_readiness_before_generic_advice",
+    rule="Executor/runtime comparison requests should route to executor-runtime-readiness before generic advice.",
+    matched_label="guard:executor_runtime_readiness",
+    preferred_skills=("executor-runtime-readiness",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; executor/runtime comparison should show tool gaps and handoff mode before selection.",
+    activation_status="active",
+)
+VOICE_OPERATOR_GUARD = RoutingGuardRule(
+    id="voice_operator_before_generic_clarification",
+    rule="Voice, mobile, or terse accessibility-sensitive requests should route to voice-operator before generic clarification.",
+    matched_label="guard:voice_operator",
+    preferred_skills=("voice-operator",),
+    score_boost=24,
+    why="Matched guard/trigger metadata; voice/mobile-style requests need concise clarify/plan/status UX with confirmation boundaries.",
+    activation_status="active",
+)
 VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     id="img_summary_before_materials_or_delivery",
     rule="Image, card, or img-summary requests should route to img-summary before materials or PR delivery-cycle lanes.",
@@ -472,9 +716,12 @@ ROUTING_GUARD_RULES = (
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
+    EXECUTOR_RUNTIME_READINESS_GUARD,
+    VOICE_OPERATOR_GUARD,
     VISUAL_SUMMARY_GUARD,
     DELIVERABLE_PACKAGE_GUARD,
     DELIVERY_CYCLE_GUARD,
+    CODING_HANDOFF_STATUS_GUARD,
 )
 
 
@@ -531,31 +778,29 @@ def active_routing_guard_rules(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens):
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
+    if _executor_runtime_readiness_guard_applies(normalized_query, query_tokens):
+        rules.append(EXECUTOR_RUNTIME_READINESS_GUARD)
+    if _voice_operator_guard_applies(normalized_query, query_tokens):
+        rules.append(VOICE_OPERATOR_GUARD)
     if _visual_summary_guard_applies(normalized_query, query_tokens):
         rules.append(VISUAL_SUMMARY_GUARD)
     if _deliverable_package_guard_applies(normalized_query, query_tokens):
         rules.append(DELIVERABLE_PACKAGE_GUARD)
+    if _coding_handoff_status_guard_applies(normalized_query, query_tokens):
+        rules.append(CODING_HANDOFF_STATUS_GUARD)
     if delivery_cycle_applies:
         rules.append(DELIVERY_CYCLE_GUARD)
     return tuple(rules)
 
 
 def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _RISKY_REFACTOR_EXPLICIT_PHRASES):
+        return True
     if not ({"refactor", "refactoring"} & query_tokens):
         return False
-    if {"risky", "dangerous", "unsafe"} & query_tokens:
+    if _RISKY_REFACTOR_TOKENS & query_tokens:
         return True
-    return _contains_phrase(
-        normalized_query,
-        (
-            "feels risky",
-            "seems risky",
-            "위험한 리팩터링",
-            "위험한 리팩토링",
-            "리팩터링 위험",
-            "리팩토링 위험",
-        ),
-    )
+    return _contains_phrase(normalized_query, _RISKY_REFACTOR_RISK_PHRASES)
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -667,6 +912,46 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
             "pull request",
             "pr까지",
         ),
+    )
+
+
+def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    explicit_phrase = _contains_phrase(normalized_query, _CODING_HANDOFF_PHRASES)
+    executor = bool(_CODING_HANDOFF_EXECUTOR_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("claude code", "coding agent", "코딩 에이전트"),
+    )
+    work = bool(_CODING_HANDOFF_WORK_TOKENS & query_tokens)
+    control = bool(_CODING_HANDOFF_CONTROL_TOKENS & query_tokens)
+    return explicit_phrase or (executor and work and control)
+
+
+def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _EXECUTOR_RUNTIME_READINESS_PHRASES):
+        return True
+    runtime_intent = bool(_EXECUTOR_RUNTIME_READINESS_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("runtime", "executor", "handoff", "런타임", "실행", "위임"),
+    )
+    named_executor = _contains_phrase(
+        normalized_query,
+        ("codex", "claude code", "coding agent", "omx", "omo", "omc", "코덱스", "클로드"),
+    )
+    selection = _contains_phrase(
+        normalized_query,
+        ("which", "choose", "compare", "vs", "중 어떤", "어떤", "골라", "선택"),
+    )
+    return runtime_intent and named_executor and selection
+
+
+def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _VOICE_OPERATOR_PHRASES):
+        return True
+    return bool(_VOICE_OPERATOR_TOKENS & query_tokens) and _contains_phrase(
+        normalized_query,
+        ("clarify", "summarize", "route", "safe", "confirm", "정리", "안전", "확인", "라우팅"),
     )
 
 

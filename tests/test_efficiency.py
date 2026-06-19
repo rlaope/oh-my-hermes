@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from _local_package import load_local_package
@@ -9,6 +10,24 @@ load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_skill_templates
 from omh.routing import recommend as recommend_module
 from omh.skills import render as render_module
+from omh.release import (
+    AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
+    AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
+    AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT,
+    FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT,
+    FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT,
+    STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT,
+    STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT,
+)
+from omh.capabilities.skills import skill_capabilities
+from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
+from omh.plugin_bundle.omh.awareness import (
+    awareness_context_matches_message,
+    awareness_primer_payload,
+    awareness_primer_context,
+    awareness_primer_markdown,
+    awareness_workflow_context_markdown,
+)
 from omh.skills.catalog import (
     builtin_harnesses,
     catalog_intent_delegation_skill_names,
@@ -65,6 +84,62 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(combined.count("memory_review_card/v1"), explicit_budget)
         self.assertLessEqual(combined.count("handoff_context_pack/v1"), explicit_budget)
         self.assertLessEqual(combined.count("advisory local context"), compact_budget)
+
+    def test_omh_awareness_context_is_strong_but_bounded(self) -> None:
+        workflow_skill_names = {template.name for template in builtin_skill_templates()} - {"oh-my-hermes"}
+        workflow_context_lengths = {
+            name: len(awareness_workflow_context_markdown(name))
+            for name in workflow_skill_names
+        }
+        combined = "\n".join(template.content for template in builtin_skill_templates())
+
+        self.assertLessEqual(len(awareness_primer_context()), AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT)
+        self.assertLessEqual(len(awareness_primer_markdown()), AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT)
+        self.assertLessEqual(max(workflow_context_lengths.values()), AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT)
+        self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
+        self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
+
+    def test_omh_awareness_lanes_cover_installable_skills(self) -> None:
+        payload = awareness_primer_payload()
+        lane_skills = {
+            str(skill)
+            for lane in payload["lanes"]
+            if isinstance(lane, dict)
+            for skill in lane.get("skills", [])
+        }
+        installable_skills = {definition.name for definition in builtin_definitions()}
+
+        self.assertFalse(installable_skills - lane_skills)
+
+    def test_mid_session_awareness_detector_is_bounded(self) -> None:
+        self.assertTrue(awareness_context_matches_message("회의록을 세로 요약 이미지 카드로 만들어줘"))
+        self.assertTrue(awareness_context_matches_message("make a PR summary card for reviewers"))
+        self.assertTrue(awareness_context_matches_message("what is the coding handoff status?"))
+        self.assertFalse(awareness_context_matches_message("prepare a sandwich"))
+        self.assertFalse(awareness_context_matches_message(""))
+
+    def test_capability_context_is_strong_but_bounded(self) -> None:
+        full_items = skill_capabilities()
+        standalone_items = standalone_skill_capability_items()
+        full_section_chars = len(json.dumps(full_items, sort_keys=True, ensure_ascii=False))
+        standalone_section_chars = len(json.dumps(standalone_items, sort_keys=True, ensure_ascii=False))
+        max_full_item_chars = max(len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in full_items)
+        max_standalone_item_chars = max(
+            len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in standalone_items
+        )
+
+        self.assertLessEqual(full_section_chars, FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT)
+        self.assertLessEqual(standalone_section_chars, STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT)
+        self.assertLessEqual(max_full_item_chars, FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT)
+        self.assertLessEqual(max_standalone_item_chars, STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT)
+        self.assertIn(
+            "ambitious goal -> loopability check",
+            " ".join(next(item for item in full_items if item["id"] == "loop")["cross_lane_examples"]),
+        )
+        self.assertIn(
+            "meeting notes -> meeting-brief",
+            " ".join(next(item for item in full_items if item["id"] == "img-summary")["cross_lane_examples"]),
+        )
 
     def test_workflow_reference_markdown_reuses_cached_render(self) -> None:
         render_module._workflow_reference_markdown_cached.cache_clear()

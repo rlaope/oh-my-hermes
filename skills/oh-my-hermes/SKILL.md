@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `ultraprocess`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
@@ -46,17 +46,35 @@ Bad example:
 
 ## OMH Awareness Primer
 
-When a request looks like planning, research, operations, materials, automation, image summary, coding delegation, review, status, or long-running loop work, consider OMH before treating it as a generic chat.
+OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off without hiding unobserved execution.
 
-Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
+When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
 
-- **Intent -> plan**: `deep-interview`, `ralplan`, `ultragoal`, `ultraprocess`, `loop` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
-- **Research and company ops**: `web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department` - source-backed research, customer signals, product operations, and briefing workflows.
-- **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
-- **Automation and status**: `automation-blueprint`, `ops-observability-card`, `agent-ops-review`, `doctor` - scheduled ops blueprints, status cards, runtime health, and release/ops review.
-- **Coding handoff**: `request-to-handoff`, `executor selection`, `coding runtime handoff`, `code-review` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+Carry this across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
 
-If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing connection and offer a setup/selection fallback instead of claiming the action happened.
+Every generated workflow skill carries this rail.
+
+Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
+
+- **Intent -> plan**: `oh-my-hermes`, `deep-interview`, `plan`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`, `ralph`, `performance-goal` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
+- **Research and company ops**: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`, `meeting-brief`, `operating-rhythm`, `ops-review`, `reliability-review` - source-backed research, customer signals, product operations, and briefing workflows.
+- **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
+- **Automation and status**: `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `memory-curation-review`, `doctor`, `skill`, `ask`, `cancel` - scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review.
+- **Coding handoff**: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`, `ultrawork`, `team`, `ultraqa`, `ai-slop-cleaner`, `executor-runtime-readiness`, `request-to-handoff`, `executor selection`, `coding runtime handoff` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+
+Cross-lane examples:
+
+- ambitious goal -> loopability check -> loop or ultraprocess -> verification status
+- customer signal -> feedback-triage -> investigation plan -> coding handoff -> status
+- meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence
+- daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence
+- accepted plan -> ultraprocess -> coding handoff -> review and CI evidence
+
+Tools:
+
+- Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.
+
+If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback instead of claiming the action happened.
 
 Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
 
@@ -119,7 +137,7 @@ omh chat route --source discord --record "risky refactor"
 
 Use `route.routing_prompt_template` with `{message}` replaced by the received chat message as the prompt forwarded to Hermes. If the wrapper does not log stdout and wants a pre-expanded prompt, pass `--include-message` and forward `route.routing_prompt`. A `dispatch` action targets the selected workflow skill; `clarify` and `fallback` target this router so Hermes can ask one concise follow-up instead of guessing.
 
-If the user asks what OMH commands, skills, or workflows are available, use `omh chat interact` and render `chat_response.kind == skill_picker`. Do not make the user approve `omh list` just to see the catalog; the picker response carries `omh_skill_picker/v1` options, direct invocation text, and a claim boundary that selection is routing intent only.
+If the user asks what OMH commands, skills, or workflows are available, prefer `omh_capabilities` with `action=summary` when the plugin/tool surface is available, or use `omh chat interact` and render `chat_response.kind == skill_picker` from a wrapper backend. Do not make the user approve `omh list` just to see the catalog; the summary and picker responses carry workflow options, direct invocation text, and a claim boundary that selection is routing intent only.
 
 This is a deterministic wrapper-side decision layer. By default, stdout and runtime artifacts avoid duplicating the raw prompt body. It does not patch Hermes core or require platform network access from `omh`.
 
@@ -174,7 +192,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `operating-rhythm`: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`
 - `report-package`: `report-package`, `report package`, `weekly report`, `monthly report`, `executive report`
 - `materials-package`: `materials-package`, `material package`, `materials package`, `document package`, `deck file`
-- `img-summary`: `img-summary`, `img summary`, `visual prompt card`, `image card`, `summary image`
+- `img-summary`: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image summary card`
 - `automation-blueprint`: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`
 - `reliability-review`: `reliability-review`, `reliability review`, `incident review`, `incident postmortem`, `postmortem`
 - `idea-to-deploy`: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`
@@ -195,7 +213,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `doctor`: `doctor`, `$doctor`, `diagnose omh`, `installation health`
 - `github-event-ops`: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`
 - `agent-board`: `agent-board`, `agent board`, `kanban`, `multi agent board`, `hermes profiles`
-- `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `curate memory`
+- `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`
 - `gateway-intent-card`: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`
 - `executor-runtime-readiness`: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`
 - `deliverable-package`: `deliverable-package`, `deliverable mode`, `file attachment`, `attach file`, `attachment status`

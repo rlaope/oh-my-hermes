@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.resources as resources
+import json
 from pathlib import Path
 import re
 import shlex
@@ -8,13 +10,28 @@ import shutil
 from typing import Mapping, Sequence
 
 from . import __version__
+from .capabilities.playbooks import playbook_capabilities
+from .capabilities.skills import skill_capabilities
+from .catalogs.roles import role_definitions, role_file_markdown
 from .command_path import (
     installed_command_path_check_plan,
     inspect_installed_command_path,
     path_check_kind,
 )
+from .plugin_bundle.omh.awareness import (
+    awareness_primer_context,
+    awareness_primer_markdown,
+    awareness_primer_payload,
+    awareness_workflow_context_markdown,
+)
+from .plugin_bundle.omh.tools.capability_tool import (
+    standalone_playbook_capability_items,
+    standalone_skill_capability_ids,
+    standalone_skill_capability_items,
+)
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
+from .skills.catalog import builtin_definitions
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
@@ -31,6 +48,16 @@ INSTALL_PATHS = ("tap", "setup")
 REPRESENTATIVE_CONTEXT_RAIL_SKILLS = ("img-summary", "loop", "ultraprocess", "web-research", "materials-package")
 ROUTER_CONTENT_MARKERS = ("OMH Awareness Primer", "img-summary", "Normal users talk to Hermes")
 WORKFLOW_CONTEXT_MARKERS = ("OMH Context Rail", "not a standalone executor", "Prepared OMH routing")
+ROLE_CONTEXT_MARKERS = ("OMH Role Context", "OMH workflow-layer responsibility context", "prepared guidance only")
+CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "coding runtime handoff")
+AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 2200
+AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3200
+AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
+ROLE_CONTEXT_CHAR_LIMIT = 2600
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 220000
+FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 75000
+STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 
 
 @dataclass(frozen=True)
@@ -226,7 +253,7 @@ def release_readiness_checklist(
             "installed-command",
             True,
             False,
-            "Skill content smoke reports ok=true for router awareness and generated workflow context rails.",
+            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, playbook capability context, standalone plugin capability fallback coverage, bounded prompt context budgets, and bounded capability payload budgets.",
             "This proves the installed OMH command package can render expected skill guidance; it does not prove Hermes loaded or selected it in chat.",
         ),
         ReleaseChecklistItem(
@@ -594,6 +621,148 @@ def installed_command_smoke_plan(
 
 def skill_content_smoke() -> dict[str, object]:
     templates = {template.name: template.content for template in builtin_skill_templates()}
+    workflow_skill_names = set(templates) - {DEFAULT_HERMES_SKILL}
+    role_contexts = {role.id: role_file_markdown(role) for role in role_definitions()}
+    bundled_role_contexts = _bundled_role_contexts()
+    awareness = awareness_primer_payload()
+    lane_skill_names = _awareness_lane_skill_names(awareness)
+    catalog_skill_names = {definition.name for definition in builtin_definitions()}
+    missing_awareness_skills = sorted(workflow_skill_names - lane_skill_names)
+    unexpected_awareness_surfaces = sorted(lane_skill_names - catalog_skill_names - set(CONCEPTUAL_AWARENESS_SURFACES))
+    standalone_capability_skill_names = standalone_skill_capability_ids()
+    standalone_capability_items = standalone_skill_capability_items()
+    full_capability_items = skill_capabilities()
+    full_playbook_items = playbook_capabilities()
+    standalone_playbook_items = standalone_playbook_capability_items()
+    full_capability_skill_names = {
+        str(item.get("id") or "")
+        for item in full_capability_items
+        if str(item.get("id") or "")
+    }
+    missing_full_capability_skills = sorted(workflow_skill_names - full_capability_skill_names)
+    missing_standalone_capability_skills = sorted(workflow_skill_names - standalone_capability_skill_names)
+    unexpected_standalone_capability_skills = sorted(
+        standalone_capability_skill_names - catalog_skill_names - set(CONCEPTUAL_AWARENESS_SURFACES)
+    )
+    required_standalone_context_fields = {
+        "workflow_routing_hint",
+        "workflow_context_rule",
+        "chat_rule",
+        "fallback_rule",
+        "evidence_boundary",
+        "cross_lane_examples",
+    }
+    required_playbook_context_fields = {
+        "workflow_context_rule",
+        "chat_rule",
+        "fallback_rule",
+        "evidence_boundary",
+        "prepared_is_not",
+        "pipeline",
+        "primary_owner_role",
+        "stage_owners",
+        "available_wrapper_actions",
+        "first_stage",
+    }
+    missing_standalone_capability_context_skills = sorted(
+        str(item.get("id") or "")
+        for item in standalone_capability_items
+        if str(item.get("id") or "") in workflow_skill_names
+        and any(not item.get(field) for field in required_standalone_context_fields)
+    )
+    missing_full_capability_context_skills = sorted(
+        str(item.get("id") or "")
+        for item in full_capability_items
+        if str(item.get("id") or "") in workflow_skill_names
+        and any(not item.get(field) for field in required_standalone_context_fields)
+    )
+    missing_playbook_context_playbooks = sorted(
+        str(item.get("id") or "")
+        for item in full_playbook_items
+        if any(not item.get(field) for field in required_playbook_context_fields)
+    )
+    missing_standalone_playbook_context_playbooks = sorted(
+        str(item.get("id") or "")
+        for item in standalone_playbook_items
+        if any(not item.get(field) for field in required_playbook_context_fields)
+    )
+    required_playbook_ids = {
+        "request-to-handoff",
+        "safe-feature-change",
+        "feedback-triage",
+        "research-department",
+        "materials-processing",
+        "idea-to-deploy",
+    }
+    full_playbook_ids = {str(item.get("id") or "") for item in full_playbook_items}
+    standalone_playbook_ids = {str(item.get("id") or "") for item in standalone_playbook_items}
+    missing_required_playbook_capabilities = sorted(required_playbook_ids - full_playbook_ids)
+    missing_required_standalone_playbook_capabilities = sorted(required_playbook_ids - standalone_playbook_ids)
+    full_capability_skill_section_chars = len(json.dumps(full_capability_items, sort_keys=True, ensure_ascii=False))
+    standalone_capability_skill_section_chars = len(
+        json.dumps(standalone_capability_items, sort_keys=True, ensure_ascii=False)
+    )
+    max_full_capability_skill_chars = max(
+        (len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in full_capability_items),
+        default=0,
+    )
+    max_standalone_capability_skill_chars = max(
+        (len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in standalone_capability_items),
+        default=0,
+    )
+    primer_context_chars = len(awareness_primer_context())
+    primer_markdown_chars = len(awareness_primer_markdown())
+    workflow_context_chars = {
+        name: len(awareness_workflow_context_markdown(name))
+        for name in sorted(workflow_skill_names)
+    }
+    role_context_chars = {name: len(context) for name, context in role_contexts.items()}
+    oversized_role_contexts = [
+        name
+        for name, char_count in role_context_chars.items()
+        if char_count > ROLE_CONTEXT_CHAR_LIMIT
+    ]
+    missing_role_context_roles = sorted(
+        name
+        for name, context in role_contexts.items()
+        if any(marker not in context for marker in ROLE_CONTEXT_MARKERS)
+    )
+    missing_bundled_role_context_roles = sorted(
+        name
+        for name, context in bundled_role_contexts.items()
+        if any(marker not in context for marker in ROLE_CONTEXT_MARKERS)
+    )
+    missing_bundled_role_files = sorted(set(role_contexts) - set(bundled_role_contexts))
+    unexpected_bundled_role_files = sorted(set(bundled_role_contexts) - set(role_contexts))
+    stale_bundled_role_context_roles = sorted(
+        name
+        for name, context in role_contexts.items()
+        if bundled_role_contexts.get(name) is not None and bundled_role_contexts[name] != context
+    )
+    oversized_awareness_contexts = [
+        name
+        for name, char_count in workflow_context_chars.items()
+        if char_count > AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT
+    ]
+    awareness_budget_failures = []
+    if primer_context_chars > AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT:
+        awareness_budget_failures.append("awareness_primer_context")
+    if primer_markdown_chars > AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT:
+        awareness_budget_failures.append("awareness_primer_markdown")
+    if oversized_awareness_contexts:
+        awareness_budget_failures.append("workflow_context_rail")
+    role_context_budget_failures = []
+    if oversized_role_contexts:
+        role_context_budget_failures.append("role_context")
+    capability_budget_failures = []
+    if full_capability_skill_section_chars > FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT:
+        capability_budget_failures.append("full_capability_skill_section")
+    if max_full_capability_skill_chars > FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT:
+        capability_budget_failures.append("full_capability_skill_item")
+    if standalone_capability_skill_section_chars > STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT:
+        capability_budget_failures.append("standalone_capability_skill_section")
+    if max_standalone_capability_skill_chars > STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT:
+        capability_budget_failures.append("standalone_capability_skill_item")
     checks: list[dict[str, object]] = []
 
     def add_check(name: str, marker: str, ok: bool, *, scope: str) -> None:
@@ -618,17 +787,95 @@ def skill_content_smoke() -> dict[str, object]:
             add_check(name, marker, marker in content, scope="workflow_context_rail")
 
     failed_checks = [check for check in checks if not check["ok"]]
-    ok = not failed_checks and not missing_representative
+    ok = (
+        not failed_checks
+        and not missing_representative
+        and not missing_awareness_skills
+        and not unexpected_awareness_surfaces
+        and not missing_full_capability_skills
+        and not missing_full_capability_context_skills
+        and not missing_playbook_context_playbooks
+        and not missing_required_playbook_capabilities
+        and not missing_standalone_capability_skills
+        and not unexpected_standalone_capability_skills
+        and not missing_standalone_capability_context_skills
+        and not missing_standalone_playbook_context_playbooks
+        and not missing_required_standalone_playbook_capabilities
+        and not missing_role_context_roles
+        and not missing_bundled_role_context_roles
+        and not missing_bundled_role_files
+        and not unexpected_bundled_role_files
+        and not stale_bundled_role_context_roles
+        and not awareness_budget_failures
+        and not role_context_budget_failures
+        and not capability_budget_failures
+    )
     return {
         "schema_version": SKILL_CONTENT_SMOKE_SCHEMA,
         "mode": "live",
         "ok": ok,
         "observed": True,
         "skill_count": len(templates),
+        "catalog_skill_count": len(catalog_skill_names),
         "router_skill": DEFAULT_HERMES_SKILL,
         "workflow_skill_count": max(len(templates) - 1, 0),
+        "non_installed_catalog_surface_count": len(catalog_skill_names - set(templates)),
         "representative_skills": list(REPRESENTATIVE_CONTEXT_RAIL_SKILLS),
         "missing_representative_skills": missing_representative,
+        "awareness_lane_skill_count": len(lane_skill_names),
+        "missing_awareness_lane_skills": missing_awareness_skills,
+        "unexpected_awareness_surfaces": unexpected_awareness_surfaces,
+        "allowed_conceptual_awareness_surfaces": list(CONCEPTUAL_AWARENESS_SURFACES),
+        "full_capability_skill_count": len(full_capability_skill_names),
+        "missing_full_capability_skills": missing_full_capability_skills,
+        "missing_full_capability_context_skills": missing_full_capability_context_skills,
+        "playbook_capability_count": len(full_playbook_items),
+        "standalone_playbook_capability_count": len(standalone_playbook_items),
+        "required_playbook_capability_ids": sorted(required_playbook_ids),
+        "missing_required_playbook_capabilities": missing_required_playbook_capabilities,
+        "missing_required_standalone_playbook_capabilities": missing_required_standalone_playbook_capabilities,
+        "missing_playbook_context_playbooks": missing_playbook_context_playbooks,
+        "missing_standalone_playbook_context_playbooks": missing_standalone_playbook_context_playbooks,
+        "standalone_capability_skill_count": len(standalone_capability_skill_names),
+        "missing_standalone_capability_skills": missing_standalone_capability_skills,
+        "unexpected_standalone_capability_skills": unexpected_standalone_capability_skills,
+        "missing_standalone_capability_context_skills": missing_standalone_capability_context_skills,
+        "role_context_count": len(role_contexts),
+        "missing_role_context_roles": missing_role_context_roles,
+        "bundled_role_context_count": len(bundled_role_contexts),
+        "missing_bundled_role_context_roles": missing_bundled_role_context_roles,
+        "missing_bundled_role_files": missing_bundled_role_files,
+        "unexpected_bundled_role_files": unexpected_bundled_role_files,
+        "stale_bundled_role_context_roles": stale_bundled_role_context_roles,
+        "required_role_context_markers": list(ROLE_CONTEXT_MARKERS),
+        "required_capability_context_fields": sorted(required_standalone_context_fields),
+        "required_standalone_capability_context_fields": sorted(required_standalone_context_fields),
+        "required_playbook_context_fields": sorted(required_playbook_context_fields),
+        "capability_context_char_limits": {
+            "full_skill_section": FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT,
+            "full_skill_item": FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT,
+            "standalone_skill_section": STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT,
+            "standalone_skill_item": STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT,
+        },
+        "full_capability_skill_section_chars": full_capability_skill_section_chars,
+        "max_full_capability_skill_chars": max_full_capability_skill_chars,
+        "standalone_capability_skill_section_chars": standalone_capability_skill_section_chars,
+        "max_standalone_capability_skill_chars": max_standalone_capability_skill_chars,
+        "capability_budget_failures": capability_budget_failures,
+        "awareness_context_char_limits": {
+            "primer_context": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
+            "primer_markdown": AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
+            "workflow_context": AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT,
+            "role_context": ROLE_CONTEXT_CHAR_LIMIT,
+        },
+        "awareness_primer_context_chars": primer_context_chars,
+        "awareness_primer_markdown_chars": primer_markdown_chars,
+        "max_workflow_context_chars": max(workflow_context_chars.values(), default=0),
+        "max_role_context_chars": max(role_context_chars.values(), default=0),
+        "oversized_awareness_contexts": oversized_awareness_contexts,
+        "awareness_budget_failures": awareness_budget_failures,
+        "oversized_role_contexts": oversized_role_contexts,
+        "role_context_budget_failures": role_context_budget_failures,
         "checked_marker_count": len(checks),
         "failed_checks": failed_checks,
         "proof_boundary": (
@@ -636,6 +883,38 @@ def skill_content_smoke() -> dict[str, object]:
             "It does not prove the target Hermes profile installed, loaded, selected, or used those skills in chat."
         ),
     }
+
+
+def _bundled_role_contexts() -> dict[str, str]:
+    try:
+        root = resources.files("omh.plugin_bundle.omh.references")
+    except (ModuleNotFoundError, FileNotFoundError):
+        return {}
+    contexts: dict[str, str] = {}
+    for path in root.iterdir():
+        if not path.is_file() or not path.name.startswith("role-") or path.name == "role-.md":
+            continue
+        role_id = path.name.removeprefix("role-").removesuffix(".md")
+        try:
+            contexts[role_id] = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+    return contexts
+
+
+def _awareness_lane_skill_names(payload: Mapping[str, object]) -> set[str]:
+    names: set[str] = set()
+    lanes = payload.get("lanes", [])
+    if not isinstance(lanes, Sequence) or isinstance(lanes, (str, bytes)):
+        return names
+    for lane in lanes:
+        if not isinstance(lane, Mapping):
+            continue
+        skills = lane.get("skills", [])
+        if not isinstance(skills, Sequence) or isinstance(skills, (str, bytes)):
+            continue
+        names.update(str(skill) for skill in skills)
+    return names
 
 
 def first_use_status_smoke_plan(

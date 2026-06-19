@@ -513,7 +513,21 @@ class WrapperContractTests(unittest.TestCase):
 
     def test_natural_catalog_questions_open_picker_without_shell(self) -> None:
         for message in (
+            "what can OMH do?",
+            "what can I do with OMH?",
+            "what does OMH do?",
+            "how can OMH help my team?",
+            "Can OMH help with planning, research, and coding?",
+            "what can OMH do for planning/research/coding?",
+            "Can OMH help with planning/research/coding?",
+            "OMH로 뭐 할 수 있어?",
+            "OMH가 뭐 해줄 수 있어?",
+            "OMH는 뭘 도와줘?",
+            "OMH가 우리 팀에서 어떻게 쓰여?",
+            "OMH로 계획/리서치/코딩까지 도와줄 수 있어?",
+            "OMH에서 deep-interview/ralplan/loop는 뭐야?",
             "OMH 명령어 뭐 있어?",
+            "OMH로 할 수 있는 workflow가 뭐야?",
             "skill들은 뭐 있어?",
             "what OMH workflows are available?",
             "¿Qué comandos de OMH están disponibles?",
@@ -546,6 +560,18 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("feedback-triage", groups["company_product_ops"]["workflows"])
                 self.assertIn("code-review", groups["coding_and_runtime"]["workflows"])
                 self.assertIn("Prepared plans", primer["evidence_rule"])
+                capability_summary = payload["chat_response"]["state"]["capability_summary"]
+                self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
+                lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
+                self.assertTrue({"intent_to_plan", "materials_and_visuals", "coding_handoff"} <= lanes.keys())
+                self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
+                self.assertIn("ultraprocess", lanes["intent_to_plan"]["primary_skills"])
+                self.assertIn("code-review", lanes["coding_handoff"]["primary_skills"])
+                intent_playbooks = {playbook["id"] for playbook in lanes["intent_to_plan"]["representative_playbooks"]}
+                self.assertIn("request-to-handoff", intent_playbooks)
+                self.assertTrue(
+                    any("Prepared OMH capability" in boundary for boundary in capability_summary["evidence_boundary"])
+                )
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
     def test_non_catalog_command_and_skill_questions_do_not_open_picker(self) -> None:
@@ -553,7 +579,13 @@ class WrapperContractTests(unittest.TestCase):
             "show me the command to install OMH",
             "what command is available to install OMH?",
             "what command should I run to verify installation?",
+            "what can OMH do to install itself?",
             "what skills are needed to debug this Python error?",
+            "what does OMH do in src/routing/catalog_questions.py?",
+            "explain what OMH does in this README section",
+            "search docs/WORKFLOWS.md for loop",
+            "show img-summary in README.md",
+            "how can Hermes help my team?",
             "list files that mention command injection",
             "¿Qué comando debería ejecutar para instalar OMH?",
             "Quel workflow dois-je utiliser pour ce bug Python?",
@@ -565,6 +597,23 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertNotEqual(payload["next_action"], "choose_skill")
                 self.assertNotIn("catalog_question", payload["chat_response"]["state"])
+                self.assertNotIn("capability_summary", payload["chat_response"]["state"])
+
+    def test_file_lookup_fallback_card_uses_lookup_copy(self) -> None:
+        payload = build_chat_interaction_payload("search docs/WORKFLOWS.md for loop", source="discord")
+
+        self.assertEqual(payload["mode"], "clarify")
+        self.assertEqual(payload["route"]["action"], "fallback")
+        self.assertEqual(payload["next_action"], "answer_file_lookup")
+        response = payload["chat_response"]
+        self.assertEqual(response["kind"], "clarification")
+        self.assertIn("file or text lookup", response["body"])
+        self.assertIn("file or text lookup", response["state"]["routing_instruction"])
+        self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
+        self.assertNotIn("choose the right workflow", response["body"])
+        actions = {action["id"]: action for action in response["actions"]}
+        self.assertIn("answer:file_lookup", actions)
+        self.assertTrue(actions["answer:file_lookup"]["enabled"])
 
     def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
         cases = {
@@ -673,28 +722,34 @@ class WrapperContractTests(unittest.TestCase):
         self.assertFalse(actions["start_loop"]["enabled"])
 
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
-        message = "research the repo, plan, implement, code-review, sync docs, and prepare a PR"
+        cases = (
+            "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
+            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
+        )
 
-        payload = build_chat_interaction_payload(message, source="discord")
+        for message in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
 
-        self.assertEqual(payload["mode"], "route")
-        self.assertEqual(payload["next_action"], "start_ultraprocess")
-        self.assertEqual(payload["chat_response"]["kind"], "process")
-        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
-        self.assertEqual(payload["chat_response"]["state"]["cycle_policy"], "single_cycle")
-        self.assertFalse(payload["chat_response"]["state"]["continues_after_feedback"])
-        self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
-        self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
-        self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
-        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
-        self.assertTrue(actions["start_ultraprocess"]["enabled"])
-        self.assertFalse(actions["prepare_handoff"]["enabled"])
-        self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "start_ultraprocess")
+                self.assertEqual(payload["chat_response"]["kind"], "process")
+                self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
+                self.assertEqual(payload["chat_response"]["state"]["cycle_policy"], "single_cycle")
+                self.assertFalse(payload["chat_response"]["state"]["continues_after_feedback"])
+                self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
+                self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
+                self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
+                actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+                self.assertTrue(actions["start_ultraprocess"]["enabled"])
+                self.assertFalse(actions["prepare_handoff"]["enabled"])
+                self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
     def test_visual_summary_interaction_exposes_prompt_card_actions(self) -> None:
         cases = (
             "Make a PR summary card",
             "크론 기능 설명 이미지 하나 만들어줘",
+            "이 회의록을 세로 이미지 카드로 만들어줘",
         )
 
         for message in cases:
@@ -727,6 +782,40 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("generate_visual_image", actions)
                 self.assertIn("not generated image", payload["chat_response"]["claim_boundary"])
                 self.assertIn("visual QA", payload["chat_response"]["state"]["evidence_not_observed"])
+
+    def test_complex_operator_patterns_route_to_dedicated_surfaces(self) -> None:
+        cases = (
+            (
+                "Codex랑 Claude Code 중 어떤 런타임으로 넘겨야 해?",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+            ),
+            (
+                "음성으로 짧게 말한 요청을 안전하게 정리해줘",
+                "voice-operator",
+                "prepare_voice_operator_card",
+            ),
+            (
+                "GitHub PR이 열리면 리뷰하고 CI 실패 원인을 정리해줘",
+                "github-event-ops",
+                "prepare_github_event_ops_card",
+            ),
+            (
+                "우리 팀 Hermes agent 여러 명으로 작업 보드 관리하고 싶어",
+                "agent-board",
+                "prepare_agent_board_card",
+            ),
+        )
+
+        for message, selected_workflow, next_action in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
+                self.assertEqual(payload["next_action"], next_action)
+                self.assertEqual(payload["chat_response"]["kind"], "ack")
+                self.assertIn(selected_workflow, payload["chat_response"]["headline"])
 
     def test_ack_workflow_chat_copy_stays_human_friendly(self) -> None:
         cases = (

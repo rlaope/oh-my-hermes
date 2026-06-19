@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..awareness import awareness_primer_context
+from ..awareness import awareness_context_matches_message, awareness_primer_context
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..runtime_reader import read_omh_hud, read_omh_status
 
@@ -19,27 +19,30 @@ def _token_metadata_from_kwargs(kwargs: dict) -> dict[str, object]:
 def pre_llm_call(**kwargs) -> dict[str, str] | None:
     """Inject bounded OMH role/status context without storing prompts."""
     context_parts: list[str] = []
-    if bool(kwargs.get("is_first_turn", False)):
-        if kwargs.get("include_omh_awareness", True) is not False:
-            context_parts.append(awareness_primer_context())
-        marker = extract_role_marker(str(kwargs.get("user_message", "") or ""))
-        if marker:
-            role_payload = role_context_payload(marker)
-            if role_payload["status"] == "available":
-                context_parts.append(
-                    "\n".join(
-                        [
-                            f"[OMH Role: {role_payload['role']}]",
-                            str(role_payload["context"]),
-                            str(role_payload["claim_boundary"]),
-                        ]
-                    )
+    user_message = str(kwargs.get("user_message", "") or "")
+    is_first_turn = bool(kwargs.get("is_first_turn", False))
+    should_include_awareness = is_first_turn or awareness_context_matches_message(user_message)
+    if kwargs.get("include_omh_awareness", True) is not False and should_include_awareness:
+        context_parts.append(awareness_primer_context())
+
+    marker = extract_role_marker(user_message)
+    if marker:
+        role_payload = role_context_payload(marker)
+        if role_payload["status"] == "available":
+            context_parts.append(
+                "\n".join(
+                    [
+                        f"[OMH Role: {role_payload['role']}]",
+                        str(role_payload["context"]),
+                        str(role_payload["claim_boundary"]),
+                    ]
                 )
-            else:
-                context_parts.append(
-                    "[OMH Role Warning] "
-                    f"Unknown role '{marker}'. Available roles: {', '.join(role_payload['available_roles']) or '(none)'}."
-                )
+            )
+        else:
+            context_parts.append(
+                "[OMH Role Warning] "
+                f"Unknown role '{marker}'. Available roles: {', '.join(role_payload['available_roles']) or '(none)'}."
+            )
 
     try:
         omh_home = str(kwargs.get("omh_home", "") or "") or None

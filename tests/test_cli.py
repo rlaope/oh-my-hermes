@@ -932,6 +932,32 @@ class CliTests(unittest.TestCase):
         self.assertTrue(payload["observed"])
         self.assertEqual(payload["failed_checks"], [])
         self.assertIn("img-summary", payload["representative_skills"])
+        self.assertEqual(payload["awareness_budget_failures"], [])
+        self.assertGreaterEqual(payload["full_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertEqual(payload["missing_full_capability_skills"], [])
+        self.assertEqual(payload["missing_full_capability_context_skills"], [])
+        self.assertGreaterEqual(payload["playbook_capability_count"], 20)
+        self.assertGreaterEqual(payload["standalone_playbook_capability_count"], 8)
+        self.assertEqual(payload["missing_required_playbook_capabilities"], [])
+        self.assertEqual(payload["missing_required_standalone_playbook_capabilities"], [])
+        self.assertEqual(payload["missing_playbook_context_playbooks"], [])
+        self.assertEqual(payload["missing_standalone_playbook_context_playbooks"], [])
+        self.assertEqual(payload["missing_standalone_capability_skills"], [])
+        self.assertEqual(payload["unexpected_standalone_capability_skills"], [])
+        self.assertEqual(payload["missing_standalone_capability_context_skills"], [])
+        self.assertEqual(payload["capability_budget_failures"], [])
+        self.assertLessEqual(
+            payload["full_capability_skill_section_chars"],
+            payload["capability_context_char_limits"]["full_skill_section"],
+        )
+        self.assertIn("workflow_context_rule", payload["required_standalone_capability_context_fields"])
+        self.assertIn("fallback_rule", payload["required_standalone_capability_context_fields"])
+        self.assertGreaterEqual(payload["catalog_skill_count"], payload["skill_count"])
+        self.assertGreaterEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertLessEqual(
+            payload["max_workflow_context_chars"],
+            payload["awareness_context_char_limits"]["workflow_context"],
+        )
 
         status, stdout, stderr = run_cli(["release", "skill-content-smoke"], output_json=False)
 
@@ -939,6 +965,15 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH skill content smoke", stdout)
         self.assertIn("Status: ok", stdout)
+        self.assertIn("Awareness context:", stdout)
+        self.assertIn("workflow max", stdout)
+        self.assertIn("Role context:", stdout)
+        self.assertIn("role surface(s)", stdout)
+        self.assertIn("Capability payload:", stdout)
+        self.assertIn("Full capability manifest:", stdout)
+        self.assertIn("Playbook capabilities:", stdout)
+        self.assertIn("Plugin fallback capabilities:", stdout)
+        self.assertIn("context missing 0", stdout)
         self.assertIn("For machine-readable output", stdout)
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
@@ -1841,6 +1876,9 @@ class CliTests(unittest.TestCase):
             "이거 위험한 리팩터링 같아",
             "dangerous refactor",
             "unsafe refactor",
+            "ce refactor me semble risqué",
+            "este refactor parece peligroso",
+            "dieses refactor wirkt gefährlich",
         )
 
         for message in cases:
@@ -1852,6 +1890,7 @@ class CliTests(unittest.TestCase):
                 recommendations = json.loads(stdout)["recommendations"]
                 self.assertEqual(recommendations[0]["skill"], "ralplan")
                 self.assertEqual(recommendations[0]["next_action"], "present_plan")
+                self.assertIn("guard:risky_refactor_before_cleanup", recommendations[0]["matched"])
                 self.assertIn("draft plan", recommendations[0]["evidence_boundary"])
 
     def test_recommend_web_research_stays_hermes_owned(self) -> None:
@@ -2078,12 +2117,15 @@ class CliTests(unittest.TestCase):
             "Make a feature explainer image for cron automation.",
             "Explain this workflow as a shareable image.",
             "Create a one-page infographic for the automation feature.",
+            "Create an image summary card from these notes.",
             "회의록을 세로 요약 이미지로 만들어줘",
             "PR 요약 카드",
             "이슈 트리아지 카드",
             "경쟁사 뉴스 브리핑 카드",
             "릴리즈 노트 발표 이미지",
             "크론 기능 설명 이미지 하나 만들어줘",
+            "이미지 요약 카드 만들어줘",
+            "이 내용을 공유용 요약 카드로 만들어줘",
             "이 기능을 설명하는 인포그래픽 만들어줘",
             "워크플로우 이미지로 설명해줘",
         )
@@ -2171,6 +2213,8 @@ class CliTests(unittest.TestCase):
             "web research and source scan, then prepare a PR",
             "daily research plan implement and open a PR",
             "every morning competitor research then prepare a PR",
+            "codex로 이 기능 구현 맡겨줘",
+            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
         )
 
         for message in cases:
@@ -2582,6 +2626,36 @@ class CliTests(unittest.TestCase):
         self.assertIn("{message}", route["routing_prompt_template"])
         self.assertNotIn("risky refactor", json.dumps(route))
 
+    def test_chat_route_file_lookup_does_not_emit_workflow_clarification(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertEqual(route["action"], "fallback")
+        self.assertEqual(route["selected_skill"], "oh-my-hermes")
+        self.assertEqual(route["confidence"], "low")
+        self.assertIn("File or text lookup", route["reason"])
+        self.assertIn("file or text lookup", route["clarification"])
+        self.assertIn("file or text lookup", route["routing_instruction"])
+        self.assertNotIn("ask one concise clarification", route["routing_instruction"])
+        self.assertNotEqual(route["recommendations"][0]["skill"], route["selected_skill"])
+
+    def test_chat_interact_file_lookup_fallback_uses_lookup_card(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["mode"], "clarify")
+        self.assertEqual(payload["route"]["action"], "fallback")
+        self.assertEqual(payload["next_action"], "answer_file_lookup")
+        response = payload["chat_response"]
+        self.assertEqual(response["kind"], "clarification")
+        self.assertIn("file or text lookup", response["body"])
+        self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
+        self.assertNotIn("choose the right workflow", response["body"])
+
     def test_chat_interact_safe_feature_presents_plan_and_disabled_handoff(self) -> None:
         message = "I want to safely add a feature to this repo"
         status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
@@ -2623,6 +2697,7 @@ class CliTests(unittest.TestCase):
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
             ("./loop make this project a 10k star OSS", "loop", "loop", "reframe_north_star"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
+            ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:
@@ -2659,7 +2734,21 @@ class CliTests(unittest.TestCase):
 
     def test_chat_interact_catalog_questions_open_picker_without_shell(self) -> None:
         for message in (
+            "what can OMH do?",
+            "what can I do with OMH?",
+            "what does OMH do?",
+            "how can OMH help my team?",
+            "Can OMH help with planning, research, and coding?",
+            "what can OMH do for planning/research/coding?",
+            "Can OMH help with planning/research/coding?",
+            "OMH로 뭐 할 수 있어?",
+            "OMH가 뭐 해줄 수 있어?",
+            "OMH는 뭘 도와줘?",
+            "OMH가 우리 팀에서 어떻게 쓰여?",
+            "OMH로 계획/리서치/코딩까지 도와줄 수 있어?",
+            "OMH에서 deep-interview/ralplan/loop는 뭐야?",
             "OMH 명령어 뭐 있어?",
+            "OMH로 할 수 있는 workflow가 뭐야?",
             "skill들은 뭐 있어?",
             "what OMH workflows are available?",
             "¿Qué comandos de OMH están disponibles?",
@@ -2681,6 +2770,14 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
                 self.assertIn("shell command", payload["chat_response"]["body"])
+                capability_summary = payload["chat_response"]["state"]["capability_summary"]
+                self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
+                lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
+                self.assertIn("intent_to_plan", lanes)
+                self.assertIn("materials_and_visuals", lanes)
+                self.assertIn("coding_handoff", lanes)
+                self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
+                self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
     def test_chat_interact_non_catalog_command_questions_do_not_open_picker(self) -> None:
@@ -2688,7 +2785,13 @@ class CliTests(unittest.TestCase):
             "show me the command to install OMH",
             "what command is available to install OMH?",
             "what command should I run to verify installation?",
+            "what can OMH do to install itself?",
             "what skills are needed to debug this Python error?",
+            "what does OMH do in src/routing/catalog_questions.py?",
+            "explain what OMH does in this README section",
+            "search docs/WORKFLOWS.md for loop",
+            "show img-summary in README.md",
+            "how can Hermes help my team?",
             "list files that mention command injection",
             "¿Qué comando debería ejecutar para instalar OMH?",
             "Quel workflow dois-je utiliser pour ce bug Python?",
