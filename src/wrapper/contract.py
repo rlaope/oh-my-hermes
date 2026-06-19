@@ -27,6 +27,7 @@ SKILL_PICKER_SCHEMA_VERSION = "omh_skill_picker/v1"
 COMMAND_PREVIEW_SCHEMA_VERSION = "omh_command_preview/v1"
 CONTEXT_PRIMER_SCHEMA_VERSION = "omh_context_primer/v1"
 USAGE_TRACE_SCHEMA_VERSION = "omh_usage_trace/v1"
+WORKFLOW_EXPLANATION_SCHEMA_VERSION = "omh_workflow_explanation/v1"
 MESSENGER_RENDERING_SCHEMA_VERSION = "omh_messenger_rendering/v1"
 RENDER_PROFILE_LIMITED_MARKDOWN = "limited_markdown"
 RENDER_PROFILE_RICH_MARKDOWN = "rich_markdown"
@@ -455,6 +456,7 @@ def build_chat_response_from_route(
             )
         policy = _selected_recommendation_policy(decision, selected)
         policy_next_action = str(policy.get("next_action", ""))
+        workflow_explanation_reason = _workflow_explanation_reason_for_route(decision, policy, selected)
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (
@@ -510,6 +512,7 @@ def build_chat_response_from_route(
                     "route_action": action,
                     "confidence": decision.get("confidence", "low"),
                     "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
                     "policy_next_action": policy_next_action,
                     "loopability_assessment": assessment,
                     "permission_profile_required": True,
@@ -553,6 +556,7 @@ def build_chat_response_from_route(
                     "route_action": action,
                     "confidence": decision.get("confidence", "low"),
                     "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
                     "policy_next_action": policy_next_action,
                     "cycle_policy": "single_cycle",
                     "continues_after_feedback": False,
@@ -609,6 +613,7 @@ def build_chat_response_from_route(
                     "route_action": action,
                     "confidence": decision.get("confidence", "low"),
                     "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
                     "policy_next_action": policy_next_action,
                     "artifact_schema": "visual_prompt_card/v1",
                     "observation_schema": "visual_observation/v1",
@@ -658,6 +663,7 @@ def build_chat_response_from_route(
                     "route_action": action,
                     "confidence": decision.get("confidence", "low"),
                     "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
                     "policy_next_action": policy_next_action,
                     "artifact_schema": card["schema_version"],
                     "status_card_schema": status_card.get("schema_version", ""),
@@ -688,6 +694,7 @@ def build_chat_response_from_route(
                 "route_action": action,
                 "confidence": decision.get("confidence", "low"),
                 "selected_workflow": selected,
+                "workflow_explanation_reason": workflow_explanation_reason,
                 "policy_next_action": policy_next_action,
             },
         )
@@ -1208,6 +1215,20 @@ def _selected_recommendation_policy(decision: dict[str, object], selected: str) 
     return {}
 
 
+def _workflow_explanation_reason_for_route(
+    decision: dict[str, object],
+    policy: dict[str, object],
+    selected: str,
+) -> str:
+    guidance = str(policy.get("wrapper_guidance") or "").strip()
+    if guidance:
+        return f"Selected `{selected}` because this request matches that workflow's triggers. {guidance}"
+    reason = str(decision.get("reason") or "").strip()
+    if reason and reason != "Matched trigger metadata for this task.":
+        return reason
+    return ""
+
+
 def _catalog_question_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
     updated = dict(route_payload)
     harness = primary_harness_for_skill(_ROUTER_SKILL)
@@ -1569,6 +1590,14 @@ def _chat_response(
     if thread_key:
         state["thread_key"] = thread_key
     state.update(extra_state or {})
+    if "workflow_explanation" not in state:
+        state["workflow_explanation"] = workflow_explanation_payload(
+            kind=kind,
+            phase=phase,
+            next_action=next_action,
+            state=state,
+            claim_boundary=claim_boundary,
+        )
     usage_trace = usage_trace_payload(kind=kind, phase=phase, next_action=next_action, state=state)
     headline_with_prefix = headline_with_usage_prefix(headline, str(usage_trace["visible_prefix"]))
     response: dict[str, object] = {
@@ -1592,6 +1621,71 @@ def _chat_response(
     if status_card:
         response["status_card"] = status_card
     return response
+
+
+def workflow_explanation_payload(
+    *,
+    kind: str,
+    phase: str,
+    next_action: str,
+    state: dict[str, object],
+    claim_boundary: str,
+) -> dict[str, object]:
+    workflow = _usage_workflow(state)
+    label = workflow or _usage_label(state, kind=kind, phase=phase, next_action=next_action)
+    harness = primary_harness_for_skill(workflow) if workflow else ""
+    return {
+        "schema_version": WORKFLOW_EXPLANATION_SCHEMA_VERSION,
+        "selected_workflow": workflow,
+        "label": label,
+        "selected_harness": harness,
+        "why_this_workflow": _workflow_explanation_reason(state, workflow=workflow, label=label),
+        "next_action": next_action,
+        "next_action_label": next_action.replace("_", " "),
+        "not_evidence_yet": _workflow_explanation_not_evidence(state, claim_boundary=claim_boundary),
+        "claim_boundary": claim_boundary,
+        "rendering_hint": "Show this as a compact why/next/not-evidence card in chat surfaces.",
+    }
+
+
+def _workflow_explanation_reason(state: dict[str, object], *, workflow: str, label: str) -> str:
+    explanation_reason = str(state.get("workflow_explanation_reason") or "").strip()
+    if explanation_reason:
+        return explanation_reason
+    reason = str(state.get("routing_reason") or "").strip()
+    if reason:
+        return reason
+    if workflow:
+        return f"Selected `{workflow}` from the message, workflow metadata, and guardrail policy."
+    return f"Using the `{label}` response state for this step."
+
+
+def _workflow_explanation_not_evidence(state: dict[str, object], *, claim_boundary: str) -> list[str]:
+    explicit = state.get("evidence_not_observed")
+    if isinstance(explicit, list) and explicit:
+        return [str(item) for item in explicit if str(item)]
+    text = claim_boundary.lower()
+    items: list[str] = []
+    for marker, label in (
+        ("plan acceptance", "plan acceptance"),
+        ("dispatch", "executor/runtime dispatch"),
+        ("execution", "execution"),
+        ("implementation", "implementation"),
+        ("image", "image generation"),
+        ("file", "file generation/export"),
+        ("delivery", "delivery"),
+        ("review", "review"),
+        ("ci", "CI"),
+        ("merge", "merge"),
+        ("verification", "verification"),
+    ):
+        if marker in text and label not in items:
+            items.append(label)
+    if items:
+        return items
+    if "prepared" in text:
+        return ["execution", "verification", "delivery"]
+    return ["completion claim without observed evidence"]
 
 
 def usage_trace_payload(*, kind: str, phase: str, next_action: str, state: dict[str, object]) -> dict[str, object]:

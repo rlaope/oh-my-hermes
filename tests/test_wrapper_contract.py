@@ -247,6 +247,13 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(trace["visible_prefix"], "[omh] web-research")
         self.assertEqual(trace["selected_harness"], "research")
         self.assertEqual(trace["evidence_state"], "routing_not_execution")
+        explanation = response["state"]["workflow_explanation"]
+        self.assertEqual(explanation["schema_version"], "omh_workflow_explanation/v1")
+        self.assertEqual(explanation["selected_workflow"], "web-research")
+        self.assertEqual(explanation["selected_harness"], "research")
+        self.assertIn("why_this_workflow", explanation)
+        self.assertEqual(explanation["next_action"], "run_hermes_research")
+        self.assertTrue(explanation["not_evidence_yet"])
         self.assertTrue(response["headline"].startswith("[omh] web-research - "))
         self.assertEqual(response["plain_headline"], "I know which workflow should handle this.")
         self.assertEqual(rendering["schema_version"], "omh_messenger_rendering/v1")
@@ -740,6 +747,9 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
                 self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
                 self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
+                explanation = payload["chat_response"]["state"]["workflow_explanation"]
+                self.assertEqual(explanation["selected_workflow"], "ultraprocess")
+                self.assertIn("PR creation", explanation["not_evidence_yet"])
                 actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
                 self.assertTrue(actions["start_ultraprocess"]["enabled"])
                 self.assertFalse(actions["prepare_handoff"]["enabled"])
@@ -783,6 +793,11 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("generate_visual_image", actions)
                 self.assertIn("not generated image", payload["chat_response"]["claim_boundary"])
                 self.assertIn("visual QA", payload["chat_response"]["state"]["evidence_not_observed"])
+                explanation = payload["chat_response"]["state"]["workflow_explanation"]
+                self.assertEqual(explanation["selected_workflow"], "img-summary")
+                self.assertIn("workflow's triggers", explanation["why_this_workflow"])
+                self.assertIn("image_generation_setup/v1", explanation["why_this_workflow"])
+                self.assertIn("visual QA", explanation["not_evidence_yet"])
 
     def test_complex_operator_patterns_route_to_dedicated_surfaces(self) -> None:
         cases = (
@@ -863,6 +878,10 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertEqual(payload["chat_response"]["kind"], response_kind)
                 self.assertIn(selected_workflow, payload["chat_response"]["headline"])
+                self.assertEqual(
+                    payload["chat_response"]["state"]["workflow_explanation"]["selected_workflow"],
+                    selected_workflow,
+                )
 
     def test_ack_workflow_chat_copy_stays_human_friendly(self) -> None:
         cases = (
