@@ -147,6 +147,20 @@ class CliTests(unittest.TestCase):
             self.assertFalse(export_payload["export"]["privacy"]["fixture_text_stored"])
             self.assertTrue(Path(export_payload["export_path"]).exists())
 
+            status, stdout, stderr = run_cli(base + ["learning", "audit"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            audit = json.loads(stdout)
+            self.assertEqual(audit["schema_version"], "workflow_learning_audit/v1")
+            self.assertEqual(audit["status"], "ready")
+            self.assertEqual(audit["coverage"]["eval_coverage_percent"], 100)
+            self.assertEqual(audit["coverage"]["regression_coverage_percent"], 100)
+            self.assertEqual(audit["regression_replay"]["status"], "passed")
+            self.assertEqual(audit["warnings"], [])
+            self.assertNotIn(message, json.dumps(audit))
+            self.assertNotIn("safely add a feature to this repo", json.dumps(audit))
+
             status, stdout, stderr = run_cli(base + ["learning", "index", "check"])
 
             self.assertEqual(status, 0, stderr)
@@ -167,6 +181,15 @@ class CliTests(unittest.TestCase):
             stale_check = json.loads(stdout)
             self.assertEqual(stale_check["status"], "stale")
             self.assertEqual(len(stale_check["missing_records"]), 1)
+
+            status, stdout, stderr = run_cli(base + ["learning", "audit"])
+
+            self.assertEqual(status, 1)
+            self.assertEqual(stderr, "")
+            stale_audit = json.loads(stdout)
+            self.assertEqual(stale_audit["status"], "blocked")
+            self.assertEqual(stale_audit["index"]["status"], "stale")
+            self.assertIn("rebuild_learning_index", {item["id"] for item in stale_audit["next_actions"]})
 
             status, stdout, stderr = run_cli(base + ["learning", "index", "rebuild"])
 

@@ -17,6 +17,7 @@ from omh.workflow_learning import (
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
     build_workflow_eval_result,
+    build_workflow_learning_audit,
     check_learning_index,
     learning_trace_ref,
     list_learning_traces,
@@ -371,6 +372,80 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(bundle["status"], "no_records")
             with self.assertRaises(WorkflowLearningError):
                 write_learning_export(paths, bundle)
+
+    def test_learning_audit_tracks_readiness_without_raw_prompt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "I want to safely add a feature with secret-token-123"
+
+            empty = build_workflow_learning_audit(paths)
+            self.assertEqual(empty["schema_version"], "workflow_learning_audit/v1")
+            self.assertEqual(empty["status"], "no_records")
+            self.assertTrue(empty["ok"])
+
+            trace = write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(build_chat_interaction_payload(message, source="discord")),
+            )
+            attention = build_workflow_learning_audit(paths)
+            self.assertEqual(attention["status"], "needs_attention")
+            self.assertEqual(attention["counts"]["traces"], 1)
+            self.assertEqual(attention["coverage"]["eval_coverage_percent"], 0)
+            self.assertIn("trace_without_eval", {item["id"] for item in attention["warnings"]})
+            self.assertNotIn(message, json.dumps(attention))
+            self.assertNotIn("secret-token-123", json.dumps(attention))
+
+            write_workflow_eval(paths, build_workflow_eval_result(trace))
+            write_regression_case(
+                paths,
+                build_regression_case_from_trace(trace, redacted_message="safely add a feature"),
+            )
+            write_learning_export(paths, build_learning_export_bundle(paths, trace_ids=[trace["trace_id"]]))
+
+            ready = build_workflow_learning_audit(paths)
+
+            self.assertEqual(ready["status"], "ready")
+            self.assertTrue(ready["ok"])
+            self.assertEqual(ready["coverage"]["eval_coverage_percent"], 100)
+            self.assertEqual(ready["coverage"]["regression_coverage_percent"], 100)
+            self.assertEqual(ready["regression_replay"]["status"], "passed")
+            self.assertEqual(ready["warnings"], [])
+            self.assertNotIn("safely add a feature", json.dumps(ready))
+
+    def test_learning_audit_blocks_on_stale_index(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            trace = write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(build_chat_interaction_payload("diagnose installation health", source="discord")),
+            )
+            index = json.loads(paths.learning_index_path.read_text(encoding="utf-8"))
+            index["records"] = [item for item in index["records"] if item["id"] != trace["trace_id"]]
+            paths.learning_index_path.write_text(json.dumps(index), encoding="utf-8")
+
+            audit = build_workflow_learning_audit(paths)
+
+            self.assertEqual(audit["status"], "blocked")
+            self.assertFalse(audit["ok"])
+            self.assertEqual(audit["index"]["status"], "stale")
+            self.assertIn("learning_index_not_clean", {item["id"] for item in audit["blocking_issues"]})
+
+    def test_learning_audit_blocks_on_invalid_records_without_valid_traces(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            paths.learning_traces_dir.mkdir(parents=True, exist_ok=True)
+            (paths.learning_traces_dir / "broken.json").write_text(
+                json.dumps({"schema_version": "workflow_learning_trace/v1"}),
+                encoding="utf-8",
+            )
+
+            audit = build_workflow_learning_audit(paths)
+
+            self.assertEqual(audit["status"], "blocked")
+            self.assertFalse(audit["ok"])
+            self.assertEqual(audit["counts"]["traces"], 0)
+            self.assertEqual(audit["counts"]["invalid_records"], 1)
+            self.assertIn("invalid_learning_record", {item["id"] for item in audit["blocking_issues"]})
 
 
 if __name__ == "__main__":

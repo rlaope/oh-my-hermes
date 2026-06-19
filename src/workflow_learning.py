@@ -17,6 +17,7 @@ IMPROVEMENT_CANDIDATE_SCHEMA_VERSION = "improvement_candidate/v1"
 REGRESSION_CASE_SCHEMA_VERSION = "regression_case/v1"
 WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
+WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION = "workflow_learning_audit/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
@@ -663,6 +664,116 @@ def write_learning_export(paths: OmhPaths, bundle: dict[str, Any]) -> dict[str, 
         raise WorkflowLearningError("only ready learning export bundles can be written")
     atomic_write_json(learning_export_path(paths, str(bundle["export_id"])), bundle, private=True)
     return bundle
+
+
+def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) -> dict[str, Any]:
+    scanned = _scan_learning_records(paths)
+    index_check = check_learning_index(paths)
+    traces = _apply_limit(_read_valid_learning_records(paths.learning_traces_dir, validate_workflow_learning_trace), limit)
+    evals = _read_valid_learning_records(paths.learning_evals_dir, validate_workflow_eval_result)
+    candidates = _read_valid_learning_records(paths.learning_candidates_dir, validate_improvement_candidate)
+    regression_cases = _read_valid_learning_records(paths.learning_regressions_dir, validate_regression_case)
+    exports = _read_valid_learning_records(paths.learning_exports_dir, validate_workflow_learning_export)
+    replay = (
+        _learning_audit_replay_blocked(scanned)
+        if scanned["invalid_records"]
+        else replay_regression_cases(paths)
+    )
+
+    trace_ids = {str(trace.get("trace_id", "")) for trace in traces if trace.get("trace_id")}
+    eval_trace_ids = {str(result.get("trace_id", "")) for result in evals if result.get("trace_id")}
+    candidate_trace_ids = {str(candidate.get("trace_id", "")) for candidate in candidates if candidate.get("trace_id")}
+    regression_trace_ids = {str(case.get("trace_id", "")) for case in regression_cases if case.get("trace_id")}
+    failed_evals = [result for result in evals if result.get("status") == "failed"]
+    warning_evals = [result for result in evals if result.get("status") == "warning"]
+    problem_eval_trace_ids = {str(result.get("trace_id", "")) for result in failed_evals + warning_evals if result.get("trace_id")}
+    pending_candidates = [
+        candidate
+        for candidate in candidates
+        if _nested(candidate, "human_gate", "decision") == "pending"
+    ]
+    missing_eval = sorted(trace_id for trace_id in trace_ids if trace_id not in eval_trace_ids)
+    missing_regression = sorted(trace_id for trace_id in trace_ids if trace_id not in regression_trace_ids)
+    missing_candidate = sorted(
+        trace_id
+        for trace_id in problem_eval_trace_ids
+        if trace_id not in candidate_trace_ids
+    )
+    blocking_issues = _learning_audit_blocking_issues(scanned=scanned, index_check=index_check, failed_evals=failed_evals)
+    warnings = _learning_audit_warnings(
+        missing_eval=missing_eval,
+        missing_regression=missing_regression,
+        missing_candidate=missing_candidate,
+        warning_evals=warning_evals,
+        pending_candidates=pending_candidates,
+        replay=replay,
+        exports=exports,
+    )
+    status = _learning_audit_status(
+        traces_total=len(traces),
+        blocking_issues=blocking_issues,
+        warnings=warnings,
+        replay=replay,
+    )
+    return {
+        "schema_version": WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION,
+        "status": status,
+        "ok": status in {"ready", "no_records"},
+        "generated_at": utc_now(),
+        "scope": {
+            "limit": "all" if limit is None else limit,
+            "learning_dir": str(paths.learning_dir),
+            "index_path": str(paths.learning_index_path),
+        },
+        "counts": {
+            "traces": len(traces),
+            "evals": len(evals),
+            "candidates": len(candidates),
+            "regression_cases": len(regression_cases),
+            "exports": len(exports),
+            "invalid_records": len(scanned["invalid_records"]),
+        },
+        "coverage": {
+            "traces_with_eval": len(trace_ids & eval_trace_ids),
+            "traces_with_regression_case": len(trace_ids & regression_trace_ids),
+            "traces_with_candidate": len(trace_ids & candidate_trace_ids),
+            "eval_coverage_percent": _coverage_percent(len(trace_ids & eval_trace_ids), len(trace_ids)),
+            "regression_coverage_percent": _coverage_percent(len(trace_ids & regression_trace_ids), len(trace_ids)),
+            "candidate_coverage_percent": _coverage_percent(len(trace_ids & candidate_trace_ids), len(trace_ids)),
+        },
+        "index": {
+            "status": index_check.get("status", ""),
+            "ok": index_check.get("ok") is True,
+            "missing_records": len(_list(index_check.get("missing_records"))),
+            "extra_records": len(_list(index_check.get("extra_records"))),
+            "schema_mismatches": len(_list(index_check.get("schema_mismatches"))),
+            "repair_hint": str(index_check.get("repair_hint", "")),
+        },
+        "regression_replay": {
+            "status": replay.get("status", ""),
+            "total": int(replay.get("total", 0) or 0),
+            "passed": int(replay.get("passed", 0) or 0),
+            "failed": int(replay.get("failed", 0) or 0),
+            "skipped": int(replay.get("skipped", 0) or 0),
+        },
+        "blocking_issues": blocking_issues,
+        "warnings": warnings,
+        "next_actions": _learning_audit_next_actions(
+            status=status,
+            missing_eval=missing_eval,
+            missing_regression=missing_regression,
+            missing_candidate=missing_candidate,
+            pending_candidates=pending_candidates,
+            index_check=index_check,
+            exports=exports,
+        ),
+        "recent_traces": [_trace_summary(trace) for trace in traces],
+        "claim_boundary": (
+            "Workflow learning audit reads local metadata-only learning records. "
+            "It does not train a model, patch skills, execute workflows, call networks, "
+            "or upgrade prepared artifacts into observed evidence."
+        ),
+    }
 
 
 def attach_learning_trace_ref_to_interaction(interaction: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
@@ -1321,6 +1432,225 @@ def _read_regression_cases(paths: OmhPaths) -> list[dict[str, Any]]:
             validate_regression_case(case)
             cases.append(case)
     return cases
+
+
+def _read_valid_learning_records(
+    directory: Path,
+    validator: Callable[[dict[str, Any]], None],
+) -> list[dict[str, Any]]:
+    if not directory.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            record = read_json_object(path)
+            if not record:
+                continue
+            validator(record)
+            records.append(record)
+        except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError):
+            continue
+    return records
+
+
+def _learning_audit_blocking_issues(
+    *,
+    scanned: dict[str, Any],
+    index_check: dict[str, Any],
+    failed_evals: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for invalid in _list(scanned.get("invalid_records")):
+        if not isinstance(invalid, dict):
+            continue
+        issues.append(
+            {
+                "id": "invalid_learning_record",
+                "severity": "blocking",
+                "kind": str(invalid.get("kind", "")),
+                "path": str(invalid.get("path", "")),
+                "summary": str(invalid.get("error", "")),
+                "next_action": "repair_or_remove_invalid_record",
+            }
+        )
+    if index_check.get("ok") is not True:
+        issues.append(
+            {
+                "id": "learning_index_not_clean",
+                "severity": "blocking",
+                "summary": f"Learning index status is {index_check.get('status', 'unknown')}.",
+                "next_action": "omh learning index rebuild",
+            }
+        )
+    for result in failed_evals:
+        issues.append(
+            {
+                "id": "failed_workflow_eval",
+                "severity": "blocking",
+                "trace_id": str(result.get("trace_id", "")),
+                "eval_id": str(result.get("eval_id", "")),
+                "summary": "A workflow eval failed; review the trace before treating it as learning-ready.",
+                "next_action": "omh learning candidate <trace-id>",
+            }
+        )
+    return issues
+
+
+def _learning_audit_warnings(
+    *,
+    missing_eval: list[str],
+    missing_regression: list[str],
+    missing_candidate: list[str],
+    warning_evals: list[dict[str, Any]],
+    pending_candidates: list[dict[str, Any]],
+    replay: dict[str, Any],
+    exports: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+    if missing_eval:
+        warnings.append(
+            {
+                "id": "trace_without_eval",
+                "count": len(missing_eval),
+                "trace_ids": missing_eval[:10],
+                "summary": "Some traces have not been checked by deterministic rubrics.",
+                "next_action": "omh learning eval <trace-id>",
+            }
+        )
+    if missing_regression:
+        warnings.append(
+            {
+                "id": "trace_without_regression_case",
+                "count": len(missing_regression),
+                "trace_ids": missing_regression[:10],
+                "summary": "Some traces cannot be replayed as future regression cases yet.",
+                "next_action": "omh learning regression add <trace-id> --fixture-message <redacted fixture>",
+            }
+        )
+    if missing_candidate:
+        warnings.append(
+            {
+                "id": "evaluated_trace_without_candidate",
+                "count": len(missing_candidate),
+                "trace_ids": missing_candidate[:10],
+                "summary": "Evaluated traces have no reviewable improvement candidate.",
+                "next_action": "omh learning candidate <trace-id>",
+            }
+        )
+    if warning_evals:
+        warnings.append(
+            {
+                "id": "warning_workflow_eval",
+                "count": len(warning_evals),
+                "eval_ids": [str(result.get("eval_id", "")) for result in warning_evals[:10]],
+                "summary": "Some workflow evals passed with rubric warnings.",
+                "next_action": "review_warning_eval",
+            }
+        )
+    if pending_candidates:
+        warnings.append(
+            {
+                "id": "pending_improvement_candidate",
+                "count": len(pending_candidates),
+                "candidate_ids": [str(candidate.get("candidate_id", "")) for candidate in pending_candidates[:10]],
+                "summary": "Improvement candidates still need human review before any source changes.",
+                "next_action": "review_improvement_candidate",
+            }
+        )
+    if replay.get("status") in {"failed", "skipped", "incomplete"}:
+        warnings.append(
+            {
+                "id": "regression_replay_not_clean",
+                "status": str(replay.get("status", "")),
+                "summary": "Regression replay is not clean across the local corpus.",
+                "next_action": "fix_or_minimize_regression_cases",
+            }
+        )
+    if not exports:
+        warnings.append(
+            {
+                "id": "no_learning_export_bundle",
+                "summary": "No redacted learning export bundle has been written for external review.",
+                "next_action": "omh learning export",
+            }
+        )
+    return warnings
+
+
+def _learning_audit_status(
+    *,
+    traces_total: int,
+    blocking_issues: list[dict[str, Any]],
+    warnings: list[dict[str, Any]],
+    replay: dict[str, Any],
+) -> str:
+    if blocking_issues:
+        return "blocked"
+    if traces_total == 0:
+        return "no_records"
+    if warnings or replay.get("status") not in {"passed", "no_cases"}:
+        return "needs_attention"
+    return "ready"
+
+
+def _learning_audit_replay_blocked(scanned: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": "workflow_regression_replay/v1",
+        "status": "blocked",
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "results": [],
+        "invalid_records": scanned["invalid_records"],
+        "claim_boundary": "Regression replay was not run because invalid local learning records need repair first.",
+    }
+
+
+def _learning_audit_next_actions(
+    *,
+    status: str,
+    missing_eval: list[str],
+    missing_regression: list[str],
+    missing_candidate: list[str],
+    pending_candidates: list[dict[str, Any]],
+    index_check: dict[str, Any],
+    exports: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if index_check.get("ok") is not True:
+        actions.append({"id": "rebuild_learning_index", "command": "omh learning index rebuild"})
+    if missing_eval:
+        actions.append({"id": "evaluate_trace", "trace_id": missing_eval[0], "command": f"omh learning eval {missing_eval[0]}"})
+    if missing_regression:
+        actions.append(
+            {
+                "id": "add_regression_case",
+                "trace_id": missing_regression[0],
+                "command": f"omh learning regression add {missing_regression[0]} --fixture-message <redacted fixture>",
+            }
+        )
+    if missing_candidate:
+        actions.append({"id": "create_candidate", "trace_id": missing_candidate[0], "command": f"omh learning candidate {missing_candidate[0]}"})
+    if pending_candidates:
+        actions.append(
+            {
+                "id": "review_candidate",
+                "candidate_id": str(pending_candidates[0].get("candidate_id", "")),
+                "command": "review the candidate before applying any source change",
+            }
+        )
+    if not exports and status != "no_records":
+        actions.append({"id": "write_learning_export", "command": "omh learning export"})
+    if not actions:
+        actions.append({"id": "continue_recording", "command": "omh learning record <message or --from-runtime-run>"})
+    return actions
+
+
+def _coverage_percent(covered: int, total: int) -> int:
+    if total <= 0:
+        return 0
+    return round((covered / total) * 100)
 
 
 def _replay_regression_case(case: dict[str, Any]) -> dict[str, Any]:
