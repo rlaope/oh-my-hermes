@@ -52,6 +52,16 @@ from .goal import (
 )
 from .hermes import _add_hermes_commands, cmd_hermes_plan
 from .hud import _add_hud_commands, cmd_hud
+from .learning import (
+    _add_learning_commands,
+    cmd_learning_candidate,
+    cmd_learning_eval,
+    cmd_learning_list,
+    cmd_learning_record,
+    cmd_learning_regression_add,
+    cmd_learning_regression_replay,
+    cmd_learning_show,
+)
 from .loop import _add_loop_commands, cmd_loop_feedback, cmd_loop_permit, cmd_loop_run_once, cmd_loop_start, cmd_loop_status
 from .materials import (
     _add_materials_commands,
@@ -155,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
             "Backend/control-plane commands such as chat, coding, runtime, goal, loop,\n"
-            "memory, ops, materials, state, harness, release smoke, and demo print JSON by design."
+            "learning, memory, ops, materials, state, harness, release smoke, and demo print JSON by design."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -181,6 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_coding_commands(sub)
     _add_hermes_commands(sub)
     _add_hud_commands(sub)
+    _add_learning_commands(sub)
     _add_loop_commands(sub)
     _add_memory_commands(sub)
     _add_menubar_commands(sub)

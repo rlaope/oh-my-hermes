@@ -131,6 +131,30 @@ class OmhPaths:
         return self.omh_home / "state"
 
     @property
+    def learning_dir(self) -> Path:
+        return self.omh_home / "learning"
+
+    @property
+    def learning_traces_dir(self) -> Path:
+        return self.learning_dir / "traces"
+
+    @property
+    def learning_evals_dir(self) -> Path:
+        return self.learning_dir / "evals"
+
+    @property
+    def learning_candidates_dir(self) -> Path:
+        return self.learning_dir / "candidates"
+
+    @property
+    def learning_regressions_dir(self) -> Path:
+        return self.learning_dir / "regressions"
+
+    @property
+    def learning_index_path(self) -> Path:
+        return self.learning_dir / "index.json"
+
+    @property
     def hermes_config_path(self) -> Path:
         return self.hermes_home / "config.yaml"
 

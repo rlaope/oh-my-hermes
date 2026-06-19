@@ -247,6 +247,16 @@ ladder step such as runtime start, worktree creation, worker dispatch, worker
 result, verification, review, CI, merge readiness, or merge. Missing records
 remain missing evidence; OMH does not infer them from prepared handoff text.
 
+`workflow_learning.py` owns the metadata-only learning plane above routing,
+wrapper sessions, and runtime artifacts. It projects workflow attempts into
+`workflow_learning_trace/v1`, evaluates them with deterministic
+`workflow_eval_result/v1` rubrics, creates review-only
+`improvement_candidate/v1` records, and stores `regression_case/v1` fixtures for
+future replay. It is deliberately projection-first: trace recording does not
+mutate skills, patch Hermes, train a model, or upgrade prepared work into
+observed evidence. This gives Hermes good process data to review while keeping
+status, verification, CI, merge, and skill changes separately observed.
+
 `wrapper/sessions.py` owns metadata-only chat session persistence for wrappers.
 It records chat continuity, plan decisions, and a link to a prepared run id, but
 it does not own execution, review, CI, merge readiness, or merge evidence.

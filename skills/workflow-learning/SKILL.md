@@ -1,41 +1,42 @@
 ---
-name: ask
-description: [omh] Hermes adaptation for consulting an external advisor when configured.
+name: workflow-learning
+description: [omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, and regression case.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, review]
-    category: review
-    phase: external-advice
-    role: reviewer
-    quality_tier: evidence-gated
+    tags: [workflow, oh-my-hermes, optimization]
+    category: optimization
+    phase: workflow-learning
+    role: tracker
+    quality_tier: workflow-surface-gated
 ---
 
-# Ask
+# Workflow Learning
 
-This is a Hermes-native `ask` workflow skill.
+This is a Hermes-native `workflow-learning` workflow skill.
 
 ## Why This Exists
 
-`ask` exists to keep `review` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
-- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+- The request is already handled by a narrower explicit skill with stronger evidence.
+- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
 
 ## Examples
 
 Good example:
 
-- Prompt: ask: handle a review request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `ask` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: workflow-learning record why this request went to plan and make a regression case.
+- Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
+- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: ask: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: workflow-learning silently patch the skill and claim future behavior is fixed.
+- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## OMH Context Rail
 
@@ -50,47 +51,48 @@ Bad example:
 
 ## Use When
 
-Use only when an external advisor is configured and would materially improve the answer.
+Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, and reusable as a future regression without storing raw prompts.
 
-    Strong routing signals: `ask`, `$ask`, `external advisor`, `claude`, `gemini`
+    Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`
 
 ## Catalog Metadata
 
-Category: `review`
-Phase: `external-advice`
-Hermes role: `reviewer`
-Quality tier: `evidence-gated`
+Category: `optimization`
+Phase: `workflow-learning`
+Hermes role: `tracker`
+Quality tier: `workflow-surface-gated`
 
 Quality bar:
 
-- Name the workflow target, constraints, validation evidence, and stop condition.
-- Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
+- Name the user-facing workflow objective, required context, next action, and stop condition.
+- Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+- Expose missing tools, credentials, targets, or observations as user-visible gaps.
 
 Handoff policy:
 
-Use as optional advice gathering; evaluate the advice in Hermes and delegate coding changes separately.
+Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 
 Required inputs:
 
-- question
-- context summary
-- why external advice helps
+- user request
+- target context
+- delivery or status expectation
+- known missing evidence
 
 Expected outputs:
 
-- advisor summary
-- accepted/rejected advice
-- decision note
+- workflow-learning/v1 card or guidance
+- next action
+- prepared-vs-observed boundary
 
 Artifact expectations:
 
-- advisor transcript reference only when explicitly captured
+- workflow-learning/v1 metadata-only runtime or wrapper card when recorded
 
 Safety rules:
 
-- Use only when configured and materially useful.
-- Treat advisor output as evidence to evaluate, not authority.
-- Do not send secrets or private prompts without explicit opt-in.
+- A workflow learning trace is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
+- Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
 
@@ -100,12 +102,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `critic`.
+Preferred harness for this skill: `workflow-learning`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill ask --harness critic --status started
+omh runtime record --skill workflow-learning --harness workflow-learning --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
@@ -118,7 +120,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
 - Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
 - When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
-- When wrapper metadata includes `memory_review_card/v1` or `handoff_context_pack/v1`, treat it as reviewed OMH-local or wrapper-supplied context only. Use conflict-free context summaries to shape plans and handoffs, but do not claim Hermes internal memory was read or changed.
+- Treat wrapper-supplied memory/context summaries as advisory local context, not proof that opaque Hermes memory was read or changed.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
   - question renderers -> one concise question in the current Hermes interface,

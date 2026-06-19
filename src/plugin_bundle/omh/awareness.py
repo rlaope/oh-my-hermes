@@ -16,6 +16,7 @@ ROUTER_KEYWORD_SKILLS = (
     "materials-package",
     "img-summary",
     "automation-blueprint",
+    "workflow-learning",
     "code-review",
     "team",
     "ultrawork",
@@ -38,6 +39,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     ],
     "automation_and_status": [
         "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
+        "workflow attempt -> workflow-learning -> eval -> improvement candidate or regression case",
         "runtime confusion -> doctor or agent-ops-review -> status card -> next repair action",
     ],
     "coding_handoff": [
@@ -79,12 +81,21 @@ WORKFLOW_CONTEXT_CARDS = (
     {
         "id": "automation_and_status",
         "label": "Automation and status",
-        "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, or runtime question",
-        "omh_pattern": "prepare a schedule/status/repair card, name required tools, then keep observed runtime state separate",
-        "representative_workflows": ("automation-blueprint", "agent-ops-review", "toolbelt-readiness", "doctor"),
-        "user_examples": ("Every morning send a digest if something changed", "What is currently blocked?"),
-        "first_response_shape": "Show the prepared status or schedule shape, name the missing connector/runtime evidence, and expose refresh or repair actions.",
-        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load"),
+        "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, workflow learning, or runtime question",
+        "omh_pattern": "prepare a schedule/status/repair/learning card, name required tools or evidence, then keep observed runtime state separate",
+        "representative_workflows": (
+            "automation-blueprint",
+            "agent-ops-review",
+            "workflow-learning",
+            "toolbelt-readiness",
+            "doctor",
+        ),
+        "user_examples": (
+            "Every morning send a digest if something changed",
+            "Why did this route to plan? Make it a regression.",
+        ),
+        "first_response_shape": "Show the prepared status, schedule, or learning shape, name the missing evidence, and expose refresh, repair, or review actions.",
+        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load", "skill patch approval"),
     },
     {
         "id": "coding_handoff",
@@ -132,6 +143,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "toolbelt-readiness": "automation_and_status",
     "voice-operator": "automation_and_status",
     "wiki": "automation_and_status",
+    "workflow-learning": "automation_and_status",
     "ai-slop-cleaner": "coding_handoff",
     "ask": "coding_handoff",
     "code-review": "coding_handoff",
@@ -318,6 +330,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ops-observability-card",
                 "agent-ops-review",
                 "memory-curation-review",
+                "workflow-learning",
                 "doctor",
                 "skill",
                 "ask",
@@ -395,6 +408,10 @@ def awareness_primer_payload() -> dict[str, object]:
             {
                 "cue": "coding, risky changes, executor status, review, CI, or merge state",
                 "route": "ultraprocess, coding handoff, code-review, or agent-ops-review with observed evidence boundaries",
+            },
+            {
+                "cue": "workflow trace, skill improvement, regression corpus, or why-routing questions",
+                "route": "workflow-learning before ad hoc self-critique or automatic skill patching",
             },
         ],
         "context_surfaces": [
@@ -531,7 +548,8 @@ def _compact_workflow_cue_line() -> str:
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
         "feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; "
         "decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
-        "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review"
+        "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; "
+        "trace/improve/regression -> workflow-learning"
     )
 
 
@@ -540,7 +558,7 @@ def _compact_workflow_context_cards_line() -> str:
         "intent -> deep-interview/ralplan/loop/ultraprocess; "
         "signals -> web-research/research-department/feedback-triage/meeting-brief; "
         "materials -> materials-package/report-package/img-summary; "
-        "automation/status -> automation-blueprint/agent-ops-review/doctor; "
+        "automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; "
         "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
     )
 

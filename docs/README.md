@@ -124,6 +124,10 @@ selected.
   operator wants real Hermes profile evidence.
 - Runtime and wrapper docs should preserve the separation between wrapper
   session state and run-level evidence.
+- Workflow learning docs should state that `workflow_learning_trace/v1` records
+  are metadata-only process evidence. They can feed evals, review-only
+  improvement candidates, and regression cases, but they are not automatic
+  training, hidden skill patches, or proof that future behavior is fixed.
 - Parity docs should map common oh-my runtime capability axes to OMH's
   Hermes-native evidence model instead of promising hidden workers, worktrees,
   MCP tools, or plugin runtime load without observation.

@@ -337,6 +337,7 @@ _CODING_INTENT_BY_SKILL.update(
         "toolbelt-readiness": "planning",
         "ops-observability-card": "planning",
         "agent-ops-review": "planning",
+        "workflow-learning": "planning",
     }
 )
 
@@ -2586,6 +2587,36 @@ _FEATURE_SURFACE_SKILLS = (
         good_prompt="agent-ops-review show me quality, blockers, and throughput for AI-agent research, coding, and review work.",
         bad_prompt="agent-ops-review claim Codex finished and CI passed because a handoff exists.",
     ),
+    _feature_surface_skill(
+        "workflow-learning",
+        "Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, and regression case.",
+        (
+            "workflow-learning",
+            "workflow learning",
+            "learning trace",
+            "execution trace",
+            "skill improvement",
+            "improvement candidate",
+            "regression corpus",
+            "GEPA",
+            "VPRM",
+            "process supervision",
+            "why did this route",
+            "learn from this run",
+            "이번 실행 학습",
+            "스킬 개선",
+            "회귀 케이스",
+            "실행 기록",
+            "학습 기록",
+        ),
+        "Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, and reusable as a future regression without storing raw prompts.",
+        category="optimization",
+        phase="workflow-learning",
+        next_action="record_workflow_learning_trace",
+        boundary="A workflow learning trace is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.",
+        good_prompt="workflow-learning record why this request went to plan and make a regression case.",
+        bad_prompt="workflow-learning silently patch the skill and claim future behavior is fixed.",
+    ),
 )
 
 
@@ -2688,6 +2719,14 @@ _SURFACE_EXPOSURES = (
         True,
         "primary_workflow_skill",
         "Use as an installed Hermes workflow skill when a manager wants quality, blockers, next actions, and throughput guidance for AI-agent work.",
+    ),
+    SurfaceExposure(
+        "workflow-learning",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, or create a regression case.",
     ),
 )
 
@@ -3696,6 +3735,30 @@ _FEATURE_SURFACE_HARNESSES = (
         ),
         overclaim_guard="An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.",
     ),
+    _feature_surface_harness(
+        "workflow-learning",
+        "Record workflow attempts as metadata-only learning traces, deterministic evals, review-only improvement candidates, and regression cases.",
+        "Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification.",
+        ("source trace or run id", "selected workflow", "observed evidence refs when available", "feedback or failure summary"),
+        ("workflow_learning_trace/v1", "workflow_eval_result/v1", "improvement_candidate/v1", "regression_case/v1"),
+        quality_tier="learning-gated",
+        evidence_ladder=(
+            "trace_recorded",
+            "eval_recorded",
+            "improvement_candidate_reviewed",
+            "regression_case_recorded",
+            "future_replay_passed_when_available",
+        ),
+        wrapper_actions=(
+            "record_workflow_learning_trace",
+            "show_learning_eval",
+            "propose_skill_improvement",
+            "add_regression_case",
+            "replay_regression_cases",
+            "show_status",
+        ),
+        overclaim_guard="A workflow learning artifact is not automatic model training, skill mutation, execution, verification, review, CI, merge, or proof that future behavior is fixed.",
+    ),
 )
 
 
@@ -3752,6 +3815,7 @@ _PRIMARY_HARNESSES.update(
         "toolbelt-readiness": "toolbelt-readiness",
         "ops-observability-card": "ops-observability-card",
         "agent-ops-review": "agent-ops-review",
+        "workflow-learning": "workflow-learning",
     }
 )
 
