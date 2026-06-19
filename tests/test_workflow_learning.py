@@ -15,6 +15,7 @@ from omh.workflow_learning import (
     build_improvement_candidate,
     build_improvement_candidate_review_card,
     build_improvement_patch_proposal,
+    build_workflow_learning_review_queue,
     build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
@@ -25,8 +26,10 @@ from omh.workflow_learning import (
     list_learning_traces,
     rebuild_learning_index,
     replay_regression_cases,
+    review_improvement_candidate,
     validate_improvement_candidate_review_card,
     validate_improvement_patch_proposal,
+    validate_workflow_learning_review_queue,
     validate_learning_audit_card,
     validate_workflow_learning_trace,
     validate_workflow_learning_export,
@@ -231,6 +234,94 @@ class WorkflowLearningTests(unittest.TestCase):
                 proposal["source_refs"]["regression_case_refs"],
                 ["omh-learning-regression_case:case_a", "omh-learning-regression_case:case_b"],
             )
+
+    def test_empty_learning_review_queue_has_valid_primary_action(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            queue = build_workflow_learning_review_queue(paths, limit=None)
+
+            self.assertEqual(queue["status"], "empty")
+            self.assertEqual(queue["primary_action"], "record_workflow_learning_trace")
+            self.assertIn("record_workflow_learning_trace", queue["wrapper_actions"])
+            validate_workflow_learning_review_queue(queue)
+
+    def test_learning_review_queue_tracks_candidate_decisions_without_raw_review_note(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "I want to safely add a feature to this repo"
+            interaction = build_chat_interaction_payload(message, source="discord")
+            trace = write_learning_trace(paths, build_trace_from_chat_interaction(interaction))
+            candidate = write_improvement_candidate(
+                paths,
+                build_improvement_candidate(trace, build_workflow_eval_result(trace)),
+            )
+
+            pending_queue = build_workflow_learning_review_queue(paths)
+
+            self.assertEqual(pending_queue["schema_version"], "workflow_learning_review_queue/v1")
+            self.assertEqual(pending_queue["status"], "needs_review")
+            self.assertEqual(pending_queue["summary"]["pending_candidates"], 1)
+            self.assertEqual(pending_queue["entries"][0]["status"], "needs_candidate_review")
+            self.assertEqual(pending_queue["entries"][0]["primary_action"], "review_improvement")
+            self.assertIn("show_learning_review_queue", pending_queue["wrapper_actions"])
+            validate_workflow_learning_review_queue(pending_queue)
+
+            reviewed = review_improvement_candidate(
+                paths,
+                str(candidate["candidate_id"]),
+                decision="approve",
+                reviewer_ref="operator:test",
+                review_note="private operator note should not be stored",
+            )
+            serialized_reviewed = json.dumps(reviewed)
+
+            self.assertEqual(reviewed["status"], "accepted")
+            self.assertEqual(reviewed["human_gate"]["decision"], "approve")
+            self.assertEqual(reviewed["review_card"]["status"], "approved")
+            self.assertIn("review_note_sha256", reviewed["human_gate"])
+            self.assertIn("review_note_length", reviewed["human_gate"])
+            self.assertNotIn("private operator note", serialized_reviewed)
+
+            revision = review_improvement_candidate(
+                paths,
+                str(candidate["candidate_id"]),
+                decision="revise",
+                reviewer_ref="operator:second-pass",
+            )
+
+            self.assertEqual(revision["status"], "proposed")
+            self.assertEqual(revision["human_gate"]["decision"], "revise")
+            self.assertNotIn("review_note_sha256", revision["human_gate"])
+            self.assertNotIn("review_note_length", revision["human_gate"])
+
+            reviewed = review_improvement_candidate(
+                paths,
+                str(candidate["candidate_id"]),
+                decision="approve",
+                reviewer_ref="operator:test",
+                review_note="private operator note should not be stored",
+            )
+
+            approved_queue = build_workflow_learning_review_queue(paths)
+
+            self.assertEqual(approved_queue["status"], "needs_review")
+            self.assertEqual(approved_queue["summary"]["approved_without_proposal"], 1)
+            self.assertEqual(approved_queue["entries"][0]["status"], "needs_patch_proposal")
+            self.assertEqual(approved_queue["entries"][0]["primary_action"], "prepare_patch_proposal")
+
+            write_regression_case(
+                paths,
+                build_regression_case_from_trace(trace, redacted_message="safely add a feature to this repo"),
+            )
+            ready_proposal = write_improvement_patch_proposal(paths, build_improvement_patch_proposal(paths, reviewed))
+            ready_queue = build_workflow_learning_review_queue(paths)
+
+            self.assertEqual(ready_queue["status"], "ready")
+            self.assertEqual(ready_queue["summary"]["ready_patch_proposals"], 1)
+            self.assertEqual(ready_queue["entries"][0]["proposal_id"], ready_proposal["proposal_id"])
+            self.assertEqual(ready_queue["entries"][0]["primary_action"], "copy_patch_handoff")
+            self.assertIn("source patch applied", ready_queue["not_evidence_yet"])
 
     def test_regression_case_id_includes_fixture_and_expected_shape(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -615,6 +706,27 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(audit["counts"]["traces"], 0)
             self.assertEqual(audit["counts"]["invalid_records"], 1)
             self.assertIn("invalid_learning_record", {item["id"] for item in audit["blocking_issues"]})
+
+    def test_learning_review_queue_orders_invalid_records_stably(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            paths.learning_traces_dir.mkdir(parents=True, exist_ok=True)
+            (paths.learning_traces_dir / "z-broken.json").write_text(
+                json.dumps({"schema_version": "workflow_learning_trace/v1"}),
+                encoding="utf-8",
+            )
+            (paths.learning_traces_dir / "a-broken.json").write_text(
+                json.dumps({"schema_version": "workflow_learning_trace/v1"}),
+                encoding="utf-8",
+            )
+
+            first = build_workflow_learning_review_queue(paths, limit=None)
+            second = build_workflow_learning_review_queue(paths, limit=None)
+
+            self.assertEqual(first["status"], "blocked")
+            self.assertEqual([item["entry_id"] for item in first["entries"]], [item["entry_id"] for item in second["entries"]])
+            self.assertEqual([item["created_at"] for item in first["entries"]], [item["created_at"] for item in second["entries"]])
+            self.assertTrue(all(str(item["created_at"]).startswith("invalid:") for item in first["entries"]))
 
 
 if __name__ == "__main__":

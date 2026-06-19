@@ -211,7 +211,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 | Coding agent paths | Hermes can prepare work for Codex, Claude Code, Hermes itself, or another runtime without pretending the work already ran. |
 | Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
-| Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts: metadata-only trace, deterministic eval, human-reviewed candidate, non-applying patch proposal, regression case, audit, and export bundle. |
+| Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts: metadata-only trace, deterministic eval, human review queue, non-applying patch proposal, regression case, audit, and export bundle. |
 | Organization patterns | Solo, research, product ops, coding runtime, and CTO-style collaboration patterns help Hermes present the right role flow for the request. |
 
 <br>

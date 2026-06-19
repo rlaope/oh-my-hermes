@@ -113,6 +113,16 @@ contract shaped like this:
   review card is the Hermes-facing surface for approve/revise/reject decisions,
   regression-case follow-up, and status narration. It is not a source patch,
   automatic skill mutation, or proof that future behavior changed.
+- `omh learning review` returns `workflow_learning_review_queue/v1`: the
+  local human-review queue for pending candidates, approved candidates that
+  still need a patch proposal, proposals that need regression work, and
+  proposals ready to copy as patch handoff material. The queue is review
+  navigation only; it does not approve candidates, apply source changes, or
+  prove future behavior improved.
+- `omh learning review-candidate <candidate-id> --decision approve|revise|reject`
+  records the human gate decision for an improvement candidate and refreshes
+  its review card. Optional review notes are stored only as hash and length, not
+  raw text.
 - `omh learning proposal <candidate-id>` records an
   `improvement_patch_proposal/v1` snapshot for the candidate's current review
   and regression state. Draft statuses such as `needs_regression_case` remain
