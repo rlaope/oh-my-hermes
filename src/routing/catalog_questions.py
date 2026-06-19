@@ -67,36 +67,6 @@ _EXPLICIT_CATALOG_PHRASES = (
     "리스트",
 )
 _CONTEXT_MARKERS = ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스")
-_CATALOG_WORDS = (
-    "skill",
-    "skills",
-    "workflow",
-    "workflows",
-    "command",
-    "commands",
-    "스킬",
-    "워크플로",
-    "워크플로우",
-    "명령",
-    "기능",
-    "comandos",
-    "habilidades",
-    "flujos de trabajo",
-    "fluxos de trabalho",
-    "commandes",
-    "competences",
-    "befehle",
-    "workflows",
-    "スキル",
-    "ワークフロー",
-    "コマンド",
-    "技能",
-    "工作流",
-    "命令",
-    "команды",
-    "навыки",
-    "рабочие процессы",
-)
 _CATALOG_COLLECTION_WORDS = (
     "skills",
     "skill",
@@ -127,6 +97,7 @@ _CATALOG_COLLECTION_WORDS = (
     "навыки",
     "рабочие процессы",
 )
+_CATALOG_WORDS = _CATALOG_COLLECTION_WORDS
 _AVAILABILITY_MARKERS = (
     "available",
     "do you have",
@@ -231,19 +202,7 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
-_CATALOG_COLLISION_MARKERS = (
-    "command",
-    "commands",
-    "skill",
-    "skills",
-    "workflow",
-    "workflows",
-    "명령",
-    "명령어",
-    "스킬",
-    "워크플로",
-    "워크플로우",
-)
+_CATALOG_COLLISION_MARKERS = _PLURAL_CATALOG_WORDS + ("명령", "명령어")
 
 
 def is_skill_catalog_question(message: str) -> bool:
