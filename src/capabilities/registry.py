@@ -130,6 +130,7 @@ def capability_summary() -> dict[str, object]:
             for lane in lanes
             if isinstance(lane, dict)
         ],
+        "workflow_context_cards": awareness.get("workflow_context_cards", []) if isinstance(awareness, dict) else [],
         "direct_response_guidance": [
             "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
             "When a request matches a lane, name the likely workflow and the first safe next action.",

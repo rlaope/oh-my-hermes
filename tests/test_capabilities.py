@@ -80,6 +80,7 @@ class CapabilityManifestTests(unittest.TestCase):
     def test_capability_summary_is_human_facing_catalog_context(self) -> None:
         summary = capability_summary()
         lanes = {lane["id"]: lane for lane in summary["lanes"]}
+        context_cards = {card["id"]: card for card in summary["workflow_context_cards"]}
 
         self.assertEqual(summary["schema_version"], "omh_capability_summary/v1")
         self.assertIn("without requiring shell catalog approval", summary["purpose"])
@@ -95,6 +96,9 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
         self.assertIn("materials-processing", {item["id"] for item in lanes["materials_and_visuals"]["representative_playbooks"]})
         self.assertTrue(lanes["coding_handoff"]["wrapper_actions"])
+        self.assertIn("feedback-triage", context_cards["research_and_ops"]["representative_workflows"])
+        self.assertIn("img-summary", context_cards["materials_and_visuals"]["representative_workflows"])
+        self.assertIn("implementation", context_cards["coding_handoff"]["not_evidence_until_observed"])
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]

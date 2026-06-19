@@ -566,13 +566,18 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("loop", groups["intent_to_plan"]["workflows"])
                 self.assertIn("feedback-triage", groups["company_product_ops"]["workflows"])
                 self.assertIn("code-review", groups["coding_and_runtime"]["workflows"])
+                primer_cards = {card["id"]: card for card in primer["workflow_context_cards"]}
+                self.assertIn("img-summary", primer_cards["materials_and_visuals"]["representative_workflows"])
+                self.assertIn("ultraprocess", primer_cards["coding_handoff"]["representative_workflows"])
                 self.assertIn("Prepared plans", primer["evidence_rule"])
                 capability_summary = payload["chat_response"]["state"]["capability_summary"]
                 self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
                 lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
+                summary_cards = {card["id"]: card for card in capability_summary["workflow_context_cards"]}
                 self.assertTrue({"intent_to_plan", "materials_and_visuals", "coding_handoff"} <= lanes.keys())
                 self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
                 self.assertIn("ultraprocess", lanes["intent_to_plan"]["primary_skills"])
+                self.assertIn("feedback-triage", summary_cards["research_and_ops"]["representative_workflows"])
                 self.assertIn("code-review", lanes["coding_handoff"]["primary_skills"])
                 intent_playbooks = {playbook["id"] for playbook in lanes["intent_to_plan"]["representative_playbooks"]}
                 self.assertIn("request-to-handoff", intent_playbooks)

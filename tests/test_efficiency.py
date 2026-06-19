@@ -97,13 +97,16 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(len(awareness_primer_markdown()), AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT)
         self.assertLessEqual(max(workflow_context_lengths.values()), AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT)
         self.assertIn("Common cues:", awareness_primer_context())
+        self.assertIn("Pattern cards:", awareness_primer_context())
         self.assertIn("image cards/infographics -> img-summary", awareness_primer_context())
+        self.assertIn("Workflow context cards", awareness_primer_markdown())
         self.assertIn("Common cues before generic tools", awareness_primer_markdown())
         self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
         self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
 
     def test_omh_awareness_lanes_cover_installable_skills(self) -> None:
         payload = awareness_primer_payload()
+        cards = {str(card["id"]): card for card in payload["workflow_context_cards"]}
         lane_skills = {
             str(skill)
             for lane in payload["lanes"]
@@ -113,6 +116,9 @@ class EfficiencyContractTests(unittest.TestCase):
         installable_skills = {definition.name for definition in builtin_definitions()}
 
         self.assertFalse(installable_skills - lane_skills)
+        self.assertIn("img-summary", cards["materials_and_visuals"]["representative_workflows"])
+        self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
+        self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
 
     def test_mid_session_awareness_detector_is_bounded(self) -> None:
         self.assertTrue(awareness_context_matches_message("회의록을 세로 요약 이미지 카드로 만들어줘"))

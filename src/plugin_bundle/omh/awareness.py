@@ -45,6 +45,43 @@ LANE_CROSS_LANE_EXAMPLES = {
         "risky change -> ralplan -> executor selection -> observed coding-agent status",
     ],
 }
+WORKFLOW_CONTEXT_CARDS = (
+    {
+        "id": "intent_to_plan",
+        "user_signal": "fuzzy goal, ambitious target, safe feature, or one-cycle delivery request",
+        "omh_pattern": "clarify or plan first, then move to ultragoal, ultraprocess, loop, or handoff only when concrete",
+        "representative_workflows": ("deep-interview", "ralplan", "ultragoal", "loop", "ultraprocess"),
+        "not_evidence_until_observed": ("plan acceptance", "executor dispatch", "verification"),
+    },
+    {
+        "id": "research_and_ops",
+        "user_signal": "customer signal, meeting notes, market question, strategy request, or operating record",
+        "omh_pattern": "collect evidence, separate source notes from synthesis, then create a brief, decision, or status artifact",
+        "representative_workflows": ("web-research", "research-department", "feedback-triage", "meeting-brief", "strategy-brief"),
+        "not_evidence_until_observed": ("source retrieval", "decision approval", "delivery"),
+    },
+    {
+        "id": "materials_and_visuals",
+        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, image card, or shareable summary",
+        "omh_pattern": "shape the deliverable contract, prepare prompts or package metadata, then record generation and QA only when observed",
+        "representative_workflows": ("materials-package", "report-package", "deliverable-package", "img-summary"),
+        "not_evidence_until_observed": ("file export", "image generation", "visual QA", "attachment"),
+    },
+    {
+        "id": "automation_and_status",
+        "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, or runtime question",
+        "omh_pattern": "prepare a schedule/status/repair card, name required tools, then keep observed runtime state separate",
+        "representative_workflows": ("automation-blueprint", "agent-ops-review", "toolbelt-readiness", "doctor"),
+        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load"),
+    },
+    {
+        "id": "coding_handoff",
+        "user_signal": "risky code change, issue-to-PR, review, CI, merge, coding-agent progress, or Hermes coding request",
+        "omh_pattern": "choose the coding owner, prepare executor-neutral handoff or Hermes coding team path, then track dispatch and result evidence",
+        "representative_workflows": ("ultraprocess", "code-review", "team", "ultrawork", "ultraqa"),
+        "not_evidence_until_observed": ("dispatch", "implementation", "review", "CI", "merge"),
+    },
+)
 _AWARENESS_MESSAGE_MARKERS = (
     "oh-my-hermes",
     "pull request",
@@ -115,6 +152,20 @@ def router_keyword_summary() -> str:
 def awareness_lane_examples(lane_id: str) -> list[str]:
     """Return compact examples relevant to one OMH awareness lane."""
     return list(LANE_CROSS_LANE_EXAMPLES.get(lane_id, []))
+
+
+def workflow_context_cards() -> list[dict[str, object]]:
+    """Return compact workflow cards that teach Hermes when OMH should help."""
+    return [
+        {
+            "id": card["id"],
+            "user_signal": card["user_signal"],
+            "omh_pattern": card["omh_pattern"],
+            "representative_workflows": list(card["representative_workflows"]),
+            "not_evidence_until_observed": list(card["not_evidence_until_observed"]),
+        }
+        for card in WORKFLOW_CONTEXT_CARDS
+    ]
 
 
 def awareness_context_matches_message(message: str) -> bool:
@@ -231,6 +282,7 @@ def awareness_primer_payload() -> dict[str, object]:
         "skill_coverage": "Every generated workflow skill carries this rail.",
         "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
         "lanes": lanes,
+        "workflow_context_cards": workflow_context_cards(),
         "cross_lane_examples": [
             example
             for lane_examples in LANE_CROSS_LANE_EXAMPLES.values()
@@ -301,11 +353,7 @@ def awareness_primer_payload() -> dict[str, object]:
 
 def awareness_primer_context() -> str:
     payload = awareness_primer_payload()
-    lane_lines = [
-        f"- {lane['label']}: {lane['use_for']}."
-        for lane in payload["lanes"]
-        if isinstance(lane, dict)
-    ]
+    pattern_line = _compact_workflow_context_cards_line()
     cue_map = _compact_workflow_cue_line()
     return "\n".join(
         [
@@ -315,7 +363,7 @@ def awareness_primer_context() -> str:
             str(payload["all_skill_context_rule"]),
             str(payload["skill_coverage"]),
             str(payload["chat_rule"]),
-            *lane_lines,
+            f"Pattern cards: {pattern_line}.",
             f"Common cues: {cue_map}.",
             (
                 "Tools: omh_capabilities for workflow/playbook catalog context; action=summary for catalog "
@@ -353,13 +401,13 @@ def awareness_primer_markdown() -> str:
             "",
             *lane_lines,
             "",
+            "Workflow context cards:",
+            "",
+            _compact_workflow_context_cards_line() + ".",
+            "",
             "Common cues before generic tools:",
             "",
             _compact_workflow_cue_line() + ".",
-            "",
-            "Cross-lane examples:",
-            "",
-            *[f"- {example}" for example in payload["cross_lane_examples"]],
             "",
             "Tools:",
             "",
@@ -401,6 +449,16 @@ def _compact_workflow_cue_line() -> str:
         "feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; "
         "decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
         "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review"
+    )
+
+
+def _compact_workflow_context_cards_line() -> str:
+    return (
+        "intent -> deep-interview/ralplan/loop/ultraprocess; "
+        "signals -> web-research/research-department/feedback-triage/meeting-brief; "
+        "materials -> materials-package/report-package/img-summary; "
+        "automation/status -> automation-blueprint/agent-ops-review/doctor; "
+        "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
     )
 
 
