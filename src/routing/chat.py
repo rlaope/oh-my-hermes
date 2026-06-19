@@ -17,6 +17,9 @@ from .recommend import recommend_skills
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
 
+FILE_LOOKUP_REASON = (
+    "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
+)
 
 
 @dataclass(frozen=True)
@@ -95,7 +98,7 @@ def route_chat_message(
         candidate_score = 0
         candidate_confidence = "low"
         action = "fallback"
-        reason = "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
+        reason = FILE_LOOKUP_REASON
         ambiguous = False
     elif candidate_score == 0:
         selected_skill = "oh-my-hermes"
@@ -117,7 +120,7 @@ def route_chat_message(
         reason = f"Best match confidence {candidate_confidence} is below {min_confidence}; clarify before dispatch."
 
     selected_harness = primary_harness_for_skill(selected_skill)
-    clarification = _clarification(action, candidate_skill, candidate_confidence, min_confidence)
+    clarification = _clarification(action, candidate_skill, candidate_confidence, min_confidence, reason)
     decision = ChatRouteDecision(
         schema_version=1,
         source=source,
@@ -156,6 +159,7 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
         str(route["action"]),
         str(route["selected_skill"]),
         str(route["candidate_skill"]),
+        str(route["reason"]),
     )
     route["routing_prompt_template"] = _routing_prompt_template(
         str(route["action"]),
@@ -215,10 +219,12 @@ def _meets_threshold(confidence: str, threshold: str) -> bool:
     return meets_confidence_threshold(confidence, threshold)
 
 
-def _clarification(action: str, candidate_skill: str, candidate_confidence: str, threshold: str) -> str:
+def _clarification(action: str, candidate_skill: str, candidate_confidence: str, threshold: str, reason: str = "") -> str:
     if action == "dispatch":
         return ""
     if action == "fallback":
+        if _is_file_lookup_reason(reason):
+            return "Answer this as a file or text lookup, or ask for the target file/path if it is missing."
         return "Ask which workflow or outcome the user wants before choosing a specialist skill."
     return f"Ask whether to use `{candidate_skill}`; confidence was {candidate_confidence}, below threshold {threshold}."
 
@@ -228,15 +234,21 @@ def _routing_prompt(action: str, selected_skill: str, candidate_skill: str, reas
 
 
 def _routing_prompt_template(action: str, selected_skill: str, candidate_skill: str, reason: str) -> str:
-    return f"{_routing_instruction(action, selected_skill, candidate_skill)}\n\nRouting reason: {reason}\n\nUser message:\n{{message}}"
+    return f"{_routing_instruction(action, selected_skill, candidate_skill, reason)}\n\nRouting reason: {reason}\n\nUser message:\n{{message}}"
 
 
-def _routing_instruction(action: str, selected_skill: str, candidate_skill: str) -> str:
+def _routing_instruction(action: str, selected_skill: str, candidate_skill: str, reason: str = "") -> str:
     if action == "dispatch":
         return f"Use the `{selected_skill}` workflow for this chat message."
     elif action == "clarify":
         return f"Use the `oh-my-hermes` router before dispatching to `{candidate_skill}`."
+    if _is_file_lookup_reason(reason):
+        return "Answer this as a file or text lookup; do not dispatch to a workflow keyword unless the user explicitly asks."
     return "Use the `oh-my-hermes` router and ask one concise clarification question."
+
+
+def _is_file_lookup_reason(reason: str) -> bool:
+    return reason == FILE_LOOKUP_REASON
 
 
 def _compact_recommendations(recommendations: object) -> list[dict[str, object]]:

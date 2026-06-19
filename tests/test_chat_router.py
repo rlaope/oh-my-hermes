@@ -140,6 +140,12 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "coding-handling")
                 self.assertEqual(decision["confidence"], "low")
                 self.assertIn("File or text lookup", decision["reason"])
+                self.assertIn("file or text lookup", decision["clarification"])
+                self.assertIn("do not dispatch to a workflow keyword", decision["routing_prompt"])
+
+                public_payload = public_route_payload(decision)
+                self.assertIn("file or text lookup", public_payload["routing_instruction"])
+                self.assertNotIn("ask one concise clarification", public_payload["routing_instruction"])
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (
