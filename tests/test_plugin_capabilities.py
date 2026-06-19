@@ -115,6 +115,8 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     handler({{"action": "inspect", "id": "retained-cognition", "section": "agent_roles"}})
                 )
                 inspected_loop = json.loads(handler({{"action": "inspect", "section": "skills", "id": "loop"}}))
+                inspected_visual = json.loads(handler({{"action": "inspect", "section": "skills", "id": "img-summary"}}))
+                inspected_process = json.loads(handler({{"action": "inspect", "section": "skills", "id": "ultraprocess"}}))
                 inspected_boundary = json.loads(
                     handler({{"action": "inspect", "section": "evidence_boundaries", "id": "prepared_is_not"}})
                 )
@@ -126,6 +128,7 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "plugin_hooks": sorted(item["name"] for item in exported["hooks"]["plugin_hooks"]),
                     "source": exported["source"],
                     "keyword_schema": keywords["keywords"]["schema_version"],
+                    "skill_ids": sorted(item["id"] for item in exported["skills"]),
                     "tool_requirement_schema": exported["tool_requirements"]["schema_version"],
                     "tool_requirement_ids": listed_tools["ids"],
                     "evidence_section": evidence["section"],
@@ -138,6 +141,16 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "retained_error": retained["error"],
                     "loop_section": inspected_loop["section"],
                     "loop_runtime_claim": inspected_loop["capability"]["runtime_claim"],
+                    "loop_routing_hint": inspected_loop["capability"]["workflow_routing_hint"],
+                    "loop_chat_rule": inspected_loop["capability"]["chat_rule"],
+                    "loop_context_rule": inspected_loop["capability"]["workflow_context_rule"],
+                    "loop_fallback_rule": inspected_loop["capability"]["fallback_rule"],
+                    "loop_evidence_boundary": inspected_loop["capability"]["evidence_boundary"],
+                    "loop_cross_lane_examples": inspected_loop["capability"]["cross_lane_examples"],
+                    "visual_lane": inspected_visual["capability"]["awareness_lane"],
+                    "visual_owner": inspected_visual["capability"]["primary_owner_role"],
+                    "process_lane": inspected_process["capability"]["awareness_lane"],
+                    "process_owner": inspected_process["capability"]["primary_owner_role"],
                     "runtime_claim": inspected["capability"]["runtime_claim"],
                     "invalid_section_error": invalid_section["error"],
                     "degraded": inspected["degraded"],
@@ -161,6 +174,17 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["plugin_hooks"], sorted(PROVIDED_HOOKS))
             self.assertEqual(payload["source"], "standalone_plugin_bundle_fallback")
             self.assertEqual(payload["keyword_schema"], "keyword_detector_manifest/v1")
+            for skill in (
+                "img-summary",
+                "ultraprocess",
+                "research-department",
+                "materials-package",
+                "automation-blueprint",
+                "code-review",
+            ):
+                with self.subTest(skill=skill):
+                    self.assertIn(skill, payload["skill_ids"])
+                    self.assertIn(skill, payload["tool_requirement_ids"])
             self.assertEqual(payload["tool_requirement_schema"], "tool_requirement_manifest/v1")
             self.assertIn("loop", payload["tool_requirement_ids"])
             self.assertEqual(payload["evidence_section"], "evidence_boundaries")
@@ -170,6 +194,16 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("unknown capability id: retained-cognition", payload["retained_error"])
             self.assertEqual(payload["loop_section"], "skills")
             self.assertEqual(payload["loop_runtime_claim"], "skill_guidance_not_execution")
+            self.assertIn("Use `loop`", payload["loop_routing_hint"])
+            self.assertIn("Normal users talk to Hermes", payload["loop_chat_rule"])
+            self.assertIn("across every OMH skill", payload["loop_context_rule"])
+            self.assertIn("missing", payload["loop_fallback_rule"])
+            self.assertIn("not observed execution", payload["loop_evidence_boundary"])
+            self.assertIn("ambitious goal -> loopability check", " ".join(payload["loop_cross_lane_examples"]))
+            self.assertEqual(payload["visual_lane"], "materials_and_visuals")
+            self.assertEqual(payload["visual_owner"], "operator")
+            self.assertEqual(payload["process_lane"], "intent_to_plan")
+            self.assertEqual(payload["process_owner"], "planner")
             self.assertEqual(payload["runtime_claim"], "descriptor_not_runtime_agent")
             self.assertIn("unknown capability section", payload["invalid_section_error"])
             self.assertTrue(payload["degraded"])

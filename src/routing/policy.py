@@ -337,6 +337,119 @@ _DELIVERABLE_GATEWAY_CONTEXT_PHRASES = (
     "gateway status",
     "platform delivery",
 )
+_RISKY_REFACTOR_TOKENS = frozenset(
+    {
+        "risky",
+        "risk",
+        "dangerous",
+        "unsafe",
+        "risque",
+        "risquee",
+        "dangereux",
+        "dangereuse",
+        "peligroso",
+        "peligrosa",
+        "riesgoso",
+        "riesgosa",
+        "inseguro",
+        "insegura",
+        "gefahrlich",
+        "gefaehrlich",
+        "riskant",
+        "riskante",
+        "riskantes",
+    }
+)
+_RISKY_REFACTOR_EXPLICIT_PHRASES = (
+    "위험한 리팩터링",
+    "위험한 리팩토링",
+    "위험한 refactor",
+    "위험한 refactoring",
+    "리팩터링 위험",
+    "리팩토링 위험",
+    "refactor 위험",
+    "refactoring 위험",
+)
+_RISKY_REFACTOR_RISK_PHRASES = (
+    "feels risky",
+    "seems risky",
+)
+_CODING_HANDOFF_EXECUTOR_TOKENS = frozenset(
+    {
+        "codex",
+        "claude",
+        "claude-code",
+        "claudecode",
+        "omx",
+        "omo",
+        "omc",
+        "executor",
+        "코덱스",
+        "클로드",
+    }
+)
+_CODING_HANDOFF_WORK_TOKENS = frozenset(
+    {
+        "implement",
+        "implementation",
+        "code",
+        "coding",
+        "fix",
+        "issue",
+        "pr",
+        "구현",
+        "코딩",
+        "수정",
+        "고쳐",
+        "이슈",
+    }
+)
+_CODING_HANDOFF_CONTROL_TOKENS = frozenset(
+    {
+        "delegate",
+        "handoff",
+        "dispatch",
+        "assign",
+        "track",
+        "tracking",
+        "status",
+        "progress",
+        "session",
+        "attach",
+        "맡기고",
+        "맡기",
+        "넘기",
+        "위임",
+        "추적",
+        "진행상태",
+        "진행",
+        "상태",
+        "세션",
+    }
+)
+_CODING_HANDOFF_PHRASES = (
+    "delegate to codex",
+    "send to codex",
+    "codex implement",
+    "codex implementation",
+    "codex handoff",
+    "codex progress tracking",
+    "codex session tracking",
+    "track coding progress",
+    "coding agent progress",
+    "open in codex",
+    "attach codex session",
+    "claude code handoff",
+    "codex로 구현",
+    "코덱스로 구현",
+    "codex에게 맡기",
+    "codex로 맡기",
+    "코덱스에게 맡기",
+    "코딩 에이전트에게 맡기",
+    "구현하게 맡기고 진행상태 추적",
+    "진행상태 추적",
+    "진행 상태 추적",
+)
 _SCHEDULED_OPS_PHRASES = (
     "every morning",
     "every day",
@@ -430,6 +543,15 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; PR or delivery-cycle requests need the one-cycle process lane rather than research-only routing.",
     activation_status="active",
 )
+CODING_HANDOFF_STATUS_GUARD = RoutingGuardRule(
+    id="coding_handoff_status_before_clarify",
+    rule="Executor-named coding handoff plus progress/status tracking should route to Ultraprocess instead of generic clarification.",
+    matched_label="guard:coding_handoff_status",
+    preferred_skills=("ultraprocess",),
+    score_boost=26,
+    why="Matched guard/trigger metadata; executor-named coding handoff and status requests should prepare a tracked one-cycle handoff without claiming execution.",
+    activation_status="active",
+)
 VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     id="img_summary_before_materials_or_delivery",
     rule="Image, card, or img-summary requests should route to img-summary before materials or PR delivery-cycle lanes.",
@@ -475,6 +597,7 @@ ROUTING_GUARD_RULES = (
     VISUAL_SUMMARY_GUARD,
     DELIVERABLE_PACKAGE_GUARD,
     DELIVERY_CYCLE_GUARD,
+    CODING_HANDOFF_STATUS_GUARD,
 )
 
 
@@ -535,27 +658,21 @@ def active_routing_guard_rules(
         rules.append(VISUAL_SUMMARY_GUARD)
     if _deliverable_package_guard_applies(normalized_query, query_tokens):
         rules.append(DELIVERABLE_PACKAGE_GUARD)
+    if _coding_handoff_status_guard_applies(normalized_query, query_tokens):
+        rules.append(CODING_HANDOFF_STATUS_GUARD)
     if delivery_cycle_applies:
         rules.append(DELIVERY_CYCLE_GUARD)
     return tuple(rules)
 
 
 def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _RISKY_REFACTOR_EXPLICIT_PHRASES):
+        return True
     if not ({"refactor", "refactoring"} & query_tokens):
         return False
-    if {"risky", "dangerous", "unsafe"} & query_tokens:
+    if _RISKY_REFACTOR_TOKENS & query_tokens:
         return True
-    return _contains_phrase(
-        normalized_query,
-        (
-            "feels risky",
-            "seems risky",
-            "위험한 리팩터링",
-            "위험한 리팩토링",
-            "리팩터링 위험",
-            "리팩토링 위험",
-        ),
-    )
+    return _contains_phrase(normalized_query, _RISKY_REFACTOR_RISK_PHRASES)
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -668,6 +785,19 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
             "pr까지",
         ),
     )
+
+
+def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    explicit_phrase = _contains_phrase(normalized_query, _CODING_HANDOFF_PHRASES)
+    executor = bool(_CODING_HANDOFF_EXECUTOR_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("claude code", "coding agent", "코딩 에이전트"),
+    )
+    work = bool(_CODING_HANDOFF_WORK_TOKENS & query_tokens)
+    control = bool(_CODING_HANDOFF_CONTROL_TOKENS & query_tokens)
+    return explicit_phrase or (executor and work and control)
 
 
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

@@ -73,7 +73,7 @@ selected.
 
 | Family | What Hermes owns | Plain request |
 | --- | --- | --- |
-| `deep-interview` / `ralplan` / `ultragoal` / `loop` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, or loopability-gated project cycle. | "Make onboarding feel smoother." |
+| `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, loopability-gated project cycle, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
 | `research-department` / `web-research` / `research-brief` / `report-package` | Prepare Scout -> Analyst -> Briefer research operations with source inbox, briefing status, knowledge-store readiness, and synthesis-tool readiness. | "Every morning, watch competitor news and brief me if something changed." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |

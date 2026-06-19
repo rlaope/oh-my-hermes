@@ -673,23 +673,28 @@ class WrapperContractTests(unittest.TestCase):
         self.assertFalse(actions["start_loop"]["enabled"])
 
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
-        message = "research the repo, plan, implement, code-review, sync docs, and prepare a PR"
+        cases = (
+            "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
+            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
+        )
 
-        payload = build_chat_interaction_payload(message, source="discord")
+        for message in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
 
-        self.assertEqual(payload["mode"], "route")
-        self.assertEqual(payload["next_action"], "start_ultraprocess")
-        self.assertEqual(payload["chat_response"]["kind"], "process")
-        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
-        self.assertEqual(payload["chat_response"]["state"]["cycle_policy"], "single_cycle")
-        self.assertFalse(payload["chat_response"]["state"]["continues_after_feedback"])
-        self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
-        self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
-        self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
-        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
-        self.assertTrue(actions["start_ultraprocess"]["enabled"])
-        self.assertFalse(actions["prepare_handoff"]["enabled"])
-        self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "start_ultraprocess")
+                self.assertEqual(payload["chat_response"]["kind"], "process")
+                self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
+                self.assertEqual(payload["chat_response"]["state"]["cycle_policy"], "single_cycle")
+                self.assertFalse(payload["chat_response"]["state"]["continues_after_feedback"])
+                self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
+                self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
+                self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
+                actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+                self.assertTrue(actions["start_ultraprocess"]["enabled"])
+                self.assertFalse(actions["prepare_handoff"]["enabled"])
+                self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
     def test_visual_summary_interaction_exposes_prompt_card_actions(self) -> None:
         cases = (

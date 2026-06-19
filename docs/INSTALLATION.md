@@ -237,9 +237,15 @@ omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smo
 ```
 
 `release skill-content-smoke` checks the installed command package's generated
-skill guidance, including router awareness and workflow context rails. It is
-not Hermes chat-load evidence. When an operator explicitly wants live evidence
-from the target Hermes profile, run one of these:
+skill guidance, including router awareness and workflow context rails. It also
+checks bundled role context, all-skill awareness lane coverage, full capability
+manifest context, standalone plugin capability fallback coverage, fallback
+routing/context/boundary fields, bounded prompt context budgets, and bounded
+capability payload budgets.
+In short, it preserves bounded context budgets while still giving Hermes enough
+OMH workflow context to route well.
+It is not Hermes chat-load evidence. When an operator explicitly wants live
+evidence from the target Hermes profile, run one of these:
 
 ```sh
 omh release hermes-smoke --live --install-path tap --target-confirmed

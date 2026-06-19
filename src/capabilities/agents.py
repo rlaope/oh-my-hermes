@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from ..catalogs.roles import RoleDefinition, role_definitions
+from ..catalogs.roles import (
+    ROLE_BOUNDARY_RULE,
+    ROLE_CHAT_RULE,
+    ROLE_WORKFLOW_CONTEXT_RULE,
+    RoleDefinition,
+    role_definitions,
+)
 from .schema import AGENT_ROLE_CAPABILITY_SCHEMA_VERSION, PREPARED_NOT_OBSERVED
 
 
@@ -38,6 +44,9 @@ def _role_capability(role: RoleDefinition) -> dict[str, object]:
         "primary_skills": list(role.primary_skills),
         "primary_harnesses": list(role.primary_harnesses),
         "allowed_wrapper_actions": list(role.wrapper_actions),
+        "workflow_context_rule": ROLE_WORKFLOW_CONTEXT_RULE,
+        "chat_rule": ROLE_CHAT_RULE,
+        "role_boundary_rule": ROLE_BOUNDARY_RULE,
         "default_orchestration_patterns": _default_patterns(role),
         "team_eligibility": _TEAM_ELIGIBILITY.get(role.id, "not_eligible"),
         "tool_requirements": {

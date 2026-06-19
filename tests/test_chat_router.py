@@ -111,6 +111,7 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             "daily research plan implement and open a PR",
             "every morning competitor research then prepare a PR",
+            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
         )
 
         for message in cases:

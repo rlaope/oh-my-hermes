@@ -21,6 +21,7 @@ from omh.skill_pack import (
     skill_exposure_payload,
 )
 from omh.playbooks import inspect_playbook, list_playbooks
+from omh.plugin_bundle.omh.awareness import ROUTER_KEYWORD_SKILLS, router_keyword_summary
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
     SkillDefinition,
@@ -30,6 +31,7 @@ from omh.skills.catalog import (
     retained_delegation_skill_names,
 )
 from omh.skills.render import workflow_reference_markdown, workflow_reference_payload
+from omh.snippet import WORKSPACE_SNIPPET
 from omh.use_cases import USE_CASES, list_use_cases
 
 
@@ -78,6 +80,11 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
+        self.assertIn(router_keyword_summary(), router.content)
+        self.assertIn(router_keyword_summary(), WORKSPACE_SNIPPET)
+        for skill_name in ROUTER_KEYWORD_SKILLS:
+            self.assertIn(f"`{skill_name}`", router.content)
+            self.assertIn(f"`{skill_name}`", WORKSPACE_SNIPPET)
         self.assertIn("OMH Awareness Primer", router.content)
         self.assertIn("consider OMH before treating it as a generic chat", router.content)
         self.assertIn("Materials and visual summaries", router.content)
@@ -122,12 +129,17 @@ class RouterContentTests(unittest.TestCase):
 
         self.assertEqual(roles_doc, roles_reference_markdown())
         self.assertIn("request-to-handoff", roles_doc)
+        self.assertIn("OMH Role Context", roles_doc)
+        self.assertIn("OMH workflow-layer responsibility context", roles_doc)
+        self.assertIn("Normal users talk to Hermes", roles_doc)
         self.assertIn("roles are responsibility descriptors, not runtime agents", roles_doc.lower())
         for role in role_definitions():
             role_file = Path("roles") / f"{role.id}.md"
             text = role_file.read_text(encoding="utf-8")
             self.assertEqual(text, role_file_markdown(role))
             self.assertIn("responsibility descriptor, not a runtime agent", text)
+            self.assertIn("OMH Role Context", text)
+            self.assertIn("prepared guidance only", text)
             self.assertIn(role.evidence_boundary, text)
             self.assertNotIn("secretly", text.lower())
             if role.id == "handoff-guide":
@@ -624,8 +636,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Runtime Evidence", skills["ultragoal"].content)
         self.assertIn("OMH Context Rail", skills["ultragoal"].content)
         self.assertIn("part of OMH's Hermes workflow layer", skills["ultragoal"].content)
+        self.assertIn("Hermes-native workflow pack", skills["ultragoal"].content)
         self.assertIn("Current lane: **Intent -> plan**", skills["ultragoal"].content)
         self.assertIn("hand back to `oh-my-hermes`", skills["ultragoal"].content)
+        self.assertIn("Cross-skill context", skills["ultragoal"].content)
+        self.assertIn("Every generated workflow skill", skills["ultragoal"].content)
         self.assertIn("Prepared OMH routing", skills["ultragoal"].content)
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
         self.assertIn("active_agent_count", skills["ultragoal"].content)
@@ -649,6 +664,9 @@ class RouterContentTests(unittest.TestCase):
             with self.subTest(skill=name):
                 self.assertIn("OMH Context Rail", skill.content)
                 self.assertIn("not a standalone executor", skill.content)
+                self.assertIn("Product context:", skill.content)
+                self.assertIn("Cross-skill context:", skill.content)
+                self.assertIn("Coverage:", skill.content)
 
     def test_coding_handoff_skills_include_executor_readiness_fallback(self) -> None:
         templates = {template.name: template.content for template in builtin_skill_templates()}
@@ -966,6 +984,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Readiness", installation)
         self.assertIn("name the responsible", installation)
         self.assertIn("Hermes CLI Release Smoke", installation)
+        self.assertIn("all-skill awareness lane coverage", installation)
+        self.assertIn("bundled role context", installation)
+        self.assertIn("bounded context budgets", installation)
         self.assertIn("--hermes-home /tmp/hermes-smoke release hermes-smoke --live --install-path setup", installation)
         self.assertIn("OMH Agent Install Protocol", install_for_agents)
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", install_for_agents)
@@ -1019,6 +1040,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Hermes Agent Integration Runbook", docs_readme)
         self.assertIn("Role Surface", docs_readme)
         self.assertIn("Agent Install Protocol", docs_readme)
+        self.assertIn("`deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`", docs_readme)
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)
         self.assertIn("docs workflows --check", ci)
@@ -1037,6 +1059,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Pinned stable install", release)
         self.assertIn("release_readiness_checklist/v1", release)
         self.assertIn("omh release checklist --version 1.0.1 --json", release)
+        self.assertIn("all-skill awareness lane coverage", release)
+        self.assertIn("bundled role context", release)
+        self.assertIn("bounded context budgets", release)
+        self.assertIn("prompt bloat", release)
         self.assertIn("Runtime evidence smoke", release)
         self.assertIn("Harness catalog validation status", release)
         self.assertIn("GitHub Pages workflow status", release)
@@ -1078,6 +1104,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Prepared is not observed", site)
         self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site)
         self.assertIn("Loop and Image gen are flagship OMH lanes.", site)
+        self.assertIn("<code>loop</code> / <code>ultraprocess</code>", site)
         self.assertIn("<h3>Loop!</h3>", site)
         self.assertIn("Image gen prompt cards", site)
         self.assertIn("Visual summaries that match the source.", site)
@@ -1097,6 +1124,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Role surface", site_docs)
         self.assertIn("docs/ROLES.md", site_docs)
         self.assertIn("INSTALL_FOR_AGENTS.md", site_docs)
+        self.assertIn("<code>loop</code> / <code>ultraprocess</code>", site_docs)
         self.assertIn("request-to-handoff", site_docs)
         self.assertIn("planner", site_docs)
         self.assertIn("Routing is not plan acceptance, dispatch, or execution evidence.", site_docs)

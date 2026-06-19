@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `ultraprocess`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
@@ -46,15 +46,29 @@ Bad example:
 
 ## OMH Awareness Primer
 
+OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, surface status, and hand off to tools or coding agents without hiding unobserved execution.
+
 When a request looks like planning, research, operations, materials, automation, image summary, coding delegation, review, status, or long-running loop work, consider OMH before treating it as a generic chat.
+
+Carry this context across every OMH skill, not only image or coding skills: match the user's intent to the nearest workflow lane, name adjacent OMH workflows when the request crosses lanes, and keep the next action clear.
+
+Every generated workflow skill carries an OMH Context Rail derived from this awareness payload.
 
 Normal users talk to Hermes; OMH CLI commands are backend, setup, verification, and wrapper infrastructure.
 
-- **Intent -> plan**: `deep-interview`, `ralplan`, `ultragoal`, `ultraprocess`, `loop` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
-- **Research and company ops**: `web-research`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department` - source-backed research, customer signals, product operations, and briefing workflows.
-- **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
-- **Automation and status**: `automation-blueprint`, `ops-observability-card`, `agent-ops-review`, `doctor` - scheduled ops blueprints, status cards, runtime health, and release/ops review.
-- **Coding handoff**: `request-to-handoff`, `executor selection`, `coding runtime handoff`, `code-review` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+- **Intent -> plan**: `deep-interview`, `plan`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`, `ralph`, `performance-goal` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
+- **Research and company ops**: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`, `meeting-brief`, `operating-rhythm`, `ops-review`, `reliability-review` - source-backed research, customer signals, product operations, and briefing workflows.
+- **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
+- **Automation and status**: `automation-blueprint`, `agent-ops-review`, `memory-curation-review`, `doctor`, `skill`, `ask`, `cancel` - scheduled ops blueprints, status cards, runtime health, and release/ops review.
+- **Coding handoff**: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`, `ultrawork`, `team`, `ultraqa`, `ai-slop-cleaner`, `request-to-handoff`, `executor selection`, `coding runtime handoff` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+
+Cross-lane examples:
+
+- ambitious goal -> loopability check -> loop or ultraprocess -> verification status
+- customer signal -> feedback-triage -> investigation plan -> coding handoff -> status
+- meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence
+- daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence
+- accepted plan -> ultraprocess -> coding handoff -> review and CI evidence
 
 If an external image tool, coding agent, connector, credential, or runtime is missing, explain the missing connection and offer a setup/selection fallback instead of claiming the action happened.
 

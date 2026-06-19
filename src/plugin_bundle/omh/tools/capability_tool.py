@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ..awareness import awareness_primer_payload
+from ..awareness import awareness_lane_examples, awareness_primer_payload
 from ..metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 
 STANDALONE_CAPABILITY_SECTIONS = (
@@ -15,6 +15,28 @@ STANDALONE_CAPABILITY_SECTIONS = (
     "tool_requirements",
     "evidence_boundaries",
 )
+CONCEPTUAL_AWARENESS_SURFACES = {
+    "request-to-handoff",
+    "executor selection",
+    "coding runtime handoff",
+}
+LANE_OWNER_ROLES = {
+    "intent_to_plan": "planner",
+    "research_and_ops": "researcher",
+    "materials_and_visuals": "operator",
+    "automation_and_status": "tracker",
+    "coding_handoff": "handoff-guide",
+}
+
+
+def standalone_skill_capability_ids() -> set[str]:
+    """Return degraded plugin fallback skill ids for release/package smoke checks."""
+    return {str(item["id"]) for item in _standalone_skill_capabilities()}
+
+
+def standalone_skill_capability_items() -> list[dict[str, object]]:
+    """Return degraded plugin fallback skill capabilities for release/package smoke checks."""
+    return _standalone_skill_capabilities()
 
 
 OMH_CAPABILITIES_SCHEMA = {
@@ -339,56 +361,51 @@ def _standalone_item_id(item: dict[str, object], fallback: str) -> str:
 
 
 def _standalone_skill_capabilities() -> list[dict[str, object]]:
-    return [
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "deep-interview",
-            "display_name": "Deep Interview",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planner",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "ralplan",
-            "display_name": "Ralplan",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planner",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "ultragoal",
-            "display_name": "Ultragoal",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "handoff-guide",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "loop",
-            "display_name": "Loop",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "planner",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "code-review",
-            "display_name": "Code Review",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "reviewer",
-            "degraded": True,
-        },
-        {
-            "schema_version": "skill_capability/v1",
-            "id": "feedback-triage",
-            "display_name": "Feedback Triage",
-            "runtime_claim": "skill_guidance_not_execution",
-            "primary_owner_role": "operator",
-            "degraded": True,
-        },
-    ]
+    capabilities: list[dict[str, object]] = []
+    seen: set[str] = set()
+    awareness = awareness_primer_payload()
+    chat_rule = str(awareness.get("chat_rule") or "")
+    context_rule = str(awareness.get("all_skill_context_rule") or "")
+    evidence_boundary = str(awareness.get("evidence_boundary") or "")
+    fallback_rule = str(awareness.get("fallback_rule") or "")
+    for lane in awareness["lanes"]:
+        if not isinstance(lane, dict):
+            continue
+        lane_id = str(lane.get("id") or "")
+        lane_label = str(lane.get("label") or lane_id)
+        owner_role = LANE_OWNER_ROLES.get(lane_id, "guide")
+        skills = lane.get("skills", [])
+        if not isinstance(skills, list):
+            continue
+        for skill in skills:
+            skill_id = str(skill)
+            if skill_id in seen or skill_id in CONCEPTUAL_AWARENESS_SURFACES:
+                continue
+            seen.add(skill_id)
+            capabilities.append(
+                {
+                    "schema_version": "skill_capability/v1",
+                    "id": skill_id,
+                    "display_name": skill_id.replace("-", " ").title(),
+                    "runtime_claim": "skill_guidance_not_execution",
+                    "primary_owner_role": owner_role,
+                    "awareness_lane": lane_id,
+                    "awareness_lane_label": lane_label,
+                    "use_for": str(lane.get("use_for") or ""),
+                    "workflow_routing_hint": (
+                        f"Use `{skill_id}` when the request fits {lane_label}: "
+                        f"{lane.get('use_for') or 'OMH workflow guidance'}. "
+                        "If the request crosses lanes, name the adjacent OMH workflow first."
+                    ),
+                    "workflow_context_rule": context_rule,
+                    "chat_rule": chat_rule,
+                    "fallback_rule": fallback_rule,
+                    "evidence_boundary": evidence_boundary,
+                    "cross_lane_examples": awareness_lane_examples(lane_id),
+                    "degraded": True,
+                }
+            )
+    return sorted(capabilities, key=lambda item: str(item["id"]))
 
 
 def _standalone_tool_requirements() -> dict[str, object]:

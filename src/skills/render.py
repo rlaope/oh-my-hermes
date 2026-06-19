@@ -17,7 +17,11 @@ from .catalog import (
     surface_exposure_for_skill,
     workflow_reference_definitions,
 )
-from ..plugin_bundle.omh.awareness import awareness_primer_markdown, awareness_workflow_context_markdown
+from ..plugin_bundle.omh.awareness import (
+    awareness_primer_markdown,
+    awareness_workflow_context_markdown,
+    router_keyword_summary,
+)
 
 
 @dataclass(frozen=True)
@@ -250,7 +254,7 @@ def router_skill() -> SkillTemplate:
     harnesses = builtin_harnesses()
     body = f"""# Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `ralph`, `ultragoal`, `ultrawork`, `ultraprocess`, `deep-interview`, `web-research`, `team`, `ultraqa`, `ralplan`, or `code-review`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as {router_keyword_summary()}.
 
 ## Routing Contract
 

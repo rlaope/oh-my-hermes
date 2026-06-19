@@ -932,6 +932,25 @@ class CliTests(unittest.TestCase):
         self.assertTrue(payload["observed"])
         self.assertEqual(payload["failed_checks"], [])
         self.assertIn("img-summary", payload["representative_skills"])
+        self.assertEqual(payload["awareness_budget_failures"], [])
+        self.assertGreaterEqual(payload["full_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertEqual(payload["missing_full_capability_skills"], [])
+        self.assertEqual(payload["missing_full_capability_context_skills"], [])
+        self.assertEqual(payload["missing_standalone_capability_skills"], [])
+        self.assertEqual(payload["unexpected_standalone_capability_skills"], [])
+        self.assertEqual(payload["missing_standalone_capability_context_skills"], [])
+        self.assertEqual(payload["capability_budget_failures"], [])
+        self.assertLessEqual(
+            payload["full_capability_skill_section_chars"],
+            payload["capability_context_char_limits"]["full_skill_section"],
+        )
+        self.assertIn("workflow_context_rule", payload["required_standalone_capability_context_fields"])
+        self.assertIn("fallback_rule", payload["required_standalone_capability_context_fields"])
+        self.assertEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertLessEqual(
+            payload["max_workflow_context_chars"],
+            payload["awareness_context_char_limits"]["workflow_context"],
+        )
 
         status, stdout, stderr = run_cli(["release", "skill-content-smoke"], output_json=False)
 
@@ -939,6 +958,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH skill content smoke", stdout)
         self.assertIn("Status: ok", stdout)
+        self.assertIn("Awareness context:", stdout)
+        self.assertIn("workflow max", stdout)
+        self.assertIn("Role context:", stdout)
+        self.assertIn("role surface(s)", stdout)
+        self.assertIn("Capability payload:", stdout)
+        self.assertIn("Full capability manifest:", stdout)
+        self.assertIn("Plugin fallback capabilities:", stdout)
+        self.assertIn("context missing 0", stdout)
         self.assertIn("For machine-readable output", stdout)
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
@@ -1841,6 +1868,9 @@ class CliTests(unittest.TestCase):
             "이거 위험한 리팩터링 같아",
             "dangerous refactor",
             "unsafe refactor",
+            "ce refactor me semble risqué",
+            "este refactor parece peligroso",
+            "dieses refactor wirkt gefährlich",
         )
 
         for message in cases:
@@ -1852,6 +1882,7 @@ class CliTests(unittest.TestCase):
                 recommendations = json.loads(stdout)["recommendations"]
                 self.assertEqual(recommendations[0]["skill"], "ralplan")
                 self.assertEqual(recommendations[0]["next_action"], "present_plan")
+                self.assertIn("guard:risky_refactor_before_cleanup", recommendations[0]["matched"])
                 self.assertIn("draft plan", recommendations[0]["evidence_boundary"])
 
     def test_recommend_web_research_stays_hermes_owned(self) -> None:
@@ -2171,6 +2202,7 @@ class CliTests(unittest.TestCase):
             "web research and source scan, then prepare a PR",
             "daily research plan implement and open a PR",
             "every morning competitor research then prepare a PR",
+            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
         )
 
         for message in cases:

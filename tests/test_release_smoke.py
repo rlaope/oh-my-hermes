@@ -37,6 +37,12 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(items["installed_command_help"]["command"], "/tmp/omh --help")
         self.assertEqual(items["skill_content_smoke"]["command"], "/tmp/omh release skill-content-smoke --json")
         self.assertIn("generated workflow context rails", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("bundled role context", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("all-skill awareness lane coverage", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("full capability manifest context", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("standalone plugin capability fallback coverage", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("bounded prompt context budgets", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("bounded capability payload budgets", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("--include-command-smoke", items["installed_command_smoke"]["command"])
         self.assertIn("dist/oh_my_hermes-1.0.0-py3-none-any.whl", items["wheel_install"]["command"])
         self.assertIn("wheel_setup_dry_run", items)
@@ -71,6 +77,66 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["router_skill"], "oh-my-hermes")
         self.assertIn("img-summary", payload["representative_skills"])
         self.assertEqual(payload["missing_representative_skills"], [])
+        self.assertEqual(payload["missing_awareness_lane_skills"], [])
+        self.assertEqual(payload["unexpected_awareness_surfaces"], [])
+        self.assertIn("request-to-handoff", payload["allowed_conceptual_awareness_surfaces"])
+        self.assertGreaterEqual(payload["awareness_lane_skill_count"], payload["workflow_skill_count"])
+        self.assertGreaterEqual(payload["full_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertEqual(payload["missing_full_capability_skills"], [])
+        self.assertEqual(payload["missing_full_capability_context_skills"], [])
+        self.assertEqual(payload["missing_standalone_capability_skills"], [])
+        self.assertEqual(payload["unexpected_standalone_capability_skills"], [])
+        self.assertEqual(payload["missing_standalone_capability_context_skills"], [])
+        self.assertGreaterEqual(payload["role_context_count"], 8)
+        self.assertEqual(payload["missing_role_context_roles"], [])
+        self.assertEqual(payload["bundled_role_context_count"], payload["role_context_count"])
+        self.assertEqual(payload["missing_bundled_role_context_roles"], [])
+        self.assertEqual(payload["missing_bundled_role_files"], [])
+        self.assertEqual(payload["unexpected_bundled_role_files"], [])
+        self.assertEqual(payload["stale_bundled_role_context_roles"], [])
+        self.assertIn("OMH Role Context", payload["required_role_context_markers"])
+        self.assertIn("workflow_routing_hint", payload["required_capability_context_fields"])
+        self.assertIn("evidence_boundary", payload["required_capability_context_fields"])
+        self.assertIn("workflow_routing_hint", payload["required_standalone_capability_context_fields"])
+        self.assertIn("evidence_boundary", payload["required_standalone_capability_context_fields"])
+        self.assertEqual(payload["standalone_capability_skill_count"], payload["workflow_skill_count"])
+        self.assertLessEqual(
+            payload["full_capability_skill_section_chars"],
+            payload["capability_context_char_limits"]["full_skill_section"],
+        )
+        self.assertLessEqual(
+            payload["standalone_capability_skill_section_chars"],
+            payload["capability_context_char_limits"]["standalone_skill_section"],
+        )
+        self.assertLessEqual(
+            payload["max_full_capability_skill_chars"],
+            payload["capability_context_char_limits"]["full_skill_item"],
+        )
+        self.assertLessEqual(
+            payload["max_standalone_capability_skill_chars"],
+            payload["capability_context_char_limits"]["standalone_skill_item"],
+        )
+        self.assertEqual(payload["capability_budget_failures"], [])
+        self.assertLessEqual(
+            payload["awareness_primer_context_chars"],
+            payload["awareness_context_char_limits"]["primer_context"],
+        )
+        self.assertLessEqual(
+            payload["awareness_primer_markdown_chars"],
+            payload["awareness_context_char_limits"]["primer_markdown"],
+        )
+        self.assertLessEqual(
+            payload["max_workflow_context_chars"],
+            payload["awareness_context_char_limits"]["workflow_context"],
+        )
+        self.assertEqual(payload["oversized_awareness_contexts"], [])
+        self.assertEqual(payload["awareness_budget_failures"], [])
+        self.assertLessEqual(
+            payload["max_role_context_chars"],
+            payload["awareness_context_char_limits"]["role_context"],
+        )
+        self.assertEqual(payload["oversized_role_contexts"], [])
+        self.assertEqual(payload["role_context_budget_failures"], [])
         self.assertEqual(payload["failed_checks"], [])
         self.assertGreaterEqual(payload["skill_count"], 40)
         self.assertGreaterEqual(payload["checked_marker_count"], 100)

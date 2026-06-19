@@ -11,6 +11,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.capabilities.registry import capability_snapshot, inspect_capability, list_capabilities
+from omh.skills.catalog import installable_skill_names
 
 
 LEGACY_ROLE_ALIASES = {
@@ -31,12 +32,29 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(first["determinism"], "static_projection_no_runtime_clock")
         self.assertEqual(first["omh_awareness"]["schema_version"], "omh_awareness/v1")
         self.assertIn("workflow-shaped requests", first["omh_awareness"]["purpose"])
+        self.assertIn("Hermes-native workflow pack", first["omh_awareness"]["product_context"])
+        self.assertIn("across every OMH skill", first["omh_awareness"]["all_skill_context_rule"])
+        self.assertIn("Every generated workflow skill", first["omh_awareness"]["skill_coverage"])
+        self.assertIn("meeting notes -> meeting-brief", " ".join(first["omh_awareness"]["cross_lane_examples"]))
         self.assertIn("img-summary", json.dumps(first["omh_awareness"], sort_keys=True))
         self.assertGreaterEqual(first["summary"]["skills"], 30)
         self.assertGreaterEqual(first["summary"]["agent_roles"], 8)
         self.assertIn("no runtime_topology schema in this PR", first["non_goals"])
         self.assertNotIn("runtime_topology", first)
         self.assertIn("Prepared OMH capability", first["evidence_boundaries"]["prepared_is_not"])
+
+    def test_awareness_lanes_cover_every_generated_workflow_skill(self) -> None:
+        awareness = capability_snapshot()["omh_awareness"]
+        lane_skills = {
+            str(skill)
+            for lane in awareness["lanes"]
+            for skill in lane["skills"]
+        }
+        generated_skills = set(installable_skill_names()) - {"oh-my-hermes"}
+        conceptual_surfaces = {"request-to-handoff", "executor selection", "coding runtime handoff"}
+
+        self.assertFalse(generated_skills - lane_skills)
+        self.assertLessEqual(lane_skills - generated_skills, conceptual_surfaces)
 
     def test_capability_sections_have_expected_ids(self) -> None:
         listing = list_capabilities()
@@ -60,13 +78,24 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(skill["schema_version"], "skill_capability/v1")
         self.assertEqual(skill["tool_requirements"]["derivation_status"], "partial")
         self.assertIn("prepared_not_observed", skill["evidence_boundary"])
+        self.assertEqual(skill["awareness_lane"], "intent_to_plan")
+        self.assertIn("Use `ultragoal`", skill["workflow_routing_hint"])
+        self.assertIn("across every OMH skill", skill["workflow_context_rule"])
+        self.assertIn("Normal users talk to Hermes", skill["chat_rule"])
+        self.assertIn("missing", skill["fallback_rule"])
+        self.assertIn("ambitious goal -> loopability check", " ".join(skill["cross_lane_examples"]))
         self.assertEqual(hidden_surface["exposure"], "harness_only")
         self.assertEqual(awareness["schema_version"], "omh_awareness/v1")
         self.assertIn("materials", awareness["first_turn_rule"])
+        self.assertIn("meeting-brief", json.dumps(awareness, sort_keys=True))
+        self.assertIn("capability manifest", awareness["context_surfaces"])
         self.assertFalse(hidden_surface["install_visibility"])
         self.assertTrue(hidden_surface["compatibility_alias"])
         self.assertIn("preferred_usage", hidden_surface)
         self.assertEqual(role["runtime_claim"], "descriptor_not_runtime_agent")
+        self.assertIn("OMH workflow-layer responsibility context", role["workflow_context_rule"])
+        self.assertIn("Normal users talk to Hermes", role["chat_rule"])
+        self.assertIn("prepared guidance only", role["role_boundary_rule"])
         self.assertIn("executor_session_handoff", role["default_orchestration_patterns"])
         self.assertEqual(legacy_role["requested_id"], "coding-handoff")
         self.assertEqual(legacy_role["resolved_id"], "handoff-guide")
