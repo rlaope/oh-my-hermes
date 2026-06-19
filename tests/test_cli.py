@@ -716,6 +716,39 @@ class CliTests(unittest.TestCase):
         self.assertFalse(plan["should_update"])
         self.assertIn("local updates require", plan["reason"])
 
+    def test_update_self_update_recognizes_venv_python_symlink_path(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            venv_bin = root / ".local" / "share" / "omh" / "venv" / "bin"
+            venv_bin.mkdir(parents=True)
+            venv_python = venv_bin / "python"
+            venv_python.symlink_to(Path(sys.executable).resolve())
+            args = Namespace(
+                command_package_updated=False,
+                dry_run=False,
+                from_skills_dir=None,
+                source=None,
+                channel="preview",
+                version="",
+                package_url="",
+            )
+
+            env = {
+                "HOME": str(root),
+                "XDG_DATA_HOME": "",
+                "OMH_VENV_DIR": "",
+                setup_commands.SELF_UPDATE_SKIP_ENV: "",
+            }
+            with patch.dict(os.environ, env, clear=False):
+                with patch.object(setup_commands.sys, "executable", str(venv_python)):
+                    runtime = setup_commands._managed_command_runtime()
+                    plan = setup_commands._command_package_self_update_plan(args)
+
+        self.assertTrue(runtime["managed"])
+        self.assertEqual(runtime["python"], str(venv_python))
+        self.assertTrue(plan["should_update"])
+        self.assertEqual(plan["python"], str(venv_python))
+
     def test_goal_cli_records_checkpoints_and_completion_gate(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

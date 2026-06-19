@@ -228,12 +228,12 @@ def _managed_command_runtime() -> dict[str, object]:
     venv_dir = _managed_command_venv_dir()
     if venv_dir is None:
         return {"managed": False, "reason": "HOME or OMH_VENV_DIR is not available"}
-    executable = Path(sys.executable).expanduser().resolve()
-    if not _is_relative_to(executable, venv_dir):
+    executable = Path(sys.executable).expanduser()
+    if not _is_relative_to_without_resolving_symlinks(executable, venv_dir):
         return {
             "managed": False,
             "reason": "current omh command is not running from the install.sh-managed OMH venv",
-            "python": str(executable),
+            "python": str(executable.resolve()),
             "venv_dir": str(venv_dir),
         }
     return {"managed": True, "reason": "", "python": str(executable), "venv_dir": str(venv_dir)}
@@ -258,6 +258,19 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_relative_to_without_resolving_symlinks(path: Path, parent: Path) -> bool:
+    try:
+        _normalize_without_final_symlink(path).relative_to(_normalize_without_final_symlink(parent))
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_without_final_symlink(path: Path) -> Path:
+    expanded = path.expanduser()
+    return expanded.parent.resolve() / expanded.name
 
 
 def _install_operation(args: argparse.Namespace) -> str:
