@@ -93,6 +93,8 @@ class ChatRouterTests(unittest.TestCase):
             "이미지 요약 카드 만들어줘",
             "이 내용을 공유용 요약 카드로 만들어줘",
             "Create an image summary card from these notes.",
+            "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
+            "The Hermes agent did not use OMH for this summary image.",
         )
 
         for message in cases:

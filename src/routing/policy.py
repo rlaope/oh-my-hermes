@@ -271,6 +271,43 @@ _VISUAL_SUMMARY_PHRASES = (
     "이미지로 설명",
     "이미지 하나 만들어줘",
 )
+_OMH_MISSED_WORKFLOW_PHRASES = (
+    "did not use omh",
+    "didn't use omh",
+    "didnt use omh",
+    "not using omh",
+    "without omh",
+    "missed omh",
+    "skipped omh",
+    "forgot omh",
+    "not aware of omh",
+    "did not know omh",
+    "didn't know omh",
+)
+_MISSED_WORKFLOW_ACTION_PHRASES = (
+    "did not use",
+    "didn't use",
+    "didnt use",
+    "does not use",
+    "doesn't use",
+    "doesnt use",
+    "not using",
+    "missed",
+    "skipped",
+    "forgot",
+    "not aware",
+    "did not know",
+    "didn't know",
+    "does not know",
+    "몰랐",
+    "모르",
+    "안 썼",
+    "안 써",
+    "안쓰",
+    "안 쓰",
+    "놓쳤",
+    "빠졌",
+)
 _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "executor-runtime-readiness",
     "runtime readiness",
@@ -1331,6 +1368,12 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
     explicit_visual_phrase = _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
     if explicit_visual_phrase:
         return True
+    if (
+        _missed_omh_workflow_context_applies(normalized_query)
+        and _VISUAL_SUMMARY_MODALITY_TOKENS & query_tokens
+        and not _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS & query_tokens
+    ):
+        return True
     if _VISUAL_SUMMARY_CARD_TOKENS & query_tokens and _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens:
         return True
     if _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS & query_tokens:
@@ -1343,6 +1386,14 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
     ):
         return True
     return False
+
+
+def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
+    if _contains_phrase(normalized_query, _OMH_MISSED_WORKFLOW_PHRASES):
+        return True
+    return ("omh" in normalized_query or "oh-my-hermes" in normalized_query) and _contains_phrase(
+        normalized_query, _MISSED_WORKFLOW_ACTION_PHRASES
+    )
 
 
 def _deliverable_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

@@ -2128,6 +2128,7 @@ class CliTests(unittest.TestCase):
             "이 내용을 공유용 요약 카드로 만들어줘",
             "이 기능을 설명하는 인포그래픽 만들어줘",
             "워크플로우 이미지로 설명해줘",
+            "이미지 생성 요청을 했는데 OMH를 안 썼어",
         )
 
         for message in cases:
