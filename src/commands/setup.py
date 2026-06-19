@@ -2177,13 +2177,20 @@ def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
             "omh_home": str(paths.omh_home),
             "runtime_state_path": str(paths.runtime_state_path),
         },
+        "bridge": {
+            "manifest_command": "omh mcp manifest",
+            "server_command": "omh mcp serve",
+            "transport": "stdio",
+            "tools": ["omh_status", "omh_recommend", "omh_probe"],
+        },
         "claim_boundary": (
             "OMH setup records the operator MCP bridge preference only; it does not prove an MCP host "
             "loaded OMH, called a tool, or observed runtime evidence."
         ),
         "next_action": (
-            "Use Hermes skills as the normal surface. Treat MCP bridge availability as unobserved until a "
-            "Hermes/MCP host records a concrete load or tool-call event."
+            "Use Hermes skills as the normal surface. If the host supports MCP, export `omh mcp manifest` and "
+            "wire the stdio `omh mcp serve` bridge. Treat host load as unobserved until a Hermes/MCP host "
+            "records a concrete load or tool-call event."
         ),
     }
 

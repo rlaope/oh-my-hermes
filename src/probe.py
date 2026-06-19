@@ -109,6 +109,42 @@ def _mcp_preference_capability(paths: OmhPaths) -> Capability:
     )
 
 
+def _mcp_bridge_server_capability() -> Capability:
+    return Capability(
+        "mcp_bridge_server",
+        "available",
+        "omh mcp manifest; omh mcp serve",
+        "OMH ships an allowlisted stdio MCP bridge with omh_status, omh_recommend, and omh_probe tools",
+    )
+
+
+def _mcp_bridge_runtime_capability(paths: OmhPaths) -> Capability:
+    state, error = read_state_result(paths)
+    evidence = str(paths.runtime_state_path)
+    if error:
+        return Capability(
+            "mcp_bridge_runtime",
+            "unknown",
+            evidence,
+            f"Could not read OMH MCP bridge runtime observation state: {error}",
+        )
+    bridge = state.get("last_mcp_bridge") if isinstance(state, dict) else None
+    if not isinstance(bridge, dict) or not bridge.get("observed"):
+        return Capability(
+            "mcp_bridge_runtime",
+            "unverified",
+            evidence,
+            "No OMH MCP bridge tool call has been observed in local OMH state",
+        )
+    tool = str(bridge.get("tool", "unknown"))
+    return Capability(
+        "mcp_bridge_runtime",
+        "available",
+        evidence,
+        f"OMH MCP bridge observed a local tool call ({tool}); host-specific load evidence remains separate",
+    )
+
+
 def _dir_capability(name: str, path: Path, found_message: str, missing_message: str) -> Capability:
     found = _has_dir(path)
     return Capability(
@@ -169,6 +205,8 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
     )
     mcp_markers = [paths.hermes_home / ".mcp.json", paths.hermes_home / "mcp.json"]
     capabilities.append(_mcp_preference_capability(paths))
+    capabilities.append(_mcp_bridge_server_capability())
+    capabilities.append(_mcp_bridge_runtime_capability(paths))
     capabilities.append(
         _marker_capability(
             "mcp_host_config",

@@ -78,6 +78,7 @@ from .materials import (
 )
 from .menubar import _add_menubar_commands, cmd_menubar_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
+from .mcp import _add_mcp_commands, cmd_mcp_manifest, cmd_mcp_serve
 from .ops import (
     _add_ops_commands,
     cmd_ops_agent_review,
@@ -160,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
             "  omh hud\n"
             "  omh menubar status\n"
+            "  omh mcp manifest\n"
             "  omh loop status\n"
             "  omh ops list\n"
             "  omh materials list\n"
@@ -199,6 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_loop_commands(sub)
     _add_memory_commands(sub)
     _add_menubar_commands(sub)
+    _add_mcp_commands(sub)
     _add_ops_commands(sub)
     _add_materials_commands(sub)
     _add_visual_commands(sub)
@@ -237,6 +240,7 @@ Useful operator commands:
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
   omh menubar status     Show the menu bar app status view model
+  omh mcp manifest       Print the optional stdio MCP bridge manifest
   omh loop status        Show loopable goal cycle state
   omh ops list           List local operations artifacts
   omh materials list     List material-processing artifacts
