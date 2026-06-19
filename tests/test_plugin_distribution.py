@@ -370,6 +370,42 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("image cards", empty_first_turn_context["context"])
             self.assertNotIn("make an image summary card for this PR", empty_first_turn_context["context"])
 
+            mid_session_visual_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="회의록을 세로 요약 이미지 카드로 만들어줘",
+                is_first_turn=False,
+            )
+            self.assertIsNotNone(mid_session_visual_context)
+            self.assertIn("[OMH Awareness]", mid_session_visual_context["context"])
+            self.assertIn("img-summary", mid_session_visual_context["context"])
+            self.assertIn("generic tool can render or execute", mid_session_visual_context["context"])
+            self.assertNotIn("회의록을 세로 요약 이미지 카드로 만들어줘", mid_session_visual_context["context"])
+
+            mid_session_generic_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="tell me a short joke",
+                is_first_turn=False,
+            )
+            self.assertIsNone(mid_session_generic_context)
+
+            suppressed_awareness_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="make a PR summary image card",
+                is_first_turn=False,
+                include_omh_awareness=False,
+            )
+            self.assertIsNone(suppressed_awareness_context)
+
+            mid_session_role_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="[omh-role:planner] do not leak this mid-session prompt",
+                is_first_turn=False,
+                include_omh_awareness=False,
+            )
+            self.assertIsNotNone(mid_session_role_context)
+            self.assertIn("[OMH Role: planner]", mid_session_role_context["context"])
+            self.assertNotIn("do not leak this mid-session prompt", mid_session_role_context["context"])
+
 
 if __name__ == "__main__":
     unittest.main()

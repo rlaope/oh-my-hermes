@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+import unicodedata
+
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 ROUTER_KEYWORD_SKILLS = (
     "deep-interview",
@@ -42,6 +45,66 @@ LANE_CROSS_LANE_EXAMPLES = {
         "risky change -> ralplan -> executor selection -> observed coding-agent status",
     ],
 }
+_AWARENESS_MESSAGE_MARKERS = (
+    "oh-my-hermes",
+    "pull request",
+    "image card",
+    "summary card",
+    "계획",
+    "리서치",
+    "회의",
+    "회의록",
+    "피드백",
+    "이슈",
+    "버그",
+    "상태",
+    "자동화",
+    "루프",
+    "코딩",
+    "리뷰",
+    "릴리즈",
+    "보고서",
+    "자료",
+    "이미지",
+    "요약 카드",
+)
+_AWARENESS_TOKEN_MARKERS = frozenset(
+    {
+        "omh",
+        "workflow",
+        "workflows",
+        "skill",
+        "skills",
+        "plan",
+        "planning",
+        "research",
+        "brief",
+        "meeting",
+        "feedback",
+        "issue",
+        "bug",
+        "pr",
+        "status",
+        "automation",
+        "cron",
+        "schedule",
+        "loop",
+        "handoff",
+        "coding",
+        "codex",
+        "claude",
+        "review",
+        "release",
+        "deck",
+        "ppt",
+        "pdf",
+        "spreadsheet",
+        "image",
+        "visual",
+        "deliverable",
+        "material",
+    }
+)
 
 
 def router_keyword_summary() -> str:
@@ -52,6 +115,17 @@ def router_keyword_summary() -> str:
 def awareness_lane_examples(lane_id: str) -> list[str]:
     """Return compact examples relevant to one OMH awareness lane."""
     return list(LANE_CROSS_LANE_EXAMPLES.get(lane_id, []))
+
+
+def awareness_context_matches_message(message: str) -> bool:
+    """Return true when a non-first-turn message should refresh OMH context."""
+    text = unicodedata.normalize("NFKC", message).casefold()
+    if not text.strip():
+        return False
+    tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", text))
+    return bool(tokens & _AWARENESS_TOKEN_MARKERS) or any(
+        marker in text for marker in _AWARENESS_MESSAGE_MARKERS
+    )
 
 
 def awareness_primer_payload() -> dict[str, object]:

@@ -22,6 +22,7 @@ from omh.release import (
 from omh.capabilities.skills import skill_capabilities
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh.awareness import (
+    awareness_context_matches_message,
     awareness_primer_context,
     awareness_primer_markdown,
     awareness_workflow_context_markdown,
@@ -96,6 +97,13 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(max(workflow_context_lengths.values()), AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT)
         self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
         self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
+
+    def test_mid_session_awareness_detector_is_bounded(self) -> None:
+        self.assertTrue(awareness_context_matches_message("회의록을 세로 요약 이미지 카드로 만들어줘"))
+        self.assertTrue(awareness_context_matches_message("make a PR summary card for reviewers"))
+        self.assertTrue(awareness_context_matches_message("what is the coding handoff status?"))
+        self.assertFalse(awareness_context_matches_message("prepare a sandwich"))
+        self.assertFalse(awareness_context_matches_message(""))
 
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
