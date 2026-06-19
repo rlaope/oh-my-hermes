@@ -43,6 +43,12 @@ _STOPWORDS = {
 }
 _FALLBACK_SKILLS = ("oh-my-hermes", "plan", "deep-interview")
 _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/planning guidance."
+_GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
+    {
+        "missed_workflow_research_recovery",
+        "missed_workflow_operating_record_recovery",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -453,6 +459,7 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
         return [recommendation.to_dict() for recommendation in matches[:limit]]
     if apply_guardrails:
         guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
+        matches = _ensure_guardrail_candidates(matches, definitions, guards, query)
         matches = _apply_guardrail_reranking(
             matches,
             guards=guards,
@@ -574,6 +581,48 @@ def _fallback_recommendations(definitions: list[SkillDefinition], query: str) ->
             )
         )
     return recommendations
+
+
+def _ensure_guardrail_candidates(
+    recommendations: list[Recommendation],
+    definitions: list[SkillDefinition],
+    guards: tuple[RoutingGuardRule, ...],
+    query: str,
+) -> list[Recommendation]:
+    injectable_guards = tuple(
+        guard for guard in guards if guard.id in _GUARDRAIL_CANDIDATE_INJECTION_IDS
+    )
+    if not injectable_guards:
+        return recommendations
+    by_skill = {recommendation.skill: recommendation for recommendation in recommendations}
+    by_definition = {definition.name: definition for definition in definitions}
+    expanded = list(recommendations)
+    for guard in injectable_guards:
+        for skill_name in guard.preferred_skills:
+            if skill_name in by_skill:
+                continue
+            definition = by_definition.get(skill_name)
+            if definition is None:
+                continue
+            recommendation = Recommendation(
+                skill=definition.name,
+                description=definition.description,
+                category=definition.category,
+                phase=definition.phase,
+                hermes_role=definition.hermes_role,
+                handoff_policy=definition.handoff_policy,
+                score=0,
+                confidence="low",
+                matched=(),
+                why=_FALLBACK_WHY,
+                next_action=_next_action(definition),
+                evidence_boundary=_evidence_boundary(definition),
+                wrapper_guidance=_wrapper_guidance(definition),
+                suggested_prompt=_suggested_prompt(definition.name, query),
+            )
+            by_skill[skill_name] = recommendation
+            expanded.append(recommendation)
+    return expanded
 
 
 def _apply_guardrail_reranking(

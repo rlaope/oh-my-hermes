@@ -58,6 +58,16 @@ class ChatRouterTests(unittest.TestCase):
                 "operating-rhythm",
             ),
             (
+                "회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어",
+                "operating-rhythm",
+                "operating-rhythm",
+            ),
+            (
+                "리서치 요청했는데 OMH를 안 썼어",
+                "web-research",
+                "research",
+            ),
+            (
                 "create a PPT report package for a monthly leadership status deck",
                 "report-package",
                 "report-package",

@@ -1902,6 +1902,7 @@ class CliTests(unittest.TestCase):
             ["ウェブ検索して最新の出典をまとめて"],
             ["查一下最新资料和来源"],
             ["buscar", "en", "la", "web", "fuentes", "actuales"],
+            ["리서치 요청했는데 OMH를 안 썼어"],
         )
 
         for args in cases:
@@ -2052,6 +2053,13 @@ class CliTests(unittest.TestCase):
         cases = (
             (
                 "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
+                "operating-rhythm",
+                "prepare_operating_record",
+                "meeting, scrum, sprint",
+                "prepared",
+            ),
+            (
+                "회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어",
                 "operating-rhythm",
                 "prepare_operating_record",
                 "meeting, scrum, sprint",
@@ -2700,6 +2708,8 @@ class CliTests(unittest.TestCase):
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "ack", "prepare_github_event_ops_card"),
+            ("리서치 요청했는데 OMH를 안 썼어", "web-research", "ack", "run_hermes_research"),
+            ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "ack", "prepare_operating_record"),
             ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "ack", "prepare_material_package"),
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
