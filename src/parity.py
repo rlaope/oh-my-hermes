@@ -87,13 +87,13 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         id="worktree_isolation",
         title="Worktree and project-session isolation",
         common_pattern="Use isolated workspaces so parallel agents can work without stepping on each other's files.",
-        omh_surface="`worktree_session_isolation/v1` plans inside coding handoffs, wrapper Prepare worktree actions, executor-session status cards, loop queue metadata, and runtime observations for worktree creation.",
-        status="partial",
-        evidence=("src/isolation.py", "src/coding_delegation.py", "src/wrapper/executor_sessions.py", "src/runtime/records.py", "tests/test_wrapper_sessions.py"),
-        missing_piece="OMH prepares and tracks workspace-isolation intent, but it does not create Git worktrees or bind host agent sessions directly.",
-        v1_decision="Show the Prepare worktree action, workspace hint, and status card step before any optional creator command exists.",
+        omh_surface="`worktree_session_isolation/v1` plans inside coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation.",
+        status="available",
+        evidence=("src/isolation.py", "src/worktree_creator.py", "src/commands/worktree.py", "src/wrapper/executor_sessions.py", "tests/test_worktree_creator.py"),
+        missing_piece="OMH can explicitly create a local Git worktree, but it does not auto-launch executors or bind host agent sessions without wrapper/runtime evidence.",
+        v1_decision="Make worktree mutation explicit and opt-in: the wrapper may show Prepare worktree, and the backend can create the Git worktree only when invoked.",
         user_value="Teams see when same workspace is acceptable, when an isolated worktree is recommended, and when it is required before opening a coding agent.",
-        claim_boundary="A worktree plan is not a created worktree; only runtime observation can mark it observed.",
+        claim_boundary="A worktree plan is not a created worktree; an OMH-created worktree is workspace-isolation evidence only, not executor dispatch or implementation evidence.",
     ),
     ParityCapability(
         id="hud_session_observability",
@@ -171,9 +171,9 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
                 "why": "Separates installed/importable plugin payloads from host-observed plugin runtime use.",
             },
             {
-                "id": "worktree-creator-opt-in",
-                "title": "Evaluate explicit opt-in worktree creator support",
-                "why": "Only add real workspace mutation if operators want OMH to create isolated worktrees instead of delegating that to the chosen runtime.",
+                "id": "worktree-session-binding-guides",
+                "title": "Add worktree-to-executor session binding recipes",
+                "why": "Shows wrappers how to connect an observed worktree to Codex, Claude Code, Hermes, or an oh-my runtime without auto-launching them.",
             },
             {
                 "id": "mcp-host-config-guides",
@@ -183,7 +183,7 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
         ],
         "claim_boundary": (
             "The parity matrix is a product and operator contract. It does not claim hidden worker launch, "
-            "worktree creation, host-observed MCP load, plugin runtime load, executor execution, review, CI, or merge evidence."
+            "automatic worktree creation, host-observed MCP load, plugin runtime load, executor execution, review, CI, or merge evidence."
         ),
     }
 
@@ -205,6 +205,7 @@ def _probe_alignment(probe_payload: dict[str, object]) -> dict[str, object]:
         "mcp_bridge_runtime": by_name.get("mcp_bridge_runtime", "unknown"),
         "mcp_host_session": by_name.get("mcp_host_session", "unknown"),
         "mcp_host_config": by_name.get("mcp_host_config", "unknown"),
+        "worktree_creator": by_name.get("worktree_creator", "unknown"),
         "target_topology": by_name.get("target_topology", "unknown"),
         "wrapper_metadata": by_name.get("wrapper_metadata", "unknown"),
     }

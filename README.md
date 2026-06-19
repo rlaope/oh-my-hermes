@@ -133,7 +133,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 - **Safe handoffs** - coding can go to Codex, Claude Code, Hermes, or another
   selected runtime, while OMH keeps "prepared" separate from "observed."
 - **Workspace-aware starts** - risky, parallel, or runtime-owned coding requests
-  can show Prepare worktree before Open in Codex or another coding agent.
+  can show Prepare worktree before Open in Codex or another coding agent; the
+  backend can explicitly create the local Git worktree when that button is used.
 - **Useful beyond coding** - research, planning, feedback triage, meeting prep,
   reports, automation blueprints, material packages, and loop work all have
   Hermes-facing workflow paths.
@@ -211,7 +212,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 | Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
 | Coding agent paths | Hermes can prepare work for Codex, Claude Code, Hermes itself, or another runtime without pretending the work already ran. |
-| Workspace isolation | Hermes can show whether the current workspace is ok, a worktree is recommended, or a worktree is required before opening the coding agent. |
+| Workspace isolation | Hermes can show whether the current workspace is ok, recommend or require a worktree, and use `omh worktree prepare` to create the local Git worktree only when explicitly chosen. |
 | Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
 | Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts: metadata-only trace, deterministic eval, human review queue, non-applying patch proposal, regression case, audit, and export bundle. |

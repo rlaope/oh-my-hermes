@@ -55,8 +55,8 @@ names shown below.
 ## Claim Boundary
 
 Capability presence means OMH can prepare guidance, status, or a handoff. It
-does not mean Hermes loaded a plugin, a worker ran, a worktree was created, code
-changed, review passed, CI passed, or a PR was merged.
+does not mean Hermes loaded a plugin, a worker ran, code changed, review passed,
+CI passed, or a PR was merged.
 
 Those claims require matching local wrapper or runtime artifacts such as
 `runtime_observation/v1`.
@@ -64,7 +64,10 @@ Those claims require matching local wrapper or runtime artifacts such as
 Workspace-isolation guidance uses `worktree_session_isolation/v1`. It can tell a
 wrapper to keep the same workspace, recommend a worktree, or require a worktree
 before opening a coding agent. It is still prepared guidance until a wrapper or
-runtime observes the workspace action.
+operator invokes or observes the workspace action. `omh worktree prepare` is the
+explicit opt-in backend that can create a local Git worktree and record
+`omh_worktree_observation/v1`; that record proves workspace isolation only, not
+executor dispatch, implementation, review, CI, or merge.
 
 The optional MCP bridge uses `omh mcp serve` and exposes only `omh_status`,
 `omh_recommend`, and `omh_probe`. Bridge availability is not host-load evidence,

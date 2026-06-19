@@ -120,6 +120,15 @@ def _mcp_bridge_server_capability() -> Capability:
     )
 
 
+def _worktree_creator_capability() -> Capability:
+    return Capability(
+        "worktree_creator",
+        "available",
+        "omh worktree prepare; omh worktree list",
+        "OMH can explicitly create local Git worktrees and record omh_worktree_observation/v1 workspace-isolation evidence",
+    )
+
+
 def _mcp_bridge_runtime_capability(paths: OmhPaths) -> Capability:
     state, error = read_state_result(paths)
     evidence = str(paths.runtime_state_path)
@@ -251,6 +260,7 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
     mcp_markers = [paths.hermes_home / ".mcp.json", paths.hermes_home / "mcp.json"]
     capabilities.append(_mcp_preference_capability(paths))
     capabilities.append(_mcp_bridge_server_capability())
+    capabilities.append(_worktree_creator_capability())
     capabilities.append(_mcp_bridge_runtime_capability(paths))
     mcp_host_session = _mcp_host_session_capability(paths)
     capabilities.append(mcp_host_session)

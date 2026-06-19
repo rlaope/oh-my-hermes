@@ -400,7 +400,10 @@ autopilot, and release maintenance. Partial rows are intentional evidence
 boundaries, not failures. The worktree row includes
 `worktree_session_isolation/v1` wrapper guidance when coding handoffs need same
 workspace, recommended worktree, or required worktree status before opening a
-coding agent; it is still not proof that a Git worktree was created.
+coding agent. If a wrapper or operator chooses the explicit backend action,
+`omh worktree prepare` can create the local Git worktree and record
+`omh_worktree_observation/v1`; that still proves workspace isolation only, not
+executor dispatch or implementation.
 
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see
@@ -706,8 +709,11 @@ Before calling the bot integration ready, verify these points:
   worker-protocol, and worktree guidance without creating a lifecycle run.
 - Coding handoffs include `worktree_session_isolation/v1` so wrappers can show
   Prepare worktree before opening an executor when risk or parallelism calls for
-  isolation. The plan remains `prepared_not_observed` until matching runtime
-  evidence exists.
+  isolation. The plan remains `prepared_not_observed` until a wrapper invokes
+  or observes the workspace action. `omh worktree prepare --repo <repo> --task
+  "<task>"` is the explicit local backend action for creating the Git worktree;
+  linked runtime ladders still require separate `runtime_observation/v1`
+  records.
 - Executor-choice, runtime-handoff, clarify, fallback, and prompt-only handoffs
   return `runtime.recorded=false`; wrappers should not expect
   `runtime.run.run_id` for those paths.
