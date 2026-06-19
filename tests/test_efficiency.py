@@ -96,6 +96,9 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(len(awareness_primer_context()), AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT)
         self.assertLessEqual(len(awareness_primer_markdown()), AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT)
         self.assertLessEqual(max(workflow_context_lengths.values()), AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT)
+        self.assertIn("Common cues:", awareness_primer_context())
+        self.assertIn("image cards/infographics -> img-summary", awareness_primer_context())
+        self.assertIn("Common cues before generic tools", awareness_primer_markdown())
         self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
         self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
 

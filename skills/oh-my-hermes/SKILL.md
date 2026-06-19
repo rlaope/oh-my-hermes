@@ -48,7 +48,7 @@ Bad example:
 
 OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off without hiding unobserved execution.
 
-When a request asks for planning, research, ops, materials, automation, image cards, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
+When a request asks for planning, research, ops records, files/materials, visual summaries, image cards, automation, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
 
 Carry this across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
 
@@ -56,11 +56,15 @@ Every generated workflow skill carries this rail.
 
 Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
 
-- **Intent -> plan**: `oh-my-hermes`, `deep-interview`, `plan`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`, `ralph`, `performance-goal` - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
-- **Research and company ops**: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`, `meeting-brief`, `operating-rhythm`, `ops-review`, `reliability-review` - source-backed research, customer signals, product operations, and briefing workflows.
-- **Materials and visual summaries**: `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki` - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
-- **Automation and status**: `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `memory-curation-review`, `doctor`, `skill`, `ask`, `cancel` - scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review.
-- **Coding handoff**: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`, `ultrawork`, `team`, `ultraqa`, `ai-slop-cleaner`, `executor-runtime-readiness`, `request-to-handoff`, `executor selection`, `coding runtime handoff` - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
+- **Intent -> plan**: ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects. Key: `oh-my-hermes`, `deep-interview`, `plan`, `ralplan`.
+- **Research and company ops**: source-backed research, customer signals, product operations, and briefing workflows. Key: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`.
+- **Materials and visual summaries**: decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages. Key: `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
+- **Automation and status**: scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review. Key: `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`.
+- **Coding handoff**: Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking. Key: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`.
+
+Common cues before generic tools:
+
+notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review.
 
 Cross-lane examples:
 
