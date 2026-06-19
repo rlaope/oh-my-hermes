@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import datetime, timezone
 from json import JSONDecodeError
 from pathlib import Path
@@ -47,6 +48,7 @@ def build_menubar_status_payload(
     *,
     limit: int = 3,
     process_overlay: dict[str, Any] | None = None,
+    observe_local_processes: bool = False,
     now: datetime | str | None = None,
 ) -> dict[str, Any]:
     safe_limit = _safe_limit(limit, default=3)
@@ -54,6 +56,8 @@ def build_menubar_status_payload(
     hermes_agents = _hermes_agent_rows(paths)
     external_executors = _external_executor_rows(paths, limit=safe_limit)
     current_executor, current_executor_source = _select_current_external_executor(paths, external_executors)
+    if observe_local_processes and process_overlay is None:
+        process_overlay = _local_process_overlay(hermes_agents, now=now)
     overlay_summary = _apply_process_overlay(
         hermes_agents,
         external_executors,
@@ -74,7 +78,7 @@ def build_menubar_status_payload(
             },
             "external_coding_executors": {
                 "title": "External coding executors",
-                "empty_label": "No external coding executor handoff observed",
+                "empty_label": "No coding agent activity observed",
             },
             "settings": {
                 "title": "Settings",
@@ -95,8 +99,9 @@ def build_menubar_status_payload(
             "rendering_rule": "Render source and model as icons in compact surfaces; expose tooltip text on hover or focus.",
         },
         "evidence_boundary": (
-            "menubar_status/v1 is a metadata-only view projection. Configured Hermes targets and prepared coding "
-            "handoffs are not process, execution, verification, review, CI, merge, or PID evidence."
+            "menubar_status/v1 is a metadata-only view projection unless a caller overlay or explicit local process "
+            "observation is applied. Configured Hermes targets and prepared coding-agent actions are not execution, "
+            "verification, review, CI, merge, or PID evidence."
         ),
         "privacy": "metadata_only",
     }
@@ -113,6 +118,74 @@ def read_process_overlay_file(path: str) -> dict[str, Any]:
     if schema != PROCESS_OVERLAY_SCHEMA_VERSION:
         raise ValueError(f"unsupported process overlay schema: {schema!r}")
     return data
+
+
+def _local_process_overlay(hermes_agents: list[dict[str, Any]], *, now: datetime | str | None) -> dict[str, Any] | None:
+    observed_at = _coerce_datetime(now) or datetime.now(timezone.utc)
+    processes = _local_hermes_process_rows()
+    overlay_agents: list[dict[str, Any]] = []
+    if len(hermes_agents) == 1 and processes:
+        process = processes[0]
+        overlay_agents.append(
+            {
+                "id": str(hermes_agents[0].get("id", "") or ""),
+                "pid": process["pid"],
+                "status": "running",
+                "summary": f"Hermes process observed locally: PID {process['pid']}.",
+            }
+        )
+    elif len(hermes_agents) > 1 and len(hermes_agents) == len(processes):
+        for agent, process in zip(hermes_agents, processes, strict=False):
+            overlay_agents.append(
+                {
+                    "id": str(agent.get("id", "") or ""),
+                    "pid": process["pid"],
+                    "status": "running",
+                    "summary": f"Hermes process observed locally: PID {process['pid']}.",
+                }
+            )
+    return {
+        "schema_version": PROCESS_OVERLAY_SCHEMA_VERSION,
+        "source": "local_process_scan",
+        "observed_at": _format_datetime(observed_at),
+        "ttl_seconds": DEFAULT_PROCESS_OVERLAY_TTL_SECONDS,
+        "restart_window_seconds": DEFAULT_RESTART_WINDOW_SECONDS,
+        "agents": overlay_agents,
+    }
+
+
+def _local_hermes_process_rows() -> list[dict[str, Any]]:
+    try:
+        result = subprocess.run(
+            ["ps", "-axo", "pid=,stat=,command="],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    rows: list[dict[str, Any]] = []
+    for raw_line in result.stdout.splitlines():
+        parts = raw_line.strip().split(None, 2)
+        if len(parts) < 3:
+            continue
+        pid, stat, command = parts
+        if not _looks_like_hermes_runtime_process(command):
+            continue
+        parsed_pid = _positive_int(pid, 0)
+        if not parsed_pid:
+            continue
+        rows.append({"pid": parsed_pid, "stat": stat, "command": command})
+    return rows
+
+
+def _looks_like_hermes_runtime_process(command: str) -> bool:
+    padded = f" {command} "
+    return " -m hermes_cli.main " in padded or "hermes_cli.main gateway run" in command
 
 
 def _hermes_agent_rows(paths: OmhPaths) -> list[dict[str, Any]]:
@@ -323,8 +396,8 @@ def _settings(
         ),
         "coding_handoff": _setting(
             value=current_executor,
-            label=f"Coding handoff: {_executor_setting_label(current_executor)}",
-            raw=f"coding_handoff:{current_executor}",
+            label=f"Coding agent: {_executor_setting_label(current_executor)}",
+            raw=f"coding_agent:{current_executor}",
         ),
         "send_mode": _setting(
             value=dispatch_policy,
@@ -360,7 +433,7 @@ def _display(
     if current_executor_row:
         pieces.append(f"{current_executor_row['name']} {current_executor_row['status_label'].lower()}")
     else:
-        pieces.append("no external executor handoff")
+        pieces.append("coding agent idle")
     return {
         "menu_title": "omh",
         "headline": headline,
@@ -376,20 +449,13 @@ def _menu_cards(
 ) -> list[dict[str, Any]]:
     return [
         {
-            "title": "Connection",
-            "rows": [
-                _menu_row("Connection", _setting_value(settings, "omh_connection", default="unknown")),
-                _menu_row("Hermes targets", str(len(hermes_agents)), detail=_target_menu_detail(settings)),
-            ],
-        },
-        {
             "title": "Agent Status",
             "columns": ["Agent", "PID", "Status"],
             "rows": _agent_status_menu_rows(hermes_agents),
-            "footer": "PID is shown only after an observed runtime overlay.",
+            "footer": "PID appears after overlay or explicit local observation.",
         },
         {
-            "title": "Coding Handoff",
+            "title": "Coding Agent",
             "rows": _coding_menu_rows(settings, current_executor_row),
         },
         {
@@ -422,15 +488,6 @@ def _agent_status_row(agent: str, pid: str, status: str, *, tone: str = "neutral
 def _setting_value(settings: dict[str, Any], key: str, *, default: str = "") -> str:
     row = _dict(settings.get(key))
     return str(row.get("value", "") or default)
-
-
-def _target_menu_detail(settings: dict[str, Any]) -> str:
-    value = _setting_value(settings, "hermes_targets", default="unknown")
-    if value.startswith("single"):
-        return "single target"
-    if value.startswith("multi"):
-        return "multi target"
-    return value
 
 
 def _coding_agent_menu_value(settings: dict[str, Any], current_executor_row: dict[str, Any]) -> str:
@@ -476,14 +533,14 @@ def _coding_menu_rows(settings: dict[str, Any], current_executor_row: dict[str, 
     dispatch = _setting_value(settings, "send_mode", default="ask_before_dispatch")
     return [
         _menu_row("Agent", _coding_agent_menu_value(settings, current_executor_row)),
-        _menu_row("Status", "idle", detail="no external handoff"),
-        _menu_row("Send mode", _dispatch_policy_menu_value(dispatch, _setting_value(settings, "coding_handoff"))),
+        _menu_row("Status", "idle", detail="no coding agent selected"),
+        _menu_row("Open mode", _dispatch_policy_menu_value(dispatch, _setting_value(settings, "coding_handoff"))),
     ]
 
 
 def _dispatch_policy_menu_value(dispatch_policy: str, executor: str) -> str:
     label = _dispatch_policy_label(dispatch_policy, executor)
-    prefix = "Send mode: "
+    prefix = "Open mode: "
     return label[len(prefix) :] if label.startswith(prefix) else label
 
 
@@ -773,7 +830,8 @@ def _overlay_summary(
         "skipped": skipped or [],
         "errors": errors or [],
         "claim_boundary": (
-            "Process status is applied only from this caller-provided overlay. OMH does not scan processes or infer PID state."
+            "Process status is applied only from a caller-provided overlay or explicit local process observation. "
+            "Plain `omh menubar status` does not scan processes or infer PID state."
         ),
     }
 
@@ -868,12 +926,12 @@ def _executor_setting_label(executor_profile: str) -> str:
 def _dispatch_policy_label(dispatch_policy: str, executor_profile: str) -> str:
     if dispatch_policy == "ask_before_dispatch":
         target = executor_label(executor_profile)
-        return f"Send mode: Ask before opening {target}" if executor_profile != "choose" else "Send mode: Ask before choosing"
+        return f"Open mode: Ask before opening {target}" if executor_profile != "choose" else "Open mode: Ask before choosing"
     if dispatch_policy == "prepare_only":
-        return "Send mode: Prepare only"
+        return "Open mode: Prepare only"
     if dispatch_policy == "configured_auto_dispatch_reserved":
-        return "Send mode: Auto dispatch reserved"
-    return f"Send mode: {dispatch_policy.replace('_', ' ')}"
+        return "Open mode: Auto dispatch reserved"
+    return f"Open mode: {dispatch_policy.replace('_', ' ')}"
 
 
 def _setting(*, value: str, label: str, raw: str) -> dict[str, str]:

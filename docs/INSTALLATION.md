@@ -103,21 +103,23 @@ omh menubar status
 
 `omh menubar status` itself emits `menubar_status/v1` JSON with separate
 `hermes_agents` and `external_coding_executors` sections, friendly labels such
-as `OMH connection: Ready`, `Hermes targets: 2`, `Coding handoff: Codex`, and
-`Send mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
-text. It also includes `display.menu_cards`, a compact Connection/Agent Status/
-Coding Handoff/Evidence card model for native menu bar surfaces. The Agent
-Status card is a small `Agent | PID | Status` list. Codex and other coding tools
-are external executors, not Hermes agents. Without an explicit process overlay,
-the payload reports configured/prepared state only and shows PID as not observed.
+as `OMH connection: Ready`, `Hermes targets: 2`, `Coding agent: Codex`, and
+`Open mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
+text. It also includes `display.menu_cards`, a compact Agent Status/Coding
+Agent/Evidence card model for native menu bar surfaces. The Agent Status card is
+a small `Agent | PID | Status` list. Codex and other coding tools are external
+executors, not Hermes agents. Without an explicit process overlay or local
+process observation, the payload reports configured/prepared state only and
+shows PID as not observed.
 
 On macOS, a normal user-scope `omh setup` also attempts to build and start the
 small OMH menu bar helper when `swiftc` is available. The helper lives under
 `~/.omh/menubar`, is started with a user LaunchAgent, and refreshes the same
-`omh menubar status` payload. The visible menu is intentionally grouped as
-Connection, Agent Status, Coding Handoff, and Evidence sections instead of a raw
-text list, and it shows process/PID detail only when a fresh overlay observed
-that process. Use explicit commands when you want to manage it yourself:
+`omh menubar status --observe-local-processes` payload. The visible menu is
+intentionally grouped as Agent Status, Coding Agent, and Evidence sections
+instead of a raw text list, and it shows process/PID detail only when a fresh
+overlay or explicit local observation saw that process. Use explicit commands
+when you want to manage it yourself:
 
 ```sh
 omh menubar install
@@ -132,15 +134,18 @@ failed helper start does not make the OMH workflow setup fail; setup reports the
 menu bar step separately.
 
 A native macOS MenuBarExtra app, the OMH menu bar helper, or a test harness can
-pass a short-lived `menubar_process_overlay/v1` file when it has actually
-observed local process state:
+pass a short-lived `menubar_process_overlay/v1` file, or ask the backend to do a
+bounded local process observation, when it has actually observed local process
+state:
 
 ```sh
 omh menubar status --overlay /path/to/overlay.json
+omh menubar status --observe-local-processes
 ```
 
-The overlay is app-local and expires by TTL. OMH does not auto-read process
-caches, scan the host, or infer that a prepared coding handoff is running.
+The overlay and local observation are app-local and expire by TTL. OMH does not
+infer that a prepared coding-agent action was executed, reviewed, passed CI, or
+merged.
 
 MCP bridge setup is also optional and intentionally conservative:
 
