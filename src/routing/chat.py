@@ -5,6 +5,7 @@ import hashlib
 from typing import Any
 
 from ..ingress import CHAT_SOURCES, extract_message_text
+from .catalog_questions import is_skill_catalog_question
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
@@ -70,11 +71,21 @@ def route_chat_message(
     candidate_score = _int_value(top["score"])
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
+    catalog_question = is_skill_catalog_question(message)
 
     if explicit_skill:
         selected_skill = explicit_skill
         action = "dispatch"
         reason = "Explicit workflow invocation wins over heuristic routing."
+        ambiguous = False
+    elif catalog_question:
+        selected_skill = "oh-my-hermes"
+        candidate_skill = selected_skill
+        candidate_harness = primary_harness_for_skill(candidate_skill)
+        candidate_score = max(candidate_score, 11)
+        candidate_confidence = "high"
+        action = "dispatch"
+        reason = "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
         ambiguous = False
     elif candidate_score == 0:
         selected_skill = "oh-my-hermes"

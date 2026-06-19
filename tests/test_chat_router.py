@@ -104,6 +104,15 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "img-summary")
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_catalog_question_dispatches_to_router_without_shell_approval(self) -> None:
+        decision = route_chat_message("OMH로 할 수 있는 workflow가 뭐야?", source="discord")
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+        self.assertEqual(decision["selected_harness"], "coding-handling")
+        self.assertEqual(decision["confidence"], "high")
+        self.assertIn("Catalog question", decision["reason"])
+
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (
             "웹서치해서 최신 자료와 출처 정리해줘",
@@ -127,6 +136,7 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             "daily research plan implement and open a PR",
             "every morning competitor research then prepare a PR",
+            "codex로 이 기능 구현 맡겨줘",
             "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
         )
 
@@ -138,6 +148,14 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_skill"], "ultraprocess")
                 self.assertEqual(decision["selected_harness"], "goal-execution")
                 self.assertEqual(decision["confidence"], "high")
+
+    def test_memory_context_chat_dispatches_to_curation_review(self) -> None:
+        decision = route_chat_message("Hermes가 기억하는 맥락을 점검하고 정리해줘", source="discord")
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "memory-curation-review")
+        self.assertEqual(decision["selected_harness"], "memory-curation-review")
+        self.assertEqual(decision["confidence"], "high")
 
     def test_event_text_extraction_supports_discord_slack_and_generic_shapes(self) -> None:
         self.assertEqual(extract_message_text({"message": {"content": "risky refactor"}}), "risky refactor")

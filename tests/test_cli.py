@@ -2212,6 +2212,7 @@ class CliTests(unittest.TestCase):
             "web research and source scan, then prepare a PR",
             "daily research plan implement and open a PR",
             "every morning competitor research then prepare a PR",
+            "codex로 이 기능 구현 맡겨줘",
             "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
         )
 
@@ -2665,6 +2666,7 @@ class CliTests(unittest.TestCase):
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
             ("./loop make this project a 10k star OSS", "loop", "loop", "reframe_north_star"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
+            ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
         )
 
         for message, selected_skill, response_kind, next_action in cases:
@@ -2702,6 +2704,7 @@ class CliTests(unittest.TestCase):
     def test_chat_interact_catalog_questions_open_picker_without_shell(self) -> None:
         for message in (
             "OMH 명령어 뭐 있어?",
+            "OMH로 할 수 있는 workflow가 뭐야?",
             "skill들은 뭐 있어?",
             "what OMH workflows are available?",
             "¿Qué comandos de OMH están disponibles?",

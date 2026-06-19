@@ -514,6 +514,7 @@ class WrapperContractTests(unittest.TestCase):
     def test_natural_catalog_questions_open_picker_without_shell(self) -> None:
         for message in (
             "OMH 명령어 뭐 있어?",
+            "OMH로 할 수 있는 workflow가 뭐야?",
             "skill들은 뭐 있어?",
             "what OMH workflows are available?",
             "¿Qué comandos de OMH están disponibles?",
