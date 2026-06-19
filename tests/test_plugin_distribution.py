@@ -358,6 +358,8 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("external image tool", context)
             self.assertIn("[omh]", context)
             self.assertIn("prepared handoffs are not execution", context)
+            self.assertIn("Pattern cards:", context)
+            self.assertIn("signals -> web-research/research-department/feedback-triage/meeting-brief", context)
             self.assertNotIn("this raw prompt should not leak", context)
 
             empty_first_turn_context = ctx.hooks["pre_llm_call"](

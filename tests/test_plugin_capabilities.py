@@ -53,6 +53,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("without requiring shell catalog approval", summary["purpose"])
             self.assertIn("img-summary", summary_lanes["materials_and_visuals"]["primary_skills"])
             self.assertIn("roles", summary["section_aliases"])
+            summary_cards = {card["id"]: card for card in summary["workflow_context_cards"]}
+            self.assertIn("feedback-triage", summary_cards["research_and_ops"]["representative_workflows"])
+            self.assertIn("img-summary", summary_cards["materials_and_visuals"]["representative_workflows"])
 
             inspected = json.loads(handler({"action": "inspect", "id": "handoff-guide"}))
             inspected_by_alias_section = json.loads(handler({"action": "inspect", "id": "handoff-guide", "section": "roles"}))
@@ -158,6 +161,10 @@ class PluginCapabilitiesTests(unittest.TestCase):
                         if lane["id"] == "intent_to_plan"
                         for playbook in lane["representative_playbooks"]
                     ],
+                    "summary_context_cards": {{
+                        card["id"]: card["representative_workflows"]
+                        for card in summary["workflow_context_cards"]
+                    }},
                     "summary_alias_roles": summary["section_aliases"]["roles"],
                     "keyword_schema": keywords["keywords"]["schema_version"],
                     "skill_ids": sorted(item["id"] for item in exported["skills"]),
@@ -223,6 +230,8 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("intent_to_plan", payload["summary_lanes"])
             self.assertIn("img-summary", payload["summary_visual_skills"])
             self.assertIn("request-to-handoff", payload["summary_intent_playbooks"])
+            self.assertIn("feedback-triage", payload["summary_context_cards"]["research_and_ops"])
+            self.assertIn("ultraprocess", payload["summary_context_cards"]["coding_handoff"])
             self.assertEqual(payload["summary_alias_roles"], "agent_roles")
             self.assertEqual(payload["keyword_schema"], "keyword_detector_manifest/v1")
             for skill in (

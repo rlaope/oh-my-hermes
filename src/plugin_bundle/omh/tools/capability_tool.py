@@ -170,6 +170,7 @@ def _standalone_capability_summary() -> dict[str, object]:
             "agent_roles": len(_standalone_items(sections["agent_roles"])),
         },
         "lanes": lanes,
+        "workflow_context_cards": awareness.get("workflow_context_cards", []),
         "direct_response_guidance": [
             "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
             "When a request matches a lane, name the likely workflow and the first safe next action.",

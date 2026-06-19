@@ -11,6 +11,7 @@ from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..operator_productivity import build_agent_operator_productivity_card
+from ..plugin_bundle.omh.awareness import workflow_context_cards
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
@@ -1472,6 +1473,7 @@ def _context_primer_state() -> dict[str, object]:
             "deliverables, coding handoffs, loops, and status updates without treating prepared guidance as observed work."
         ),
         "workflow_groups": groups,
+        "workflow_context_cards": workflow_context_cards(),
         "routing_rule": "Use Route for me when the user did not choose a workflow; use explicit workflow names when the user did.",
         "evidence_rule": "Prepared plans, prompts, cards, or handoffs are not execution, file generation, delivery, review, CI, merge, or verification evidence.",
         "inventory_rule": "Render the picker for common choices and use search_skills for the full installed catalog.",
@@ -1511,6 +1513,7 @@ def _catalog_capability_summary() -> dict[str, object]:
         "schema_version": summary.get("schema_version", "omh_capability_summary/v1"),
         "purpose": summary.get("purpose", ""),
         "lanes": compact_lanes,
+        "workflow_context_cards": list(summary.get("workflow_context_cards", [])),
         "direct_response_guidance": _as_string_list(summary.get("direct_response_guidance", [])),
         "evidence_boundary": _as_string_list(summary.get("evidence_boundary", [])),
     }

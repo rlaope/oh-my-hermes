@@ -62,17 +62,13 @@ Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrappe
 - **Automation and status**: scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review. Key: `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`.
 - **Coding handoff**: Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking. Key: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`.
 
+Workflow context cards:
+
+intent -> deep-interview/ralplan/loop/ultraprocess; signals -> web-research/research-department/feedback-triage/meeting-brief; materials -> materials-package/report-package/img-summary; automation/status -> automation-blueprint/agent-ops-review/doctor; code -> ultraprocess/code-review/team/ultrawork/ultraqa.
+
 Common cues before generic tools:
 
 notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review.
-
-Cross-lane examples:
-
-- ambitious goal -> loopability check -> loop or ultraprocess -> verification status
-- customer signal -> feedback-triage -> investigation plan -> coding handoff -> status
-- meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence
-- daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence
-- accepted plan -> ultraprocess -> coding handoff -> review and CI evidence
 
 Tools:
 
