@@ -1,0 +1,11 @@
+{
+  "event_id": "slack-route-hint-missed-route-001",
+  "team_id": "omh-demo-team",
+  "event": {
+    "client_msg_id": "slack-message-route-hint-missed-route-001",
+    "channel": "repo-maintenance",
+    "user": "maintainer-1",
+    "text": "missed route: OMH was not used",
+    "ts": "1782033900.000100"
+  }
+}

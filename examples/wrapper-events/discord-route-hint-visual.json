@@ -1,0 +1,13 @@
+{
+  "id": "discord-route-hint-visual-001",
+  "guild_id": "omh-demo-guild",
+  "message": {
+    "id": "discord-message-route-hint-visual-001",
+    "channel": "design-share",
+    "content": "make an image explaining the cron feature",
+    "author": {
+      "id": "maintainer-1"
+    },
+    "timestamp": "2026-06-20T04:05:00Z"
+  }
+}

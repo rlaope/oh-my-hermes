@@ -1,0 +1,44 @@
+{
+  "schema_version": "route_hint_golden_examples/v1",
+  "purpose": "Transport-free route-hint examples for Hermes chat wrappers that want an OMH card before shell approval or plugin load.",
+  "examples": [
+    {
+      "scenario": "visual_summary_hint",
+      "source": "discord",
+      "fixture": "examples/wrapper-events/discord-route-hint-visual.json",
+      "expected_response": {
+        "schema_version": "chat_route_hint_response/v1",
+        "kind": "workflow_route_hint",
+        "primary_workflow": "img-summary",
+        "next_action": "prepare_visual_prompt_card",
+        "action_ids": [
+          "open_workflow",
+          "route_for_me",
+          "open_picker"
+        ],
+        "messenger_rendering": "messenger_route_hint_rendering/v1",
+        "safe_to_render_without_shell_approval": true
+      },
+      "claim_boundary": "Hint-only card; not workflow selection, image generation, visual QA, attachment, delivery, or observed execution evidence."
+    },
+    {
+      "scenario": "missed_route_learning_hint",
+      "source": "slack",
+      "fixture": "examples/wrapper-events/slack-route-hint-missed-route.json",
+      "expected_response": {
+        "schema_version": "chat_route_hint_response/v1",
+        "kind": "workflow_route_hint",
+        "primary_workflow": "workflow-learning",
+        "next_action": "audit_learning_readiness",
+        "action_ids": [
+          "open_workflow",
+          "route_for_me",
+          "open_picker"
+        ],
+        "messenger_rendering": "messenger_route_hint_rendering/v1",
+        "safe_to_render_without_shell_approval": true
+      },
+      "claim_boundary": "Hint-only card; not regression capture, skill patch approval, future behavior proof, or observed workflow evidence."
+    }
+  ]
+}

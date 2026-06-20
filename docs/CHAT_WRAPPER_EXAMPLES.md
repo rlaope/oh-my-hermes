@@ -15,6 +15,8 @@ uv run python examples/discord-adapter-shim.py
 uv run python examples/discord-adapter-shim.py examples/wrapper-events/discord-command-preview.json
 uv run python examples/slack-adapter-shim.py examples/wrapper-events/slack-command-preview.json
 uv run python examples/telegram-adapter-shim.py examples/wrapper-events/telegram-command-preview.json
+uv run python examples/discord-adapter-shim.py --route-hint examples/wrapper-events/discord-route-hint-visual.json
+uv run python examples/slack-adapter-shim.py --route-hint examples/wrapper-events/slack-route-hint-missed-route.json
 uv run python -m src.cli chat route-hint --source discord "make an image explaining the cron feature"
 uv run python -m src.cli chat native-command --source discord
 uv run python -m src.cli chat native-command --source slack
@@ -146,6 +148,30 @@ State
 Use `--prompt-context` only when a wrapper intentionally injects the compact
 `[OMH Route Hint]` text into Hermes context itself. The default response is the
 safer card/JSON contract and never echoes the raw prompt.
+
+The transport-free adapter shims can render the same card directly from fixture
+events:
+
+```sh
+uv run python examples/discord-adapter-shim.py --route-hint examples/wrapper-events/discord-route-hint-visual.json
+uv run python examples/slack-adapter-shim.py --route-hint examples/wrapper-events/slack-route-hint-missed-route.json
+```
+
+Those examples lock the wrapper behavior in `examples/wrapper-golden/route-hints.json`:
+
+```text
+Hermes Agent  BOT
+[omh] img-summary looks relevant.
+
+I can open `img-summary` first because this request matches the materials and
+visuals lane. Next action: `prepare_visual_prompt_card`.
+
+[ Open img-summary ] [ Route for me ] [ Open omh ]
+```
+
+For missed OMH usage feedback, the Slack fixture routes to `workflow-learning`
+instead of treating the message as normal prose. The card still stays
+metadata-only and hint-only until the user or wrapper chooses a workflow.
 
 ## Missed OMH Route Capture
 
