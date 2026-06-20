@@ -4,7 +4,7 @@ import argparse
 import json
 
 from ..coding_delegation import CODING_EXECUTOR_TARGETS
-from ..ingress import CHAT_SOURCES
+from ..ingress import CHAT_SOURCES, extract_message_text
 from ..installer import OmhError
 from ..memory import read_handoff_context_pack_file
 from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_message, routing_record_payload
@@ -19,6 +19,7 @@ from ..wrapper.executor_sessions import (
     request_executor_session_verification,
 )
 from ..wrapper.native_commands import NATIVE_COMMAND_SOURCES, build_native_command_surface
+from ..wrapper.route_hints import build_chat_route_hint_payload
 from ..wrapper.sessions import (
     WrapperSessionError,
     build_wrapper_session_status,
@@ -69,6 +70,23 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
             ),
         )
         payload["runtime"] = {"run": run, "routing": routing}
+    _print_json(payload)
+    return 0
+
+
+def cmd_chat_route_hint(args: argparse.Namespace) -> int:
+    try:
+        event_or_message, source_metadata = _chat_input_and_metadata(args)
+        message = extract_message_text(event_or_message) if isinstance(event_or_message, dict) else str(event_or_message)
+        payload = build_chat_route_hint_payload(
+            message,
+            source=args.source,
+            max_hints=args.max_hints,
+            source_metadata=source_metadata,
+            include_prompt_context=args.prompt_context,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
     _print_json(payload)
     return 0
 
@@ -349,6 +367,34 @@ def _add_chat_commands(sub) -> None:
     route.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     route.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
     route.set_defaults(func=cmd_chat_route)
+
+    route_hint = chat_sub.add_parser(
+        "route-hint",
+        help="Print a lightweight OMH workflow hint card without recording routing or execution evidence.",
+    )
+    route_hint.add_argument("message", nargs="*", help="Chat message to preview before a workflow is selected.")
+    route_hint.add_argument(
+        "--source",
+        choices=CHAT_SOURCES,
+        default="generic",
+        help="Source surface that received the chat message.",
+    )
+    route_hint.add_argument("--stdin", action="store_true", help="Read the raw chat message from stdin.")
+    route_hint.add_argument(
+        "--event-json",
+        default=None,
+        help="Read a Slack/Discord/Hermes-like JSON event from this path, or '-' for stdin.",
+    )
+    route_hint.add_argument("--source-event-id", default="", help="Optional source message/event id to expose as metadata.")
+    route_hint.add_argument("--channel-ref", default="", help="Optional channel reference to expose as metadata.")
+    route_hint.add_argument("--user-ref", default="", help="Optional user reference to expose as metadata.")
+    route_hint.add_argument("--max-hints", type=int, default=2, help="Maximum route hints to include.")
+    route_hint.add_argument(
+        "--prompt-context",
+        action="store_true",
+        help="Also include the compact plugin-style prompt context string for wrappers that inject context manually.",
+    )
+    route_hint.set_defaults(func=cmd_chat_route_hint)
 
     interact = chat_sub.add_parser("interact")
     interact.add_argument("message", nargs="*", help="Chat message to turn into a wrapper-native interaction envelope.")
