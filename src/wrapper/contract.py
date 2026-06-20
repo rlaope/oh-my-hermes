@@ -14,6 +14,7 @@ from ..operator_productivity import build_agent_operator_productivity_card
 from ..paths import OmhPaths, resolve_paths
 from ..plugin_bundle.omh.awareness import workflow_context_card_for_workflow, workflow_context_cards
 from ..probe import probe_capabilities
+from ..quickstart import build_quickstart_card
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
@@ -67,6 +68,7 @@ VISIBLE_ACTIONS = (
     "record_executor_blocked",
     "record_executor_failed",
     "ask_hermes_verify",
+    "show_quickstart",
     "show_status",
     "show_target_status",
     "apply_target_change",
@@ -477,6 +479,17 @@ def build_chat_interaction_payload(
     if _is_generic_skill_catalog_route(message, route_payload):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
+
+    if _is_omh_quickstart_question(message) and resolved_mode in {"route", "plan", "clarify"}:
+        base["mode"] = "status"
+        base["route"] = _omh_quickstart_route_payload(route_payload)
+        base["chat_response"] = build_chat_response_from_omh_quickstart(
+            paths or resolve_paths(),
+            source=source,
+            thread_key=str(base["thread_key"]),
+        )
+        base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_quickstart"))
+        return _finish_interaction(base, target_notice)
 
     if (
         _is_omh_status_question(message)
@@ -1329,6 +1342,64 @@ def build_chat_response_from_omh_status_roadmap(paths: OmhPaths, *, thread_key: 
     )
 
 
+def build_chat_response_from_omh_quickstart(
+    paths: OmhPaths,
+    *,
+    source: str = "generic",
+    thread_key: str = "",
+) -> dict[str, object]:
+    card = build_quickstart_card(paths, source=source)
+    local_status = _nested(card, "local_status")
+    doctor = _nested(local_status, "doctor")
+    plugin_bridge = _nested(local_status, "plugin_bridge")
+    wrapper_usage = _nested(local_status, "wrapper_usage")
+    prompts = card.get("chat_prompts", [])
+    first_prompt = ""
+    if isinstance(prompts, list) and prompts and isinstance(prompts[0], dict):
+        first_prompt = str(prompts[0].get("prompt", "")).strip()
+    evidence_gaps = card.get("not_evidence_yet", [])
+    evidence_gap = str(evidence_gaps[0]) if isinstance(evidence_gaps, list) and evidence_gaps else _default_overclaim_guard()
+    roadmap = _nested(card, "capability_gap_roadmap")
+    next_actions = _roadmap_next_actions(roadmap, limit=3)
+
+    body_lines = [
+        (
+            f"OMH quickstart is {card.get('status', 'unknown')}: "
+            f"{doctor.get('passing', 0)}/{doctor.get('total', 0)} local checks pass."
+        ),
+        (
+            f"Plugin bridge: {str(plugin_bridge.get('status', 'unknown')).replace('_', ' ')}; "
+            f"Hermes plugin use: {'observed' if bool(local_status.get('plugin_runtime_active')) else 'not observed yet'}; "
+            f"wrapper usage: {str(wrapper_usage.get('status', 'missing')).replace('_', ' ')}."
+        ),
+        f"Next in Hermes: {first_prompt}" if first_prompt else "",
+        f"Boundary: {evidence_gap}",
+    ]
+    observed_gaps = [str(item) for item in evidence_gaps if str(item)] if isinstance(evidence_gaps, list) else []
+    return _chat_response(
+        kind="quickstart",
+        headline="Here is the OMH first-use path.",
+        body=" ".join(line for line in body_lines if line),
+        phase="status",
+        next_action="show_quickstart",
+        thread_key=thread_key,
+        actions=[
+            _action("show_quickstart", "Show quickstart", "primary"),
+            _action("show_skill_picker", "Open workflow picker", "secondary"),
+            _action("show_status", "Show detailed status", "secondary"),
+        ],
+        claim_boundary=str(card.get("claim_boundary") or _default_overclaim_guard()),
+        extra_state={
+            "status_source": "omh_quickstart",
+            "quickstart_card": card,
+            "capability_gap_roadmap": roadmap,
+            "roadmap_next_actions": next_actions,
+            "workflow_explanation_reason": "The user asked what to do after OMH setup or install, so the wrapper shows the first-use quickstart card instead of asking for shell command approval.",
+            "evidence_not_observed": observed_gaps,
+        },
+    )
+
+
 def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, object]:
     next_action = str(status_payload.get("next_action", "show_status"))
     kind, headline, body, claim_boundary = _status_copy(status_payload, next_action)
@@ -1667,6 +1738,73 @@ def _omh_status_route_payload(route_payload: dict[str, object]) -> dict[str, obj
         }
     )
     return updated
+
+
+def _omh_quickstart_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
+    updated = dict(route_payload)
+    harness = primary_harness_for_skill(_ROUTER_SKILL)
+    updated.update(
+        {
+            "action": "dispatch",
+            "ambiguous": False,
+            "candidate_harness": harness,
+            "candidate_skill": _ROUTER_SKILL,
+            "confidence": "high",
+            "reason": "OMH first-use or post-setup question; show the quickstart card instead of drafting a plan.",
+            "recommendations": [
+                {
+                    "confidence": "high",
+                    "evidence_boundary": "Quickstart output is local setup and wrapper guidance only; it is not host plugin load, executor work, review, CI, or merge evidence.",
+                    "matched": ["omh_quickstart_question"],
+                    "next_action": "show_quickstart",
+                    "score": max(10, _intish(updated.get("score", 0))),
+                    "skill": _ROUTER_SKILL,
+                    "wrapper_guidance": "Render the OMH quickstart card in chat; do not ask for shell approval just to answer first-use setup guidance.",
+                }
+            ],
+            "routing_instruction": "Show the OMH quickstart card and first-use Hermes prompts.",
+            "routing_prompt_template": "Show the OMH quickstart card and first-use Hermes prompts.\n\nUser message:\n{message}",
+            "score": max(10, _intish(updated.get("score", 0))),
+            "selected_harness": harness,
+            "selected_skill": _ROUTER_SKILL,
+            "threshold": "high",
+        }
+    )
+    return updated
+
+
+def _is_omh_quickstart_question(message: str) -> bool:
+    text = message.strip().lower()
+    if not text:
+        return False
+    omh_markers = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
+    if not any(marker in text for marker in omh_markers):
+        return False
+    quickstart_markers = (
+        "quickstart",
+        "getting started",
+        "first use",
+        "what next",
+        "what should i do next",
+        "what do i do next",
+        "next action",
+        "after setup",
+        "after install",
+        "installed correctly",
+        "setup next",
+        "next step",
+        "처음",
+        "퀵스타트",
+        "다음 액션",
+        "다음 단계",
+        "이제 뭐",
+        "설치됐",
+        "설치 되었",
+        "설치 완료",
+        "셋업",
+        "세팅",
+    )
+    return any(marker in text for marker in quickstart_markers)
 
 
 def _is_omh_status_question(message: str) -> bool:
@@ -2311,6 +2449,8 @@ def _usage_label(state: dict[str, object], *, kind: str, phase: str, next_action
         return "plan"
     if kind == "clarification":
         return "clarification"
+    if kind == "quickstart":
+        return "quickstart"
     if kind in {"status", "blocker"}:
         return "status"
     if kind == "handoff":

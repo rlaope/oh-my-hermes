@@ -667,33 +667,57 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(response["usage_trace"]["visible_prefix"], "[omh] status")
         self.assertEqual(response["usage_trace"]["evidence_state"], "observed_partial")
 
-    def test_omh_status_questions_render_probe_roadmap_instead_of_plan(self) -> None:
+    def test_omh_first_use_questions_render_quickstart_card_without_shell(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
             for message in (
                 "what should I do next with OMH setup?",
                 "omh 상태랑 다음 액션 알려줘",
+                "OMH 설치됐는데 이제 뭐해?",
                 "is OMH installed correctly?",
-                "show OMH status",
             ):
                 with self.subTest(message=message):
                     payload = build_chat_interaction_payload(message, source="discord", paths=paths)
 
                     self.assertEqual(payload["mode"], "status")
-                    self.assertEqual(payload["next_action"], "show_status")
+                    self.assertEqual(payload["next_action"], "show_quickstart")
                     self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
-                    self.assertEqual(payload["chat_response"]["kind"], "status")
-                    self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] status - "))
-                    self.assertIn("OMH setup gaps:", payload["chat_response"]["body"])
+                    self.assertEqual(payload["route"]["recommendations"][0]["matched"], ["omh_quickstart_question"])
+                    self.assertEqual(payload["chat_response"]["kind"], "quickstart")
+                    self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] quickstart - "))
+                    self.assertIn("OMH quickstart is", payload["chat_response"]["body"])
+                    self.assertIn("Use OMH request-to-handoff", payload["chat_response"]["body"])
                     self.assertIn("Boundary:", payload["chat_response"]["body"])
                     state = payload["chat_response"]["state"]
-                    self.assertEqual(state["status_source"], "omh_probe")
+                    self.assertEqual(state["status_source"], "omh_quickstart")
+                    self.assertEqual(state["quickstart_card"]["schema_version"], "omh_quickstart_card/v1")
+                    self.assertEqual(state["quickstart_card"]["source"], "discord")
                     roadmap = state["capability_gap_roadmap"]
                     self.assertEqual(roadmap["schema_version"], "omh_capability_gap_roadmap/v1")
                     self.assertGreaterEqual(roadmap["summary"]["baseline_product_gaps"], 1)
                     self.assertEqual(state["roadmap_next_actions"][0]["id"], "run_setup")
-                    self.assertEqual(state["workflow_explanation"]["label"], "status")
+                    self.assertEqual(state["workflow_explanation"]["label"], "quickstart")
                     self.assertNotIn(message, json.dumps(payload))
+
+    def test_explicit_omh_status_questions_can_still_render_probe_roadmap(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            payload = build_chat_interaction_payload("show OMH status", source="discord", paths=paths)
+
+            self.assertEqual(payload["mode"], "status")
+            self.assertEqual(payload["next_action"], "show_status")
+            self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+            self.assertEqual(payload["chat_response"]["kind"], "status")
+            self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] status - "))
+            self.assertIn("OMH setup gaps:", payload["chat_response"]["body"])
+            self.assertIn("Boundary:", payload["chat_response"]["body"])
+            state = payload["chat_response"]["state"]
+            self.assertEqual(state["status_source"], "omh_probe")
+            roadmap = state["capability_gap_roadmap"]
+            self.assertEqual(roadmap["schema_version"], "omh_capability_gap_roadmap/v1")
+            self.assertGreaterEqual(roadmap["summary"]["baseline_product_gaps"], 1)
+            self.assertEqual(state["roadmap_next_actions"][0]["id"], "run_setup")
+            self.assertEqual(state["workflow_explanation"]["label"], "status")
 
     def test_direct_omh_invocation_exposes_skill_picker(self) -> None:
         payload = build_chat_interaction_payload("./omh", source="discord")
