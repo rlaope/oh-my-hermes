@@ -278,6 +278,7 @@ _ROUTE_HINT_RULES = (
         "lane": "automation_and_status",
         "next_action": "record_missed_route",
         "reason": "The user is reporting that OMH or the expected workflow was not used.",
+        "fallback_action": "record_learning_trace_or_show_route_review",
         "phrases": (
             "missed route",
             "missed workflow",
@@ -299,6 +300,7 @@ _ROUTE_HINT_RULES = (
         "lane": "materials_and_visuals",
         "next_action": "prepare_visual_prompt_card",
         "reason": "The user is asking for an image card, infographic, poster, or shareable visual summary.",
+        "fallback_action": "choose_image_generator_or_prompt_only_when_missing",
         "phrases": (
             "image card",
             "summary card",
@@ -325,6 +327,7 @@ _ROUTE_HINT_RULES = (
         "lane": "research_and_ops",
         "next_action": "classify_signal_and_prepare_investigation",
         "reason": "The user is describing customer feedback, bugs, issues, or product signals that need triage before implementation.",
+        "fallback_action": "ask_for_examples_or_prepare_repro_plan",
         "phrases": (
             "customer feedback",
             "payment failure",
@@ -347,6 +350,7 @@ _ROUTE_HINT_RULES = (
         "lane": "automation_and_status",
         "next_action": "prepare_scheduled_ops_blueprint",
         "reason": "The user is asking for recurring, scheduled, cron-like, or digest-style work.",
+        "fallback_action": "confirm_schedule_delivery_and_tools",
         "phrases": (
             "every morning",
             "every day",
@@ -369,6 +373,7 @@ _ROUTE_HINT_RULES = (
         "lane": "research_and_ops",
         "next_action": "gather_source_backed_evidence",
         "reason": "The user is asking for current, source-backed, market, competitor, paper, or news research.",
+        "fallback_action": "ask_for_scope_or_source_constraints",
         "phrases": (
             "web search",
             "best practice",
@@ -392,6 +397,7 @@ _ROUTE_HINT_RULES = (
         "lane": "coding_handoff",
         "next_action": "prepare_one_cycle_delivery",
         "reason": "The user is asking for coding delivery, PR preparation, implementation, review, CI, or merge-oriented work.",
+        "fallback_action": "choose_coding_agent_or_runtime",
         "phrases": (
             "pull request",
             "code review",
@@ -490,6 +496,7 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
                     "lane": str(rule["lane"]),
                     "next_action": str(rule["next_action"]),
                     "reason": str(rule["reason"]),
+                    "fallback_action": str(rule["fallback_action"]),
                     "matched_cues": _bounded_matches(phrase_matches + token_matches),
                     "adjacent_workflows": list(rule["adjacent_workflows"]),
                     "workflow_context_card": context_card,
@@ -537,6 +544,14 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
             f"- workflow={hint.get('workflow')}; lane={hint.get('lane')}; "
             f"next_action={hint.get('next_action')}; reason={hint.get('reason')}"
         )
+        context_card = hint.get("workflow_context_card")
+        if isinstance(context_card, dict):
+            first_response_shape = str(context_card.get("first_response_shape") or "").strip()
+            if first_response_shape:
+                lines.append(f"  first_response_shape={first_response_shape}")
+        fallback_action = str(hint.get("fallback_action") or "").strip()
+        if fallback_action:
+            lines.append(f"  fallback_action={fallback_action}.")
         if adjacent:
             lines.append(f"  adjacent_workflows={adjacent}.")
         not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", [])[:4])

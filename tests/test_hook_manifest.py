@@ -111,11 +111,22 @@ class HookManifestTests(unittest.TestCase):
         self.assertIn("[OMH Route Hint]", context)
         self.assertIn("workflow=img-summary", context)
         self.assertIn("workflow=automation-blueprint", context)
+        self.assertIn("first_response_shape=Separate copy/layout/package prep", context)
+        self.assertIn("fallback_action=choose_image_generator_or_prompt_only_when_missing", context)
+        self.assertIn("fallback_action=confirm_schedule_delivery_and_tools", context)
         self.assertIn("not_evidence_yet=file export, image generation", context)
         self.assertEqual(context_brief["schema_version"], "omh_context_brief/v1")
         self.assertEqual(context_brief["source"], "pre_llm_call")
         self.assertEqual(context_brief["route_hint"]["primary_workflow"], "img-summary")
         self.assertEqual(context_brief["route_hint"]["primary_next_action"], "prepare_visual_prompt_card")
+        self.assertEqual(
+            context_brief["route_hint"]["hints"][0]["fallback_action"],
+            "choose_image_generator_or_prompt_only_when_missing",
+        )
+        self.assertIn(
+            "generated file or image evidence",
+            context_brief["route_hint"]["hints"][0]["workflow_context_card"]["first_response_shape"],
+        )
         self.assertFalse(context_brief["message"]["raw_prompt_stored"])
         self.assertFalse(context_brief["message"]["raw_prompt_echoed"])
         self.assertNotIn(message, context)
