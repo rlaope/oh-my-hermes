@@ -228,12 +228,14 @@ executor observations, records verification observations, and reports derived
 status without mutating prepared handoff records into execution proof.
 
 `wrapper/executor_sessions.py` owns wrapper-native executor session metadata.
-It turns chat buttons such as Open in Codex, Open in Claude Code, Attach
-session, Refresh status, Record completed, Record blocked, and Ask Hermes to
-verify into `executor_session/v1` records and status lines. It can bridge to the
-Codex lifecycle run or a runtime-start observation when the wrapper reports an
-observed open, but it does not launch Codex, Claude Code, Hermes, workers,
-worktrees, or network transports.
+It turns Hermes actions such as Start Codex session, Start Claude Code session,
+Attach coding session, Refresh status, Record completed, Record blocked, and Ask
+Hermes to verify into `executor_session/v1` records and status lines. It can
+bridge to the Codex lifecycle run or a runtime-start observation when Hermes or
+the wrapper reports an observed coding-session start/attach event. OMH still
+does not secretly launch Codex, Claude Code, Hermes, workers, worktrees, or
+network transports; it tells Hermes what to start and records what Hermes or the
+wrapper actually observed.
 
 `hermes_planning.py` owns deterministic Hermes-facing planning artifacts under
 `.hermes/plans/` and the machine-readable plan wrapper contract used after plan

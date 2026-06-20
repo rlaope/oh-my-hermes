@@ -204,14 +204,14 @@ User-facing effect:
   runtime handoff with team/swarm, worker-protocol, and worktree guidance.
   Claude Code and generic profiles render a copyable prompt handoff instead of
   lifecycle evidence.
-- `Open in Codex` and `Open in Claude Code` include an
-  `executor_launch/v1` payload. Render that as copyable terminal commands for
-  Codex or Claude Code. Prompt placeholders use
+- `Start Codex session` and `Start Claude Code session` include an
+  `executor_launch/v1` payload. Render that as Hermes-owned terminal/session
+  commands for the configured coding agent. Prompt placeholders use
   `{executor_prompt_shell_quoted}`; workspace command templates use
-  `{workspace_path_shell_quoted}` for shell-safe paths. After the wrapper
-  observes the user or platform open the executor, it records the backend open
-  action; showing the command is still not execution evidence. Executors
-  without a deterministic local command expose prompt-copy guidance only, not a
+  `{workspace_path_shell_quoted}` for shell-safe paths. After Hermes or the
+  wrapper observes that the coding session exists, it records the backend open
+  action; a prepared command is still not execution evidence. Executors without
+  a deterministic local command expose prompt-copy guidance only, not a
   terminal command.
 - If `worktree_session_isolation/v1` says worktree recommended or required,
   render `Prepare worktree` before the open button. The action prepares wrapper

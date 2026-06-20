@@ -59,16 +59,16 @@ when wrappers or operators later observe runtime start, worktree, worker,
 verification, review, CI, or merge ladder events.
 
 Coding handoffs also include `worktree_session_isolation/v1`. Hermes can show
-same workspace ok, worktree recommended, or worktree required before opening a
-coding agent. When a wrapper or operator chooses to proceed, `omh worktree
+same workspace ok, worktree recommended, or worktree required before starting a
+coding session. When a wrapper or operator chooses to proceed, `omh worktree
 prepare` can create the local Git worktree and write
 `omh_worktree_observation/v1`. That record proves workspace isolation only; the
 executor session and runtime ladder still need separate observed evidence.
 
-Executor session buttons use `executor_session/v1` records when a wrapper
-observes Open in Codex, Open in Claude Code, Attach session, Record completed,
-Record blocked, or Ask Hermes to verify. They update chat status without
-requiring normal users to type backend commands.
+Executor session buttons use `executor_session/v1` records when Hermes or a
+wrapper observes Start Codex session, Start Claude Code session, Attach coding
+session, Record completed, Record blocked, or Ask Hermes to verify. They update
+chat status without requiring normal users to type backend commands.
 
 Operating models are optional advanced Hermes collaboration postures. They
 should not be described as installed agents or first-run setup choices unless a

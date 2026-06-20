@@ -141,24 +141,25 @@ omh chat session status "$SESSION_ID"
 ```
 
 Before a handoff is prepared, the status card should explain the plan or
-executor-choice state without showing executor open/result buttons. After a
+executor-choice state without showing executor start/result buttons. After a
 handoff is prepared, render the returned `chat_response.actions` as
-Hermes-native buttons. A normal user should see actions such as Open in Codex,
-Open in Claude Code, Attach session, Refresh status, Record completed, Record
-blocked, or Ask Hermes to verify. The wrapper process maps those buttons back
-to backend calls; the user does not need to know the command names.
+Hermes-native actions. A normal user should see actions such as Start Codex
+session, Start Claude Code session, Attach coding session, Refresh status,
+Record completed, Record blocked, or Ask Hermes to verify. The wrapper process
+maps those actions back to backend calls; the user does not need to know the
+command names.
 
-Open buttons include `executor_launch/v1` under
-`executor_actions[].payload.launch`. Render it as a copyable command/prompt UI.
-Codex command templates use `codex` and optional `codex --cd`; Claude Code
-command templates use `claude` and optional `claude --add-dir`. Prompt
-placeholders use `{executor_prompt_shell_quoted}`, and workspace command
-templates use `{workspace_path_shell_quoted}` for shell-safe paths. The launch
-payload is explicitly `ui_only` and `not_backend_execution`; fallback executors
-without a deterministic local command expose prompt-copy guidance only. The
-wrapper substitutes `{executor_prompt}` from the prepared handoff prompt or
-original chat message it already holds, then calls `open-executor --observed`
-only after it sees the user/platform open the executor.
+Start-session buttons include `executor_launch/v1` under
+`executor_actions[].payload.launch`. The payload names the configured executor
+profile so Hermes can start the right path: Codex if setup/session selected
+Codex, Claude Code if it selected Claude Code, Hermes/runtime paths when those
+profiles are selected. Codex command templates use `codex` and optional
+`codex --cd`; Claude Code command templates use `claude` and optional
+`claude --add-dir`. Prompt placeholders use `{executor_prompt_shell_quoted}`,
+and workspace command templates use `{workspace_path_shell_quoted}` for
+shell-safe paths. OMH itself still does not execute the coding agent; Hermes or
+the wrapper starts or attaches the terminal/app session, then calls
+`open-executor --observed` only after that coding session exists.
 
 For a Codex handoff, the wrapper can record an observed open and later result:
 

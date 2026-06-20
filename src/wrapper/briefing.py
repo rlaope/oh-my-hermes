@@ -402,9 +402,9 @@ def _user_facing_lines(
     if isolation_plan:
         strategy = str(isolation_plan.get("strategy", "same_workspace_ok"))
         if strategy == "worktree_required":
-            lines.append("Workspace isolation is required before opening the coding agent.")
+            lines.append("Workspace isolation is required before starting the coding session.")
         elif strategy == "worktree_recommended":
-            lines.append("Workspace isolation is recommended before opening the coding agent.")
+            lines.append("Workspace isolation is recommended before starting the coding session.")
     if team_path:
         observed = [str(step["id"]) for step in runtime_milestones if step.get("state") == "complete"]
         remaining = [str(step["id"]) for step in runtime_milestones if step.get("state") in {"pending", "blocked", "in_progress"}]
