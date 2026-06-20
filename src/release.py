@@ -29,6 +29,7 @@ from .plugin_bundle.omh.tools.capability_tool import (
     standalone_skill_capability_ids,
     standalone_skill_capability_items,
 )
+from .parity import build_parity_matrix
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
 from .skills.catalog import builtin_definitions
@@ -37,6 +38,7 @@ from .use_cases import (
     build_all_use_case_artifacts,
     demo_all_use_cases,
     replay_use_case_fixtures,
+    use_case_readiness,
     validate_use_case_artifact,
 )
 
@@ -47,6 +49,7 @@ RELEASE_CHECKLIST_SCHEMA = "release_readiness_checklist/v1"
 INSTALLED_COMMAND_SMOKE_SCHEMA = "installed_omh_command_smoke/v1"
 FIRST_USE_STATUS_SMOKE_SCHEMA = "first_use_status_smoke/v1"
 SKILL_CONTENT_SMOKE_SCHEMA = "skill_content_smoke/v1"
+PRODUCT_READINESS_SCHEMA = "omh_product_readiness/v1"
 RELEASE_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*(?:[-_+.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$")
 DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
 DEFAULT_HERMES_SKILL = "oh-my-hermes"
@@ -226,6 +229,16 @@ def release_readiness_checklist(
             False,
             "Use-case readiness reports catalog, demo-card, artifact-bundle, and replay gates as passing while separating optional local artifact-store state.",
             "Use-case readiness proves deterministic local use-case contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
+        ),
+        ReleaseChecklistItem(
+            "product_readiness",
+            "Check product readiness rollup",
+            f"{omh_display} release product-readiness --version {release_version} --json",
+            "contract-quality",
+            True,
+            False,
+            "Product readiness reports skill-content, G1-G10 use-case, parity, and release checklist gates as passing.",
+            "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
             "stable_install_dry_run",
@@ -415,6 +428,121 @@ def release_readiness_checklist(
         "recommended_next_action": (
             "Run the required local gates, record one live Hermes smoke from the target profile, then request explicit "
             "release authority before tagging or publishing."
+        ),
+    }
+
+
+def product_readiness_report(
+    *,
+    version: str = __version__,
+    omh_command: str = "omh",
+) -> dict[str, object]:
+    release_version = _normalize_release_version(version)
+    omh_display = _shell_word(omh_command)
+    skill_content = skill_content_smoke()
+    parity = build_parity_matrix()
+    checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
+
+    checklist_items = checklist.get("items", [])
+    checklist_ids = {
+        str(item.get("id"))
+        for item in checklist_items
+        if isinstance(item, dict) and item.get("id")
+    }
+    required_checklist_ids = {
+        "unit_tests",
+        "docs_workflows_check",
+        "harness_validate",
+        "skill_content_smoke",
+        "use_case_readiness",
+        "product_readiness",
+        "installed_command_smoke",
+        "installer_smoke",
+        "live_tap_smoke",
+    }
+    missing_checklist_ids = sorted(required_checklist_ids - checklist_ids)
+
+    parity_summary = parity.get("summary", {}) if isinstance(parity.get("summary"), dict) else {}
+    parity_errors = []
+    for status_key in ("partial", "planned", "deferred"):
+        count = int(parity_summary.get(status_key, 0) or 0)
+        if count:
+            parity_errors.append(f"{status_key}: {count}")
+
+    gates = [
+        _product_readiness_gate(
+            "skill_content",
+            "Installed package skill content",
+            "passed" if skill_content.get("ok") else "failed",
+            True,
+            (
+                f"{skill_content.get('skill_count')} skill surface(s), "
+                f"{skill_content.get('checked_marker_count')} marker(s), "
+                f"{len(skill_content.get('failed_checks', [])) if isinstance(skill_content.get('failed_checks'), list) else 0} failed marker(s)"
+            ),
+            "omh release skill-content-smoke --json",
+            _skill_content_product_errors(skill_content),
+            [],
+            str(skill_content.get("proof_boundary", "")),
+        ),
+        _product_readiness_gate(
+            "use_cases",
+            "G1-G10 application use cases",
+            "passed" if skill_content.get("use_case_readiness_blocking_failures") == 0 else "failed",
+            True,
+            (
+                f"score {skill_content.get('use_case_readiness_score')}/100; "
+                f"blocking {skill_content.get('use_case_readiness_blocking_failures')}; "
+                f"warnings {skill_content.get('use_case_readiness_warning_count')}"
+            ),
+            "omh cases readiness --json",
+            _string_list(skill_content.get("use_case_readiness_failures")),
+            _string_list(skill_content.get("use_case_readiness_warnings")),
+            str(skill_content.get("use_case_readiness_boundary", "")),
+        ),
+        _product_readiness_gate(
+            "parity_contracts",
+            "Common runtime parity contract coverage",
+            "passed" if not parity_errors else "failed",
+            True,
+            (
+                f"{parity_summary.get('available', 0)}/{parity_summary.get('capability_count', 0)} "
+                "capability axis/axes available"
+            ),
+            "omh probe --parity --json",
+            parity_errors,
+            [],
+            str(parity.get("claim_boundary", "")),
+        ),
+        _product_readiness_gate(
+            "release_checklist",
+            "Release checklist shape",
+            "passed" if not missing_checklist_ids and checklist.get("ok") else "failed",
+            True,
+            f"{checklist.get('required_item_count')} required release gate(s) indexed",
+            f"{omh_display} release checklist --version {release_version} --json",
+            [f"missing checklist id: {item_id}" for item_id in missing_checklist_ids],
+            [],
+            str(checklist.get("proof_boundary", "")),
+        ),
+    ]
+    blocking_failures = [gate for gate in gates if gate["blocking"] and gate["status"] != "passed"]
+    warning_count = sum(len(gate.get("warnings", [])) for gate in gates)
+    return {
+        "schema_version": PRODUCT_READINESS_SCHEMA,
+        "status": "ready" if not blocking_failures else "needs_attention",
+        "score": 100 if not blocking_failures else round(((len(gates) - len(blocking_failures)) / max(1, len(gates))) * 100),
+        "mode": "live",
+        "observed": True,
+        "version": release_version,
+        "blocking_failures": len(blocking_failures),
+        "warning_count": warning_count,
+        "gates": gates,
+        "next_actions": _product_readiness_next_actions(blocking_failures, warning_count),
+        "boundary": (
+            "Product readiness proves deterministic local OMH package and product contracts only. "
+            "It does not run the release checklist, mutate Hermes, prove live Hermes chat selection, "
+            "run connectors, dispatch executors, review code, pass CI, merge, deliver messages, or spend provider budget."
         ),
     }
 
@@ -755,6 +883,9 @@ def skill_content_smoke() -> dict[str, object]:
     use_case_artifact_failures = _use_case_artifact_failures(use_case_artifact_bundle)
     use_case_replay = replay_use_case_fixtures()
     use_case_replay_failures = _use_case_replay_failures(use_case_replay)
+    use_case_readiness_payload = use_case_readiness(None)
+    use_case_readiness_failures = _blocking_gate_messages(use_case_readiness_payload)
+    use_case_readiness_warnings = _warning_gate_messages(use_case_readiness_payload)
     max_full_capability_skill_chars = max(
         (len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in full_capability_items),
         default=0,
@@ -865,6 +996,7 @@ def skill_content_smoke() -> dict[str, object]:
         and not use_case_demo_failures
         and not use_case_artifact_failures
         and not use_case_replay_failures
+        and not use_case_readiness_failures
     )
     return {
         "schema_version": SKILL_CONTENT_SMOKE_SCHEMA,
@@ -936,6 +1068,14 @@ def skill_content_smoke() -> dict[str, object]:
         "use_case_replay_passed": use_case_replay.get("passed"),
         "expected_use_case_replay_total": use_case_replay.get("expected_total"),
         "use_case_replay_failures": use_case_replay_failures,
+        "use_case_readiness_schema": use_case_readiness_payload.get("schema_version"),
+        "use_case_readiness_status": use_case_readiness_payload.get("status"),
+        "use_case_readiness_score": use_case_readiness_payload.get("score"),
+        "use_case_readiness_blocking_failures": use_case_readiness_payload.get("blocking_failures"),
+        "use_case_readiness_warning_count": use_case_readiness_payload.get("warning_count"),
+        "use_case_readiness_failures": use_case_readiness_failures,
+        "use_case_readiness_warnings": use_case_readiness_warnings,
+        "use_case_readiness_boundary": use_case_readiness_payload.get("boundary"),
         "awareness_context_char_limits": {
             "primer_context": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
             "primer_markdown": AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
@@ -957,6 +1097,117 @@ def skill_content_smoke() -> dict[str, object]:
             "It does not prove the target Hermes profile installed, loaded, selected, or used those skills in chat."
         ),
     }
+
+
+def _product_readiness_gate(
+    gate_id: str,
+    title: str,
+    status: str,
+    blocking: bool,
+    summary: str,
+    command: str,
+    errors: Sequence[object] | None,
+    warnings: Sequence[object] | None,
+    proof_boundary: str,
+) -> dict[str, object]:
+    return {
+        "id": gate_id,
+        "title": title,
+        "status": status,
+        "blocking": blocking,
+        "summary": summary,
+        "command": command,
+        "errors": [str(error) for error in errors or []],
+        "warnings": [str(warning) for warning in warnings or []],
+        "proof_boundary": proof_boundary,
+    }
+
+
+def _skill_content_product_errors(payload: Mapping[str, object]) -> list[str]:
+    keys = (
+        "failed_checks",
+        "missing_representative_skills",
+        "missing_awareness_lane_skills",
+        "unexpected_awareness_surfaces",
+        "missing_full_capability_skills",
+        "missing_full_capability_context_skills",
+        "missing_playbook_context_playbooks",
+        "missing_required_playbook_capabilities",
+        "missing_standalone_capability_skills",
+        "unexpected_standalone_capability_skills",
+        "missing_standalone_capability_context_skills",
+        "missing_standalone_playbook_context_playbooks",
+        "missing_required_standalone_playbook_capabilities",
+        "missing_role_context_roles",
+        "missing_bundled_role_context_roles",
+        "missing_bundled_role_files",
+        "unexpected_bundled_role_files",
+        "stale_bundled_role_context_roles",
+        "awareness_budget_failures",
+        "role_context_budget_failures",
+        "capability_budget_failures",
+        "use_case_demo_failures",
+        "use_case_artifact_failures",
+        "use_case_replay_failures",
+        "use_case_readiness_failures",
+    )
+    errors: list[str] = []
+    for key in keys:
+        values = payload.get(key, [])
+        if isinstance(values, Sequence) and not isinstance(values, (str, bytes)) and values:
+            errors.append(f"{key}: {len(values)}")
+    if not payload.get("ok"):
+        errors.append("skill_content_smoke_ok_false")
+    return errors
+
+
+def _blocking_gate_messages(payload: Mapping[str, object]) -> list[str]:
+    gates = payload.get("gates", [])
+    if not isinstance(gates, Sequence) or isinstance(gates, (str, bytes)):
+        return ["gates_not_sequence"]
+    messages = []
+    for gate in gates:
+        if not isinstance(gate, Mapping):
+            messages.append("gate_not_mapping")
+            continue
+        if gate.get("blocking") and gate.get("status") != "passed":
+            messages.append(f"{gate.get('id', 'unknown')}: {gate.get('summary', gate.get('status', 'failed'))}")
+    return messages
+
+
+def _warning_gate_messages(payload: Mapping[str, object]) -> list[str]:
+    gates = payload.get("gates", [])
+    if not isinstance(gates, Sequence) or isinstance(gates, (str, bytes)):
+        return []
+    messages = []
+    for gate in gates:
+        if not isinstance(gate, Mapping):
+            continue
+        if not gate.get("blocking") and gate.get("status") != "passed":
+            messages.append(f"{gate.get('id', 'unknown')}: {gate.get('status', 'warning')}")
+    return messages
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return []
+    return [str(item) for item in value]
+
+
+def _product_readiness_next_actions(blocking_failures: Sequence[Mapping[str, object]], warning_count: int) -> list[str]:
+    if blocking_failures:
+        return [
+            "Fix blocking product readiness gates, then rerun `omh release product-readiness --json`.",
+            "Use the per-gate command to inspect the failing contract before tagging.",
+        ]
+    actions = [
+        "Attach observed evidence for each required release checklist item before tagging or publishing.",
+        "Run one live Hermes tap smoke from the target profile before treating Hermes runtime visibility as observed.",
+        "Use `omh release product-readiness --json` when a wrapper or release note needs the full machine-readable payload.",
+    ]
+    if warning_count:
+        actions.insert(0, "Review non-blocking warnings; they should be acknowledged but do not block local product readiness.")
+    return actions
 
 
 def _use_case_demo_card_failures(payload: Mapping[str, object]) -> list[str]:

@@ -1585,6 +1585,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("use_case_artifact_bundle", stdout)
         self.assertIn("use_case_replay", stdout)
         self.assertIn("use_case_readiness", stdout)
+        self.assertIn("product_readiness", stdout)
         self.assertIn("/tmp/omh --help", stdout)
         self.assertIn("live_tap_smoke", stdout)
         self.assertIn("profile-mutating", stdout)
@@ -1608,6 +1609,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("cases artifact --all --json", items["use_case_artifact_bundle"]["command"])
         self.assertIn("cases replay --json", items["use_case_replay"]["command"])
         self.assertIn("cases readiness --json", items["use_case_readiness"]["command"])
+        self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
@@ -1651,6 +1653,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["use_case_replay_passed"], 20)
         self.assertEqual(payload["expected_use_case_replay_total"], 20)
         self.assertEqual(payload["use_case_replay_failures"], [])
+        self.assertEqual(payload["use_case_readiness_schema"], "omh_use_case_readiness/v1")
+        self.assertEqual(payload["use_case_readiness_status"], "ready")
+        self.assertEqual(payload["use_case_readiness_score"], 100)
+        self.assertEqual(payload["use_case_readiness_blocking_failures"], 0)
+        self.assertEqual(payload["use_case_readiness_failures"], [])
         self.assertLessEqual(
             payload["full_capability_skill_section_chars"],
             payload["capability_context_char_limits"]["full_skill_section"],
@@ -1663,6 +1670,45 @@ class CliTests(unittest.TestCase):
             payload["max_workflow_context_chars"],
             payload["awareness_context_char_limits"]["workflow_context"],
         )
+
+    def test_release_product_readiness_cli_summarizes_product_story(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["release", "product-readiness", "--version", "v1.0.1", "--omh-command", "/tmp/omh"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn("OMH product readiness for 1.0.1", stdout)
+        self.assertIn("Status: ready", stdout)
+        self.assertIn("Score: 100/100", stdout)
+        self.assertIn("skill_content: passed", stdout)
+        self.assertIn("use_cases: passed", stdout)
+        self.assertIn("parity_contracts: passed", stdout)
+        self.assertIn("release_checklist: passed", stdout)
+        self.assertIn("Boundary:", stdout)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
+        status, stdout, stderr = run_cli(
+            ["release", "product-readiness", "--version", "1.0.1", "--json"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "omh_product_readiness/v1")
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["score"], 100)
+        self.assertEqual(payload["blocking_failures"], 0)
+        gates = {gate["id"]: gate for gate in payload["gates"]}
+        self.assertEqual(
+            set(gates),
+            {"skill_content", "use_cases", "parity_contracts", "release_checklist"},
+        )
+        self.assertEqual(gates["parity_contracts"]["status"], "passed")
+        self.assertIn("not run the release checklist", payload["boundary"])
 
         status, stdout, stderr = run_cli(["release", "skill-content-smoke"], output_json=False)
 

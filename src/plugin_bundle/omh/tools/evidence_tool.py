@@ -61,6 +61,7 @@ _DEFAULT_ALLOWLIST = (
     "omh harness validate",
     "omh docs workflows --check",
     "omh release checklist",
+    "omh release product-readiness",
     "python -m unittest",
     "python3 -m unittest",
     "python -m compileall",

@@ -60,6 +60,7 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
+python3 -m omh.cli release product-readiness --version 1.0.1 --json
 python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli cases replay --json
@@ -120,6 +121,18 @@ into one operator-readable card. It should be ready before a release, but it
 still proves only local deterministic contracts, not live Hermes selection or
 runtime execution.
 
+The product readiness rollup sits one level above use cases:
+
+```sh
+omh release product-readiness --version 1.0.1 --json
+```
+
+It checks the generated skill content, G1-G10 readiness, parity matrix, and
+release checklist shape in one operator-readable card. It is useful for release
+notes and maintainer handoff, but it is still local deterministic evidence only:
+it does not run the checklist, mutate Hermes, dispatch executors, review code,
+pass CI, merge, deliver messages, or spend provider budget.
+
 ## Hermes CLI Install Smoke
 
 The release gate includes a deterministic smoke plan for the real Hermes CLI
@@ -163,6 +176,7 @@ Run the installed command smoke in CI or a release shell after installing OMH:
 command -v omh
 omh --help
 omh release skill-content-smoke --json
+omh release product-readiness --version 1.0.1 --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 

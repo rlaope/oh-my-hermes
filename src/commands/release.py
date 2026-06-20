@@ -9,6 +9,7 @@ from ..release import (
     DEFAULT_HERMES_TAP,
     INSTALL_PATHS,
     hermes_release_smoke_plan,
+    product_readiness_report,
     release_readiness_checklist,
     run_hermes_release_smoke,
     run_installed_command_smoke,
@@ -119,6 +120,18 @@ def cmd_release_skill_content_smoke(args: argparse.Namespace) -> int:
     return 0 if payload["ok"] else 1
 
 
+def cmd_release_product_readiness(args: argparse.Namespace) -> int:
+    try:
+        payload = product_readiness_report(version=args.version or __version__, omh_command=args.omh_command)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_product_readiness_summary(payload)
+    return 0 if payload["status"] == "ready" else 1
+
+
 def _add_release_commands(sub) -> None:
     release = sub.add_parser("release", help="Plan or run release smoke checks for real Hermes installation paths.")
     release_sub = release.add_subparsers(dest="release_command", required=True)
@@ -197,6 +210,15 @@ def _add_release_commands(sub) -> None:
     skill_content.add_argument("--json", action="store_true", help="Print the machine-readable skill content smoke payload.")
     skill_content.set_defaults(func=cmd_release_skill_content_smoke)
 
+    product_readiness = release_sub.add_parser(
+        "product-readiness",
+        help="Summarize deterministic OMH product readiness gates.",
+    )
+    product_readiness.add_argument("--version", default="", help="Release version to summarize, such as 1.0.1 or v1.0.1.")
+    product_readiness.add_argument("--omh-command", default="omh", help="Installed OMH executable name/path shown in release gate commands.")
+    product_readiness.add_argument("--json", action="store_true", help="Print the machine-readable product readiness payload.")
+    product_readiness.set_defaults(func=cmd_release_product_readiness)
+
 
 def _print_release_checklist_summary(payload: dict[str, object]) -> None:
     print(f"OMH release checklist for {payload['version']} ({payload['tag']})")
@@ -252,6 +274,36 @@ def _print_install_smoke_summary(payload: dict[str, object]) -> None:
         print(f"    Boundary: {step.get('proof_boundary', '')}")
     print("")
     print(f"Next: {payload.get('recommended_next_action')}")
+    print("For machine-readable output, rerun with `--json`.")
+
+
+def _print_product_readiness_summary(payload: dict[str, object]) -> None:
+    print(f"OMH product readiness for {payload.get('version')}")
+    print("Summary")
+    print(f"  Status: {payload.get('status')}")
+    print(f"  Score: {payload.get('score')}/100")
+    print(f"  Blocking failures: {payload.get('blocking_failures')}")
+    print(f"  Warnings: {payload.get('warning_count')}")
+    print("")
+    print("Gates")
+    for gate in payload.get("gates", []):
+        if not isinstance(gate, dict):
+            continue
+        marker = "required" if gate.get("blocking") else "optional"
+        print(f"  - {gate.get('id')}: {gate.get('status')} [{marker}]")
+        print(f"    {gate.get('summary')}")
+        errors = gate.get("errors", [])
+        if isinstance(errors, list) and errors:
+            print(f"    Errors: {', '.join(str(error) for error in errors)}")
+        warnings = gate.get("warnings", [])
+        if isinstance(warnings, list) and warnings:
+            print(f"    Warnings: {', '.join(str(warning) for warning in warnings)}")
+    print("")
+    print("Next")
+    for action in payload.get("next_actions", []):
+        print(f"  - {action}")
+    print("")
+    print(f"Boundary: {payload.get('boundary')}")
     print("For machine-readable output, rerun with `--json`.")
 
 
@@ -344,6 +396,13 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         f"{payload.get('use_case_replay_passed')}/{payload.get('use_case_replay_total')} fixture(s); "
         f"status {payload.get('use_case_replay_status')}; "
         f"failures {len(use_case_replay_failures) if isinstance(use_case_replay_failures, list) else 0}"
+    )
+    print(
+        "Use-case readiness: "
+        f"{payload.get('use_case_readiness_status')}; "
+        f"score {payload.get('use_case_readiness_score')}/100; "
+        f"blocking {payload.get('use_case_readiness_blocking_failures')}; "
+        f"warnings {payload.get('use_case_readiness_warning_count')}"
     )
     if missing:
         print("Missing representative skills: " + ", ".join(str(item) for item in missing))
