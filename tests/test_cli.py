@@ -224,6 +224,31 @@ class CliTests(unittest.TestCase):
             self.assertEqual(state["roadmap_next_actions"][0]["id"], "run_setup")
             self.assertIn("omh setup", state["roadmap_next_actions"][0]["command"])
 
+    def test_chat_interact_omh_status_question_uses_sectioned_status_card(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(
+                base + ["chat", "interact", "--source", "discord", "show OMH status"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["mode"], "status")
+            self.assertEqual(payload["next_action"], "show_status")
+            self.assertEqual(payload["chat_response"]["kind"], "status")
+            self.assertIn("Current status:", payload["chat_response"]["body"])
+            self.assertIn("Next action:", payload["chat_response"]["body"])
+            self.assertNotIn("- Next:", payload["chat_response"]["body"])
+            self.assertIn("Boundary:", payload["chat_response"]["body"])
+            rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
+            self.assertGreaterEqual(sum(1 for block in rendering_blocks if block["type"] == "bullet"), 4)
+            state = payload["chat_response"]["state"]
+            self.assertEqual(state["status_source"], "omh_probe")
+            self.assertEqual(state["capability_gap_roadmap"]["schema_version"], "omh_capability_gap_roadmap/v1")
+
     def test_learning_record_eval_and_regression_replay(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

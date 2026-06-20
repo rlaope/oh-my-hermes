@@ -716,8 +716,16 @@ class WrapperContractTests(unittest.TestCase):
             self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
             self.assertEqual(payload["chat_response"]["kind"], "status")
             self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] status - "))
+            self.assertIn("Current status:", payload["chat_response"]["body"])
             self.assertIn("OMH setup gaps:", payload["chat_response"]["body"])
+            self.assertIn("Next action:", payload["chat_response"]["body"])
+            self.assertNotIn("- Next:", payload["chat_response"]["body"])
             self.assertIn("Boundary:", payload["chat_response"]["body"])
+            rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
+            self.assertGreaterEqual(
+                sum(1 for block in rendering_blocks if block["type"] == "bullet"),
+                4,
+            )
             state = payload["chat_response"]["state"]
             self.assertEqual(state["status_source"], "omh_probe")
             roadmap = state["capability_gap_roadmap"]
