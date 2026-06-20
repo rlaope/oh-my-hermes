@@ -11,7 +11,9 @@ from _local_package import load_local_package
 load_local_package()
 from omh.coding_delegation import build_coding_delegation_payload
 from omh.hermes_planning import build_hermes_plan_payload
+from omh.ingress import extract_message_text, extract_source_metadata
 from omh.skills.render import workflow_reference_payload
+from omh.wrapper.route_hints import build_chat_route_hint_payload
 
 
 class WrapperGoldenExampleTests(unittest.TestCase):
@@ -283,6 +285,93 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertEqual(registration["schema_version"], "omh_native_command_surface/v1")
                 self.assertEqual(registration["preview_contract"]["only_top_level_suggestions"], ["omh"])
                 self.assertIn("workflow selected", native_render["not_evidence"])
+
+    def test_route_hint_golden_examples_match_live_contract_sources(self) -> None:
+        payload = json.loads(Path("examples/wrapper-golden/route-hints.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], "route_hint_golden_examples/v1")
+
+        for item in payload["examples"]:
+            with self.subTest(item["scenario"]):
+                event = json.loads(Path(item["fixture"]).read_text(encoding="utf-8"))
+                message = extract_message_text(event)
+                live = build_chat_route_hint_payload(
+                    message,
+                    source=item["source"],
+                    source_metadata=extract_source_metadata(event),
+                )
+                expected = item["expected_response"]
+                response = live["chat_response"]
+
+                self.assertEqual(response["schema_version"], expected["schema_version"])
+                self.assertEqual(response["kind"], expected["kind"])
+                self.assertEqual(live["route_hint"]["primary_workflow"], expected["primary_workflow"])
+                self.assertEqual(response["state"]["next_action"], expected["next_action"])
+                self.assertEqual(response["messenger_rendering"]["schema_version"], expected["messenger_rendering"])
+                self.assertEqual(
+                    [action["id"] for action in response["actions"]],
+                    expected["action_ids"],
+                )
+                self.assertEqual(
+                    live["wrapper_contract"]["safe_to_render_without_shell_approval"],
+                    expected["safe_to_render_without_shell_approval"],
+                )
+                self.assertIn("not workflow execution", live["claim_boundary"].lower())
+                self.assertNotIn(message, json.dumps(live))
+
+    def test_route_hint_shims_render_workflow_hint_cards(self) -> None:
+        cases = (
+            (
+                "examples/discord-adapter-shim.py",
+                "examples/wrapper-events/discord-route-hint-visual.json",
+                "discord",
+                "img-summary",
+                "prepare_visual_prompt_card",
+                "make an image explaining the cron feature",
+            ),
+            (
+                "examples/slack-adapter-shim.py",
+                "examples/wrapper-events/slack-route-hint-missed-route.json",
+                "slack",
+                "workflow-learning",
+                "audit_learning_readiness",
+                "missed route: OMH was not used",
+            ),
+        )
+
+        for script, fixture, source, workflow, next_action, raw_message in cases:
+            with self.subTest(source=source):
+                result = subprocess.run(
+                    [sys.executable, script, "--route-hint", fixture],
+                    cwd=Path.cwd(),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.returncode, 0)
+                payload = json.loads(result.stdout)
+                action_ids = {action["id"] for action in payload["actions"]}
+
+                self.assertEqual(payload["schema_version"], "wrapper_adapter_shim/v1")
+                self.assertEqual(payload["source"], source)
+                self.assertEqual(payload["mode"], "route_hint")
+                self.assertEqual(payload["redaction_policy"], "metadata_only")
+                self.assertEqual(payload["response"]["kind"], "workflow_route_hint")
+                self.assertEqual(payload["route_hint"]["primary_workflow"], workflow)
+                self.assertEqual(payload["next_action"], next_action)
+                self.assertEqual(payload["usage_trace"]["schema_version"], "omh_usage_trace/v1")
+                self.assertEqual(payload["usage_trace"]["visible_prefix"], f"[omh] {workflow}")
+                self.assertEqual(payload["messenger_rendering"]["schema_version"], "messenger_route_hint_rendering/v1")
+                self.assertEqual(payload["wrapper_contract"]["schema_version"], "omh_route_hint_wrapper_contract/v1")
+                self.assertTrue(payload["wrapper_contract"]["safe_to_render_without_shell_approval"])
+                self.assertTrue(payload["wrapper_contract"]["does_not_require_plugin_load"])
+                self.assertIsNone(payload["native_render"])
+                self.assertIn("workflow_selection", payload["not_evidence_until_observed"])
+                self.assertIn("workflow_execution", payload["not_evidence_until_observed"])
+                self.assertEqual(action_ids, {"open_workflow", "route_for_me", "open_picker"})
+                self.assertIn(f"Open {workflow}", {action["label"] for action in payload["actions"]})
+                self.assertNotIn(raw_message, result.stdout)
 
     def _source_harness_quality(self, item: dict[str, object]) -> dict[str, object]:
         source = item["source_payload"]
