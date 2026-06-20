@@ -3950,6 +3950,26 @@ class CliTests(unittest.TestCase):
                 self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
+    def test_chat_interact_omh_intro_questions_use_context_brief(self) -> None:
+        for message in ("what is OMH and how do I use it?", "OMH가 뭐야? 어떻게 써?"):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "show_context_brief")
+                self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+                self.assertEqual(payload["chat_response"]["kind"], "context_brief")
+                self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] context - "))
+                self.assertIn("Hermes workflow layer", payload["chat_response"]["body"])
+                state = payload["chat_response"]["state"]
+                self.assertEqual(state["context_brief"]["schema_version"], "omh_context_brief/v1")
+                self.assertEqual(state["context_brief"]["source"], "discord")
+                self.assertEqual(state["workflow_explanation"]["label"], "context")
+                self.assertNotIn(message, json.dumps(payload))
+
     def test_chat_interact_non_catalog_command_questions_do_not_open_picker(self) -> None:
         for message in (
             "show me the command to install OMH",

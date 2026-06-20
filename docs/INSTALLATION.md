@@ -51,6 +51,12 @@ is the same card that `omh chat interact` returns as
 omh quickstart --json
 ```
 
+If the user asks what OMH is or how to use it, wrappers can answer with
+`chat_response.kind == context_brief` and `[omh] context` before opening the
+full workflow picker. This keeps the first explanation conversational while
+still exposing `omh_context_brief/v1` for adapters that want structured lanes,
+rules, and boundaries.
+
 ## What Setup Changes
 
 OMH's setup footprint is intentionally bounded:
@@ -562,6 +568,9 @@ The backend flow is:
    it can use `omh context brief --json` or plugin tool `omh_context` to fetch
    `omh_context_brief/v1`: lanes, common cues, generic-tool checkpoint, optional
    route hint, and response rules without storing or echoing the raw prompt.
+   If the user asks "what is OMH?" or "how do I use OMH?", `omh chat interact`
+   can now return `chat_response.kind == context_brief` directly, with the same
+   structured `omh_context_brief/v1` under `chat_response.state.context_brief`.
 8. If the user asks what to do next after setup or install, the wrapper returns
    `chat_response.kind == quickstart` with `[omh] quickstart`, the
    `omh_quickstart_card/v1` payload, first-use Hermes prompts, and the same

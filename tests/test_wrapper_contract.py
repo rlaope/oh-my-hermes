@@ -818,6 +818,37 @@ class WrapperContractTests(unittest.TestCase):
                 )
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
+    def test_omh_intro_questions_render_context_brief_before_picker(self) -> None:
+        for message in (
+            "what is OMH and how do I use it?",
+            "explain OMH for a new Hermes user",
+            "OMH가 뭐야? 어떻게 써?",
+            "OMH 사용법 소개해줘",
+        ):
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["next_action"], "show_context_brief")
+                self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+                self.assertEqual(payload["route"]["recommendations"][0]["matched"], ["omh_intro_question"])
+                response = payload["chat_response"]
+                self.assertEqual(response["kind"], "context_brief")
+                self.assertTrue(response["headline"].startswith("[omh] context - "))
+                self.assertIn("Hermes workflow layer", response["body"])
+                self.assertIn("install once", response["body"])
+                self.assertIn("workflow picker", response["body"])
+                state = response["state"]
+                self.assertEqual(state["status_source"], "omh_context_brief")
+                self.assertEqual(state["context_brief"]["schema_version"], "omh_context_brief/v1")
+                self.assertEqual(state["context_brief"]["source"], "discord")
+                self.assertEqual(state["workflow_explanation"]["label"], "context")
+                actions = {action["id"]: action for action in response["actions"]}
+                self.assertEqual(actions["show_context_brief"]["style"], "primary")
+                self.assertEqual(actions["show_skill_picker"]["style"], "secondary")
+                self.assertEqual(actions["show_quickstart"]["style"], "secondary")
+                self.assertNotIn(message, json.dumps(payload))
+
     def test_non_catalog_command_and_skill_questions_do_not_open_picker(self) -> None:
         for message in (
             "show me the command to install OMH",
