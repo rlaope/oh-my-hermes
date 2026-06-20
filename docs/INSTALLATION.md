@@ -166,6 +166,24 @@ connector execution, coding dispatch, or proof that an MCP runtime is active.
 bridge load or use and can attach a stable evidence reference. It records
 `omh_mcp_host_session/v1` metadata; it does not discover or force host loading.
 
+The OMH plugin follows the same evidence split. `omh setup` installs the plugin
+bundle and `omh doctor` can prove local import/register smoke. A Hermes host or
+wrapper that actually sees the plugin load or one of its tools/hooks run can
+record that runtime event:
+
+```sh
+omh plugin observe-host --host hermes-agent --session <session-id> --event plugin_load --evidence-ref <host-log-ref>
+omh plugin observations
+```
+
+This writes `omh_plugin_host_observation/v1`. It is plugin load/use evidence
+only; it is not coding dispatch, implementation, review, CI, merge, or proof of
+unrecorded plugin calls. Observed `plugin_load`, `tool_call`, `hook_call`, or
+`status_query` records count as active runtime observations. Observed
+`session_end` or `plugin_unload` records are historical runtime evidence only.
+`blocked` means the host or wrapper could not inspect the plugin state; it does
+not preserve an older active-ready claim.
+
 ## Install Path A: Hermes-Native Skill Tap
 
 Use this path when the target Hermes environment supports skill taps:
@@ -391,7 +409,11 @@ After `omh setup` has run, `omh doctor` also checks the managed plugin manifest
 plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so
 operators do not mistake local install readiness for observed Hermes runtime
-use.
+use. When a host or wrapper records `omh plugin observe-host`,
+`plugin_runtime_observed` can become available. `native_integration_claim_ready`
+can become true only when the latest observed plugin event is active
+(`plugin_load`, `tool_call`, `hook_call`, or `status_query`); observed
+`session_end` and `plugin_unload` remain historical evidence only.
 Use `omh probe --parity` when an operator wants the broader comparison against
 common oh-my runtime capability axes. It returns `omh_parity_matrix/v1` with
 available and partial rows for skills/plugins, roles, team/swarm workers,

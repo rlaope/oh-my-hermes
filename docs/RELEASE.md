@@ -228,4 +228,5 @@ Use explicit proof-boundary language:
 Do not claim native Hermes runtime use from plugin installation alone.
 `plugin_distribution_ready` means the local bundle exists and passed local
 import/register smoke; `native_integration_claim_ready` still requires observed
-Hermes runtime-load or hook/tool-use evidence.
+Hermes active runtime-load, hook/tool-use, or status-query evidence. Session-end
+and plugin-unload observations are historical evidence only.
