@@ -22,6 +22,7 @@ WORKFLOW_LEARNING_INDEX_SCHEMA_VERSION = "workflow_learning_index/v1"
 WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
 WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION = "workflow_learning_audit/v1"
 LEARNING_AUDIT_CARD_SCHEMA_VERSION = "learning_audit_card/v1"
+MISSED_ROUTE_RESULT_SCHEMA_VERSION = "learning_missed_route_result/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
@@ -734,6 +735,115 @@ def write_regression_case(paths: OmhPaths, case: dict[str, Any]) -> dict[str, An
     atomic_write_json(regression_case_path(paths, str(case["case_id"])), case, private=True)
     _update_learning_index(paths, case, "regression_case")
     return case
+
+
+def record_missed_route(
+    paths: OmhPaths,
+    interaction: dict[str, Any],
+    *,
+    source_ref: str = "",
+    expected_workflow: str | None = None,
+    expected_harness: str | None = None,
+    expected_next_action: str | None = None,
+    fixture_message: str = "",
+    rubric_id: str = "missed-route",
+    target_type: str = "routing",
+    title: str = "",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    trace = build_trace_from_chat_interaction(
+        interaction,
+        source_ref=source_ref,
+        outcome="failed",
+        feedback_summary="Operator reported that Hermes did not use the intended OMH workflow.",
+    )
+    eval_result = build_workflow_eval_result(trace, rubric_id=rubric_id)
+    regression_case = build_regression_case_from_trace(
+        trace,
+        redacted_message=fixture_message,
+        expected_workflow=expected_workflow,
+        expected_harness=expected_harness,
+        expected_next_action=expected_next_action,
+    )
+    candidate = build_improvement_candidate(
+        trace,
+        eval_result,
+        target_type=target_type,
+        title=title or "Review missed OMH workflow route",
+    )
+    if not dry_run:
+        write_learning_trace(paths, trace)
+        write_workflow_eval(paths, eval_result)
+        write_regression_case(paths, regression_case)
+        write_improvement_candidate(paths, candidate)
+    replay_ready = bool(fixture_message)
+    expected = _object(regression_case.get("expected"))
+    return {
+        "schema_version": MISSED_ROUTE_RESULT_SCHEMA_VERSION,
+        "recorded": not dry_run,
+        "dry_run": dry_run,
+        "source_kind": "chat_interaction",
+        "status": "review_ready" if replay_ready else "needs_regression_fixture",
+        "learning_trace_ref": learning_trace_ref(str(trace["trace_id"])),
+        "records": {
+            "trace_id": trace["trace_id"],
+            "eval_id": eval_result["eval_id"],
+            "regression_case_id": regression_case["case_id"],
+            "candidate_id": candidate["candidate_id"],
+        },
+        "selected": {
+            "workflow": trace["workflow"]["selected_workflow"],
+            "harness": trace["workflow"]["selected_harness"],
+            "next_action": trace["workflow"]["next_action"],
+            "confidence": trace["route"]["confidence"],
+            "matched": trace["route"]["matched"],
+        },
+        "expected": {
+            "workflow": expected.get("selected_workflow", ""),
+            "harness": expected.get("selected_harness", ""),
+            "next_action": expected.get("next_action", ""),
+        },
+        "regression_case": {
+            "case_id": regression_case["case_id"],
+            "replay_ready": replay_ready,
+            "fixture_sha256": regression_case["fixture"]["fixture_sha256"],
+            "privacy": regression_case["fixture"]["privacy"],
+        },
+        "eval": {
+            "eval_id": eval_result["eval_id"],
+            "status": eval_result["status"],
+            "rubric_id": eval_result["rubric_id"],
+            "check_ids": [check["id"] for check in eval_result["checks"]],
+        },
+        "candidate": {
+            "candidate_id": candidate["candidate_id"],
+            "status": candidate["status"],
+            "target_type": candidate["target_type"],
+            "target_ref": candidate["target_ref"],
+            "primary_action": candidate["review_card"]["primary_action"],
+        },
+        "next_action": "review_improvement_candidate" if replay_ready else "add_regression_fixture",
+        "wrapper_actions": [
+            "show_learning_eval",
+            "review_improvement",
+            "add_regression_fixture",
+            "replay_regression_cases",
+            "export_learning_bundle",
+            "show_status",
+        ],
+        "not_evidence_yet": [
+            "Hermes route changed",
+            "skill or routing patch applied",
+            "regression replay after a future patch",
+            "workflow execution",
+            "future behavior fixed",
+        ],
+        "claim_boundary": (
+            "Missed-route capture records local metadata, eval, a regression placeholder, "
+            "and a human-review candidate only. It does not prove the route was wrong, "
+            "patch skills, execute workflows, or prove future Hermes behavior changed."
+        ),
+    }
 
 
 def replay_regression_cases(paths: OmhPaths, *, limit: int | None = None) -> dict[str, Any]:

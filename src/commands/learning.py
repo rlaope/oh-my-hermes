@@ -25,6 +25,7 @@ from ..workflow_learning import (
     latest_workflow_eval_result,
     list_learning_traces,
     rebuild_learning_index,
+    record_missed_route,
     replay_regression_cases,
     review_improvement_candidate,
     show_improvement_candidate,
@@ -85,6 +86,39 @@ def cmd_learning_record(args: argparse.Namespace) -> int:
                 "interaction": attach_learning_trace_ref_to_interaction(interaction, trace),
                 "claim_boundary": "The learning ref is exposed only after the trace is written; it is not execution evidence.",
             }
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_learning_missed_route(args: argparse.Namespace) -> int:
+    try:
+        paths = _paths(args)
+        event_or_message, source_metadata = _chat_input_and_metadata(args)
+        interaction = build_chat_interaction_payload(
+            event_or_message,
+            source=args.source,
+            mode=args.mode,
+            limit=args.limit,
+            min_confidence=args.min_confidence,
+            include_message=False,
+            source_metadata={**source_metadata, **_explicit_source_metadata(args)},
+            executor_target=args.executor,
+        )
+        payload = record_missed_route(
+            paths,
+            interaction,
+            source_ref=args.source_ref or args.source_event_id or "",
+            expected_workflow=args.expected_workflow or None,
+            expected_harness=args.expected_harness or None,
+            expected_next_action=args.expected_next_action or None,
+            fixture_message=args.fixture_message or args.redacted_message or "",
+            rubric_id=args.rubric,
+            target_type=args.target_type,
+            title=args.title or "Review missed OMH workflow route",
+            dry_run=args.dry_run,
+        )
     except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json(payload)
@@ -351,6 +385,41 @@ def _add_learning_commands(sub) -> None:
     record.add_argument("--outcome", choices=("unknown", "useful", "not_useful", "blocked", "failed"), default="unknown")
     record.add_argument("--feedback-summary", default="")
     record.set_defaults(func=cmd_learning_record)
+
+    missed_route = learning_sub.add_parser(
+        "missed-route",
+        help="Capture a reported missed OMH workflow route as trace, eval, regression, and review material.",
+    )
+    missed_route.add_argument("message", nargs="*", help="Chat message to route and record as a missed-route signal.")
+    missed_route.add_argument("--source", choices=CHAT_SOURCES, default="generic")
+    missed_route.add_argument("--mode", choices=INTERACTION_MODES, default="auto")
+    missed_route.add_argument("--limit", type=int, default=3)
+    missed_route.add_argument("--min-confidence", choices=CONFIDENCE_LEVELS, default="high")
+    missed_route.add_argument("--stdin", action="store_true")
+    missed_route.add_argument("--event-json", default=None)
+    missed_route.add_argument("--executor", default="choose")
+    missed_route.add_argument("--source-ref", default="")
+    missed_route.add_argument("--source-event-id", default="")
+    missed_route.add_argument("--channel-ref", default="")
+    missed_route.add_argument("--user-ref", default="")
+    missed_route.add_argument("--expected-workflow", default="")
+    missed_route.add_argument("--expected-harness", default="")
+    missed_route.add_argument("--expected-next-action", default="")
+    missed_route.add_argument(
+        "--fixture-message",
+        default="",
+        help="Operator-minimized replay fixture text. Omit it to create a non-replayable placeholder.",
+    )
+    missed_route.add_argument(
+        "--redacted-message",
+        default="",
+        help="Deprecated alias for --fixture-message; caller is responsible for minimizing private content.",
+    )
+    missed_route.add_argument("--rubric", default="missed-route")
+    missed_route.add_argument("--target-type", default="routing")
+    missed_route.add_argument("--title", default="")
+    missed_route.add_argument("--dry-run", action="store_true")
+    missed_route.set_defaults(func=cmd_learning_missed_route)
 
     list_cmd = learning_sub.add_parser("list", help="List local workflow learning traces.")
     list_cmd.add_argument("--limit", type=int, default=None)

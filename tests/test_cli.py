@@ -79,6 +79,16 @@ class CliTests(unittest.TestCase):
             <= action_ids
         )
 
+        for message in ("missed route: OMH was not used", "OMH 안 썼어"):
+            status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
+            self.assertEqual(payload["next_action"], "audit_learning_readiness")
+            self.assertIn("guard:workflow_learning", payload["route"]["recommendations"][0]["matched"])
+
     def test_learning_record_eval_and_regression_replay(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -340,6 +350,101 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertEqual(json.loads(stdout)["status"], "passed")
+
+    def test_learning_missed_route_records_review_bundle_without_echoing_prompt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "make an image explaining the cron feature"
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "learning",
+                    "missed-route",
+                    message,
+                    "--source",
+                    "discord",
+                    "--expected-workflow",
+                    "img-summary",
+                    "--expected-harness",
+                    "img-summary",
+                    "--expected-next-action",
+                    "prepare_visual_prompt_card",
+                    "--fixture-message",
+                    message,
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "learning_missed_route_result/v1")
+            self.assertTrue(payload["recorded"])
+            self.assertFalse(payload["dry_run"])
+            self.assertEqual(payload["status"], "review_ready")
+            self.assertEqual(payload["selected"]["workflow"], "img-summary")
+            self.assertEqual(payload["expected"]["workflow"], "img-summary")
+            self.assertEqual(payload["expected"]["next_action"], "prepare_visual_prompt_card")
+            self.assertTrue(payload["regression_case"]["replay_ready"])
+            self.assertEqual(payload["candidate"]["target_type"], "routing")
+            self.assertEqual(payload["candidate"]["primary_action"], "review_improvement")
+            self.assertEqual(payload["next_action"], "review_improvement_candidate")
+            self.assertIn("replay_regression_cases", payload["wrapper_actions"])
+            self.assertIn("future behavior fixed", payload["not_evidence_yet"])
+            self.assertNotIn(message, stdout)
+
+            status, stdout, stderr = run_cli(base + ["learning", "regression", "replay"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            replay = json.loads(stdout)
+            self.assertEqual(replay["schema_version"], "workflow_regression_replay/v1")
+            self.assertEqual(replay["status"], "passed")
+            self.assertEqual(replay["passed"], 1)
+
+    def test_learning_missed_route_without_fixture_is_metadata_only_placeholder(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "make an image explaining the cron feature"
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "learning",
+                    "missed-route",
+                    message,
+                    "--source",
+                    "discord",
+                    "--expected-workflow",
+                    "img-summary",
+                    "--expected-harness",
+                    "img-summary",
+                    "--expected-next-action",
+                    "prepare_visual_prompt_card",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "learning_missed_route_result/v1")
+            self.assertEqual(payload["status"], "needs_regression_fixture")
+            self.assertFalse(payload["regression_case"]["replay_ready"])
+            self.assertEqual(payload["regression_case"]["fixture_sha256"], "")
+            self.assertEqual(payload["regression_case"]["privacy"]["mode"], "missing_fixture")
+            self.assertEqual(payload["next_action"], "add_regression_fixture")
+            self.assertNotIn(message, stdout)
+
+            status, stdout, stderr = run_cli(base + ["learning", "regression", "replay"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            replay = json.loads(stdout)
+            self.assertEqual(replay["schema_version"], "workflow_regression_replay/v1")
+            self.assertEqual(replay["status"], "skipped")
+            self.assertEqual(replay["skipped"], 1)
 
     def test_setup_and_doctor_default_to_human_summary_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:

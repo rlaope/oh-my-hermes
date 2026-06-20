@@ -25,6 +25,7 @@ from omh.workflow_learning import (
     learning_trace_ref,
     list_learning_traces,
     rebuild_learning_index,
+    record_missed_route,
     replay_regression_cases,
     review_improvement_candidate,
     validate_improvement_candidate_review_card,
@@ -197,6 +198,55 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(replay["total"], 1)
             self.assertEqual(replay["passed"], 0)
             self.assertEqual(replay["skipped"], 1)
+
+    def test_missed_route_helper_records_review_bundle_without_raw_prompt_output(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "make an image explaining the cron feature"
+            interaction = build_chat_interaction_payload(message, source="discord")
+
+            payload = record_missed_route(
+                paths,
+                interaction,
+                source_ref="discord:message-1",
+                expected_workflow="img-summary",
+                expected_harness="img-summary",
+                expected_next_action="prepare_visual_prompt_card",
+                fixture_message=message,
+            )
+            serialized = json.dumps(payload)
+
+            self.assertEqual(payload["schema_version"], "learning_missed_route_result/v1")
+            self.assertTrue(payload["recorded"])
+            self.assertEqual(payload["status"], "review_ready")
+            self.assertEqual(payload["selected"]["workflow"], "img-summary")
+            self.assertEqual(payload["expected"]["workflow"], "img-summary")
+            self.assertEqual(payload["candidate"]["target_type"], "routing")
+            self.assertEqual(payload["candidate"]["primary_action"], "review_improvement")
+            self.assertTrue(payload["regression_case"]["replay_ready"])
+            self.assertNotIn(message, serialized)
+            self.assertEqual(len(list_learning_traces(paths)), 1)
+            self.assertEqual(replay_regression_cases(paths)["status"], "passed")
+
+    def test_missed_route_helper_dry_run_does_not_write_records(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "make an image explaining the cron feature"
+            interaction = build_chat_interaction_payload(message, source="discord")
+
+            payload = record_missed_route(
+                paths,
+                interaction,
+                expected_workflow="img-summary",
+                fixture_message=message,
+                dry_run=True,
+            )
+
+            self.assertFalse(payload["recorded"])
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["status"], "review_ready")
+            self.assertEqual(list_learning_traces(paths), [])
+            self.assertEqual(replay_regression_cases(paths)["status"], "no_cases")
 
     def test_patch_proposal_regression_snapshot_is_order_stable(self) -> None:
         with TemporaryDirectory() as tmp:
