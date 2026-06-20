@@ -3222,6 +3222,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("{message}", route["routing_prompt_template"])
         self.assertNotIn("risky refactor", json.dumps(route))
 
+    def test_chat_route_dispatches_image_capability_questions_to_img_summary(self) -> None:
+        cases = (
+            "이미지 생성 기능 뭐 있어?",
+            "what image generation features does OMH have?",
+            "does OMH support image generation?",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                route = json.loads(stdout)["route"]
+                self.assertEqual(route["action"], "dispatch")
+                self.assertEqual(route["selected_skill"], "img-summary")
+                self.assertEqual(route["selected_harness"], "img-summary")
+                self.assertEqual(route["recommendations"][0]["skill"], "img-summary")
+                self.assertEqual(route["recommendations"][0]["next_action"], "prepare_visual_prompt_card")
+                self.assertIn("guard:img_summary", route["recommendations"][0]["matched"])
+
     def test_chat_route_hint_exposes_wrapper_card_without_recording_route(self) -> None:
         message = "make an image explaining the cron feature"
         status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", message])

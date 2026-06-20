@@ -20,6 +20,7 @@ from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routabl
 FILE_LOOKUP_REASON = (
     "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
 )
+_SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset({"img-summary"})
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,14 @@ def route_chat_message(
         selected_skill = explicit_skill
         action = "dispatch"
         reason = "Explicit workflow invocation wins over heuristic routing."
+        ambiguous = False
+    elif catalog_question and _specific_capability_catalog_match(top):
+        selected_skill = candidate_skill
+        action = "dispatch"
+        reason = (
+            f"Specific OMH capability question matched `{candidate_skill}`; "
+            "show that workflow card instead of the generic workflow picker."
+        )
         ambiguous = False
     elif catalog_question:
         selected_skill = "oh-my-hermes"
@@ -217,6 +226,20 @@ def _is_ambiguous(recommendations: list[dict[str, object]]) -> bool:
 
 def _meets_threshold(confidence: str, threshold: str) -> bool:
     return meets_confidence_threshold(confidence, threshold)
+
+
+def _specific_capability_catalog_match(top: dict[str, object]) -> bool:
+    skill = str(top.get("skill", ""))
+    if skill not in _SPECIFIC_CAPABILITY_CATALOG_SKILLS:
+        return False
+    if _int_value(top.get("score", 0)) < 30:
+        return False
+    confidence = str(top.get("confidence", "low"))
+    if not _meets_threshold(confidence, "high"):
+        return False
+    matched = _string_list(top.get("matched", []))
+    next_action = str(top.get("next_action", ""))
+    return next_action == "prepare_visual_prompt_card" or any(item.startswith("guard:") for item in matched)
 
 
 def _clarification(action: str, candidate_skill: str, candidate_confidence: str, threshold: str, reason: str = "") -> str:
