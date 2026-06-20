@@ -102,14 +102,16 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("Pattern cards:", awareness_primer_context())
         self.assertIn("image cards/infographics -> img-summary", awareness_primer_context())
         self.assertIn("check OMH prep/status/learning", awareness_primer_context())
+        self.assertIn("image->img-summary", awareness_primer_context())
         self.assertIn("Workflow context cards", awareness_primer_markdown())
         self.assertIn("Common cues before generic tools", awareness_primer_markdown())
         self.assertIn("check OMH prep/status/learning", awareness_primer_markdown())
+        self.assertIn("Generic tool map", awareness_primer_markdown())
         self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
         self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
         for name in workflow_skill_names:
             self.assertIn(
-                "Generic-tool checkpoint: check OMH prep/status/learning",
+                "Generic-tool checkpoint: image->img-summary",
                 awareness_workflow_context_markdown(name),
             )
 
@@ -129,11 +131,22 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
+        tool_routes = {route["tool_family"]: route for route in payload["generic_tool_checkpoint_routes"]}
+        self.assertEqual(tool_routes["image_tools"]["primary_workflow"], "img-summary")
+        self.assertEqual(tool_routes["file_tools"]["primary_workflow"], "materials-package")
+        self.assertEqual(tool_routes["search_tools"]["primary_workflow"], "web-research")
+        self.assertEqual(tool_routes["coding_tools"]["primary_workflow"], "ultraprocess")
+        self.assertIn("visual QA", tool_routes["image_tools"]["not_evidence_yet"])
         self.assertEqual(
             awareness_generic_tool_checkpoint_payload()["schema_version"],
             "omh_generic_tool_checkpoint/v1",
         )
         self.assertIn("prep/status/learning", awareness_generic_tool_checkpoint_payload()["body"])
+        checkpoint_routes = {
+            route["tool_family"]: route for route in awareness_generic_tool_checkpoint_payload()["routes"]
+        }
+        self.assertEqual(checkpoint_routes["coding_tools"]["fallback_action"], "choose_coding_agent_or_runtime")
+        self.assertIn("executor dispatch", checkpoint_routes["coding_tools"]["not_evidence_yet"])
         for card in cards.values():
             self.assertTrue(card["label"])
             self.assertTrue(card["user_examples"])

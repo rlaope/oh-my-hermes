@@ -45,7 +45,7 @@ Bad example:
 - Current lane: **Coding handoff** (`idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`, `ultrawork`, `team`, `ultraqa`, `ai-slop-cleaner`, `executor-runtime-readiness`, `request-to-handoff`, `executor selection`, `coding runtime handoff`) - Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
 - Cross-skill context: Across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH because a generic tool can render or execute.
-- Generic-tool checkpoint: check OMH prep/status/learning before image/file/search/coding tools.
+- Generic-tool checkpoint: image->img-summary; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
 - Coverage: Every generated workflow skill carries this rail.
 - Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
 - Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.

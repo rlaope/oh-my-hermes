@@ -72,6 +72,10 @@ Common cues before generic tools:
 
 notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; trace/improve/regression -> workflow-learning.
 
+Generic tool map:
+
+image->img-summary; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
+
 Tools:
 
 - Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.

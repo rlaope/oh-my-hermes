@@ -9,6 +9,44 @@ OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
 OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION = "omh_generic_tool_checkpoint/v1"
 GENERIC_TOOL_CHECKPOINT_TEXT = "Before generic tools, check OMH prep/status/learning; if relevant, name the workflow first."
 GENERIC_TOOL_CHECKPOINT_APPLIES_BEFORE = ("image tools", "file tools", "search tools", "coding tools")
+GENERIC_TOOL_CHECKPOINT_ROUTES = (
+    {
+        "tool_family": "image_tools",
+        "applies_before": ("image generation", "local rendering", "visual design tools"),
+        "primary_workflow": "img-summary",
+        "preferred_workflows": ("img-summary", "materials-package", "report-package"),
+        "primary_next_action": "prepare_visual_prompt_card",
+        "fallback_action": "choose_image_generator_or_setup",
+        "not_evidence_yet": ("image generation", "visual QA", "attachment", "delivery"),
+    },
+    {
+        "tool_family": "file_tools",
+        "applies_before": ("PPT/PDF/XLSX/DOC/HWP generation", "file conversion", "attachment packaging"),
+        "primary_workflow": "materials-package",
+        "preferred_workflows": ("materials-package", "deliverable-package", "report-package"),
+        "primary_next_action": "prepare_material_package",
+        "fallback_action": "confirm_target_format_and_generator",
+        "not_evidence_yet": ("file export", "render QA", "attachment", "delivery"),
+    },
+    {
+        "tool_family": "search_tools",
+        "applies_before": ("web search", "source lookup", "market/news/paper research"),
+        "primary_workflow": "web-research",
+        "preferred_workflows": ("web-research", "research-department", "research-brief"),
+        "primary_next_action": "gather_source_backed_evidence",
+        "fallback_action": "ask_for_scope_or_source_constraints",
+        "not_evidence_yet": ("source retrieval", "source verification", "synthesis approval", "delivery"),
+    },
+    {
+        "tool_family": "coding_tools",
+        "applies_before": ("Codex", "Claude Code", "Hermes coding", "oh-my runtime handoff"),
+        "primary_workflow": "ultraprocess",
+        "preferred_workflows": ("ultraprocess", "ralplan", "code-review", "agent-ops-review"),
+        "primary_next_action": "prepare_one_cycle_delivery",
+        "fallback_action": "choose_coding_agent_or_runtime",
+        "not_evidence_yet": ("executor dispatch", "implementation", "review", "CI", "merge"),
+    },
+)
 ROUTER_KEYWORD_SKILLS = (
     "deep-interview",
     "ralplan",
@@ -614,6 +652,7 @@ def awareness_primer_payload() -> dict[str, object]:
         "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
         "lanes": lanes,
         "workflow_context_cards": workflow_context_cards(),
+        "generic_tool_checkpoint_routes": generic_tool_checkpoint_routes(),
         "cross_lane_examples": [
             example
             for lane_examples in LANE_CROSS_LANE_EXAMPLES.values()
@@ -692,14 +731,36 @@ def awareness_generic_tool_checkpoint_payload() -> dict[str, object]:
         "label": "OMH-first checkpoint",
         "body": GENERIC_TOOL_CHECKPOINT_TEXT,
         "applies_before": list(GENERIC_TOOL_CHECKPOINT_APPLIES_BEFORE),
+        "routes": generic_tool_checkpoint_routes(),
+        "operating_rule": (
+            "If a route matches, show the preferred OMH workflow/action first. "
+            "Use the generic tool only after the user accepts the route or when the route does not fit."
+        ),
         "claim_boundary": "Advisory routing context only; not workflow execution or generic tool invocation evidence.",
     }
+
+
+def generic_tool_checkpoint_routes() -> list[dict[str, object]]:
+    """Return compact OMH-first route hints for common generic tool families."""
+    return [
+        {
+            "tool_family": str(route["tool_family"]),
+            "applies_before": list(route["applies_before"]),
+            "primary_workflow": str(route["primary_workflow"]),
+            "preferred_workflows": list(route["preferred_workflows"]),
+            "primary_next_action": str(route["primary_next_action"]),
+            "fallback_action": str(route["fallback_action"]),
+            "not_evidence_yet": list(route["not_evidence_yet"]),
+        }
+        for route in GENERIC_TOOL_CHECKPOINT_ROUTES
+    ]
 
 
 def awareness_primer_context() -> str:
     payload = awareness_primer_payload()
     pattern_line = _compact_workflow_context_cards_line()
     cue_map = _compact_workflow_cue_line()
+    tool_map = _compact_generic_tool_checkpoint_line()
     return "\n".join(
         [
             "[OMH Awareness]",
@@ -711,6 +772,7 @@ def awareness_primer_context() -> str:
             str(payload["chat_rule"]),
             f"Pattern cards: {pattern_line}.",
             f"Common cues: {cue_map}.",
+            f"Tools: {tool_map}",
             (
                 "Tools: omh_capabilities for workflow/playbook catalog context; action=summary for catalog "
                 "questions; omh_status or omh_hud for state; omh_role for responsibility context."
@@ -757,6 +819,10 @@ def awareness_primer_markdown() -> str:
             "",
             _compact_workflow_cue_line() + ".",
             "",
+            "Generic tool map:",
+            "",
+            _compact_generic_tool_checkpoint_line() + ".",
+            "",
             "Tools:",
             "",
             "- Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.",
@@ -784,7 +850,7 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
             f"- {lane_line}",
             "- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.",
             f"- Cross-skill context: {payload['all_skill_context_rule']}",
-            "- Generic-tool checkpoint: check OMH prep/status/learning before image/file/search/coding tools.",
+            f"- Generic-tool checkpoint: {_compact_generic_tool_checkpoint_line()}.",
             f"- Coverage: {payload['skill_coverage']}",
             f"- {payload['chat_rule']}",
             f"- Boundary: {payload['evidence_boundary']}",
@@ -809,6 +875,13 @@ def _compact_workflow_context_cards_line() -> str:
         "materials -> materials-package/report-package/img-summary; "
         "automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; "
         "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
+    )
+
+
+def _compact_generic_tool_checkpoint_line() -> str:
+    return (
+        "image->img-summary; file->materials-package; "
+        "search->web-research; code->ultraprocess/ralplan/review"
     )
 
 

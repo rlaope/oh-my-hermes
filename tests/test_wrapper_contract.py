@@ -80,6 +80,13 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "feedback-triage")
         self.assertEqual(payload["generic_tool_checkpoint"]["schema_version"], "omh_generic_tool_checkpoint/v1")
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"]["body"])
+        checkpoint_routes = {
+            route["tool_family"]: route for route in payload["generic_tool_checkpoint"]["routes"]
+        }
+        self.assertEqual(checkpoint_routes["image_tools"]["primary_workflow"], "img-summary")
+        self.assertEqual(checkpoint_routes["file_tools"]["primary_workflow"], "materials-package")
+        self.assertEqual(checkpoint_routes["search_tools"]["primary_workflow"], "web-research")
+        self.assertEqual(checkpoint_routes["coding_tools"]["primary_workflow"], "ultraprocess")
         self.assertIn("prep/status/learning", payload["chat_response"]["body"])
         self.assertNotIn("generic_tool_checkpoint", payload["chat_response"]["state"])
         self.assertEqual(payload["chat_response"]["messenger_rendering"]["profile"], "discord")
