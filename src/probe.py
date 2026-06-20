@@ -16,6 +16,7 @@ from .plugin_observations import (
 from .plugin_pack import inspect_plugin_bundle
 from .runtime.artifacts import read_state_result
 from .targets import summarize_target_registry
+from .team_readiness import build_team_worker_readiness
 
 PROBE_STATUSES = ("available", "missing", "unknown", "unverified")
 MCP_HOST_SESSION_SCHEMA_VERSION = "omh_mcp_host_session/v1"
@@ -136,6 +137,37 @@ def _worktree_creator_capability() -> Capability:
             "workspace-isolation evidence, and return wrapper binding recipes for opening or attaching "
             "the selected coding agent without launching it"
         ),
+    )
+
+
+def _team_worker_readiness_capability(paths: OmhPaths) -> tuple[Capability, dict]:
+    readiness = build_team_worker_readiness(paths)
+    status = str(readiness.get("status", "missing"))
+    presentation_status = str(readiness.get("presentation_status", "unknown"))
+    hermes_visibility = str(readiness.get("hermes_visibility_status", "unknown"))
+    observed_runtime = readiness.get("observed_runtime", {})
+    observed_status = (
+        str(observed_runtime.get("status", "not_observed"))
+        if isinstance(observed_runtime, dict)
+        else "not_observed"
+    )
+    if status == "available":
+        message = (
+            "OMH ships team/swarm worker contract readiness, wrapper actions, and runtime observation ledger support; "
+            f"presentation={presentation_status}, Hermes visibility={hermes_visibility}, observed runtime={observed_status}"
+        )
+        capability_status = "available"
+    else:
+        message = "OMH team/swarm worker contract readiness is missing required local workflow surfaces"
+        capability_status = "missing"
+    return (
+        Capability(
+            "team_worker_readiness",
+            capability_status,
+            "omh runtime team-readiness",
+            message,
+        ),
+        readiness,
     )
 
 
@@ -336,8 +368,10 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
         )
     )
     mcp_markers = [paths.hermes_home / ".mcp.json", paths.hermes_home / "mcp.json"]
+    team_worker_readiness_capability, team_worker_readiness = _team_worker_readiness_capability(paths)
     capabilities.append(_mcp_preference_capability(paths))
     capabilities.append(_mcp_bridge_server_capability())
+    capabilities.append(team_worker_readiness_capability)
     capabilities.append(_worktree_creator_capability())
     capabilities.append(_mcp_bridge_runtime_capability(paths))
     mcp_host_session = _mcp_host_session_capability(paths)
@@ -435,6 +469,9 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
         "plugin_runtime_observed": plugin_runtime_observed,
         "plugin_runtime_active": plugin_runtime_active,
         "mcp_host_session_observed": mcp_host_session.status == "available",
+        "team_worker_readiness_ready": team_worker_readiness_capability.status == "available",
+        "team_worker_presentation_status": str(team_worker_readiness.get("presentation_status", "unknown")),
+        "team_worker_readiness": team_worker_readiness,
         "native_integration_claim_ready": bool(plugin["plugin_distribution_ready"]) and plugin_runtime_active,
         "claim_boundary": (
             "Prompt-level routing is the default unless a stable Hermes extension surface and host-supplied "

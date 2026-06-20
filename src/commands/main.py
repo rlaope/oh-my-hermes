@@ -119,6 +119,7 @@ from .runtime import (
     cmd_runtime_runs,
     cmd_runtime_show,
     cmd_runtime_status,
+    cmd_runtime_team_readiness,
     cmd_runtime_validate,
     cmd_runtime_wrapper,
 )
@@ -182,6 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh worktree prepare --repo . --task \"risky refactor\" --dry-run\n"
             "  omh worktree bind --path .worktrees/risky-refactor --executor codex --session <session-id>\n"
             "  omh runtime status\n\n"
+            "  omh runtime team-readiness\n\n"
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
             "Backend/control-plane commands such as chat, coding, runtime, goal, loop,\n"

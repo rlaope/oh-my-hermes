@@ -364,6 +364,7 @@ omh setup
 omh doctor
 omh list
 omh runtime status
+omh runtime team-readiness
 omh probe
 omh probe --parity
 ```
@@ -423,12 +424,23 @@ use. When a host or wrapper records `omh plugin observe-host`,
 can become true only when the latest observed plugin event is active
 (`plugin_load`, `tool_call`, `hook_call`, or `status_query`); observed
 `session_end` and `plugin_unload` remain historical evidence only.
+Use `omh runtime team-readiness` when an operator or wrapper wants to know
+whether Hermes/team/swarm coding paths are ready to present. It returns
+`omh_team_worker_readiness/v1` with the installed skill visibility, runtime
+templates, wrapper actions, worker ACK/result requirements, and current
+`runtime_observation/v1` status. If no worker event has been recorded, it should
+still say `not_observed`; readiness is not worker execution. The payload keeps
+`contract_status` separate from `presentation_status`, so wrappers can tell the
+difference between "OMH ships this contract" and "Hermes can currently see the
+installed team/ultrawork skill surface."
+
 Use `omh probe --parity` when an operator wants the broader comparison against
 common oh-my runtime capability axes. It returns `omh_parity_matrix/v1` with
-available and partial rows for skills/plugins, roles, team/swarm workers,
-worktree isolation, HUD/session status, MCP/tool bridge, loop
-autopilot, and release maintenance. Partial rows are intentional evidence
-boundaries, not failures. The worktree row includes
+available rows for skills/plugins, roles, team/swarm workers, worktree
+isolation, HUD/session status, MCP/tool bridge, loop autopilot, and release
+maintenance. Available means OMH has the deterministic contract or backend
+surface for that axis; live runtime actions still need separate observed
+evidence. The worktree row includes
 `worktree_session_isolation/v1` wrapper guidance when coding handoffs need same
 workspace, recommended worktree, or required worktree status before opening a
 coding agent. If a wrapper or operator chooses the explicit backend action,
