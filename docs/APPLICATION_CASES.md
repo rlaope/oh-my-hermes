@@ -454,7 +454,7 @@ omh demo grounded-score
 The purpose of the matrix is to keep Hermes users command-agnostic while giving
 wrapper operators a concrete contract result to render.
 
-`omh demo grounded-score` is a deterministic contract-compliance demo over 20
+`omh demo grounded-score` is a deterministic contract-compliance demo over 27
 representative messages. The score is 10/10 only when the expected chat route,
 response kind, next action, playbook confidence, and coding-delegation evidence
 boundary all match. It does not award points for unobserved execution, review,
@@ -480,6 +480,13 @@ CI, or merge work.
 | Idea-to-deploy product loop | `take this product idea from plan to deploy and monitor safely` | `idea-to-deploy` / `present_app_delivery_loop` | `idea-to-deploy` | Hermes presents the product loop without claiming implementation, deploy, or monitoring. | `10/10` |
 | CTO loop | `run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness` | `cto-loop` / `run_cto_loop` | `cto-loop` | Hermes keeps leadership decisions separate from accepted implementation follow-ups. | `10/10` |
 | Deploy and monitor | `deploy and monitor this release with rollback and health checks` | `deploy-and-monitor` / `prepare_deploy_monitor_plan` | `deploy-and-monitor` | Hermes prepares release operation gates without claiming infrastructure execution. | `10/10` |
+| English product shaping | `I need to improve our onboarding but I don't know where to start` | `deep-interview` / `answer_clarification` | `deep-interview-to-plan` | Hermes asks the blocking product-shaping question before planning or implementation. | `10/10` |
+| Workflow learning improvement | `I want Hermes to learn from this workflow and improve the skill next time` | `workflow-learning` / `audit_learning_readiness` | `workflow-learning` | Hermes prepares trace review and improvement candidates without silently patching a skill. | `10/10` |
+| Visual summary poster | `make a poster explaining cron automation` | `img-summary` / `prepare_visual_prompt_card` | `img-summary` | Hermes prepares the image prompt card; generation, QA, posting, and delivery remain observed-only. | `10/10` |
+| Research department ops | `I need a weekly leadership brief from support tickets, competitor news, and release risks` | `research-department` / `prepare_research_department_plan` | `weekly-ops-review` | Hermes shapes the recurring research and briefing flow without claiming source retrieval or delivery. | `10/10` |
+| GitHub event ops delivery | `Make this GitHub issue into a PR, run review, update docs, and tell me what changed` | `github-event-ops` / `prepare_github_event_ops_card` | `github-event-ops` | Hermes prepares a GitHub event card without claiming webhook delivery, mutation, code execution, review, or docs sync. | `10/10` |
+| Executor runtime selection | `Should I use Codex or Claude Code for this coding task?` | `executor-runtime-readiness` / `prepare_executor_runtime_readiness` | `executor-runtime-readiness` | A Codex handoff can be prepared, but it remains `prepared_not_observed` until dispatch and runtime evidence exist. | `10/10` |
+| Coding-agent progress status | `Codex 작업이 진행중인지 확인하고 지금 어떤 상태인지 알려줘` | `agent-ops-review` / `show_agent_ops_review` | `agent-ops-review` | Hermes reports runtime status from observed records and does not invent result, verification, review, CI, or merge evidence. | `10/10` |
 | Loopability-gated goal cycle | `./loop make this project a 10k star OSS` | `loop` / `reframe_north_star` | Direct skill invocation | The star goal is a north star; the current loop goal must name a bounded arena, observable problem, and verification before linked evidence can advance it. | `10/10` |
 | Direct one-cycle ultraprocess | `$ultraprocess research the repo, plan, implement, code-review, sync docs, and prepare a PR` | `ultraprocess` / `start_ultraprocess` | Direct skill invocation | One cycle is prepared without claiming implementation, review, docs sync, CI, PR, or merge evidence. | `10/10` |
 

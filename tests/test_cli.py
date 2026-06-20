@@ -3872,7 +3872,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(payload["summary"]["scenario_count"], 20)
+        self.assertEqual(payload["summary"]["scenario_count"], 27)
         self.assertTrue(payload["summary"]["all_10"])
         self.assertEqual(payload["summary"]["minimum_score"], 10)
         self.assertEqual(payload["summary"]["maximum_score"], 10)
@@ -3881,6 +3881,45 @@ class CliTests(unittest.TestCase):
         failed = [scenario["id"] for scenario in payload["scenarios"] if scenario["score"] != 10]
         self.assertEqual(failed, [])
         direct = {scenario["id"]: scenario for scenario in payload["scenarios"]}
+        self.assertEqual(
+            list(direct.keys()),
+            [
+                "startup-product-triage",
+                "startup-product-triage-expanded",
+                "oss-issue-to-pr",
+                "ai-agent-product-qa",
+                "dangerous-refactor",
+                "ai-coding-safety-audit",
+                "product-feature-shaping",
+                "release-gate-review",
+                "repeated-refactor-workflow",
+                "personal-multi-agent-hub",
+                "agency-template",
+                "operating-rhythm-history",
+                "leadership-report-package",
+                "materials-processing-package",
+                "reliability-incident-review",
+                "idea-to-deploy-loop",
+                "cto-loop",
+                "deploy-and-monitor",
+                "english-product-shaping",
+                "workflow-learning-improvement",
+                "visual-summary-poster",
+                "research-department-ops",
+                "github-event-ops-delivery",
+                "executor-runtime-selection",
+                "coding-agent-progress-status",
+                "direct-goal-loop",
+                "direct-ultraprocess-cycle",
+            ],
+        )
+        self.assertEqual(direct["workflow-learning-improvement"]["observed"]["playbook"]["id"], "workflow-learning")
+        self.assertEqual(direct["visual-summary-poster"]["observed"]["playbook"]["id"], "img-summary")
+        self.assertEqual(direct["coding-agent-progress-status"]["observed"]["playbook"]["id"], "agent-ops-review")
+        self.assertEqual(
+            direct["executor-runtime-selection"]["observed"]["handoff_status"],
+            "prepared_not_observed",
+        )
         self.assertIsNone(direct["direct-goal-loop"]["expected"]["playbook"])
         self.assertIsNone(direct["direct-ultraprocess-cycle"]["expected"]["playbook"])
         self.assertEqual(direct["direct-goal-loop"]["expected"]["invocation_mode"], "direct_skill")
