@@ -108,7 +108,11 @@ catalog. `omh_skill_picker/v1` carries the workflow labels, direct invocation
 text, harness names, and routing-only claim boundary. Catalog-question
 responses also include `omh_capability_summary/v1`, so Hermes can summarize the
 larger lanes, representative playbooks, and evidence boundary before or beside
-the picker.
+the picker. When an operator or trusted backend already has permission to query
+the local install, `omh list --json` also includes
+`omh_installed_skill_catalog_context/v1` plus per-skill descriptions, routing
+hints, and evidence boundaries, so a catalog answer does not degrade into a flat
+name list.
 
 ## Plugin-Native Chat Interaction
 

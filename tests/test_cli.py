@@ -958,6 +958,39 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(json.loads(stdout)["written"], str(output.resolve()))
 
+    def test_list_exposes_catalog_context_for_chat_answers(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(base + ["install"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+
+            status, stdout, stderr = run_cli(base + ["list"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Workflow lanes", stdout)
+            self.assertIn("Intent -> plan", stdout)
+            self.assertIn("Coding handoff", stdout)
+            self.assertIn("In chat, ask Hermes what OMH can do", stdout)
+
+            status, stdout, stderr = run_cli(base + ["list", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["catalog_context"]["schema_version"], "omh_installed_skill_catalog_context/v1")
+            self.assertGreaterEqual(payload["catalog_context"]["described_skill_count"], 40)
+            lane_ids = {lane["id"] for lane in payload["catalog_context"]["lanes"]}
+            self.assertIn("intent_to_plan", lane_ids)
+            self.assertIn("coding_handoff", lane_ids)
+            skills = {skill["name"]: skill for skill in payload["skills"]}
+            self.assertIn("description", skills["loop"])
+            self.assertIn("workflow_routing_hint", skills["loop"])
+            self.assertIn("evidence_boundary", skills["loop"])
+            self.assertEqual(skills["loop"]["awareness_lane"], "intent_to_plan")
+
     def test_probe_parity_matrix_maps_common_agent_runtime_gaps(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -19,6 +19,8 @@ except ImportError:  # pragma: no cover - Windows compatibility guard.
 
 from .. import __version__
 from ..command_path import inspect_omh_command_path
+from ..capabilities.registry import capability_summary
+from ..capabilities.skills import skill_capabilities
 from ..config_adapter import ensure_external_dir, external_dirs, read_config, remove_external_dir, write_config
 from ..doctor import doctor_ok, recommended_next_action, run_doctor
 from ..executors import CODING_EXECUTOR_TARGETS
@@ -725,7 +727,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 def cmd_list(args: argparse.Namespace) -> int:
     paths = _paths(args)
     manifest = read_manifest(paths.manifest_path)
-    payload = manifest or {"skills": [], "message": "not installed"}
+    payload = _catalog_aware_list_payload(manifest)
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -741,6 +743,95 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     else:
         _print_doctor_summary(payload, language=language)
     return 0 if payload["ok"] else 1
+
+
+def _catalog_aware_list_payload(manifest: dict[str, object] | None) -> dict[str, object]:
+    payload = dict(manifest or {"schema_version": 1, "skills": [], "message": "not installed"})
+    raw_skills = payload.get("skills", [])
+    if not isinstance(raw_skills, list):
+        raw_skills = []
+    capabilities = {
+        str(item.get("id")): item
+        for item in skill_capabilities()
+        if isinstance(item, dict) and item.get("id")
+    }
+    enriched_skills: list[dict[str, object]] = []
+    for raw_skill in raw_skills:
+        if not isinstance(raw_skill, dict):
+            continue
+        record = dict(raw_skill)
+        capability = capabilities.get(str(record.get("name") or ""))
+        if capability:
+            record.update(_list_skill_catalog_fields(capability))
+        enriched_skills.append(record)
+    payload["skills"] = enriched_skills
+    payload["catalog_context"] = _list_catalog_context(enriched_skills)
+    return payload
+
+
+def _list_skill_catalog_fields(capability: dict[str, object]) -> dict[str, object]:
+    fields = {
+        "description": capability.get("description", ""),
+        "category": capability.get("category", ""),
+        "phase": capability.get("phase", ""),
+        "hermes_role": capability.get("hermes_role", ""),
+        "use_for": capability.get("use_for", ""),
+        "preferred_usage": capability.get("preferred_usage", ""),
+        "awareness_lane": capability.get("awareness_lane", ""),
+        "awareness_lane_label": capability.get("awareness_lane_label", ""),
+        "workflow_routing_hint": capability.get("workflow_routing_hint", ""),
+        "handoff_policy": capability.get("handoff_policy", ""),
+        "evidence_boundary": capability.get("evidence_boundary", ""),
+    }
+    triggers = capability.get("triggers", [])
+    if isinstance(triggers, list):
+        fields["triggers"] = [str(item) for item in triggers[:10] if str(item)]
+    required_inputs = capability.get("required_inputs", [])
+    if isinstance(required_inputs, list):
+        fields["required_inputs"] = [str(item) for item in required_inputs[:8] if str(item)]
+    expected_outputs = capability.get("expected_outputs", [])
+    if isinstance(expected_outputs, list):
+        fields["expected_outputs"] = [str(item) for item in expected_outputs[:8] if str(item)]
+    return fields
+
+
+def _list_catalog_context(skills: list[dict[str, object]]) -> dict[str, object]:
+    names = {str(skill.get("name") or "") for skill in skills}
+    described_count = sum(1 for skill in skills if skill.get("description"))
+    summary = capability_summary()
+    lanes = []
+    for lane in summary.get("lanes", []):
+        if not isinstance(lane, dict):
+            continue
+        lane_skills = [str(skill) for skill in lane.get("primary_skills", []) if str(skill) in names]
+        if not lane_skills:
+            continue
+        lanes.append(
+            {
+                "id": lane.get("id", ""),
+                "label": lane.get("label", ""),
+                "owner_role": lane.get("owner_role", ""),
+                "use_for": lane.get("use_for", ""),
+                "primary_skills": lane_skills,
+                "examples": lane.get("examples", []),
+            }
+        )
+    return {
+        "schema_version": "omh_installed_skill_catalog_context/v1",
+        "purpose": (
+            "Hermes-facing context for answering what installed OMH workflows are available "
+            "without asking the user to approve extra shell catalog commands."
+        ),
+        "skill_count": len(skills),
+        "described_skill_count": described_count,
+        "lanes": lanes,
+        "direct_response_guidance": [
+            "Summarize workflow lanes before listing every skill.",
+            "Offer `./omh` or the matching clean skill name when the user wants to choose manually.",
+            "Use workflow_routing_hint and evidence_boundary before claiming execution or runtime evidence.",
+        ],
+        "evidence_boundary": summary.get("evidence_boundary", ""),
+    }
 
 
 def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
@@ -1741,8 +1832,28 @@ def _print_list_summary(payload: dict[str, object], *, manifest_path: Path, skil
     shown = names[:12]
     if shown:
         print("  Names: " + ", ".join(shown) + (" ..." if len(names) > len(shown) else ""))
+    catalog = payload.get("catalog_context")
+    if isinstance(catalog, dict):
+        lanes = catalog.get("lanes", [])
+        if isinstance(lanes, list) and lanes:
+            print(_color("Workflow lanes", "1;32", use_color))
+            for lane in lanes[:5]:
+                if not isinstance(lane, dict):
+                    continue
+                lane_skills = lane.get("primary_skills", [])
+                if not isinstance(lane_skills, list):
+                    lane_skills = []
+                skill_names = ", ".join(str(skill) for skill in lane_skills[:5])
+                overflow = f" +{len(lane_skills) - 5}" if len(lane_skills) > 5 else ""
+                label = str(lane.get("label") or lane.get("id") or "workflow lane")
+                use_for = _short_summary(str(lane.get("use_for", "")), limit=96)
+                print(f"  - {label}: {skill_names}{overflow}")
+                if use_for:
+                    print(f"    Use for: {use_for}")
     print(_color("Next", "1;32", use_color))
     print("  Run `omh doctor` to verify Hermes registration.")
+    if skills:
+        print("  In chat, ask Hermes what OMH can do or type `./omh` to open the workflow picker.")
     print(f"  {tr('en', 'machine_readable')}")
 
 
