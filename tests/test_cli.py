@@ -5433,6 +5433,40 @@ class CliTests(unittest.TestCase):
             self.assertFalse(fake_link.exists())
             self.assertFalse(fake_venv.exists())
 
+    def test_uninstall_detects_managed_command_package_when_venv_python_resolves_outside(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            fake_venv = root / "venv"
+            fake_venv_bin = fake_venv / "bin"
+            fake_venv_bin.mkdir(parents=True)
+            external_python = root / "external" / "python3.14"
+            external_python.parent.mkdir()
+            external_python.write_text("# fake external python\n", encoding="utf-8")
+            fake_python = fake_venv_bin / "python"
+            fake_python.symlink_to(external_python)
+            fake_omh = fake_venv_bin / "omh"
+            fake_omh.write_text("# fake omh\n", encoding="utf-8")
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            fake_link = fake_bin / "omh"
+            fake_link.symlink_to(fake_omh)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup"])[0], 0)
+            env = {**os.environ, "OMH_VENV_DIR": str(fake_venv), "OMH_BIN_DIR": str(fake_bin)}
+            with patch.dict(os.environ, env, clear=True), patch.object(sys, "executable", str(fake_python)):
+                status, stdout, stderr = run_cli(base + ["uninstall", "--dry-run"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            preview = json.loads(stdout)
+            self.assertIn(str(fake_link), preview["command_package_would_remove"])
+            self.assertIn(str(fake_venv.resolve()), preview["command_package_would_remove"])
+            self.assertEqual(preview["command_package"]["status"], "would_remove")
+            self.assertFalse(preview["command_package"]["kept"])
+
     def test_setup_and_chat_detect_persisted_hermes_target_topology_drift(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
