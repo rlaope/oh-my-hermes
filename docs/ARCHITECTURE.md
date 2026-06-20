@@ -147,7 +147,12 @@ OMH directly when Hermes taps are available.
 `omh_hud` tool, a detailed metadata-only `omh_status` tool, an `omh_role` role
 context tool, a bounded `omh_gather_evidence` local verification probe, and
 passive lifecycle hooks for bounded status context, role marker validation, and
-metadata-only session-end checkpointing. `omh hud`
+metadata-only session-end checkpointing. The `pre_llm_call` hook can also add
+`omh_route_hint/v1` for messages that look like planning, research, ops,
+materials, visual summary, automation, workflow-learning, or coding-handoff
+work. That hint carries only hash/length metadata, matched cue labels, candidate
+workflow names, next actions, and boundaries; it does not include the raw user
+message or prove a workflow executed. `omh hud`
 exposes the same status-line payload for local operator smoke tests. The HUD
 line stays limited to version, plugin bridge readiness, target topology, current
 or default coding agent, and evidence state. Host-supplied token metadata

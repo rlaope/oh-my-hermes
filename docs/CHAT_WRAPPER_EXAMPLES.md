@@ -93,6 +93,30 @@ responses also include `omh_capability_summary/v1`, so Hermes can summarize the
 larger lanes, representative playbooks, and evidence boundary before or beside
 the picker.
 
+## Plugin Route Hints
+
+When the optional OMH plugin bridge is loaded, `pre_llm_call` can add a bounded
+`omh_route_hint/v1` context block for messages that look like workflow-shaped
+work. The hint does not include the raw user message. It carries only message
+hash/length metadata, matched cue labels, a candidate workflow, adjacent
+workflows, the next action, and the same prepared-vs-observed boundary.
+
+Example effect:
+
+```text
+User
+make an image explaining the cron feature
+
+Hermes Agent
+[OMH Route Hint]
+- workflow=img-summary; lane=materials_and_visuals; next_action=prepare_visual_prompt_card
+- workflow=automation-blueprint; lane=automation_and_status; next_action=prepare_scheduled_ops_blueprint
+```
+
+The wrapper still owns rendering and state recording. The route hint is prompt
+context only; it is not workflow execution, image generation, scheduled job
+creation, review, CI, or delivery evidence.
+
 ## Missed OMH Route Capture
 
 If Hermes or the user says a response did not use the expected OMH workflow, the
