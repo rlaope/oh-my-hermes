@@ -110,7 +110,7 @@ the picker.
 
 ## Plugin Route Hints
 
-When the optional OMH plugin bridge is loaded, `pre_llm_call` can add a bounded
+When the managed OMH plugin bridge is loaded, `pre_llm_call` can add a bounded
 `omh_route_hint/v1` context block for messages that look like workflow-shaped
 work. The hint does not include the raw user message. It carries only message
 hash/length metadata, matched cue labels, a candidate workflow, adjacent
@@ -153,7 +153,7 @@ These routes are advisory. They tell Hermes which OMH workflow to consider
 before a generic tool, while image generation, file export, search retrieval,
 coding dispatch, review, CI, and merge remain observed-only claims.
 
-When the optional OMH plugin is loaded, its `pre_tool_call` hook can emit the
+When the managed OMH plugin is loaded, its `pre_tool_call` hook can emit the
 same checkpoint before image, file, search, or coding tool calls. The hook uses
 tool metadata such as `tool_name` or `tool_family`; it does not copy the raw
 image prompt, file body, search query, or coding task into the context.

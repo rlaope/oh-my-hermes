@@ -39,7 +39,7 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         id="skill_plugin_distribution",
         title="Skill and plugin distribution",
         common_pattern="Install a native skill/plugin payload, then let the host agent surface workflows without making users memorize backend commands.",
-        omh_surface="`hermes skills ...` compatible skill pack, `omh setup`, and the optional `~/.hermes/plugins/omh` bridge.",
+        omh_surface="`hermes skills ...` compatible skill pack, `omh setup`, and the managed `~/.hermes/plugins/omh` bridge.",
         status="available",
         evidence=(
             "skills/*/SKILL.md",
