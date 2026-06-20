@@ -89,6 +89,18 @@ Route for me and Hermes will select the safest next step.
 [ Choose workflow ] [ Search workflows ] [ Show status ]
 ```
 
+Render the picker in this order:
+
+- `featured_options` first, usually `Route for me`
+- `groups` next, so users see intent-to-plan, ops, deliverables, and
+  coding/runtime sections instead of one long flat list
+- `options` only as the backward-compatible flat-list fallback
+- `claim_boundary` visibly, because choosing a workflow is only routing intent
+- `search_skills` for the full catalog when the compact picker is not enough
+
+This lets Hermes answer catalog questions without asking the user to approve
+`omh list`.
+
 The wrapper should not ask the user to approve `omh list` merely to show the
 catalog. `omh_skill_picker/v1` carries the workflow labels, direct invocation
 text, harness names, and routing-only claim boundary. Catalog-question
@@ -127,12 +139,12 @@ can call the transport-free backend preview:
 omh chat route-hint --source discord "make an image explaining the cron feature"
 ```
 
-Capability-specific catalog questions should also stay workflow-native. If the
-user asks "이미지 생성 기능 뭐 있어?", "does OMH support image generation?", or
-"what image generation features does OMH have?", the wrapper should render the
-`img-summary` card with `show_visual_prompt_card`, `choose_image_generator`, and
-`image_generation_setup/v1` actions instead of falling back to the generic OMH
-workflow picker.
+Capability-specific catalog questions and short image requests should also stay
+workflow-native. If the user asks "이미지 생성 기능 뭐 있어?", "이미지 생성해줘",
+"does OMH support image generation?", or "generate an image", the wrapper should
+render the `img-summary` card with `show_visual_prompt_card`,
+`choose_image_generator`, and `image_generation_setup/v1` actions instead of
+falling back to the generic OMH workflow picker or a generic clarification.
 
 The same rule applies to other specific capability questions. A broad question
 such as "OMH 기능 뭐 있어?" still opens `omh_skill_picker/v1`, but "does OMH

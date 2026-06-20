@@ -3232,6 +3232,10 @@ class CliTests(unittest.TestCase):
             "이미지 생성 기능 뭐 있어?",
             "what image generation features does OMH have?",
             "does OMH support image generation?",
+            "이미지 생성해줘",
+            "이미지 만들어줘",
+            "generate an image",
+            "generate an image.",
         )
 
         for message in cases:
@@ -3247,6 +3251,24 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(route["recommendations"][0]["skill"], "img-summary")
                 self.assertEqual(route["recommendations"][0]["next_action"], "prepare_visual_prompt_card")
                 self.assertIn("guard:img_summary", route["recommendations"][0]["matched"])
+
+    def test_chat_route_does_not_send_image_coding_requests_to_img_summary(self) -> None:
+        cases = (
+            "generate an image processing script",
+            "make an image upload component",
+            "create an image classifier in Python",
+            "이미지를 생성해줘 파이썬 스크립트로",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                route = json.loads(stdout)["route"]
+                self.assertNotEqual(route["selected_skill"], "img-summary")
+                self.assertNotEqual(route["recommendations"][0]["skill"], "img-summary")
 
     def test_chat_route_dispatches_specific_capability_questions_to_cards(self) -> None:
         cases = (
@@ -3433,6 +3455,14 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(picker["schema_version"], "omh_skill_picker/v1")
                 option_ids = {option["id"] for option in picker["options"]}
                 self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
+                self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+                groups = {group["id"]: group for group in picker["groups"]}
+                self.assertIn("loop", groups["intent_to_plan"]["option_ids"])
+                self.assertIn("img-summary", groups["deliverables_and_visuals"]["option_ids"])
+                self.assertIn("code-review", groups["coding_and_runtime"]["option_ids"])
+                action_payload = next(action for action in payload["chat_response"]["actions"] if action["id"] == "choose_skill")["payload"]
+                self.assertEqual(action_payload["featured_options"][0]["id"], "oh-my-hermes")
+                self.assertIn("groups", action_payload)
                 self.assertIn("choose_skill", {action["id"] for action in payload["chat_response"]["actions"]})
 
     def test_chat_interact_catalog_questions_open_picker_without_shell(self) -> None:
@@ -3473,6 +3503,11 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
                 self.assertIn("shell command", payload["chat_response"]["body"])
+                picker = payload["chat_response"]["state"]["skill_picker"]
+                self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+                picker_groups = {group["id"]: group for group in picker["groups"]}
+                self.assertIn("feedback-triage", picker_groups["company_product_ops"]["option_ids"])
+                self.assertIn("img-summary", picker_groups["deliverables_and_visuals"]["option_ids"])
                 capability_summary = payload["chat_response"]["state"]["capability_summary"]
                 self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
                 lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
@@ -3556,6 +3591,8 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["registration"]["schema_version"], registration_schema)
                 self.assertEqual(payload["preview_contract"]["only_top_level_suggestions"], ["omh"])
                 self.assertEqual(payload["fallback_card"]["primary_action"]["label"], "Open omh")
+                self.assertIn("featured_options", " ".join(payload["rendering_steps"]))
+                self.assertIn("skill_picker.groups", " ".join(payload["rendering_steps"]))
                 self.assertIn("platform command installed", payload["not_evidence"])
 
     def test_chat_route_exposes_selected_recommendation_policy(self) -> None:

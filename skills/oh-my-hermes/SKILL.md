@@ -88,7 +88,7 @@ For messenger-native setup, wrappers can call `omh chat native-command --source 
 
 If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `research-department`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
 
-In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.options` as a select menu or compact button list. In Hermes TUI, render the same options as a text command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.
+In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.featured_options` first, then `chat_response.state.skill_picker.groups` as short sections. Keep `chat_response.state.skill_picker.options` as a backward-compatible flat-list fallback. In Hermes TUI, render the same grouped sections as a compact command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.
 
 Hermes-native install paths should converge on the same skill-visible state:
 

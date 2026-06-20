@@ -656,10 +656,19 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(picker["selection_mode"], "single_select")
         option_ids = {option["id"] for option in picker["options"]}
         self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
+        self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+        picker_groups = {group["id"]: group for group in picker["groups"]}
+        self.assertTrue({"intent_to_plan", "company_product_ops", "deliverables_and_visuals", "coding_and_runtime"} <= picker_groups.keys())
+        self.assertIn("loop", picker_groups["intent_to_plan"]["option_ids"])
+        self.assertIn("img-summary", picker_groups["deliverables_and_visuals"]["option_ids"])
+        self.assertIn("code-review", picker_groups["coding_and_runtime"]["option_ids"])
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertIn("choose_skill", actions)
         self.assertIn("search_skills", actions)
         self.assertEqual(actions["choose_skill"]["payload"]["schema_version"], "omh_skill_picker/v1")
+        self.assertEqual(actions["choose_skill"]["payload"]["featured_options"][0]["id"], "oh-my-hermes")
+        action_groups = {group["id"]: group for group in actions["choose_skill"]["payload"]["groups"]}
+        self.assertIn("feedback-triage", action_groups["company_product_ops"]["option_ids"])
         self.assertIn("routing intent only", payload["chat_response"]["claim_boundary"])
 
     def test_natural_catalog_questions_open_picker_without_shell(self) -> None:
@@ -701,6 +710,10 @@ class WrapperContractTests(unittest.TestCase):
                 picker = payload["chat_response"]["state"]["skill_picker"]
                 option_ids = {option["id"] for option in picker["options"]}
                 self.assertTrue({"oh-my-hermes", "loop", "ultraprocess"} <= option_ids)
+                self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+                picker_groups = {group["id"]: group for group in picker["groups"]}
+                self.assertIn("ultraprocess", picker_groups["intent_to_plan"]["option_ids"])
+                self.assertIn("img-summary", picker_groups["deliverables_and_visuals"]["option_ids"])
                 primer = payload["chat_response"]["state"]["context_primer"]
                 self.assertEqual(primer["schema_version"], "omh_context_primer/v1")
                 self.assertIn("Hermes workflow layer", primer["summary"])
@@ -816,6 +829,8 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(surface["fallback_card"]["schema_version"], "omh_command_fallback_card/v1")
                 self.assertEqual(surface["fallback_card"]["primary_action"]["label"], "Open omh")
                 self.assertEqual(surface["registration"]["schema_version"], registration_schema)
+                self.assertIn("featured_options", " ".join(surface["rendering_steps"]))
+                self.assertIn("skill_picker.groups", " ".join(surface["rendering_steps"]))
                 self.assertIn("platform command installed", surface["not_evidence"])
                 self.assertIn("not observed platform registration", surface["claim_boundary"])
 
@@ -834,6 +849,26 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(rendered["component"]["kind"], "discord_message_components")
         self.assertEqual(rendered["component"]["buttons"][0]["label"], "Open omh")
         self.assertIn("workflow selected", rendered["not_evidence"])
+
+    def test_native_render_exposes_grouped_skill_picker(self) -> None:
+        interaction = build_chat_interaction_payload("./omh", source="discord")
+
+        rendered = render_native_command_response(interaction, source="discord")
+
+        self.assertEqual(rendered["schema_version"], "omh_native_command_render/v1")
+        self.assertEqual(rendered["render_kind"], "workflow_picker")
+        self.assertEqual(rendered["picker_schema"], "omh_skill_picker/v1")
+        self.assertEqual(rendered["featured_options"][0]["id"], "oh-my-hermes")
+        rendered_groups = {group["id"]: group for group in rendered["groups"]}
+        self.assertIn("intent_to_plan", rendered_groups)
+        self.assertIn("deliverables_and_visuals", rendered_groups)
+        component = rendered["component"]
+        self.assertEqual(component["kind"], "discord_select_menu")
+        self.assertEqual(component["featured_options"][0]["value"], "oh-my-hermes")
+        component_groups = {group["id"]: group for group in component["groups"]}
+        self.assertIn("loop", {option["value"] for option in component_groups["intent_to_plan"]["options"]})
+        self.assertIn("img-summary", {option["value"] for option in component_groups["deliverables_and_visuals"]["options"]})
+        self.assertIn("fallback_options", component)
 
     def test_direct_skills_invocation_uses_picker_not_management_skill(self) -> None:
         payload = build_chat_interaction_payload("./skills", source="discord")
@@ -914,6 +949,9 @@ class WrapperContractTests(unittest.TestCase):
             "이미지 생성 기능 뭐 있어?",
             "what image generation features does OMH have?",
             "does OMH support image generation?",
+            "이미지 생성해줘",
+            "이미지 만들어줘",
+            "generate an image",
             "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
         )
 

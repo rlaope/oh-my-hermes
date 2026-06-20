@@ -1865,6 +1865,8 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
                     "schema_version": SKILL_PICKER_SCHEMA_VERSION,
                     "selection_mode": "single_select",
                     "options": picker["options"],
+                    "featured_options": picker["featured_options"],
+                    "groups": picker["groups"],
                 },
             ),
             _action("search_skills", "Search workflows", "secondary", payload={"input_schema": {"query": "string"}}),
@@ -1897,18 +1899,62 @@ def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
                 },
             }
         )
+    featured_options = [
+        _compact_picker_option(option)
+        for option in options
+        if option["id"] == _ROUTER_SKILL
+    ]
+    groups = _skill_picker_groups(options)
     return {
         "schema_version": SKILL_PICKER_SCHEMA_VERSION,
         "trigger": _first_token(message),
         "source": source,
         "selection_mode": "single_select",
         "options": options,
+        "featured_options": featured_options,
+        "groups": groups,
         "rendering_hints": {
-            "discord": "Render options as a select menu or compact buttons in the current thread.",
-            "slack": "Render options as a static select or button list in the current thread.",
-            "hermes_tui": "Render options as a compact command list; keep real skill names unchanged.",
+            "discord": "Render Route for me first, then grouped sections; keep the full options list only as a compatibility fallback.",
+            "slack": "Render Route for me first, then grouped sections or a grouped static select in the current thread.",
+            "hermes_tui": "Render grouped sections with short direct invocations; keep real skill names unchanged.",
         },
+        "recommended_rendering": "Show the featured Route for me option first, then the groups. Use search_skills for the full installed catalog.",
         "claim_boundary": "This picker records routing intent only; selected workflows still need their own plan, handoff, or observed evidence.",
+    }
+
+
+def _skill_picker_groups(options: list[dict[str, object]]) -> list[dict[str, object]]:
+    by_id = {str(option["id"]): option for option in options}
+    groups = []
+    for group in _CONTEXT_PRIMER_GROUPS:
+        group_options = [
+            _compact_picker_option(by_id[workflow_id])
+            for workflow_id in group["workflows"]
+            if workflow_id in by_id and workflow_id != _ROUTER_SKILL
+        ]
+        if not group_options:
+            continue
+        groups.append(
+            {
+                "id": group["id"],
+                "label": group["label"],
+                "use_when": group["use_when"],
+                "option_ids": [str(option["id"]) for option in group_options],
+                "options": group_options,
+                "action_id": "choose_skill",
+            }
+        )
+    return groups
+
+
+def _compact_picker_option(option: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": str(option.get("id", "")),
+        "label": str(option.get("label", "")),
+        "description": str(option.get("description", "")),
+        "direct_invocation": str(option.get("direct_invocation", "")),
+        "harness": str(option.get("harness", "")),
+        "action_id": str(option.get("action_id", "choose_skill")),
     }
 
 
