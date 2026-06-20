@@ -137,6 +137,10 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
   another configured coding-agent session; the backend can explicitly create the
   local Git worktree, then return a separate wrapper recipe for opening or
   attaching the selected coding agent from that worktree.
+- **Team-ready without hidden workers** - Hermes/team/swarm paths expose worker
+  protocol, runtime templates, wrapper actions, and observed ledger status via
+  `omh runtime team-readiness` while keeping worker launch and results
+  evidence-only.
 - **Useful beyond coding** - research, planning, feedback triage, meeting prep,
   reports, automation blueprints, material packages, and loop work all have
   Hermes-facing workflow paths.
@@ -248,9 +252,10 @@ files remain an explicit advanced option.
 | "Make this repo feel 10k-star quality." | Treat it as a north star, choose a smaller loopable goal, and keep the next verification visible. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
 
-Advanced team presets, plugin status helpers, the optional MCP bridge with
-host-specific config recipes, host-session evidence records, runtime
-observation, and release smoke commands are covered in the documentation below.
+Advanced team presets, team/swarm readiness, plugin status helpers, the
+optional MCP bridge with host-specific config recipes, host-session evidence
+records, runtime observation, and release smoke commands are covered in the
+documentation below.
 
 <br>
 

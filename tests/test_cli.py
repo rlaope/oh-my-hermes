@@ -797,10 +797,10 @@ class CliTests(unittest.TestCase):
             matrix = payload["parity_matrix"]
             self.assertEqual(matrix["schema_version"], "omh_parity_matrix/v1")
             self.assertGreaterEqual(matrix["summary"]["available"], 5)
-            self.assertGreaterEqual(matrix["summary"]["partial"], 1)
+            self.assertEqual(matrix["summary"]["partial"], 0)
             capabilities = {item["id"]: item for item in matrix["capabilities"]}
             self.assertEqual(capabilities["skill_plugin_distribution"]["status"], "available")
-            self.assertEqual(capabilities["team_swarm_workers"]["status"], "partial")
+            self.assertEqual(capabilities["team_swarm_workers"]["status"], "available")
             self.assertEqual(capabilities["worktree_isolation"]["status"], "available")
             self.assertEqual(capabilities["mcp_tool_bridge"]["status"], "available")
             self.assertIn("not worker dispatch", capabilities["team_swarm_workers"]["claim_boundary"])
@@ -808,6 +808,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(matrix["probe_alignment"]["managed_skills"], "available")
             self.assertEqual(matrix["probe_alignment"]["omh_plugin_bundle"], "available")
             self.assertEqual(matrix["probe_alignment"]["mcp_bridge_server"], "available")
+            self.assertEqual(matrix["probe_alignment"]["team_worker_readiness"], "available")
+            self.assertEqual(matrix["probe_alignment"]["team_worker_presentation"], "available")
             self.assertEqual(matrix["probe_alignment"]["mcp_host_session"], "unverified")
             self.assertEqual(matrix["probe_alignment"]["worktree_creator"], "available")
             self.assertIn("does not claim hidden worker launch", matrix["claim_boundary"])
@@ -818,11 +820,104 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("OMH capability probe", stdout)
             self.assertIn("Parity matrix", stdout)
-            self.assertIn("Team, swarm, and worker protocol: partial", stdout)
+            self.assertIn("Team, swarm, and worker protocol: available", stdout)
             self.assertIn("Worktree and project-session isolation: available", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)
+
+    def test_runtime_team_readiness_reports_contract_without_claiming_execution(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(base + ["runtime", "team-readiness"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_team_worker_readiness/v1")
+            self.assertEqual(payload["status"], "available")
+            self.assertEqual(payload["contract_status"], "available")
+            self.assertEqual(payload["presentation_status"], "not_installed")
+            self.assertEqual(payload["hermes_visibility_status"], "not_installed")
+            self.assertEqual(payload["observed_runtime"]["status"], "not_observed")
+            self.assertEqual(payload["observed_runtime"]["worker_event_count"], 0)
+            self.assertEqual(payload["observed_runtime"]["target_scan_limit"], 50)
+            self.assertIn("start_team", payload["worker_protocol"]["wrapper_actions"])
+            self.assertIn("start_swarm", payload["worker_protocol"]["wrapper_actions"])
+            self.assertIn("worker_dispatch", payload["runtime_observation_contract"]["team_worker_events"])
+            self.assertIn("runtime_observation/v1", payload["claim_boundary"])
+            self.assertIn("omh setup", " ".join(payload["next_actions"]))
+
+            status, _, stderr = run_cli(base + ["setup", "--with-plugin"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+
+            status, stdout, stderr = run_cli(base + ["runtime", "team-readiness"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            installed = json.loads(stdout)
+            self.assertEqual(installed["hermes_visibility_status"], "available")
+            self.assertEqual(installed["presentation_status"], "available")
+            self.assertGreaterEqual(installed["installed_skill_count"], 2)
+
+    def test_runtime_team_readiness_reflects_worker_observations(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home_args = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "risky refactor"
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "start",
+                    "--source",
+                    "discord",
+                    "--source-event-id",
+                    "m1",
+                    "--channel-ref",
+                    "c1",
+                    message,
+                ]
+            )
+            self.assertEqual(status, 0, stderr)
+            session_id = json.loads(stdout)["session"]["session_id"]
+            self.assertEqual(run_cli(home_args + ["chat", "session", "accept-plan", session_id])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "select-executor", session_id, "omx-runtime"])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "prepare-handoff", session_id, message])[0], 0)
+
+            for event in ("runtime_start", "worker_dispatch"):
+                command = [
+                    "runtime",
+                    "observe",
+                    "--session",
+                    session_id,
+                    "--runtime-profile",
+                    "omx-runtime",
+                    "--event",
+                    event,
+                    "--summary",
+                    f"{event} observed",
+                ]
+                if event == "worker_dispatch":
+                    command.extend(["--worker-ref", "worker-1"])
+                status, _, stderr = run_cli(home_args + command)
+                self.assertEqual(status, 0, stderr)
+
+            status, stdout, stderr = run_cli(home_args + ["runtime", "team-readiness"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            observed = payload["observed_runtime"]
+            self.assertEqual(observed["status"], "observed")
+            self.assertIn("runtime_start", observed["observed_events"])
+            self.assertIn("worker_dispatch", observed["observed_events"])
+            self.assertEqual(observed["latest_worker_events"]["worker_dispatch"]["worker_ref"], "worker-1")
+            self.assertIn("record_runtime_observation", observed["next_action"])
 
     def test_setup_interactive_wizard_records_user_choices(self) -> None:
         with TemporaryDirectory() as tmp:

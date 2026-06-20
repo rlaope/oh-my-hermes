@@ -29,6 +29,7 @@ from ..runtime.artifacts import (
 from ..executors import CODING_RUNTIME_HANDOFF_TARGETS
 from ..local_store import read_json_object
 from ..skill_pack import builtin_harnesses, routable_definitions
+from ..team_readiness import DEFAULT_RUNTIME_TARGET_SCAN_LIMIT, build_team_worker_readiness
 from .common import _paths, _print_json
 
 
@@ -353,6 +354,14 @@ def cmd_runtime_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runtime_team_readiness(args: argparse.Namespace) -> int:
+    target_limit = None if getattr(args, "all", False) else int(getattr(args, "limit", DEFAULT_RUNTIME_TARGET_SCAN_LIMIT))
+    if target_limit is not None and target_limit < 1:
+        raise OmhError("--limit must be at least 1 unless --all is set")
+    _print_json(build_team_worker_readiness(_paths(args), target_limit=target_limit))
+    return 0
+
+
 def _bounded_limit(args: argparse.Namespace) -> int | None:
     if getattr(args, "all", False):
         return None
@@ -470,3 +479,16 @@ def _add_runtime_commands(sub) -> None:
     runtime_export.add_argument("--all", action="store_true", help="Export all runs and wrapper sessions.")
     runtime_export.add_argument("--summary", action="store_true", help="Export run/session records without full event payloads.")
     runtime_export.set_defaults(func=cmd_runtime_export)
+
+    runtime_team_readiness = runtime_sub.add_parser(
+        "team-readiness",
+        help="Inspect Hermes/team/swarm worker contract readiness without claiming worker execution.",
+    )
+    runtime_team_readiness.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_RUNTIME_TARGET_SCAN_LIMIT,
+        help="Maximum recent runtime targets to inspect for observations. Use --all for an unbounded scan.",
+    )
+    runtime_team_readiness.add_argument("--all", action="store_true", help="Inspect all runtime targets.")
+    runtime_team_readiness.set_defaults(func=cmd_runtime_team_readiness)

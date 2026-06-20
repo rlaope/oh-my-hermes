@@ -546,7 +546,10 @@ def summarize_runtime_observation_status(records: list[dict[str, Any]]) -> dict[
         if not isinstance(record, dict):
             continue
         event_type = str(record.get("event_type", ""))
-        if event_type in RUNTIME_OBSERVATION_EVENTS:
+        current = latest_by_event.get(event_type)
+        if event_type in RUNTIME_OBSERVATION_EVENTS and (
+            current is None or _runtime_observation_sort_key(record) >= _runtime_observation_sort_key(current)
+        ):
             latest_by_event[event_type] = record
 
     observed_events: list[str] = []
@@ -595,6 +598,15 @@ def summarize_runtime_observation_status(records: list[dict[str, Any]]) -> dict[
             "Missing ladder steps remain unobserved."
         ),
     }
+
+
+def _runtime_observation_sort_key(record: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(record.get("updated_at", "")),
+        str(record.get("target_type", "")),
+        str(record.get("target_id", "")),
+        str(record.get("event_type", "")),
+    )
 
 
 def runtime_observation_not_applicable(reason: str) -> dict[str, Any]:

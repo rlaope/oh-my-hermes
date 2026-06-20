@@ -504,13 +504,17 @@ oh-my runtime capability axes with OMH's actual surfaces: skill/plugin
 distribution, specialist roles, team/swarm workers, worktree isolation, HUD and
 session observability, MCP/tool bridge, loop/autopilot workflow, and
 release maintenance. It is a product and operator contract, not a hidden runtime
-claim. A `partial` row means OMH has deterministic guidance, handoff metadata,
-or observation records for that axis, while the live worker, executor session,
-MCP host load, or plugin runtime event still belongs to Hermes, the selected
-executor, or a future observed integration. Worktree isolation is available only
-for the explicit `omh worktree prepare/list/bind` backend and its local
+claim. Team/swarm worker support is exposed as `omh_team_worker_readiness/v1`
+through `omh runtime team-readiness`: OMH can show the worker protocol, runtime
+templates, wrapper actions, installed skill visibility, and observed
+`runtime_observation/v1` ledger status. That readiness is still not worker
+launch, pane/session creation, worker result, review, CI, or merge evidence.
+Worktree isolation is available only for the explicit
+`omh worktree prepare/list/bind` backend and its local
 `omh_worktree_observation/v1` ledger plus wrapper binding recipes; it does not
-auto-launch an executor.
+auto-launch an executor. MCP host load and plugin runtime events likewise
+belong to Hermes, the selected executor, or another observed integration until
+the matching ledger records exist.
 
 ## Harness Contract
 
