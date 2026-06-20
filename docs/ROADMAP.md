@@ -51,3 +51,5 @@
   import/register smoke and conservative runtime-claim boundaries
 - Host-observed plugin load/use records through `omh plugin observe-host`, kept
   separate from local install smoke and from execution/review/CI evidence
+- Plugin tool/hook self-observation when a Hermes host supplies bounded
+  observation metadata, using the same runtime evidence boundary

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from ..awareness import awareness_lane_examples, awareness_primer_payload
+from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 
 STANDALONE_CAPABILITY_SECTIONS = (
@@ -93,19 +94,21 @@ OMH_CAPABILITIES_SCHEMA = {
                 "type": "string",
                 "description": "Capability id for action=inspect.",
             },
+            "observation": OBSERVATION_SCHEMA,
         },
     },
 }
 
 
 def omh_capabilities_handler(args: dict, **kwargs) -> str:
+    observation = observe_plugin_tool_call("omh_capabilities", args, kwargs)
     action = str(args.get("action", "export") or "export")
     section = str(args.get("section", "") or "") or None
     try:
         payload = _handle_capability_action(action, section, str(args.get("id", "") or ""))
     except ValueError as exc:
         payload = {"error": str(exc)}
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
 
 
 def _handle_capability_action(action: str, section: str | None, capability_id: str) -> dict[str, object]:

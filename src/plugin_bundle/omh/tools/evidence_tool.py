@@ -9,6 +9,8 @@ import shlex
 import subprocess
 from typing import Any
 
+from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+
 OMH_EVIDENCE_SCHEMA = {
     "name": "omh_gather_evidence",
     "description": (
@@ -39,6 +41,7 @@ OMH_EVIDENCE_SCHEMA = {
                 "type": "integer",
                 "description": "Maximum output characters per command. Keeps the tail. Default 4000, capped at 20000.",
             },
+            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["commands"],
     },
@@ -71,18 +74,24 @@ _DEFAULT_ALLOWLIST = (
 
 
 def omh_evidence_handler(args: dict, **kwargs) -> str:
+    observation = observe_plugin_tool_call("omh_gather_evidence", args, kwargs)
     commands = args.get("commands", [])
     if not isinstance(commands, list) or not commands:
-        return _json({"error": "commands must be a non-empty list"})
+        return _json(_with_observation({"error": "commands must be a non-empty list"}, observation))
     if len(commands) > _MAX_COMMANDS:
-        return _json({"error": f"too many commands: {len(commands)} > {_MAX_COMMANDS}"})
+        return _json(_with_observation({"error": f"too many commands: {len(commands)} > {_MAX_COMMANDS}"}, observation))
 
     project_root = _project_root(args, kwargs)
     if not project_root.is_dir():
-        return _json({"error": "project_root must be an existing directory", "project_root": str(project_root)})
+        return _json(
+            _with_observation(
+                {"error": "project_root must be an existing directory", "project_root": str(project_root)},
+                observation,
+            )
+        )
     workdir = _workdir(args, project_root)
     if isinstance(workdir, dict):
-        return _json(workdir)
+        return _json(_with_observation(workdir, observation))
 
     timeout = min(_positive_int(args.get("timeout"), _DEFAULT_TIMEOUT_SECONDS), _MAX_TIMEOUT_SECONDS)
     truncate = min(_positive_int(args.get("truncate"), _DEFAULT_TRUNCATE_CHARS), _MAX_TRUNCATE_CHARS)
@@ -127,7 +136,11 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
             "implementation, review, CI, merge, or Hermes runtime-load evidence."
         ),
     }
-    return _json(payload)
+    return _json(_with_observation(payload, observation))
+
+
+def _with_observation(payload: dict[str, Any], observation: dict[str, Any] | None) -> dict[str, Any]:
+    return attach_public_observation(payload, observation)
 
 
 def _project_root(args: dict, kwargs: dict) -> Path:

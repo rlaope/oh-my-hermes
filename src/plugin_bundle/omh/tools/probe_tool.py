@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+from json import JSONDecodeError
 import os
 from pathlib import Path
 from typing import Any
 
+from ..host_observation import PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS
+from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..runtime_reader import read_omh_hud, read_omh_status
 
 OMH_PROBE_SCHEMA = {
@@ -32,6 +35,7 @@ OMH_PROBE_SCHEMA = {
                 "type": "boolean",
                 "description": "Include the capability gap roadmap.",
             },
+            "observation": OBSERVATION_SCHEMA,
         },
     },
 }
@@ -42,6 +46,7 @@ def omh_probe_handler(args: dict, **kwargs) -> str:
     include_roadmap = bool(args.get("include_roadmap", False))
     omh_home = _optional_path_arg(args.get("omh_home"))
     hermes_home = _optional_path_arg(args.get("hermes_home"))
+    observation = observe_plugin_tool_call("omh_probe", args, kwargs)
     try:
         payload = _package_probe(
             omh_home=omh_home,
@@ -58,7 +63,7 @@ def omh_probe_handler(args: dict, **kwargs) -> str:
             include_parity=include_parity,
             include_roadmap=include_roadmap,
         )
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
 
 
 def _package_probe(
@@ -93,7 +98,12 @@ def _standalone_probe(
     hermes = _expand_path(hermes_home or os.environ.get("HERMES_HOME", "~/.hermes"))
     status = read_omh_status(omh_home=home, limit=3)
     hud = read_omh_hud(omh_home=home, hermes_home=hermes, preset="focused", limit=1)
-    capabilities = _standalone_capabilities(home, hermes, status, hud)
+    plugin_observation = _latest_plugin_observation(home)
+    plugin_runtime_observed = bool(plugin_observation and plugin_observation.get("observed"))
+    plugin_runtime_active = (
+        plugin_runtime_observed and str(plugin_observation.get("runtime_readiness", "")) == "active_runtime_observed"
+    )
+    capabilities = _standalone_capabilities(home, hermes, status, hud, plugin_observation=plugin_observation)
     payload: dict[str, Any] = {
         "schema_version": 1,
         "source": "standalone_plugin_bundle_fallback",
@@ -104,9 +114,9 @@ def _standalone_probe(
         "capabilities": capabilities,
         "target_topology": hud.get("target_topology", {}),
         "plugin_distribution_ready": _capability_status(capabilities, "omh_plugin_bundle") == "available",
-        "plugin_runtime_observed": False,
-        "plugin_runtime_active": False,
-        "native_integration_claim_ready": False,
+        "plugin_runtime_observed": plugin_runtime_observed,
+        "plugin_runtime_active": plugin_runtime_active,
+        "native_integration_claim_ready": plugin_runtime_active,
         "privacy": "metadata_only",
         "claim_boundary": (
             "This standalone plugin probe can read local OMH files and the current plugin bundle metadata. "
@@ -129,7 +139,14 @@ def _standalone_probe(
     return payload
 
 
-def _standalone_capabilities(home: Path, hermes: Path, status: dict[str, Any], hud: dict[str, Any]) -> list[dict[str, str]]:
+def _standalone_capabilities(
+    home: Path,
+    hermes: Path,
+    status: dict[str, Any],
+    hud: dict[str, Any],
+    *,
+    plugin_observation: dict[str, Any] | None,
+) -> list[dict[str, str]]:
     skills_dir = home / "skills"
     managed_skill = skills_dir / "oh-my-hermes" / "SKILL.md"
     hermes_config = hermes / "config.yaml"
@@ -172,12 +189,7 @@ def _standalone_capabilities(home: Path, hermes: Path, status: dict[str, Any], h
             "omh_probe",
             "This response was produced by the managed OMH plugin tool; persisted host observation remains separate",
         ),
-        _capability(
-            "plugin_runtime_observed",
-            "unverified",
-            str(home / "runtime" / "plugin_host_observations.jsonl"),
-            "No host-supplied plugin observation is inferred by the standalone probe fallback",
-        ),
+        _standalone_plugin_runtime_capability(home, plugin_observation),
         _capability(
             "wrapper_metadata",
             "available" if wrapper_paths else "missing",
@@ -271,7 +283,7 @@ def _standalone_roadmap(probe_payload: dict[str, Any]) -> dict[str, Any]:
             "evidence_gaps": len(evidence),
             "optional_or_host_unknowns": 1,
             "baseline_ready": len(baseline) == 0,
-            "native_runtime_observed": False,
+            "native_runtime_observed": _status(capabilities, "plugin_runtime_observed") == "available",
             "wrapper_usage_observed": _status(capabilities, "wrapper_metadata") == "available",
         },
         "product_gaps": baseline,
@@ -305,6 +317,59 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+def _latest_plugin_observation(home: Path) -> dict[str, Any] | None:
+    path = home / "runtime" / "plugin_host_observations.jsonl"
+    if not path.exists():
+        return None
+    latest: dict[str, Any] | None = None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except JSONDecodeError:
+            continue
+        if isinstance(record, dict) and record.get("schema_version") == "omh_plugin_host_observation/v1":
+            latest = record
+    return latest
+
+
+def _standalone_plugin_runtime_capability(home: Path, observation: dict[str, Any] | None) -> dict[str, str]:
+    evidence = str(home / "runtime" / "plugin_host_observations.jsonl")
+    if observation and observation.get("observed"):
+        host = str(observation.get("host", "unknown") or "unknown")
+        event = str(observation.get("event", "unknown") or "unknown")
+        session_id = str(observation.get("session_id", "unknown") or "unknown")
+        readiness = str(observation.get("runtime_readiness", "") or "")
+        active = readiness == "active_runtime_observed"
+        message = (
+            f"OMH plugin active runtime observed by {host} ({event}, session={session_id})"
+            if active
+            else f"OMH plugin historical runtime event observed by {host} ({event}, session={session_id}); active readiness requires one of {', '.join(PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS)}"
+        )
+        return _capability("plugin_runtime_observed", "available", evidence, message)
+    if observation:
+        host = str(observation.get("host", "unknown") or "unknown")
+        status = str(observation.get("status", "unknown") or "unknown")
+        event = str(observation.get("event", "unknown") or "unknown")
+        return _capability(
+            "plugin_runtime_observed",
+            "unverified",
+            evidence,
+            f"Latest plugin host observation from {host} is {status} ({event}); Hermes plugin runtime is not currently observed",
+        )
+    return _capability(
+        "plugin_runtime_observed",
+        "unverified",
+        evidence,
+        "No host-supplied plugin observation is inferred by the standalone probe fallback",
+    )
 
 
 def _capability(name: str, status: str, evidence: str, message: str) -> dict[str, str]:

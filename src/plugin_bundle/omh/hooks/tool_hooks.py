@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 
 from ..awareness import generic_tool_checkpoint_routes
+from ..host_observation import observe_plugin_hook_call
 from ..omh_roles import extract_role_marker, resolve_role_name, role_aliases, role_names
 
 
 def pre_tool_call(**kwargs) -> dict[str, str] | None:
     """Inject bounded OMH context before tool calls without exposing tool input."""
+    observe_plugin_hook_call("pre_tool_call", kwargs)
     context_parts: list[str] = []
     role_warning = _delegate_role_warning(kwargs)
     if role_warning:

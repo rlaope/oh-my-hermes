@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from ..awareness import awareness_primer_payload, awareness_route_hint
+from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 
 OMH_RECOMMEND_SCHEMA = {
     "name": "omh_recommend",
@@ -26,6 +27,7 @@ OMH_RECOMMEND_SCHEMA = {
                 "default": 5,
                 "description": "Maximum recommendations to return.",
             },
+            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["message"],
     },
@@ -66,6 +68,7 @@ _FALLBACK_RECOMMENDATIONS = (
 
 
 def omh_recommend_handler(args: dict, **kwargs) -> str:
+    observation = observe_plugin_tool_call("omh_recommend", args, kwargs)
     message = str(args.get("message") or "").strip()
     limit = _bounded_limit(args.get("limit"), default=5)
     if not message:
@@ -76,7 +79,7 @@ def omh_recommend_handler(args: dict, **kwargs) -> str:
             "recommendations": [],
             "claim_boundary": _claim_boundary(),
         }
-        return json.dumps(payload, sort_keys=True)
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
 
     recommendations, source = _recommendations(message, limit)
     payload = {
@@ -96,7 +99,7 @@ def omh_recommend_handler(args: dict, **kwargs) -> str:
         ),
         "claim_boundary": _claim_boundary(),
     }
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
 
 
 def _recommendations(message: str, limit: int) -> tuple[list[dict[str, Any]], str]:

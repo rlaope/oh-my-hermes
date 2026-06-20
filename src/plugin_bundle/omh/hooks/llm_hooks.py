@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..awareness import awareness_context_matches_message, awareness_primer_context, awareness_route_hint_context
+from ..host_observation import observe_plugin_hook_call
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..runtime_reader import read_omh_hud, read_omh_status
 
@@ -18,6 +19,7 @@ def _token_metadata_from_kwargs(kwargs: dict) -> dict[str, object]:
 
 def pre_llm_call(**kwargs) -> dict[str, str] | None:
     """Inject bounded OMH role/status context without storing prompts."""
+    observe_plugin_hook_call("pre_llm_call", kwargs)
     context_parts: list[str] = []
     user_message = str(kwargs.get("user_message", "") or "")
     is_first_turn = bool(kwargs.get("is_first_turn", False))
