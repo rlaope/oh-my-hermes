@@ -657,6 +657,7 @@ class CliTests(unittest.TestCase):
             (["cases", "demo", "--all"], "OMH G1-G10 use-case demo cards", "cards"),
             (["cases", "artifact", "G10"], "OMH use-case artifact:", "artifact_id"),
             (["cases", "artifact", "--all"], "OMH G1-G10 use-case artifacts", "artifacts"),
+            (["cases", "replay"], "OMH G1-G10 use-case replay", "results"),
             (["cases", "validate"], "OMH G1-G10 feature surface validation", "validated"),
             (["playbook", "list"], "OMH playbooks", "playbooks"),
             (["playbook", "inspect", "safe-feature-change"], "OMH playbook:", "playbook"),
@@ -838,6 +839,25 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertTrue(json.loads(stdout)["replaced"])
+
+        status, stdout, stderr = run_cli(["cases", "replay", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        replay = json.loads(stdout)
+        self.assertEqual(replay["schema_version"], "omh_use_case_replay/v1")
+        self.assertEqual(replay["status"], "passed")
+        self.assertEqual(replay["total"], 20)
+        self.assertEqual(replay["passed"], 20)
+        self.assertEqual(replay["covered_goals"], [f"G{index}" for index in range(1, 11)])
+        self.assertFalse([result for result in replay["results"] if result["status"] != "passed"])
+        self.assertIn("does not execute workflows", replay["boundary"])
+
+        status, stdout, stderr = run_cli(["cases", "replay", "--limit", "0", "--json"], output_json=False)
+
+        self.assertEqual(status, 2)
+        self.assertEqual(stdout, "")
+        self.assertIn("limit must be at least 1", stderr)
 
         examples = (
             ("Every morning send a competitor digest to Slack only if changed", "G1", "automation-blueprint"),
@@ -1541,6 +1561,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("installed_command_smoke", stdout)
         self.assertIn("use_case_demo_cards", stdout)
         self.assertIn("use_case_artifact_bundle", stdout)
+        self.assertIn("use_case_replay", stdout)
         self.assertIn("/tmp/omh --help", stdout)
         self.assertIn("live_tap_smoke", stdout)
         self.assertIn("profile-mutating", stdout)
@@ -1562,6 +1583,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("uv build", items["build_artifacts"]["command"])
         self.assertIn("cases demo --all --json", items["use_case_demo_cards"]["command"])
         self.assertIn("cases artifact --all --json", items["use_case_artifact_bundle"]["command"])
+        self.assertIn("cases replay --json", items["use_case_replay"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
@@ -1599,6 +1621,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["use_case_artifact_count"], 10)
         self.assertEqual(payload["expected_use_case_artifact_count"], 10)
         self.assertEqual(payload["use_case_artifact_failures"], [])
+        self.assertEqual(payload["use_case_replay_schema"], "omh_use_case_replay/v1")
+        self.assertEqual(payload["use_case_replay_status"], "passed")
+        self.assertEqual(payload["use_case_replay_total"], 20)
+        self.assertEqual(payload["use_case_replay_passed"], 20)
+        self.assertEqual(payload["expected_use_case_replay_total"], 20)
+        self.assertEqual(payload["use_case_replay_failures"], [])
         self.assertLessEqual(
             payload["full_capability_skill_section_chars"],
             payload["capability_context_char_limits"]["full_skill_section"],
@@ -1628,6 +1656,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Plugin fallback capabilities:", stdout)
         self.assertIn("Use-case demo cards: 10/10 card(s); failures 0", stdout)
         self.assertIn("Use-case artifacts: 10/10 artifact(s); failures 0", stdout)
+        self.assertIn("Use-case replay: 20/20 fixture(s); status passed; failures 0", stdout)
         self.assertIn("context missing 0", stdout)
         self.assertIn("For machine-readable output", stdout)
         with self.assertRaises(json.JSONDecodeError):

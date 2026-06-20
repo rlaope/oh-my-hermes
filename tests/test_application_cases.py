@@ -60,6 +60,7 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
         self.assertIn("omh runtime show", cases)
         self.assertIn("omh cases artifact --all --write", cases)
         self.assertIn(".omh/use-cases/artifacts/", cases)
+        self.assertIn("omh cases replay --json", cases)
         self.assertIn("Chat Wrapper Backend Flow", install)
         self.assertIn("Codex lifecycle calls", install)
         self.assertIn("What Gets Recorded", install)
@@ -127,6 +128,25 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
             self.assertTrue(validation["ok"])
             self.assertEqual(validation["artifact_count"], 10)
             self.assertEqual(validation["missing_goals"], [])
+
+    def test_g1_to_g10_use_case_replay_covers_operator_fixtures(self) -> None:
+        code, stdout, stderr = run_cli(["cases", "replay", "--json"], output_json=False)
+
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(stderr, "")
+        replay = json.loads(stdout)
+        self.assertEqual(replay["schema_version"], "omh_use_case_replay/v1")
+        self.assertEqual(replay["status"], "passed")
+        self.assertEqual(replay["total"], 20)
+        self.assertEqual(replay["passed"], 20)
+        self.assertEqual(replay["failed"], 0)
+        self.assertEqual(replay["covered_goals"], [f"G{index}" for index in range(1, 11)])
+        self.assertIn("synthetic operator fixtures", replay["boundary"])
+        for result in replay["results"]:
+            with self.subTest(fixture=result["fixture_id"]):
+                self.assertEqual(result["status"], "passed")
+                self.assertEqual(result["expected"]["goal"], result["observed"]["goal"])
+                self.assertEqual(result["expected"]["primary_skill"], result["observed"]["primary_skill"])
 
 
 if __name__ == "__main__":

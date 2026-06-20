@@ -11,6 +11,7 @@ from ..use_cases import (
     inspect_use_case,
     list_use_cases,
     recommend_use_cases,
+    replay_use_case_fixtures,
     validate_use_case_artifact_store,
     validate_use_cases,
     write_all_use_case_artifacts,
@@ -107,6 +108,18 @@ def cmd_cases_artifact_validate(args: argparse.Namespace) -> int:
     else:
         _print_cases_artifact_validate_summary(payload)
     return 0 if payload["ok"] else 1
+
+
+def cmd_cases_replay(args: argparse.Namespace) -> int:
+    try:
+        payload = replay_use_case_fixtures(limit=args.limit)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_cases_replay_summary(payload)
+    return 0 if payload["status"] == "passed" else 1
 
 
 def cmd_cases_validate(args: argparse.Namespace) -> int:
@@ -311,6 +324,42 @@ def _print_cases_artifact_validate_summary(payload: dict[str, object]) -> None:
     print("  For machine-readable output, rerun with `--json`.")
 
 
+def _print_cases_replay_summary(payload: dict[str, object]) -> None:
+    print("OMH G1-G10 use-case replay")
+    print("Summary")
+    print(f"  Status: {payload.get('status')}")
+    print(f"  Fixtures: {payload.get('passed')}/{payload.get('total')} passed")
+    print(f"  Covered goals: {', '.join(str(goal) for goal in payload.get('covered_goals', []))}")
+    results = payload.get("results", [])
+    if not isinstance(results, list):
+        results = []
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        expected = result.get("expected", {})
+        observed = result.get("observed", {})
+        if not isinstance(expected, dict):
+            expected = {}
+        if not isinstance(observed, dict):
+            observed = {}
+        marker = "ok" if result.get("status") == "passed" else "failed"
+        print(
+            f"  - {result.get('fixture_id')}: {expected.get('goal')} "
+            f"{expected.get('primary_skill')} -> {observed.get('goal')} {observed.get('primary_skill')} [{marker}]"
+        )
+    if payload.get("failed"):
+        print("Errors")
+        for result in results:
+            if not isinstance(result, dict) or result.get("status") == "passed":
+                continue
+            errors = result.get("errors", [])
+            for error in errors if isinstance(errors, list) else []:
+                print(f"  - {result.get('fixture_id')}: {error}")
+    print("Boundary")
+    print(f"  {payload.get('boundary')}")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
 def _print_cases_recommend_summary(payload: dict[str, object]) -> None:
     recommendations = payload.get("recommendations", [])
     if not isinstance(recommendations, list):
@@ -391,6 +440,11 @@ def _add_cases_commands(sub) -> None:
     artifact_validate_cmd = cases_sub.add_parser("artifact-validate")
     artifact_validate_cmd.add_argument("--json", action="store_true", help="Print machine-readable validation for local use-case artifacts.")
     artifact_validate_cmd.set_defaults(func=cmd_cases_artifact_validate)
+
+    replay_cmd = cases_sub.add_parser("replay")
+    replay_cmd.add_argument("--limit", type=int, default=None, help="Replay only the first N deterministic use-case fixtures.")
+    replay_cmd.add_argument("--json", action="store_true", help="Print machine-readable replay results.")
+    replay_cmd.set_defaults(func=cmd_cases_replay)
 
     validate_cmd = cases_sub.add_parser("validate")
     validate_cmd.add_argument("--json", action="store_true", help="Print machine-readable validation for all G1-G10 feature surfaces.")

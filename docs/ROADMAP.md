@@ -11,6 +11,8 @@
   and release flows
 - More artifact-backed application case fixtures beyond the prepared G1-G10
   runbook bundle
+- Broader multilingual and platform-shaped replay fixtures beyond the initial
+  English/Korean G1-G10 operator corpus
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
 - Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
@@ -49,6 +51,9 @@
 - G1-G10 use-case artifact bundles through `omh cases artifact`, including
   local `.omh/use-cases/artifacts/` writes, cache-only validation, and release
   smoke coverage
+- G1-G10 use-case replay through `omh cases replay`, including English/Korean
+  synthetic operator fixtures and release smoke coverage for deterministic
+  recommendation routing
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated

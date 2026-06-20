@@ -41,6 +41,7 @@ omh cases demo --all --json
 omh cases artifact G10 --json
 omh cases artifact --all --write
 omh cases artifact-validate --json
+omh cases replay --json
 omh cases recommend "PR opened with failing CI" --json
 omh cases validate --json
 ```
@@ -88,6 +89,20 @@ This writes JSON under `.omh/use-cases/artifacts/` plus a cache-only index at
 and onboarding. It is still not evidence that Hermes ran cron, called a
 connector, generated a file, changed memory, dispatched an executor, reviewed
 code, passed CI, merged, delivered a message, or spent real provider budget.
+
+Use-case replay is the deterministic natural-language regression gate:
+
+```sh
+omh cases replay
+omh cases replay --json
+```
+
+`omh cases replay` runs English and Korean synthetic operator fixtures for every
+G1-G10 case through the same use-case recommendation path that wrappers can
+consult. The replay passes only when each fixture returns the expected goal and
+primary skill. It proves deterministic product-fit routing for those fixtures;
+it is not evidence of live Hermes chat behavior, connector execution, file
+generation, memory mutation, executor dispatch, review, CI, merge, or delivery.
 
 ## Case 1: Coding Request Handling
 
@@ -568,6 +583,9 @@ Before using these cases as public release evidence, verify:
   `omh_use_case_artifact_collection/v1`, and `omh cases artifact --all --write`
   can create `.omh/use-cases/artifacts/*.json` without turning prepared
   runbooks into observed runtime claims.
+- `omh cases replay --json` exposes `omh_use_case_replay/v1` and must pass the
+  English/Korean G1-G10 synthetic operator fixture set before the use-case map is
+  treated as release-ready.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
   triage, ops review, operating rhythm history, report packages, reliability

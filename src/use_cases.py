@@ -18,6 +18,7 @@ USE_CASE_ARTIFACT_SCHEMA_VERSION = "omh_use_case_artifact/v1"
 USE_CASE_ARTIFACT_COLLECTION_SCHEMA_VERSION = "omh_use_case_artifact_collection/v1"
 USE_CASE_ARTIFACT_WRITE_SCHEMA_VERSION = "omh_use_case_artifact_write/v1"
 USE_CASE_ARTIFACT_INDEX_SCHEMA_VERSION = "omh_use_case_artifact_index/v1"
+USE_CASE_REPLAY_SCHEMA_VERSION = "omh_use_case_replay/v1"
 _ARTIFACT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")
 
 
@@ -40,6 +41,14 @@ class UseCase:
     evidence_boundary: str
     proof_surfaces: tuple[str, ...]
     keywords: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class UseCaseReplayFixture:
+    fixture_id: str
+    goal: str
+    locale: str
+    message: str
 
 
 USE_CASES: tuple[UseCase, ...] = (
@@ -233,6 +242,30 @@ USE_CASES: tuple[UseCase, ...] = (
         proof_surfaces=("omh recommend", "omh playbook inspect ops-observability-card", "omh harness inspect ops-observability-card"),
         keywords=("observability", "cost", "latency", "token", "run history", "telemetry", "failure mode", "비용", "토큰", "관측성"),
     ),
+)
+
+
+USE_CASE_REPLAY_FIXTURES: tuple[UseCaseReplayFixture, ...] = (
+    UseCaseReplayFixture("g1-daily-digest-en", "G1", "en", "Every morning send a competitor digest to Slack only if changed."),
+    UseCaseReplayFixture("g1-automation-ko", "G1", "ko", "매일 아침 경쟁사 뉴스를 Slack으로 보내줘."),
+    UseCaseReplayFixture("g2-ci-review-en", "G2", "en", "PR opened with failing CI and needs review label or fix handoff."),
+    UseCaseReplayFixture("g2-github-ko", "G2", "ko", "깃허브 PR CI failed 리뷰 라벨링이 필요해."),
+    UseCaseReplayFixture("g3-board-en", "G3", "en", "Coordinate multiple Hermes profiles on a Kanban board with blockers."),
+    UseCaseReplayFixture("g3-agent-ko", "G3", "ko", "여러 에이전트 칸반 blocker heartbeat 상태를 정리해줘."),
+    UseCaseReplayFixture("g4-memory-en", "G4", "en", "Review stale MEMORY.md facts and duplicate skills before cleanup."),
+    UseCaseReplayFixture("g4-memory-ko", "G4", "ko", "기억 메모리 중복 충돌 정리할 후보를 보여줘."),
+    UseCaseReplayFixture("g5-gateway-en", "G5", "en", "Discord gateway thread should send silent attachment status updates."),
+    UseCaseReplayFixture("g5-discord-ko", "G5", "ko", "디스코드 스레드 첨부 상태 업데이트 정책을 잡아줘."),
+    UseCaseReplayFixture("g6-runtime-en", "G6", "en", "Can this run in Codex Claude Code or Hermes coding with missing tools?"),
+    UseCaseReplayFixture("g6-coding-ko", "G6", "ko", "코덱스 클로드 hermes coding missing tools runtime 확인해줘."),
+    UseCaseReplayFixture("g7-deliverable-en", "G7", "en", "Prepare a PPT PDF XLSX deliverable and show attachment status."),
+    UseCaseReplayFixture("g7-materials-ko", "G7", "ko", "PPT PDF XLSX 자료 첨부 상태를 패키지로 준비해줘."),
+    UseCaseReplayFixture("g8-voice-en", "G8", "en", "Voice mobile request release before lunch check risky parts."),
+    UseCaseReplayFixture("g8-mobile-ko", "G8", "ko", "음성 모바일로 release before lunch 위험한 부분 확인해."),
+    UseCaseReplayFixture("g9-toolbelt-en", "G9", "en", "Which MCP CLI API credentials are needed for Linear GitHub triage?"),
+    UseCaseReplayFixture("g9-mcp-ko", "G9", "ko", "MCP CLI API credential connector missing tool 점검해줘."),
+    UseCaseReplayFixture("g10-observability-en", "G10", "en", "Show token cost latency run history and loop failure modes."),
+    UseCaseReplayFixture("g10-cost-ko", "G10", "ko", "토큰 비용 latency run history failure mode를 보여줘."),
 )
 
 
@@ -535,6 +568,79 @@ def recommend_use_cases(query: str, *, limit: int = 3) -> dict[str, Any]:
         "query": clean_query,
         "recommendations": recommendations,
         "boundary": "Use-case recommendations prove only routing/product-fit guidance; they are not runtime, connector, delivery, file, memory, or execution evidence.",
+    }
+
+
+def replay_use_case_fixtures(*, limit: int | None = None) -> dict[str, Any]:
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be at least 1")
+    fixtures = list(USE_CASE_REPLAY_FIXTURES)
+    if limit is not None:
+        fixtures = fixtures[:limit]
+    results = []
+    for fixture in fixtures:
+        case = _find_case(fixture.goal)
+        if case is None:
+            results.append(
+                {
+                    "fixture_id": fixture.fixture_id,
+                    "goal": fixture.goal,
+                    "locale": fixture.locale,
+                    "status": "failed",
+                    "message": fixture.message,
+                    "expected": {"goal": fixture.goal, "primary_skill": ""},
+                    "observed": {"goal": "", "primary_skill": "", "score": 0, "confidence": "none"},
+                    "errors": ["fixture goal is not registered in USE_CASES"],
+                }
+            )
+            continue
+        recommendation = recommend_use_cases(fixture.message, limit=1)["recommendations"][0]
+        observed_goal = str(recommendation.get("goal", ""))
+        observed_skill = str(recommendation.get("primary_skill", ""))
+        errors = []
+        if observed_goal != case.goal:
+            errors.append(f"expected goal {case.goal}, observed {observed_goal or '<none>'}")
+        if observed_skill != case.primary_skill:
+            errors.append(f"expected primary_skill {case.primary_skill}, observed {observed_skill or '<none>'}")
+        results.append(
+            {
+                "fixture_id": fixture.fixture_id,
+                "goal": fixture.goal,
+                "locale": fixture.locale,
+                "message": fixture.message,
+                "status": "failed" if errors else "passed",
+                "expected": {
+                    "goal": case.goal,
+                    "primary_skill": case.primary_skill,
+                    "next_action": case.next_action,
+                },
+                "observed": {
+                    "goal": observed_goal,
+                    "primary_skill": observed_skill,
+                    "score": recommendation.get("score", 0),
+                    "confidence": recommendation.get("confidence", ""),
+                    "next_action": recommendation.get("next_action", ""),
+                },
+                "errors": errors,
+            }
+        )
+    failed = [result for result in results if result.get("status") != "passed"]
+    replayed_goals = {str(result.get("goal", "")) for result in results}
+    covered_goals = [case.goal for case in USE_CASES if case.goal in replayed_goals]
+    return {
+        "schema_version": USE_CASE_REPLAY_SCHEMA_VERSION,
+        "status": "passed" if not failed else "failed",
+        "total": len(results),
+        "passed": len(results) - len(failed),
+        "failed": len(failed),
+        "expected_total": len(USE_CASE_REPLAY_FIXTURES),
+        "expected_goals": [case.goal for case in USE_CASES],
+        "covered_goals": covered_goals,
+        "results": results,
+        "boundary": (
+            "Use-case replay checks deterministic recommendation routing for synthetic operator fixtures only. "
+            "It does not execute workflows, call connectors, create files, mutate memory, dispatch executors, review code, run CI, merge, deliver messages, or prove live Hermes chat behavior."
+        ),
     }
 
 

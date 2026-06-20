@@ -32,7 +32,13 @@ from .plugin_bundle.omh.tools.capability_tool import (
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
 from .skills.catalog import builtin_definitions
-from .use_cases import USE_CASES, build_all_use_case_artifacts, demo_all_use_cases, validate_use_case_artifact
+from .use_cases import (
+    USE_CASES,
+    build_all_use_case_artifacts,
+    demo_all_use_cases,
+    replay_use_case_fixtures,
+    validate_use_case_artifact,
+)
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
@@ -202,6 +208,16 @@ def release_readiness_checklist(
             "Use-case artifacts prove prepared runbook projection only; they do not prove runtime execution, connector invocation, delivery, file generation, memory mutation, executor dispatch, review, CI, merge, or billing evidence.",
         ),
         ReleaseChecklistItem(
+            "use_case_replay",
+            "Replay G1-G10 natural-language use-case fixtures",
+            "uv run python -m src.cli cases replay --json",
+            "contract-quality",
+            True,
+            False,
+            "Use-case replay passes deterministic English and Korean operator fixtures for every G1-G10 application case.",
+            "Use-case replay proves deterministic recommendation routing for synthetic fixtures only; it does not prove live Hermes chat behavior or any runtime execution.",
+        ),
+        ReleaseChecklistItem(
             "stable_install_dry_run",
             "Dry-run stable install metadata",
             (
@@ -274,7 +290,7 @@ def release_readiness_checklist(
             "installed-command",
             True,
             False,
-            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, playbook capability context, standalone plugin capability fallback coverage, G1-G10 use-case demo cards, G1-G10 use-case artifact bundles, bounded prompt context budgets, and bounded capability payload budgets.",
+            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, playbook capability context, standalone plugin capability fallback coverage, G1-G10 use-case demo cards, G1-G10 use-case artifact bundles, G1-G10 natural-language use-case replay, bounded prompt context budgets, and bounded capability payload budgets.",
             "This proves the installed OMH command package can render expected skill guidance; it does not prove Hermes loaded or selected it in chat.",
         ),
         ReleaseChecklistItem(
@@ -727,6 +743,8 @@ def skill_content_smoke() -> dict[str, object]:
     use_case_demo_failures = _use_case_demo_card_failures(use_case_demo_cards)
     use_case_artifact_bundle = build_all_use_case_artifacts()
     use_case_artifact_failures = _use_case_artifact_failures(use_case_artifact_bundle)
+    use_case_replay = replay_use_case_fixtures()
+    use_case_replay_failures = _use_case_replay_failures(use_case_replay)
     max_full_capability_skill_chars = max(
         (len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in full_capability_items),
         default=0,
@@ -836,6 +854,7 @@ def skill_content_smoke() -> dict[str, object]:
         and not capability_budget_failures
         and not use_case_demo_failures
         and not use_case_artifact_failures
+        and not use_case_replay_failures
     )
     return {
         "schema_version": SKILL_CONTENT_SMOKE_SCHEMA,
@@ -901,6 +920,12 @@ def skill_content_smoke() -> dict[str, object]:
         else 0,
         "expected_use_case_artifact_count": len(USE_CASES),
         "use_case_artifact_failures": use_case_artifact_failures,
+        "use_case_replay_schema": use_case_replay.get("schema_version"),
+        "use_case_replay_status": use_case_replay.get("status"),
+        "use_case_replay_total": use_case_replay.get("total"),
+        "use_case_replay_passed": use_case_replay.get("passed"),
+        "expected_use_case_replay_total": use_case_replay.get("expected_total"),
+        "use_case_replay_failures": use_case_replay_failures,
         "awareness_context_char_limits": {
             "primer_context": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
             "primer_markdown": AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
@@ -1001,6 +1026,39 @@ def _use_case_artifact_failures(payload: Mapping[str, object]) -> list[str]:
             failures.append(f"{goal or index}_missing_validate_surface")
     if observed_goals != expected_goals:
         failures.append("goal_order")
+    return failures
+
+
+def _use_case_replay_failures(payload: Mapping[str, object]) -> list[str]:
+    failures: list[str] = []
+    if payload.get("schema_version") != "omh_use_case_replay/v1":
+        failures.append("schema")
+    if payload.get("status") != "passed":
+        failures.append("status")
+    results = payload.get("results", [])
+    if not isinstance(results, Sequence) or isinstance(results, (str, bytes)):
+        return failures + ["results_not_sequence"]
+    expected_goals = {case.goal for case in USE_CASES}
+    covered_goals = {str(result.get("goal", "")) for result in results if isinstance(result, Mapping)}
+    if covered_goals != expected_goals:
+        failures.append("goal_coverage")
+    if len(results) < len(USE_CASES):
+        failures.append("fixture_count")
+    for index, result in enumerate(results):
+        if not isinstance(result, Mapping):
+            failures.append(f"result_{index}_not_mapping")
+            continue
+        if result.get("status") != "passed":
+            failures.append(f"{result.get('fixture_id', index)}_failed")
+        expected = result.get("expected", {})
+        observed = result.get("observed", {})
+        if not isinstance(expected, Mapping) or not isinstance(observed, Mapping):
+            failures.append(f"{result.get('fixture_id', index)}_route_shape")
+            continue
+        if expected.get("goal") != observed.get("goal"):
+            failures.append(f"{result.get('fixture_id', index)}_goal")
+        if expected.get("primary_skill") != observed.get("primary_skill"):
+            failures.append(f"{result.get('fixture_id', index)}_primary_skill")
     return failures
 
 
