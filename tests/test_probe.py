@@ -194,7 +194,8 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(roadmap["summary"]["baseline_product_gaps"], 2)
             actions = {action["id"]: action for action in roadmap["next_actions"]}
             self.assertIn("repair_plugin_bridge", actions)
-            self.assertEqual(actions["repair_plugin_bridge"]["command"], "omh setup --force")
+            self.assertEqual(actions["repair_plugin_bridge"]["command"], "omh setup")
+            self.assertEqual(actions["repair_plugin_bridge"]["fallback_command"], "omh setup --force")
             self.assertIn("not proof that Hermes loaded", actions["repair_plugin_bridge"]["boundary"])
 
 

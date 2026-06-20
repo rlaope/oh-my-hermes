@@ -189,9 +189,22 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
                 Check("plugin_bundle", bool(plugin["plugin_dir_installed"]), f"{paths.hermes_plugin_dir}"),
                 Check("plugin_manifest", bool(plugin["plugin_manifest_valid"]), str(plugin["plugin_manifest_path"])),
                 Check(
+                    "plugin_bundle_current",
+                    bool(plugin["plugin_manifest_current"]),
+                    (
+                        "installed plugin bundle matches the current OMH package"
+                        if plugin["plugin_manifest_current"]
+                        else _plugin_bridge_message(plugin)
+                    ),
+                    remediation="" if plugin["plugin_manifest_current"] else _plugin_bridge_remediation(plugin),
+                    next_action="" if plugin["plugin_manifest_current"] else _plugin_bridge_next_action(plugin),
+                ),
+                Check(
                     "plugin_import_smoke",
                     bool(plugin["plugin_import_smoke"]),
                     "installed plugin imports without side effects" if plugin["plugin_import_smoke"] else "; ".join(plugin["errors"]),
+                    remediation="" if plugin["plugin_import_smoke"] else _plugin_bridge_remediation(plugin),
+                    next_action="" if plugin["plugin_import_smoke"] else _plugin_bridge_next_action(plugin),
                 ),
                 Check(
                     "plugin_register_smoke",
@@ -199,8 +212,10 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
                     (
                         f"registered tools={plugin['registered_tools']} hooks={plugin['registered_hooks']}"
                         if plugin["plugin_register_smoke"]
-                        else "; ".join(plugin["errors"])
+                        else _plugin_bridge_message(plugin)
                     ),
+                    remediation="" if plugin["plugin_register_smoke"] else _plugin_bridge_remediation(plugin),
+                    next_action="" if plugin["plugin_register_smoke"] else _plugin_bridge_next_action(plugin),
                 ),
                 Check(
                     "plugin_runtime_observed",
@@ -278,6 +293,34 @@ def recommended_next_action(checks: list[Check]) -> str:
     if prioritized_warnings:
         return prioritized_warnings[0].next_action
     return "Open Hermes Agent and try: Use OMH request-to-handoff for: I want to safely add a feature to this repo."
+
+
+def _plugin_bridge_message(plugin: dict) -> str:
+    errors = [str(item) for item in plugin.get("errors", []) if str(item)]
+    if errors:
+        return "; ".join(errors)
+    missing_tools = [str(item) for item in plugin.get("missing_registered_tools", [])]
+    missing_hooks = [str(item) for item in plugin.get("missing_registered_hooks", [])]
+    if missing_tools or missing_hooks:
+        details: list[str] = []
+        if missing_tools:
+            details.append(f"missing tools={missing_tools}")
+        if missing_hooks:
+            details.append(f"missing hooks={missing_hooks}")
+        return "plugin register smoke is incomplete: " + "; ".join(details)
+    return "managed plugin bridge is installed but did not pass local import/register smoke"
+
+
+def _plugin_bridge_remediation(plugin: dict) -> str:
+    if plugin.get("plugin_bundle_stale"):
+        return "Run `omh setup` to refresh the managed plugin bridge from the current OMH package."
+    return "Run `omh setup`; use `omh setup --force` only if replacing local plugin edits is intended."
+
+
+def _plugin_bridge_next_action(plugin: dict) -> str:
+    if plugin.get("plugin_bundle_stale"):
+        return "Run `omh setup`, then `omh doctor` again."
+    return "Run `omh setup --force`, then `omh doctor` again."
 
 
 def _default_remediation(name: str) -> str:
