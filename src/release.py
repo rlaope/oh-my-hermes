@@ -32,7 +32,7 @@ from .plugin_bundle.omh.tools.capability_tool import (
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
 from .skills.catalog import builtin_definitions
-from .use_cases import USE_CASES, demo_all_use_cases
+from .use_cases import USE_CASES, build_all_use_case_artifacts, demo_all_use_cases, validate_use_case_artifact
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
@@ -192,6 +192,16 @@ def release_readiness_checklist(
             "Use-case demo cards prove wrapper-renderable projections only; they do not prove cron, connector, file, memory, executor, review, CI, merge, or delivery work happened.",
         ),
         ReleaseChecklistItem(
+            "use_case_artifact_bundle",
+            "Check G1-G10 use-case artifact bundle",
+            "uv run python -m src.cli cases artifact --all --json",
+            "contract-quality",
+            True,
+            False,
+            "Use-case artifact bundle renders all ten G1-G10 prepared artifacts with route, operator-step, proof-surface, wrapper-card, and evidence-boundary metadata.",
+            "Use-case artifacts prove prepared runbook projection only; they do not prove runtime execution, connector invocation, delivery, file generation, memory mutation, executor dispatch, review, CI, merge, or billing evidence.",
+        ),
+        ReleaseChecklistItem(
             "stable_install_dry_run",
             "Dry-run stable install metadata",
             (
@@ -264,7 +274,7 @@ def release_readiness_checklist(
             "installed-command",
             True,
             False,
-            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, playbook capability context, standalone plugin capability fallback coverage, bounded prompt context budgets, and bounded capability payload budgets.",
+            "Skill content smoke reports ok=true for router awareness, generated workflow context rails, bundled role context, all-skill awareness lane coverage, full capability manifest context, playbook capability context, standalone plugin capability fallback coverage, G1-G10 use-case demo cards, G1-G10 use-case artifact bundles, bounded prompt context budgets, and bounded capability payload budgets.",
             "This proves the installed OMH command package can render expected skill guidance; it does not prove Hermes loaded or selected it in chat.",
         ),
         ReleaseChecklistItem(
@@ -715,6 +725,8 @@ def skill_content_smoke() -> dict[str, object]:
     )
     use_case_demo_cards = demo_all_use_cases()
     use_case_demo_failures = _use_case_demo_card_failures(use_case_demo_cards)
+    use_case_artifact_bundle = build_all_use_case_artifacts()
+    use_case_artifact_failures = _use_case_artifact_failures(use_case_artifact_bundle)
     max_full_capability_skill_chars = max(
         (len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in full_capability_items),
         default=0,
@@ -823,6 +835,7 @@ def skill_content_smoke() -> dict[str, object]:
         and not role_context_budget_failures
         and not capability_budget_failures
         and not use_case_demo_failures
+        and not use_case_artifact_failures
     )
     return {
         "schema_version": SKILL_CONTENT_SMOKE_SCHEMA,
@@ -882,6 +895,12 @@ def skill_content_smoke() -> dict[str, object]:
         else 0,
         "expected_use_case_demo_card_count": len(USE_CASES),
         "use_case_demo_failures": use_case_demo_failures,
+        "use_case_artifact_collection_schema": use_case_artifact_bundle.get("schema_version"),
+        "use_case_artifact_count": len(use_case_artifact_bundle.get("artifacts", []))
+        if isinstance(use_case_artifact_bundle.get("artifacts"), list)
+        else 0,
+        "expected_use_case_artifact_count": len(USE_CASES),
+        "use_case_artifact_failures": use_case_artifact_failures,
         "awareness_context_char_limits": {
             "primer_context": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
             "primer_markdown": AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
@@ -946,6 +965,40 @@ def _use_case_demo_card_failures(payload: Mapping[str, object]) -> list[str]:
             failures.append(f"{goal or index}_primary_action")
         if not isinstance(chat_surface, Mapping) or not str(chat_surface.get("headline") or "").startswith("[omh] "):
             failures.append(f"{goal or index}_chat_surface")
+    if observed_goals != expected_goals:
+        failures.append("goal_order")
+    return failures
+
+
+def _use_case_artifact_failures(payload: Mapping[str, object]) -> list[str]:
+    failures: list[str] = []
+    if payload.get("schema_version") != "omh_use_case_artifact_collection/v1":
+        failures.append("collection_schema")
+    artifacts = payload.get("artifacts", [])
+    if not isinstance(artifacts, Sequence) or isinstance(artifacts, (str, bytes)):
+        return failures + ["artifacts_not_sequence"]
+    if len(artifacts) != len(USE_CASES):
+        failures.append("artifact_count")
+    expected_goals = [case.goal for case in USE_CASES]
+    observed_goals: list[str] = []
+    for index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            failures.append(f"artifact_{index}_not_mapping")
+            continue
+        goal = str(artifact.get("goal") or "")
+        observed_goals.append(goal)
+        for error in validate_use_case_artifact(artifact):
+            failures.append(f"{goal or index}: {error}")
+        steps = artifact.get("operator_steps", [])
+        if not isinstance(steps, Sequence) or isinstance(steps, (str, bytes)):
+            failures.append(f"{goal or index}_operator_steps")
+        elif not any(isinstance(step, Mapping) and step.get("kind") == "hermes_prompt" for step in steps):
+            failures.append(f"{goal or index}_missing_hermes_prompt_step")
+        proof_surfaces = artifact.get("proof_surfaces", [])
+        if not isinstance(proof_surfaces, Sequence) or isinstance(proof_surfaces, (str, bytes)):
+            failures.append(f"{goal or index}_proof_surfaces")
+        elif "omh cases validate --json" not in proof_surfaces:
+            failures.append(f"{goal or index}_missing_validate_surface")
     if observed_goals != expected_goals:
         failures.append("goal_order")
     return failures

@@ -149,8 +149,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
   reports, automation blueprints, material packages, and loop work all have
   Hermes-facing workflow paths.
 - **Application-case ready** - the G1-G10 use-case map can be exported as
-  wrapper-ready demo cards so operators see the route, next action, and
-  evidence boundary before wiring a chat surface.
+  wrapper-ready demo cards or local runbook artifacts so operators see the
+  route, next action, and evidence boundary before wiring a chat surface.
 - **Local and inspectable** - skills, manifests, plans, sessions, and status
   records stay in user-owned local directories.
 

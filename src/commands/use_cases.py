@@ -3,8 +3,20 @@ from __future__ import annotations
 import argparse
 
 from ..installer import OmhError
-from ..use_cases import demo_all_use_cases, demo_use_case, inspect_use_case, list_use_cases, recommend_use_cases, validate_use_cases
-from .common import _print_json, _wants_json
+from ..use_cases import (
+    build_all_use_case_artifacts,
+    build_use_case_artifact,
+    demo_all_use_cases,
+    demo_use_case,
+    inspect_use_case,
+    list_use_cases,
+    recommend_use_cases,
+    validate_use_case_artifact_store,
+    validate_use_cases,
+    write_all_use_case_artifacts,
+    write_use_case_artifact,
+)
+from .common import _paths, _print_json, _wants_json
 
 
 def cmd_cases_list(args: argparse.Namespace) -> int:
@@ -60,6 +72,41 @@ def cmd_cases_recommend(args: argparse.Namespace) -> int:
     else:
         _print_cases_recommend_summary(payload)
     return 0
+
+
+def cmd_cases_artifact(args: argparse.Namespace) -> int:
+    try:
+        if args.all:
+            if args.id:
+                raise OmhError("use either `omh cases artifact <id>` or `omh cases artifact --all`, not both")
+            payload = (
+                write_all_use_case_artifacts(_paths(args), force=args.force)
+                if args.write
+                else build_all_use_case_artifacts()
+            )
+        else:
+            if not args.id:
+                raise OmhError("use-case id required unless --all is passed")
+            artifact = build_use_case_artifact(args.id)
+            payload = write_use_case_artifact(_paths(args), artifact, force=args.force) if args.write else artifact
+    except KeyError as exc:
+        raise OmhError(f"unknown use case: {args.id}") from exc
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_cases_artifact_summary(payload)
+    return 0
+
+
+def cmd_cases_artifact_validate(args: argparse.Namespace) -> int:
+    payload = validate_use_case_artifact_store(_paths(args))
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_cases_artifact_validate_summary(payload)
+    return 0 if payload["ok"] else 1
 
 
 def cmd_cases_validate(args: argparse.Namespace) -> int:
@@ -176,6 +223,94 @@ def _print_cases_demo_collection_summary(payload: dict[str, object]) -> None:
     print("  For machine-readable output, rerun with `--json`.")
 
 
+def _print_cases_artifact_summary(payload: dict[str, object]) -> None:
+    schema = payload.get("schema_version")
+    if schema == "omh_use_case_artifact_write/v1":
+        mode = str(payload.get("mode", ""))
+        print("OMH use-case artifact write")
+        print("Summary")
+        if mode == "write_all":
+            artifacts = payload.get("artifacts", [])
+            if not isinstance(artifacts, list):
+                artifacts = []
+            print(f"  Written artifacts: {len(artifacts)}")
+            for artifact in artifacts:
+                if not isinstance(artifact, dict):
+                    continue
+                marker = "replaced" if artifact.get("replaced") else "written"
+                print(f"  - {artifact.get('goal')}: {artifact.get('title')} [{marker}]")
+            print(f"  Index: {payload.get('index_path')}")
+        else:
+            artifact = payload.get("artifact", {})
+            if not isinstance(artifact, dict):
+                artifact = {}
+            marker = "replaced" if payload.get("replaced") else "written"
+            print(f"  Artifact: {artifact.get('goal')} - {artifact.get('title')} [{marker}]")
+            print(f"  Path: {payload.get('artifact_path')}")
+            print(f"  Index: {payload.get('index_path')}")
+        print("Boundary")
+        print(f"  {payload.get('boundary')}")
+        print("  For machine-readable output, rerun with `--json`.")
+        return
+    if schema == "omh_use_case_artifact_collection/v1":
+        artifacts = payload.get("artifacts", [])
+        if not isinstance(artifacts, list):
+            artifacts = []
+        print("OMH G1-G10 use-case artifacts")
+        print("Summary")
+        print(f"  Prepared artifacts: {len(artifacts)}")
+        for artifact in artifacts:
+            if not isinstance(artifact, dict):
+                continue
+            route = artifact.get("route", {})
+            if not isinstance(route, dict):
+                route = {}
+            print(f"  - {artifact.get('goal')}: {artifact.get('title')} ({route.get('primary_skill')} -> {route.get('next_action')})")
+        print("Boundary")
+        print(f"  {payload.get('boundary')}")
+        print("Next")
+        print("  Write them with `omh cases artifact --all --write`.")
+        print("  For machine-readable output, rerun with `--json`.")
+        return
+    route = payload.get("route", {})
+    evidence = payload.get("evidence", {})
+    if not isinstance(route, dict):
+        route = {}
+    if not isinstance(evidence, dict):
+        evidence = {}
+    print(f"OMH use-case artifact: {payload.get('goal')} - {payload.get('title')}")
+    print("Route")
+    print(f"  {route.get('primary_skill')} -> {route.get('next_action')}")
+    print("Artifact")
+    print(f"  ID: {payload.get('artifact_id')}")
+    print(f"  Status: {payload.get('observation_status')}")
+    print("Boundary")
+    print(f"  {evidence.get('claim_boundary')}")
+    print("Next")
+    print(f"  Write it with `omh cases artifact {payload.get('goal')} --write`.")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
+def _print_cases_artifact_validate_summary(payload: dict[str, object]) -> None:
+    print("OMH use-case artifact validation")
+    print("Summary")
+    print(f"  OK: {payload.get('ok')}")
+    print(f"  Artifacts: {payload.get('artifact_count')}/{payload.get('expected_count')}")
+    missing = payload.get("missing_goals", [])
+    errors = payload.get("errors", [])
+    if missing:
+        print("  Missing goals: " + ", ".join(str(item) for item in missing))
+    if errors:
+        print("Errors")
+        for error in (errors[:12] if isinstance(errors, list) else []):
+            print(f"  - {error}")
+        if isinstance(errors, list) and len(errors) > 12:
+            print(f"  ... {len(errors) - 12} more")
+    print("Boundary")
+    print(f"  {payload.get('boundary')}")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
 def _print_cases_recommend_summary(payload: dict[str, object]) -> None:
     recommendations = payload.get("recommendations", [])
     if not isinstance(recommendations, list):
@@ -244,6 +379,18 @@ def _add_cases_commands(sub) -> None:
     recommend_cmd.add_argument("--limit", type=int, default=3, help="Maximum use cases to return.")
     recommend_cmd.add_argument("--json", action="store_true", help="Print the full machine-readable recommendation payload.")
     recommend_cmd.set_defaults(func=cmd_cases_recommend)
+
+    artifact_cmd = cases_sub.add_parser("artifact")
+    artifact_cmd.add_argument("id", nargs="?", default="", help="Use-case id such as G10 or ops-observability-card.")
+    artifact_cmd.add_argument("--all", action="store_true", help="Build artifacts for all G1-G10 use cases.")
+    artifact_cmd.add_argument("--write", action="store_true", help="Write prepared use-case artifacts under the OMH home.")
+    artifact_cmd.add_argument("--force", action="store_true", help="Replace an existing managed use-case artifact.")
+    artifact_cmd.add_argument("--json", action="store_true", help="Print the full machine-readable artifact payload.")
+    artifact_cmd.set_defaults(func=cmd_cases_artifact)
+
+    artifact_validate_cmd = cases_sub.add_parser("artifact-validate")
+    artifact_validate_cmd.add_argument("--json", action="store_true", help="Print machine-readable validation for local use-case artifacts.")
+    artifact_validate_cmd.set_defaults(func=cmd_cases_artifact_validate)
 
     validate_cmd = cases_sub.add_parser("validate")
     validate_cmd.add_argument("--json", action="store_true", help="Print machine-readable validation for all G1-G10 feature surfaces.")

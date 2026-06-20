@@ -58,6 +58,8 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
 
         self.assertIn("Artifact-backed verification", cases)
         self.assertIn("omh runtime show", cases)
+        self.assertIn("omh cases artifact --all --write", cases)
+        self.assertIn(".omh/use-cases/artifacts/", cases)
         self.assertIn("Chat Wrapper Backend Flow", install)
         self.assertIn("Codex lifecycle calls", install)
         self.assertIn("What Gets Recorded", install)
@@ -82,6 +84,49 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
                 self.assertEqual(card["actions"][0]["id"], card["route"]["next_action"])
                 self.assertIn("not", card["evidence"]["claim_boundary"].lower())
                 self.assertIn("executor_dispatch", card["evidence"]["not_evidence_until_observed"])
+
+    def test_g1_to_g10_use_case_artifacts_are_local_runbooks(self) -> None:
+        code, stdout, stderr = run_cli(["cases", "artifact", "--all", "--json"], output_json=False)
+
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(stderr, "")
+        collection = json.loads(stdout)
+        self.assertEqual(collection["schema_version"], "omh_use_case_artifact_collection/v1")
+        self.assertEqual(collection["count"], 10)
+        self.assertEqual([artifact["goal"] for artifact in collection["artifacts"]], [f"G{index}" for index in range(1, 11)])
+        for artifact in collection["artifacts"]:
+            with self.subTest(artifact=artifact["goal"]):
+                self.assertEqual(artifact["schema_version"], "omh_use_case_artifact/v1")
+                self.assertEqual(artifact["status"], "prepared")
+                self.assertEqual(artifact["observation_status"], "prepared_not_observed")
+                self.assertEqual(artifact["wrapper_card"]["status"], "prepared_not_observed")
+                self.assertEqual(artifact["evidence"]["state"], "prepared_not_observed")
+                self.assertFalse(artifact["release_quality"]["contains_raw_user_prompt"])
+                self.assertIn("omh cases validate --json", artifact["proof_surfaces"])
+                self.assertTrue(any(step["kind"] == "hermes_prompt" for step in artifact["operator_steps"]))
+
+    def test_use_case_artifacts_can_be_written_and_validated(self) -> None:
+        with TemporaryDirectory() as tmp:
+            omh_home = Path(tmp) / ".omh"
+
+            code, stdout, stderr = run_cli(["--omh-home", str(omh_home), "cases", "artifact", "--all", "--write", "--json"], output_json=False)
+
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual(stderr, "")
+            write_payload = json.loads(stdout)
+            self.assertEqual(write_payload["schema_version"], "omh_use_case_artifact_write/v1")
+            self.assertEqual(write_payload["count"], 10)
+            self.assertTrue((omh_home / "use-cases" / "index.json").exists())
+            self.assertEqual(len(list((omh_home / "use-cases" / "artifacts").glob("*.json"))), 10)
+
+            code, stdout, stderr = run_cli(["--omh-home", str(omh_home), "cases", "artifact-validate", "--json"], output_json=False)
+
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual(stderr, "")
+            validation = json.loads(stdout)
+            self.assertTrue(validation["ok"])
+            self.assertEqual(validation["artifact_count"], 10)
+            self.assertEqual(validation["missing_goals"], [])
 
 
 if __name__ == "__main__":

@@ -38,6 +38,9 @@ omh cases list --json
 omh cases inspect G10 --json
 omh cases demo G10 --json
 omh cases demo --all --json
+omh cases artifact G10 --json
+omh cases artifact --all --write
+omh cases artifact-validate --json
 omh cases recommend "PR opened with failing CI" --json
 omh cases validate --json
 ```
@@ -61,6 +64,30 @@ cron, connectors, file generation, memory mutation, executor work, review, CI,
 or merge happened. The checked-in fixture lives at
 `examples/use-cases/g1-g10-demo-cards.json` and is tested against the live
 command output.
+
+Use-case artifacts are the local, reusable runbook form of the same map. A
+single artifact uses `omh_use_case_artifact/v1`; the full bundle uses
+`omh_use_case_artifact_collection/v1`. These artifacts include:
+
+- the same route, playbook, harness, wrapper card, and Hermes prompt as the
+  demo card
+- operator steps for inspect, playbook/harness review, Hermes start, and later
+  observed-evidence recording
+- proof surfaces that release checks can replay
+- an explicit `prepared_not_observed` evidence boundary
+
+To write the full bundle locally:
+
+```sh
+omh cases artifact --all --write
+omh cases artifact-validate
+```
+
+This writes JSON under `.omh/use-cases/artifacts/` plus a cache-only index at
+`.omh/use-cases/index.json`. It is useful for wrapper QA, release review, demos,
+and onboarding. It is still not evidence that Hermes ran cron, called a
+connector, generated a file, changed memory, dispatched an executor, reviewed
+code, passed CI, merged, delivered a message, or spent real provider budget.
 
 ## Case 1: Coding Request Handling
 
@@ -537,6 +564,10 @@ Before using these cases as public release evidence, verify:
   for wrapper rendering and status decisions.
 - `omh cases demo --all --json` exposes `omh_use_case_demo_collection/v1` for
   every G1-G10 wrapper card and preserves `prepared_not_observed`.
+- `omh cases artifact --all --json` exposes
+  `omh_use_case_artifact_collection/v1`, and `omh cases artifact --all --write`
+  can create `.omh/use-cases/artifacts/*.json` without turning prepared
+  runbooks into observed runtime claims.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
   triage, ops review, operating rhythm history, report packages, reliability

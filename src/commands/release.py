@@ -308,6 +308,7 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
     role_context_budget_failures = payload.get("role_context_budget_failures", [])
     capability_budget_failures = payload.get("capability_budget_failures", [])
     use_case_demo_failures = payload.get("use_case_demo_failures", [])
+    use_case_artifact_failures = payload.get("use_case_artifact_failures", [])
     print(
         "Full capability manifest: "
         f"{payload.get('full_capability_skill_count')} skill surface(s); "
@@ -331,6 +332,11 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         "Use-case demo cards: "
         f"{payload.get('use_case_demo_card_count')}/{payload.get('expected_use_case_demo_card_count')} card(s); "
         f"failures {len(use_case_demo_failures) if isinstance(use_case_demo_failures, list) else 0}"
+    )
+    print(
+        "Use-case artifacts: "
+        f"{payload.get('use_case_artifact_count')}/{payload.get('expected_use_case_artifact_count')} artifact(s); "
+        f"failures {len(use_case_artifact_failures) if isinstance(use_case_artifact_failures, list) else 0}"
     )
     if missing:
         print("Missing representative skills: " + ", ".join(str(item) for item in missing))
@@ -385,6 +391,8 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         print("Capability budget failures: " + ", ".join(str(item) for item in capability_budget_failures))
     if use_case_demo_failures:
         print("Use-case demo card failures: " + ", ".join(str(item) for item in use_case_demo_failures))
+    if use_case_artifact_failures:
+        print("Use-case artifact failures: " + ", ".join(str(item) for item in use_case_artifact_failures))
     if isinstance(failed, list) and failed:
         print("Failed markers:")
         for check in failed[:12]:

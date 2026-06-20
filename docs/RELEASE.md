@@ -61,6 +61,7 @@ python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
 python3 -m omh.cli cases demo --all --json
+python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
@@ -98,6 +99,12 @@ The checklist also gates the G1-G10 use-case demo cards through
 use-case projections with route, action, status-card, and evidence-boundary
 metadata. It is not evidence that cron, connectors, files, memory updates,
 executors, reviews, CI, merges, or delivery actually ran.
+
+It also gates the G1-G10 use-case artifact bundle through
+`omh cases artifact --all --json`. That proves OMH can render local prepared
+runbooks with operator steps and proof surfaces for each use case. It is not
+evidence that those runbooks were accepted, executed, delivered, reviewed,
+verified, merged, or billed by any runtime.
 
 ## Hermes CLI Install Smoke
 

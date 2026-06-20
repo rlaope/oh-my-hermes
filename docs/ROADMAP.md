@@ -9,8 +9,8 @@
 - Richer routing catalog fields
 - More playbook-backed situation pipelines for wrapper UX, research, planning,
   and release flows
-- More artifact-backed application case fixtures beyond the G1-G10 demo-card
-  collection
+- More artifact-backed application case fixtures beyond the prepared G1-G10
+  runbook bundle
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
 - Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
@@ -46,6 +46,9 @@
   `omh_use_case_demo_collection/v1` fixture for wrapper rendering
 - Release and skill-content smoke now gate those G1-G10 demo cards so route,
   action, wrapper-card, and evidence-boundary drift fails before release
+- G1-G10 use-case artifact bundles through `omh cases artifact`, including
+  local `.omh/use-cases/artifacts/` writes, cache-only validation, and release
+  smoke coverage
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated
