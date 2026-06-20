@@ -741,6 +741,14 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["next_action"], "choose_skill")
         self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
         self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+        self.assertIn("Best default:", payload["chat_response"]["body"])
+        self.assertIn("Manual lanes:", payload["chat_response"]["body"])
+        self.assertIn("Route for me:", payload["chat_response"]["body"])
+        rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
+        self.assertGreaterEqual(
+            sum(1 for block in rendering_blocks if block["type"] == "bullet"),
+            5,
+        )
         picker = payload["chat_response"]["state"]["skill_picker"]
         self.assertEqual(picker["schema_version"], "omh_skill_picker/v1")
         self.assertEqual(picker["selection_mode"], "single_select")
@@ -797,6 +805,14 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
                 self.assertIn("shell command", payload["chat_response"]["body"])
                 self.assertIn("planning, ops, deliverables, coding handoffs, loops, and status", payload["chat_response"]["body"])
+                self.assertIn("Start here:", payload["chat_response"]["body"])
+                self.assertIn("Common lanes:", payload["chat_response"]["body"])
+                self.assertIn("Route for me:", payload["chat_response"]["body"])
+                rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
+                self.assertGreaterEqual(
+                    sum(1 for block in rendering_blocks if block["type"] == "bullet"),
+                    7,
+                )
                 picker = payload["chat_response"]["state"]["skill_picker"]
                 option_ids = {option["id"] for option in picker["options"]}
                 self.assertTrue({"oh-my-hermes", "loop", "ultraprocess"} <= option_ids)

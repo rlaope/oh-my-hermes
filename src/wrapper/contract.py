@@ -2227,11 +2227,7 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
     return _chat_response(
         kind="skill_picker",
         headline="Here are the OMH workflows." if catalog_question else "Choose an OMH workflow.",
-        body=(
-            "You do not need to run a shell command for this. OMH covers planning, ops, deliverables, coding handoffs, loops, and status. Pick a workflow here, or choose Route for me and Hermes will select the safest next step."
-            if catalog_question
-            else "Pick a workflow, or choose Route for me and Hermes will select the safest next step from the request."
-        ),
+        body=_skill_picker_body(catalog_question=catalog_question),
         phase="skill_selection",
         next_action="choose_skill",
         thread_key=thread_key,
@@ -2253,6 +2249,40 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
         ],
         claim_boundary="Choosing a skill is routing intent only; it is not plan acceptance, dispatch, execution, review, CI, or verification evidence.",
         extra_state=extra_state,
+    )
+
+
+def _skill_picker_body(*, catalog_question: bool) -> str:
+    if catalog_question:
+        return "\n".join(
+            [
+                "You do not need to run a shell command for this. OMH covers planning, ops, deliverables, coding handoffs, loops, and status.",
+                "",
+                "Start here:",
+                "- Route for me: let Hermes choose the safest workflow from your message.",
+                "- Choose workflow: pick from the grouped OMH workflow lanes.",
+                "- Search workflows: find the exact skill when you already know the job.",
+                "",
+                "Common lanes:",
+                "- Intent to plan: deep-interview, ralplan, ultragoal, loop, ultraprocess.",
+                "- Company/product ops: feedback-triage, research-brief, strategy-brief, research-department.",
+                "- Deliverables/visuals: materials-package, report-package, img-summary.",
+                "- Coding/runtime: request-to-handoff, idea-to-deploy, code-review, executor selection.",
+            ]
+        )
+    return "\n".join(
+        [
+            "Pick how to start, or choose Route for me and Hermes will select the safest next step from the request.",
+            "",
+            "Best default:",
+            "- Route for me: paste the request and let Hermes choose the workflow.",
+            "",
+            "Manual lanes:",
+            "- Plan or loop: deep-interview, ralplan, ultragoal, loop, ultraprocess.",
+            "- Ops or research: feedback-triage, research-brief, strategy-brief.",
+            "- Deliverables or visuals: materials-package, report-package, img-summary.",
+            "- Coding: request-to-handoff, idea-to-deploy, code-review, executor selection.",
+        ]
     )
 
 
