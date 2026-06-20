@@ -4,6 +4,7 @@ description: "Oh My Hermes native bridge for metadata-only runtime status, HUD, 
 author: oh-my-hermes maintainers
 provides_tools:
   - omh_capabilities
+  - omh_context
   - omh_gather_evidence
   - omh_hud
   - omh_interact

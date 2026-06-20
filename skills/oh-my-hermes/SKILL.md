@@ -84,7 +84,7 @@ Generic tool map:
 image->img-summary; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
 
 Tools:
-- Tools: `omh_interact` chat/session meta; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.
+- Tools: `omh_interact`; `omh_context`; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.
 
 If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback instead of claiming the action happened.
 

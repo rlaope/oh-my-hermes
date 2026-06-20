@@ -52,6 +52,46 @@ class CliTests(unittest.TestCase):
         self.assertIn("release smoke", help_text)
         self.assertIn("memory, ops, materials, state", help_text)
 
+    def test_context_brief_exposes_omh_mental_model_and_route_hint(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["context", "brief", "--source", "discord", "make an image card for this PR"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn("OMH context brief", stdout)
+        self.assertIn("Route hint: img-summary -> prepare_visual_prompt_card", stdout)
+        self.assertIn("Workflow lanes", stdout)
+        self.assertIn("Generic tool checkpoint", stdout)
+        self.assertIn("Do not skip OMH merely because a generic tool", stdout)
+
+        status, stdout, stderr = run_cli(
+            [
+                "context",
+                "brief",
+                "--source",
+                "discord",
+                "--prompt-context",
+                "--json",
+                "make an image card for this PR with secret-token-123",
+            ],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "omh_context_brief/v1")
+        self.assertEqual(payload["source"], "discord")
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "prepare_visual_prompt_card")
+        self.assertIn("workflow=img-summary", payload["prompt_context"])
+        self.assertIn("generic tool can render", payload["normal_response_contract"]["when_generic_tool_is_available"])
+        self.assertFalse(payload["message"]["raw_prompt_echoed"])
+        self.assertFalse(payload["message"]["raw_prompt_stored"])
+        self.assertNotIn("secret-token-123", stdout)
+
     def test_chat_interact_routes_workflow_learning_to_audit_actions(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "interact", "--source", "discord", "learn from this workflow run"],

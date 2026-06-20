@@ -12,8 +12,17 @@ def hook_manifest() -> dict[str, object]:
                 "name": name,
                 "supported_by_plugin_bundle": True,
                 "supported_by_wrapper_contract": name
-                in {"omh_status", "omh_hud", "omh_capabilities", "omh_probe", "omh_recommend", "omh_interact"},
-                "supported_by_cli_backend": name in {"omh_capabilities", "omh_probe", "omh_recommend", "omh_interact"},
+                in {
+                    "omh_status",
+                    "omh_hud",
+                    "omh_capabilities",
+                    "omh_context",
+                    "omh_probe",
+                    "omh_recommend",
+                    "omh_interact",
+                },
+                "supported_by_cli_backend": name
+                in {"omh_capabilities", "omh_context", "omh_probe", "omh_recommend", "omh_interact"},
                 "cli_backend_surface": _cli_backend_surface(name),
                 "observed_in_this_environment": False,
             }
@@ -70,6 +79,8 @@ def _cli_backend_surface(name: str) -> str:
         return "omh chat interact"
     if name == "omh_capabilities":
         return "omh capabilities"
+    if name == "omh_context":
+        return "omh context brief"
     if name == "omh_probe":
         return "omh probe"
     if name == "omh_recommend":
