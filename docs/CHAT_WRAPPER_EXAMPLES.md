@@ -196,10 +196,11 @@ verification, review, CI, or merge.
 ## Plugin Route Hints
 
 When the managed OMH plugin bridge is loaded, `pre_llm_call` can add a bounded
-`omh_route_hint/v1` context block for messages that look like workflow-shaped
-work. The hint does not include the raw user message. It carries only message
-hash/length metadata, matched cue labels, a candidate workflow, adjacent
-workflows, the next action, and the same prepared-vs-observed boundary.
+`omh_context_brief/v1` payload plus an `omh_route_hint/v1` context block for
+messages that look like workflow-shaped work. The payload and hint do not
+include the raw user message. They carry only message hash/length metadata,
+matched cue labels, candidate workflows, adjacent workflows, next actions, the
+generic-tool checkpoint, and the same prepared-vs-observed boundary.
 
 Example effect:
 
@@ -213,9 +214,9 @@ Hermes Agent
 - workflow=automation-blueprint; lane=automation_and_status; next_action=prepare_scheduled_ops_blueprint
 ```
 
-The wrapper still owns rendering and state recording. The route hint is prompt
-context only; it is not workflow execution, image generation, scheduled job
-creation, review, CI, or delivery evidence.
+The wrapper still owns rendering and state recording. The context brief and
+route hint are prompt/context guidance only; they are not workflow execution,
+image generation, scheduled job creation, review, CI, or delivery evidence.
 
 Wrappers do not need to wait for plugin load to show the same kind of hint. They
 can call the transport-free backend preview:

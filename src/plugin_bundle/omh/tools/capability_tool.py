@@ -495,7 +495,7 @@ def _standalone_matches(wanted: str, item: dict[str, object]) -> bool:
 
 def _standalone_hook_payload_fields(name: str) -> list[str]:
     if name == "pre_llm_call":
-        return ["omh_awareness_primer", "bounded_status_context", "redacted"]
+        return ["omh_awareness_primer", "omh_context_brief", "omh_route_hint", "bounded_status_context", "redacted"]
     if name == "pre_tool_call":
         return ["tool_name", "tool_family_hint", "omh_generic_tool_checkpoint", "claim_boundary", "redacted"]
     if name == "on_session_end":

@@ -45,6 +45,7 @@ class HookManifestTests(unittest.TestCase):
         self.assertTrue(tools["omh_probe"]["supported_by_wrapper_contract"])
         self.assertIn("pre_llm_call", hooks)
         self.assertIn("omh_awareness_primer", hooks["pre_llm_call"]["payload_fields"])
+        self.assertIn("omh_context_brief", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("omh_route_hint", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("bounded_status_context", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("omh_generic_tool_checkpoint", hooks["pre_tool_call"]["payload_fields"])
@@ -103,14 +104,22 @@ class HookManifestTests(unittest.TestCase):
 
         result = pre_llm_call(user_message=message, is_first_turn=False)
         context = result["context"] if result else ""
+        context_brief = result["omh_context_brief"] if result else {}
 
         self.assertIn("[OMH Awareness]", context)
         self.assertIn("[OMH Route Hint]", context)
         self.assertIn("workflow=img-summary", context)
         self.assertIn("workflow=automation-blueprint", context)
         self.assertIn("not_evidence_yet=file export, image generation", context)
+        self.assertEqual(context_brief["schema_version"], "omh_context_brief/v1")
+        self.assertEqual(context_brief["source"], "pre_llm_call")
+        self.assertEqual(context_brief["route_hint"]["primary_workflow"], "img-summary")
+        self.assertEqual(context_brief["route_hint"]["primary_next_action"], "prepare_visual_prompt_card")
+        self.assertFalse(context_brief["message"]["raw_prompt_stored"])
+        self.assertFalse(context_brief["message"]["raw_prompt_echoed"])
         self.assertNotIn(message, context)
         self.assertNotIn("secret-token-123", context)
+        self.assertNotIn("secret-token-123", str(context_brief))
 
     def test_pre_llm_call_can_disable_awareness_route_hint(self) -> None:
         result = pre_llm_call(

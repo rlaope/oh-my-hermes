@@ -498,6 +498,7 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(hook_payload)
             context = hook_payload["context"]
+            context_brief = hook_payload["omh_context_brief"]
             self.assertIn("[OMH Awareness]", context)
             self.assertIn("Hermes-native workflow pack", context)
             self.assertIn("consider OMH before generic chat or generic tools", context)
@@ -521,7 +522,12 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("prepared handoffs are not execution", context)
             self.assertIn("Pattern cards:", context)
             self.assertIn("signals -> web-research/research-department/feedback-triage/meeting-brief", context)
+            self.assertEqual(context_brief["schema_version"], "omh_context_brief/v1")
+            self.assertEqual(context_brief["source"], "pre_llm_call")
+            self.assertEqual(context_brief["message"]["raw_prompt_stored"], False)
+            self.assertEqual(context_brief["message"]["raw_prompt_echoed"], False)
             self.assertNotIn("this raw prompt should not leak", context)
+            self.assertNotIn("this raw prompt should not leak", json.dumps(context_brief, sort_keys=True))
 
             empty_first_turn_context = ctx.hooks["pre_llm_call"](
                 omh_home=str(root / ".empty-omh"),
@@ -540,10 +546,18 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertIsNotNone(mid_session_visual_context)
             self.assertIn("[OMH Awareness]", mid_session_visual_context["context"])
+            self.assertEqual(
+                mid_session_visual_context["omh_context_brief"]["route_hint"]["primary_workflow"],
+                "img-summary",
+            )
             self.assertIn("img-summary", mid_session_visual_context["context"])
             self.assertIn("generic tool can render or execute", mid_session_visual_context["context"])
             self.assertIn("check OMH prep/status/learning", mid_session_visual_context["context"])
             self.assertNotIn("회의록을 세로 요약 이미지 카드로 만들어줘", mid_session_visual_context["context"])
+            self.assertNotIn(
+                "회의록을 세로 요약 이미지 카드로 만들어줘",
+                json.dumps(mid_session_visual_context["omh_context_brief"], sort_keys=True),
+            )
 
             mid_session_generic_context = ctx.hooks["pre_llm_call"](
                 omh_home=str(root / ".empty-omh"),
