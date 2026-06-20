@@ -79,7 +79,14 @@ from .materials import (
 )
 from .menubar import _add_menubar_commands, cmd_menubar_status
 from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
-from .mcp import cmd_mcp_manifest, cmd_mcp_observe_host, cmd_mcp_serve, cmd_mcp_sessions, _add_mcp_commands
+from .mcp import (
+    _add_mcp_commands,
+    cmd_mcp_config_recipe,
+    cmd_mcp_manifest,
+    cmd_mcp_observe_host,
+    cmd_mcp_serve,
+    cmd_mcp_sessions,
+)
 from .plugin import _add_plugin_commands, cmd_plugin_observations, cmd_plugin_observe_host
 from .ops import (
     _add_ops_commands,
@@ -165,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh hud\n"
             "  omh menubar status\n"
             "  omh mcp manifest\n"
+            "  omh mcp config-recipe --host codex\n"
             "  omh plugin observe-host --host hermes-agent --session <session-id> --event plugin_load --evidence-ref <host-log>\n"
             "  omh loop status\n"
             "  omh ops list\n"

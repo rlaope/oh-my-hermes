@@ -26,7 +26,75 @@ class McpBridgeTests(unittest.TestCase):
             tools = {tool["name"] for tool in payload["tools"]}
             self.assertEqual(tools, {"omh_status", "omh_recommend", "omh_probe"})
             self.assertIn("observe-host", payload["setup"]["host_observation_command"])
+            self.assertEqual(payload["setup"]["host_config_recipes_command"], "/tmp/omh mcp config-recipe --host <host>")
             self.assertIn("allowlisted local status", payload["claim_boundary"])
+
+    def test_mcp_config_recipe_outputs_host_specific_snippets(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                base + ["mcp", "config-recipe", "--host", "claude_code", "--command", "/tmp/omh"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            claude = json.loads(stdout)
+            self.assertEqual(claude["schema_version"], "omh_mcp_host_config_recipe/v1")
+            self.assertEqual(claude["host"], "claude-code")
+            self.assertEqual(claude["config_format"], "json")
+            self.assertIn(".mcp.json", claude["target_paths"])
+            self.assertIn("~/.claude.json", claude["target_paths"])
+            self.assertEqual(claude["snippet"]["mcpServers"]["omh"]["command"], "/tmp/omh")
+            self.assertEqual(claude["snippet"]["mcpServers"]["omh"]["type"], "stdio")
+            self.assertEqual(claude["snippet"]["mcpServers"]["omh"]["args"][-2:], ["mcp", "serve"])
+            self.assertTrue(claude["target_notes"])
+            self.assertIn("https://code.claude.com/docs/en/mcp", claude["source_urls"])
+            self.assertIn("not evidence that the host loaded OMH", claude["verify"]["boundary"])
+
+            status, stdout, stderr = run_cli(
+                base + ["mcp", "config-recipe", "--host", "codex", "--portable"],
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            codex = json.loads(stdout)
+            self.assertEqual(codex["config_format"], "toml")
+            self.assertEqual(codex["server"]["args"], ["mcp", "serve"])
+            self.assertIn("[mcp_servers.omh]", codex["snippet_text"])
+            self.assertIn('command = "omh"', codex["snippet_text"])
+            self.assertIn('args = ["mcp", "serve"]', codex["snippet_text"])
+            self.assertIn('enabled_tools = ["omh_status", "omh_recommend", "omh_probe"]', codex["snippet_text"])
+            self.assertIn("https://developers.openai.com/codex/config-reference", codex["source_urls"])
+
+            status, stdout, stderr = run_cli(base + ["mcp", "config-recipe", "--host", "opencode"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            opencode = json.loads(stdout)
+            self.assertEqual(opencode["snippet"]["mcp"]["omh"]["type"], "local")
+            self.assertEqual(opencode["snippet"]["mcp"]["omh"]["command"][0], "omh")
+            self.assertIn("https://opencode.ai/docs/mcp-servers/", opencode["source_urls"])
+
+            status, stdout, stderr = run_cli(base + ["mcp", "config-recipe", "--host", "cursor"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            cursor = json.loads(stdout)
+            self.assertEqual(cursor["snippet"]["mcpServers"]["omh"]["command"], "omh")
+            self.assertEqual(cursor["snippet"]["mcpServers"]["omh"]["type"], "stdio")
+            self.assertIn(".cursor/mcp.json", cursor["target_paths"])
+            self.assertIn("~/.cursor/mcp.json", cursor["target_paths"])
+            self.assertTrue(cursor["target_notes"])
+
+    def test_mcp_config_recipe_rejects_unknown_host(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(base + ["mcp", "config-recipe", "--host", "not-a-host"])
+
+            self.assertEqual(status, 2)
+            self.assertEqual(stdout, "")
+            self.assertIn("mcp config recipe host must be one of", stderr)
 
     def test_mcp_stdio_server_lists_and_calls_tools_without_stdout_noise(self) -> None:
         with TemporaryDirectory() as tmp:

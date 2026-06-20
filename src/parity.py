@@ -124,12 +124,12 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         id="mcp_tool_bridge",
         title="MCP and tool bridge",
         common_pattern="Offer tool/MCP bridge configuration so the host agent can reach external capabilities through a controlled surface.",
-        omh_surface="`omh setup --with-mcp`, `omh mcp manifest`, `omh mcp serve`, `omh probe`, and MCP preference/host-config/runtime-call separation.",
+        omh_surface="`omh setup --with-mcp`, `omh mcp manifest`, `omh mcp config-recipe`, `omh mcp serve`, `omh probe`, and MCP preference/host-config/runtime-call separation.",
         status="available",
         evidence=("src/mcp_bridge.py", "src/commands/mcp.py", "src/probe.py", "tests/test_mcp_bridge.py"),
         missing_piece="OMH does not auto-enable a host MCP config or independently inspect live host sessions; the host or wrapper must record load/session evidence.",
         v1_decision="Ship a dependency-free stdio bridge with only allowlisted local status, recommendation, and probe tools.",
-        user_value="Operators can connect OMH to MCP-capable hosts without exposing arbitrary shell or hidden execution.",
+        user_value="Operators can connect OMH to MCP-capable hosts with copy-paste host recipes without exposing arbitrary shell or hidden execution.",
         claim_boundary="MCP bridge availability and host config are not connector invocation, coding dispatch, implementation, review, CI, merge, or host-load proof.",
     ),
     ParityCapability(
@@ -177,13 +177,7 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
         },
         "capabilities": capabilities,
         "probe_alignment": _probe_alignment(probe_payload or {}),
-        "recommended_next_prs": [
-            {
-                "id": "mcp-host-config-guides",
-                "title": "Add host-specific MCP config recipes",
-                "why": "Turns the manifest contract into copy-paste recipes for common MCP-capable host config shapes without auto-mutating them.",
-            },
-        ],
+        "recommended_next_prs": [],
         "claim_boundary": (
             "The parity matrix is a product and operator contract. It does not claim hidden worker launch, "
             "automatic worktree creation, host-observed MCP load, plugin runtime load, executor execution, review, CI, or merge evidence."

@@ -18,8 +18,26 @@ MCP_BRIDGE_SCHEMA_VERSION = "omh_mcp_bridge/v1"
 MCP_TOOL_RESULT_SCHEMA_VERSION = "omh_mcp_tool_result/v1"
 MCP_OBSERVATION_SCHEMA_VERSION = "omh_mcp_observation/v1"
 MCP_HOST_SESSION_SCHEMA_VERSION = "omh_mcp_host_session/v1"
+MCP_HOST_CONFIG_RECIPE_SCHEMA_VERSION = "omh_mcp_host_config_recipe/v1"
 MCP_HOST_SESSION_EVENTS = ("host_load", "session_start", "tool_call", "session_end", "host_unload")
 MCP_HOST_SESSION_STATUSES = ("observed", "not_observed", "blocked")
+MCP_HOST_CONFIG_RECIPE_HOSTS = ("generic", "claude-code", "codex", "opencode", "cursor")
+_MCP_HOST_CONFIG_RECIPE_ALIASES = {
+    "generic": "generic",
+    "mcp": "generic",
+    "claude": "claude-code",
+    "claude-code": "claude-code",
+    "claude_code": "claude-code",
+    "claude code": "claude-code",
+    "codex": "codex",
+    "openai-codex": "codex",
+    "openai_codex": "codex",
+    "opencode": "opencode",
+    "open-code": "opencode",
+    "open_code": "opencode",
+    "open code": "opencode",
+    "cursor": "cursor",
+}
 
 MCP_BRIDGE_CLAIM_BOUNDARY = (
     "The OMH MCP bridge exposes allowlisted local status, recommendation, and probe tools only. "
@@ -95,11 +113,23 @@ def mcp_tool_definitions() -> list[dict[str, Any]]:
     ]
 
 
-def build_mcp_manifest(paths: OmhPaths, *, command: str = "omh", include_absolute_homes: bool = True) -> dict[str, Any]:
+def _mcp_server_args(paths: OmhPaths, *, include_absolute_homes: bool) -> list[str]:
     args = []
     if include_absolute_homes:
         args.extend(["--omh-home", str(paths.omh_home), "--hermes-home", str(paths.hermes_home)])
     args.extend(["mcp", "serve"])
+    return args
+
+
+def _mcp_stdio_server(command: str, args: list[str], *, include_type: bool = False) -> dict[str, Any]:
+    server: dict[str, Any] = {"command": command, "args": args}
+    if include_type:
+        server["type"] = "stdio"
+    return server
+
+
+def build_mcp_manifest(paths: OmhPaths, *, command: str = "omh", include_absolute_homes: bool = True) -> dict[str, Any]:
+    args = _mcp_server_args(paths, include_absolute_homes=include_absolute_homes)
     return {
         "schema_version": MCP_BRIDGE_SCHEMA_VERSION,
         "name": "omh",
@@ -124,6 +154,7 @@ def build_mcp_manifest(paths: OmhPaths, *, command: str = "omh", include_absolut
         "setup": {
             "operator_command": f"{command} mcp manifest",
             "server_command": " ".join([command, *args]),
+            "host_config_recipes_command": f"{command} mcp config-recipe --host <host>",
             "host_observation_command": (
                 f"{command} mcp observe-host --host <host> --session <session-id> "
                 "--event host_load --status observed --evidence-ref <host-log-or-session-ref>"
@@ -132,6 +163,152 @@ def build_mcp_manifest(paths: OmhPaths, *, command: str = "omh", include_absolut
         },
         "claim_boundary": MCP_BRIDGE_CLAIM_BOUNDARY,
     }
+
+
+def build_mcp_host_config_recipe(
+    paths: OmhPaths,
+    *,
+    host: str = "generic",
+    command: str = "omh",
+    include_absolute_homes: bool = True,
+) -> dict[str, Any]:
+    host = _normalize_recipe_host(host)
+    args = _mcp_server_args(paths, include_absolute_homes=include_absolute_homes)
+    generic_server = _mcp_stdio_server(command, args)
+    typed_stdio_server = _mcp_stdio_server(command, args, include_type=True)
+    if host == "generic":
+        snippet: dict[str, Any] | str = {"mcpServers": {"omh": generic_server}}
+        snippet_text = _pretty_json(snippet)
+        config_format = "json"
+        target_paths = ["mcp.json", ".mcp.json"]
+        target_notes = ["Some MCP hosts use a host-specific MCP config file or settings panel."]
+        apply_steps = [
+            "Open the MCP-capable host configuration file.",
+            "Merge the mcpServers.omh entry into the existing config.",
+            "Restart or reload the host, then record observed load with omh mcp observe-host.",
+        ]
+        source_urls = ["https://modelcontextprotocol.io"]
+    elif host == "claude-code":
+        snippet = {"mcpServers": {"omh": typed_stdio_server}}
+        snippet_text = _pretty_json(snippet)
+        config_format = "json"
+        target_paths = [".mcp.json", "~/.claude.json"]
+        target_notes = ["Claude Code can also add the same stdio command through `claude mcp add`."]
+        apply_steps = [
+            "For project scope, merge this into .mcp.json at the project root.",
+            "Alternatively use Claude Code's MCP CLI to add the same stdio command.",
+            "Open Claude Code and approve the project MCP server if prompted, then record observed load with omh mcp observe-host.",
+        ]
+        source_urls = ["https://code.claude.com/docs/en/mcp", "https://docs.anthropic.com/en/docs/claude-code/settings"]
+    elif host == "codex":
+        snippet = _codex_mcp_toml(command, args)
+        snippet_text = snippet
+        config_format = "toml"
+        target_paths = ["~/.codex/config.toml", ".codex/config.toml"]
+        target_notes = ["Use the user config for global availability or project config for one repository."]
+        apply_steps = [
+            "Merge the [mcp_servers.omh] table into the target Codex config.toml.",
+            "Restart or reload Codex so it can start the stdio MCP server.",
+            "Record observed load or tool use with omh mcp observe-host after the host actually uses the bridge.",
+        ]
+        source_urls = [
+            "https://developers.openai.com/codex/config-basic",
+            "https://developers.openai.com/codex/config-reference",
+        ]
+    elif host == "opencode":
+        snippet = {
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "omh": {
+                    "type": "local",
+                    "command": [command, *args],
+                    "enabled": True,
+                }
+            },
+        }
+        snippet_text = _pretty_json(snippet)
+        config_format = "json"
+        target_paths = ["opencode.json", "opencode.jsonc"]
+        target_notes = ["OpenCode supports local MCP servers under the mcp config object."]
+        apply_steps = [
+            "Merge the mcp.omh entry into the OpenCode config.",
+            "Restart or reload OpenCode so it can start the local MCP server.",
+            "Record observed load or tool use with omh mcp observe-host after OpenCode actually connects.",
+        ]
+        source_urls = ["https://opencode.ai/docs/mcp-servers/", "https://opencode.ai/docs/config/"]
+    else:
+        snippet = {"mcpServers": {"omh": typed_stdio_server}}
+        snippet_text = _pretty_json(snippet)
+        config_format = "json"
+        target_paths = [".cursor/mcp.json", "~/.cursor/mcp.json"]
+        target_notes = ["Cursor MCP settings can create or open the active MCP JSON config for the current version."]
+        apply_steps = [
+            "Open Cursor MCP settings or the project/user MCP JSON file supported by the current Cursor version.",
+            "Merge the mcpServers.omh entry into the existing config.",
+            "Reload Cursor and record observed load or tool use with omh mcp observe-host after it actually connects.",
+        ]
+        source_urls = ["https://cursor.com/docs/mcp"]
+    return {
+        "schema_version": MCP_HOST_CONFIG_RECIPE_SCHEMA_VERSION,
+        "host": host,
+        "known_hosts": list(MCP_HOST_CONFIG_RECIPE_HOSTS),
+        "config_format": config_format,
+        "target_paths": target_paths,
+        "target_notes": target_notes,
+        "server": {
+            "name": "omh",
+            "transport": "stdio",
+            "command": command,
+            "args": args,
+            "tools": [tool["name"] for tool in mcp_tool_definitions()],
+        },
+        "snippet": snippet,
+        "snippet_text": snippet_text,
+        "apply_steps": apply_steps,
+        "verify": {
+            "local_command": f"{command} mcp manifest",
+            "host_observation_command": (
+                f"{command} mcp observe-host --host {host} --session <session-id> "
+                "--event host_load --status observed --evidence-ref <host-log-or-session-ref>"
+            ),
+            "boundary": "A pasted host config is not evidence that the host loaded OMH; record a host observation only after the host actually loads or uses the bridge.",
+        },
+        "source_urls": source_urls,
+        "claim_boundary": MCP_BRIDGE_CLAIM_BOUNDARY,
+    }
+
+
+def _normalize_recipe_host(host: str) -> str:
+    normalized = " ".join(str(host or "generic").strip().lower().replace("_", " ").split())
+    normalized = normalized.replace(" ", "-") if normalized in {"claude code", "openai codex", "open code"} else normalized
+    normalized = _MCP_HOST_CONFIG_RECIPE_ALIASES.get(normalized, normalized)
+    if normalized not in MCP_HOST_CONFIG_RECIPE_HOSTS:
+        raise ValueError(f"mcp config recipe host must be one of: {', '.join(MCP_HOST_CONFIG_RECIPE_HOSTS)}")
+    return normalized
+
+
+def _pretty_json(value: Any) -> str:
+    return json.dumps(value, indent=2, sort_keys=True)
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value)
+
+
+def _toml_array(values: list[str]) -> str:
+    return "[" + ", ".join(_toml_string(value) for value in values) + "]"
+
+
+def _codex_mcp_toml(command: str, args: list[str]) -> str:
+    return "\n".join(
+        [
+            "[mcp_servers.omh]",
+            f"command = {_toml_string(command)}",
+            f"args = {_toml_array(args)}",
+            "enabled = true",
+            'enabled_tools = ["omh_status", "omh_recommend", "omh_probe"]',
+        ]
+    ) + "\n"
 
 
 def record_mcp_host_session(

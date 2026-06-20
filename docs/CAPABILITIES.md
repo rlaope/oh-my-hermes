@@ -16,7 +16,8 @@ over existing OMH catalogs and contracts:
 - wrapper action ids from `src/wrapper/contract.py`
 - runtime observation events from `src/runtime/records.py`
 - plugin hook/tool metadata from `src/plugin_bundle/omh/*`
-- optional MCP bridge metadata from `omh mcp manifest`
+- optional MCP bridge metadata from `omh mcp manifest` and host recipes from
+  `omh mcp config-recipe`
 
 Use:
 
@@ -73,11 +74,12 @@ session-start guidance only, not executor dispatch, implementation, review, CI,
 or merge.
 
 The optional MCP bridge uses `omh mcp serve` and exposes only `omh_status`,
-`omh_recommend`, and `omh_probe`. Bridge availability is not host-load evidence,
-and a host config file is not proof that any MCP tool was called. A host or
-wrapper that actually observes bridge load or use can record
-`omh_mcp_host_session/v1` with `omh mcp observe-host`; that remains session
-evidence only.
+`omh_recommend`, and `omh_probe`. `omh mcp config-recipe --host
+claude-code|codex|opencode|cursor|generic` can print copy-paste snippets for
+common MCP-capable hosts, but bridge availability and host config text are not
+host-load evidence. A host or wrapper that actually observes bridge load or use
+can record `omh_mcp_host_session/v1` with `omh mcp observe-host`; that remains
+session evidence only.
 
 The optional plugin bridge has the same split. Local install/import/register
 smoke proves the bundle is present and importable. Host or wrapper evidence that
