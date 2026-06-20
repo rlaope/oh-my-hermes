@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import subprocess
@@ -5683,6 +5684,56 @@ class CliTests(unittest.TestCase):
         self.assertIn("  1) Ask every time (recommended)", rendered)
         self.assertNotIn("[x]", rendered)
         self.assertNotIn("[ ]", rendered)
+
+    def test_setup_choice_menu_counts_wrapped_terminal_rows(self) -> None:
+        from omh.commands.setup import _rendered_terminal_rows, _visible_text_width
+
+        self.assertEqual(_visible_text_width("\033[1;36mCodex\033[0m"), 5)
+        self.assertEqual(_visible_text_width("설정"), 4)
+        lines = [
+            "\033[1;36mDefault coding agent\033[0m",
+            "  This option description is intentionally long enough to wrap.",
+            "  설정",
+        ]
+
+        self.assertEqual(_rendered_terminal_rows(lines, columns=20), 6)
+
+    def test_setup_keyboard_menu_repaints_using_wrapped_terminal_rows(self) -> None:
+        options = [
+            {"choice": "1", "value": "codex", "label": "Codex", "description": "Short."},
+            {
+                "choice": "2",
+                "value": "hermes",
+                "label": "Hermes",
+                "description": "This option description is intentionally long enough to wrap.",
+            },
+        ]
+        lines = setup_commands._choice_menu_lines(
+            "Default coding agent",
+            ["Choose who Hermes should suggest for coding work."],
+            options,
+            0,
+            default_choice="1",
+            use_color=False,
+        )
+        expected_rows = setup_commands._rendered_terminal_rows(lines, columns=20)
+        output = io.StringIO()
+
+        with (
+            patch.object(setup_commands.shutil, "get_terminal_size", return_value=os.terminal_size((20, 24))),
+            patch.object(setup_commands, "_read_tui_key", side_effect=["\x1b[B", "\n"]),
+            patch.object(setup_commands.sys, "stdout", output),
+        ):
+            value = setup_commands._keyboard_single_choice(
+                "Default coding agent",
+                ["Choose who Hermes should suggest for coding work."],
+                options,
+                default_choice="1",
+                use_color=False,
+            )
+
+        self.assertEqual(value, "hermes")
+        self.assertIn(f"\033[{expected_rows}F\033[J", output.getvalue())
 
     def test_setup_executor_copy_uses_simple_coding_agent_names(self) -> None:
         from omh.commands.language import tr
