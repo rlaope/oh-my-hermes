@@ -291,8 +291,9 @@ documentation below.
 
 ## Development
 
-Development and release smoke details live in [Release](docs/RELEASE.md). For a
-quick local sanity check from a source checkout:
+Development, release smoke, product readiness, and evidence-bundle details live
+in [Release](docs/RELEASE.md). For a quick local sanity check from a source
+checkout:
 
 ```sh
 python3 -m unittest discover -s tests
