@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..awareness import awareness_context_matches_message, awareness_primer_context
+from ..awareness import awareness_context_matches_message, awareness_primer_context, awareness_route_hint_context
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..runtime_reader import read_omh_hud, read_omh_status
 
@@ -21,9 +21,12 @@ def pre_llm_call(**kwargs) -> dict[str, str] | None:
     context_parts: list[str] = []
     user_message = str(kwargs.get("user_message", "") or "")
     is_first_turn = bool(kwargs.get("is_first_turn", False))
-    should_include_awareness = is_first_turn or awareness_context_matches_message(user_message)
+    route_hint_context = awareness_route_hint_context(user_message)
+    should_include_awareness = is_first_turn or bool(route_hint_context) or awareness_context_matches_message(user_message)
     if kwargs.get("include_omh_awareness", True) is not False and should_include_awareness:
         context_parts.append(awareness_primer_context())
+        if route_hint_context:
+            context_parts.append(route_hint_context)
 
     marker = extract_role_marker(user_message)
     if marker:

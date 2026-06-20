@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
+OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
 ROUTER_KEYWORD_SKILLS = (
     "deep-interview",
     "ralplan",
@@ -228,6 +230,146 @@ _AWARENESS_TOKEN_MARKERS = frozenset(
         "material",
     }
 )
+_ROUTE_HINT_RULES = (
+    {
+        "id": "visual_summary",
+        "workflow": "img-summary",
+        "lane": "materials_and_visuals",
+        "next_action": "prepare_visual_prompt_card",
+        "reason": "The user is asking for an image card, infographic, poster, or shareable visual summary.",
+        "phrases": (
+            "image card",
+            "summary card",
+            "infographic",
+            "poster",
+            "visual one-pager",
+            "shareable visual",
+            "generate image",
+            "image summary",
+            "이미지",
+            "포스터",
+            "요약 카드",
+            "공유용 카드",
+            "画像",
+            "海报",
+            "海報",
+        ),
+        "tokens": ("image", "infographic", "poster", "visual"),
+        "adjacent_workflows": ("materials-package", "report-package"),
+    },
+    {
+        "id": "missed_workflow",
+        "workflow": "workflow-learning",
+        "lane": "automation_and_status",
+        "next_action": "audit_learning_readiness",
+        "reason": "The user is reporting that OMH or the expected workflow was not used.",
+        "phrases": (
+            "missed route",
+            "missed workflow",
+            "did not use omh",
+            "omh was not used",
+            "omx was not used",
+            "not use omh",
+            "omh 안 썼어",
+            "omh 안 썼",
+            "워크플로 누락",
+            "라우팅 누락",
+        ),
+        "tokens": ("missed",),
+        "adjacent_workflows": ("doctor", "agent-ops-review"),
+    },
+    {
+        "id": "customer_signal",
+        "workflow": "feedback-triage",
+        "lane": "research_and_ops",
+        "next_action": "classify_signal_and_prepare_investigation",
+        "reason": "The user is describing customer feedback, bugs, issues, or product signals that need triage before implementation.",
+        "phrases": (
+            "customer feedback",
+            "payment failure",
+            "payment failures",
+            "bug report",
+            "issue triage",
+            "user feedback",
+            "결제 실패",
+            "고객 피드백",
+            "버그",
+            "이슈",
+            "피드백",
+        ),
+        "tokens": ("feedback", "bug", "issue", "triage"),
+        "adjacent_workflows": ("web-research", "github-event-ops", "coding handoff"),
+    },
+    {
+        "id": "scheduled_ops",
+        "workflow": "automation-blueprint",
+        "lane": "automation_and_status",
+        "next_action": "prepare_scheduled_ops_blueprint",
+        "reason": "The user is asking for recurring, scheduled, cron-like, or digest-style work.",
+        "phrases": (
+            "every morning",
+            "every day",
+            "daily digest",
+            "weekly digest",
+            "cron",
+            "scheduled",
+            "recurring",
+            "매일",
+            "매주",
+            "자동화",
+            "스케줄",
+        ),
+        "tokens": ("cron", "schedule", "scheduled", "recurring", "digest"),
+        "adjacent_workflows": ("research-department", "ops-observability-card"),
+    },
+    {
+        "id": "source_research",
+        "workflow": "web-research",
+        "lane": "research_and_ops",
+        "next_action": "gather_source_backed_evidence",
+        "reason": "The user is asking for current, source-backed, market, competitor, paper, or news research.",
+        "phrases": (
+            "web search",
+            "best practice",
+            "competitor",
+            "market research",
+            "latest news",
+            "source-backed",
+            "paper",
+            "논문",
+            "리서치",
+            "검색",
+            "시장 조사",
+            "경쟁사",
+        ),
+        "tokens": ("research", "sources", "competitor", "market", "paper", "news"),
+        "adjacent_workflows": ("research-brief", "research-department", "strategy-brief"),
+    },
+    {
+        "id": "coding_delivery",
+        "workflow": "ultraprocess",
+        "lane": "coding_handoff",
+        "next_action": "prepare_one_cycle_delivery",
+        "reason": "The user is asking for coding delivery, PR preparation, implementation, review, CI, or merge-oriented work.",
+        "phrases": (
+            "pull request",
+            "code review",
+            "ci failed",
+            "merge this",
+            "implement",
+            "coding agent",
+            "codex",
+            "claude code",
+            "pr 올려",
+            "머지",
+            "코딩",
+            "구현",
+            "리뷰",
+        ),
+        "tokens": ("pr", "implementation", "implement", "review", "ci", "merge", "codex", "claude"),
+        "adjacent_workflows": ("ralplan", "code-review", "agent-ops-review"),
+    },
+)
 
 
 def router_keyword_summary() -> str:
@@ -284,6 +426,83 @@ def awareness_context_matches_message(message: str) -> bool:
     return bool(tokens & _AWARENESS_TOKEN_MARKERS) or any(
         marker in text for marker in _AWARENESS_MESSAGE_MARKERS
     )
+
+
+def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, object]:
+    """Return bounded message-specific workflow hints without exposing raw text."""
+    normalized = unicodedata.normalize("NFKC", message).casefold()
+    tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", normalized))
+    hint_limit = max(max_hints, 0)
+    hints: list[dict[str, object]] = []
+    if normalized.strip() and hint_limit:
+        for rule in _ROUTE_HINT_RULES:
+            phrase_matches = [phrase for phrase in rule["phrases"] if phrase in normalized]
+            token_matches = [token for token in rule["tokens"] if token in tokens]
+            if not phrase_matches and not token_matches:
+                continue
+            workflow = str(rule["workflow"])
+            context_card = workflow_context_card_for_workflow(workflow)
+            hints.append(
+                {
+                    "id": str(rule["id"]),
+                    "workflow": workflow,
+                    "lane": str(rule["lane"]),
+                    "next_action": str(rule["next_action"]),
+                    "reason": str(rule["reason"]),
+                    "matched_cues": _bounded_matches(phrase_matches + token_matches),
+                    "adjacent_workflows": list(rule["adjacent_workflows"]),
+                    "workflow_context_card": context_card,
+                    "not_evidence_yet": list(context_card.get("not_evidence_until_observed", []))
+                    if isinstance(context_card, dict)
+                    else [],
+                }
+            )
+            if len(hints) >= hint_limit:
+                break
+    return {
+        "schema_version": OMH_ROUTE_HINT_SCHEMA_VERSION,
+        "status": "hinted" if hints else "no_hint",
+        "message_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest() if message else "",
+        "message_length": len(message),
+        "primary_workflow": str(hints[0]["workflow"]) if hints else "",
+        "primary_next_action": str(hints[0]["next_action"]) if hints else "",
+        "hints": hints,
+        "privacy": {
+            "mode": "metadata_only",
+            "raw_prompt_stored": False,
+            "stored_fields": ["message hash", "message length", "matched cue labels", "workflow hint"],
+        },
+        "claim_boundary": (
+            "OMH route hints are local deterministic prompt context only. They are not workflow execution, "
+            "tool invocation, generated output, verification, review, CI, merge, or proof that routing was correct."
+        ),
+    }
+
+
+def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
+    """Return compact hook text for message-specific workflow hints."""
+    payload = awareness_route_hint(message, max_hints=max_hints)
+    if payload.get("status") != "hinted":
+        return ""
+    lines = [
+        "[OMH Route Hint]",
+        "Use this message-specific OMH hint before generic chat/tools when it fits the user intent.",
+    ]
+    for hint in payload["hints"]:
+        if not isinstance(hint, dict):
+            continue
+        adjacent = ", ".join(str(item) for item in hint.get("adjacent_workflows", []))
+        lines.append(
+            f"- workflow={hint.get('workflow')}; lane={hint.get('lane')}; "
+            f"next_action={hint.get('next_action')}; reason={hint.get('reason')}"
+        )
+        if adjacent:
+            lines.append(f"  adjacent_workflows={adjacent}.")
+        not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", [])[:4])
+        if not_evidence:
+            lines.append(f"  not_evidence_yet={not_evidence}.")
+    lines.append("Boundary: " + str(payload["claim_boundary"]))
+    return "\n".join(lines)
 
 
 def awareness_primer_payload() -> dict[str, object]:
@@ -573,6 +792,17 @@ def _compact_workflow_context_cards_line() -> str:
         "automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; "
         "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
     )
+
+
+def _bounded_matches(matches: list[str]) -> list[str]:
+    seen: list[str] = []
+    for item in matches:
+        value = item.strip()
+        if value and value not in seen:
+            seen.append(value)
+        if len(seen) >= 4:
+            break
+    return seen
 
 
 def _lane_for_skill(skill_name: str, lanes: object) -> dict[str, object] | None:

@@ -42,6 +42,7 @@ def hook_manifest() -> dict[str, object]:
         "prepared_is_not": PREPARED_NOT_OBSERVED,
         "source_refs": [
             "src/plugin_bundle/omh/metadata.py",
+            "src/plugin_bundle/omh/awareness.py",
             "src/plugin_bundle/omh/plugin.yaml",
             "src/plugin_bundle/omh/__init__.py",
             "src/wrapper/contract.py",
@@ -64,7 +65,7 @@ def _wrapper_event(name: str, payload_fields: tuple[str, ...]) -> dict[str, obje
 
 def _hook_payload_fields(name: str) -> list[str]:
     if name == "pre_llm_call":
-        return ["omh_awareness_primer", "bounded_status_context", "redacted"]
+        return ["omh_awareness_primer", "omh_route_hint", "bounded_status_context", "redacted"]
     if name == "pre_tool_call":
         return ["tool_name", "claim_boundary"]
     if name == "on_session_end":
