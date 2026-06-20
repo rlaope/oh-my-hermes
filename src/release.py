@@ -218,6 +218,16 @@ def release_readiness_checklist(
             "Use-case replay proves deterministic recommendation routing for synthetic fixtures only; it does not prove live Hermes chat behavior or any runtime execution.",
         ),
         ReleaseChecklistItem(
+            "use_case_readiness",
+            "Check G1-G10 use-case readiness rollup",
+            "uv run python -m src.cli cases readiness --json",
+            "contract-quality",
+            True,
+            False,
+            "Use-case readiness reports catalog, demo-card, artifact-bundle, and replay gates as passing while separating optional local artifact-store state.",
+            "Use-case readiness proves deterministic local use-case contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
+        ),
+        ReleaseChecklistItem(
             "stable_install_dry_run",
             "Dry-run stable install metadata",
             (

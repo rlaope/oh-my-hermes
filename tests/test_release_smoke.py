@@ -34,6 +34,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("use_case_demo_cards", items)
         self.assertIn("use_case_artifact_bundle", items)
         self.assertIn("use_case_replay", items)
+        self.assertIn("use_case_readiness", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
         self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
@@ -67,12 +68,15 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("English and Korean operator fixtures", items["use_case_replay"]["evidence_required"])
         self.assertIn("synthetic fixtures", items["use_case_replay"]["proof_boundary"])
         self.assertIn("does not prove live Hermes chat behavior", items["use_case_replay"]["proof_boundary"])
+        self.assertEqual(items["use_case_readiness"]["command"], "uv run python -m src.cli cases readiness --json")
+        self.assertIn("readiness", items["use_case_readiness"]["evidence_required"])
+        self.assertIn("deterministic local use-case contracts", items["use_case_readiness"]["proof_boundary"])
         self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
         self.assertFalse(items["tag_and_publish"]["required"])
         self.assertIn('git tag -a v1.0.0 -m "Release v1.0.0"', items["tag_and_publish"]["command"])
         self.assertTrue(items["tag_and_publish"]["requires_release_authority"])
-        self.assertGreaterEqual(payload["required_item_count"], 17)
+        self.assertGreaterEqual(payload["required_item_count"], 18)
 
     def test_release_readiness_checklist_rejects_unsafe_versions_and_quotes_command_paths(self) -> None:
         with self.assertRaises(ValueError):

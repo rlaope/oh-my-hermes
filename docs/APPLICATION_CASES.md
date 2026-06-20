@@ -41,6 +41,7 @@ omh cases demo --all --json
 omh cases artifact G10 --json
 omh cases artifact --all --write
 omh cases artifact-validate --json
+omh cases readiness --json
 omh cases replay --json
 omh cases recommend "PR opened with failing CI" --json
 omh cases validate --json
@@ -103,6 +104,20 @@ consult. The replay passes only when each fixture returns the expected goal and
 primary skill. It proves deterministic product-fit routing for those fixtures;
 it is not evidence of live Hermes chat behavior, connector execution, file
 generation, memory mutation, executor dispatch, review, CI, merge, or delivery.
+
+Use-case readiness is the operator-facing rollup for the full G1-G10 story:
+
+```sh
+omh cases readiness
+omh cases readiness --json
+```
+
+It checks the catalog, wrapper demo cards, prepared artifact bundle, and replay
+fixtures as required gates, then reports the local artifact store as an optional
+state. A missing local store is a warning, not a release blocker, because the
+bundle can still be rendered deterministically. This command is useful when a
+release reviewer, wrapper author, or Hermes operator wants one answer to: "are
+the application cases ready to show?"
 
 ## Case 1: Coding Request Handling
 
@@ -586,6 +601,9 @@ Before using these cases as public release evidence, verify:
 - `omh cases replay --json` exposes `omh_use_case_replay/v1` and must pass the
   English/Korean G1-G10 synthetic operator fixture set before the use-case map is
   treated as release-ready.
+- `omh cases readiness --json` exposes `omh_use_case_readiness/v1` and rolls the
+  catalog, card, artifact, replay, and optional local-store states into a single
+  operator-readable readiness card.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
   triage, ops review, operating rhythm history, report packages, reliability

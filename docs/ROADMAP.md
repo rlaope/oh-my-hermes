@@ -54,6 +54,9 @@
 - G1-G10 use-case replay through `omh cases replay`, including English/Korean
   synthetic operator fixtures and release smoke coverage for deterministic
   recommendation routing
+- G1-G10 use-case readiness through `omh cases readiness`, rolling catalog,
+  demo-card, artifact-bundle, replay, and optional local artifact-store states
+  into one operator-facing release card
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated

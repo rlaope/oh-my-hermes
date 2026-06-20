@@ -657,6 +657,7 @@ class CliTests(unittest.TestCase):
             (["cases", "demo", "--all"], "OMH G1-G10 use-case demo cards", "cards"),
             (["cases", "artifact", "G10"], "OMH use-case artifact:", "artifact_id"),
             (["cases", "artifact", "--all"], "OMH G1-G10 use-case artifacts", "artifacts"),
+            (["cases", "readiness"], "OMH G1-G10 use-case readiness", "gates"),
             (["cases", "replay"], "OMH G1-G10 use-case replay", "results"),
             (["cases", "validate"], "OMH G1-G10 feature surface validation", "validated"),
             (["playbook", "list"], "OMH playbooks", "playbooks"),
@@ -858,6 +859,27 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertEqual(stdout, "")
         self.assertIn("limit must be at least 1", stderr)
+
+        with TemporaryDirectory() as tmp:
+            base = ["--omh-home", str(Path(tmp) / ".omh")]
+
+            status, stdout, stderr = run_cli(base + ["cases", "readiness", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            readiness = json.loads(stdout)
+            self.assertEqual(readiness["schema_version"], "omh_use_case_readiness/v1")
+            self.assertEqual(readiness["status"], "ready")
+            self.assertEqual(readiness["score"], 100)
+            self.assertEqual(readiness["blocking_failures"], 0)
+            gates = {gate["id"]: gate for gate in readiness["gates"]}
+            self.assertEqual(gates["catalog"]["status"], "passed")
+            self.assertEqual(gates["demo_cards"]["command"], "omh cases demo --all --json")
+            self.assertEqual(gates["artifact_bundle"]["status"], "passed")
+            self.assertEqual(gates["replay"]["status"], "passed")
+            self.assertEqual(gates["local_artifact_store"]["status"], "not_written")
+            self.assertFalse(gates["local_artifact_store"]["blocking"])
+            self.assertIn("artifact --all --write", " ".join(readiness["next_actions"]))
 
         examples = (
             ("Every morning send a competitor digest to Slack only if changed", "G1", "automation-blueprint"),
@@ -1562,6 +1584,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("use_case_demo_cards", stdout)
         self.assertIn("use_case_artifact_bundle", stdout)
         self.assertIn("use_case_replay", stdout)
+        self.assertIn("use_case_readiness", stdout)
         self.assertIn("/tmp/omh --help", stdout)
         self.assertIn("live_tap_smoke", stdout)
         self.assertIn("profile-mutating", stdout)
@@ -1584,6 +1607,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("cases demo --all --json", items["use_case_demo_cards"]["command"])
         self.assertIn("cases artifact --all --json", items["use_case_artifact_bundle"]["command"])
         self.assertIn("cases replay --json", items["use_case_replay"]["command"])
+        self.assertIn("cases readiness --json", items["use_case_readiness"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])

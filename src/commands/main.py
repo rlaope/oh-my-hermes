@@ -168,6 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Operator examples:\n"
             "  omh recommend \"risky refactor\"\n"
             "  omh cases recommend \"daily competitor digest\"\n"
+            "  omh cases readiness\n"
             "  omh cases demo --all\n"
             "  omh cases artifact --all --write\n"
             "  omh cases replay\n"
@@ -257,6 +258,7 @@ First five minutes:
 Useful operator commands:
   omh recommend "risky refactor"
   omh cases recommend "daily competitor digest"
+  omh cases readiness   Check the G1-G10 readiness rollup
   omh cases demo --all  Show wrapper-ready G1-G10 use-case cards
   omh cases artifact --all --write
                           Write local G1-G10 runbook artifacts
