@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..awareness import awareness_context_matches_message, awareness_primer_context, awareness_route_hint_context
+from ..context_brief import build_context_brief
 from ..host_observation import observe_plugin_hook_call
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..runtime_reader import read_omh_hud, read_omh_status
@@ -17,16 +18,23 @@ def _token_metadata_from_kwargs(kwargs: dict) -> dict[str, object]:
     return {key: kwargs[key] for key in keys if kwargs.get(key) is not None}
 
 
-def pre_llm_call(**kwargs) -> dict[str, str] | None:
+def pre_llm_call(**kwargs) -> dict[str, object] | None:
     """Inject bounded OMH role/status context without storing prompts."""
     observe_plugin_hook_call("pre_llm_call", kwargs)
     context_parts: list[str] = []
+    payload: dict[str, object] = {}
     user_message = str(kwargs.get("user_message", "") or "")
     is_first_turn = bool(kwargs.get("is_first_turn", False))
     route_hint_context = awareness_route_hint_context(user_message)
     should_include_awareness = is_first_turn or bool(route_hint_context) or awareness_context_matches_message(user_message)
     if kwargs.get("include_omh_awareness", True) is not False and should_include_awareness:
         context_parts.append(awareness_primer_context())
+        payload["omh_context_brief"] = build_context_brief(
+            user_message,
+            source=str(kwargs.get("source") or kwargs.get("host") or "pre_llm_call"),
+            max_hints=2,
+            include_prompt_context=False,
+        )
         if route_hint_context:
             context_parts.append(route_hint_context)
 
@@ -91,4 +99,5 @@ def pre_llm_call(**kwargs) -> dict[str, str] | None:
             )
         lines.append("Use omh_hud for the compact status line, omh_role for role context, or omh_status for full metadata-only status.")
         context_parts.append("\n".join(lines))
-    return {"context": "\n\n".join(context_parts)}
+    payload["context"] = "\n\n".join(context_parts)
+    return payload
