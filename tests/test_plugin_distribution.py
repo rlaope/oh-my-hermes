@@ -322,6 +322,18 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("Unknown role 'nope'", tool_warning["context"])
             self.assertIn("planner", tool_warning["context"])
 
+            tool_checkpoint = ctx.hooks["pre_tool_call"](
+                tool_name="image_generate",
+                tool_input={"prompt": "secret-token-123 should not leak"},
+            )
+            self.assertIsNotNone(tool_checkpoint)
+            self.assertIn("[OMH Tool Checkpoint]", tool_checkpoint["context"])
+            self.assertIn("schema=omh_generic_tool_checkpoint/v1", tool_checkpoint["context"])
+            self.assertIn("workflow=img-summary", tool_checkpoint["context"])
+            self.assertIn("next_action=prepare_visual_prompt_card", tool_checkpoint["context"])
+            self.assertNotIn("secret-token-123", tool_checkpoint["context"])
+            self.assertNotIn("should not leak", tool_checkpoint["context"])
+
             session_checkpoint = ctx.hooks["on_session_end"](omh_home=str(omh_home))
             self.assertEqual(session_checkpoint["status"], "checkpoint_written")
             checkpoint = json.loads((omh_home / "runtime" / "plugin-session-end.json").read_text(encoding="utf-8"))

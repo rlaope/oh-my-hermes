@@ -483,7 +483,7 @@ def _standalone_hook_payload_fields(name: str) -> list[str]:
     if name == "pre_llm_call":
         return ["omh_awareness_primer", "bounded_status_context", "redacted"]
     if name == "pre_tool_call":
-        return ["tool_name", "claim_boundary"]
+        return ["tool_name", "tool_family_hint", "omh_generic_tool_checkpoint", "claim_boundary", "redacted"]
     if name == "on_session_end":
         return ["session_summary", "metadata_only"]
     return []
