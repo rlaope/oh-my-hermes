@@ -307,6 +307,7 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
     oversized_role_contexts = payload.get("oversized_role_contexts", [])
     role_context_budget_failures = payload.get("role_context_budget_failures", [])
     capability_budget_failures = payload.get("capability_budget_failures", [])
+    use_case_demo_failures = payload.get("use_case_demo_failures", [])
     print(
         "Full capability manifest: "
         f"{payload.get('full_capability_skill_count')} skill surface(s); "
@@ -325,6 +326,11 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         f"{payload.get('standalone_capability_skill_count')} workflow skill(s); "
         f"missing {len(missing_standalone) if isinstance(missing_standalone, list) else 0}; "
         f"context missing {len(missing_standalone_context) if isinstance(missing_standalone_context, list) else 0}"
+    )
+    print(
+        "Use-case demo cards: "
+        f"{payload.get('use_case_demo_card_count')}/{payload.get('expected_use_case_demo_card_count')} card(s); "
+        f"failures {len(use_case_demo_failures) if isinstance(use_case_demo_failures, list) else 0}"
     )
     if missing:
         print("Missing representative skills: " + ", ".join(str(item) for item in missing))
@@ -377,6 +383,8 @@ def _print_skill_content_smoke_summary(payload: dict[str, object]) -> None:
         print("Role context budget failures: " + ", ".join(str(item) for item in role_context_budget_failures))
     if capability_budget_failures:
         print("Capability budget failures: " + ", ".join(str(item) for item in capability_budget_failures))
+    if use_case_demo_failures:
+        print("Use-case demo card failures: " + ", ".join(str(item) for item in use_case_demo_failures))
     if isinstance(failed, list) and failed:
         print("Failed markers:")
         for check in failed[:12]:

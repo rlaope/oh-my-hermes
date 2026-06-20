@@ -31,6 +31,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("skill_content_smoke", items)
         self.assertIn("installed_command_smoke", items)
         self.assertIn("installed_command_path", items)
+        self.assertIn("use_case_demo_cards", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
         self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
@@ -49,12 +50,16 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("wheel_setup_dry_run", items)
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertIn("release install-smoke --live", items["installer_smoke"]["command"])
+        self.assertEqual(items["use_case_demo_cards"]["command"], "uv run python -m src.cli cases demo --all --json")
+        self.assertIn("G1-G10", items["use_case_demo_cards"]["evidence_required"])
+        self.assertIn("wrapper-renderable projections", items["use_case_demo_cards"]["proof_boundary"])
+        self.assertIn("not prove", items["use_case_demo_cards"]["proof_boundary"])
         self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
         self.assertFalse(items["tag_and_publish"]["required"])
         self.assertIn('git tag -a v1.0.0 -m "Release v1.0.0"', items["tag_and_publish"]["command"])
         self.assertTrue(items["tag_and_publish"]["requires_release_authority"])
-        self.assertGreaterEqual(payload["required_item_count"], 16)
+        self.assertGreaterEqual(payload["required_item_count"], 17)
 
     def test_release_readiness_checklist_rejects_unsafe_versions_and_quotes_command_paths(self) -> None:
         with self.assertRaises(ValueError):
@@ -131,6 +136,10 @@ class ReleaseSmokeTests(unittest.TestCase):
             payload["capability_context_char_limits"]["standalone_skill_item"],
         )
         self.assertEqual(payload["capability_budget_failures"], [])
+        self.assertEqual(payload["use_case_demo_collection_schema"], "omh_use_case_demo_collection/v1")
+        self.assertEqual(payload["use_case_demo_card_count"], 10)
+        self.assertEqual(payload["expected_use_case_demo_card_count"], 10)
+        self.assertEqual(payload["use_case_demo_failures"], [])
         self.assertLessEqual(
             payload["awareness_primer_context_chars"],
             payload["awareness_context_char_limits"]["primer_context"],

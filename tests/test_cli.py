@@ -1474,6 +1474,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("OMH release checklist for 1.0.0 (v1.0.0)", stdout)
         self.assertIn("Required gates:", stdout)
         self.assertIn("installed_command_smoke", stdout)
+        self.assertIn("use_case_demo_cards", stdout)
         self.assertIn("/tmp/omh --help", stdout)
         self.assertIn("live_tap_smoke", stdout)
         self.assertIn("profile-mutating", stdout)
@@ -1493,6 +1494,7 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["observed"])
         items = {item["id"]: item for item in payload["items"]}
         self.assertIn("uv build", items["build_artifacts"]["command"])
+        self.assertIn("cases demo --all --json", items["use_case_demo_cards"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
@@ -1522,6 +1524,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["unexpected_standalone_capability_skills"], [])
         self.assertEqual(payload["missing_standalone_capability_context_skills"], [])
         self.assertEqual(payload["capability_budget_failures"], [])
+        self.assertEqual(payload["use_case_demo_collection_schema"], "omh_use_case_demo_collection/v1")
+        self.assertEqual(payload["use_case_demo_card_count"], 10)
+        self.assertEqual(payload["expected_use_case_demo_card_count"], 10)
+        self.assertEqual(payload["use_case_demo_failures"], [])
         self.assertLessEqual(
             payload["full_capability_skill_section_chars"],
             payload["capability_context_char_limits"]["full_skill_section"],
@@ -1549,6 +1555,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Full capability manifest:", stdout)
         self.assertIn("Playbook capabilities:", stdout)
         self.assertIn("Plugin fallback capabilities:", stdout)
+        self.assertIn("Use-case demo cards: 10/10 card(s); failures 0", stdout)
         self.assertIn("context missing 0", stdout)
         self.assertIn("For machine-readable output", stdout)
         with self.assertRaises(json.JSONDecodeError):
