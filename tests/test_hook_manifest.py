@@ -9,6 +9,7 @@ load_local_package()
 from omh.capabilities.hooks import hook_manifest
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
 from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
+from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
 
 
 class HookManifestTests(unittest.TestCase):
@@ -28,6 +29,9 @@ class HookManifestTests(unittest.TestCase):
         self.assertIn("omh_awareness_primer", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("omh_route_hint", hooks["pre_llm_call"]["payload_fields"])
         self.assertIn("bounded_status_context", hooks["pre_llm_call"]["payload_fields"])
+        self.assertIn("omh_generic_tool_checkpoint", hooks["pre_tool_call"]["payload_fields"])
+        self.assertIn("tool_family_hint", hooks["pre_tool_call"]["payload_fields"])
+        self.assertIn("redacted", hooks["pre_tool_call"]["payload_fields"])
         self.assertIn("executor_opened", events)
         self.assertIn("selected_executor_profile", events["executor_opened"]["payload_fields"])
         self.assertIn("native_command_registered", events)
@@ -101,3 +105,39 @@ class HookManifestTests(unittest.TestCase):
         self.assertNotIn("[OMH Awareness]", context)
         self.assertNotIn("[OMH Route Hint]", context)
         self.assertNotIn("workflow=img-summary", context)
+
+    def test_pre_tool_call_injects_generic_tool_checkpoint_without_raw_input(self) -> None:
+        cases = (
+            ("image_generate", {}, "image_tools", "img-summary", "prepare_visual_prompt_card"),
+            ("write_file", {}, "file_tools", "materials-package", "prepare_material_package"),
+            ("web_search", {}, "search_tools", "web-research", "gather_source_backed_evidence"),
+            ("codex_session_open", {}, "coding_tools", "ultraprocess", "prepare_one_cycle_delivery"),
+            ("python_runner", {"tool_family": "search"}, "search_tools", "web-research", "gather_source_backed_evidence"),
+        )
+
+        for tool_name, extra_kwargs, tool_family, workflow, next_action in cases:
+            with self.subTest(tool_name=tool_name):
+                result = pre_tool_call(
+                    tool_name=tool_name,
+                    tool_input={"prompt": "secret-token-123 should never appear"},
+                    **extra_kwargs,
+                )
+                context = result["context"] if result else ""
+
+                self.assertIn("[OMH Tool Checkpoint]", context)
+                self.assertIn("schema=omh_generic_tool_checkpoint/v1", context)
+                self.assertIn(f"tool_family={tool_family}", context)
+                self.assertIn(f"workflow={workflow}", context)
+                self.assertIn(f"next_action={next_action}", context)
+                self.assertIn("advisory tool-use context only", context)
+                self.assertNotIn("secret-token-123", context)
+                self.assertNotIn("should never appear", context)
+
+    def test_pre_tool_call_checkpoint_can_be_disabled(self) -> None:
+        result = pre_tool_call(
+            tool_name="image_generate",
+            tool_input={"prompt": "secret-token-123"},
+            include_omh_tool_checkpoint=False,
+        )
+
+        self.assertIsNone(result)
