@@ -26,6 +26,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH - oh-my-hermes", stdout)
         self.assertIn("omh setup", stdout)
+        self.assertIn("omh quickstart", stdout)
         self.assertIn("Agent chat with installed OMH skills", stdout)
         self.assertIn("First five minutes:", stdout)
         self.assertIn("If `omh` is not found", stdout)
@@ -42,6 +43,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("`omh` was not found", help_text)
         self.assertIn("setup", help_text)
         self.assertIn("Connect OMH workflows to the target Hermes profile", help_text)
+        self.assertIn("quickstart", help_text)
+        self.assertIn("Show the first-use OMH/Hermes path", help_text)
         self.assertIn("chat", help_text)
         self.assertIn("wrapper chat events", help_text)
         self.assertIn("omh cases recommend", help_text)
@@ -668,6 +671,49 @@ class CliTests(unittest.TestCase):
             command_check = {check["name"]: check for check in doctor_payload["checks"]}["command_path"]
             self.assertEqual(command_check["severity"], "ok")
             self.assertTrue(command_check["observed"])
+
+    def test_quickstart_card_shows_first_use_path_without_recording_runtime_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["setup", "--no-interactive"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH setup complete.", stdout)
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["quickstart"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH quickstart", stdout)
+            self.assertIn("Status: ready", stdout)
+            self.assertIn("Plugin bridge: ready locally", stdout)
+            self.assertIn("Live Hermes plugin use: not observed yet", stdout)
+            self.assertIn("Wrapper usage: not recorded yet", stdout)
+            self.assertIn("Use OMH request-to-handoff", stdout)
+            self.assertIn("A ready local plugin bridge is not proof", stdout)
+            self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
+            self.assertFalse((root / ".omh" / "runtime" / "wrapper_sessions").exists())
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["quickstart", "--source", "discord", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_quickstart_card/v1")
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["source"], "discord")
+            self.assertEqual(payload["local_status"]["plugin_bridge"]["status"], "ready_locally")
+            self.assertFalse(payload["local_status"]["plugin_runtime_observed"])
+            self.assertFalse(payload["local_status"]["plugin_runtime_active"])
+            self.assertEqual(payload["local_status"]["wrapper_usage"]["status"], "missing")
+            self.assertIn("request-to-handoff", payload["chat_prompts"][0]["expected_workflow"])
+            self.assertTrue(any(action["id"] == "record_wrapper_usage" for action in payload["wrapper_actions"]))
 
     def test_setup_recovers_bare_null_external_dirs_shape(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -89,6 +89,7 @@ from .mcp import (
     cmd_mcp_sessions,
 )
 from .plugin import _add_plugin_commands, cmd_plugin_observations, cmd_plugin_observe_host
+from .quickstart import _add_quickstart_commands, cmd_quickstart
 from .ops import (
     _add_ops_commands,
     cmd_ops_agent_review,
@@ -157,7 +158,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Quick start:\n"
             "  omh setup\n"
-            "  omh doctor\n\n"
+            "  omh doctor\n"
+            "  omh quickstart\n\n"
             "First five minutes:\n"
             "  1. Run setup, accepting the recommended choices.\n"
             "  2. Restart or reload Hermes Agent.\n"
@@ -209,6 +211,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     _add_top_level_commands(sub)
+    _add_quickstart_commands(sub)
     _add_docs_commands(sub)
     _add_harness_commands(sub)
     _add_cases_commands(sub)
@@ -252,6 +255,7 @@ when it can prove the command came from the install.sh-managed OMH venv.
 Start:
   omh setup              Install skills and connect them to Hermes
   omh doctor             Check local OMH health and registration
+  omh quickstart         Show what to do next in Hermes
   omh update             Refresh managed skills and update metadata
 
 First five minutes:
@@ -260,6 +264,7 @@ First five minutes:
   3. Ask Hermes the prompt below.
 
 Useful operator commands:
+  omh quickstart         Show first-use prompts and evidence boundaries
   omh recommend "risky refactor"
   omh cases recommend "daily competitor digest"
   omh cases readiness   Check the G1-G10 readiness rollup
