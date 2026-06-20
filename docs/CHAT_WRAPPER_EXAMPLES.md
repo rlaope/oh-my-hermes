@@ -150,6 +150,16 @@ recorded.
 That returns `chat_route_hint/v1` with a `chat_response` card the adapter can
 render immediately:
 
+The same primary-action rule applies to normal routed workflow cards, not only
+catalog capability questions. For example, `web-research`,
+`strategy-brief`, `code-review`, `gateway-intent-card`,
+`ops-observability-card`, and `report-package` responses should place the
+workflow `next_action` first, then a status action. A route such as
+`run_hermes_research`, `prepare_strategy_brief`,
+`prepare_review_or_followup_handoff`, `prepare_gateway_intent_card`,
+`prepare_ops_observability_card`, or `prepare_report_package` is still only a
+prepared wrapper action until observed work or evidence is recorded.
+
 ```text
 Hermes Agent  BOT
 [omh] img-summary looks relevant.

@@ -45,6 +45,7 @@ VISIBLE_ACTIONS = (
     "search_skills",
     "accept_plan",
     "revise_plan",
+    "present_plan",
     "prepare_handoff",
     "choose_executor",
     "show_prompt_handoff",
@@ -91,6 +92,7 @@ VISIBLE_ACTIONS = (
     "revise_research_sources",
     "confirm_cadence_delivery_tooling",
     "record_source_observation",
+    "prepare_visual_prompt_card",
     "show_visual_prompt_card",
     "copy_visual_prompt",
     "revise_visual_card",
@@ -102,6 +104,23 @@ VISIBLE_ACTIONS = (
     "record_visual_qa",
     "record_visual_delivery",
     "show_visual_status",
+    "run_hermes_research",
+    "prepare_strategy_brief",
+    "prepare_meeting_brief",
+    "triage_feedback",
+    "prepare_ops_review",
+    "present_app_delivery_loop",
+    "run_cto_loop",
+    "prepare_deploy_monitor_plan",
+    "prepare_review_or_followup_handoff",
+    "run_local_operator_check",
+    "prepare_operating_workflow",
+    "prepare_memory_review",
+    "prepare_coding_handoff",
+    "prepare_coding_runtime_handoff",
+    "prepare_operating_record",
+    "prepare_report_package",
+    "prepare_reliability_review",
     "prepare_scheduled_ops_blueprint",
     "prepare_research_department_plan",
     "prepare_material_package",
@@ -110,8 +129,12 @@ VISIBLE_ACTIONS = (
     "prepare_agent_board_card",
     "prepare_executor_runtime_readiness",
     "prepare_memory_curation_review",
+    "prepare_gateway_intent_card",
     "prepare_voice_operator_card",
     "prepare_toolbelt_readiness",
+    "prepare_ops_observability_card",
+    "refresh_status",
+    "prepare_agent_ops_review",
     "show_agent_ops_review",
     "choose_ops_lane",
     "prepare_research_lane",
@@ -332,9 +355,72 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "I will map the MCP, CLI, API, credential, and connector pieces this workflow needs, show what is "
         "observed versus missing, and suggest the safest setup or handoff next step."
     ),
+    "web-research": (
+        "I will keep this in Hermes as a source-backed research lane: define source boundaries, freshness, "
+        "version or jurisdiction scope, citation confidence, and retrieval gaps before any later plan or handoff."
+    ),
+    "strategy-brief": (
+        "I will prepare strategy options, tradeoffs, decision notes, and open questions in Hermes. Implementation "
+        "handoff stays disabled until an accepted decision creates explicit work."
+    ),
+    "meeting-brief": (
+        "I will prepare the agenda, context prompts, decision slots, and follow-up template. Prepared meeting "
+        "material is not evidence that the meeting happened."
+    ),
+    "feedback-triage": (
+        "I will cluster the signal, separate bug reports, requests, and questions, and recommend the next investigation, "
+        "plan, or handoff path without treating triage as implementation."
+    ),
+    "code-review": (
+        "I will prepare the review path: what needs checking, which claims need evidence, and what follow-up handoff "
+        "is needed if fixes are found. Review preparation is not a completed review."
+    ),
+    "report-package": (
+        "I will prepare the report package: source inputs, outline, missing numbers, approval points, and export or "
+        "delivery checks. The package is not delivered until observed evidence exists."
+    ),
+    "reliability-review": (
+        "I will prepare a reliability review with service boundaries, SLO or incident context, risk areas, and "
+        "remediation handoff options. Healthy status or incident closure still needs observed evidence."
+    ),
+    "gateway-intent-card": (
+        "I will normalize the gateway intent: origin, thread, delivery policy, silent updates, attachments, and "
+        "status-update behavior before any platform action is claimed."
+    ),
+    "ops-observability-card": (
+        "I will prepare a wrapper-safe observability card for token, cost, latency, run history, and failure-mode "
+        "signals while keeping local estimates separate from provider-observed truth."
+    ),
+    "operating-rhythm": (
+        "I will prepare the operating rhythm: cadence, meeting topics, decision records, owners, and follow-up "
+        "slots. Prepared operations notes are not evidence that the work happened."
+    ),
 }
 
 _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
+    "present_plan": ("present_plan", "Show plan"),
+    "assess_loopability": ("assess_loopability", "Assess loopability"),
+    "prepare_visual_prompt_card": ("prepare_visual_prompt_card", "Prepare image card"),
+    "prepare_agent_ops_review": ("prepare_agent_ops_review", "Open ops review"),
+    "start_ultraprocess": ("start_ultraprocess", "Start ultraprocess"),
+    "audit_learning_readiness": ("audit_learning_readiness", "Audit learning"),
+    "run_hermes_research": ("run_hermes_research", "Start research"),
+    "prepare_strategy_brief": ("prepare_strategy_brief", "Prepare strategy"),
+    "prepare_meeting_brief": ("prepare_meeting_brief", "Prepare brief"),
+    "triage_feedback": ("triage_feedback", "Triage feedback"),
+    "prepare_ops_review": ("prepare_ops_review", "Prepare ops review"),
+    "present_app_delivery_loop": ("present_app_delivery_loop", "Show delivery loop"),
+    "run_cto_loop": ("run_cto_loop", "Open team loop"),
+    "prepare_deploy_monitor_plan": ("prepare_deploy_monitor_plan", "Prepare deploy plan"),
+    "prepare_review_or_followup_handoff": ("prepare_review_or_followup_handoff", "Prepare review"),
+    "run_local_operator_check": ("run_local_operator_check", "Show local check"),
+    "prepare_operating_workflow": ("prepare_operating_workflow", "Prepare workflow"),
+    "prepare_memory_review": ("prepare_memory_review", "Review memory"),
+    "prepare_coding_handoff": ("prepare_coding_handoff", "Prepare coding handoff"),
+    "prepare_coding_runtime_handoff": ("prepare_coding_runtime_handoff", "Prepare runtime handoff"),
+    "prepare_operating_record": ("prepare_operating_record", "Prepare rhythm"),
+    "prepare_report_package": ("prepare_report_package", "Prepare report"),
+    "prepare_reliability_review": ("prepare_reliability_review", "Review reliability"),
     "prepare_scheduled_ops_blueprint": ("prepare_scheduled_ops_blueprint", "Prepare automation"),
     "prepare_research_department_plan": ("prepare_research_department_plan", "Prepare research flow"),
     "prepare_material_package": ("prepare_material_package", "Prepare package"),
@@ -343,8 +429,11 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_agent_board_card": ("prepare_agent_board_card", "Open agent board"),
     "prepare_executor_runtime_readiness": ("prepare_executor_runtime_readiness", "Check runtime"),
     "prepare_memory_curation_review": ("prepare_memory_curation_review", "Review memory"),
+    "prepare_gateway_intent_card": ("prepare_gateway_intent_card", "Open gateway card"),
     "prepare_voice_operator_card": ("prepare_voice_operator_card", "Open voice card"),
     "prepare_toolbelt_readiness": ("prepare_toolbelt_readiness", "Check toolbelt"),
+    "prepare_ops_observability_card": ("prepare_ops_observability_card", "Open observability"),
+    "refresh_status": ("refresh_status", "Refresh status"),
 }
 
 
