@@ -82,7 +82,7 @@ host-load evidence. A host or wrapper that actually observes bridge load or use
 can record `omh_mcp_host_session/v1` with `omh mcp observe-host`; that remains
 session evidence only.
 
-The optional plugin bridge has the same split. Local install/import/register
+The managed plugin bridge has the same split. Local install/import/register
 smoke proves the bundle is present and importable. Host or wrapper evidence that
 Hermes actually loaded or used the plugin is recorded separately with
 `omh plugin observe-host` as `omh_plugin_host_observation/v1`. Active readiness

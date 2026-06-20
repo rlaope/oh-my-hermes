@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 CAPABILITY_GAP_ROADMAP_SCHEMA_VERSION = "omh_capability_gap_roadmap/v1"
-BASELINE_PRODUCT_CAPABILITIES = ("managed_skills", "external_skill_dirs", "target_registry")
+BASELINE_PRODUCT_CAPABILITIES = ("managed_skills", "external_skill_dirs", "target_registry", "omh_plugin_bundle")
 PLUGIN_SMOKE_CAPABILITIES = ("plugin_import_smoke", "plugin_register_smoke")
 OPTIONAL_HOST_CAPABILITIES = ("native_hooks", "apps", "native_skill_metadata", "mcp_host_config")
 
@@ -24,36 +24,15 @@ def build_capability_gap_roadmap(probe_payload: dict[str, object]) -> dict[str, 
                 "kind": "product_gap",
                 "priority": 10,
                 "label": "Run OMH setup",
-                "why": "Managed skills, Hermes registration, or target registry evidence is missing.",
+                "why": "Managed skills, Hermes registration, target registry, or plugin bridge evidence is missing.",
                 "command": "omh setup",
                 "boundary": "Setup prepares and registers local OMH workflow surfaces; it is not workflow execution evidence.",
                 "capabilities": [item["capability"] for item in baseline_gaps],
             }
         )
 
-    optional_plugin_gap = None
-    if _status(capabilities, "omh_plugin_bundle") in {"missing", "unknown"}:
-        optional_plugin_gap = _gap_item(
-            capabilities,
-            "omh_plugin_bundle",
-            category="optional_surface",
-            severity="optional",
-        )
-        actions.append(
-            {
-                "id": "install_optional_plugin",
-                "kind": "optional_surface",
-                "priority": 60,
-                "label": "Install the optional OMH plugin bridge",
-                "why": "The skill-first path works without the plugin, but plugin tools can expose compact status and role context inside Hermes when the host loads them.",
-                "command": "omh setup --with-plugin",
-                "boundary": "Local plugin install/import/register smoke is still not proof that Hermes loaded or used the plugin.",
-                "capabilities": ["omh_plugin_bundle"],
-            }
-        )
-
     plugin_smoke_gaps = [
-        _gap_item(capabilities, name, category="optional_surface", severity="repair")
+        _gap_item(capabilities, name, category="product_gap", severity="repair")
         for name in PLUGIN_SMOKE_CAPABILITIES
         if _status(capabilities, name) == "missing"
     ]
@@ -61,12 +40,12 @@ def build_capability_gap_roadmap(probe_payload: dict[str, object]) -> dict[str, 
     if plugin_smoke_gaps:
         actions.append(
             {
-                "id": "repair_optional_plugin",
-                "kind": "optional_surface",
+                "id": "repair_plugin_bridge",
+                "kind": "product_gap",
                 "priority": 25,
-                "label": "Repair the optional OMH plugin bridge",
-                "why": "The optional plugin bundle exists, but its local import/register smoke check is failing.",
-                "command": "omh setup --with-plugin --force",
+                "label": "Repair the managed OMH plugin bridge",
+                "why": "The managed plugin bundle exists, but its local import/register smoke check is failing.",
+                "command": "omh setup --force",
                 "boundary": "Repairing the local plugin bridge is not proof that Hermes loaded it or that any workflow executed.",
                 "capabilities": [item["capability"] for item in plugin_smoke_gaps],
             }
@@ -156,12 +135,10 @@ def build_capability_gap_roadmap(probe_payload: dict[str, object]) -> dict[str, 
             }
         )
 
-    if optional_plugin_gap:
-        optional_unknowns.append(optional_plugin_gap)
-    optional_unknowns.extend(plugin_smoke_gaps)
+    baseline_gaps.extend(plugin_smoke_gaps)
 
     actions.sort(key=_action_priority)
-    product_gap_count = len(baseline_gaps)
+    product_gap_count = len({str(item["capability"]) for item in baseline_gaps if item})
     evidence_gap_count = len({str(item["capability"]) for item in evidence_gaps if item})
     optional_count = len({str(item["capability"]) for item in optional_unknowns if item})
 

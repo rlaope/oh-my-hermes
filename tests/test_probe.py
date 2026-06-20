@@ -45,6 +45,7 @@ class ProbeCliTests(unittest.TestCase):
             self.assertGreaterEqual(roadmap["summary"]["baseline_product_gaps"], 2)
             self.assertFalse(roadmap["summary"]["baseline_ready"])
             self.assertEqual(roadmap["next_actions"][0]["id"], "run_setup")
+            self.assertIn("omh_plugin_bundle", roadmap["next_actions"][0]["capabilities"])
             self.assertIn("not workflow execution evidence", roadmap["next_actions"][0]["boundary"])
 
             self.assertEqual(run_cli(base + ["setup", "--with-plugin"])[0], 0)
@@ -169,7 +170,7 @@ class ProbeCliTests(unittest.TestCase):
             self.assertTrue(payload["plugin_distribution_ready"])
             self.assertFalse(payload["native_integration_claim_ready"])
 
-    def test_probe_roadmap_points_to_repair_for_broken_optional_plugin(self) -> None:
+    def test_probe_roadmap_points_to_repair_for_broken_plugin_bridge(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             omh_home = root / ".omh"
@@ -190,11 +191,11 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(caps["plugin_register_smoke"]["status"], "missing")
             self.assertFalse(payload["plugin_distribution_ready"])
             roadmap = payload["capability_gap_roadmap"]
-            self.assertEqual(roadmap["summary"]["baseline_product_gaps"], 0)
+            self.assertEqual(roadmap["summary"]["baseline_product_gaps"], 2)
             actions = {action["id"]: action for action in roadmap["next_actions"]}
-            self.assertIn("repair_optional_plugin", actions)
-            self.assertEqual(actions["repair_optional_plugin"]["command"], "omh setup --with-plugin --force")
-            self.assertIn("not proof that Hermes loaded", actions["repair_optional_plugin"]["boundary"])
+            self.assertIn("repair_plugin_bridge", actions)
+            self.assertEqual(actions["repair_plugin_bridge"]["command"], "omh setup --force")
+            self.assertIn("not proof that Hermes loaded", actions["repair_plugin_bridge"]["boundary"])
 
 
 if __name__ == "__main__":

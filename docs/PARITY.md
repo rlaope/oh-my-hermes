@@ -39,7 +39,7 @@ implementation or claim runtime behavior it did not observe.
 
 | Capability axis | OMH status | OMH surface | Missing or intentionally delegated |
 | --- | --- | --- | --- |
-| Skill and plugin distribution | Available | Tap-compatible `skills/*/SKILL.md`, `omh setup`, optional `~/.hermes/plugins/omh` bridge, and `omh plugin observe-host` for host-observed plugin load/use. | Live plugin load/use must still be recorded by the host or wrapper; local install smoke is not runtime evidence. |
+| Skill and plugin distribution | Available | Tap-compatible `skills/*/SKILL.md`, `omh setup`, managed `~/.hermes/plugins/omh` bridge, and `omh plugin observe-host` for host-observed plugin load/use. | Live plugin load/use must still be recorded by the host or wrapper; local install smoke is not runtime evidence. |
 | Specialist role/profile system | Available | Skill catalog metadata, operating models, optional visible profile packs, wrapper role narration, plugin `omh_role`, and `[omh-role:name]` context injection. | Observed role execution still requires wrapper or runtime evidence; role context is not a hidden live agent. |
 | Bounded evidence probe | Available | Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as doctor, harness validation, docs checks, unittest, compileall, and whitespace checks. | It is not a general shell, executor dispatch, PR review, CI, merge, or live Hermes plugin-load signal. |
 | Team, swarm, and worker protocol | Available | `team`, `ultrawork`, `omh runtime team-readiness`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | Live worker launch and pane/session management still require the selected host runtime to act and record observations. |
@@ -55,7 +55,7 @@ implementation or claim runtime behavior it did not observe.
 - `omh probe --parity` so operators and wrappers can inspect the matrix beside
   the current local capability probe.
 - `omh probe --roadmap`, and the roadmap section inside `omh probe --parity`,
-  so operators can see whether the next step is setup, optional plugin/MCP
+  so operators can see whether the next step is setup or repair, optional MCP
   configuration, wrapper usage evidence, or host runtime observation.
 - A plugin bridge with native role context lookup, role marker injection,
   delegate marker validation, session-end checkpoints, and bounded
