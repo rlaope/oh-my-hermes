@@ -503,6 +503,10 @@ _WORKFLOW_LEARNING_PHRASES = (
     "learn from this workflow",
     "learn from this workflow run",
     "learn from this run",
+    "record this as workflow learning",
+    "record this workflow learning",
+    "record this as a workflow learning trace",
+    "record this workflow learning trace",
     "improve the skill next time",
     "improve this skill next time",
     "improve routing next time",
@@ -524,6 +528,38 @@ _WORKFLOW_LEARNING_PHRASES = (
     "omh 안 썼",
     "워크플로 누락",
     "라우팅 누락",
+)
+_WORKFLOW_LEARNING_ACTION_TOKENS = _normalized_token_set(
+    {
+        "add",
+        "audit",
+        "case",
+        "candidate",
+        "eval",
+        "evaluate",
+        "export",
+        "fix",
+        "future",
+        "improve",
+        "improvement",
+        "missed",
+        "missing",
+        "next",
+        "propose",
+        "record",
+        "recorded",
+        "regression",
+        "replay",
+        "review",
+        "trace",
+        "why",
+        "개선",
+        "기록",
+        "누락",
+        "리뷰",
+        "왜",
+        "회귀",
+    }
 )
 _WORKFLOW_LEARNING_CONTEXT_TOKENS = _normalized_token_set(
     {
@@ -1465,7 +1501,8 @@ def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[st
     learning = bool({"learn", "learning", "학습"} & query_tokens)
     workflow_or_skill = bool({"workflow", "run", "trace", "skill", "routing", "route", "워크플로우", "스킬", "라우팅"} & query_tokens)
     future_improvement = bool({"improve", "improvement", "next", "future", "regression", "개선", "회귀"} & query_tokens)
-    if learning and workflow_or_skill:
+    feedback_action = bool(_WORKFLOW_LEARNING_ACTION_TOKENS & query_tokens)
+    if learning and workflow_or_skill and feedback_action:
         return True
     if future_improvement and workflow_or_skill and bool(_WORKFLOW_LEARNING_CONTEXT_TOKENS & query_tokens):
         return True
