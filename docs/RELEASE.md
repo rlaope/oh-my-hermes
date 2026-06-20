@@ -63,6 +63,7 @@ python3 -m omh.cli release skill-content-smoke --json
 python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli cases replay --json
+python3 -m omh.cli cases readiness --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
@@ -112,6 +113,12 @@ The same gate replays G1-G10 natural-language use-case fixtures through
 synthetic English/Korean operator corpus. It is not evidence that a live Hermes
 profile selected the route in chat or that any connector, executor, review, CI,
 merge, delivery, or billing event happened.
+
+The readiness rollup, `omh cases readiness --json`, combines the catalog,
+demo-card, artifact-bundle, replay, and optional local artifact-store states
+into one operator-readable card. It should be ready before a release, but it
+still proves only local deterministic contracts, not live Hermes selection or
+runtime execution.
 
 ## Hermes CLI Install Smoke
 

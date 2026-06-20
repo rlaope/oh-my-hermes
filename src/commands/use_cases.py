@@ -12,6 +12,7 @@ from ..use_cases import (
     list_use_cases,
     recommend_use_cases,
     replay_use_case_fixtures,
+    use_case_readiness,
     validate_use_case_artifact_store,
     validate_use_cases,
     write_all_use_case_artifacts,
@@ -108,6 +109,15 @@ def cmd_cases_artifact_validate(args: argparse.Namespace) -> int:
     else:
         _print_cases_artifact_validate_summary(payload)
     return 0 if payload["ok"] else 1
+
+
+def cmd_cases_readiness(args: argparse.Namespace) -> int:
+    payload = use_case_readiness(_paths(args))
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_cases_readiness_summary(payload)
+    return 0 if payload["blocking_failures"] == 0 else 1
 
 
 def cmd_cases_replay(args: argparse.Namespace) -> int:
@@ -324,6 +334,39 @@ def _print_cases_artifact_validate_summary(payload: dict[str, object]) -> None:
     print("  For machine-readable output, rerun with `--json`.")
 
 
+def _print_cases_readiness_summary(payload: dict[str, object]) -> None:
+    print("OMH G1-G10 use-case readiness")
+    print("Summary")
+    print(f"  Status: {payload.get('status')}")
+    print(f"  Score: {payload.get('score')}/100")
+    print(f"  Blocking failures: {payload.get('blocking_failures')}")
+    print(f"  Warnings: {payload.get('warning_count')}")
+    gates = payload.get("gates", [])
+    if not isinstance(gates, list):
+        gates = []
+    print("Gates")
+    for gate in gates:
+        if not isinstance(gate, dict):
+            continue
+        marker = "required" if gate.get("blocking") else "optional"
+        print(f"  - {gate.get('id')}: {gate.get('status')} [{marker}]")
+        print(f"    {gate.get('summary')}")
+        errors = gate.get("errors", [])
+        if isinstance(errors, list) and errors:
+            for error in errors[:5]:
+                print(f"    error: {error}")
+            if len(errors) > 5:
+                print(f"    ... {len(errors) - 5} more")
+    next_actions = payload.get("next_actions", [])
+    if isinstance(next_actions, list) and next_actions:
+        print("Next")
+        for action in next_actions:
+            print(f"  - {action}")
+    print("Boundary")
+    print(f"  {payload.get('boundary')}")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
 def _print_cases_replay_summary(payload: dict[str, object]) -> None:
     print("OMH G1-G10 use-case replay")
     print("Summary")
@@ -440,6 +483,10 @@ def _add_cases_commands(sub) -> None:
     artifact_validate_cmd = cases_sub.add_parser("artifact-validate")
     artifact_validate_cmd.add_argument("--json", action="store_true", help="Print machine-readable validation for local use-case artifacts.")
     artifact_validate_cmd.set_defaults(func=cmd_cases_artifact_validate)
+
+    readiness_cmd = cases_sub.add_parser("readiness")
+    readiness_cmd.add_argument("--json", action="store_true", help="Print the full machine-readable G1-G10 readiness rollup.")
+    readiness_cmd.set_defaults(func=cmd_cases_readiness)
 
     replay_cmd = cases_sub.add_parser("replay")
     replay_cmd.add_argument("--limit", type=int, default=None, help="Replay only the first N deterministic use-case fixtures.")

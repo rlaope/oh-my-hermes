@@ -61,6 +61,7 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
         self.assertIn("omh cases artifact --all --write", cases)
         self.assertIn(".omh/use-cases/artifacts/", cases)
         self.assertIn("omh cases replay --json", cases)
+        self.assertIn("omh cases readiness --json", cases)
         self.assertIn("Chat Wrapper Backend Flow", install)
         self.assertIn("Codex lifecycle calls", install)
         self.assertIn("What Gets Recorded", install)
@@ -147,6 +148,41 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
                 self.assertEqual(result["status"], "passed")
                 self.assertEqual(result["expected"]["goal"], result["observed"]["goal"])
                 self.assertEqual(result["expected"]["primary_skill"], result["observed"]["primary_skill"])
+
+    def test_g1_to_g10_use_case_readiness_rollup_separates_optional_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            omh_home = Path(tmp) / ".omh"
+
+            code, stdout, stderr = run_cli(["--omh-home", str(omh_home), "cases", "readiness", "--json"], output_json=False)
+
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual(stderr, "")
+            readiness = json.loads(stdout)
+            self.assertEqual(readiness["schema_version"], "omh_use_case_readiness/v1")
+            self.assertEqual(readiness["status"], "ready")
+            self.assertEqual(readiness["score"], 100)
+            self.assertEqual(readiness["blocking_failures"], 0)
+            self.assertEqual(readiness["expected_goals"], [f"G{index}" for index in range(1, 11)])
+            gates = {gate["id"]: gate for gate in readiness["gates"]}
+            self.assertEqual(gates["catalog"]["status"], "passed")
+            self.assertEqual(gates["demo_cards"]["status"], "passed")
+            self.assertEqual(gates["artifact_bundle"]["status"], "passed")
+            self.assertEqual(gates["replay"]["status"], "passed")
+            self.assertFalse(gates["local_artifact_store"]["blocking"])
+            self.assertEqual(gates["local_artifact_store"]["status"], "not_written")
+            self.assertIn("not evidence", readiness["boundary"])
+
+            code, _, stderr = run_cli(["--omh-home", str(omh_home), "cases", "artifact", "--all", "--write", "--json"], output_json=False)
+            self.assertEqual(code, 0, stderr)
+
+            code, stdout, stderr = run_cli(["--omh-home", str(omh_home), "cases", "readiness", "--json"], output_json=False)
+
+            self.assertEqual(code, 0, stderr)
+            self.assertEqual(stderr, "")
+            readiness = json.loads(stdout)
+            gates = {gate["id"]: gate for gate in readiness["gates"]}
+            self.assertEqual(gates["local_artifact_store"]["status"], "passed")
+            self.assertEqual(gates["local_artifact_store"]["details"]["artifact_count"], 10)
 
 
 if __name__ == "__main__":

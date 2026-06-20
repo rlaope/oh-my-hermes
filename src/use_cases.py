@@ -19,6 +19,7 @@ USE_CASE_ARTIFACT_COLLECTION_SCHEMA_VERSION = "omh_use_case_artifact_collection/
 USE_CASE_ARTIFACT_WRITE_SCHEMA_VERSION = "omh_use_case_artifact_write/v1"
 USE_CASE_ARTIFACT_INDEX_SCHEMA_VERSION = "omh_use_case_artifact_index/v1"
 USE_CASE_REPLAY_SCHEMA_VERSION = "omh_use_case_replay/v1"
+USE_CASE_READINESS_SCHEMA_VERSION = "omh_use_case_readiness/v1"
 _ARTIFACT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")
 
 
@@ -644,6 +645,79 @@ def replay_use_case_fixtures(*, limit: int | None = None) -> dict[str, Any]:
     }
 
 
+def use_case_readiness(paths: OmhPaths | None = None) -> dict[str, Any]:
+    catalog = validate_use_cases()
+    demo_collection = demo_all_use_cases()
+    demo_errors = _validate_demo_collection(demo_collection)
+    artifact_bundle = build_all_use_case_artifacts()
+    artifact_errors = _validate_artifact_collection(artifact_bundle)
+    replay = replay_use_case_fixtures()
+    replay_errors = _validate_replay_result(replay)
+
+    gates = [
+        _readiness_gate(
+            "catalog",
+            "Catalog registration",
+            "passed" if catalog.get("ok") else "failed",
+            True,
+            f"{len(catalog.get('validated', []))}/{len(USE_CASES)} use-case surface(s) registered",
+            "omh cases validate --json",
+            catalog.get("errors", []),
+        ),
+        _readiness_gate(
+            "demo_cards",
+            "Wrapper demo cards",
+            "passed" if not demo_errors else "failed",
+            True,
+            f"{len(demo_collection.get('cards', []))}/{len(USE_CASES)} wrapper card(s) render",
+            "omh cases demo --all --json",
+            demo_errors,
+        ),
+        _readiness_gate(
+            "artifact_bundle",
+            "Prepared artifact bundle",
+            "passed" if not artifact_errors else "failed",
+            True,
+            f"{len(artifact_bundle.get('artifacts', []))}/{len(USE_CASES)} prepared artifact(s) render",
+            "omh cases artifact --all --json",
+            artifact_errors,
+        ),
+        _readiness_gate(
+            "replay",
+            "Natural-language replay fixtures",
+            "passed" if not replay_errors else "failed",
+            True,
+            f"{replay.get('passed')}/{replay.get('total')} deterministic fixture(s) pass",
+            "omh cases replay --json",
+            replay_errors,
+        ),
+        _local_artifact_store_gate(paths),
+    ]
+    blocking_failures = [gate for gate in gates if gate["blocking"] and gate["status"] != "passed"]
+    warnings = [gate for gate in gates if not gate["blocking"] and gate["status"] != "passed"]
+    next_actions = []
+    if blocking_failures:
+        next_actions.append("Fix blocking gates, then rerun `omh cases readiness`.")
+    if any(gate["id"] == "local_artifact_store" and gate["status"] != "passed" for gate in gates):
+        next_actions.append("Optional: write local runbook artifacts with `omh cases artifact --all --write`.")
+    next_actions.append("Use `omh cases readiness --json` when a wrapper or release check needs the full payload.")
+    return {
+        "schema_version": USE_CASE_READINESS_SCHEMA_VERSION,
+        "status": "ready" if not blocking_failures else "needs_attention",
+        "score": 100 if not blocking_failures else round(((len(gates) - len(warnings) - len(blocking_failures)) / max(1, len(gates) - len(warnings))) * 100),
+        "blocking_failures": len(blocking_failures),
+        "warning_count": len(warnings),
+        "expected_goals": [case.goal for case in USE_CASES],
+        "gates": gates,
+        "next_actions": next_actions,
+        "boundary": (
+            "Use-case readiness proves deterministic local catalog, card, artifact, and replay contracts only. "
+            "It is not evidence that Hermes selected a workflow in live chat, ran connectors, generated files, "
+            "changed memory, dispatched an executor, reviewed code, passed CI, merged, delivered messages, or spent real provider budget."
+        ),
+    }
+
+
 def validate_use_cases() -> dict[str, Any]:
     from .playbooks import list_playbooks
     from .skill_pack import (
@@ -715,6 +789,160 @@ def validate_use_cases() -> dict[str, Any]:
         "errors": errors,
         "boundary": "Validation proves the 10 OMH feature surfaces are routable and registered with the right exposure, playbook, harness, and invocation metadata; it is not proof that any external runtime action happened.",
     }
+
+
+def _readiness_gate(
+    gate_id: str,
+    label: str,
+    status: str,
+    blocking: bool,
+    summary: str,
+    command: str,
+    errors: object | None = None,
+    *,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": gate_id,
+        "label": label,
+        "status": status,
+        "blocking": blocking,
+        "summary": summary,
+        "command": command,
+        "errors": errors if isinstance(errors, list) else ([] if errors is None else [errors]),
+        "details": details or {},
+    }
+
+
+def _validate_demo_collection(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if payload.get("schema_version") != USE_CASE_DEMO_COLLECTION_SCHEMA_VERSION:
+        errors.append("schema_version must be omh_use_case_demo_collection/v1")
+    cards = payload.get("cards", [])
+    if not isinstance(cards, list):
+        return errors + ["cards must be a list"]
+    if len(cards) != len(USE_CASES):
+        errors.append(f"expected {len(USE_CASES)} cards, observed {len(cards)}")
+    expected_goals = [case.goal for case in USE_CASES]
+    observed_goals = [str(card.get("goal", "")) for card in cards if isinstance(card, dict)]
+    if observed_goals != expected_goals:
+        errors.append("cards must be ordered G1-G10")
+    for card in cards:
+        if not isinstance(card, dict):
+            errors.append("card must be an object")
+            continue
+        goal = str(card.get("goal", ""))
+        case = _find_case(goal)
+        prefix = goal or "<unknown>"
+        if card.get("schema_version") != USE_CASE_DEMO_CARD_SCHEMA_VERSION:
+            errors.append(f"{prefix}: schema_version must be omh_use_case_demo_card/v1")
+        route = card.get("route") if isinstance(card.get("route"), dict) else {}
+        wrapper = card.get("wrapper_card") if isinstance(card.get("wrapper_card"), dict) else {}
+        evidence = card.get("evidence") if isinstance(card.get("evidence"), dict) else {}
+        actions = card.get("actions") if isinstance(card.get("actions"), list) else []
+        if case is None:
+            errors.append(f"{prefix}: goal must reference a known G1-G10 use case")
+            continue
+        if route.get("primary_skill") != case.primary_skill:
+            errors.append(f"{prefix}: route.primary_skill must match catalog")
+        if route.get("next_action") != case.next_action:
+            errors.append(f"{prefix}: route.next_action must match catalog")
+        if wrapper.get("component") != "omh_use_case_card":
+            errors.append(f"{prefix}: wrapper_card.component must be omh_use_case_card")
+        if wrapper.get("status") != "prepared_not_observed":
+            errors.append(f"{prefix}: wrapper_card.status must be prepared_not_observed")
+        if evidence.get("state") != "prepared_not_observed":
+            errors.append(f"{prefix}: evidence.state must be prepared_not_observed")
+        if "not" not in str(evidence.get("claim_boundary", "")).casefold():
+            errors.append(f"{prefix}: evidence.claim_boundary must keep a not-evidence guard")
+        if not actions or not isinstance(actions[0], dict) or actions[0].get("id") != case.next_action:
+            errors.append(f"{prefix}: first action must match the next action")
+    return errors
+
+
+def _validate_artifact_collection(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if payload.get("schema_version") != USE_CASE_ARTIFACT_COLLECTION_SCHEMA_VERSION:
+        errors.append("schema_version must be omh_use_case_artifact_collection/v1")
+    artifacts = payload.get("artifacts", [])
+    if not isinstance(artifacts, list):
+        return errors + ["artifacts must be a list"]
+    if len(artifacts) != len(USE_CASES):
+        errors.append(f"expected {len(USE_CASES)} artifacts, observed {len(artifacts)}")
+    expected_goals = [case.goal for case in USE_CASES]
+    observed_goals = [str(artifact.get("goal", "")) for artifact in artifacts if isinstance(artifact, dict)]
+    if observed_goals != expected_goals:
+        errors.append("artifacts must be ordered G1-G10")
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            errors.append("artifact must be an object")
+            continue
+        for error in validate_use_case_artifact(artifact):
+            errors.append(f"{artifact.get('goal', '<unknown>')}: {error}")
+    return errors
+
+
+def _validate_replay_result(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if payload.get("schema_version") != USE_CASE_REPLAY_SCHEMA_VERSION:
+        errors.append("schema_version must be omh_use_case_replay/v1")
+    if payload.get("status") != "passed":
+        errors.append(f"status must be passed, observed {payload.get('status')}")
+    if payload.get("passed") != payload.get("expected_total"):
+        errors.append(f"expected {payload.get('expected_total')} passing fixture(s), observed {payload.get('passed')}")
+    if payload.get("covered_goals") != [case.goal for case in USE_CASES]:
+        errors.append("covered_goals must include G1-G10")
+    results = payload.get("results", [])
+    if not isinstance(results, list):
+        return errors + ["results must be a list"]
+    for result in results:
+        if isinstance(result, dict) and result.get("status") != "passed":
+            errors.append(f"{result.get('fixture_id', '<unknown>')}: {result.get('errors', [])}")
+    return errors
+
+
+def _local_artifact_store_gate(paths: OmhPaths | None) -> dict[str, Any]:
+    if paths is None:
+        return _readiness_gate(
+            "local_artifact_store",
+            "Local artifact store",
+            "not_checked",
+            False,
+            "Local artifact store was not checked because no OMH paths were supplied",
+            "omh cases artifact-validate --json",
+        )
+    validation = validate_use_case_artifact_store(paths)
+    artifact_count = int(validation.get("artifact_count", 0))
+    expected_count = int(validation.get("expected_count", len(USE_CASES)))
+    errors = validation.get("errors", [])
+    missing = validation.get("missing_goals", [])
+    if errors:
+        status = "warning"
+        summary = f"{artifact_count}/{expected_count} local artifact(s) readable; repair warnings before relying on the local cache"
+    elif artifact_count == 0:
+        status = "not_written"
+        summary = f"0/{expected_count} local artifact(s) written; optional for wrapper QA and demos"
+    elif missing:
+        status = "partial"
+        summary = f"{artifact_count}/{expected_count} local artifact(s) written; {len(missing)} goal(s) missing"
+    else:
+        status = "passed"
+        summary = f"{artifact_count}/{expected_count} local artifact(s) written and valid"
+    return _readiness_gate(
+        "local_artifact_store",
+        "Local artifact store",
+        status,
+        False,
+        summary,
+        "omh cases artifact-validate --json",
+        errors,
+        details={
+            "artifact_count": artifact_count,
+            "expected_count": expected_count,
+            "missing_goals": missing,
+            "index_authority": validation.get("index_authority", ""),
+        },
+    )
 
 
 def _proof_surface_supported(surface: str, *, playbook_ids: set[str], harness_names: set[str]) -> bool:
