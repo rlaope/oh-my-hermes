@@ -603,8 +603,11 @@ def awareness_primer_payload() -> dict[str, object]:
             "or generic tools."
         ),
         "all_skill_context_rule": (
-            "Carry this across every OMH skill: match intent to a lane, name adjacent "
-            "workflows, and do not dismiss OMH just because a generic tool can render or execute the final step."
+            "Across every OMH skill: match intent to a lane, name adjacent workflows, "
+            "and do not dismiss OMH because a generic tool can render or execute."
+        ),
+        "generic_tool_checkpoint": (
+            "Before generic tools, check OMH prep/status/learning; if relevant, name the workflow first."
         ),
         "skill_coverage": "Every generated workflow skill carries this rail.",
         "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
@@ -692,6 +695,7 @@ def awareness_primer_context() -> str:
             str(payload["product_context"]),
             str(payload["first_turn_rule"]),
             str(payload["all_skill_context_rule"]),
+            str(payload["generic_tool_checkpoint"]),
             str(payload["skill_coverage"]),
             str(payload["chat_rule"]),
             f"Pattern cards: {pattern_line}.",
@@ -725,6 +729,8 @@ def awareness_primer_markdown() -> str:
             str(payload["first_turn_rule"]),
             "",
             str(payload["all_skill_context_rule"]),
+            "",
+            str(payload["generic_tool_checkpoint"]),
             "",
             str(payload["skill_coverage"]),
             "",
@@ -767,6 +773,7 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
             f"- {lane_line}",
             "- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.",
             f"- Cross-skill context: {payload['all_skill_context_rule']}",
+            "- Generic-tool checkpoint: check OMH prep/status/learning before image/file/search/coding tools.",
             f"- Coverage: {payload['skill_coverage']}",
             f"- {payload['chat_rule']}",
             f"- Boundary: {payload['evidence_boundary']}",

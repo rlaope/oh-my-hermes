@@ -50,7 +50,9 @@ OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work,
 
 When a request asks for planning, research, ops records, files/materials, visual summaries, image cards, automation, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
 
-Carry this across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH just because a generic tool can render or execute the final step.
+Across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH because a generic tool can render or execute.
+
+Before generic tools, check OMH prep/status/learning; if relevant, name the workflow first.
 
 Every generated workflow skill carries this rail.
 

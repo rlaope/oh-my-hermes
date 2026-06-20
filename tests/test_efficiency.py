@@ -100,10 +100,17 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("Common cues:", awareness_primer_context())
         self.assertIn("Pattern cards:", awareness_primer_context())
         self.assertIn("image cards/infographics -> img-summary", awareness_primer_context())
+        self.assertIn("check OMH prep/status/learning", awareness_primer_context())
         self.assertIn("Workflow context cards", awareness_primer_markdown())
         self.assertIn("Common cues before generic tools", awareness_primer_markdown())
+        self.assertIn("check OMH prep/status/learning", awareness_primer_markdown())
         self.assertEqual(combined.count("## OMH Context Rail"), len(workflow_skill_names))
         self.assertEqual(combined.count("## OMH Awareness Primer"), 1)
+        for name in workflow_skill_names:
+            self.assertIn(
+                "Generic-tool checkpoint: check OMH prep/status/learning",
+                awareness_workflow_context_markdown(name),
+            )
 
     def test_omh_awareness_lanes_cover_installable_skills(self) -> None:
         payload = awareness_primer_payload()
@@ -120,6 +127,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("img-summary", cards["materials_and_visuals"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
+        self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
         for card in cards.values():
             self.assertTrue(card["label"])
             self.assertTrue(card["user_examples"])

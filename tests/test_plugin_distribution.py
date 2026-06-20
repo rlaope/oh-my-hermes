@@ -345,6 +345,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("consider OMH before generic chat or generic tools", context)
             self.assertIn("every OMH skill", context)
             self.assertIn("generic tool can render or execute", context)
+            self.assertIn("check OMH prep/status/learning", context)
             self.assertIn("Every generated workflow skill", context)
             self.assertIn("img-summary", context)
             self.assertIn("materials-package", context)
@@ -381,6 +382,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("[OMH Awareness]", mid_session_visual_context["context"])
             self.assertIn("img-summary", mid_session_visual_context["context"])
             self.assertIn("generic tool can render or execute", mid_session_visual_context["context"])
+            self.assertIn("check OMH prep/status/learning", mid_session_visual_context["context"])
             self.assertNotIn("회의록을 세로 요약 이미지 카드로 만들어줘", mid_session_visual_context["context"])
 
             mid_session_generic_context = ctx.hooks["pre_llm_call"](
