@@ -249,8 +249,8 @@ files remain an explicit advanced option.
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |
 
 Advanced team presets, plugin status helpers, the optional MCP bridge with
-host-session evidence records, runtime observation, and release smoke commands
-are covered in the documentation below.
+host-specific config recipes, host-session evidence records, runtime
+observation, and release smoke commands are covered in the documentation below.
 
 <br>
 

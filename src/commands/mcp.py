@@ -4,8 +4,10 @@ import argparse
 
 from ..installer import OmhError
 from ..mcp_bridge import (
+    MCP_HOST_CONFIG_RECIPE_HOSTS,
     MCP_HOST_SESSION_EVENTS,
     MCP_HOST_SESSION_STATUSES,
+    build_mcp_host_config_recipe,
     build_mcp_manifest,
     read_mcp_host_sessions,
     record_mcp_host_session,
@@ -20,6 +22,20 @@ def cmd_mcp_manifest(args: argparse.Namespace) -> int:
         command=args.command,
         include_absolute_homes=not args.portable,
     )
+    _print_json(payload)
+    return 0
+
+
+def cmd_mcp_config_recipe(args: argparse.Namespace) -> int:
+    try:
+        payload = build_mcp_host_config_recipe(
+            _paths(args),
+            host=args.host,
+            command=args.command,
+            include_absolute_homes=not args.portable,
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     _print_json(payload)
     return 0
 
@@ -88,6 +104,27 @@ def _add_mcp_commands(sub) -> None:
         help="Omit absolute --omh-home/--hermes-home args so the host inherits its environment.",
     )
     manifest.set_defaults(func=cmd_mcp_manifest)
+
+    config_recipe = mcp_sub.add_parser(
+        "config-recipe",
+        help="Print a host-specific copy-paste MCP config recipe without mutating host files.",
+    )
+    config_recipe.add_argument(
+        "--host",
+        default="generic",
+        help=f"Target host recipe ({', '.join(MCP_HOST_CONFIG_RECIPE_HOSTS)}). Common aliases are accepted.",
+    )
+    config_recipe.add_argument(
+        "--command",
+        default="omh",
+        help="Command path the MCP host should launch. Use an absolute installed omh path when needed.",
+    )
+    config_recipe.add_argument(
+        "--portable",
+        action="store_true",
+        help="Omit absolute --omh-home/--hermes-home args so the host inherits its environment.",
+    )
+    config_recipe.set_defaults(func=cmd_mcp_config_recipe)
 
     serve = mcp_sub.add_parser(
         "serve",

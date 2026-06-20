@@ -475,7 +475,9 @@ host load, connector invocation, or coding execution.
 
 The MCP bridge is intentionally narrow. `omh mcp serve` speaks newline-delimited
 stdio JSON-RPC and exposes only `omh_status`, `omh_recommend`, and `omh_probe`.
-It does not expose arbitrary shell commands, mutate host MCP configuration,
+`omh mcp config-recipe --host ...` can print host-shaped config snippets for
+Claude Code, Codex, OpenCode, Cursor, and generic MCP hosts, but it does not
+mutate those host files. The bridge does not expose arbitrary shell commands,
 call external APIs, dispatch coding executors, or prove a specific Hermes host
 loaded the bridge.
 When a host or wrapper does observe bridge load or use, it can record

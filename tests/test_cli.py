@@ -932,6 +932,11 @@ class CliTests(unittest.TestCase):
             self.assertTrue(mcp["requested"])
             self.assertFalse(mcp["observed"])
             self.assertEqual(mcp["bridge"]["manifest_command"], "omh mcp manifest")
+            self.assertEqual(mcp["bridge"]["host_config_recipes_command"], "omh mcp config-recipe --host <host>")
+            self.assertEqual(
+                mcp["bridge"]["known_recipe_hosts"],
+                ["generic", "claude-code", "codex", "opencode", "cursor"],
+            )
             self.assertEqual(mcp["bridge"]["server_command"], "omh mcp serve")
             self.assertIn("observe-host", mcp["bridge"]["host_observation_command"])
             self.assertIn("omh_probe", mcp["bridge"]["tools"])

@@ -41,7 +41,7 @@ implementation or claim runtime behavior it did not observe.
 | Team, swarm, and worker protocol | Partial | `team`, `ultrawork`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | OMH does not launch hidden tmux teams, spawn workers, or manage panes by itself. |
 | Worktree and project-session isolation | Available | `worktree_session_isolation/v1` plans in coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation. | OMH creates local Git worktrees only through the explicit opt-in backend command; binding recipes show how wrappers can open or attach host sessions but do not auto-launch executors or claim runtime evidence. |
 | HUD, status, and session observability | Available | `omh hud`, plugin `omh_hud`/`omh_status`, wrapper sessions, runtime runs, and status cards. | Live host HUD rendering depends on Hermes/plugin support. |
-| MCP and tool bridge | Available | `omh setup --with-mcp`, `omh mcp manifest`, `omh mcp serve`, `omh mcp observe-host`, and `omh probe` preference/server/runtime/host-session/host-config separation. | OMH does not auto-enable host MCP config or independently inspect live host sessions; the host or wrapper must record load/session evidence. |
+| MCP and tool bridge | Available | `omh setup --with-mcp`, `omh mcp manifest`, `omh mcp config-recipe`, `omh mcp serve`, `omh mcp observe-host`, and `omh probe` preference/server/runtime/host-session/host-config separation. | OMH does not auto-enable host MCP config or independently inspect live host sessions; the host or wrapper must record load/session evidence. |
 | Loop and autopilot workflow | Available | `loop`, `ultraprocess`, `ralplan`, `ultragoal`, loop queue ticks, verification tiers, and failure-mode cards. | Scheduling, connector I/O, worktree creation, and subagent execution remain prepared or delegated until observed. |
 | Doctor, update, uninstall, and release smoke | Available | `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh release checklist`, `omh release install-smoke`, and `omh release hermes-smoke`. | Installer smoke can run live in an isolated temp HOME; live Hermes profile smoke still needs an explicit target Hermes profile or operator confirmation before mutation. |
 
@@ -72,17 +72,14 @@ implementation or claim runtime behavior it did not observe.
   executor or treating a terminal command as evidence.
 - A dependency-free stdio MCP bridge with allowlisted local `omh_status`,
   `omh_recommend`, and `omh_probe` tools plus manifest and probe evidence.
+- `omh mcp config-recipe --host ...`, which prints copy-paste config snippets
+  for Claude Code, Codex, OpenCode, Cursor, and generic MCP hosts without
+  mutating host files or claiming host load.
 - `omh_mcp_host_session/v1` records for host/wrapper-observed MCP bridge load
   or session use, kept separate from local bridge tool-call evidence and host
   config file probes.
 - Unit tests that lock JSON schema shape, human summaries, conservative claim
   boundaries, and wrapper-visible Prepare worktree actions.
-
-Next PR candidates:
-
-| Next PR | Why it matters |
-| --- | --- |
-| Host-specific MCP config recipes | Turns the manifest contract into copy-paste recipes for common MCP-capable host config shapes without auto-mutating them. |
 
 ## Acceptance Criteria
 
