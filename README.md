@@ -80,6 +80,10 @@ short "what now?" card after setup, ask Hermes "what should I do next with
 OMH setup?" or run `omh quickstart`; both surfaces show the first Hermes
 prompts plus what has and has not been observed yet.
 
+If you are not sure what OMH is, ask Hermes "what is OMH and how do I use it?"
+and it can answer with a compact overview before opening the full workflow
+picker.
+
 If your Hermes environment supports skill taps, this Hermes-native path also
 works:
 

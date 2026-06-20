@@ -7,6 +7,7 @@ from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_tex
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_route_payload, route_chat_message
 from ..coding_delegation import build_coding_delegation_payload
+from ..context import build_context_brief
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
@@ -69,6 +70,7 @@ VISIBLE_ACTIONS = (
     "record_executor_failed",
     "ask_hermes_verify",
     "show_quickstart",
+    "show_context_brief",
     "show_status",
     "show_target_status",
     "apply_target_change",
@@ -479,6 +481,17 @@ def build_chat_interaction_payload(
     if _is_generic_skill_catalog_route(message, route_payload):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
+
+    if _is_omh_intro_question(message) and resolved_mode in {"route", "plan", "clarify"}:
+        base["mode"] = "route"
+        base["route"] = _omh_intro_route_payload(route_payload)
+        base["chat_response"] = build_chat_response_from_omh_context_brief(
+            message,
+            source=source,
+            thread_key=str(base["thread_key"]),
+        )
+        base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_context_brief"))
+        return _finish_interaction(base, target_notice)
 
     if _is_omh_quickstart_question(message) and resolved_mode in {"route", "plan", "clarify"}:
         base["mode"] = "status"
@@ -1400,6 +1413,57 @@ def build_chat_response_from_omh_quickstart(
     )
 
 
+def build_chat_response_from_omh_context_brief(
+    message: str = "",
+    *,
+    source: str = "generic",
+    thread_key: str = "",
+) -> dict[str, object]:
+    brief = build_context_brief(message, source=source, max_hints=2, include_prompt_context=False)
+    lanes = brief.get("lanes", [])
+    lane_summaries: list[str] = []
+    if isinstance(lanes, list):
+        for lane in lanes[:4]:
+            if not isinstance(lane, dict):
+                continue
+            label = str(lane.get("label", "")).strip()
+            use_for = str(lane.get("use_for", "")).strip()
+            if label and use_for:
+                lane_summaries.append(f"{label}: {use_for}")
+    first_lane_sentence = " ".join(lane_summaries[:3])
+    body_lines = [
+        "OMH is the Hermes workflow layer: install once, then ask Hermes in chat instead of memorizing backend commands.",
+        first_lane_sentence,
+        "Start with: ask what you want in normal language, use ./omh to open the workflow picker when you want to choose manually, or ask what to do next after setup.",
+        "Boundary: this context explains routing and workflow choices; it is not execution, delivery, verification, review, CI, or merge evidence.",
+    ]
+    return _chat_response(
+        kind="context_brief",
+        headline="Here is how OMH fits into Hermes.",
+        body=" ".join(line for line in body_lines if line),
+        phase="route",
+        next_action="show_context_brief",
+        thread_key=thread_key,
+        actions=[
+            _action("show_context_brief", "Show OMH overview", "primary"),
+            _action("show_skill_picker", "Open workflow picker", "secondary"),
+            _action("show_quickstart", "Show quickstart", "secondary"),
+        ],
+        claim_boundary=str(brief.get("claim_boundary") or _default_overclaim_guard()),
+        extra_state={
+            "status_source": "omh_context_brief",
+            "context_brief": brief,
+            "workflow_explanation_reason": "The user asked what OMH is or how to use it, so the wrapper explains the Hermes-facing mental model before opening the full picker.",
+            "evidence_not_observed": [
+                "workflow selection",
+                "plan acceptance",
+                "executor dispatch",
+                "generation, delivery, verification, review, CI, or merge",
+            ],
+        },
+    )
+
+
 def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, object]:
     next_action = str(status_payload.get("next_action", "show_status"))
     kind, headline, body, claim_boundary = _status_copy(status_payload, next_action)
@@ -1771,6 +1835,101 @@ def _omh_quickstart_route_payload(route_payload: dict[str, object]) -> dict[str,
         }
     )
     return updated
+
+
+def _omh_intro_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
+    updated = dict(route_payload)
+    harness = primary_harness_for_skill(_ROUTER_SKILL)
+    updated.update(
+        {
+            "action": "dispatch",
+            "ambiguous": False,
+            "candidate_harness": harness,
+            "candidate_skill": _ROUTER_SKILL,
+            "confidence": "high",
+            "reason": "OMH intro or usage question; show the compact Hermes-facing mental model before the full picker.",
+            "recommendations": [
+                {
+                    "confidence": "high",
+                    "evidence_boundary": "Context brief output is routing/help context only; it is not workflow execution, delivery, verification, review, CI, or merge evidence.",
+                    "matched": ["omh_intro_question"],
+                    "next_action": "show_context_brief",
+                    "score": max(10, _intish(updated.get("score", 0))),
+                    "skill": _ROUTER_SKILL,
+                    "wrapper_guidance": "Render the OMH context brief first, then offer the workflow picker or quickstart card.",
+                }
+            ],
+            "routing_instruction": "Show the OMH context brief and offer the workflow picker as the next action.",
+            "routing_prompt_template": "Show the OMH context brief and offer the workflow picker as the next action.\n\nUser message:\n{message}",
+            "score": max(10, _intish(updated.get("score", 0))),
+            "selected_harness": harness,
+            "selected_skill": _ROUTER_SKILL,
+            "threshold": "high",
+        }
+    )
+    return updated
+
+
+def _is_omh_intro_question(message: str) -> bool:
+    text = message.strip().lower()
+    if not text:
+        return False
+    omh_markers = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
+    if not any(marker in text for marker in omh_markers):
+        return False
+    if any(marker in text for marker in ("status", "doctor", "health", "install", "setup", "next", "상태", "설치", "셋업", "세팅", "다음")):
+        return False
+    catalog_only_markers = (
+        "available",
+        "workflow",
+        "workflows",
+        "skill",
+        "skills",
+        "workflows available",
+        "skills available",
+        "commands available",
+        "deep-interview",
+        "ralplan",
+        "ultragoal",
+        "loop",
+        "ultraprocess",
+        "list",
+        "menu",
+        "picker",
+        "명령어",
+        "스킬",
+        "워크플로",
+        "워크플로우",
+        "有哪些",
+        "可用",
+        "使える",
+    )
+    if any(marker in text for marker in catalog_only_markers):
+        return False
+    intro_markers = (
+        "what is",
+        "what are you",
+        "how do i use",
+        "how should i use",
+        "how to use",
+        "how does",
+        "explain",
+        "overview",
+        "getting started",
+        "mental model",
+        "뭐야",
+        "무엇이야",
+        "어떻게 써",
+        "어떻게 사용",
+        "사용법",
+        "소개",
+        "설명",
+        "何ですか",
+        "使い方",
+        "是什么",
+        "怎么用",
+    )
+    return any(marker in text for marker in intro_markers)
 
 
 def _is_omh_quickstart_question(message: str) -> bool:
@@ -2451,6 +2610,8 @@ def _usage_label(state: dict[str, object], *, kind: str, phase: str, next_action
         return "clarification"
     if kind == "quickstart":
         return "quickstart"
+    if kind == "context_brief":
+        return "context"
     if kind in {"status", "blocker"}:
         return "status"
     if kind == "handoff":

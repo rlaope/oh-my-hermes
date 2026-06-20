@@ -265,6 +265,14 @@ render the `img-summary` card with `show_visual_prompt_card`,
 `choose_image_generator`, and `image_generation_setup/v1` actions instead of
 falling back to the generic OMH workflow picker or a generic clarification.
 
+For first-use explanation questions, avoid dropping the user into the full
+catalog immediately. If the user asks "what is OMH and how do I use it?" or
+"OMH가 뭐야? 어떻게 써?", `omh chat interact` returns
+`chat_response.kind == context_brief` with `[omh] context`, a compact mental
+model, the structured `omh_context_brief/v1`, and actions to open the picker or
+quickstart card. Use the picker for "what workflows are available?" and similar
+catalog questions.
+
 The same rule applies to other specific capability questions. A broad question
 such as "OMH 기능 뭐 있어?" still opens `omh_skill_picker/v1`, but "does OMH
 support scheduled automation?", "can OMH help with MCP setup?", "does OMH
