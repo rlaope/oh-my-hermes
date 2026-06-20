@@ -2392,6 +2392,34 @@ class CliTests(unittest.TestCase):
                 self.assertIn(boundary_fragment, top["evidence_boundary"])
                 self.assertIn(wrapper_fragment, top["wrapper_guidance"].lower())
 
+    def test_recommend_chat_first_quality_guards_route_common_operator_intent(self) -> None:
+        cases = (
+            (
+                "I need to improve our onboarding but I don't know where to start",
+                "deep-interview",
+                "ask_clarification",
+                "guard:product_shaping",
+            ),
+            (
+                "I want Hermes to learn from this workflow and improve the skill next time",
+                "workflow-learning",
+                "audit_learning_readiness",
+                "guard:workflow_learning",
+            ),
+        )
+
+        for message, skill, next_action, guard_label in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], skill)
+                self.assertEqual(top["confidence"], "high")
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(guard_label, top["matched"])
+
     def test_recommend_material_processing_routes_to_materials_package(self) -> None:
         cases = (
             "엑셀로 매출 리포트 만들고 PDF로 공유해줘",
@@ -2998,6 +3026,12 @@ class CliTests(unittest.TestCase):
             ("이거 위험한 리팩터링 같아", "ralplan", "plan", "present_plan"),
             ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "ack", "prepare_review_or_followup_handoff"),
             ("온보딩을 더 부드럽게 만들고 싶어", "deep-interview", "clarification", "answer_clarification"),
+            (
+                "I need to improve our onboarding but I don't know where to start",
+                "deep-interview",
+                "clarification",
+                "answer_clarification",
+            ),
             ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
             ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
@@ -3020,6 +3054,12 @@ class CliTests(unittest.TestCase):
             ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "ack", "prepare_executor_runtime_readiness"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "ack", "prepare_agent_board_card"),
             ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
+            (
+                "I want Hermes to learn from this workflow and improve the skill next time",
+                "workflow-learning",
+                "workflow_learning",
+                "audit_learning_readiness",
+            ),
         )
 
         for message, selected_skill, response_kind, next_action in cases:

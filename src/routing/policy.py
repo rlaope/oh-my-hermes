@@ -401,6 +401,111 @@ _MISSED_WORKFLOW_OPERATING_RECORD_TOKENS = _normalized_token_set(
         "기록",
     }
 )
+_PRODUCT_SHAPING_PHRASES = (
+    "where to start",
+    "do not know where to start",
+    "don't know where to start",
+    "dont know where to start",
+    "not sure where to start",
+    "improve our onboarding",
+    "improve onboarding",
+    "make onboarding smoother",
+    "make onboarding feel smoother",
+    "make the user experience smoother",
+    "make the product experience better",
+    "온보딩을 더 부드럽게",
+    "온보딩 개선",
+    "어디서 시작",
+    "어디부터 시작",
+)
+_PRODUCT_SHAPING_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "onboarding",
+        "activation",
+        "conversion",
+        "funnel",
+        "ux",
+        "product",
+        "feature",
+        "experience",
+        "customer",
+        "user",
+        "users",
+        "온보딩",
+        "제품",
+        "기능",
+        "사용자",
+        "고객",
+        "경험",
+    }
+)
+_PRODUCT_SHAPING_UNCERTAINTY_TOKENS = _normalized_token_set(
+    {
+        "improve",
+        "improvement",
+        "better",
+        "smoother",
+        "smooth",
+        "start",
+        "where",
+        "unclear",
+        "vague",
+        "fuzzy",
+        "unknown",
+        "개선",
+        "부드럽게",
+        "어디",
+        "시작",
+        "모호",
+    }
+)
+_WORKFLOW_LEARNING_PHRASES = (
+    "learn from this workflow",
+    "learn from this workflow run",
+    "learn from this run",
+    "improve the skill next time",
+    "improve this skill next time",
+    "improve routing next time",
+    "make a regression case",
+    "add a regression case",
+    "why did this route",
+    "record why this request",
+    "future workflow behavior",
+    "workflow should learn",
+    "hermes should learn",
+    "이번 실행 학습",
+    "이번 워크플로우 학습",
+    "다음에 스킬 개선",
+    "라우팅 회귀",
+    "회귀 케이스",
+)
+_WORKFLOW_LEARNING_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "learn",
+        "learning",
+        "workflow",
+        "run",
+        "trace",
+        "skill",
+        "routing",
+        "route",
+        "regression",
+        "eval",
+        "audit",
+        "improve",
+        "improvement",
+        "candidate",
+        "next",
+        "future",
+        "학습",
+        "스킬",
+        "워크플로우",
+        "라우팅",
+        "회귀",
+        "개선",
+        "실행",
+    }
+)
 _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "executor-runtime-readiness",
     "runtime readiness",
@@ -982,6 +1087,24 @@ FEEDBACK_BEFORE_CODING_GUARD = RoutingGuardRule(
     why="Product feedback and bug reports should get triage/investigation before coding handoff.",
     activation_status="cataloged",
 )
+PRODUCT_SHAPING_GUARD = RoutingGuardRule(
+    id="product_shaping_before_ops_review",
+    rule="Fuzzy product, onboarding, UX, or growth-shaping requests should start with deep interview before ops/status review.",
+    matched_label="guard:product_shaping",
+    preferred_skills=("deep-interview",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; fuzzy product-shaping requests need one clarifying interview before plan or execution.",
+    activation_status="active",
+)
+WORKFLOW_LEARNING_GUARD = RoutingGuardRule(
+    id="workflow_learning_before_skill_management",
+    rule="Requests to learn from a workflow, improve a skill next time, or add routing regressions should route to workflow-learning before generic skill management.",
+    matched_label="guard:workflow_learning",
+    preferred_skills=("workflow-learning",),
+    score_boost=34,
+    why="Matched guard/trigger metadata; workflow improvement requests should become a learning trace, review candidate, or regression instead of generic skill management.",
+    activation_status="active",
+)
 WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     id="web_research_before_process",
     rule="Plain web/source/current-evidence requests should route to web research before one-cycle delivery.",
@@ -1138,6 +1261,8 @@ RESEARCH_DEPARTMENT_GUARD = RoutingGuardRule(
 ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
+    PRODUCT_SHAPING_GUARD,
+    WORKFLOW_LEARNING_GUARD,
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
@@ -1197,6 +1322,10 @@ def active_routing_guard_rules(
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
+    if _product_shaping_guard_applies(normalized_query, query_tokens):
+        rules.append(PRODUCT_SHAPING_GUARD)
+    if _workflow_learning_guard_applies(normalized_query, query_tokens):
+        rules.append(WORKFLOW_LEARNING_GUARD)
     delivery_cycle_applies = _delivery_cycle_guard_applies(normalized_query, query_tokens)
     research_department_applies = (
         not delivery_cycle_applies and _research_department_guard_applies(normalized_query, query_tokens)
@@ -1250,6 +1379,29 @@ def _risky_refactor_guard_applies(normalized_query: str, query_tokens: set[str])
     if _RISKY_REFACTOR_TOKENS & query_tokens:
         return True
     return _contains_phrase(normalized_query, _RISKY_REFACTOR_RISK_PHRASES)
+
+
+def _product_shaping_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _delivery_cycle_terms(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _PRODUCT_SHAPING_PHRASES):
+        return True
+    product_context = bool(_PRODUCT_SHAPING_CONTEXT_TOKENS & query_tokens)
+    shaping_uncertainty = bool(_PRODUCT_SHAPING_UNCERTAINTY_TOKENS & query_tokens)
+    return product_context and shaping_uncertainty
+
+
+def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _WORKFLOW_LEARNING_PHRASES):
+        return True
+    learning = bool({"learn", "learning", "학습"} & query_tokens)
+    workflow_or_skill = bool({"workflow", "run", "trace", "skill", "routing", "route", "워크플로우", "스킬", "라우팅"} & query_tokens)
+    future_improvement = bool({"improve", "improvement", "next", "future", "regression", "개선", "회귀"} & query_tokens)
+    if learning and workflow_or_skill:
+        return True
+    if future_improvement and workflow_or_skill and bool(_WORKFLOW_LEARNING_CONTEXT_TOKENS & query_tokens):
+        return True
+    return False
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
