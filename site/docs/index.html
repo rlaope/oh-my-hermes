@@ -595,6 +595,12 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
             playbook confidence, and evidence boundary all match; execution,
             review, CI, and merge never count unless observed.
           </p>
+          <p>
+            Export the wrapper-facing G1-G10 card set with
+            <code>omh cases demo --all --json</code>. Each card uses
+            <code>omh_use_case_demo_card/v1</code> and keeps route, action,
+            and evidence state in one deterministic payload.
+          </p>
           <div class="case-grid case-grid--docs" aria-label="Grounded operator case summary">
             <article class="case-card">
               <span>10/10 contract</span>

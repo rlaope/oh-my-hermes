@@ -6,6 +6,8 @@ from typing import Any
 
 
 USE_CASE_CATALOG_SCHEMA_VERSION = "omh_use_case_catalog/v1"
+USE_CASE_DEMO_CARD_SCHEMA_VERSION = "omh_use_case_demo_card/v1"
+USE_CASE_DEMO_COLLECTION_SCHEMA_VERSION = "omh_use_case_demo_collection/v1"
 USE_CASE_RECOMMENDATION_SCHEMA_VERSION = "omh_use_case_recommendation/v1"
 USE_CASE_VALIDATION_SCHEMA_VERSION = "omh_use_case_validation/v1"
 
@@ -243,6 +245,26 @@ def inspect_use_case(case_id: str) -> dict[str, Any]:
     }
 
 
+def demo_use_case(case_id: str) -> dict[str, Any]:
+    case = _find_case(case_id)
+    if case is None:
+        raise KeyError(case_id)
+    return _demo_card(case)
+
+
+def demo_all_use_cases() -> dict[str, Any]:
+    return {
+        "schema_version": USE_CASE_DEMO_COLLECTION_SCHEMA_VERSION,
+        "count": len(USE_CASES),
+        "cards": [_demo_card(case) for case in USE_CASES],
+        "boundary": (
+            "Use-case demo cards are wrapper rendering artifacts. They prove OMH "
+            "can shape a Hermes-facing card for the scenario; they are not runtime, "
+            "connector, delivery, file, memory, or execution evidence."
+        ),
+    }
+
+
 def recommend_use_cases(query: str, *, limit: int = 3) -> dict[str, Any]:
     clean_query = " ".join(query.split())
     if limit < 1:
@@ -371,6 +393,119 @@ def _public_case(case: UseCase) -> dict[str, Any]:
     payload["proof_surfaces"] = list(case.proof_surfaces)
     payload["keywords"] = list(case.keywords)
     return payload
+
+
+def _demo_card(case: UseCase) -> dict[str, Any]:
+    exposure = _public_case(case)
+    return {
+        "schema_version": USE_CASE_DEMO_CARD_SCHEMA_VERSION,
+        "goal": case.goal,
+        "id": case.id,
+        "title": case.title,
+        "route": {
+            "primary_skill": case.primary_skill,
+            "playbook": case.playbook,
+            "harness": case.harness,
+            "exposure": exposure["exposure"],
+            "install_visibility": exposure["install_visibility"],
+            "compatibility_alias": exposure["compatibility_alias"],
+            "next_action": case.next_action,
+        },
+        "chat_surface": {
+            "source": "hermes_agent_chat",
+            "suggested_user_prompt": case.hermes_chat_prompt,
+            "direct_skill_invocation": case.direct_skill_invocation,
+            "headline": f"[omh] {case.title}",
+            "body_lines": [
+                case.hermes_use_case,
+                f"Route: {case.primary_skill} -> {case.next_action}.",
+                case.user_value,
+            ],
+            "status_line": f"prepared_not_observed | {case.primary_skill} | {case.next_action}",
+        },
+        "wrapper_card": {
+            "component": "omh_use_case_card",
+            "render_profile": "chat_first",
+            "status": "prepared_not_observed",
+            "headline": f"[omh] {case.title}",
+            "summary": case.user_value,
+            "sections": [
+                {
+                    "id": "why_this_route",
+                    "title": "Why this workflow",
+                    "body": case.hermes_use_case,
+                },
+                {
+                    "id": "what_omh_prepares",
+                    "title": "What OMH prepares",
+                    "body": case.feature_surface,
+                },
+                {
+                    "id": "evidence_boundary",
+                    "title": "What is not evidence yet",
+                    "body": case.evidence_boundary,
+                },
+            ],
+            "chips": [case.goal, case.primary_skill, exposure["exposure"], case.next_action],
+        },
+        "actions": [
+            {
+                "id": case.next_action,
+                "label": _action_label(case.next_action),
+                "kind": "hermes_prompt",
+                "style": "primary",
+                "value": case.hermes_chat_prompt,
+            },
+            {
+                "id": "inspect_playbook",
+                "label": "Inspect playbook",
+                "kind": "operator_command",
+                "style": "secondary",
+                "value": f"omh playbook inspect {case.playbook} --json",
+            },
+            {
+                "id": "inspect_harness",
+                "label": "Inspect harness",
+                "kind": "operator_command",
+                "style": "secondary",
+                "value": f"omh harness inspect {case.harness} --json",
+            },
+            {
+                "id": "show_boundary",
+                "label": "Show evidence boundary",
+                "kind": "static_boundary",
+                "style": "secondary",
+                "value": case.evidence_boundary,
+            },
+        ],
+        "operator_commands": [
+            f"omh cases inspect {case.goal} --json",
+            f"omh playbook inspect {case.playbook} --json",
+            f"omh harness inspect {case.harness} --json",
+        ],
+        "evidence": {
+            "state": "prepared_not_observed",
+            "claim_boundary": case.evidence_boundary,
+            "not_evidence_until_observed": [
+                "runtime_execution",
+                "connector_invocation",
+                "delivery_or_attachment",
+                "file_generation",
+                "memory_mutation",
+                "executor_dispatch",
+                "executor_result",
+                "verification",
+                "review",
+                "ci",
+                "merge",
+            ],
+        },
+        "case": exposure,
+    }
+
+
+def _action_label(action: str) -> str:
+    return action.replace("_", " ").capitalize()
 
 
 def _find_case(case_id: str) -> UseCase | None:

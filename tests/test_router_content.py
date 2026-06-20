@@ -1335,6 +1335,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("safe-feature-change", text)
         self.assertIn("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", text)
         self.assertIn("omh demo grounded-score", text)
+        self.assertIn("omh cases demo --all --json", text)
+        self.assertIn("omh_use_case_demo_card/v1", text)
+        self.assertIn("examples/use-cases/g1-g10-demo-cards.json", text)
         self.assertIn("10/10", text)
         self.assertIn("$ultraprocess research the repo", text)
         self.assertIn("feedback-triage", text)
@@ -1401,6 +1404,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('id="operator-cases"', site_docs)
         self.assertIn("Grounded operator cases", site_docs)
         self.assertIn("omh demo grounded-score", site_docs)
+        self.assertIn("omh cases demo --all --json", site_docs)
+        self.assertIn("omh_use_case_demo_card/v1", site_docs)
         self.assertIn("10/10", site_docs)
 
     def test_architecture_docs_include_visual_system_view(self) -> None:

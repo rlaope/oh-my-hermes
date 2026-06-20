@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from ..installer import OmhError
-from ..use_cases import inspect_use_case, list_use_cases, recommend_use_cases, validate_use_cases
+from ..use_cases import demo_all_use_cases, demo_use_case, inspect_use_case, list_use_cases, recommend_use_cases, validate_use_cases
 from .common import _print_json, _wants_json
 
 
@@ -25,6 +25,27 @@ def cmd_cases_inspect(args: argparse.Namespace) -> int:
         _print_json(payload)
     else:
         _print_case_summary(payload["use_case"])
+    return 0
+
+
+def cmd_cases_demo(args: argparse.Namespace) -> int:
+    try:
+        if args.all:
+            if args.id:
+                raise OmhError("use either `omh cases demo <id>` or `omh cases demo --all`, not both")
+            payload = demo_all_use_cases()
+        else:
+            if not args.id:
+                raise OmhError("use-case id required unless --all is passed")
+            payload = demo_use_case(args.id)
+    except KeyError as exc:
+        raise OmhError(f"unknown use case: {args.id}") from exc
+    if _wants_json(args):
+        _print_json(payload)
+    elif args.all:
+        _print_cases_demo_collection_summary(payload)
+    else:
+        _print_case_demo_summary(payload)
     return 0
 
 
@@ -99,6 +120,62 @@ def _print_case_summary(case: dict[str, object]) -> None:
     print("  For machine-readable output, rerun with `--json`.")
 
 
+def _print_case_demo_summary(card: dict[str, object]) -> None:
+    route = card.get("route", {})
+    chat_surface = card.get("chat_surface", {})
+    evidence = card.get("evidence", {})
+    actions = card.get("actions", [])
+    if not isinstance(route, dict):
+        route = {}
+    if not isinstance(chat_surface, dict):
+        chat_surface = {}
+    if not isinstance(evidence, dict):
+        evidence = {}
+    if not isinstance(actions, list):
+        actions = []
+    print(f"OMH use-case demo card: {card.get('goal')} - {card.get('title')}")
+    print("Route")
+    print(
+        f"  {route.get('primary_skill')} -> {route.get('next_action')} "
+        f"({route.get('exposure')}; playbook {route.get('playbook')}; harness {route.get('harness')})"
+    )
+    print("Hermes card")
+    print(f"  {chat_surface.get('headline')}")
+    for line in chat_surface.get("body_lines", []):
+        print(f"  - {line}")
+    print(f"  Status: {chat_surface.get('status_line')}")
+    print("Actions")
+    for action in actions[:4]:
+        if not isinstance(action, dict):
+            continue
+        print(f"  - {action.get('label')}: {action.get('value')}")
+    print("Boundary")
+    print(f"  {evidence.get('claim_boundary')}")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
+def _print_cases_demo_collection_summary(payload: dict[str, object]) -> None:
+    cards = payload.get("cards", [])
+    if not isinstance(cards, list):
+        cards = []
+    print("OMH G1-G10 use-case demo cards")
+    print("Summary")
+    print(f"  Demo cards: {len(cards)}")
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        route = card.get("route", {})
+        if not isinstance(route, dict):
+            route = {}
+        print(f"  - {card.get('goal')}: {card.get('title')} ({route.get('primary_skill')} -> {route.get('next_action')})")
+    print("Boundary")
+    print(f"  {payload.get('boundary')}")
+    print("Next")
+    print("  Inspect one with `omh cases demo G10`.")
+    print("  Export all cards with `omh cases demo --all --json`.")
+    print("  For machine-readable output, rerun with `--json`.")
+
+
 def _print_cases_recommend_summary(payload: dict[str, object]) -> None:
     recommendations = payload.get("recommendations", [])
     if not isinstance(recommendations, list):
@@ -155,6 +232,12 @@ def _add_cases_commands(sub) -> None:
     inspect_cmd.add_argument("id", help="Use-case id such as G10, ops-observability-card, or natural-automation-blueprint.")
     inspect_cmd.add_argument("--json", action="store_true", help="Print the full machine-readable use-case payload.")
     inspect_cmd.set_defaults(func=cmd_cases_inspect)
+
+    demo_cmd = cases_sub.add_parser("demo")
+    demo_cmd.add_argument("id", nargs="?", default="", help="Use-case id such as G10 or ops-observability-card.")
+    demo_cmd.add_argument("--all", action="store_true", help="Print demo cards for all G1-G10 use cases.")
+    demo_cmd.add_argument("--json", action="store_true", help="Print the full machine-readable demo card payload.")
+    demo_cmd.set_defaults(func=cmd_cases_demo)
 
     recommend_cmd = cases_sub.add_parser("recommend")
     recommend_cmd.add_argument("task", nargs="+", help="Natural-language request to map to a representative OMH use case.")

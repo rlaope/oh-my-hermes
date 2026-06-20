@@ -36,6 +36,8 @@ Machine-readable operator checks:
 ```sh
 omh cases list --json
 omh cases inspect G10 --json
+omh cases demo G10 --json
+omh cases demo --all --json
 omh cases recommend "PR opened with failing CI" --json
 omh cases validate --json
 ```
@@ -43,6 +45,22 @@ omh cases validate --json
 Normal users should not need those commands. They exist so Hermes wrappers,
 tests, and release checks can verify that the chat-first story has deterministic
 local backing.
+
+Use-case demo cards are the wrapper-facing projection of this catalog. A card
+uses `omh_use_case_demo_card/v1` and contains:
+
+- the selected skill, playbook, harness, exposure, and next action
+- a Hermes-facing headline, body lines, and status line
+- primary and secondary wrapper actions
+- the exact evidence boundary and `prepared_not_observed` state
+
+`omh cases demo --all --json` exports all ten cards as
+`omh_use_case_demo_collection/v1`. This gives wrapper authors and release checks
+one deterministic artifact for the full G1-G10 product story without claiming
+cron, connectors, file generation, memory mutation, executor work, review, CI,
+or merge happened. The checked-in fixture lives at
+`examples/use-cases/g1-g10-demo-cards.json` and is tested against the live
+command output.
 
 ## Case 1: Coding Request Handling
 
@@ -517,6 +535,8 @@ Before using these cases as public release evidence, verify:
 - The generated router includes the representative harness registry.
 - `omh docs workflows --json` exposes `harness_quality/v1` style quality data
   for wrapper rendering and status decisions.
+- `omh cases demo --all --json` exposes `omh_use_case_demo_collection/v1` for
+  every G1-G10 wrapper card and preserves `prepared_not_observed`.
 - `omh playbook recommend` returns situation-level pipelines for safe coding,
   source-backed research, research-to-strategy briefs, meeting prep, feedback
   triage, ops review, operating rhythm history, report packages, reliability

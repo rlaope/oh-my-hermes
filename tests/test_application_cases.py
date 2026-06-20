@@ -63,6 +63,26 @@ class ApplicationCaseArtifactTests(unittest.TestCase):
         self.assertIn("What Gets Recorded", install)
         self.assertNotIn("What Gets Recorded", readme)
 
+    def test_g1_to_g10_demo_fixture_is_wrapper_renderable(self) -> None:
+        code, stdout, stderr = run_cli(["cases", "demo", "--all", "--json"], output_json=False)
+
+        self.assertEqual(code, 0, stderr)
+        self.assertEqual(stderr, "")
+        generated = json.loads(stdout)
+        fixture = json.loads(Path("examples/use-cases/g1-g10-demo-cards.json").read_text(encoding="utf-8"))
+        self.assertEqual(fixture, generated)
+        self.assertEqual(fixture["schema_version"], "omh_use_case_demo_collection/v1")
+        self.assertEqual(fixture["count"], 10)
+        for card in fixture["cards"]:
+            with self.subTest(card=card["goal"]):
+                self.assertEqual(card["schema_version"], "omh_use_case_demo_card/v1")
+                self.assertEqual(card["wrapper_card"]["component"], "omh_use_case_card")
+                self.assertEqual(card["wrapper_card"]["status"], "prepared_not_observed")
+                self.assertEqual(card["evidence"]["state"], "prepared_not_observed")
+                self.assertEqual(card["actions"][0]["id"], card["route"]["next_action"])
+                self.assertIn("not", card["evidence"]["claim_boundary"].lower())
+                self.assertIn("executor_dispatch", card["evidence"]["not_evidence_until_observed"])
+
 
 if __name__ == "__main__":
     unittest.main()
