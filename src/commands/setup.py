@@ -3,9 +3,12 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 
 try:
     import termios
@@ -55,6 +58,7 @@ DOCTOR_SUMMARY_SCHEMA_VERSION = "doctor_summary/v1"
 MCP_SETUP_SCHEMA_VERSION = "omh_mcp_setup/v1"
 SELF_UPDATE_REENTRY_ENV = "OMH_UPDATE_COMMAND_PACKAGE_REENTERED"
 SELF_UPDATE_SKIP_ENV = "OMH_SKIP_COMMAND_PACKAGE_UPDATE"
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -1221,7 +1225,7 @@ def _keyboard_single_choice(
     language: str = "en",
 ) -> str:
     cursor = _default_choice_index(options, default_choice)
-    rendered_lines = 0
+    rendered_rows = 0
     while True:
         lines = _choice_menu_lines(
             title,
@@ -1232,11 +1236,11 @@ def _keyboard_single_choice(
             use_color=use_color,
             language=language,
         )
-        if rendered_lines:
-            sys.stdout.write(f"\033[{rendered_lines}F\033[J")
+        if rendered_rows:
+            sys.stdout.write(f"\033[{rendered_rows}F\033[J")
         sys.stdout.write("\n".join(lines) + "\n")
         sys.stdout.flush()
-        rendered_lines = len(lines)
+        rendered_rows = _rendered_terminal_rows(lines)
         key = _read_tui_key()
         if key in {"\x03", "\x04"}:
             raise KeyboardInterrupt
@@ -1279,6 +1283,30 @@ def _choice_menu_lines(
         if option["description"]:
             lines.append(f"      {option['description']}")
     return lines
+
+
+def _rendered_terminal_rows(lines: list[str], columns: int | None = None) -> int:
+    if columns is None:
+        columns = shutil.get_terminal_size((80, 24)).columns
+    columns = max(1, columns)
+    rows = 0
+    for line in lines:
+        width = _visible_text_width(line)
+        rows += max(1, (width + columns - 1) // columns)
+    return rows
+
+
+def _visible_text_width(text: str) -> int:
+    visible = ANSI_ESCAPE_RE.sub("", text)
+    width = 0
+    for character in visible:
+        if unicodedata.combining(character):
+            continue
+        category = unicodedata.category(character)
+        if category in {"Cc", "Cf"}:
+            continue
+        width += 2 if unicodedata.east_asian_width(character) in {"F", "W"} else 1
+    return width
 
 
 def _default_choice_index(options: list[dict[str, str]], default_choice: str) -> int:
