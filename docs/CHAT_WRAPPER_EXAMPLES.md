@@ -139,6 +139,20 @@ can call the transport-free backend preview:
 omh chat route-hint --source discord "make an image explaining the cron feature"
 ```
 
+The preview payload also includes `generic_tool_checkpoint.routes`, so adapters
+do not need to parse prose before opening generic tool surfaces. The current
+OMH-first map is:
+
+- image tools -> `img-summary` / `prepare_visual_prompt_card`
+- file tools -> `materials-package` / `prepare_material_package`
+- search tools -> `web-research` / `gather_source_backed_evidence`
+- coding tools -> `ultraprocess` first, with `ralplan`, `code-review`, and
+  `agent-ops-review` as adjacent options
+
+These routes are advisory. They tell Hermes which OMH workflow to consider
+before a generic tool, while image generation, file export, search retrieval,
+coding dispatch, review, CI, and merge remain observed-only claims.
+
 Capability-specific catalog questions and short image requests should also stay
 workflow-native. If the user asks "이미지 생성 기능 뭐 있어?", "이미지 생성해줘",
 "does OMH support image generation?", or "generate an image", the wrapper should

@@ -44,7 +44,7 @@ Bad example:
 - Current lane: **Intent -> plan** (`oh-my-hermes`, `deep-interview`, `plan`, `ralplan`, `ultragoal`, `ultraprocess`, `loop`, `ralph`, `performance-goal`) - ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
 - Cross-skill context: Across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH because a generic tool can render or execute.
-- Generic-tool checkpoint: check OMH prep/status/learning before image/file/search/coding tools.
+- Generic-tool checkpoint: image->img-summary; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
 - Coverage: Every generated workflow skill carries this rail.
 - Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
 - Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
