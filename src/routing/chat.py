@@ -20,7 +20,61 @@ from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routabl
 FILE_LOOKUP_REASON = (
     "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
 )
-_SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset({"img-summary"})
+_ROUTER_SKILL = "oh-my-hermes"
+_SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE = 6
+_SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset(
+    {
+        "agent-board",
+        "agent-ops-review",
+        "automation-blueprint",
+        "deliverable-package",
+        "executor-runtime-readiness",
+        "feedback-triage",
+        "github-event-ops",
+        "img-summary",
+        "loop",
+        "materials-package",
+        "memory-curation-review",
+        "operating-rhythm",
+        "ops-observability-card",
+        "report-package",
+        "research-department",
+        "strategy-brief",
+        "toolbelt-readiness",
+        "ultraprocess",
+        "voice-operator",
+        "web-research",
+        "workflow-learning",
+    }
+)
+_BROAD_CAPABILITY_CATALOG_PHRASES = (
+    "planning, research, and coding",
+    "planning/research/coding",
+    "planning, research, coding",
+    "deep-interview/ralplan/loop",
+    "계획/리서치/코딩",
+    "플랜/리서치/코딩",
+)
+_BROAD_CAPABILITY_TOPIC_TOKENS = frozenset(
+    {
+        "planning",
+        "plan",
+        "research",
+        "coding",
+        "interview",
+        "workflow",
+        "workflows",
+        "skill",
+        "skills",
+        "계획",
+        "플랜",
+        "리서치",
+        "코딩",
+        "워크플로",
+        "워크플로우",
+        "스킬",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +121,14 @@ def route_chat_message(
 
     definitions = routable_definitions()
     full_recommendations = recommend_skills(message, limit=len(definitions))
+    catalog_question = is_skill_catalog_question(message)
+    specific_catalog_match = (
+        _specific_capability_catalog_match(full_recommendations)
+        if catalog_question and not _is_broad_capability_catalog_question(message)
+        else None
+    )
+    if specific_catalog_match is not None:
+        full_recommendations = _prioritize_recommendation(full_recommendations, specific_catalog_match)
     recommendations = tuple(full_recommendations[:limit])
     top = full_recommendations[0]
     explicit_skill = explicit_skill_invocation(message, definitions)
@@ -75,7 +137,6 @@ def route_chat_message(
     candidate_score = _int_value(top["score"])
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
-    catalog_question = is_skill_catalog_question(message)
     file_or_text_lookup = is_file_or_text_lookup_question(message)
 
     if explicit_skill:
@@ -83,7 +144,7 @@ def route_chat_message(
         action = "dispatch"
         reason = "Explicit workflow invocation wins over heuristic routing."
         ambiguous = False
-    elif catalog_question and _specific_capability_catalog_match(top):
+    elif catalog_question and specific_catalog_match is not None:
         selected_skill = candidate_skill
         action = "dispatch"
         reason = (
@@ -92,7 +153,7 @@ def route_chat_message(
         )
         ambiguous = False
     elif catalog_question:
-        selected_skill = "oh-my-hermes"
+        selected_skill = _ROUTER_SKILL
         candidate_skill = selected_skill
         candidate_harness = primary_harness_for_skill(candidate_skill)
         candidate_score = max(candidate_score, 11)
@@ -101,7 +162,7 @@ def route_chat_message(
         reason = "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
         ambiguous = False
     elif file_or_text_lookup:
-        selected_skill = "oh-my-hermes"
+        selected_skill = _ROUTER_SKILL
         candidate_skill = selected_skill
         candidate_harness = primary_harness_for_skill(candidate_skill)
         candidate_score = 0
@@ -110,13 +171,13 @@ def route_chat_message(
         reason = FILE_LOOKUP_REASON
         ambiguous = False
     elif candidate_score == 0:
-        selected_skill = "oh-my-hermes"
+        selected_skill = _ROUTER_SKILL
         candidate_skill = selected_skill
         candidate_harness = primary_harness_for_skill(candidate_skill)
         action = "fallback"
         reason = "No strong catalog metadata match; use the router to clarify the workflow."
     elif ambiguous:
-        selected_skill = "oh-my-hermes"
+        selected_skill = _ROUTER_SKILL
         action = "clarify"
         reason = "Top catalog matches are tied; ask one concise clarification before dispatch."
     elif _meets_threshold(candidate_confidence, min_confidence):
@@ -124,7 +185,7 @@ def route_chat_message(
         action = "dispatch"
         reason = str(top["why"])
     else:
-        selected_skill = "oh-my-hermes"
+        selected_skill = _ROUTER_SKILL
         action = "clarify"
         reason = f"Best match confidence {candidate_confidence} is below {min_confidence}; clarify before dispatch."
 
@@ -228,18 +289,43 @@ def _meets_threshold(confidence: str, threshold: str) -> bool:
     return meets_confidence_threshold(confidence, threshold)
 
 
-def _specific_capability_catalog_match(top: dict[str, object]) -> bool:
-    skill = str(top.get("skill", ""))
-    if skill not in _SPECIFIC_CAPABILITY_CATALOG_SKILLS:
-        return False
-    if _int_value(top.get("score", 0)) < 30:
-        return False
-    confidence = str(top.get("confidence", "low"))
-    if not _meets_threshold(confidence, "high"):
-        return False
-    matched = _string_list(top.get("matched", []))
-    next_action = str(top.get("next_action", ""))
-    return next_action == "prepare_visual_prompt_card" or any(item.startswith("guard:") for item in matched)
+def _specific_capability_catalog_match(recommendations: list[dict[str, object]]) -> dict[str, object] | None:
+    for recommendation in recommendations:
+        skill = str(recommendation.get("skill", ""))
+        if skill == _ROUTER_SKILL or skill not in _SPECIFIC_CAPABILITY_CATALOG_SKILLS:
+            continue
+        if _int_value(recommendation.get("score", 0)) < _SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE:
+            continue
+        confidence = str(recommendation.get("confidence", "low"))
+        if not _meets_threshold(confidence, "high"):
+            continue
+        matched = _string_list(recommendation.get("matched", []))
+        next_action = str(recommendation.get("next_action", ""))
+        if not next_action or next_action == "clarify_or_route":
+            continue
+        if any(item.startswith("guard:") for item in matched) or any(item.startswith("trigger:") for item in matched):
+            return recommendation
+    return None
+
+
+def _is_broad_capability_catalog_question(message: str) -> bool:
+    text = message.strip().lower()
+    if any(phrase in text for phrase in _BROAD_CAPABILITY_CATALOG_PHRASES):
+        return True
+    if "/" in text or "," in text:
+        topic_hits = sum(1 for token in _BROAD_CAPABILITY_TOPIC_TOKENS if token in text)
+        if topic_hits >= 2:
+            return True
+    named_hits = sum(1 for skill in _SPECIFIC_CAPABILITY_CATALOG_SKILLS if skill in text)
+    return named_hits >= 2
+
+
+def _prioritize_recommendation(
+    recommendations: list[dict[str, object]],
+    selected: dict[str, object],
+) -> list[dict[str, object]]:
+    selected_skill = str(selected.get("skill", ""))
+    return [selected] + [item for item in recommendations if str(item.get("skill", "")) != selected_skill]
 
 
 def _clarification(action: str, candidate_skill: str, candidate_confidence: str, threshold: str, reason: str = "") -> str:

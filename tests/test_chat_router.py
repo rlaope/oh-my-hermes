@@ -13,6 +13,7 @@ from omh.chat_router import (
     route_chat_message,
     routing_record_payload,
 )
+from omh.skills.catalog import primary_harness_for_skill
 
 
 class ChatRouterTests(unittest.TestCase):
@@ -147,6 +148,26 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "coding-handling")
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("Catalog question", decision["reason"])
+
+    def test_specific_capability_catalog_questions_dispatch_to_matching_workflow(self) -> None:
+        cases = (
+            ("does OMH support scheduled automation?", "automation-blueprint"),
+            ("can OMH help with MCP setup?", "toolbelt-readiness"),
+            ("does OMH support memory cleanup?", "memory-curation-review"),
+            ("does OMH support voice commands?", "voice-operator"),
+            ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops"),
+        )
+
+        for message, selected_skill in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], selected_skill)
+                self.assertEqual(decision["selected_harness"], primary_harness_for_skill(selected_skill))
+                self.assertEqual(decision["recommendations"][0]["skill"], selected_skill)
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn("Specific OMH capability question", decision["reason"])
 
     def test_file_lookup_does_not_dispatch_to_workflow_keyword(self) -> None:
         for message in (

@@ -339,7 +339,11 @@ def build_chat_interaction_payload(
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
 
-    if _is_omh_status_question(message) and resolved_mode in {"route", "plan", "clarify"}:
+    if (
+        _is_omh_status_question(message)
+        and str(route_payload.get("selected_skill", "")) == _ROUTER_SKILL
+        and resolved_mode in {"route", "plan", "clarify"}
+    ):
         base["mode"] = "status"
         base["route"] = _omh_status_route_payload(route_payload)
         base["chat_response"] = build_chat_response_from_omh_status_roadmap(

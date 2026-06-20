@@ -3243,6 +3243,28 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(route["recommendations"][0]["next_action"], "prepare_visual_prompt_card")
                 self.assertIn("guard:img_summary", route["recommendations"][0]["matched"])
 
+    def test_chat_route_dispatches_specific_capability_questions_to_cards(self) -> None:
+        cases = (
+            ("does OMH support scheduled automation?", "automation-blueprint", "prepare_scheduled_ops_blueprint"),
+            ("can OMH help with MCP setup?", "toolbelt-readiness", "prepare_toolbelt_readiness"),
+            ("does OMH support memory cleanup?", "memory-curation-review", "prepare_memory_curation_review"),
+            ("does OMH support voice commands?", "voice-operator", "prepare_voice_operator_card"),
+            ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops", "prepare_github_event_ops_card"),
+        )
+
+        for message, selected_skill, next_action in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                route = json.loads(stdout)["route"]
+                self.assertEqual(route["action"], "dispatch")
+                self.assertEqual(route["selected_skill"], selected_skill)
+                self.assertEqual(route["recommendations"][0]["skill"], selected_skill)
+                self.assertEqual(route["recommendations"][0]["next_action"], next_action)
+                self.assertIn("Specific OMH capability question", route["reason"])
+
     def test_chat_route_hint_exposes_wrapper_card_without_recording_route(self) -> None:
         message = "make an image explaining the cron feature"
         status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", message])
