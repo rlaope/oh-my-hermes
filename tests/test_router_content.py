@@ -639,6 +639,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("OMH Context Rail", skills["ultragoal"].content)
         self.assertIn("part of OMH's Hermes workflow layer", skills["ultragoal"].content)
         self.assertIn("Hermes-native workflow pack", skills["ultragoal"].content)
+        self.assertIn("Completion Checklist", skills["ultragoal"].content)
+        self.assertIn("Recovery Notes", skills["ultragoal"].content)
         self.assertIn("Current lane: **Intent -> plan**", skills["ultragoal"].content)
         self.assertIn("hand back to `oh-my-hermes`", skills["ultragoal"].content)
         self.assertIn("Cross-skill context", skills["ultragoal"].content)
@@ -647,6 +649,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
         self.assertIn("active_agent_count", skills["ultragoal"].content)
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
+        self.assertIn("goal_completion_gate/v1", skills["ultragoal"].content)
+        self.assertIn("inspect .omh/goals", skills["ultragoal"].content)
         self.assertIn("Current lane: **Materials and visual summaries**", skills["img-summary"].content)
         self.assertIn("Current lane: **Research and company ops**", skills["web-research"].content)
         self.assertIn("loop_cycle/v1", skills["loop"].content)
@@ -654,11 +658,21 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("verification_plan", skills["loop"].content)
         self.assertIn("verification_gap", skills["loop"].content)
         self.assertIn("test as stop signal", skills["loop"].content)
+        self.assertIn("queued loop ticks", skills["loop"].content)
+        self.assertIn("failure_mode_summary", skills["loop"].content)
         self.assertIn("single-cycle-plan-to-pr", skills["ultraprocess"].content)
         self.assertIn("Do not continue into a repeated feedback loop", skills["ultraprocess"].content)
         self.assertIn("code-review gate", skills["ultraprocess"].content)
         self.assertIn("docs-specialist", skills["ultraprocess"].content)
+        self.assertIn("one delivery cycle", skills["ultraprocess"].content)
+        self.assertIn("PR readiness", skills["ultraprocess"].content)
         self.assertIn("Prefer richer evidence and clearer stop conditions", skills["code-review"].content)
+        self.assertIn("Findings come first", skills["code-review"].content)
+        self.assertIn("independent review evidence", skills["code-review"].content)
+        self.assertIn("non-disjoint", skills["ultrawork"].content)
+        self.assertIn("Worker ACK", skills["ultrawork"].content)
+        self.assertIn("Blocking issues and warnings", skills["doctor"].content)
+        self.assertIn("plugin register smoke", skills["doctor"].content)
 
         for name, skill in skills.items():
             if name == "oh-my-hermes":
@@ -669,6 +683,28 @@ class RouterContentTests(unittest.TestCase):
                 self.assertIn("Product context:", skill.content)
                 self.assertIn("Cross-skill context:", skill.content)
                 self.assertIn("Coverage:", skill.content)
+                self.assertIn("Completion Checklist", skill.content)
+                self.assertIn("Recovery Notes", skill.content)
+
+    def test_installable_skills_expose_completion_and_recovery_guidance(self) -> None:
+        for definition in installable_skill_definitions():
+            with self.subTest(skill=definition.name):
+                self.assertGreaterEqual(len(definition.final_checklist), 2)
+                self.assertGreaterEqual(len(definition.recovery_notes), 2)
+                self.assertTrue(all(item.strip() for item in definition.final_checklist))
+                self.assertTrue(all(item.strip() for item in definition.recovery_notes))
+
+    def test_default_completion_and_recovery_guidance_varies_by_lane(self) -> None:
+        definitions = {definition.name: definition for definition in installable_skill_definitions()}
+        completion_sets = {tuple(definition.final_checklist) for definition in definitions.values()}
+        recovery_sets = {tuple(definition.recovery_notes) for definition in definitions.values()}
+
+        self.assertGreaterEqual(len(completion_sets), 10)
+        self.assertGreaterEqual(len(recovery_sets), 10)
+        self.assertIn("source boundaries", " ".join(definitions["web-research"].final_checklist))
+        self.assertIn("agenda", " ".join(definitions["meeting-brief"].final_checklist).lower())
+        self.assertIn("selected coding or runtime owner", " ".join(definitions["ralph"].final_checklist))
+        self.assertIn("managed path", " ".join(definitions["skill"].final_checklist))
 
     def test_coding_handoff_skills_include_executor_readiness_fallback(self) -> None:
         templates = {template.name: template.content for template in builtin_skill_templates()}
@@ -713,8 +749,19 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("do_not_use_when", skills["oh-my-hermes"])
         self.assertIn("good_example", skills["oh-my-hermes"])
         self.assertIn("bad_example", skills["oh-my-hermes"])
+        self.assertIn("final_checklist", skills["oh-my-hermes"])
+        self.assertIn("recovery_notes", skills["oh-my-hermes"])
+        self.assertGreaterEqual(len(skills["oh-my-hermes"]["final_checklist"]), 2)
+        self.assertGreaterEqual(len(skills["oh-my-hermes"]["recovery_notes"]), 2)
         self.assertIn("routing conservative", skills["oh-my-hermes"]["why_this_exists"])
         self.assertIn("Use OMH request-to-handoff", skills["oh-my-hermes"]["good_example"]["prompt"])
+        loop_final = " ".join(skills["loop"]["final_checklist"])
+        ultragoal_recovery = " ".join(skills["ultragoal"]["recovery_notes"])
+        self.assertIn("loop_status_card/v1", loop_final)
+        self.assertIn("verification_plan", loop_final)
+        self.assertIn("queued loop ticks", loop_final)
+        self.assertIn("inspect .omh/goals", ultragoal_recovery)
+        self.assertIn("prepared_not_observed", ultragoal_recovery)
         for name, (exposure, installable) in FEATURE_SURFACE_EXPOSURES.items():
             self.assertIn(name, skills)
             self.assertEqual(skills[name]["exposure"], exposure)

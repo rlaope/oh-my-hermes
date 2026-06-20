@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `wiki`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
+- Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
+- Separate coding or docs tasks are extracted instead of buried in notes.
+
+## Recovery Notes
+
+- If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
+- If the fact may be stale, record the staleness warning and next refresh action.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

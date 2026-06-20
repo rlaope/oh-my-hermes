@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Proceed to diagnosis or implementation instead of interviewing.
 - Why: The required facts are already available, so more questions would slow the workflow.
 
+## Completion Checklist
+
+- The clarified brief names goals, non-goals, constraints, and one next planning or handoff path.
+- Remaining ambiguity is listed only when it changes the plan, risk, or stop condition.
+- No implementation handoff is prepared until the blocking decision is resolved.
+
+## Recovery Notes
+
+- If the user answers with new ambiguity, ask the next decision-changing question instead of planning too early.
+- If repo evidence can answer the question, inspect it before asking the user.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

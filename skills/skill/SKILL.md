@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `skill`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The local command, managed path, config surface, and state artifact inspected are named.
+- Blocking issues, warnings, and optional surfaces are separated.
+- The next repair action is explicit and does not claim a reload or runtime observation.
+
+## Recovery Notes
+
+- If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
+- If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

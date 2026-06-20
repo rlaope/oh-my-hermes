@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
+## Completion Checklist
+
+- Confirm the workflow target, evidence boundary, and stop condition are named.
+- Report which outputs are prepared, observed, blocked, or missing.
+- Name the smallest next verification or handoff instead of claiming completion from narration.
+
+## Recovery Notes
+
+- If required context is missing, ask one blocking question or route back to the narrower workflow.
+- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

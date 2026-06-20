@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
+- Draft recommendations, accepted decisions, and executor handoffs are separate states.
+- Rejected options or unresolved tradeoffs are recorded before handoff.
+
+## Recovery Notes
+
+- If acceptance criteria or verification are missing, route back to clarification before handoff.
+- If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

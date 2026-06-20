@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `strategy-brief`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The decision, options, tradeoffs, assumptions, and rejected alternatives are named.
+- Observed signals are separated from strategic inference.
+- Accepted decisions and implementation follow-ups are not conflated.
+
+## Recovery Notes
+
+- If evidence is mostly assumption, label it and recommend a research or feedback-triage pass.
+- If the decision owner is missing, keep the output as options rather than accepted strategy.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

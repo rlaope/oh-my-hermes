@@ -38,6 +38,19 @@ Bad example:
 - Expected behavior: Route implementation to a selected executor/runtime after review findings are established.
 - Why: Review can identify the issue, but code mutation is a separate execution step.
 
+## Completion Checklist
+
+- Findings come first and are ranked by severity before summary or praise.
+- Every finding cites file, diff, command output, artifact, or expected behavior evidence.
+- No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.
+- Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
+
+## Recovery Notes
+
+- If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.
+- If tests fail or are missing, cite the exact command gap and do not approve the change as verified.
+- If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

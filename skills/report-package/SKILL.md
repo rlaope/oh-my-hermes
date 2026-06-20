@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Route to `reliability-review` and require metric or incident evidence.
 - Why: Report packaging cannot satisfy reliability closure evidence.
 
+## Completion Checklist
+
+- The reporting window, inputs, audience, narrative, and evidence gaps are named.
+- Draft report, generated package, approval, and delivery are separate states.
+- The next action says whether to gather evidence, generate, revise, approve, or deliver.
+
+## Recovery Notes
+
+- If input evidence is incomplete, mark the section as pending rather than fabricating a report claim.
+- If delivery or attachment is unavailable, keep the report package prepared_not_observed.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

@@ -37,6 +37,18 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `team`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- Each lane has an owner, disjoint scope, expected output, and verification target.
+- Worker ACK, dispatch, result, integration, and verification evidence are separated when wrappers record them.
+- The integrated status names which lanes are observed, blocked, or still prepared_not_observed.
+
+## Recovery Notes
+
+- If two lanes are not independent, collapse them under one owner or re-plan before dispatch.
+- If a worker has no ACK or result, mark that lane not_observed or blocked rather than infer progress.
+- If integration reveals a shared-file conflict, stop lane fan-out and reassign ownership before continuing.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

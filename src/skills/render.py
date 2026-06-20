@@ -204,7 +204,15 @@ def _quality_rubric_sections(definition: SkillDefinition) -> str:
 
 {_example_block("Good", definition, good=True)}
 
-{_example_block("Bad", definition, good=False)}"""
+{_example_block("Bad", definition, good=False)}
+
+## Completion Checklist
+
+{_tuple_list(definition.final_checklist)}
+
+## Recovery Notes
+
+{_tuple_list(definition.recovery_notes)}"""
 
 
 def _skill_metadata_block(definition: SkillDefinition) -> str:
@@ -533,6 +541,10 @@ def _workflow_reference_markdown_cached() -> str:
                 f"  - Why: {definition.bad_example.why if definition.bad_example else ''}",
                 "- Quality bar:",
                 *[f"  - {item}" for item in definition.quality_bar],
+                "- Completion checklist:",
+                *[f"  - {item}" for item in definition.final_checklist],
+                "- Recovery notes:",
+                *[f"  - {item}" for item in definition.recovery_notes],
                 "- Required inputs:",
                 *[f"  - {item}" for item in definition.required_inputs],
                 "- Expected outputs:",
@@ -613,6 +625,8 @@ def _copy_skill_payload(payload: dict[str, object]) -> dict[str, object]:
         "triggers",
         "do_not_use_when",
         "quality_bar",
+        "final_checklist",
+        "recovery_notes",
         "required_inputs",
         "expected_outputs",
         "artifact_expectations",
@@ -675,6 +689,8 @@ def _skill_payload(definition: SkillDefinition) -> dict[str, object]:
         "bad_example": _example_payload(definition.bad_example),
         "quality_tier": definition.quality_tier,
         "quality_bar": list(definition.quality_bar),
+        "final_checklist": list(definition.final_checklist),
+        "recovery_notes": list(definition.recovery_notes),
         "required_inputs": list(definition.required_inputs),
         "expected_outputs": list(definition.expected_outputs),
         "artifact_expectations": list(definition.artifact_expectations),

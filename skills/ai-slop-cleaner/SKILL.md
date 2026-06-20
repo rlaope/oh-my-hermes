@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ai-slop-cleaner`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The selected coding or runtime owner is named before any implementation claim.
+- Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
+- The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+
+## Recovery Notes
+
+- If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
+- If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

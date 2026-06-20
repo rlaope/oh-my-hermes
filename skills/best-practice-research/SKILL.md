@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `best-practice-research`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The research question, source boundaries, recency assumptions, and confidence level are named.
+- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+
+## Recovery Notes
+
+- If sources cannot be accessed, state the retrieval gap and use only observed local context.
+- If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

@@ -38,6 +38,20 @@ Bad example:
 - Expected behavior: Route to planning or implementation instead of health diagnostics.
 - Why: That is product development work, not a local health check.
 
+## Completion Checklist
+
+- Command availability, managed skills, Hermes registration, runtime state, and optional surfaces are grouped separately.
+- Blocking issues and warnings are separated, with one next repair action named for each blocking area.
+- Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.
+- The final status says whether setup/update/doctor repaired anything or only observed health.
+
+## Recovery Notes
+
+- If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.
+- If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.
+- If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.
+- If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.
