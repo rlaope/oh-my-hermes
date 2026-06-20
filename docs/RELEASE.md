@@ -60,6 +60,7 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
+python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
@@ -91,6 +92,12 @@ omh release checklist --version 1.0.1 --json
 It is plan-only: it does not run checks, mutate Hermes, create tags, or publish
 GitHub releases. Treat it as the operator-facing index of the evidence that must
 be attached before a stable tag.
+
+The checklist also gates the G1-G10 use-case demo cards through
+`omh cases demo --all --json`. That proves OMH can render wrapper-safe
+use-case projections with route, action, status-card, and evidence-boundary
+metadata. It is not evidence that cron, connectors, files, memory updates,
+executors, reviews, CI, merges, or delivery actually ran.
 
 ## Hermes CLI Install Smoke
 

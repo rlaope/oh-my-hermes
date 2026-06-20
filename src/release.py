@@ -32,6 +32,7 @@ from .plugin_bundle.omh.tools.capability_tool import (
 from .release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from .skill_pack import builtin_skill_templates
 from .skills.catalog import builtin_definitions
+from .use_cases import USE_CASES, demo_all_use_cases
 
 REPOSITORY_ARCHIVE_ROOT = "https://github.com/rlaope/oh-my-hermes/archive/refs"
 RELEASE_CHANNELS = ("stable", "preview", "local")
@@ -179,6 +180,16 @@ def release_readiness_checklist(
             False,
             "Harness catalog validation exits successfully.",
             "Harness validation proves local schemas and metadata, not runtime execution.",
+        ),
+        ReleaseChecklistItem(
+            "use_case_demo_cards",
+            "Check G1-G10 use-case demo cards",
+            "uv run python -m src.cli cases demo --all --json",
+            "contract-quality",
+            True,
+            False,
+            "Use-case demo card collection renders all ten G1-G10 cards with route, action, wrapper card, and evidence boundary metadata.",
+            "Use-case demo cards prove wrapper-renderable projections only; they do not prove cron, connector, file, memory, executor, review, CI, merge, or delivery work happened.",
         ),
         ReleaseChecklistItem(
             "stable_install_dry_run",
@@ -702,6 +713,8 @@ def skill_content_smoke() -> dict[str, object]:
     standalone_capability_skill_section_chars = len(
         json.dumps(standalone_capability_items, sort_keys=True, ensure_ascii=False)
     )
+    use_case_demo_cards = demo_all_use_cases()
+    use_case_demo_failures = _use_case_demo_card_failures(use_case_demo_cards)
     max_full_capability_skill_chars = max(
         (len(json.dumps(item, sort_keys=True, ensure_ascii=False)) for item in full_capability_items),
         default=0,
@@ -809,6 +822,7 @@ def skill_content_smoke() -> dict[str, object]:
         and not awareness_budget_failures
         and not role_context_budget_failures
         and not capability_budget_failures
+        and not use_case_demo_failures
     )
     return {
         "schema_version": SKILL_CONTENT_SMOKE_SCHEMA,
@@ -862,6 +876,12 @@ def skill_content_smoke() -> dict[str, object]:
         "standalone_capability_skill_section_chars": standalone_capability_skill_section_chars,
         "max_standalone_capability_skill_chars": max_standalone_capability_skill_chars,
         "capability_budget_failures": capability_budget_failures,
+        "use_case_demo_collection_schema": use_case_demo_cards.get("schema_version"),
+        "use_case_demo_card_count": len(use_case_demo_cards.get("cards", []))
+        if isinstance(use_case_demo_cards.get("cards"), list)
+        else 0,
+        "expected_use_case_demo_card_count": len(USE_CASES),
+        "use_case_demo_failures": use_case_demo_failures,
         "awareness_context_char_limits": {
             "primer_context": AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
             "primer_markdown": AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
@@ -883,6 +903,52 @@ def skill_content_smoke() -> dict[str, object]:
             "It does not prove the target Hermes profile installed, loaded, selected, or used those skills in chat."
         ),
     }
+
+
+def _use_case_demo_card_failures(payload: Mapping[str, object]) -> list[str]:
+    failures: list[str] = []
+    if payload.get("schema_version") != "omh_use_case_demo_collection/v1":
+        failures.append("collection_schema")
+    cards = payload.get("cards", [])
+    if not isinstance(cards, Sequence) or isinstance(cards, (str, bytes)):
+        return failures + ["cards_not_sequence"]
+    if len(cards) != len(USE_CASES):
+        failures.append("card_count")
+    expected_goals = [case.goal for case in USE_CASES]
+    observed_goals: list[str] = []
+    for index, card in enumerate(cards):
+        if not isinstance(card, Mapping):
+            failures.append(f"card_{index}_not_mapping")
+            continue
+        goal = str(card.get("goal") or "")
+        observed_goals.append(goal)
+        if card.get("schema_version") != "omh_use_case_demo_card/v1":
+            failures.append(f"{goal or index}_schema")
+        route = card.get("route")
+        wrapper_card = card.get("wrapper_card")
+        evidence = card.get("evidence")
+        actions = card.get("actions")
+        chat_surface = card.get("chat_surface")
+        if not isinstance(route, Mapping) or not route.get("primary_skill") or not route.get("next_action"):
+            failures.append(f"{goal or index}_route")
+        if not isinstance(wrapper_card, Mapping) or wrapper_card.get("component") != "omh_use_case_card":
+            failures.append(f"{goal or index}_wrapper_card")
+        if isinstance(wrapper_card, Mapping) and wrapper_card.get("status") != "prepared_not_observed":
+            failures.append(f"{goal or index}_wrapper_status")
+        if not isinstance(evidence, Mapping) or evidence.get("state") != "prepared_not_observed":
+            failures.append(f"{goal or index}_evidence_state")
+        boundary = str(evidence.get("claim_boundary") if isinstance(evidence, Mapping) else "")
+        if "not " not in boundary.casefold() or "evidence" not in boundary.casefold():
+            failures.append(f"{goal or index}_boundary")
+        if not isinstance(actions, Sequence) or isinstance(actions, (str, bytes)) or not actions:
+            failures.append(f"{goal or index}_actions")
+        elif isinstance(route, Mapping) and isinstance(actions[0], Mapping) and actions[0].get("id") != route.get("next_action"):
+            failures.append(f"{goal or index}_primary_action")
+        if not isinstance(chat_surface, Mapping) or not str(chat_surface.get("headline") or "").startswith("[omh] "):
+            failures.append(f"{goal or index}_chat_surface")
+    if observed_goals != expected_goals:
+        failures.append("goal_order")
+    return failures
 
 
 def _bundled_role_contexts() -> dict[str, str]:

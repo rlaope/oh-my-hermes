@@ -44,6 +44,8 @@
   touching real user state
 - G1-G10 use-case demo cards through `omh cases demo`, including a checked-in
   `omh_use_case_demo_collection/v1` fixture for wrapper rendering
+- Release and skill-content smoke now gate those G1-G10 demo cards so route,
+  action, wrapper-card, and evidence-boundary drift fails before release
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated
