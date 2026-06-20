@@ -15,6 +15,8 @@ uv run python examples/discord-adapter-shim.py
 uv run python examples/discord-adapter-shim.py examples/wrapper-events/discord-command-preview.json
 uv run python examples/slack-adapter-shim.py examples/wrapper-events/slack-command-preview.json
 uv run python examples/telegram-adapter-shim.py examples/wrapper-events/telegram-command-preview.json
+uv run python examples/discord-adapter-shim.py --plugin-interact examples/wrapper-events/discord-workflow-catalog.json
+uv run python examples/slack-adapter-shim.py --plugin-interact examples/wrapper-events/slack-risky-refactor.json
 uv run python examples/discord-adapter-shim.py --route-hint examples/wrapper-events/discord-route-hint-visual.json
 uv run python examples/slack-adapter-shim.py --route-hint examples/wrapper-events/slack-route-hint-missed-route.json
 uv run python -m src.cli chat route-hint --source discord "make an image explaining the cron feature"
@@ -107,6 +109,57 @@ text, harness names, and routing-only claim boundary. Catalog-question
 responses also include `omh_capability_summary/v1`, so Hermes can summarize the
 larger lanes, representative playbooks, and evidence boundary before or beside
 the picker.
+
+## Plugin-Native Chat Interaction
+
+When the managed OMH plugin is loaded, a Hermes wrapper can call the plugin
+tool `omh_interact` directly. That path returns the same renderable
+`chat_interaction/v1` envelope as `omh chat interact`, and it can also record a
+metadata-only wrapper session with `record_provenance.producer == plugin_tool`.
+
+The transport-free shims can render this without touching your real `~/.omh` or
+`~/.hermes` state:
+
+```sh
+uv run python examples/discord-adapter-shim.py --plugin-interact examples/wrapper-events/discord-workflow-catalog.json
+uv run python examples/slack-adapter-shim.py --plugin-interact examples/wrapper-events/slack-risky-refactor.json
+```
+
+Example catalog effect:
+
+```text
+Hermes Agent  BOT
+[omh] oh-my-hermes - Here are the OMH workflows.
+
+You do not need to run a shell command for this. OMH covers planning, ops,
+deliverables, coding handoffs, loops, and status.
+
+[ Choose workflow ] [ Search workflows ] [ Show status ]
+
+Plugin session
+- tool: omh_interact
+- wrapper_session: recorded
+- producer: plugin_tool
+- state scope: temporary example
+```
+
+Example plan effect:
+
+```text
+Hermes Agent  BOT
+[omh] ralplan - I routed this to `ralplan` because it needs a safe plan first.
+
+Accept or revise the plan first; the handoff button stays disabled until
+acceptance. A draft plan is still only planning evidence.
+
+[ Accept plan ] [ Revise plan ] [ Prepare handoff disabled ]
+```
+
+These examples are locked by
+`examples/wrapper-golden/plugin-interact.json`. The plugin observation and
+wrapper session record prove only that the plugin tool produced metadata for
+the wrapper. They do not prove workflow execution, executor dispatch,
+verification, review, CI, or merge.
 
 ## Plugin Route Hints
 

@@ -10,8 +10,6 @@
 - More playbook-backed situation pipelines for wrapper UX, research, planning,
   and release flows
 - More artifact-backed application cases for Hermes-hosted chat surfaces
-- More fixture-backed Hermes Agent wrapper examples that consume plugin
-  `omh_interact` and `chat_interaction/v1`
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
 - Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
@@ -40,6 +38,9 @@
   hosted chat surfaces
 - Plugin-native `omh_interact` chat/session observation for Hermes-hosted
   surfaces
+- Fixture-backed Hermes Agent wrapper examples that consume plugin
+  `omh_interact` and render the resulting `chat_interaction/v1` without
+  touching real user state
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated

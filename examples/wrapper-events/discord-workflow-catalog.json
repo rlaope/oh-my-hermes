@@ -1,0 +1,13 @@
+{
+  "id": "discord-fixture-omh-catalog",
+  "channel_id": "ops-help",
+  "message": {
+    "id": "discord-message-omh-catalog",
+    "channel": "ops-help",
+    "content": "what OMH workflows are available?",
+    "author": {
+      "id": "maintainer-1"
+    },
+    "timestamp": "2026-06-20T12:00:00Z"
+  }
+}
