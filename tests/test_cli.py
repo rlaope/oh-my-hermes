@@ -89,6 +89,27 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["next_action"], "audit_learning_readiness")
             self.assertIn("guard:workflow_learning", payload["route"]["recommendations"][0]["matched"])
 
+    def test_chat_interact_omh_status_question_uses_probe_roadmap(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(
+                base + ["chat", "interact", "--source", "discord", "omh 상태랑 다음 액션 알려줘"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["mode"], "status")
+            self.assertEqual(payload["next_action"], "show_status")
+            self.assertEqual(payload["chat_response"]["kind"], "status")
+            self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] status - "))
+            state = payload["chat_response"]["state"]
+            self.assertEqual(state["capability_gap_roadmap"]["schema_version"], "omh_capability_gap_roadmap/v1")
+            self.assertEqual(state["roadmap_next_actions"][0]["id"], "run_setup")
+            self.assertIn("omh setup", state["roadmap_next_actions"][0]["command"])
+
     def test_learning_record_eval_and_regression_replay(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -508,7 +508,14 @@ The backend flow is:
    `omh_capability_summary/v1`, which lets Hermes explain the larger
    capability lanes and representative playbooks without a second catalog
    command.
-8. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
+8. If the user asks whether OMH is installed correctly, what OMH's current
+   status is, or what to do next after setup, the wrapper returns
+   `chat_response.kind == status` with `[omh] status`, a compact human summary,
+   and `chat_response.state.capability_gap_roadmap`. This is the chat-first
+   form of `omh probe --roadmap`: it separates missing product setup from
+   missing host/runtime evidence without making the user approve shell commands
+   just to understand OMH health.
+9. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
    `status_card` when present in the original channel or thread. The headline
    already starts with the visible OMH marker, such as `[omh] web-research`;
    adapters can read `chat_response.usage_trace` for the selected workflow,
@@ -517,7 +524,7 @@ The backend flow is:
    why/next/not-evidence card so Hermes can explain why OMH selected this
    workflow, what the user or wrapper should do next, and which claims are
    still not observed evidence.
-9. Adapters apply `chat_response.messenger_rendering` for the selected surface:
+10. Adapters apply `chat_response.messenger_rendering` for the selected surface:
    Discord, Slack, and Telegram default to `limited_markdown`, while Hermes TUI,
    web, and generic rich Markdown surfaces default to `rich_markdown`. Render
    `chat_response.messenger_rendering.body_text` for that profile. Limited
@@ -528,35 +535,35 @@ The backend flow is:
    `omh chat interact --render-profile limited_markdown`. The prefix appears
    once per response; repeat it only if the adapter splits a long answer into
    separate posted chunks.
-10. If the interaction asks for clarification, the wrapper keeps the answer in
+11. If the interaction asks for clarification, the wrapper keeps the answer in
    the same thread and calls `omh chat interact` again with the updated message.
-11. If the interaction presents a plan, the wrapper waits for the user to accept
+12. If the interaction presents a plan, the wrapper waits for the user to accept
    or revise it before preparing any coding handoff.
-12. If the accepted interaction exposes executor or runtime selection, the
+13. If the accepted interaction exposes executor or runtime selection, the
    wrapper uses the chosen profile. Codex can use the run-backed lifecycle path;
    Claude Code and generic agents use prompt-only handoffs; Hermes, OMX, OMO,
    and OMC use runtime handoffs with team/swarm, worker-protocol, and worktree
    guidance. The wrapper records only what it actually observes.
-13. For a coding profile that has not been observed before, the wrapper can run
+14. For a coding profile that has not been observed before, the wrapper can run
    `omh coding executor-readiness --executor <profile>` once and cache
    `executor_readiness/v1`. If the probe reports `missing` or `blocked`, ask the
    user to choose another coding agent, configure PATH, continue in Hermes, or
    keep a prompt/runtime handoff. Retry only after that state changes. Readiness
    is not dispatch, implementation, review, CI, or merge evidence.
-14. If the wrapper observes Hermes target metadata such as `agent_ref`,
+15. If the wrapper observes Hermes target metadata such as `agent_ref`,
    `agent_count`, or `hermes_home`, `chat_interaction/v1` may include
    `target_notice` and `target_topology`. Render the concise notice or
    `apply_target_change` action before treating single-to-multi or
    multi-to-single target changes as persistent setup state. When target
    identity metadata is present, `thread_key` is scoped by that target so two
    Hermes agents in the same channel do not share wrapper session state.
-15. If the wrapper has local memory-like context candidates, it can run
+16. If the wrapper has local memory-like context candidates, it can run
    `omh memory inspect` and attach a conflict-free `handoff_context_pack/v1` to
    the later handoff. Conflicting or stale assumptions must be shown as memory
    review, not silently reused.
-16. Status updates use `omh coding lifecycle report` or
+17. Status updates use `omh coding lifecycle report` or
    `omh chat interact --run <run-id>` and stay in the same thread.
-17. Hermes still starts with its normal config and reads `skills.external_dirs`;
+18. Hermes still starts with its normal config and reads `skills.external_dirs`;
    `omh apply` makes sure `~/.omh/skills` is included in that discovery list.
 
 `omh` provides deterministic local contracts for command registration, fallback
