@@ -78,7 +78,16 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["route_hint"]["schema_version"], "omh_route_hint/v1")
         self.assertEqual(payload["route_hint"]["primary_workflow"], "feedback-triage")
         self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "feedback-triage")
+        self.assertEqual(payload["generic_tool_checkpoint"]["schema_version"], "omh_generic_tool_checkpoint/v1")
+        self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"]["body"])
+        self.assertIn("prep/status/learning", payload["chat_response"]["body"])
+        self.assertNotIn("generic_tool_checkpoint", payload["chat_response"]["state"])
         self.assertEqual(payload["chat_response"]["messenger_rendering"]["profile"], "discord")
+        self.assertIn("prep/status/learning", payload["chat_response"]["messenger_rendering"]["checkpoint_text"])
+        self.assertIn(
+            "generic_tool_checkpoint_path",
+            payload["wrapper_contract"],
+        )
         self.assertTrue(payload["wrapper_contract"]["safe_to_render_without_shell_approval"])
         action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
         self.assertIn("open_workflow", action_ids)
@@ -92,6 +101,9 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["route_hint"]["status"], "no_hint")
         self.assertEqual(payload["chat_response"]["kind"], "no_route_hint")
         self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "")
+        self.assertEqual(payload["generic_tool_checkpoint"]["schema_version"], "omh_generic_tool_checkpoint/v1")
+        self.assertIn("Before generic tools", payload["generic_tool_checkpoint"]["body"])
+        self.assertIn("Before generic tools", payload["chat_response"]["body"])
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertIn("open_picker", actions)
         self.assertIn("clarify", actions)

@@ -6,6 +6,9 @@ import unicodedata
 
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
+OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION = "omh_generic_tool_checkpoint/v1"
+GENERIC_TOOL_CHECKPOINT_TEXT = "Before generic tools, check OMH prep/status/learning; if relevant, name the workflow first."
+GENERIC_TOOL_CHECKPOINT_APPLIES_BEFORE = ("image tools", "file tools", "search tools", "coding tools")
 ROUTER_KEYWORD_SKILLS = (
     "deep-interview",
     "ralplan",
@@ -606,9 +609,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "Across every OMH skill: match intent to a lane, name adjacent workflows, "
             "and do not dismiss OMH because a generic tool can render or execute."
         ),
-        "generic_tool_checkpoint": (
-            "Before generic tools, check OMH prep/status/learning; if relevant, name the workflow first."
-        ),
+        "generic_tool_checkpoint": GENERIC_TOOL_CHECKPOINT_TEXT,
         "skill_coverage": "Every generated workflow skill carries this rail.",
         "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
         "lanes": lanes,
@@ -682,6 +683,16 @@ def awareness_primer_payload() -> dict[str, object]:
             "src/skills/render.py",
             "src/capabilities/registry.py",
         ],
+    }
+
+
+def awareness_generic_tool_checkpoint_payload() -> dict[str, object]:
+    return {
+        "schema_version": OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION,
+        "label": "OMH-first checkpoint",
+        "body": GENERIC_TOOL_CHECKPOINT_TEXT,
+        "applies_before": list(GENERIC_TOOL_CHECKPOINT_APPLIES_BEFORE),
+        "claim_boundary": "Advisory routing context only; not workflow execution or generic tool invocation evidence.",
     }
 
 
