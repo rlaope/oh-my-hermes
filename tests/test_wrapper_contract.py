@@ -102,6 +102,20 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("open_picker", action_ids)
         self.assertNotIn(message, json.dumps(payload))
 
+    def test_route_hint_payload_prioritizes_missed_route_feedback(self) -> None:
+        message = "missed route: Hermes skipped OMH for my image request with secret-token-123"
+
+        payload = build_chat_route_hint_payload(message, source="discord")
+
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "workflow-learning")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "record_missed_route")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "workflow-learning")
+        self.assertEqual(payload["chat_response"]["state"]["next_action"], "record_missed_route")
+        self.assertIn("workflow-learning", payload["chat_response"]["body"])
+        self.assertIn("record_missed_route", json.dumps(payload["route_hint"]))
+        self.assertNotIn(message, json.dumps(payload))
+        self.assertNotIn("secret-token-123", json.dumps(payload))
+
     def test_route_hint_payload_has_picker_fallback_when_no_hint_matches(self) -> None:
         payload = build_chat_route_hint_payload("zzzzzz", source="slack")
 

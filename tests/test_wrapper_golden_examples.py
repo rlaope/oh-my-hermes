@@ -338,7 +338,7 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 "examples/wrapper-events/slack-route-hint-missed-route.json",
                 "slack",
                 "workflow-learning",
-                "audit_learning_readiness",
+                "record_missed_route",
                 "missed route: OMH was not used",
             ),
         )
