@@ -153,7 +153,13 @@ def _standalone_capabilities(
     config_text = _read_text(hermes_config)
     plugin_dir = hermes / "plugins" / "omh"
     target_topology = hud.get("target_topology", {}) if isinstance(hud, dict) else {}
-    wrapper_paths = list((home / "runtime" / "runs").glob("*/wrapper.json")) if (home / "runtime" / "runs").exists() else []
+    wrapper_paths = []
+    runs_dir = home / "runtime" / "runs"
+    sessions_dir = home / "runtime" / "wrapper_sessions"
+    if runs_dir.exists():
+        wrapper_paths.extend(sorted(runs_dir.glob("*/wrapper.json")))
+    if sessions_dir.exists():
+        wrapper_paths.extend(sorted(sessions_dir.glob("*/session.json")))
     return [
         _capability(
             "external_skill_dirs",

@@ -774,10 +774,10 @@ def awareness_primer_context() -> str:
             str(payload["chat_rule"]),
             f"Pattern cards: {pattern_line}.",
             f"Common cues: {cue_map}.",
-            f"Tools: {tool_map}",
             (
-                "Tools: omh_recommend routes; omh_capabilities catalogs; omh_probe gives setup/runtime roadmap; "
-                "omh_status/hud shows state; omh_role gives role context."
+                f"Tools: {tool_map}; omh_interact records chat/session metadata; "
+                "omh_recommend routes; omh_capabilities catalogs; omh_probe roadmaps; "
+                "omh_status/hud state; omh_role role context."
             ),
             str(payload["fallback_rule"]),
             "Boundary: " + str(payload["evidence_boundary"]),
@@ -810,24 +810,19 @@ def awareness_primer_markdown() -> str:
             str(payload["skill_coverage"]),
             "",
             str(payload["chat_rule"]),
-            "",
             *lane_lines,
             "",
             "Workflow context cards:",
-            "",
             _compact_workflow_context_cards_line() + ".",
             "",
             "Common cues before generic tools:",
-            "",
             _compact_workflow_cue_line() + ".",
             "",
             "Generic tool map:",
-            "",
             _compact_generic_tool_checkpoint_line() + ".",
             "",
             "Tools:",
-            "",
-            "- `omh_recommend`: routes; `omh_capabilities`: catalog; `omh_probe`: roadmap; `omh_status`/`omh_hud`: state; `omh_role`: role.",
+            "- Tools: `omh_interact` chat/session meta; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.",
             "",
             str(payload["fallback_rule"]),
             "",

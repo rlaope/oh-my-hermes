@@ -28,6 +28,7 @@ from ..runtime.artifacts import (
 )
 from .contract import (
     CHAT_RESPONSE_SCHEMA_VERSION,
+    INTERACTION_MODES,
     build_chat_interaction_payload,
     build_chat_status_interaction,
     headline_with_usage_prefix,
@@ -82,19 +83,24 @@ def create_or_resume_wrapper_session(
     event_or_message: dict[str, Any] | str,
     *,
     source: str = "generic",
+    mode: str = "auto",
     limit: int = 3,
     min_confidence: str = "high",
     source_metadata: dict[str, str] | None = None,
     executor_target: str = "choose",
     target_notice: dict[str, object] | None = None,
+    record_provenance: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise WrapperSessionError(f"unsupported wrapper session source: {source}")
+    if mode not in INTERACTION_MODES:
+        raise WrapperSessionError(f"unsupported wrapper session mode: {mode}")
     if min_confidence not in CONFIDENCE_LEVELS:
         raise WrapperSessionError(f"unsupported wrapper session confidence threshold: {min_confidence}")
     interaction = build_chat_interaction_payload(
         event_or_message,
         source=source,
+        mode=mode,
         limit=limit,
         min_confidence=min_confidence,
         include_message=False,
@@ -118,7 +124,7 @@ def create_or_resume_wrapper_session(
         session = existing
         resumed = True
     else:
-        session = _session_from_interaction(session_id, interaction)
+        session = _session_from_interaction(session_id, interaction, record_provenance=record_provenance)
         write_wrapper_session(paths, session)
         append_wrapper_session_event(
             session_dir,
@@ -801,7 +807,12 @@ def _validate_wrapper_session_dir(session_dir: Path) -> dict[str, Any]:
     return {"session_id": session_id, "ok": not errors, "errors": errors}
 
 
-def _session_from_interaction(session_id: str, interaction: dict[str, object]) -> dict[str, Any]:
+def _session_from_interaction(
+    session_id: str,
+    interaction: dict[str, object],
+    *,
+    record_provenance: dict[str, object] | None = None,
+) -> dict[str, Any]:
     route = interaction.get("route")
     route = route if isinstance(route, dict) else {}
     plan_payload = interaction.get("plan")
@@ -837,6 +848,7 @@ def _session_from_interaction(session_id: str, interaction: dict[str, object]) -
             "prompt_handoff": {},
             "runtime_handoff": {},
             "current_run_id": "",
+            "record_provenance": record_provenance or {},
         }
     )
 

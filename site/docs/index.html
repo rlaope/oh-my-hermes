@@ -330,15 +330,20 @@ hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code>
             renderable state for business workflows, planning, status, or handoff UX.
           </p>
           <div class="command" role="region" aria-label="Chat interaction command" tabindex="0">
-            <code>omh chat interact --source discord "risky refactor"
+            <code>plugin tool: omh_interact
+omh chat interact --source discord "risky refactor"
 omh chat interact --source slack "diagnose installation health"</code>
           </div>
           <p>
-            These are adapter backend calls. A response can be an answer, a clarification
-            request, policy-specific workflow guidance for research, strategy, feedback
-            triage, meeting prep, a plan, a status card, or a prepared handoff. The wrapper should render
-            that response natively instead of
-            asking users to memorize CLI commands.
+            <code>omh_interact</code> is the plugin-native path: it returns the
+            same chat envelope and records a metadata-only wrapper session with
+            producer provenance. The CLI examples are adapter backend
+            equivalents. A response can be
+            an answer, a clarification request, policy-specific workflow
+            guidance for research, strategy, feedback triage, meeting prep, a
+            plan, a status card, or a prepared handoff. The wrapper should
+            render that response natively instead of asking users to memorize
+            CLI commands.
           </p>
         </section>
 
@@ -576,7 +581,7 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
           <p>
             The application cases include twenty-eight natural-language messages
             evaluated through the same deterministic local contracts behind
-            <code>omh chat interact</code>, <code>omh playbook recommend</code>,
+            plugin <code>omh_interact</code>, <code>omh chat interact</code>, <code>omh playbook recommend</code>,
             and <code>omh coding delegate</code>. They lock the intended user
             experience: route, plan, clarify, QA, review, or handoff preparation
             without overclaiming execution.
@@ -630,7 +635,7 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
           <div class="docs-grid">
             <article class="card">
               <h3>chat_interaction/v1</h3>
-              <p>Input envelope for natural messages, source metadata, thread context, and user intent.</p>
+              <p>Input/output envelope for natural messages, source metadata, thread context, user intent, and plugin-recorded wrapper sessions.</p>
             </article>
             <article class="card">
               <h3>chat_response/v1</h3>

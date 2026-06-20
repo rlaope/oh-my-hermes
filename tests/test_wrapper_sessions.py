@@ -76,6 +76,8 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(session["status"], "plan_presented")
             self.assertEqual(session["decision"], "none")
             self.assertEqual(session["current_run_id"], "")
+            self.assertEqual(session["record_provenance"]["producer"], "wrapper_backend")
+            self.assertFalse(session["record_provenance"]["observed_by_host"])
             self.assertEqual(first["status"]["chat_response"]["messenger_rendering"]["render_profile"], "limited_markdown")
             self.assertEqual(
                 session["source_metadata"],

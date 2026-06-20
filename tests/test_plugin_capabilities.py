@@ -5,6 +5,7 @@ import subprocess
 import sys
 import textwrap
 import unittest
+from unittest.mock import patch
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
@@ -92,7 +93,41 @@ class PluginCapabilitiesTests(unittest.TestCase):
             ctx = FakeHermesContext()
             module.register(ctx)
 
+            interact_handler = ctx.tools["omh_interact"]["args"][2]
             probe_handler = ctx.tools["omh_probe"]["args"][2]
+            interaction = json.loads(
+                interact_handler(
+                    {
+                        "omh_home": str(omh_home),
+                        "hermes_home": str(hermes_home),
+                        "message": "I want to safely add a feature to this repo with secret-token-123",
+                        "source": "discord",
+                        "mode": "plan",
+                        "source_metadata": {
+                            "source_event_id": "msg-1",
+                            "channel_ref": "chan-1",
+                            "user_ref": "user-1",
+                            "target_ref": "secret-token-123",
+                            "runtime_ref": "sk-proj-example",
+                        },
+                        "observation": {
+                            "host": "hermes-agent",
+                            "session_id": "session-interact-1",
+                            "evidence_ref": "host-tool-call:omh_interact",
+                        },
+                    }
+                )
+            )
+            self.assertEqual(interaction["schema_version"], "chat_interaction/v1")
+            self.assertEqual(interaction["mode"], "plan")
+            self.assertTrue(interaction["wrapper_session"]["recorded"])
+            self.assertEqual(interaction["wrapper_session"]["session_status"], "plan_presented")
+            self.assertEqual(interaction["wrapper_session"]["record_provenance"]["producer"], "plugin_tool")
+            self.assertEqual(interaction["plugin_host_observation"]["tool"], "omh_interact")
+            serialized_interaction = json.dumps(interaction, sort_keys=True)
+            self.assertNotIn("secret-token-123", serialized_interaction)
+            self.assertNotIn("sk-proj-example", serialized_interaction)
+
             probe = json.loads(
                 probe_handler(
                     {
@@ -115,6 +150,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(probe["plugin_host_observation"]["runtime_readiness"], "active_runtime_observed")
             roadmap_actions = {item["id"] for item in probe["capability_gap_roadmap"]["next_actions"]}
             self.assertNotIn("observe_plugin_runtime", roadmap_actions)
+            self.assertNotIn("record_wrapper_usage", roadmap_actions)
+            caps = {item["name"]: item for item in probe["capabilities"]}
+            self.assertEqual(caps["wrapper_metadata"]["status"], "available")
 
             pre_llm = ctx.hooks["pre_llm_call"]
             pre_llm(
@@ -139,6 +177,36 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("host-tool-call:omh_probe", serialized)
             self.assertIn("host-hook-call:pre_llm_call", serialized)
             self.assertNotIn("secret-token-123", serialized)
+
+    def test_plugin_interact_backend_errors_are_redacted(self) -> None:
+        from omh.plugin_bundle.omh.tools.chat_tool import omh_interact_handler
+
+        with patch(
+            "omh.plugin_bundle.omh.tools.chat_tool._package_interaction",
+            side_effect=RuntimeError("sk-proj-secret leaked-token-value"),
+        ):
+            payload = json.loads(
+                omh_interact_handler(
+                    {
+                        "message": "route this request",
+                        "source": "discord",
+                        "source_metadata": {
+                            "source_event_id": "msg-1",
+                            "channel_ref": "chan-1",
+                            "runtime_ref": "sk-proj-secret",
+                        },
+                    }
+                )
+            )
+
+        serialized = json.dumps(payload, sort_keys=True)
+        self.assertEqual(payload["schema_version"], "omh_interact_result/v1")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "package_backend_error")
+        self.assertEqual(payload["error_type"], "RuntimeError")
+        self.assertFalse(payload["wrapper_session"]["recorded"])
+        self.assertNotIn("sk-proj-secret", serialized)
+        self.assertNotIn("leaked-token-value", serialized)
 
     def test_installed_plugin_capabilities_tool_loads_without_installed_omh_package(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -176,6 +244,7 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 ctx = FakeCtx()
                 module.register(ctx)
                 handler = ctx.tools["omh_capabilities"]["args"][2]
+                interact_handler = ctx.tools["omh_interact"]["args"][2]
                 recommend_handler = ctx.tools["omh_recommend"]["args"][2]
                 probe_handler = ctx.tools["omh_probe"]["args"][2]
                 keywords = json.loads(handler({{"action": "export", "section": "keywords"}}))
@@ -183,6 +252,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 summary = json.loads(handler({{"action": "summary"}}))
                 recommendation = json.loads(
                     recommend_handler({{"message": "make an image summary for this PR with secret-token-123", "limit": 2}})
+                )
+                interaction = json.loads(
+                    interact_handler({{
+                        "message": "make an image summary for this PR with secret-token-123",
+                        "source": "discord",
+                        "record_session": True,
+                        "source_metadata": {{"source_event_id": "standalone-msg-1", "channel_ref": "standalone-chan-1"}},
+                    }})
                 )
                 probe = json.loads(
                     probe_handler({{
@@ -257,6 +334,11 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "recommend_raw_prompt_echoed": recommendation["message"]["raw_prompt_echoed"],
                     "recommend_first_skill": recommendation["recommendations"][0]["skill"],
                     "recommend_serialized": json.dumps(recommendation, sort_keys=True),
+                    "interaction_schema": interaction["schema_version"],
+                    "interaction_degraded": interaction["degraded"],
+                    "interaction_source": interaction["source_backend"],
+                    "interaction_recorded": interaction["wrapper_session"]["recorded"],
+                    "interaction_serialized": json.dumps(interaction, sort_keys=True),
                     "probe_schema": probe["schema_version"],
                     "probe_source": probe["source"],
                     "probe_degraded": probe["degraded"],
@@ -362,6 +444,11 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["recommend_first_skill"], "img-summary")
             self.assertIn("<current user request>", payload["recommend_serialized"])
             self.assertNotIn("secret-token-123", payload["recommend_serialized"])
+            self.assertEqual(payload["interaction_schema"], "chat_interaction/v1")
+            self.assertTrue(payload["interaction_degraded"])
+            self.assertEqual(payload["interaction_source"], "standalone_plugin_bundle_fallback")
+            self.assertFalse(payload["interaction_recorded"])
+            self.assertNotIn("secret-token-123", payload["interaction_serialized"])
             self.assertEqual(payload["probe_schema"], 1)
             self.assertEqual(payload["probe_source"], "standalone_plugin_bundle_fallback")
             self.assertTrue(payload["probe_degraded"])

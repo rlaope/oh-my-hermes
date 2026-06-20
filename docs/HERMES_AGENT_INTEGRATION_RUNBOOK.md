@@ -30,7 +30,9 @@ questions:
 
 ## Contract Surfaces
 
-The wrapper normally starts with `chat_interaction/v1`.
+The wrapper normally starts with `chat_interaction/v1`. If the OMH plugin is
+available, use `omh_interact` so Hermes can receive the same envelope and record
+a metadata-only wrapper session without asking for shell approval.
 
 ```sh
 omh chat interact --source discord --event-json event.json
@@ -71,7 +73,7 @@ runtime run exists and the wrapper needs a compact progress card.
    `chat_response.messenger_rendering.body_text` for the selected profile. Use
    `fallback_body_text` when relaying a rich response into a narrower chat
    surface, or pass `--render-profile limited_markdown` when calling
-   `omh chat interact`. Render the prefix once per response, not on every
+  plugin `omh_interact` or `omh chat interact`. Render the prefix once per response, not on every
    paragraph; repeat it only when the adapter posts a long response as separate
    message chunks.
 5. If `target_notice.action` is `ask_to_apply_target_change`, render a short
