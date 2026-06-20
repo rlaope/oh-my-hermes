@@ -75,6 +75,9 @@ def build_context_brief(
         payload["prompt_context_boundary"] = (
             "Prompt context is for Hermes routing guidance only; it is not workflow execution or observed evidence."
         )
+    catalog_hint = _catalog_question_hint(text)
+    if catalog_hint:
+        payload["catalog_question"] = catalog_hint
     return payload
 
 
@@ -84,3 +87,119 @@ def bounded_context_hint_limit(value: object, *, default: int) -> int:
     except (TypeError, ValueError):
         parsed = default
     return max(0, min(parsed, 10))
+
+
+def _catalog_question_hint(message: str) -> dict[str, object]:
+    if not _is_catalog_question(message):
+        return {}
+    return {
+        "schema_version": "omh_catalog_question_hint/v1",
+        "status": "matched",
+        "next_action": "show_workflow_picker",
+        "recommended_tool": "omh_capabilities",
+        "recommended_tool_args": {"action": "summary"},
+        "wrapper_contracts": ["omh_skill_picker/v1", "omh_capability_summary/v1"],
+        "direct_invocation_aliases": ["./omh", "/omh", "./skills", "/skills"],
+        "response_rule": (
+            "Answer in chat by summarizing OMH lanes and offering the workflow picker; "
+            "do not ask the user to approve `omh list` for catalog discovery."
+        ),
+        "claim_boundary": (
+            "A catalog answer or workflow picker is routing/help context only; it is not plan acceptance, dispatch, "
+            "execution, review, CI, or verification evidence."
+        ),
+    }
+
+
+def _is_catalog_question(message: str) -> bool:
+    text = message.strip()
+    if not text:
+        return False
+    try:
+        from omh.routing.catalog_questions import is_skill_catalog_question
+    except Exception:
+        return _standalone_catalog_question(text)
+    try:
+        return bool(is_skill_catalog_question(text))
+    except Exception:
+        return _standalone_catalog_question(text)
+
+
+def _standalone_catalog_question(message: str) -> bool:
+    text = message.strip().lower()
+    if not text:
+        return False
+    if any(marker in text for marker in ("src/", "tests/", "docs/", ".py", ".md", "readme", "section")):
+        return False
+    explicit = (
+        "what commands are available",
+        "what skills are available",
+        "what workflows are available",
+        "available commands",
+        "available skills",
+        "available workflows",
+        "skill menu",
+        "workflow menu",
+        "workflow picker",
+        "what can omh do",
+        "what does omh do",
+        "how can omh help",
+        "omh 기능",
+        "omh로 뭐 할 수",
+        "omh가 뭐 해",
+        "omh는 뭐 해",
+        "使えるスキル",
+        "利用可能なスキル",
+        "利用可能なワークフロー",
+        "有哪些命令",
+        "有哪些技能",
+        "有哪些工作流",
+        "可用命令",
+        "可用技能",
+        "可用工作流",
+    )
+    if any(phrase in text for phrase in explicit):
+        return True
+    has_context = any(marker in text for marker in ("omh", "oh-my-hermes", "oh my hermes", "hermes", "헤르메스"))
+    has_catalog_word = any(
+        word in text
+        for word in (
+            "command",
+            "commands",
+            "skill",
+            "skills",
+            "workflow",
+            "workflows",
+            "스킬",
+            "워크플로",
+            "워크플로우",
+            "명령",
+            "기능",
+            "スキル",
+            "ワークフロー",
+            "技能",
+            "工作流",
+            "命令",
+        )
+    )
+    has_availability = any(
+        word in text
+        for word in (
+            "available",
+            "do you have",
+            "can you do",
+            "menu",
+            "picker",
+            "뭐",
+            "무엇",
+            "어떤",
+            "알려",
+            "보여",
+            "있어",
+            "가능",
+            "一覧",
+            "有哪些",
+            "可用",
+        )
+    )
+    return has_catalog_word and (has_context or has_availability)

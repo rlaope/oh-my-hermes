@@ -157,7 +157,9 @@ planning, research, ops, materials, visual summary, automation,
 workflow-learning, or coding-handoff work. That hook payload carries only
 hash/length metadata, matched cue labels, candidate workflow names, next
 actions, generic-tool checkpoint rules, and boundaries; it does not include the
-raw user message or prove a workflow executed. The `pre_tool_call` hook mirrors
+raw user message or prove a workflow executed. For capability/catalog questions,
+the context brief adds `omh_catalog_question_hint/v1` so Hermes can show the
+workflow picker or capability summary without shell approval. The `pre_tool_call` hook mirrors
 the generic-tool checkpoint as structured `omh_generic_tool_checkpoint/v1`
 metadata before image, file, search, or coding tools, while preserving the
 legacy text context for hosts that only consume prompt strings. It uses only
