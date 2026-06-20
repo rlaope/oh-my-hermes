@@ -1118,6 +1118,42 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_github_event_ops_card",
                 "triage, review, label",
             ),
+            (
+                "we need a competitor market scan and strategy memo for next week's leadership meeting",
+                "strategy-brief",
+                "prepare_strategy_brief",
+                "strategy options",
+            ),
+            (
+                "AI가 했다고 했는데 실제로 뭐 했는지 모르겠다",
+                "code-review",
+                "prepare_review_or_followup_handoff",
+                "review path",
+            ),
+            (
+                "web search latest secure login UX evidence",
+                "web-research",
+                "run_hermes_research",
+                "source-backed research lane",
+            ),
+            (
+                "route Discord Slack Telegram threads with delivery policy",
+                "gateway-intent-card",
+                "prepare_gateway_intent_card",
+                "gateway intent",
+            ),
+            (
+                "show token cost latency run history for this automation loop",
+                "ops-observability-card",
+                "prepare_ops_observability_card",
+                "observability card",
+            ),
+            (
+                "turn this sprint retro into a report package with decisions and actions",
+                "report-package",
+                "prepare_report_package",
+                "report package",
+            ),
         )
 
         for message, selected_workflow, next_action, body_marker in cases:
@@ -1135,6 +1171,36 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("/v1", payload["chat_response"]["body"])
                 self.assertNotIn("schema", payload["chat_response"]["body"].lower())
                 self.assertNotIn("artifact", payload["chat_response"]["body"].lower())
+
+    def test_recommendation_policy_next_actions_are_visible_ack_actions(self) -> None:
+        from omh.routing import recommend
+        from omh.wrapper import contract
+
+        policies = {
+            **recommend._SKILL_POLICIES,
+            **recommend._CATEGORY_POLICIES,
+            **recommend._HERMES_ROLE_POLICIES,
+        }
+        control_actions = {
+            "answer_clarification",
+            "ask_clarification",
+            "cancel",
+            "clarify_or_route",
+            "dispatch_to_workflow",
+            "show_workflow_guidance",
+        }
+
+        missing: list[str] = []
+        for name, policy in sorted(policies.items()):
+            next_action = policy.next_action
+            if not next_action or next_action in control_actions:
+                continue
+            if next_action not in contract.VISIBLE_ACTIONS:
+                missing.append(f"{name}:{next_action}:not-visible")
+            if next_action not in contract._ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION:
+                missing.append(f"{name}:{next_action}:no-ack-primary")
+
+        self.assertEqual(missing, [])
 
     def test_cancel_routes_to_control_action_without_plan_ui(self) -> None:
         payload = build_chat_interaction_payload("cancel", source="discord")
