@@ -92,10 +92,12 @@ smoke proves the bundle is present and importable, including tools such as
 --roadmap`; in standalone plugin-bundle mode it returns a degraded roadmap that
 only uses local files and metadata. Host or wrapper evidence that Hermes
 actually loaded or used the plugin is recorded separately with
-`omh plugin observe-host` as `omh_plugin_host_observation/v1`. Active readiness
-requires the latest observed event to be `plugin_load`, `tool_call`, `hook_call`,
-or `status_query`; `blocked`, `session_end`, and `plugin_unload` do not make the
-native bridge active.
+`omh plugin observe-host`, or self-recorded by an invoked plugin tool/hook when
+the host passes bounded `observation` metadata, as
+`omh_plugin_host_observation/v1`. Active readiness requires the latest observed
+event to be `plugin_load`, `tool_call`, `hook_call`, or `status_query`;
+`blocked`, `session_end`, and `plugin_unload` do not make the native bridge
+active.
 
 ## Why This Exists
 

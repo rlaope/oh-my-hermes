@@ -79,6 +79,67 @@ class PluginCapabilitiesTests(unittest.TestCase):
             retained = json.loads(handler({"action": "inspect", "id": "retained-cognition", "section": "agent_roles"}))
             self.assertIn("capability not found: retained-cognition", retained["error"])
 
+    def test_plugin_tool_and_hook_can_self_record_host_observation_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            status, _, stderr = run_cli(base + ["setup", "--with-plugin"])
+            self.assertEqual(status, 0, stderr)
+
+            module = load_installed_plugin(hermes_home / "plugins" / "omh")
+            ctx = FakeHermesContext()
+            module.register(ctx)
+
+            probe_handler = ctx.tools["omh_probe"]["args"][2]
+            probe = json.loads(
+                probe_handler(
+                    {
+                        "omh_home": str(omh_home),
+                        "hermes_home": str(hermes_home),
+                        "include_roadmap": True,
+                        "observation": {
+                            "host": "hermes-agent",
+                            "session_id": "session-tool-1",
+                            "evidence_ref": "host-tool-call:omh_probe",
+                        },
+                    }
+                )
+            )
+
+            self.assertTrue(probe["plugin_runtime_observed"])
+            self.assertTrue(probe["native_integration_claim_ready"])
+            self.assertEqual(probe["plugin_host_observation"]["event"], "tool_call")
+            self.assertEqual(probe["plugin_host_observation"]["tool"], "omh_probe")
+            self.assertEqual(probe["plugin_host_observation"]["runtime_readiness"], "active_runtime_observed")
+            roadmap_actions = {item["id"] for item in probe["capability_gap_roadmap"]["next_actions"]}
+            self.assertNotIn("observe_plugin_runtime", roadmap_actions)
+
+            pre_llm = ctx.hooks["pre_llm_call"]
+            pre_llm(
+                omh_home=str(omh_home),
+                hermes_home=str(hermes_home),
+                user_message="summarize this without storing secret-token-123",
+                observation={
+                    "host": "hermes-agent",
+                    "session_id": "session-hook-1",
+                    "evidence_ref": "host-hook-call:pre_llm_call",
+                },
+            )
+
+            status, stdout, stderr = run_cli(base + ["plugin", "observations", "--limit", "5"])
+            self.assertEqual(status, 0, stderr)
+            observations = json.loads(stdout)["observations"]
+            latest = observations[0]
+            self.assertEqual(latest["event"], "hook_call")
+            self.assertEqual(latest["hook"], "pre_llm_call")
+            self.assertEqual(latest["host"], "hermes-agent")
+            serialized = json.dumps(observations, sort_keys=True)
+            self.assertIn("host-tool-call:omh_probe", serialized)
+            self.assertIn("host-hook-call:pre_llm_call", serialized)
+            self.assertNotIn("secret-token-123", serialized)
+
     def test_installed_plugin_capabilities_tool_loads_without_installed_omh_package(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -131,6 +192,34 @@ class PluginCapabilitiesTests(unittest.TestCase):
                         "include_parity": True,
                     }})
                 )
+                observed_probe = json.loads(
+                    probe_handler({{
+                        "omh_home": {str(omh_home)!r},
+                        "hermes_home": {str(hermes_home)!r},
+                        "include_roadmap": True,
+                        "include_parity": True,
+                        "observation": {{
+                            "host": "hermes-agent",
+                            "session_id": "standalone-session-1",
+                            "evidence_ref": "standalone-host-call:omh_probe",
+                        }},
+                    }})
+                )
+                sensitive_probe = json.loads(
+                    probe_handler({{
+                        "omh_home": {str(omh_home)!r},
+                        "hermes_home": {str(hermes_home)!r},
+                        "observation": {{
+                            "host": "secret-token-123",
+                            "session_id": "session-secret-token-123",
+                            "evidence_ref": "standalone-host-call:sensitive",
+                        }},
+                    }})
+                )
+                observation_text = ({str(omh_home / "runtime" / "plugin_host_observations.jsonl")!r})
+                observation_text = open(observation_text, encoding="utf-8").read() if __import__("os").path.exists(observation_text) else ""
+                state_path = {str(omh_home / "runtime" / "state.json")!r}
+                state = json.load(open(state_path, encoding="utf-8")) if __import__("os").path.exists(state_path) else {{}}
                 listed_tools = json.loads(handler({{"action": "list", "section": "tool_requirements"}}))
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
                 inspected = json.loads(handler({{"action": "inspect", "id": "handoff-guide"}}))
@@ -178,6 +267,16 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "probe_roadmap_schema": probe["capability_gap_roadmap"]["schema_version"],
                     "probe_roadmap_actions": [item["id"] for item in probe["capability_gap_roadmap"]["next_actions"]],
                     "probe_parity_status": probe["parity_matrix"]["status"],
+                    "observed_probe_runtime_observed": observed_probe["plugin_runtime_observed"],
+                    "observed_probe_native_ready": observed_probe["native_integration_claim_ready"],
+                    "observed_probe_public": observed_probe["plugin_host_observation"],
+                    "observed_probe_roadmap_actions": [
+                        item["id"] for item in observed_probe["capability_gap_roadmap"]["next_actions"]
+                    ],
+                    "standalone_observation_text": observation_text,
+                    "standalone_state_readiness": state.get("last_plugin_runtime_readiness"),
+                    "sensitive_probe_serialized": json.dumps(sensitive_probe, sort_keys=True),
+                    "sensitive_probe_public": sensitive_probe.get("plugin_host_observation"),
                     "summary_lanes": [lane["id"] for lane in summary["lanes"]],
                     "summary_visual_skills": [
                         lane["primary_skills"]
@@ -274,6 +373,20 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["probe_roadmap_schema"], "omh_capability_gap_roadmap/v1")
             self.assertIn("observe_plugin_runtime", payload["probe_roadmap_actions"])
             self.assertEqual(payload["probe_parity_status"], "unavailable_without_package_backend")
+            self.assertTrue(payload["observed_probe_runtime_observed"])
+            self.assertTrue(payload["observed_probe_native_ready"])
+            self.assertEqual(payload["observed_probe_public"]["event"], "tool_call")
+            self.assertEqual(payload["observed_probe_public"]["tool"], "omh_probe")
+            self.assertEqual(payload["observed_probe_public"]["host"], "hermes-agent")
+            self.assertIn("standalone-host-call:omh_probe", payload["standalone_observation_text"])
+            self.assertIn("standalone-session-1", payload["standalone_observation_text"])
+            self.assertEqual(payload["standalone_state_readiness"], "active_runtime_observed")
+            self.assertNotIn("observe_plugin_runtime", payload["observed_probe_roadmap_actions"])
+            self.assertEqual(payload["sensitive_probe_public"]["status"], "not_recorded")
+            self.assertEqual(payload["sensitive_probe_public"]["host"], "")
+            self.assertEqual(payload["sensitive_probe_public"]["session_id"], "")
+            self.assertNotIn("secret-token-123", payload["sensitive_probe_serialized"])
+            self.assertNotIn("secret-token-123", payload["standalone_observation_text"])
             self.assertIn("intent_to_plan", payload["summary_lanes"])
             self.assertIn("img-summary", payload["summary_visual_skills"])
             self.assertIn("request-to-handoff", payload["summary_intent_playbooks"])

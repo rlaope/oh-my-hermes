@@ -177,8 +177,7 @@ bridge load or use and can attach a stable evidence reference. It records
 
 The OMH plugin follows the same evidence split. `omh setup` installs the plugin
 bundle and `omh doctor` can prove local import/register smoke. A Hermes host or
-wrapper that actually sees the plugin load or one of its tools/hooks run can
-record that runtime event:
+wrapper that actually sees the plugin load can record that runtime event:
 
 ```sh
 omh plugin observe-host --host hermes-agent --session <session-id> --event plugin_load --evidence-ref <host-log-ref>
@@ -192,6 +191,11 @@ unrecorded plugin calls. Observed `plugin_load`, `tool_call`, `hook_call`, or
 `session_end` or `plugin_unload` records are historical runtime evidence only.
 `blocked` means the host or wrapper could not inspect the plugin state; it does
 not preserve an older active-ready claim.
+
+When the managed plugin is actually invoked, hosts can also pass bounded
+`observation` metadata to OMH plugin tools/hooks. The plugin then records the
+same `omh_plugin_host_observation/v1` event automatically, without storing raw
+prompts or tool bodies. This proves only the recorded plugin tool/hook use.
 
 ## Install Path A: Hermes-Native Skill Tap
 
@@ -423,11 +427,12 @@ After `omh setup` has run, `omh doctor` also checks the managed plugin manifest
 plus local import/register smoke. `omh probe` reports
 `plugin_distribution_ready` separately from `native_integration_claim_ready` so
 operators do not mistake local install readiness for observed Hermes runtime
-use. When a host or wrapper records `omh plugin observe-host`,
-`plugin_runtime_observed` can become available. `native_integration_claim_ready`
-can become true only when the latest observed plugin event is active
-(`plugin_load`, `tool_call`, `hook_call`, or `status_query`); observed
-`session_end` and `plugin_unload` remain historical evidence only.
+use. When a host or wrapper records `omh plugin observe-host`, or invokes an OMH
+plugin tool/hook with bounded `observation` metadata, `plugin_runtime_observed`
+can become available. `native_integration_claim_ready` can become true only when
+the latest observed plugin event is active (`plugin_load`, `tool_call`,
+`hook_call`, or `status_query`); observed `session_end` and `plugin_unload`
+remain historical evidence only.
 Use `omh runtime team-readiness` when an operator or wrapper wants to know
 whether Hermes/team/swarm coding paths are ready to present. It returns
 `omh_team_worker_readiness/v1` with the installed skill visibility, runtime

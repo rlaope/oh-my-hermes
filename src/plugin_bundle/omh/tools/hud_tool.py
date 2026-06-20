@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..runtime_reader import read_omh_hud
 
 OMH_HUD_SCHEMA = {
@@ -51,12 +52,14 @@ OMH_HUD_SCHEMA = {
                 "type": "number",
                 "description": "Optional host-provided context remaining percentage.",
             },
+            "observation": OBSERVATION_SCHEMA,
         },
     },
 }
 
 
 def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
+    observation = observe_plugin_tool_call("omh_hud", args, kwargs)
     token_metadata = {
         key: args.get(key)
         for key in (
@@ -75,4 +78,4 @@ def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
         limit=args.get("limit") or 3,
         token_metadata=token_metadata,
     )
-    return json.dumps(payload, sort_keys=True)
+    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)

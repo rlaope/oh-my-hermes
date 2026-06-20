@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..omh_roles import role_aliases, role_context_payload, role_names
 
 OMH_ROLE_SCHEMA = {
@@ -22,6 +23,7 @@ OMH_ROLE_SCHEMA = {
                 "type": "string",
                 "description": "Role name for action=read, such as planner, researcher, handoff-guide, or a legacy alias.",
             },
+            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["action"],
     },
@@ -29,17 +31,18 @@ OMH_ROLE_SCHEMA = {
 
 
 def omh_role_handler(args: dict, **kwargs) -> str:
+    observation = observe_plugin_tool_call("omh_role", args, kwargs)
     action = str(args.get("action", "list") or "list")
     if action == "list":
-        return json.dumps(
-            {
-                "schema_version": "omh_role_catalog/v1",
-                "roles": role_names(),
-                "aliases": role_aliases(),
-                "claim_boundary": "OMH role names are prompt guidance only; they are not observed runtime agents.",
-            },
-            sort_keys=True,
-        )
+        payload = {
+            "schema_version": "omh_role_catalog/v1",
+            "roles": role_names(),
+            "aliases": role_aliases(),
+            "claim_boundary": "OMH role names are prompt guidance only; they are not observed runtime agents.",
+        }
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
     if action != "read":
-        return json.dumps({"error": f"unknown action: {action}"}, sort_keys=True)
-    return json.dumps(role_context_payload(str(args.get("role", "") or "")), sort_keys=True)
+        payload = {"error": f"unknown action: {action}"}
+    else:
+        payload = role_context_payload(str(args.get("role", "") or ""))
+    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)

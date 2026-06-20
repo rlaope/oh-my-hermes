@@ -492,12 +492,14 @@ require an evidence reference and remain host-load/session evidence only.
 Plugin runtime load uses a parallel contract. Local plugin install and
 import/register smoke prove only the copied bundle. A Hermes host or wrapper can
 record `omh_plugin_host_observation/v1` with `omh plugin observe-host` after it
-actually sees plugin load, tool use, hook use, status query, session end, or
-unload. That observation can make `plugin_runtime_observed` available in
-`omh probe`, but it still proves only the recorded plugin event. Active native
-readiness is narrower: only `plugin_load`, `tool_call`, `hook_call`, and
-`status_query` observations keep `native_integration_claim_ready` true. `blocked`
-is descriptive host metadata and `session_end`/`plugin_unload` are historical
+actually sees plugin load, status query, session end, or unload. Invoked OMH
+plugin tools/hooks can also self-record the same observation schema when the
+host supplies bounded `observation` metadata. That observation can make
+`plugin_runtime_observed` available in `omh probe`, but it still proves only the
+recorded plugin event. Active native readiness is narrower: only `plugin_load`,
+`tool_call`, `hook_call`, and `status_query` observations keep
+`native_integration_claim_ready` true. `blocked` is descriptive host metadata
+and `session_end`/`plugin_unload` are historical
 runtime evidence, not active readiness.
 
 For terminal operators, `omh probe` prints a compact status summary by default.
