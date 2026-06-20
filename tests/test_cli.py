@@ -82,6 +82,7 @@ class CliTests(unittest.TestCase):
         for message in (
             "missed route: OMH was not used",
             "OMH 안 썼어",
+            "missed route: Hermes skipped OMH for my image request",
             "Hermes did not use OMH for my image request; record this as workflow learning",
             "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
         ):
@@ -91,7 +92,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             payload = json.loads(stdout)
             self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
-            self.assertEqual(payload["next_action"], "audit_learning_readiness")
+            self.assertEqual(payload["next_action"], "record_missed_route")
+            self.assertEqual(payload["chat_response"]["state"]["learning_intent"], "missed_route")
+            self.assertEqual(payload["chat_response"]["state"]["primary_learning_action"], "record_missed_route")
+            actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+            self.assertEqual(actions["record_missed_route"]["style"], "primary")
+            self.assertEqual(actions["audit_learning_readiness"]["style"], "secondary")
             self.assertIn("guard:workflow_learning", payload["route"]["recommendations"][0]["matched"])
 
     def test_chat_interact_omh_status_question_uses_probe_roadmap(self) -> None:

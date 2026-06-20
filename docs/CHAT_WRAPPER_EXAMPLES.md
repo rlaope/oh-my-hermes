@@ -230,9 +230,15 @@ first.
 [ Open img-summary ] [ Route for me ] [ Open omh ]
 ```
 
-For missed OMH usage feedback, the Slack fixture routes to `workflow-learning`
-instead of treating the message as normal prose. The card still stays
-metadata-only and hint-only until the user or wrapper chooses a workflow.
+For missed OMH usage feedback, the wrapper does not need to teach the user a
+backend command first. Phrases such as "OMH 안 썼어", "missed route: Hermes
+skipped OMH", or "Hermes did not use OMH for my image request; record this as
+workflow learning" route to `workflow-learning` with `record_missed_route` as
+the primary action. Domain-specific recovery phrases can still route to the
+expected workflow, such as `img-summary` or `operating-rhythm`, when the user is
+asking Hermes to do the work now rather than record a learning case. The card
+still stays metadata-only and hint-only until the user or wrapper records the
+missed-route review bundle.
 
 ## Missed OMH Route Capture
 
