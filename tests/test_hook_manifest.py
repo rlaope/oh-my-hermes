@@ -56,6 +56,26 @@ class HookManifestTests(unittest.TestCase):
         self.assertEqual(suppressed["status"], "no_hint")
         self.assertEqual(suppressed["hints"], [])
 
+    def test_awareness_route_hint_uses_missed_route_primary_action(self) -> None:
+        message = "missed route: Hermes skipped OMH for my image request with secret-token-123"
+
+        payload = awareness_route_hint(message)
+        context_result = pre_llm_call(user_message=message, is_first_turn=False)
+        context = context_result["context"] if context_result else ""
+        serialized = str(payload)
+
+        self.assertEqual(payload["schema_version"], "omh_route_hint/v1")
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "workflow-learning")
+        self.assertEqual(payload["primary_next_action"], "record_missed_route")
+        self.assertEqual(payload["hints"][0]["next_action"], "record_missed_route")
+        self.assertIn("workflow=workflow-learning", context)
+        self.assertIn("next_action=record_missed_route", context)
+        self.assertNotIn(message, serialized)
+        self.assertNotIn(message, context)
+        self.assertNotIn("secret-token-123", serialized)
+        self.assertNotIn("secret-token-123", context)
+
     def test_pre_llm_call_includes_bounded_route_hint_without_raw_message(self) -> None:
         message = "make an image explaining the cron feature with secret-token-123"
 

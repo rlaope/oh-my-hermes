@@ -30,7 +30,7 @@
         "schema_version": "chat_route_hint_response/v1",
         "kind": "workflow_route_hint",
         "primary_workflow": "workflow-learning",
-        "next_action": "audit_learning_readiness",
+        "next_action": "record_missed_route",
         "action_ids": [
           "open_workflow",
           "route_for_me",
