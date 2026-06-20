@@ -850,24 +850,38 @@ def build_chat_response_from_route(
                 },
             )
         if selected == "workflow-learning":
+            missed_route_feedback = _is_missed_route_feedback(message)
+            primary_learning_action = "record_missed_route" if missed_route_feedback else "audit_learning_readiness"
+            headline = (
+                "I can record this missed OMH route."
+                if missed_route_feedback
+                else "I can inspect this workflow for learning readiness."
+            )
             evidence_boundary = str(policy.get("evidence_boundary", "")) or (
                 "Workflow learning records are process-review evidence only; they are not automatic improvement evidence."
             )
-            body = (
-                "I will turn the workflow attempt into learning material without storing raw prompts: "
-                "record the trace, run deterministic evals, add a regression case, audit readiness, "
-                "and export a redacted review bundle when useful. Any skill or routing improvement still needs human review."
-            )
+            if missed_route_feedback:
+                body = (
+                    "I will treat this as missed-route feedback: record a metadata-only trace, create a reviewable "
+                    "missed-route bundle, add or request a minimized regression fixture, and keep any routing or skill "
+                    "change behind human review."
+                )
+            else:
+                body = (
+                    "I will turn the workflow attempt into learning material without storing raw prompts: "
+                    "record the trace, run deterministic evals, add a regression case, audit readiness, "
+                    "and export a redacted review bundle when useful. Any skill or routing improvement still needs human review."
+                )
             return _chat_response(
                 kind="workflow_learning",
-                headline="I can inspect this workflow for learning readiness.",
+                headline=headline,
                 body=body,
                 phase="workflow_learning_prepared",
-                next_action="audit_learning_readiness",
+                next_action=primary_learning_action,
                 thread_key=thread_key,
                 actions=[
+                    _action("record_missed_route", "Record missed route", "primary" if missed_route_feedback else "secondary"),
                     _action("record_workflow_learning_trace", "Record trace", "secondary"),
-                    _action("record_missed_route", "Record missed route", "secondary"),
                     _action("show_learning_review_queue", "Review queue", "secondary"),
                     _action("show_learning_eval", "Run eval", "secondary"),
                     _action("propose_skill_improvement", "Propose improvement", "secondary"),
@@ -876,7 +890,7 @@ def build_chat_response_from_route(
                     _action("show_patch_proposal", "Show patch proposal", "secondary"),
                     _action("copy_patch_handoff", "Copy patch handoff", "secondary"),
                     _action("add_regression_case", "Add regression", "secondary"),
-                    _action("audit_learning_readiness", "Audit readiness", "primary"),
+                    _action("audit_learning_readiness", "Audit readiness", "secondary" if missed_route_feedback else "primary"),
                     _action("export_learning_bundle", "Export bundle", "secondary"),
                     _action("replay_regression_cases", "Replay cases", "secondary"),
                     _action("check_learning_index", "Check index", "secondary"),
@@ -890,6 +904,8 @@ def build_chat_response_from_route(
                     "selected_workflow": selected,
                     "workflow_explanation_reason": workflow_explanation_reason,
                     "policy_next_action": policy_next_action,
+                    "learning_intent": "missed_route" if missed_route_feedback else "readiness_audit",
+                    "primary_learning_action": primary_learning_action,
                     "artifact_schemas": [
                         "workflow_learning_trace/v1",
                         "workflow_eval_result/v1",
@@ -1521,6 +1537,50 @@ def _selected_recommendation_policy(decision: dict[str, object], selected: str) 
                 "wrapper_guidance": item.get("wrapper_guidance", ""),
             }
     return {}
+
+
+def _is_missed_route_feedback(message: str) -> bool:
+    text = " ".join(message.lower().split())
+    compact = text.replace(" ", "")
+    if not text:
+        return False
+    missed_route_phrases = (
+        "missed route",
+        "missed workflow",
+        "missing route",
+        "wrong route",
+        "wrong workflow",
+        "did not use omh",
+        "didn't use omh",
+        "didnt use omh",
+        "not use omh",
+        "skipped omh",
+        "omh was not used",
+        "omh was skipped",
+        "expected omh",
+        "expected workflow",
+    )
+    if any(phrase in text for phrase in missed_route_phrases):
+        return True
+    missed_route_compact_phrases = (
+        "omh안썼",
+        "omh안썻",
+        "omh안썼어",
+        "omh안썻어",
+        "omh안쓰",
+        "omh를안썼",
+        "omh를안썻",
+        "omh를안쓰",
+        "omh기능안썼",
+        "omh기능안썻",
+        "omh기능안쓰",
+        "omh안씀",
+        "omh누락",
+        "워크플로누락",
+        "라우팅누락",
+        "잘못라우팅",
+    )
+    return any(phrase in compact for phrase in missed_route_compact_phrases)
 
 
 def _workflow_explanation_reason_for_route(

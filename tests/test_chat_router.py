@@ -114,8 +114,6 @@ class ChatRouterTests(unittest.TestCase):
             "make a visual one-pager for this release",
             "作成して、PRの要約画像",
             "生成一张发布说明海报",
-            "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
-            "The Hermes agent did not use OMH for this summary image.",
             "make a workflow learning image card",
         )
 
@@ -132,6 +130,8 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             "Hermes did not use OMH for my image request; record this as workflow learning",
             "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
+            "OMH 안 썼어",
+            "missed route: Hermes skipped OMH for my image request",
         )
 
         for message in cases:

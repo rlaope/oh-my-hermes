@@ -304,6 +304,8 @@ class WrapperContractTests(unittest.TestCase):
                 response = payload["chat_response"]
                 self.assertEqual(response["kind"], "workflow_learning")
                 self.assertEqual(response["state"]["learning_audit_card_schema"], "learning_audit_card/v1")
+                self.assertEqual(response["state"]["learning_intent"], "readiness_audit")
+                self.assertEqual(response["state"]["primary_learning_action"], "audit_learning_readiness")
                 self.assertTrue(response["state"]["human_gate_required"])
                 self.assertIn("workflow_learning_trace/v1", response["state"]["artifact_schemas"])
                 self.assertIn("workflow_eval_result/v1", response["state"]["artifact_schemas"])
@@ -346,6 +348,34 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("record_missed_route", response["state"]["learning_flow"])
                 self.assertIn("prepare_patch_proposal", response["state"]["learning_flow"])
                 self.assertIn("human_review_improvement_candidate", response["state"]["learning_flow"])
+                self.assertNotIn(message, serialized)
+
+    def test_missed_route_feedback_makes_record_missed_route_primary(self) -> None:
+        messages = (
+            "OMH 안 썼어",
+            "Hermes did not use OMH for my image request; record this as workflow learning",
+            "missed route: Hermes skipped OMH for my image request",
+            "missed route: OMH was not used",
+        )
+
+        for message in messages:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                serialized = json.dumps(payload)
+                response = payload["chat_response"]
+                actions = {action["id"]: action for action in response["actions"]}
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
+                self.assertEqual(payload["next_action"], "record_missed_route")
+                self.assertEqual(response["kind"], "workflow_learning")
+                self.assertEqual(response["state"]["learning_intent"], "missed_route")
+                self.assertEqual(response["state"]["primary_learning_action"], "record_missed_route")
+                self.assertEqual(actions["record_missed_route"]["style"], "primary")
+                self.assertEqual(actions["audit_learning_readiness"]["style"], "secondary")
+                self.assertIn("missed-route feedback", response["body"])
+                self.assertIn("human review", response["body"])
+                self.assertIn("automatic skill patch", response["state"]["evidence_not_observed"])
                 self.assertNotIn(message, serialized)
 
     def test_route_mode_exposes_visible_omh_usage_trace_for_web_research(self) -> None:
