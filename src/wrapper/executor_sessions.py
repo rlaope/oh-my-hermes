@@ -156,13 +156,16 @@ def build_executor_session_actions(
     isolation_strategy = str(isolation_status.get("strategy", "same_workspace_ok"))
     open_blocker = status_blocker
     if isolation_strategy == "worktree_required" and isolation_next_action == "prepare_worktree":
-        open_blocker = open_blocker or "Workspace isolation is required before opening the coding agent."
+        open_blocker = open_blocker or "Workspace isolation is required before starting the coding session."
     base_payload = {
         "schema_version": "executor_session_action/v1",
         "session_id": session_id,
         "selected_executor_profile": executor,
         "executor_label": _surface_executor_label(executor, handoff_state=_handoff_state(session)),
-        "claim_boundary": "The wrapper must call the backend action after it observes the corresponding user or executor event.",
+        "claim_boundary": (
+            "Hermes or the wrapper must call the backend action after it observes the corresponding "
+            "coding-session event. This contract records observations; it does not secretly execute the coding agent."
+        ),
     }
     if _handoff_state(session) != "prepared":
         return [
@@ -197,7 +200,7 @@ def build_executor_session_actions(
         ),
         _action(
             "attach_executor_session",
-            "Attach existing session",
+            "Attach coding session",
             "secondary",
             enabled=not status_blocker and _handoff_state(session) == "prepared" and result_status == "not_observed",
             payload={
@@ -681,7 +684,7 @@ def _observe_dispatch(
             "status": "observed",
             "participants": [runtime_profile],
             "evidence_refs": evidence_refs,
-            "summary": summary or "Wrapper observed the runtime session open action.",
+            "summary": summary or "Hermes or the wrapper observed the runtime session start action.",
         },
     )
 
@@ -867,12 +870,12 @@ def _require_no_observed_result(paths: OmhPaths, session: dict[str, Any]) -> Non
 
 def _open_label(executor: str) -> str:
     if executor == "codex":
-        return "Open in Codex"
+        return "Start Codex session"
     if executor == "claude-code":
-        return "Open in Claude Code"
+        return "Start Claude Code session"
     if executor == "hermes":
-        return "Open Hermes coding"
-    return f"Open {executor_label(executor)}"
+        return "Start Hermes coding session"
+    return f"Start {executor_label(executor)} session"
 
 
 def _executor_launch_contract(
@@ -894,14 +897,27 @@ def _executor_launch_contract(
         workspace_shell_placeholder,
     )
     isolation_status = isolation_status or _default_isolation_status()
+    has_terminal_launch = any(str(template.get("shell_command_template", "")) for template in templates)
     return {
         "schema_version": EXECUTOR_LAUNCH_SCHEMA_VERSION,
         "selected_executor_profile": executor,
         "executor_label": label,
         "mode": "interactive_terminal_or_app",
+        "session_start_owner": "hermes_or_wrapper",
+        "decision_owner": "hermes_agent",
+        "backend_action_owner": "wrapper",
+        "configured_executor_profile": executor,
         "ui_only": True,
+        "terminal_launch_available": has_terminal_launch,
         "execution_policy": "copyable_instruction_only",
+        "session_start_capability": "terminal_command_available" if has_terminal_launch else "prompt_or_runtime_contract_only",
+        "session_start_policy": (
+            "Hermes or the wrapper may start a terminal/app session for the configured coding agent when "
+            "terminal_launch_available is true, then call open-executor with observed evidence once that session exists."
+        ),
         "not_backend_execution": True,
+        "not_omh_backend_execution": True,
+        "omh_execution_role": "contract_and_observation_only",
         "prompt_placeholder": prompt_placeholder,
         "prompt_source": "prepared handoff prompt or original chat message held by the wrapper at click time",
         "workspace_placeholder": workspace_placeholder,
@@ -912,7 +928,10 @@ def _executor_launch_contract(
         "copy_blocks": _launch_copy_blocks(label, prompt_placeholder, templates),
         "after_launch_backend_action": "open-executor",
         "observed_transition": "dispatch/open observed",
-        "claim_boundary": "Launch instructions are not execution evidence; record observed dispatch/open only after the wrapper sees the user or platform open the executor.",
+        "claim_boundary": (
+            "This is a Hermes/wrapper session-start contract, not proof of execution. The local backend does not launch the coding agent itself; "
+            "record observed dispatch/open only after Hermes or the wrapper actually starts or attaches the executor session."
+        ),
     }
 
 
@@ -1023,9 +1042,9 @@ def _workspace_hint(isolation_status: dict[str, object]) -> str:
     if status == "observed":
         return "Use the observed isolated workspace when opening or attaching the coding agent."
     if strategy == "worktree_required":
-        return "Prepare an isolated worktree before opening the coding agent."
+        return "Prepare an isolated worktree before starting the coding session."
     if strategy == "worktree_recommended":
-        return "Prefer an isolated worktree before opening the coding agent; reuse current workspace only by operator choice."
+        return "Prefer an isolated worktree before starting the coding session; reuse current workspace only by operator choice."
     return "The current workspace is acceptable unless the wrapper later observes parallel or risky edits."
 
 
@@ -1041,8 +1060,8 @@ def _isolation_step_state(value: object) -> str:
 
 def _open_summary(session: dict[str, Any], *, observed: bool) -> str:
     if observed:
-        return "Wrapper observed an executor open action. This records dispatch/open only, not executor result."
-    return "Wrapper prepared an executor open action. No executor dispatch/open is observed yet."
+        return "Hermes or the wrapper observed an executor session start. This records dispatch/open only, not executor result."
+    return "Hermes or the wrapper prepared an executor session start action. No executor dispatch/open is observed yet."
 
 
 def _display_status_lines(
@@ -1084,9 +1103,9 @@ def _isolation_display_line(isolation_status: dict[str, object]) -> str:
     if status == "not_required":
         return "Workspace isolation is not required for this prepared handoff."
     if strategy == "worktree_required":
-        return "Workspace isolation is required before opening the coding agent."
+        return "Workspace isolation is required before starting the coding session."
     if strategy == "worktree_recommended":
-        return "Workspace isolation is recommended before opening the coding agent."
+        return "Workspace isolation is recommended before starting the coding session."
     return "Workspace isolation has no active requirement."
 
 

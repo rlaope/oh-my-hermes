@@ -29,7 +29,7 @@ evidence exists.
 | --- | --- | --- |
 | `omh chat interact` | Composes route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. | `src/wrapper/contract.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
 | `omh chat session` | Persists metadata-only chat session decisions, executor/runtime selection, plan acceptance/revision/cancel state, prompt-only handoffs, runtime handoffs, and accepted Codex lifecycle links. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
-| `omh chat session open-executor`, `attach-executor`, `record-executor`, `request-verification` | Backend actions for wrapper-rendered buttons such as Open in Codex, Open in Claude Code, Attach session, Refresh status, Record completed, Record blocked, and Ask Hermes to verify. They write `executor_session/v1` metadata and do not launch hidden executors. | `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
+| `omh chat session open-executor`, `attach-executor`, `record-executor`, `request-verification` | Backend actions for wrapper-rendered buttons such as Start Codex session, Start Claude Code session, Attach coding session, Refresh status, Record completed, Record blocked, and Ask Hermes to verify. They write `executor_session/v1` metadata after Hermes or the wrapper observes a coding-session event; OMH itself does not launch hidden executors. | `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
 | `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, and runtime contracts without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
@@ -62,14 +62,18 @@ The strongest existing path is:
    wrappers know exactly which events must be observed later. Coding handoffs
    also include `worktree_session_isolation/v1`, which tells the wrapper
    whether the current workspace is acceptable, an isolated worktree is
-   recommended, or an isolated worktree is required before opening an executor.
+   recommended, or an isolated worktree is required before starting a coding
+   session.
 6. The wrapper renders executor-session buttons instead of asking the user to
-   type backend commands. Open buttons carry `executor_launch/v1` with
-   copyable Codex and Claude Code command templates, while attach/record
-   buttons stay metadata-only. If isolation is recommended or required, the
-   first action is `prepare_worktree`; the later launch payload carries a
-   workspace hint for the selected executor. When the wrapper observes Prepare
-   worktree, Open in Codex, Attach session, Record completed, Record blocked,
+   type backend commands. Start-session buttons carry `executor_launch/v1` with
+   the configured executor profile. The v1 safety fields stay copyable and
+   metadata-only for compatibility; wrappers should read
+   `terminal_launch_available` and `session_start_capability` to decide whether
+   Codex/Claude Code command templates are safe to render. Attach/record buttons
+   stay metadata-only. If isolation is recommended or required, the first action
+   is `prepare_worktree`; the later launch payload carries a workspace hint for
+   the selected executor. When Hermes or the wrapper observes Prepare worktree,
+   Start Codex session, Attach coding session, Record completed, Record blocked,
    or Ask Hermes to verify, it writes
    `executor_session/v1` metadata and derives status lines such as
    `workspace-isolation: worktree_recommended(prepared_not_observed)`,

@@ -133,8 +133,9 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 - **Safe handoffs** - coding can go to Codex, Claude Code, Hermes, or another
   selected runtime, while OMH keeps "prepared" separate from "observed."
 - **Workspace-aware starts** - risky, parallel, or runtime-owned coding requests
-  can show Prepare worktree before Open in Codex or another coding agent; the
-  backend can explicitly create the local Git worktree when that button is used.
+  can show Prepare worktree before Hermes starts Codex, Claude Code, Hermes, or
+  another configured coding-agent session; the backend can explicitly create the
+  local Git worktree when that button is used.
 - **Useful beyond coding** - research, planning, feedback triage, meeting prep,
   reports, automation blueprints, material packages, and loop work all have
   Hermes-facing workflow paths.

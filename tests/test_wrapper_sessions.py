@@ -687,10 +687,20 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(prepared_actions["prepare_worktree"]["label"], "Prepare worktree")
             self.assertEqual(prepared_actions["prepare_worktree"]["style"], "primary")
             self.assertTrue(prepared_actions["open_executor_session"]["enabled"])
-            self.assertEqual(prepared_actions["open_executor_session"]["label"], "Open in Codex")
+            self.assertEqual(prepared_actions["open_executor_session"]["label"], "Start Codex session")
             self.assertEqual(prepared_actions["open_executor_session"]["style"], "secondary")
             codex_launch = prepared_actions["open_executor_session"]["payload"]["launch"]
             self.assertEqual(codex_launch["schema_version"], "executor_launch/v1")
+            self.assertEqual(codex_launch["session_start_owner"], "hermes_or_wrapper")
+            self.assertEqual(codex_launch["decision_owner"], "hermes_agent")
+            self.assertEqual(codex_launch["backend_action_owner"], "wrapper")
+            self.assertEqual(codex_launch["configured_executor_profile"], "codex")
+            self.assertTrue(codex_launch["ui_only"])
+            self.assertTrue(codex_launch["terminal_launch_available"])
+            self.assertEqual(codex_launch["execution_policy"], "copyable_instruction_only")
+            self.assertEqual(codex_launch["session_start_capability"], "terminal_command_available")
+            self.assertTrue(codex_launch["not_backend_execution"])
+            self.assertTrue(codex_launch["not_omh_backend_execution"])
             self.assertEqual(codex_launch["workspace_isolation"]["strategy"], "worktree_recommended")
             self.assertIn("Prefer an isolated worktree", codex_launch["workspace_hint"])
             self.assertEqual(codex_launch["command_templates"][0]["argv_template"], ["codex", "{executor_prompt}"])
@@ -698,14 +708,14 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(codex_launch["command_templates"][1]["argv_template"], ["codex", "--cd", "{workspace_path}", "{executor_prompt}"])
             self.assertEqual(codex_launch["command_templates"][1]["shell_command_template"], "codex --cd {workspace_path_shell_quoted} {executor_prompt_shell_quoted}")
             self.assertEqual(codex_launch["after_launch_backend_action"], "open-executor")
-            self.assertIn("not execution evidence", codex_launch["claim_boundary"])
-            self.assertEqual(prepared_actions["attach_executor_session"]["label"], "Attach existing session")
+            self.assertIn("not proof of execution", codex_launch["claim_boundary"])
+            self.assertEqual(prepared_actions["attach_executor_session"]["label"], "Attach coding session")
             self.assertEqual(prepared_actions["attach_executor_session"]["payload"]["input_schema"]["required"], ["external_session_ref"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["chat_response"]["actions"]})
             self.assertEqual(prepared["status"]["status_card"]["executor_session_status"]["coding_agent"], "prepared(codex)")
             self.assertEqual(prepared["status"]["status_card"]["executor_next_action_label"], "Prepare worktree")
             self.assertIn("Coding agent is prepared in Codex.", prepared_status["display_status_lines"])
-            self.assertIn("Workspace isolation is recommended before opening the coding agent.", prepared_status["display_status_lines"])
+            self.assertIn("Workspace isolation is recommended before starting the coding session.", prepared_status["display_status_lines"])
             self.assertIn("open_executor_session", {action["id"] for action in prepared["status"]["status_card"]["executor_actions"]})
             self.assertIn("prepare_worktree", {action["id"] for action in prepared["status"]["status_card"]["executor_actions"]})
             with self.assertRaisesRegex(ExecutorSessionError, "requires --observed"):
@@ -779,7 +789,7 @@ class WrapperSessionTests(unittest.TestCase):
                 prepared_actions["open_executor_session"]["payload"]["disabled_reason"],
             )
             self.assertEqual(prepared["status"]["status_card"]["executor_next_action"], "prepare_worktree")
-            self.assertIn("Workspace isolation is required before opening the coding agent.", prepared_status["display_status_lines"])
+            self.assertIn("Workspace isolation is required before starting the coding session.", prepared_status["display_status_lines"])
 
     def test_coding_briefing_omits_optional_merge_gaps_when_merge_not_required(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -1021,8 +1031,16 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertNotIn("runtime_status", prepared["status"])
             actions = {action["id"]: action for action in prepared["status"]["executor_session_status"]["actions"]}
             claude_launch = actions["open_executor_session"]["payload"]["launch"]
-            self.assertEqual(actions["open_executor_session"]["label"], "Open in Claude Code")
+            self.assertEqual(actions["open_executor_session"]["label"], "Start Claude Code session")
             self.assertEqual(claude_launch["schema_version"], "executor_launch/v1")
+            self.assertEqual(claude_launch["session_start_owner"], "hermes_or_wrapper")
+            self.assertEqual(claude_launch["backend_action_owner"], "wrapper")
+            self.assertEqual(claude_launch["configured_executor_profile"], "claude-code")
+            self.assertTrue(claude_launch["ui_only"])
+            self.assertTrue(claude_launch["terminal_launch_available"])
+            self.assertEqual(claude_launch["execution_policy"], "copyable_instruction_only")
+            self.assertEqual(claude_launch["session_start_capability"], "terminal_command_available")
+            self.assertTrue(claude_launch["not_backend_execution"])
             self.assertEqual(claude_launch["command_templates"][0]["argv_template"], ["claude", "{executor_prompt}"])
             self.assertEqual(claude_launch["command_templates"][0]["shell_command_template"], "claude {executor_prompt_shell_quoted}")
             self.assertEqual(claude_launch["command_templates"][1]["argv_template"], ["claude", "--add-dir", "{workspace_path}", "{executor_prompt}"])
@@ -1073,7 +1091,12 @@ class WrapperSessionTests(unittest.TestCase):
 
                 self.assertTrue(launch["ui_only"])
                 self.assertTrue(launch["not_backend_execution"])
+                self.assertFalse(launch["terminal_launch_available"])
                 self.assertEqual(launch["execution_policy"], "copyable_instruction_only")
+                self.assertEqual(launch["session_start_capability"], "prompt_or_runtime_contract_only")
+                self.assertEqual(launch["session_start_owner"], "hermes_or_wrapper")
+                self.assertEqual(launch["backend_action_owner"], "wrapper")
+                self.assertTrue(launch["not_omh_backend_execution"])
                 expected_copy_blocks = [
                     {
                         "id": "copy_prompt",
