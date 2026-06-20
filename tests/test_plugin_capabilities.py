@@ -244,6 +244,7 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 ctx = FakeCtx()
                 module.register(ctx)
                 handler = ctx.tools["omh_capabilities"]["args"][2]
+                context_handler = ctx.tools["omh_context"]["args"][2]
                 interact_handler = ctx.tools["omh_interact"]["args"][2]
                 recommend_handler = ctx.tools["omh_recommend"]["args"][2]
                 probe_handler = ctx.tools["omh_probe"]["args"][2]
@@ -252,6 +253,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 summary = json.loads(handler({{"action": "summary"}}))
                 recommendation = json.loads(
                     recommend_handler({{"message": "make an image summary for this PR with secret-token-123", "limit": 2}})
+                )
+                context_brief = json.loads(
+                    context_handler({{
+                        "message": "make an image summary for this PR with secret-token-123",
+                        "source": "discord",
+                        "limit": 2,
+                        "include_prompt_context": True,
+                    }})
                 )
                 interaction = json.loads(
                     interact_handler({{
@@ -334,6 +343,12 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "recommend_raw_prompt_echoed": recommendation["message"]["raw_prompt_echoed"],
                     "recommend_first_skill": recommendation["recommendations"][0]["skill"],
                     "recommend_serialized": json.dumps(recommendation, sort_keys=True),
+                    "context_schema": context_brief["schema_version"],
+                    "context_source": context_brief["source_backend"],
+                    "context_plugin_tool": context_brief["plugin_tool"],
+                    "context_primary_workflow": context_brief["route_hint"]["primary_workflow"],
+                    "context_prompt_context": context_brief["prompt_context"],
+                    "context_serialized": json.dumps(context_brief, sort_keys=True),
                     "interaction_schema": interaction["schema_version"],
                     "interaction_degraded": interaction["degraded"],
                     "interaction_source": interaction["source_backend"],
@@ -444,6 +459,13 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["recommend_first_skill"], "img-summary")
             self.assertIn("<current user request>", payload["recommend_serialized"])
             self.assertNotIn("secret-token-123", payload["recommend_serialized"])
+            self.assertEqual(payload["context_schema"], "omh_context_brief/v1")
+            self.assertEqual(payload["context_source"], "standalone_plugin_bundle_fallback")
+            self.assertEqual(payload["context_plugin_tool"], "omh_context")
+            self.assertEqual(payload["context_primary_workflow"], "img-summary")
+            self.assertIn("workflow=img-summary", payload["context_prompt_context"])
+            self.assertIn("generic tool can render", payload["context_serialized"])
+            self.assertNotIn("secret-token-123", payload["context_serialized"])
             self.assertEqual(payload["interaction_schema"], "chat_interaction/v1")
             self.assertTrue(payload["interaction_degraded"])
             self.assertEqual(payload["interaction_source"], "standalone_plugin_bundle_fallback")

@@ -103,6 +103,34 @@ Render the picker in this order:
 This lets Hermes answer catalog questions without asking the user to approve
 `omh list`.
 
+## Compact OMH Context For Hermes
+
+When a wrapper only needs to prime Hermes before ordinary chat, image, file,
+search, or coding tools, use `omh_context_brief/v1` instead of asking the user
+to approve a shell command. The backend form is:
+
+```sh
+omh context brief --source discord --json "make an image card for this PR"
+```
+
+The plugin-native form is the `omh_context` tool. Both return the same compact
+shape: OMH lanes, common cues, a generic-tool checkpoint, an optional route
+hint, and the response contract. The raw prompt is represented by hash/length
+metadata only.
+
+For an image request, Hermes can then say:
+
+```text
+Hermes Agent  BOT
+[omh] img-summary looks relevant.
+
+This sounds like a visual summary request, so I will prepare the OMH
+img-summary prompt card first. Image generation, visual QA, and delivery are
+not evidence yet until your connected image tool or wrapper records them.
+
+[ Open img-summary ] [ Choose image tool ] [ Record visual evidence ]
+```
+
 The wrapper should not ask the user to approve `omh list` merely to show the
 catalog. `omh_skill_picker/v1` carries the workflow labels, direct invocation
 text, harness names, and routing-only claim boundary. Catalog-question

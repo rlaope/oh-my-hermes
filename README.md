@@ -225,6 +225,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 | Skill pack | Hermes gets workflows like `loop`, `ralplan`, `web-research`, `materials-package`, `img-summary`, and `ultraprocess`. |
 | Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
+| OMH context brief | Hermes or a wrapper can fetch a compact OMH mental model, generic-tool checkpoint, and route hint before falling back to ordinary chat/tools. |
 | Catalog-aware list | `omh list` groups installed workflows by lane, and `omh list --json` includes descriptions, routing hints, examples, and evidence boundaries for wrappers or operators. |
 | Route hint cards | Wrappers can preview the nearest OMH workflow with `chat_route_hint/v1`, even before plugin load is observed. |
 | Plugin runtime evidence | Hosts or wrappers can record plugin load/use with `omh plugin observe-host`, and plugin tools/hooks can self-record the same metadata when the host passes observation context; active-ready and historical events stay separate from install smoke. |

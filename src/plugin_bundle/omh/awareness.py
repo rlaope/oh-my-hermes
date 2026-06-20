@@ -697,6 +697,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "local artifacts and evidence records",
         ],
         "tool_hints": [
+            "Use omh_context when Hermes needs the compact OMH mental model, generic-tool checkpoint, and message-specific route hint in one payload.",
             "Use omh_capabilities action=summary when the user asks what OMH can do or which workflows are available.",
             "Use omh_recommend when the user gives a natural-language request and Hermes needs the nearest OMH workflow without shell approval.",
             "Use omh_capabilities for detailed workflow catalog and capability manifest lookup.",
@@ -776,7 +777,7 @@ def awareness_primer_context() -> str:
             f"Common cues: {cue_map}.",
             (
                 f"Tools: {tool_map}; omh_interact records chat/session metadata; "
-                "omh_recommend routes; omh_capabilities catalogs; omh_probe roadmaps; "
+                "omh_context primes; omh_recommend routes; omh_capabilities catalogs; omh_probe; "
                 "omh_status/hud state; omh_role role context."
             ),
             str(payload["fallback_rule"]),
@@ -822,7 +823,7 @@ def awareness_primer_markdown() -> str:
             _compact_generic_tool_checkpoint_line() + ".",
             "",
             "Tools:",
-            "- Tools: `omh_interact` chat/session meta; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.",
+            "- Tools: `omh_interact`; `omh_context`; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.",
             "",
             str(payload["fallback_rule"]),
             "",

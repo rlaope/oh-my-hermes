@@ -139,6 +139,7 @@ class PluginDistributionTests(unittest.TestCase):
                 plugin["registered_tools"],
                 [
                     "omh_capabilities",
+                    "omh_context",
                     "omh_gather_evidence",
                     "omh_hud",
                     "omh_interact",
@@ -296,6 +297,7 @@ class PluginDistributionTests(unittest.TestCase):
             ctx = FakeHermesContext()
             module.register(ctx)
             self.assertIn("omh_capabilities", ctx.tools)
+            self.assertIn("omh_context", ctx.tools)
             self.assertIn("omh_gather_evidence", ctx.tools)
             self.assertIn("omh_hud", ctx.tools)
             self.assertIn("omh_probe", ctx.tools)
@@ -350,6 +352,26 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(recommendation["recommendations"][0]["skill"], "img-summary")
             self.assertNotIn("secret-token-123", json.dumps(recommendation, sort_keys=True))
             self.assertIn("<current user request>", recommendation["recommendations"][0]["suggested_prompt"])
+
+            context_handler = ctx.tools["omh_context"]["args"][2]
+            context_brief = json.loads(
+                context_handler(
+                    {
+                        "message": "make an image card for this PR with secret-token-123",
+                        "source": "discord",
+                        "limit": 2,
+                        "include_prompt_context": True,
+                    }
+                )
+            )
+            self.assertEqual(context_brief["schema_version"], "omh_context_brief/v1")
+            self.assertEqual(context_brief["plugin_tool"], "omh_context")
+            self.assertEqual(context_brief["source_backend"], "package_context")
+            self.assertEqual(context_brief["route_hint"]["primary_workflow"], "img-summary")
+            self.assertIn("generic tool can render", context_brief["normal_response_contract"]["when_generic_tool_is_available"])
+            self.assertIn("workflow=img-summary", context_brief["prompt_context"])
+            self.assertFalse(context_brief["message"]["raw_prompt_echoed"])
+            self.assertNotIn("secret-token-123", json.dumps(context_brief, sort_keys=True))
 
             evidence_handler = ctx.tools["omh_gather_evidence"]["args"][2]
             evidence = json.loads(
@@ -491,7 +513,8 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("feedback-triage", context)
             self.assertIn("omh_capabilities", context)
             self.assertIn("omh_capabilities catalogs", context)
-            self.assertIn("omh_probe roadmaps", context)
+            self.assertIn("omh_context primes", context)
+            self.assertIn("omh_probe", context)
             self.assertIn("omh_role role context", context)
             self.assertIn("external image tool", context)
             self.assertIn("[omh]", context)

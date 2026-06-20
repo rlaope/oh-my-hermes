@@ -29,10 +29,13 @@ omh capabilities list
 omh capabilities inspect ultragoal --json
 omh capabilities inspect handoff-guide --section roles --json
 omh capabilities inspect request-to-handoff --section playbooks --json
+omh context brief "make an image card for this PR" --json
 ```
 
 The Hermes plugin exposes the same contract through the metadata-only
-`omh_capabilities` tool, exposes `omh_interact` when Hermes needs a renderable
+`omh_capabilities` tool, exposes `omh_context` when Hermes needs the compact
+OMH mental model, generic-tool checkpoint, and optional message route hint in
+one payload, exposes `omh_interact` when Hermes needs a renderable
 `chat_interaction/v1` plus a metadata-only wrapper session record, exposes
 `omh_recommend` when Hermes only needs route hints, and exposes `omh_probe`
 when Hermes needs local setup/runtime status or a capability roadmap without
@@ -88,8 +91,8 @@ session evidence only.
 
 The managed plugin bridge has the same split. Local install/import/register
 smoke proves the bundle is present and importable, including tools such as
-`omh_interact`, `omh_recommend`, `omh_capabilities`, `omh_probe`, `omh_hud`,
-and `omh_status`.
+`omh_interact`, `omh_context`, `omh_recommend`, `omh_capabilities`,
+`omh_probe`, `omh_hud`, and `omh_status`.
 `omh_probe` can return the same capability roadmap shape as `omh probe
 --roadmap`; in standalone plugin-bundle mode it returns a degraded roadmap that
 only uses local files and metadata. Host or wrapper evidence that Hermes

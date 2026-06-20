@@ -85,7 +85,8 @@ state. Skill counts, setup inventory, token metadata, and deep diagnostics are
 left to `omh doctor`, `omh_status`, and machine-readable HUD JSON. A quiet idle
 line looks like
 `[omh] v1.0.1 | plugin:ready | target:single | coding-agent:idle(ask)`.
-The plugin also exposes `omh_interact` for shell-free chat responses and
+The plugin also exposes `omh_context` for a compact OMH mental model plus
+generic-tool checkpoint, `omh_interact` for shell-free chat responses and
 metadata-only wrapper session records, `omh_recommend` for route hints without
 session recording, `omh_probe` for local setup/runtime status and
 capability-roadmap cards, `omh_role`, validates `[omh-role:name]` markers for
@@ -533,6 +534,10 @@ The backend flow is:
    `omh_capability_summary/v1`, which lets Hermes explain the larger
    capability lanes and representative playbooks without a second catalog
    command.
+   When the wrapper needs the compact mental model rather than the full picker,
+   it can use `omh context brief --json` or plugin tool `omh_context` to fetch
+   `omh_context_brief/v1`: lanes, common cues, generic-tool checkpoint, optional
+   route hint, and response rules without storing or echoing the raw prompt.
 8. If the user asks whether OMH is installed correctly, what OMH's current
    status is, or what to do next after setup, the wrapper returns
    `chat_response.kind == status` with `[omh] status`, a compact human summary,

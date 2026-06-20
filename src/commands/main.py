@@ -33,6 +33,7 @@ from .coding import (
     cmd_coding_lifecycle_start,
     cmd_coding_lifecycle_verify,
 )
+from .context import _add_context_commands, cmd_context_brief
 from .demo import _add_demo_commands, cmd_demo_orchestration
 from .docs import (
     _add_docs_commands,
@@ -172,6 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh cases demo --all\n"
             "  omh cases artifact --all --write\n"
             "  omh cases replay\n"
+            "  omh context brief \"make an image card for this PR\"\n"
             "  omh playbook recommend \"turn this issue into a PR\"\n"
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
             "  omh hud\n"
@@ -215,6 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_demo_commands(sub)
     _add_chat_commands(sub)
     _add_capabilities_commands(sub)
+    _add_context_commands(sub)
     _add_coding_commands(sub)
     _add_hermes_commands(sub)
     _add_hud_commands(sub)
@@ -264,6 +267,8 @@ Useful operator commands:
   omh cases artifact --all --write
                           Write local G1-G10 runbook artifacts
   omh cases replay        Replay G1-G10 routing fixtures
+  omh context brief "make an image card for this PR"
+                          Show compact OMH context and route hint
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
