@@ -2423,9 +2423,13 @@ class CliTests(unittest.TestCase):
             "Make a feature explainer image for cron automation.",
             "Explain this workflow as a shareable image.",
             "Create a one-page infographic for the automation feature.",
+            "make a poster explaining cron automation",
+            "make a visual one-pager for this release",
             "Create an image summary card from these notes.",
             "회의록을 세로 요약 이미지로 만들어줘",
+            "회의록을 공유용 카드로 만들어줘",
             "PR 요약 카드",
+            "PR 요약 포스터 만들어줘",
             "이슈 트리아지 카드",
             "경쟁사 뉴스 브리핑 카드",
             "릴리즈 노트 발표 이미지",
@@ -2434,6 +2438,8 @@ class CliTests(unittest.TestCase):
             "이 내용을 공유용 요약 카드로 만들어줘",
             "이 기능을 설명하는 인포그래픽 만들어줘",
             "워크플로우 이미지로 설명해줘",
+            "作成して、PRの要約画像",
+            "生成一张发布说明海报",
             "이미지 생성 요청을 했는데 OMH를 안 썼어",
         )
 
