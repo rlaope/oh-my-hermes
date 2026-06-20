@@ -118,6 +118,12 @@ class McpBridgeTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {"name": "omh_probe", "arguments": {"include_parity": True}},
                 },
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "tools/call",
+                    "params": {"name": "omh_probe", "arguments": {"include_roadmap": True}},
+                },
             ]
             stdin_text = "\n".join(json.dumps(request) for request in requests) + "\n"
 
@@ -126,17 +132,25 @@ class McpBridgeTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             lines = [json.loads(line) for line in stdout.splitlines()]
-            self.assertEqual([line["id"] for line in lines], [1, 2, 3, 4])
+            self.assertEqual([line["id"] for line in lines], [1, 2, 3, 4, 5])
             self.assertEqual(lines[0]["result"]["protocolVersion"], "2025-06-18")
-            tools = {tool["name"] for tool in lines[1]["result"]["tools"]}
+            listed_tools = lines[1]["result"]["tools"]
+            tools = {tool["name"] for tool in listed_tools}
             self.assertEqual(tools, {"omh_status", "omh_recommend", "omh_probe"})
+            probe_tool = next(tool for tool in listed_tools if tool["name"] == "omh_probe")
+            self.assertIn("capability roadmap", probe_tool["description"])
+            self.assertIn("include_roadmap", probe_tool["inputSchema"]["properties"])
             recommend = lines[2]["result"]["structuredContent"]
             self.assertEqual(recommend["schema_version"], "omh_mcp_tool_result/v1")
             self.assertEqual(recommend["tool"], "omh_recommend")
             self.assertIn("recommendations", recommend["payload"])
             probe = lines[3]["result"]["structuredContent"]["payload"]["probe"]
             self.assertIn("parity_matrix", probe)
+            self.assertIn("capability_gap_roadmap", probe)
             self.assertEqual(probe["parity_matrix"]["probe_alignment"]["mcp_bridge_server"], "available")
+            roadmap_probe = lines[4]["result"]["structuredContent"]["payload"]["probe"]
+            self.assertIn("capability_gap_roadmap", roadmap_probe)
+            self.assertNotIn("parity_matrix", roadmap_probe)
 
             status, stdout, stderr = run_cli(base + ["probe"])
             self.assertEqual(stderr, "")

@@ -11,9 +11,13 @@ Use the live verifier for the current local install:
 ```sh
 omh probe --parity
 omh probe --parity --json
+omh probe --roadmap
 ```
 
-The JSON payload includes `omh_parity_matrix/v1`.
+The JSON payload includes `omh_parity_matrix/v1`. `--parity` also includes
+`omh_capability_gap_roadmap/v1`, which separates real product/setup gaps from
+host or wrapper evidence gaps. This matters because a missing runtime
+observation is usually not a missing OMH feature.
 
 ## Search Basis
 
@@ -50,6 +54,9 @@ implementation or claim runtime behavior it did not observe.
 - A deterministic parity catalog in `src/parity.py`.
 - `omh probe --parity` so operators and wrappers can inspect the matrix beside
   the current local capability probe.
+- `omh probe --roadmap`, and the roadmap section inside `omh probe --parity`,
+  so operators can see whether the next step is setup, optional plugin/MCP
+  configuration, wrapper usage evidence, or host runtime observation.
 - A plugin bridge with native role context lookup, role marker injection,
   delegate marker validation, session-end checkpoints, and bounded
   `omh_gather_evidence` probes.
@@ -93,6 +100,15 @@ implementation or claim runtime behavior it did not observe.
 - `omh probe --parity` prints a human-readable parity section.
 - `omh probe --parity --json` includes `parity_matrix.schema_version` equal to
   `omh_parity_matrix/v1`.
+- `omh probe --roadmap --json` includes
+  `capability_gap_roadmap.schema_version` equal to
+  `omh_capability_gap_roadmap/v1`.
+- The roadmap distinguishes baseline product setup gaps from evidence gaps
+  such as missing wrapper metadata, MCP host-session observations, or plugin
+  runtime observations.
+- Roadmap `next_actions` keeps executable backend commands in `command` and
+  Hermes/operator guidance in `operator_instruction`, so wrappers do not treat
+  prose instructions as shell commands.
 - Team/swarm worker protocol is `available` as a readiness contract, wrapper
   action set, runtime template set, and `runtime_observation/v1` ledger. Worker
   launch, pane/session management, worker results, review, CI, and merge still

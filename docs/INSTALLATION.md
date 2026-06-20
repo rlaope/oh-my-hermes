@@ -367,6 +367,7 @@ omh runtime status
 omh runtime team-readiness
 omh probe
 omh probe --parity
+omh probe --roadmap
 ```
 
 `omh setup` should report a human-readable setup summary by default, including
@@ -447,6 +448,18 @@ coding agent. If a wrapper or operator chooses the explicit backend action,
 `omh worktree prepare` can create the local Git worktree and record
 `omh_worktree_observation/v1`; that still proves workspace isolation only, not
 executor dispatch or implementation.
+
+Use `omh probe --roadmap` when the question is "what should I do next?" rather
+than "what does OMH support?" It returns
+`omh_capability_gap_roadmap/v1` and separates baseline product/setup gaps from
+host or wrapper evidence gaps. For example, missing managed skills or Hermes
+registration points to `omh setup`; missing plugin runtime, MCP host-session,
+or wrapper-session observations points to the host or wrapper evidence that
+must be recorded before OMH can claim those runtime states. `omh probe
+--parity` includes the same roadmap so a wrapper can render capability parity
+and next actions in one status card. Roadmap actions separate executable
+backend commands from `operator_instruction` text so chat wrappers can render
+human/Hermes guidance without treating it as a shell command.
 
 For concrete examples that show how the installed skills should affect coding,
 planning, and specialist review flows, see

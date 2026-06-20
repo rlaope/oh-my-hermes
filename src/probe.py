@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .capability_roadmap import build_capability_gap_roadmap
 from .config_adapter import external_dirs, read_config
 from .local_store import read_jsonl_objects
 from .parity import build_parity_matrix
@@ -319,7 +320,7 @@ def _dir_capability(name: str, path: Path, found_message: str, missing_message: 
     )
 
 
-def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict:
+def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False, include_roadmap: bool = False) -> dict:
     config_text = read_config(paths.hermes_config_path)
     configured_dirs = external_dirs(config_text)
     skills_registered = str(paths.skills_dir) in configured_dirs
@@ -484,4 +485,6 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
     }
     if include_parity:
         payload["parity_matrix"] = build_parity_matrix(payload)
+    if include_roadmap or include_parity:
+        payload["capability_gap_roadmap"] = build_capability_gap_roadmap(payload)
     return payload

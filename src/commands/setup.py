@@ -1931,6 +1931,9 @@ def _print_probe_summary(payload: dict[str, object]) -> None:
     parity = payload.get("parity_matrix")
     if isinstance(parity, dict):
         _print_probe_parity_summary(parity, use_color=use_color)
+    roadmap = payload.get("capability_gap_roadmap")
+    if isinstance(roadmap, dict):
+        _print_probe_roadmap_summary(roadmap, use_color=use_color)
     print(f"  {tr('en', 'machine_readable')}")
 
 
@@ -1962,6 +1965,41 @@ def _print_probe_parity_summary(payload: dict[str, object], *, use_color: bool) 
     if boundary:
         print(_color("Parity boundary", "1;32", use_color))
         print(f"  {_short_summary(boundary, limit=132)}")
+
+
+def _print_probe_roadmap_summary(payload: dict[str, object], *, use_color: bool) -> None:
+    summary = payload.get("summary", {})
+    if not isinstance(summary, dict):
+        summary = {}
+    print(_color("Capability roadmap", "1;32", use_color))
+    print(
+        "  Gaps: "
+        f"{summary.get('baseline_product_gaps', 0)} product setup, "
+        f"{summary.get('evidence_gaps', 0)} evidence, "
+        f"{summary.get('optional_or_host_unknowns', 0)} optional/host unknown"
+    )
+    actions = payload.get("next_actions", [])
+    if not isinstance(actions, list):
+        actions = []
+    for action in actions[:3]:
+        if not isinstance(action, dict):
+            continue
+        label = str(action.get("label", "Next action"))
+        kind = str(action.get("kind", "unknown"))
+        next_step = _short_summary(_roadmap_next_step(action), limit=100)
+        print(f"  - {label} ({kind})")
+        if next_step:
+            print(f"    Next: {next_step}")
+    boundary = str(payload.get("claim_boundary", "")).strip()
+    if boundary:
+        print(f"  Boundary: {_short_summary(boundary, limit=132)}")
+
+
+def _roadmap_next_step(action: dict[str, object]) -> str:
+    command = str(action.get("command", "")).strip()
+    if command:
+        return command
+    return str(action.get("operator_instruction", "")).strip()
 
 
 def _short_summary(value: str, *, limit: int) -> str:
@@ -2250,7 +2288,11 @@ def cmd_snippet(args: argparse.Namespace) -> int:
 
 
 def cmd_probe(args: argparse.Namespace) -> int:
-    payload = probe_capabilities(_paths(args), include_parity=bool(getattr(args, "parity", False)))
+    payload = probe_capabilities(
+        _paths(args),
+        include_parity=bool(getattr(args, "parity", False)),
+        include_roadmap=bool(getattr(args, "roadmap", False)),
+    )
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -2391,6 +2433,11 @@ def _add_top_level_commands(sub) -> None:
         "--parity",
         action="store_true",
         help="Include the OMH parity matrix for common oh-my agent runtime capability axes.",
+    )
+    probe.add_argument(
+        "--roadmap",
+        action="store_true",
+        help="Include next actions that separate product setup gaps from missing host/runtime evidence.",
     )
     probe.add_argument("--json", action="store_true", help="Print the full machine-readable capability payload.")
     probe.set_defaults(func=cmd_probe)

@@ -100,11 +100,12 @@ def mcp_tool_definitions() -> list[dict[str, Any]]:
         {
             "name": "omh_probe",
             "title": "OMH Capability Probe",
-            "description": "Return local OMH capability probe data, optionally with the parity matrix.",
+            "description": "Return local OMH capability probe data, optionally with the parity matrix and capability roadmap.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "include_parity": {"type": "boolean", "default": False},
+                    "include_roadmap": {"type": "boolean", "default": False},
                 },
                 "additionalProperties": False,
             },
@@ -451,7 +452,8 @@ def handle_mcp_message(paths: OmhPaths, message: Any) -> dict[str, Any] | None:
 
 def _handle_tool_call(paths: OmhPaths, request_id: Any, params: dict[str, Any]) -> dict[str, Any]:
     name = str(params.get("name", ""))
-    arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+    raw_arguments = params.get("arguments")
+    arguments: dict[str, Any] = raw_arguments if isinstance(raw_arguments, dict) else {}
     try:
         structured = _call_tool(paths, name, arguments)
     except ValueError as exc:
@@ -491,7 +493,8 @@ def _call_tool(paths: OmhPaths, name: str, arguments: dict[str, Any]) -> dict[st
         )
     if name == "omh_probe":
         include_parity = bool(arguments.get("include_parity", False))
-        probe = probe_capabilities(paths, include_parity=include_parity)
+        include_roadmap = bool(arguments.get("include_roadmap", False))
+        probe = probe_capabilities(paths, include_parity=include_parity, include_roadmap=include_roadmap)
         return _tool_result("omh_probe_result/v1", "omh_probe", {"probe": probe})
     raise ValueError(f"Unknown tool: {name}")
 
