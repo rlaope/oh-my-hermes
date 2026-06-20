@@ -1,0 +1,72 @@
+{
+  "schema_version": "plugin_interact_golden_examples/v1",
+  "purpose": "Transport-free examples for Hermes wrappers that call the managed OMH plugin tool `omh_interact` instead of asking the user to approve backend shell catalog commands.",
+  "examples": [
+    {
+      "scenario": "discord_catalog_question_via_plugin_tool",
+      "source": "discord",
+      "fixture": "examples/wrapper-events/discord-workflow-catalog.json",
+      "expected_response": {
+        "schema_version": "wrapper_adapter_shim/v1",
+        "mode": "plugin_interact",
+        "response_kind": "skill_picker",
+        "response_phase": "skill_selection",
+        "action_ids": [
+          "choose_skill",
+          "search_skills",
+          "show_status"
+        ],
+        "wrapper_session_recorded": true,
+        "wrapper_session_status": "routed",
+        "record_provenance": "plugin_tool",
+        "plugin_observation_status": "observed",
+        "plugin_observation_event": "tool_call",
+        "tool": "omh_interact",
+        "state_scope": "temporary_example",
+        "real_user_state_mutated": false,
+        "not_evidence_until_observed": [
+          "workflow_execution",
+          "executor_dispatch",
+          "executor_result",
+          "verification",
+          "review",
+          "ci",
+          "merge"
+        ]
+      }
+    },
+    {
+      "scenario": "slack_risky_refactor_plan_via_plugin_tool",
+      "source": "slack",
+      "fixture": "examples/wrapper-events/slack-risky-refactor.json",
+      "expected_response": {
+        "schema_version": "wrapper_adapter_shim/v1",
+        "mode": "plugin_interact",
+        "response_kind": "plan",
+        "response_phase": "planning",
+        "action_ids": [
+          "accept_plan",
+          "revise_plan",
+          "prepare_handoff"
+        ],
+        "wrapper_session_recorded": true,
+        "wrapper_session_status": "plan_presented",
+        "record_provenance": "plugin_tool",
+        "plugin_observation_status": "observed",
+        "plugin_observation_event": "tool_call",
+        "tool": "omh_interact",
+        "state_scope": "temporary_example",
+        "real_user_state_mutated": false,
+        "not_evidence_until_observed": [
+          "workflow_execution",
+          "executor_dispatch",
+          "executor_result",
+          "verification",
+          "review",
+          "ci",
+          "merge"
+        ]
+      }
+    }
+  ]
+}

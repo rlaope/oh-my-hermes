@@ -96,8 +96,9 @@ action, and keep the prepared handoff separate from observed work. When the
 plugin surface is available, Hermes can use `omh_interact` to build the same
 chat response and record a metadata-only wrapper session without asking for
 shell approval; session records include producer provenance so plugin-authored
-metadata stays distinguishable from wrapper/backend metadata. Normal users do not need to know `omh recommend`,
-`omh chat interact`, or other backend commands.
+metadata stays distinguishable from wrapper/backend metadata. Normal users do
+not need to know `omh recommend`, `omh chat interact`, or other backend
+commands.
 
 OMH's setup footprint is deliberately small: it installs Hermes-visible skills,
 records local status contracts, and can repair managed `skills.external_dirs`
@@ -277,7 +278,7 @@ documentation below.
 | Situation playbooks | [Playbooks](docs/PLAYBOOKS.md) |
 | Role surfaces and profile packs | [Roles](docs/ROLES.md) |
 | Memory/context review and handoff packs | [Memory Context Review](docs/MEMORY_CONTEXT.md) |
-| Discord-style wrapper examples | [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md) |
+| Discord-style and plugin-native wrapper examples | [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md) |
 | Harness quality contracts | [Harness Quality Contract](docs/HARNESS_QUALITY.md) |
 | Representative workflows | [Application Cases](docs/APPLICATION_CASES.md) |
 | Public website source | [GitHub Pages site](site/index.html) |

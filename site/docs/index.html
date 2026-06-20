@@ -338,7 +338,8 @@ omh chat interact --source slack "diagnose installation health"</code>
             <code>omh_interact</code> is the plugin-native path: it returns the
             same chat envelope and records a metadata-only wrapper session with
             producer provenance. The CLI examples are adapter backend
-            equivalents. A response can be
+            equivalents. Fixture-backed examples cover both shell-free workflow
+            picker responses and plugin-produced planning cards. A response can be
             an answer, a clarification request, policy-specific workflow
             guidance for research, strategy, feedback triage, meeting prep, a
             plan, a status card, or a prepared handoff. The wrapper should
@@ -363,7 +364,8 @@ omh chat interact --source slack "diagnose installation health"</code>
           <p>
             Read the source runbook at
             <code>docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md</code> and validate the matching
-            golden fixture at <code>examples/wrapper-golden/hermes-agent-integration.json</code>.
+            golden fixtures at <code>examples/wrapper-golden/hermes-agent-integration.json</code>
+            and <code>examples/wrapper-golden/plugin-interact.json</code>.
             Responsibility roles are described in <code>docs/ROLES.md</code>;
             agent-facing installation is described in <code>INSTALL_FOR_AGENTS.md</code>.
           </p>

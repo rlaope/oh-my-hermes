@@ -380,6 +380,64 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertIn(f"Open {workflow}", {action["label"] for action in payload["actions"]})
                 self.assertNotIn(raw_message, result.stdout)
 
+    def test_plugin_interact_golden_examples_render_plugin_tool_sessions(self) -> None:
+        payload = json.loads(Path("examples/wrapper-golden/plugin-interact.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], "plugin_interact_golden_examples/v1")
+
+        for item in payload["examples"]:
+            source = str(item["source"])
+            fixture = str(item["fixture"])
+            expected = item["expected_response"]
+            script = f"examples/{source}-adapter-shim.py"
+            event = json.loads(Path(fixture).read_text(encoding="utf-8"))
+            raw_message = extract_message_text(event)
+
+            with self.subTest(item["scenario"]):
+                result = subprocess.run(
+                    [sys.executable, script, "--plugin-interact", fixture],
+                    cwd=Path.cwd(),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.returncode, 0)
+                rendered = json.loads(result.stdout)
+                plugin = rendered["plugin_interact"]
+                response = rendered["response"]
+                action_ids = [action["id"] for action in rendered["actions"]]
+
+                self.assertEqual(rendered["schema_version"], expected["schema_version"])
+                self.assertEqual(rendered["source"], source)
+                self.assertEqual(rendered["mode"], expected["mode"])
+                self.assertEqual(rendered["redaction_policy"], "metadata_only")
+                self.assertEqual(response["kind"], expected["response_kind"])
+                self.assertEqual(response["phase"], expected["response_phase"])
+                self.assertEqual(action_ids, expected["action_ids"])
+                self.assertEqual(plugin["schema_version"], "omh_plugin_interact_render/v1")
+                self.assertEqual(plugin["tool"], expected["tool"])
+                self.assertEqual(plugin["source_backend"], "package_backend")
+                self.assertEqual(plugin["wrapper_session_recorded"], expected["wrapper_session_recorded"])
+                self.assertEqual(plugin["wrapper_session_status"], expected["wrapper_session_status"])
+                self.assertEqual(plugin["record_provenance"]["producer"], expected["record_provenance"])
+                self.assertEqual(plugin["record_provenance"]["schema_version"], "wrapper_session_provenance/v1")
+                self.assertEqual(
+                    plugin["plugin_host_observation"]["status"],
+                    expected["plugin_observation_status"],
+                )
+                self.assertEqual(plugin["plugin_host_observation"]["event"], expected["plugin_observation_event"])
+                self.assertEqual(plugin["plugin_host_observation"]["tool"], expected["tool"])
+                self.assertEqual(plugin["example_runtime"]["state_scope"], expected["state_scope"])
+                self.assertEqual(
+                    plugin["example_runtime"]["real_user_state_mutated"],
+                    expected["real_user_state_mutated"],
+                )
+                self.assertEqual(rendered["not_evidence_until_observed"], expected["not_evidence_until_observed"])
+                self.assertTrue(plugin["claim_boundary"])
+                self.assertIn("not executor dispatch", plugin["claim_boundary"])
+                self.assertNotIn(raw_message, result.stdout)
+
     def _source_harness_quality(self, item: dict[str, object]) -> dict[str, object]:
         source = item["source_payload"]
         if source == "coding_delegation/v1.harness_quality":
