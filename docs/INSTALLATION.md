@@ -412,7 +412,9 @@ runtime state, Hermes registration, target topology, optional surfaces, command
 availability, issue counts, recommended next action, and the `last_doctor`
 state-log entry when the runtime directory is writable. `omh doctor --json`
 returns the full check payload plus `doctor_summary/v1`. `omh list` should show
-a concise managed skill summary by default and the full manifest with `--json`.
+a concise managed skill summary plus workflow lanes by default. `omh list
+--json` returns the managed manifest plus `omh_installed_skill_catalog_context/v1`
+and per-skill descriptions, routing hints, examples, and evidence boundaries.
 Human-facing maintenance and catalog commands print readable terminal summaries
 by default: `omh install`, `omh update`, `omh uninstall`, `omh apply`,
 `omh list`, `omh recommend`, `omh playbook ...`, `omh profile ...`,
