@@ -262,6 +262,17 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         expected_playbook="img-summary",
     ),
     GroundedScenario(
+        "korean-meeting-image-summary",
+        "Korean meeting image summary",
+        "회의록을 보기 좋은 세로 이미지로 요약해줘",
+        "img-summary",
+        "img_summary",
+        "prepare_visual_prompt_card",
+        "clarify",
+        False,
+        expected_playbook="img-summary",
+    ),
+    GroundedScenario(
         "research-department-ops",
         "Research department ops",
         "I need a weekly leadership brief from support tickets, competitor news, and release risks",

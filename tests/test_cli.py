@@ -2462,10 +2462,14 @@ class CliTests(unittest.TestCase):
             "경쟁사 뉴스 브리핑 카드",
             "릴리즈 노트 발표 이미지",
             "크론 기능 설명 이미지 하나 만들어줘",
+            "회의록을 보기 좋은 세로 이미지로 요약해줘",
+            "PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘",
             "이미지 요약 카드 만들어줘",
             "이 내용을 공유용 요약 카드로 만들어줘",
             "이 기능을 설명하는 인포그래픽 만들어줘",
             "워크플로우 이미지로 설명해줘",
+            "make an image explaining the cron feature",
+            "create a picture card from these meeting notes",
             "作成して、PRの要約画像",
             "生成一张发布说明海报",
             "이미지 생성 요청을 했는데 OMH를 안 썼어",
@@ -2919,6 +2923,28 @@ class CliTests(unittest.TestCase):
         report = json.loads(stdout)["playbook"]
         self.assertEqual(report["delegated_to_executor"], [])
         self.assertNotIn("slo_pass", report["not_evidence_until_observed"])
+
+    def test_playbook_recommend_routes_visual_summary_card_requests(self) -> None:
+        cases = (
+            "크론 기능 설명 이미지 하나 만들어줘",
+            "회의록을 보기 좋은 세로 이미지로 요약해줘",
+            "PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘",
+            "make an image explaining the cron feature",
+            "make a visual summary of this PR for reviewers",
+            "create a picture card from these meeting notes",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["playbook", "recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["id"], "img-summary")
+                self.assertEqual(top["confidence"], "high")
+                self.assertEqual(top["next_action"], "scope_visual_source")
+                self.assertIn("not generated image", top["evidence_boundary"])
 
     def test_playbook_recommend_routes_app_operation_loops(self) -> None:
         cases = (
@@ -3872,7 +3898,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(payload["summary"]["scenario_count"], 27)
+        self.assertEqual(payload["summary"]["scenario_count"], 28)
         self.assertTrue(payload["summary"]["all_10"])
         self.assertEqual(payload["summary"]["minimum_score"], 10)
         self.assertEqual(payload["summary"]["maximum_score"], 10)
@@ -3905,6 +3931,7 @@ class CliTests(unittest.TestCase):
                 "english-product-shaping",
                 "workflow-learning-improvement",
                 "visual-summary-poster",
+                "korean-meeting-image-summary",
                 "research-department-ops",
                 "github-event-ops-delivery",
                 "executor-runtime-selection",
@@ -3915,6 +3942,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(direct["workflow-learning-improvement"]["observed"]["playbook"]["id"], "workflow-learning")
         self.assertEqual(direct["visual-summary-poster"]["observed"]["playbook"]["id"], "img-summary")
+        self.assertEqual(direct["korean-meeting-image-summary"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["coding-agent-progress-status"]["observed"]["playbook"]["id"], "agent-ops-review")
         self.assertEqual(
             direct["executor-runtime-selection"]["observed"]["handoff_status"],
