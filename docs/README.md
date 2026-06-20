@@ -70,9 +70,9 @@ observes Open in Codex, Open in Claude Code, Attach session, Record completed,
 Record blocked, or Ask Hermes to verify. They update chat status without
 requiring normal users to type backend commands.
 
-Operating models are setup defaults for Hermes collaboration posture. They
-should not be described as installed agents unless a separate profile pack is
-selected.
+Operating models are optional advanced Hermes collaboration postures. They
+should not be described as installed agents or first-run setup choices unless a
+separate profile pack is explicitly selected.
 
 ## Flagship Command Set Families
 
@@ -114,7 +114,7 @@ selected.
   explain the next action, but it cannot prove execution without matching
   observed evidence.
 - Operating model docs should stay lighter than team profile pack docs. They
-  record routing and narration defaults only.
+  record optional routing and narration defaults only.
 - Coding-heavy requests should be described as delegated work unless there is
   observed evidence that a coding executor actually ran.
 - Generated workflow docs should come from `src/skills/catalog.py`; update the

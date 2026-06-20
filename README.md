@@ -216,16 +216,16 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 | Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
 | Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts: metadata-only trace, deterministic eval, human review queue, non-applying patch proposal, regression case, audit, and export bundle. |
-| Organization patterns | Solo, research, product ops, coding runtime, and CTO-style collaboration patterns help Hermes present the right role flow for the request. |
+| Organization patterns | Solo, research, product ops, coding runtime, and CTO-style patterns stay available so Hermes can choose the right role flow per request. |
 
 <br>
 
 ## Organization Patterns
 
 Profiles describe how Hermes should organize work around a request. They are
-role-interaction patterns, not hidden workers. Setup can save a default pattern
-or install visible role files, but every OMH workflow remains available either
-way.
+role-interaction patterns, not hidden workers. Setup does not need to lock one
+organization model; Hermes can choose the pattern per request, and visible role
+files remain an explicit advanced option.
 
 <p align="center">
   <img src="assets/omh-profile-interaction-map.svg" alt="OMH request-to-handoff interaction map" width="920">

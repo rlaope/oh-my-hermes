@@ -44,14 +44,14 @@ command package and `omh` executable only. `omh setup` is the explicit,
 repairable step that installs generated managed skills and registers them with
 Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it opens a small colored wizard that
-chooses the setup language, connects OMH to the target Hermes profile, saves the
-default coding request preference, installs the OMH status helper, and then
-prints a human-readable summary. For a first install, pressing Enter through
-the recommended choices is the intended path. Advanced options such as MCP
-bridge preferences and visible team role presets are shown only when the user
-asks for advanced setup or passes explicit flags. Those choices do not add or
-remove OMH workflows; they only save defaults for how Hermes should present
-handoff and role surfaces. In non-interactive shells it uses safe defaults and
+chooses the setup language, connects OMH to the target Hermes profile, asks for
+one simple default coding agent suggestion (`Codex`, `Claude Code`, or
+`Hermes`), installs the OMH status helper, and then prints a human-readable
+summary. For a first install, pressing Enter through the recommended choices is
+the intended path. Advanced setup only asks about optional tool bridge
+preferences. Team/profile packs and operating models stay available as explicit
+commands or flags, but setup does not make a user lock the whole organization
+shape during first install. In non-interactive shells it uses safe defaults and
 prints a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
@@ -350,8 +350,8 @@ workflow path, Hermes connection path, coding request preference, profile
 check, and OMH status helper state. It should not require first-time users to
 understand internal config keys, topology names, MCP state, state-log entries,
 or plugin manifests. In a real terminal it first asks for setup language, then
-only asks for optional defaults that change how handoffs or visible role presets
-are presented. The same command with `--json` should include install and apply
+only asks for a simple coding-agent suggestion plus optional tool bridge
+settings when advanced setup is explicitly opened. The same command with `--json` should include install and apply
 steps, an `operator_summary` block, and a `hermes_native_setup/v1` block that
 names the equivalent Hermes skill install path, managed skill directory, and
 `skills.external_dirs` registration key.
@@ -830,9 +830,10 @@ Use project-local OMH/Hermes paths during setup:
 omh setup --scope project
 ```
 
-Install one or more optional Hermes agent/profile packs during setup. These
-are visible team role preset files only; core workflow skills are installed and
-compatibility surfaces remain routable either way:
+Install one or more optional Hermes agent/profile packs explicitly when a
+wrapper or team wants visible Hermes role files in addition to the generated
+skill workflows. These packs are never installed by default and the first-run
+wizard no longer asks for them:
 
 ```sh
 omh setup --profile-pack cto-loop --profile-pack startup-delivery
@@ -849,19 +850,24 @@ omh setup --default-executor claude-code
 ```
 
 Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
-`omx-runtime`, `omo-runtime`, and `omc-runtime`. The recommended default is
-`choose`, which asks before choosing a coding agent. Legacy
-`OMH_SETUP_PROFILES=1,3` still maps to setup profile categories for automation
-that already uses it, but new scripts should prefer `OMH_DEFAULT_EXECUTOR`.
+`omx-runtime`, `omo-runtime`, and `omc-runtime`. The interactive wizard
+intentionally shows only `Codex`, `Claude Code`, and `Hermes` so first setup
+stays understandable. Use the wider flag values only for wrappers, scripts, or
+advanced runtime profiles. Legacy `OMH_SETUP_PROFILES=1,3` still maps to setup
+profile categories for automation that already uses it, but new scripts should
+prefer `OMH_DEFAULT_EXECUTOR`.
 
-Record a Hermes-facing operating model during setup:
+Record a Hermes-facing operating model only when a specific profile should
+start from that collaboration posture:
 
 ```sh
 omh setup --operating-model coding-runtime-team
 ```
 
-Operating models are setup defaults, not installed workers. They tell Hermes
-how to bias routing and status narration:
+Operating models are explicit advanced defaults, not installed workers and not
+first-run wizard choices. They tell Hermes how to bias routing and status
+narration for a particular profile; most users should let Hermes choose the
+right pattern per request:
 
 | ID | Use when |
 | --- | --- |

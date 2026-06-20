@@ -728,10 +728,9 @@ class CliTests(unittest.TestCase):
                 [
                     "1",
                     "y",
-                    "2",
+                    "1",
                     "y",
                     "y",
-                    "4",
                 ]
             ) + "\n"
 
@@ -741,12 +740,16 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup", stdout)
             self.assertIn("Default coding agent", stdout)
-            self.assertIn("Pick the coding agent Hermes should suggest first", stdout)
-            self.assertIn("2) Codex", stdout)
-            self.assertIn("3) Claude Code", stdout)
-            self.assertIn("Show advanced options", stdout)
-            self.assertIn("Add an optional visible team role preset", stdout)
-            self.assertIn("every OMH workflow is still installed", stdout)
+            self.assertIn("Choose who Hermes should suggest for coding work", stdout)
+            self.assertIn("1) Codex", stdout)
+            self.assertIn("2) Claude Code", stdout)
+            self.assertIn("3) Hermes", stdout)
+            self.assertIn("Show advanced tool bridge options", stdout)
+            self.assertNotIn("Ask every time", stdout)
+            self.assertNotIn("Other coding agent", stdout)
+            self.assertNotIn("Oh-my runtime", stdout)
+            self.assertNotIn("Add an optional visible team role preset", stdout)
+            self.assertNotIn("every OMH workflow is still installed", stdout)
             self.assertIn("OMH setup complete.", stdout)
             self.assertIn("OMH status helper:", stdout)
             self.assertNotIn("Install optional plugin bridge", stdout)
@@ -756,8 +759,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(profile["selected_categories"], ["codex-lifecycle"])
             self.assertEqual(profile["default_executor"], "codex")
             self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
-            self.assertTrue((hermes_home / "agents" / "omh-cto-loop-cto.md").exists())
-            self.assertTrue((omh_home / "team-profile-packs" / "cto-loop.json").exists())
+            self.assertFalse((hermes_home / "agents" / "omh-cto-loop-cto.md").exists())
+            self.assertFalse((omh_home / "team-profile-packs" / "cto-loop.json").exists())
             state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["last_setup"]["mcp_setup"]["mode"], "bridge_requested")
             self.assertFalse(state["last_setup"]["mcp_setup"]["observed"])
@@ -776,8 +779,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH setup", stdout)
             self.assertIn("OMH setup complete.", stdout)
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
-            self.assertEqual(profile["selected_categories"], ["safety-first"])
-            self.assertEqual(profile["default_executor"], "choose")
+            self.assertEqual(profile["selected_categories"], ["codex-lifecycle"])
+            self.assertEqual(profile["default_executor"], "codex")
             self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
 
     def test_setup_project_scope_uses_project_local_paths(self) -> None:
@@ -5631,7 +5634,7 @@ class CliTests(unittest.TestCase):
 
         lines = _choice_menu_lines(
             "Default coding agent",
-            ["Pick the coding agent Hermes should suggest first."],
+            ["Choose who Hermes should suggest for coding work."],
             [
                 {"choice": "1", "value": "choose", "label": "Ask every time", "description": ""},
                 {"choice": "2", "value": "codex", "label": "Codex", "description": "Use Codex."},
@@ -5652,6 +5655,7 @@ class CliTests(unittest.TestCase):
         from omh.commands.setup import _executor_summary
 
         self.assertEqual(tr("en", "executor_title"), "Default coding agent")
+        self.assertEqual(tr("en", "executor_intro_1"), "Choose who Hermes should suggest for coding work.")
         self.assertEqual(tr("en", "executor_codex_label"), "Codex")
         self.assertEqual(tr("en", "executor_claude_label"), "Claude Code")
         self.assertEqual(tr("ko", "executor_codex_label"), "Codex")
@@ -5668,6 +5672,8 @@ class CliTests(unittest.TestCase):
             ]
         ).lower()
         self.assertNotIn("handoff", setup_copy)
+        self.assertNotIn("other coding agent", setup_copy)
+        self.assertNotIn("runtime", setup_copy)
 
     def test_optional_team_profile_packs_are_listed_and_installed_on_request(self) -> None:
         status, stdout, stderr = run_cli(["profile", "list"])

@@ -16,9 +16,10 @@ Role selection is prepared guidance only. It is not worker dispatch, tool execut
 
 ## Operating Models
 
-Operating models are lighter than role profile packs. They record the default
-Hermes collaboration posture selected during setup, but they do not install
-role files or claim that separate agents ran.
+Operating models are lighter than role profile packs. They can record an
+advanced default Hermes collaboration posture for a specific profile, but normal
+setup does not force users to choose one and they do not install role files or
+claim that separate agents ran.
 
 | ID | Default posture |
 | --- | --- |
@@ -27,13 +28,13 @@ role files or claim that separate agents ran.
 | `research-ops` | Keep Hermes focused on research, strategy, and meeting workflows. |
 | `coding-runtime-team` | Make selected Hermes/OMX/OMO/OMC runtime handoffs and observed runtime ladder status first-class. |
 
-Use `omh setup --operating-model <id>` for these defaults. Use
-`omh setup --profile-pack <id>` only when you also want visible role files under
-Hermes.
+Use `omh setup --operating-model <id>` only when a profile should start from one
+of these postures. Use `omh setup --profile-pack <id>` only when you also want
+visible role files under Hermes.
 
-The setup choice is an organization pattern for Hermes chat, not proof that
-any worker or executor ran. The map below shows where roles shape chat
-routing, prepared handoffs, and observed evidence:
+An operating model is an organization pattern for Hermes chat, not proof that
+any worker or executor ran. The map below shows where roles shape chat routing,
+prepared handoffs, and observed evidence:
 
 <p align="center">
   <img src="../assets/omh-profile-interaction-map.svg" alt="OMH request-to-handoff role interaction map" width="920">
