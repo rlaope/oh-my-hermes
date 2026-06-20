@@ -111,6 +111,33 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(caps["target_registry"]["status"], "available")
             self.assertEqual(payload["target_topology"]["mode"], "single_agent_target")
 
+    def test_probe_counts_wrapper_sessions_as_wrapper_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup"])[0], 0)
+            status, stdout, stderr = run_cli(
+                base + ["chat", "session", "start", "--source", "discord", "I want to safely add a feature"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            session = json.loads(stdout)["session"]
+            self.assertTrue((omh_home / "runtime" / "wrapper_sessions" / session["session_id"] / "session.json").exists())
+
+            status, stdout, stderr = run_cli(base + ["probe", "--roadmap", "--json"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            caps = {capability["name"]: capability for capability in payload["capabilities"]}
+            self.assertEqual(caps["wrapper_metadata"]["status"], "available")
+            actions = {action["id"] for action in payload["capability_gap_roadmap"]["next_actions"]}
+            self.assertNotIn("record_wrapper_usage", actions)
+
     def test_probe_separates_mcp_preference_from_host_config(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -141,6 +141,7 @@ class PluginDistributionTests(unittest.TestCase):
                     "omh_capabilities",
                     "omh_gather_evidence",
                     "omh_hud",
+                    "omh_interact",
                     "omh_probe",
                     "omh_recommend",
                     "omh_role",
@@ -490,8 +491,8 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("feedback-triage", context)
             self.assertIn("omh_capabilities", context)
             self.assertIn("omh_capabilities catalogs", context)
-            self.assertIn("omh_probe gives setup/runtime roadmap", context)
-            self.assertIn("omh_role gives role context", context)
+            self.assertIn("omh_probe roadmaps", context)
+            self.assertIn("omh_role role context", context)
             self.assertIn("external image tool", context)
             self.assertIn("[omh]", context)
             self.assertIn("prepared handoffs are not execution", context)

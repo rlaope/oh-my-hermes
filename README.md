@@ -92,9 +92,12 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
 Hermes should route the request, name the responsible role, show the next
-action, and keep the prepared handoff separate from observed work. Normal
-users do not need to know `omh recommend`, `omh chat interact`, or other
-backend commands.
+action, and keep the prepared handoff separate from observed work. When the
+plugin surface is available, Hermes can use `omh_interact` to build the same
+chat response and record a metadata-only wrapper session without asking for
+shell approval; session records include producer provenance so plugin-authored
+metadata stays distinguishable from wrapper/backend metadata. Normal users do not need to know `omh recommend`,
+`omh chat interact`, or other backend commands.
 
 OMH's setup footprint is deliberately small: it installs Hermes-visible skills,
 records local status contracts, and can repair managed `skills.external_dirs`

@@ -48,9 +48,12 @@ def _has_dir(path: Path) -> bool:
 
 
 def _wrapper_artifacts(paths: OmhPaths) -> list[Path]:
-    if not paths.runtime_runs_dir.exists():
-        return []
-    return sorted(paths.runtime_runs_dir.glob("*/wrapper.json"))
+    artifacts: list[Path] = []
+    if paths.runtime_runs_dir.exists():
+        artifacts.extend(sorted(paths.runtime_runs_dir.glob("*/wrapper.json")))
+    if paths.runtime_wrapper_sessions_dir.exists():
+        artifacts.extend(sorted(paths.runtime_wrapper_sessions_dir.glob("*/session.json")))
+    return artifacts
 
 
 def _has_any_file(paths: list[Path]) -> bool:

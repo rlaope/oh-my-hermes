@@ -311,6 +311,15 @@ WRAPPER_SESSION_DECISIONS = ("none", "plan_accepted", "plan_revision_requested",
 WRAPPER_SESSION_SOURCE_METADATA_KEYS = CODING_SOURCE_METADATA_KEYS
 WRAPPER_SESSION_ROUTE_KEYS = ("action", "selected_skill", "selected_harness", "confidence", "score")
 WRAPPER_SESSION_PLAN_KEYS = ("status", "recommended_workflow", "recommended_harness", "coding_delegate_available")
+WRAPPER_SESSION_PROVENANCE_SCHEMA_VERSION = "wrapper_session_provenance/v1"
+WRAPPER_SESSION_PRODUCERS = ("wrapper_backend", "plugin_tool")
+WRAPPER_SESSION_PROVENANCE_KEYS = (
+    "schema_version",
+    "producer",
+    "producer_detail",
+    "observed_by_host",
+    "claim_boundary",
+)
 WRAPPER_SESSION_AUTHORITY_SESSION_OWNS = (
     "chat_continuity",
     "route_summary",
@@ -361,6 +370,7 @@ WRAPPER_SESSION_RECORD_KEYS = (
     "prompt_handoff",
     "runtime_handoff",
     "current_run_id",
+    "record_provenance",
     "redaction_policy",
     "authority",
 )
@@ -678,6 +688,7 @@ def build_wrapper_session_record(session: dict[str, Any]) -> dict[str, Any]:
         "prompt_handoff": _compact_prompt_handoff(session.get("prompt_handoff")),
         "runtime_handoff": _compact_runtime_handoff(session.get("runtime_handoff")),
         "current_run_id": str(session.get("current_run_id", "")),
+        "record_provenance": _compact_wrapper_session_provenance(session.get("record_provenance", {})),
         "redaction_policy": "metadata_only",
         "authority": {
             "session_owns": list(WRAPPER_SESSION_AUTHORITY_SESSION_OWNS),
@@ -759,6 +770,25 @@ def _compact_wrapper_session_plan(plan: Any) -> dict[str, str]:
     if not isinstance(plan, dict):
         return {}
     return {key: str(plan[key]) for key in WRAPPER_SESSION_PLAN_KEYS if key in plan and str(plan[key])}
+
+
+def _compact_wrapper_session_provenance(provenance: Any) -> dict[str, Any]:
+    if not isinstance(provenance, dict):
+        provenance = {}
+    producer = str(provenance.get("producer") or "wrapper_backend")
+    if producer not in WRAPPER_SESSION_PRODUCERS:
+        producer = "wrapper_backend"
+    producer_detail = str(provenance.get("producer_detail") or "omh wrapper session backend")
+    return {
+        "schema_version": WRAPPER_SESSION_PROVENANCE_SCHEMA_VERSION,
+        "producer": producer,
+        "producer_detail": producer_detail[:160],
+        "observed_by_host": bool(provenance.get("observed_by_host", False)),
+        "claim_boundary": (
+            "Record provenance identifies who wrote this metadata-only wrapper session. "
+            "It is not executor dispatch, implementation, verification, review, CI, or merge evidence."
+        ),
+    }
 
 
 def _compact_executor_selection(value: Any) -> dict[str, Any]:
@@ -1711,6 +1741,40 @@ def validate_wrapper_session_record(session: dict[str, Any]) -> list[str]:
         _require(session.get("selected_executor_profile") is None, errors, "wrapper_session executor_choice_required must not select an executor")
     elif isinstance(session.get("current_run_id"), str):
         _require(not run_id, errors, "wrapper_session current_run_id is only allowed for handoff_prepared")
+    provenance = session.get("record_provenance")
+    _require(isinstance(provenance, dict), errors, "wrapper_session record_provenance must be an object")
+    if isinstance(provenance, dict):
+        extra_provenance_keys = sorted(set(provenance) - set(WRAPPER_SESSION_PROVENANCE_KEYS))
+        _require(
+            not extra_provenance_keys,
+            errors,
+            f"wrapper_session record_provenance has unsupported keys: {extra_provenance_keys}",
+        )
+        _require(
+            provenance.get("schema_version") == WRAPPER_SESSION_PROVENANCE_SCHEMA_VERSION,
+            errors,
+            "wrapper_session record_provenance schema_version is invalid",
+        )
+        _require(
+            provenance.get("producer") in WRAPPER_SESSION_PRODUCERS,
+            errors,
+            f"wrapper_session record_provenance producer is invalid: {provenance.get('producer')!r}",
+        )
+        _require(
+            isinstance(provenance.get("producer_detail"), str),
+            errors,
+            "wrapper_session record_provenance.producer_detail must be a string",
+        )
+        _require(
+            isinstance(provenance.get("observed_by_host"), bool),
+            errors,
+            "wrapper_session record_provenance.observed_by_host must be a boolean",
+        )
+        _require(
+            isinstance(provenance.get("claim_boundary"), str) and bool(provenance.get("claim_boundary")),
+            errors,
+            "wrapper_session record_provenance.claim_boundary must be a string",
+        )
     authority = session.get("authority")
     _require(isinstance(authority, dict), errors, "wrapper_session authority must be an object")
     if isinstance(authority, dict):

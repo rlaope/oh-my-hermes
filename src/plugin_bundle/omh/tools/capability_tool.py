@@ -405,8 +405,9 @@ def _standalone_sections() -> dict[str, object]:
                     "name": name,
                     "supported_by_plugin_bundle": True,
                     "supported_by_wrapper_contract": name
-                    in {"omh_status", "omh_hud", "omh_capabilities", "omh_probe", "omh_recommend"},
-                    "supported_by_cli_backend": name in {"omh_capabilities", "omh_probe", "omh_recommend"},
+                    in {"omh_status", "omh_hud", "omh_capabilities", "omh_probe", "omh_recommend", "omh_interact"},
+                    "supported_by_cli_backend": name in {"omh_capabilities", "omh_probe", "omh_recommend", "omh_interact"},
+                    "cli_backend_surface": _cli_backend_surface(name),
                     "observed_in_this_environment": False,
                 }
                 for name in PROVIDED_TOOLS
@@ -491,6 +492,18 @@ def _standalone_hook_payload_fields(name: str) -> list[str]:
     if name == "on_session_end":
         return ["session_summary", "metadata_only"]
     return []
+
+
+def _cli_backend_surface(name: str) -> str:
+    if name == "omh_interact":
+        return "omh chat interact"
+    if name == "omh_capabilities":
+        return "omh capabilities"
+    if name == "omh_probe":
+        return "omh probe"
+    if name == "omh_recommend":
+        return "omh recommend"
+    return ""
 
 
 def _standalone_item_id(item: dict[str, object], fallback: str) -> str:

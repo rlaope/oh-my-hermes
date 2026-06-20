@@ -27,7 +27,7 @@ evidence exists.
 
 | Surface | Current role | Evidence |
 | --- | --- | --- |
-| `omh chat interact` | Composes route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. | `src/wrapper/contract.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
+| plugin `omh_interact`, `omh chat interact` | Compose route, plan, delegation, and status into one wrapper-native `chat_interaction/v1` response for Discord, Slack, and hosted Hermes adapters. The plugin path can also record a metadata-only wrapper session. | `src/plugin_bundle/omh/tools/chat_tool.py`, `src/wrapper/contract.py`, `tests/test_plugin_capabilities.py`, `tests/test_wrapper_contract.py`, `tests/test_cli.py` |
 | `omh chat session` | Persists metadata-only chat session decisions, executor/runtime selection, plan acceptance/revision/cancel state, prompt-only handoffs, runtime handoffs, and accepted Codex lifecycle links. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat session open-executor`, `attach-executor`, `record-executor`, `request-verification` | Backend actions for wrapper-rendered buttons such as Start Codex session, Start Claude Code session, Attach coding session, Refresh status, Record completed, Record blocked, and Ask Hermes to verify. They write `executor_session/v1` metadata after Hermes or the wrapper observes a coding-session event; OMH itself does not launch hidden executors. | `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
@@ -45,10 +45,10 @@ evidence exists.
 The strongest existing path is:
 
 1. A Discord or Slack wrapper receives a plain user message.
-2. The wrapper runs `omh chat interact` and renders the returned
-   `chat_response/v1` in the original channel or thread.
-3. If the wrapper needs restart recovery, it records the turn with
-   `omh chat session start`.
+2. The wrapper or Hermes plugin calls `omh_interact` or `omh chat interact` and
+   renders the returned `chat_response/v1` in the original channel or thread.
+3. If the wrapper needs restart recovery and did not use plugin session
+   recording, it records the turn with `omh chat session start`.
 4. For planning-shaped work, the wrapper presents the draft plan and records
    accept/revise/cancel decisions with `omh chat session`.
 5. For accepted implementation-shaped work, the wrapper records executor or

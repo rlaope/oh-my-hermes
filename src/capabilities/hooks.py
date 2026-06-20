@@ -12,8 +12,9 @@ def hook_manifest() -> dict[str, object]:
                 "name": name,
                 "supported_by_plugin_bundle": True,
                 "supported_by_wrapper_contract": name
-                in {"omh_status", "omh_hud", "omh_capabilities", "omh_probe", "omh_recommend"},
-                "supported_by_cli_backend": name in {"omh_capabilities", "omh_probe", "omh_recommend"},
+                in {"omh_status", "omh_hud", "omh_capabilities", "omh_probe", "omh_recommend", "omh_interact"},
+                "supported_by_cli_backend": name in {"omh_capabilities", "omh_probe", "omh_recommend", "omh_interact"},
+                "cli_backend_surface": _cli_backend_surface(name),
                 "observed_in_this_environment": False,
             }
             for name in PROVIDED_TOOLS
@@ -62,6 +63,18 @@ def _wrapper_event(name: str, payload_fields: tuple[str, ...]) -> dict[str, obje
         "observed_in_this_environment": False,
         "claim_boundary": "Wrapper event support is a contract; only recorded wrapper/runtime artifacts prove the event happened.",
     }
+
+
+def _cli_backend_surface(name: str) -> str:
+    if name == "omh_interact":
+        return "omh chat interact"
+    if name == "omh_capabilities":
+        return "omh capabilities"
+    if name == "omh_probe":
+        return "omh probe"
+    if name == "omh_recommend":
+        return "omh recommend"
+    return ""
 
 
 def _hook_payload_fields(name: str) -> list[str]:

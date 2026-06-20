@@ -85,15 +85,18 @@ state. Skill counts, setup inventory, token metadata, and deep diagnostics are
 left to `omh doctor`, `omh_status`, and machine-readable HUD JSON. A quiet idle
 line looks like
 `[omh] v1.0.1 | plugin:ready | target:single | coding-agent:idle(ask)`.
-The plugin also exposes `omh_recommend` for shell-free workflow choice,
-`omh_probe` for local setup/runtime status and capability-roadmap cards,
-`omh_role`, validates `[omh-role:name]` markers for delegated subagent prompts,
-and records a metadata-only session-end checkpoint when OMH runtime state
-exists. It also exposes `omh_gather_evidence` for
+The plugin also exposes `omh_interact` for shell-free chat responses and
+metadata-only wrapper session records, `omh_recommend` for route hints without
+session recording, `omh_probe` for local setup/runtime status and
+capability-roadmap cards, `omh_role`, validates `[omh-role:name]` markers for
+delegated subagent prompts, and records a metadata-only session-end checkpoint
+when OMH runtime state exists. It also exposes `omh_gather_evidence` for
 explicit allowlisted local verification probes such as OMH doctor, harness
 validation, docs checks, unittest, compileall, and whitespace checks. It does
-not provide an arbitrary shell, patch Hermes core, dispatch executors, or prove
-Hermes has loaded it.
+not provide an arbitrary shell, patch Hermes core, dispatch executors, prove
+execution, or prove Hermes has loaded it. Wrapper session records include
+`record_provenance` so plugin-authored metadata and wrapper/backend metadata
+remain distinguishable.
 If the target Hermes runtime requires a separate plugin enable command, follow
 that runtime's plugin enable/reload step.
 
@@ -748,6 +751,9 @@ Before calling the bot integration ready, verify these points:
 - `omh doctor` reports the managed skill directory as installed and registered.
 - The bot process can read the same Hermes home/config that `omh apply` updated.
 - The bot was restarted after installation or update.
+- plugin `omh_interact` returns the same `chat_interaction/v1` envelope and can
+  record a metadata-only wrapper session when Hermes supplies host/session
+  metadata.
 - `omh chat interact --source discord "<message>"` or
   `omh chat interact --source slack "<message>"` returns a
   `chat_interaction/v1` envelope with a renderable `chat_response/v1`.
@@ -826,10 +832,11 @@ Before calling the bot integration ready, verify these points:
 - If skills do not appear, run `omh setup`, then `omh doctor`, then restart the
   bot again.
 
-Current limitation: `omh chat interact`, `omh chat route`,
-`omh coding delegate`, and `omh coding lifecycle` choose contracts and record
-local metadata. Hermes Agent and the selected executor/runtime still provide the actual
-conversation, execution, GitHub, CI, and merge evidence that OMH later records.
+Current limitation: plugin `omh_interact`, `omh chat interact`,
+`omh chat route`, `omh coding delegate`, and `omh coding lifecycle` choose
+contracts and record local metadata. Hermes Agent and the selected
+executor/runtime still provide the actual conversation, execution, GitHub, CI,
+and merge evidence that OMH later records.
 
 ## Update
 

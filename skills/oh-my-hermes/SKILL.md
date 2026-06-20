@@ -68,7 +68,6 @@ Before generic tools, check OMH prep/status/learning; if relevant, name the work
 Every generated workflow skill carries this rail.
 
 Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
-
 - **Intent -> plan**: ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects. Key: `oh-my-hermes`, `deep-interview`, `plan`, `ralplan`.
 - **Research and company ops**: source-backed research, customer signals, product operations, and briefing workflows. Key: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`.
 - **Materials and visual summaries**: decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages. Key: `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
@@ -76,20 +75,16 @@ Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrappe
 - **Coding handoff**: Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking. Key: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`.
 
 Workflow context cards:
-
 intent -> deep-interview/ralplan/loop/ultraprocess; signals -> web-research/research-department/feedback-triage/meeting-brief; materials -> materials-package/report-package/img-summary; automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; code -> ultraprocess/code-review/team/ultrawork/ultraqa.
 
 Common cues before generic tools:
-
 notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; trace/improve/regression -> workflow-learning.
 
 Generic tool map:
-
 image->img-summary; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
 
 Tools:
-
-- `omh_recommend`: routes; `omh_capabilities`: catalog; `omh_probe`: roadmap; `omh_status`/`omh_hud`: state; `omh_role`: role.
+- Tools: `omh_interact` chat/session meta; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.
 
 If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback instead of claiming the action happened.
 
@@ -154,7 +149,7 @@ omh chat route --source discord --record "risky refactor"
 
 Use `route.routing_prompt_template` with `{message}` replaced by the received chat message as the prompt forwarded to Hermes. If the wrapper does not log stdout and wants a pre-expanded prompt, pass `--include-message` and forward `route.routing_prompt`. A `dispatch` action targets the selected workflow skill; `clarify` and `fallback` target this router so Hermes can ask one concise follow-up instead of guessing.
 
-If the user gives a natural-language request and Hermes needs the nearest OMH workflow, prefer `omh_recommend` when the plugin/tool surface is available. If the user asks what OMH commands, skills, or workflows are available, prefer `omh_capabilities` with `action=summary`, or use `omh chat interact` and render `chat_response.kind == skill_picker` from a wrapper backend. If the user asks whether OMH is installed, what is missing, or what to do next, prefer `omh_probe` with `include_roadmap=true`. Do not make the user approve `omh list` just to see the catalog; the summary, picker, and probe responses carry workflow options, next actions, and claim boundaries that selection or setup guidance is routing/status intent only.
+If the user gives a natural-language request and Hermes needs the nearest OMH workflow, prefer `omh_interact` when the plugin/tool surface is available because it returns `chat_interaction/v1` and records a metadata-only wrapper session. Use `omh_recommend` only when Hermes needs route hints without a session record. If the user asks what OMH commands, skills, or workflows are available, prefer `omh_capabilities` with `action=summary`, or use `omh chat interact` and render `chat_response.kind == skill_picker` from a wrapper backend. If the user asks whether OMH is installed, what is missing, or what to do next, prefer `omh_probe` with `include_roadmap=true`. Do not make the user approve `omh list` just to see the catalog; the summary, picker, and probe responses carry workflow options, next actions, and claim boundaries that selection or setup guidance is routing/status intent only.
 
 This is a deterministic wrapper-side decision layer. By default, stdout and runtime artifacts avoid duplicating the raw prompt body. It does not patch Hermes core or require platform network access from `omh`.
 

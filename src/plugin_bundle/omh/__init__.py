@@ -9,6 +9,7 @@ def register(ctx):
     from .hooks.session_hooks import on_session_end
     from .hooks.tool_hooks import pre_tool_call
     from .tools.capability_tool import OMH_CAPABILITIES_SCHEMA, omh_capabilities_handler
+    from .tools.chat_tool import OMH_INTERACT_SCHEMA, omh_interact_handler
     from .tools.evidence_tool import OMH_EVIDENCE_SCHEMA, omh_evidence_handler
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
     from .tools.probe_tool import OMH_PROBE_SCHEMA, omh_probe_handler
@@ -36,6 +37,13 @@ def register(ctx):
         OMH_HUD_SCHEMA,
         omh_hud_handler,
         description=OMH_HUD_SCHEMA["description"],
+    )
+    ctx.register_tool(
+        "omh_interact",
+        _TOOLSET,
+        OMH_INTERACT_SCHEMA,
+        omh_interact_handler,
+        description=OMH_INTERACT_SCHEMA["description"],
     )
     ctx.register_tool(
         "omh_probe",

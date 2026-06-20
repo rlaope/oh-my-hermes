@@ -42,7 +42,7 @@ flowchart LR
 
   user --> hermes
   skills --> hermes
-  plugin -->|"omh_recommend, omh_probe, omh_hud, omh_role, omh_status, evidence, hooks"| hermes
+  plugin -->|"omh_interact, omh_recommend, omh_probe, omh_hud, omh_role, omh_status, evidence, hooks"| hermes
   user --> wrapper
   wrapper -->|"chat_interaction/v1"| omh
   omh -->|"answer, clarify, plan, or status"| wrapper
@@ -145,11 +145,12 @@ OMH directly when Hermes taps are available.
 
 `plugin_bundle/omh/` is the Hermes plugin payload installed by `omh setup` to
 `~/.hermes/plugins/omh`. The v1 plugin registers deterministic
-`omh_recommend`, metadata-only `omh_probe` capability status/roadmap, compact
-metadata-only `omh_hud`, detailed metadata-only `omh_status`, `omh_role` role
-context, a bounded `omh_gather_evidence` local verification probe, and passive
-lifecycle hooks for bounded status context, role marker validation, and
-metadata-only session-end checkpointing. The
+`omh_interact` chat/session interaction, `omh_recommend` route hints,
+metadata-only `omh_probe` capability status/roadmap, compact metadata-only
+`omh_hud`, detailed metadata-only `omh_status`, `omh_role` role context, a
+bounded `omh_gather_evidence` local verification probe, and passive lifecycle
+hooks for bounded status context, role marker validation, and metadata-only
+session-end checkpointing. The
 `pre_llm_call` hook can also add
 `omh_route_hint/v1` for messages that look like planning, research, ops,
 materials, visual summary, automation, workflow-learning, or coding-handoff
@@ -327,9 +328,10 @@ Routing, planning, and delegation have eight local surfaces:
 3. Situation playbooks. `omh playbook recommend` lets wrappers map a natural
    request to a higher-level pipeline before they choose a lower-level skill,
    plan, research lane, or handoff.
-4. Wrapper-native chat orchestration. `omh chat interact` lets Discord, Slack,
-   or hosted Hermes wrappers receive one platform-neutral `chat_interaction/v1`
-   envelope with renderable chat copy, state, action buttons, and a thread key.
+4. Wrapper-native chat orchestration. Plugin `omh_interact` and
+   `omh chat interact` let Discord, Slack, or hosted Hermes wrappers receive
+   one platform-neutral `chat_interaction/v1` envelope with renderable chat
+   copy, state, action buttons, and a thread key.
 5. Wrapper session persistence. `omh chat session` lets wrappers persist
    metadata-only plan decisions, recover status by `session_id`, and link an
    accepted plan to a prepared coding run without owning execution evidence.
@@ -352,13 +354,17 @@ Routing, planning, and delegation have eight local surfaces:
    operators create deterministic `hermes_plan/v1` planning scaffolds under
    `.hermes/plans/` without claiming that execution or review already happened.
 
-`omh chat interact` is the primary Hermes-facing chat contract. It composes the
-lower-level surfaces into one response envelope so each Hermes Agent surface can
-share the same orchestration policy. The `chat_response/v1` subobject is safe
-to render directly: it names the state, provides concise copy, exposes
-platform-neutral actions, and never asks the end user to run an `omh` command.
-The surrounding envelope preserves source metadata, message hash and length,
-thread key, selected mode, next action, redaction policy, and claim boundary.
+`omh_interact` is the plugin-native Hermes-facing entry point for this
+contract, and `omh chat interact` is the CLI/backend equivalent. They compose
+the lower-level surfaces into one response envelope so each Hermes Agent
+surface can share the same orchestration policy. The `chat_response/v1`
+subobject is safe to render directly: it names the state, provides concise
+copy, exposes platform-neutral actions, and never asks the end user to run an
+`omh` command. The surrounding envelope preserves source metadata, message hash
+and length, thread key, selected mode, next action, redaction policy, and claim
+boundary. Metadata-only session records also include `record_provenance` so a
+plugin-authored record and a wrapper/backend-authored record are distinguishable
+without upgrading either one into execution evidence.
 
 The routing and delegation surfaces read from the same catalog metadata. The
 chat router returns a `routing_instruction` and `routing_prompt_template` for
