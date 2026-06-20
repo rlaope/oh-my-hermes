@@ -153,8 +153,11 @@ Start-session buttons include `executor_launch/v1` under
 `executor_actions[].payload.launch`. The payload names the configured executor
 profile so Hermes can start the right path: Codex if setup/session selected
 Codex, Claude Code if it selected Claude Code, Hermes/runtime paths when those
-profiles are selected. Codex command templates use `codex` and optional
-`codex --cd`; Claude Code command templates use `claude` and optional
+profiles are selected. For compatibility, `executor_launch/v1` keeps
+`ui_only`, `not_backend_execution`, and `execution_policy` conservative; wrappers
+should read `terminal_launch_available` and `session_start_capability` before
+showing a terminal start command. Codex command templates use `codex` and
+optional `codex --cd`; Claude Code command templates use `claude` and optional
 `claude --add-dir`. Prompt placeholders use `{executor_prompt_shell_quoted}`,
 and workspace command templates use `{workspace_path_shell_quoted}` for
 shell-safe paths. OMH itself still does not execute the coding agent; Hermes or

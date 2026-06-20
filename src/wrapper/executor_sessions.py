@@ -902,18 +902,20 @@ def _executor_launch_contract(
         "schema_version": EXECUTOR_LAUNCH_SCHEMA_VERSION,
         "selected_executor_profile": executor,
         "executor_label": label,
-        "mode": "hermes_managed_executor_session" if has_terminal_launch else "prompt_or_runtime_session_contract",
-        "launch_owner": "hermes_or_wrapper",
+        "mode": "interactive_terminal_or_app",
+        "session_start_owner": "hermes_or_wrapper",
+        "decision_owner": "hermes_agent",
+        "backend_action_owner": "wrapper",
         "configured_executor_profile": executor,
-        "ui_only": not has_terminal_launch,
-        "execution_policy": (
-            "hermes_or_wrapper_may_start_terminal_session" if has_terminal_launch else "prompt_or_runtime_handoff_only"
-        ),
+        "ui_only": True,
+        "terminal_launch_available": has_terminal_launch,
+        "execution_policy": "copyable_instruction_only",
+        "session_start_capability": "terminal_command_available" if has_terminal_launch else "prompt_or_runtime_contract_only",
         "session_start_policy": (
-            "Hermes or the wrapper may start a terminal/app session for the configured coding agent, "
-            "then call open-executor with observed evidence once that session exists."
+            "Hermes or the wrapper may start a terminal/app session for the configured coding agent when "
+            "terminal_launch_available is true, then call open-executor with observed evidence once that session exists."
         ),
-        "not_backend_execution": not has_terminal_launch,
+        "not_backend_execution": True,
         "not_omh_backend_execution": True,
         "omh_execution_role": "contract_and_observation_only",
         "prompt_placeholder": prompt_placeholder,

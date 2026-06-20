@@ -66,11 +66,13 @@ The strongest existing path is:
    session.
 6. The wrapper renders executor-session buttons instead of asking the user to
    type backend commands. Start-session buttons carry `executor_launch/v1` with
-   the configured executor profile and Codex/Claude Code command templates when
-   a deterministic local terminal launch exists, while attach/record buttons stay
-   metadata-only. If isolation is recommended or required, the first action is
-   `prepare_worktree`; the later launch payload carries a workspace hint for the
-   selected executor. When Hermes or the wrapper observes Prepare worktree,
+   the configured executor profile. The v1 safety fields stay copyable and
+   metadata-only for compatibility; wrappers should read
+   `terminal_launch_available` and `session_start_capability` to decide whether
+   Codex/Claude Code command templates are safe to render. Attach/record buttons
+   stay metadata-only. If isolation is recommended or required, the first action
+   is `prepare_worktree`; the later launch payload carries a workspace hint for
+   the selected executor. When Hermes or the wrapper observes Prepare worktree,
    Start Codex session, Attach coding session, Record completed, Record blocked,
    or Ask Hermes to verify, it writes
    `executor_session/v1` metadata and derives status lines such as

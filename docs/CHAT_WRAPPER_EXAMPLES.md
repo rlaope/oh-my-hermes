@@ -205,14 +205,17 @@ User-facing effect:
   Claude Code and generic profiles render a copyable prompt handoff instead of
   lifecycle evidence.
 - `Start Codex session` and `Start Claude Code session` include an
-  `executor_launch/v1` payload. Render that as Hermes-owned terminal/session
-  commands for the configured coding agent. Prompt placeholders use
-  `{executor_prompt_shell_quoted}`; workspace command templates use
-  `{workspace_path_shell_quoted}` for shell-safe paths. After Hermes or the
-  wrapper observes that the coding session exists, it records the backend open
-  action; a prepared command is still not execution evidence. Executors without
-  a deterministic local command expose prompt-copy guidance only, not a
-  terminal command.
+  `executor_launch/v1` payload. The legacy v1 safety fields remain conservative:
+  `ui_only`, `not_backend_execution`, and `execution_policy:
+  copyable_instruction_only` do not mean OMH launched the executor. New renderers
+  should use `terminal_launch_available` and `session_start_capability` to decide
+  whether to show a Codex or Claude Code terminal command for the configured
+  coding agent. Prompt placeholders use `{executor_prompt_shell_quoted}`;
+  workspace command templates use `{workspace_path_shell_quoted}` for shell-safe
+  paths. After Hermes or the wrapper observes that the coding session exists, it
+  records the backend open action; a prepared command is still not execution
+  evidence. Executors without a deterministic local command expose prompt-copy
+  guidance only, not a terminal command.
 - If `worktree_session_isolation/v1` says worktree recommended or required,
   render `Prepare worktree` before the open button. The action prepares wrapper
   UX and operator guidance; only `runtime_observation/v1` worktree evidence can
