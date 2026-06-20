@@ -275,6 +275,7 @@ After installing OMH into the target runtime, verify the command path too:
 command -v omh
 omh --help
 omh release skill-content-smoke --json
+omh release product-readiness --version 1.0.1 --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 
@@ -288,6 +289,11 @@ In short, it preserves bounded context budgets while still giving Hermes enough
 OMH workflow context to route well.
 It is not Hermes chat-load evidence. When an operator explicitly wants live
 evidence from the target Hermes profile, run one of these:
+
+Use `omh release product-readiness --version 1.0.1 --json` when you want a
+single release-candidate card that combines skill content, G1-G10 use-case
+readiness, parity contracts, and release checklist shape. It is still local
+contract evidence, not live Hermes chat or executor evidence.
 
 ```sh
 omh release hermes-smoke --live --install-path tap --target-confirmed

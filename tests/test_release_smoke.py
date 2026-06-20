@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from omh.release import (
     hermes_release_smoke_plan,
+    product_readiness_report,
     release_readiness_checklist,
     run_hermes_release_smoke,
     skill_content_smoke,
@@ -35,6 +36,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("use_case_artifact_bundle", items)
         self.assertIn("use_case_replay", items)
         self.assertIn("use_case_readiness", items)
+        self.assertIn("product_readiness", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
         self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
@@ -71,6 +73,9 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(items["use_case_readiness"]["command"], "uv run python -m src.cli cases readiness --json")
         self.assertIn("readiness", items["use_case_readiness"]["evidence_required"])
         self.assertIn("deterministic local use-case contracts", items["use_case_readiness"]["proof_boundary"])
+        self.assertEqual(items["product_readiness"]["command"], "/tmp/omh release product-readiness --version 1.0.0 --json")
+        self.assertIn("skill-content", items["product_readiness"]["evidence_required"])
+        self.assertIn("product contracts", items["product_readiness"]["proof_boundary"])
         self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
         self.assertFalse(items["tag_and_publish"]["required"])
@@ -88,6 +93,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(items["installed_command_help"]["command"], "'/tmp/omh command' --help")
         self.assertEqual(items["installed_command_path"]["command"], "command -v '/tmp/omh command'")
         self.assertEqual(items["skill_content_smoke"]["command"], "'/tmp/omh command' release skill-content-smoke --json")
+        self.assertEqual(
+            items["product_readiness"]["command"],
+            "'/tmp/omh command' release product-readiness --version 1.0.0 --json",
+        )
         self.assertIn("--omh-command '/tmp/omh command'", items["installed_command_smoke"]["command"])
         self.assertIn("'/tmp/omh command' release hermes-smoke --live", items["live_tap_smoke"]["command"])
 
@@ -167,6 +176,12 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["use_case_replay_passed"], 20)
         self.assertEqual(payload["expected_use_case_replay_total"], 20)
         self.assertEqual(payload["use_case_replay_failures"], [])
+        self.assertEqual(payload["use_case_readiness_schema"], "omh_use_case_readiness/v1")
+        self.assertEqual(payload["use_case_readiness_status"], "ready")
+        self.assertEqual(payload["use_case_readiness_score"], 100)
+        self.assertEqual(payload["use_case_readiness_blocking_failures"], 0)
+        self.assertGreaterEqual(payload["use_case_readiness_warning_count"], 0)
+        self.assertEqual(payload["use_case_readiness_failures"], [])
         self.assertLessEqual(
             payload["awareness_primer_context_chars"],
             payload["awareness_context_char_limits"]["primer_context"],
@@ -191,6 +206,31 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertGreaterEqual(payload["skill_count"], 40)
         self.assertGreaterEqual(payload["checked_marker_count"], 100)
         self.assertIn("does not prove the target Hermes profile", payload["proof_boundary"])
+
+    def test_product_readiness_report_rolls_up_public_release_story(self) -> None:
+        payload = product_readiness_report(version="v1.0.1", omh_command="/tmp/omh command")
+
+        self.assertEqual(payload["schema_version"], "omh_product_readiness/v1")
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["score"], 100)
+        self.assertTrue(payload["observed"])
+        self.assertEqual(payload["version"], "1.0.1")
+        self.assertEqual(payload["blocking_failures"], 0)
+        gates = {gate["id"]: gate for gate in payload["gates"]}
+        self.assertEqual(
+            set(gates),
+            {"skill_content", "use_cases", "parity_contracts", "release_checklist"},
+        )
+        self.assertEqual(gates["skill_content"]["status"], "passed")
+        self.assertEqual(gates["use_cases"]["status"], "passed")
+        self.assertEqual(gates["parity_contracts"]["status"], "passed")
+        self.assertEqual(gates["release_checklist"]["status"], "passed")
+        self.assertIn(
+            "'/tmp/omh command' release checklist --version 1.0.1 --json",
+            gates["release_checklist"]["command"],
+        )
+        self.assertIn("deterministic local OMH package", payload["boundary"])
+        self.assertIn("Attach observed evidence", " ".join(payload["next_actions"]))
 
     def test_release_readiness_checklist_rejects_empty_version(self) -> None:
         with self.assertRaises(ValueError):
