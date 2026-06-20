@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Route to `ultraprocess` because the user asked for a bounded delivery cycle, not a research-only lane.
 - Why: Research is only one stage of the requested delivery process.
 
+## Completion Checklist
+
+- The research question, source boundaries, recency assumptions, and confidence level are named.
+- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+
+## Recovery Notes
+
+- If sources cannot be accessed, state the retrieval gap and use only observed local context.
+- If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

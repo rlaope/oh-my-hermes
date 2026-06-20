@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ultraqa`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- The scenario, expected behavior, observed result, and pass/fail basis are named.
+- Proposed fixes are separated from observed QA evidence.
+- Missing or failed verification routes back to plan, fix, or a narrower test.
+
+## Recovery Notes
+
+- If the expected behavior is unclear, route back to plan before running adversarial checks.
+- If verification fails, return to fix or research with the failed signal instead of advancing.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

@@ -38,6 +38,19 @@ Bad example:
 - Expected behavior: Route to diagnosis or a direct answer instead of creating a durable goal.
 - Why: A narrow explanation does not need checkpointed long-running state.
 
+## Completion Checklist
+
+- The goal_ledger/v1 names the current criteria, checkpoints, blockers, and next action.
+- The goal_completion_gate/v1 result passes from required evidence, not from a summary-only message.
+- All explicitly linked coding milestones have matching observed runtime evidence or are still named as gaps.
+- The final user-facing status says complete, blocked, or continue with the exact remaining checkpoint.
+
+## Recovery Notes
+
+- If the goal ledger is stale or missing, inspect .omh/goals and ask which checkpoint to resume before continuing.
+- If a blocker checkpoint exists, keep the goal open and record the blocker plus the smallest unblock action.
+- If linked runtime evidence is missing, keep coding milestones prepared_not_observed and do not close the goal.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

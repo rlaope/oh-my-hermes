@@ -38,6 +38,19 @@ Bad example:
 - Expected behavior: Keep one owner or re-plan boundaries before parallelization.
 - Why: Shared core logic makes parallel edits likely to conflict or hide regressions.
 
+## Completion Checklist
+
+- All work lanes are disjoint by file, invariant, or responsibility before preparing parallel handoffs.
+- Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+- Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
+- Integration verification ran after lane results before the final status claims completion.
+
+## Recovery Notes
+
+- If lanes are non-disjoint, collapse to one owner or route back to ultragoal before coding starts.
+- If a worker does not ACK or return a result, keep that lane blocked/not_observed and expose the retry or reassignment action.
+- If a worktree or shared-file conflict appears, pause parallel delivery and re-plan ownership before more edits.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

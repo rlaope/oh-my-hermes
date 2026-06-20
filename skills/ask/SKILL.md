@@ -37,6 +37,17 @@ Bad example:
 - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
 - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
 
+## Completion Checklist
+
+- Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
+- Open questions, residual risk, and missing verification are named.
+- Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+
+## Recovery Notes
+
+- If the reviewed target is missing, inspect the requested artifact or ask one target question.
+- If independent verification is unavailable, report the gap and avoid an approval-style claim.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

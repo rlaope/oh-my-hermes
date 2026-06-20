@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
+## Completion Checklist
+
+- The deliverable type, audience, source inputs, QA ladder, and delivery boundary are named.
+- Prepared generation, generated file, render QA, approval, attachment, and delivery are separate states.
+- The next action says whether to generate, revise, QA, approve, attach, or deliver.
+
+## Recovery Notes
+
+- If generation tooling is missing, prepare a prompt or package handoff and mark file output not_observed.
+- If QA or attachment evidence is missing, keep generated/delivered states separate and show the next check.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

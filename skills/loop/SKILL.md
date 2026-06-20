@@ -40,6 +40,20 @@ Bad example:
 - Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
 - Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
 
+## Completion Checklist
+
+- The request is classified as task, project, north-star ambition, external-wait, or unclear before a loop starts.
+- The current loop_status_card/v1 names the queue item, tick status, verification_plan, and next action.
+- failure_mode_summary checks verification_gap, comprehension_debt, and cognitive_surrender before progress advances.
+- Completion is backed by linked goal/runtime evidence; queued loop ticks alone are not observed work.
+
+## Recovery Notes
+
+- If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.
+- If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.
+- If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.
+- If context or budget is exhausted, checkpoint the loop artifact and continue from the latest loop_cycle/v1 state.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
+## Completion Checklist
+
+- The local command, managed path, config surface, and state artifact inspected are named.
+- Blocking issues, warnings, and optional surfaces are separated.
+- The next repair action is explicit and does not claim a reload or runtime observation.
+
+## Recovery Notes
+
+- If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
+- If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

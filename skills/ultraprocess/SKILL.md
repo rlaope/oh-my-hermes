@@ -38,6 +38,20 @@ Bad example:
 - Expected behavior: Route to `loop` or ask for a bounded goal rather than promise endless delivery.
 - Why: Popularity and indefinite improvement need long-horizon loop management, not one PR-ready cycle.
 
+## Completion Checklist
+
+- Research and codebase context are captured before implementation handoff.
+- A ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.
+- The implementation owner is selected and handoff, dispatch, run, review, CI, and PR readiness are separated.
+- The code-review gate is observed or explicitly marked not_observed.
+- Docs sync is checked when behavior, setup, commands, examples, or public claims changed.
+
+## Recovery Notes
+
+- If the task expands beyond one delivery cycle, stop and route to loop with the current evidence as input.
+- If no implementation owner is selected, keep the work prepared_not_observed and ask for Codex, Claude Code, Hermes, or another runtime.
+- If review, CI, docs sync, or PR evidence is missing, report the stage gap instead of saying the process is complete.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

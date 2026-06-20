@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Ask for meeting notes or route to an ops/status summary with explicit evidence gaps.
 - Why: A prepared agenda cannot be treated as observed minutes or decisions.
 
+## Completion Checklist
+
+- The agenda, participants or audience, decisions needed, and record template are named.
+- Meeting prep, observed minutes, accepted decisions, and action ownership are separate states.
+- Missing context that would change the meeting structure is surfaced.
+
+## Recovery Notes
+
+- If participants, purpose, or decision owner are missing, ask for the one field that changes the agenda.
+- If minutes or decisions were not observed, keep the output as prep rather than record.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

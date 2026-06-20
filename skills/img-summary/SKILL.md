@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Ask for visual_observation/v1 delivery evidence or report delivery as not_observed.
 - Why: A prompt card cannot prove generated image, QA, or delivery evidence.
 
+## Completion Checklist
+
+- The material source, target format, audience, structure, and QA expectation are named.
+- Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
+- The next action identifies whether the package is planned, generated, QA-ready, or blocked.
+
+## Recovery Notes
+
+- If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
+- If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

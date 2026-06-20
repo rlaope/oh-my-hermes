@@ -39,6 +39,17 @@ Bad example:
 - Expected behavior: Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.
 - Why: The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.
 
+## Completion Checklist
+
+- The research question, source boundaries, recency assumptions, and confidence level are named.
+- Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+- Follow-up planning or handoff uses the research summary without calling it execution evidence.
+
+## Recovery Notes
+
+- If sources cannot be accessed, state the retrieval gap and use only observed local context.
+- If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

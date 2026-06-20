@@ -49,6 +49,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Keep users command-agnostic by naming the next UX step rather than shell commands.
   - Expose direct workflow selection without renaming skills or adding an `omh-` prefix to every skill name.
   - Use request-to-handoff as the first path when a plain request needs role, plan, handoff, or status UX.
+- Completion checklist:
+  - The selected workflow, confidence reason, evidence boundary, and user-facing next action are named.
+  - Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
+  - Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
+- Recovery notes:
+  - If routing signals conflict, show the compact picker or ask one clarifying question.
+  - If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
 - Required inputs:
   - user request
   - installed skill descriptions
@@ -100,6 +107,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Do not enter a finish-until-done loop until scope, acceptance criteria, and verification commands are concrete.
   - For coding edits, prepare and track selected runtime evidence instead of implying unobserved work happened.
   - Report completion only from observed execution and verification evidence.
+- Completion checklist:
+  - The selected coding or runtime owner is named before any implementation claim.
+  - Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
+  - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+- Recovery notes:
+  - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
+  - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
 - Required inputs:
   - concrete scope
   - acceptance criteria
@@ -150,6 +164,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Reject completion with a summary-only goal_completion_gate/v1 result until required criteria, blockers, and explicitly linked runtime runs are satisfied.
   - Tell the user the next action through goal_status_card/v1 or goal_continuation/v1 instead of ending with vague follow-up copy.
   - For coding milestones, use prepared runtime handoffs and observed runtime evidence rather than hidden execution claims.
+- Completion checklist:
+  - The goal_ledger/v1 names the current criteria, checkpoints, blockers, and next action.
+  - The goal_completion_gate/v1 result passes from required evidence, not from a summary-only message.
+  - All explicitly linked coding milestones have matching observed runtime evidence or are still named as gaps.
+  - The final user-facing status says complete, blocked, or continue with the exact remaining checkpoint.
+- Recovery notes:
+  - If the goal ledger is stale or missing, inspect .omh/goals and ask which checkpoint to resume before continuing.
+  - If a blocker checkpoint exists, keep the goal open and record the blocker plus the smallest unblock action.
+  - If linked runtime evidence is missing, keep coding milestones prepared_not_observed and do not close the goal.
 - Required inputs:
   - goal statement
   - acceptance criteria
@@ -211,6 +234,16 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Use cheap inner-loop checks frequently and expensive outer-loop checks sparingly.
   - Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
   - Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
+- Completion checklist:
+  - The request is classified as task, project, north-star ambition, external-wait, or unclear before a loop starts.
+  - The current loop_status_card/v1 names the queue item, tick status, verification_plan, and next action.
+  - failure_mode_summary checks verification_gap, comprehension_debt, and cognitive_surrender before progress advances.
+  - Completion is backed by linked goal/runtime evidence; queued loop ticks alone are not observed work.
+- Recovery notes:
+  - If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.
+  - If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.
+  - If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.
+  - If context or budget is exhausted, checkpoint the loop artifact and continue from the latest loop_cycle/v1 state.
 - Required inputs:
   - loopability assessment
   - north-star goal summary when present
@@ -287,6 +320,16 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Run code-review as a gate after implementation evidence exists; review preparation alone is not review evidence.
   - Add docs-specialist sync when public behavior, commands, setup, examples, or claims changed.
   - End with a PR-ready or PR-observed report that separates prepared, executed, reviewed, verified, CI, and PR evidence.
+- Completion checklist:
+  - Research and codebase context are captured before implementation handoff.
+  - A ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.
+  - The implementation owner is selected and handoff, dispatch, run, review, CI, and PR readiness are separated.
+  - The code-review gate is observed or explicitly marked not_observed.
+  - Docs sync is checked when behavior, setup, commands, examples, or public claims changed.
+- Recovery notes:
+  - If the task expands beyond one delivery cycle, stop and route to loop with the current evidence as input.
+  - If no implementation owner is selected, keep the work prepared_not_observed and ask for Codex, Claude Code, Hermes, or another runtime.
+  - If review, CI, docs sync, or PR evidence is missing, report the stage gap instead of saying the process is complete.
 - Required inputs:
   - task statement
   - repo or workspace context
@@ -342,6 +385,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Ask exactly one blocking question per turn unless the wrapper explicitly supports a structured batch.
   - Tie each question to a missing decision that changes the plan, handoff, or stop condition.
   - Emit a clarified brief with non-goals and acceptance criteria before planning or delegation.
+- Completion checklist:
+  - The clarified brief names goals, non-goals, constraints, and one next planning or handoff path.
+  - Remaining ambiguity is listed only when it changes the plan, risk, or stop condition.
+  - No implementation handoff is prepared until the blocking decision is resolved.
+- Recovery notes:
+  - If the user answers with new ambiguity, ask the next decision-changing question instead of planning too early.
+  - If repo evidence can answer the question, inspect it before asking the user.
 - Required inputs:
   - initial request
   - known repo facts
@@ -389,6 +439,14 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Split only independent lanes with explicit ownership and verification boundaries.
   - Keep Hermes as coordinator and status narrator while coding lanes become runtime handoffs with explicit ownership.
   - Integrate lane evidence before reporting combined progress.
+- Completion checklist:
+  - Each lane has an owner, disjoint scope, expected output, and verification target.
+  - Worker ACK, dispatch, result, integration, and verification evidence are separated when wrappers record them.
+  - The integrated status names which lanes are observed, blocked, or still prepared_not_observed.
+- Recovery notes:
+  - If two lanes are not independent, collapse them under one owner or re-plan before dispatch.
+  - If a worker has no ACK or result, mark that lane not_observed or blocked rather than infer progress.
+  - If integration reveals a shared-file conflict, stop lane fan-out and reassign ownership before continuing.
 - Required inputs:
   - bounded lane definitions
   - ownership boundaries
@@ -437,6 +495,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Require disjoint lane ownership before preparing multiple coding runtime handoffs.
   - Attach acceptance criteria, verification commands, and review expectations to each lane.
   - Keep dispatch, execution, review, CI, and merge status evidence separate.
+- Completion checklist:
+  - All work lanes are disjoint by file, invariant, or responsibility before preparing parallel handoffs.
+  - Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+  - Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
+  - Integration verification ran after lane results before the final status claims completion.
+- Recovery notes:
+  - If lanes are non-disjoint, collapse to one owner or route back to ultragoal before coding starts.
+  - If a worker does not ACK or return a result, keep that lane blocked/not_observed and expose the retry or reassignment action.
+  - If a worktree or shared-file conflict appears, pause parallel delivery and re-plan ownership before more edits.
 - Required inputs:
   - accepted plan
   - lane list
@@ -488,6 +555,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Separate direct evidence, citation links, retrieval dates, inference, confidence, and residual uncertainty.
   - Name retrieval gaps when Hermes or the wrapper cannot access the web.
   - Summarize research before any coding handoff; research is not implementation evidence.
+- Completion checklist:
+  - The research question, source boundaries, recency assumptions, and confidence level are named.
+  - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+  - Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- Recovery notes:
+  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
+  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
 - Required inputs:
   - research question
   - source boundaries
@@ -537,6 +611,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - State the research question, source boundaries, and recency assumptions before synthesis.
   - Separate observed sources, source quality, source diversity, inferred trends, and unresolved uncertainty.
   - Use the brief to feed strategy or meeting work without calling it execution evidence.
+- Completion checklist:
+  - The research question, source boundaries, recency assumptions, and confidence level are named.
+  - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+  - Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- Recovery notes:
+  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
+  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
 - Required inputs:
   - business question
   - source boundary
@@ -587,6 +668,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Map Scout, Analyst, and Briefer lanes to concrete OMH skills and source inbox buckets.
   - Expose collected, synthesized, briefed, conflict, and verification counts as status, not execution proof.
   - List required evidence before claiming retrieval, synthesis, storage, delivery, or verification.
+- Completion checklist:
+  - The research question, source boundaries, recency assumptions, and confidence level are named.
+  - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+  - Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- Recovery notes:
+  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
+  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
 - Required inputs:
   - topic or watch area
   - source boundaries
@@ -638,6 +726,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the decision, constraints, options, tradeoffs, and rejected alternatives.
   - Tie recommendations to observed evidence or mark them as assumptions.
   - Keep coding handoff disabled until strategy is accepted and code work is explicit.
+- Completion checklist:
+  - The decision, options, tradeoffs, assumptions, and rejected alternatives are named.
+  - Observed signals are separated from strategic inference.
+  - Accepted decisions and implementation follow-ups are not conflated.
+- Recovery notes:
+  - If evidence is mostly assumption, label it and recommend a research or feedback-triage pass.
+  - If the decision owner is missing, keep the output as options rather than accepted strategy.
 - Required inputs:
   - goal
   - known evidence
@@ -688,6 +783,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Turn context into agenda topics, prompts, decisions needed, and a record template.
   - Keep prep distinct from actual meeting minutes or accepted decisions.
   - Identify missing context that would change the meeting structure.
+- Completion checklist:
+  - The agenda, participants or audience, decisions needed, and record template are named.
+  - Meeting prep, observed minutes, accepted decisions, and action ownership are separate states.
+  - Missing context that would change the meeting structure is surfaced.
+- Recovery notes:
+  - If participants, purpose, or decision owner are missing, ask for the one field that changes the agenda.
+  - If minutes or decisions were not observed, keep the output as prep rather than record.
 - Required inputs:
   - meeting goal
   - audience
@@ -738,6 +840,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the source boundary before clustering feedback.
   - Classify signals into bug, feature, research, or strategy follow-up without overclaiming evidence.
   - Recommend the next workflow instead of jumping straight to coding.
+- Completion checklist:
+  - The source boundary, signal clusters, severity, and follow-up lane are named.
+  - Bug, feature, research, strategy, and coding handoff outcomes stay separate.
+  - The next workflow is recommended before any implementation claim.
+- Recovery notes:
+  - If feedback lacks source or severity, ask for the missing signal before coding handoff.
+  - If the item is actually a plan or research request, route to that workflow instead of triage.
 - Required inputs:
   - feedback items or summary
   - source boundary
@@ -785,6 +894,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Tie every status claim to observed evidence or mark it as unknown.
   - Separate risks, blockers, priorities, and follow-up owners.
   - Keep code fixes as explicit follow-up handoffs, not implicit ops-review output.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - status evidence
   - scope
@@ -836,6 +952,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name cadence, audience, time window, known notes, and missing evidence before producing a record.
   - Separate agenda/templates from observed minutes, decisions, and action items.
   - Record follow-up ownership only when supplied or explicitly mark it unknown.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - cadence or meeting type
   - audience or participants
@@ -886,6 +1009,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name audience, reporting period, sections, supplied facts, assumptions, and missing data.
   - Keep report packaging independent from reliability review unless explicitly requested.
   - Export only Markdown/JSON outlines unless a separate presentation tool produces a binary deck.
+- Completion checklist:
+  - The reporting window, inputs, audience, narrative, and evidence gaps are named.
+  - Draft report, generated package, approval, and delivery are separate states.
+  - The next action says whether to gather evidence, generate, revise, approve, or deliver.
+- Recovery notes:
+  - If input evidence is incomplete, mark the section as pending rather than fabricating a report claim.
+  - If delivery or attachment is unavailable, keep the report package prepared_not_observed.
 - Required inputs:
   - audience
   - reporting period or scope
@@ -935,6 +1065,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name audience, source inputs, target formats, outline sections, assumptions, missing inputs, and output owner.
   - Attach format-specific QA expectations before preparing a binary-generation handoff.
   - Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.
+- Completion checklist:
+  - The material source, target format, audience, structure, and QA expectation are named.
+  - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
+  - The next action identifies whether the package is planned, generated, QA-ready, or blocked.
+- Recovery notes:
+  - If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
+  - If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
 - Required inputs:
   - audience or recipient
   - source inputs
@@ -995,6 +1132,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Separate prompt prepared, image generated, visual QA passed, and delivered states.
   - Prefer `img-summary` over `materials-package` only when the request asks for an image, visual card, or summary card.
   - Use materials/report workflows only after an observed generated file needs packaging.
+- Completion checklist:
+  - The material source, target format, audience, structure, and QA expectation are named.
+  - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
+  - The next action identifies whether the package is planned, generated, QA-ready, or blocked.
+- Recovery notes:
+  - If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
+  - If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
 - Required inputs:
   - source kind
   - visual format or auto
@@ -1063,6 +1207,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name cadence/timezone uncertainty, delivery target, silence/no-change rule, selected skills, and context chain.
   - Expose whether a no-agent watchdog is a candidate without claiming it exists or ran.
   - List host automation, gateway delivery, source retrieval, and no-agent execution as not evidence until observed.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - recurring request
   - schedule or cadence hint
@@ -1113,6 +1264,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name service, incident/time window, SLO/error-budget target, source references, and missing observations.
   - Separate supplied metrics, incident notes, assumptions, and remediation follow-ups.
   - Keep closure and remediation status unobserved until evidence is supplied.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - service or incident scope
   - time window
@@ -1162,6 +1320,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Expose idea, decision, plan, handoff, verification, release, deploy, and monitor stages as separate status steps.
   - Prepare coding handoffs only after plan acceptance and selected executor/runtime choice.
   - Mark deploy, monitoring, and rollback as unobserved until the wrapper or operator records evidence.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - product idea
   - target user or customer signal
@@ -1212,6 +1377,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Tie recommendations to observed signals or mark assumptions.
   - Record accepted decisions separately from draft recommendations.
   - Prepare executor handoffs only for accepted implementation follow-ups.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - operating signals
   - roadmap or release scope
@@ -1263,6 +1435,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Show pre-deploy, deploy decision, monitor, rollback, and post-deploy record as distinct stages.
   - Mark health and rollback status unknown until observed evidence arrives.
   - Convert fix follow-ups into separate accepted plans or executor handoffs.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - release scope
   - environment
@@ -1313,6 +1492,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Generate hostile scenarios from changed behavior and known risk areas.
   - Report pass/fail evidence separately from proposed fixes.
   - Delegate code mutations discovered by QA to the selected coding executor.
+- Completion checklist:
+  - The scenario, expected behavior, observed result, and pass/fail basis are named.
+  - Proposed fixes are separated from observed QA evidence.
+  - Missing or failed verification routes back to plan, fix, or a narrower test.
+- Recovery notes:
+  - If the expected behavior is unclear, route back to plan before running adversarial checks.
+  - If verification fails, return to fix or research with the failed signal instead of advancing.
 - Required inputs:
   - changed behavior
   - acceptance criteria
@@ -1360,6 +1546,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.
   - Keep draft plans unapproved until a user or wrapper accepts them.
   - Only prepare coding handoff guidance after the plan is accepted.
+- Completion checklist:
+  - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
+  - Draft recommendations, accepted decisions, and executor handoffs are separate states.
+  - Rejected options or unresolved tradeoffs are recorded before handoff.
+- Recovery notes:
+  - If acceptance criteria or verification are missing, route back to clarification before handoff.
+  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
 - Required inputs:
   - requirements
   - constraints
@@ -1407,6 +1600,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Include a planner view, risk review, and testability check before handoff.
   - Record unresolved tradeoffs and rejected options instead of flattening uncertainty.
   - Do not implement directly from consensus planning.
+- Completion checklist:
+  - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
+  - Draft recommendations, accepted decisions, and executor handoffs are separate states.
+  - Rejected options or unresolved tradeoffs are recorded before handoff.
+- Recovery notes:
+  - If acceptance criteria or verification are missing, route back to clarification before handoff.
+  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
 - Required inputs:
   - requirements
   - options
@@ -1456,6 +1656,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Lead with ranked findings grounded in file, diff, command, or artifact evidence.
   - Separate review findings from fix implementation; fixes become executor work.
   - Say clearly when no actionable issue is found and name remaining test gaps.
+- Completion checklist:
+  - Findings come first and are ranked by severity before summary or praise.
+  - Every finding cites file, diff, command output, artifact, or expected behavior evidence.
+  - No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.
+  - Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.
+- Recovery notes:
+  - If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.
+  - If tests fail or are missing, cite the exact command gap and do not approve the change as verified.
+  - If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
 - Required inputs:
   - diff or files
   - expected behavior
@@ -1503,6 +1712,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Lock current behavior with regression checks before non-trivial cleanup.
   - Prefer deletion, reuse, and boundary repair over new abstractions.
   - Rerun verification after cleanup before claiming behavior is preserved.
+- Completion checklist:
+  - The selected coding or runtime owner is named before any implementation claim.
+  - Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
+  - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+- Recovery notes:
+  - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
+  - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
 - Required inputs:
   - target smell
   - current behavior
@@ -1550,6 +1766,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Use official or upstream sources first and name the version/environment assumptions.
   - Map applicability to the user's local context before recommending action.
   - Preserve residual uncertainty instead of overstating best practice.
+- Completion checklist:
+  - The research question, source boundaries, recency assumptions, and confidence level are named.
+  - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+  - Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- Recovery notes:
+  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
+  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
 - Required inputs:
   - chosen technology
   - question
@@ -1596,6 +1819,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Define validator criteria before gathering evidence.
   - Keep durable research artifacts separate from coding execution evidence.
   - Stop with next questions or a source-backed synthesis when validation is incomplete.
+- Completion checklist:
+  - The research question, source boundaries, recency assumptions, and confidence level are named.
+  - Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.
+  - Follow-up planning or handoff uses the research summary without calling it execution evidence.
+- Recovery notes:
+  - If sources cannot be accessed, state the retrieval gap and use only observed local context.
+  - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
 - Required inputs:
   - research objective
   - validator criteria
@@ -1642,6 +1872,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the metric, baseline, budget, and benchmark command before optimizing.
   - Treat code-level optimization as executor work when edits are required.
   - Report deltas only from observed benchmark evidence.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - metric
   - baseline
@@ -1689,6 +1926,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Capture durable facts with source evidence and retrieval hints.
   - Mark stale or uncertain knowledge instead of presenting it as permanent truth.
   - Extract separate coding tasks instead of burying them in notes.
+- Completion checklist:
+  - The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
+  - Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
+  - Separate coding or docs tasks are extracted instead of buried in notes.
+- Recovery notes:
+  - If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
+  - If the fact may be stale, record the staleness warning and next refresh action.
 - Required inputs:
   - project fact
   - source evidence
@@ -1734,6 +1978,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
+- Completion checklist:
+  - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
+  - Open questions, residual risk, and missing verification are named.
+  - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Recovery notes:
+  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
+  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
 - Required inputs:
   - question
   - context summary
@@ -1780,6 +2031,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
+- Completion checklist:
+  - The local command, managed path, config surface, and state artifact inspected are named.
+  - Blocking issues, warnings, and optional surfaces are separated.
+  - The next repair action is explicit and does not claim a reload or runtime observation.
+- Recovery notes:
+  - If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
+  - If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
 - Required inputs:
   - active workflow state
   - cancellation intent
@@ -1823,6 +2081,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
+- Completion checklist:
+  - The local command, managed path, config surface, and state artifact inspected are named.
+  - Blocking issues, warnings, and optional surfaces are separated.
+  - The next repair action is explicit and does not claim a reload or runtime observation.
+- Recovery notes:
+  - If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
+  - If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
 - Required inputs:
   - skill action
   - target skill name or directory
@@ -1867,6 +2132,16 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Name the workflow target, constraints, validation evidence, and stop condition.
   - Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
+- Completion checklist:
+  - Command availability, managed skills, Hermes registration, runtime state, and optional surfaces are grouped separately.
+  - Blocking issues and warnings are separated, with one next repair action named for each blocking area.
+  - Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.
+  - The final status says whether setup/update/doctor repaired anything or only observed health.
+- Recovery notes:
+  - If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.
+  - If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.
+  - If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.
+  - If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.
 - Required inputs:
   - omh home
   - Hermes home
@@ -1914,6 +2189,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - user request
   - target context
@@ -1962,6 +2244,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - user request
   - target context
@@ -2010,6 +2299,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - user request
   - target context
@@ -2058,6 +2354,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The origin platform, thread/session boundary, delivery target, and update policy are named.
+  - Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.
+  - The next wrapper action is explicit and platform-safe.
+- Recovery notes:
+  - If platform metadata is missing, keep the card platform-neutral and ask for the target surface.
+  - If send or registration evidence is unavailable, show the adapter-owned action instead of claiming delivery.
 - Required inputs:
   - user request
   - target context
@@ -2106,6 +2409,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The selected coding or runtime owner is named before any implementation claim.
+  - Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
+  - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+- Recovery notes:
+  - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
+  - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
 - Required inputs:
   - user request
   - target context
@@ -2154,6 +2464,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The deliverable type, audience, source inputs, QA ladder, and delivery boundary are named.
+  - Prepared generation, generated file, render QA, approval, attachment, and delivery are separate states.
+  - The next action says whether to generate, revise, QA, approve, attach, or deliver.
+- Recovery notes:
+  - If generation tooling is missing, prepare a prompt or package handoff and mark file output not_observed.
+  - If QA or attachment evidence is missing, keep generated/delivered states separate and show the next check.
 - Required inputs:
   - user request
   - target context
@@ -2202,6 +2519,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The short-input or voice-like request is clarified enough to avoid accidental action.
+  - The next action is readable, reversible when possible, and confirmation-gated when risky.
+  - Delivery, notification, or platform behavior is not claimed without wrapper evidence.
+- Recovery notes:
+  - If transcript confidence or intent is weak, ask one short clarification before action.
+  - If platform delivery is unavailable, keep the response in chat and mark delivery not_observed.
 - Required inputs:
   - user request
   - target context
@@ -2250,6 +2574,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - user request
   - target context
@@ -2298,6 +2629,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
+  - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
+  - Warnings name the next measurement or operator review action.
+- Recovery notes:
+  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
+  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
 - Required inputs:
   - user request
   - target context
@@ -2346,6 +2684,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The local command, managed path, config surface, and state artifact inspected are named.
+  - Blocking issues, warnings, and optional surfaces are separated.
+  - The next repair action is explicit and does not claim a reload or runtime observation.
+- Recovery notes:
+  - If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
+  - If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
 - Required inputs:
   - user request
   - target context
@@ -2394,6 +2739,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
 - Required inputs:
   - user request
   - target context

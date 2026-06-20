@@ -44,6 +44,17 @@ Bad example:
 - Expected behavior: Show the workflow picker or ask what the user wants to do next; do not infer a coding workflow.
 - Why: A bare product name is a picker or clarification signal, not implementation evidence.
 
+## Completion Checklist
+
+- The selected workflow, confidence reason, evidence boundary, and user-facing next action are named.
+- Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
+- Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
+
+## Recovery Notes
+
+- If routing signals conflict, show the compact picker or ask one clarifying question.
+- If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
+
 ## OMH Awareness Primer
 
 OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off without hiding unobserved execution.

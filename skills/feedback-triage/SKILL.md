@@ -38,6 +38,17 @@ Bad example:
 - Expected behavior: Route to planning or coding handoff instead of re-triaging.
 - Why: The decision is already accepted, so triage would add delay without improving evidence.
 
+## Completion Checklist
+
+- The source boundary, signal clusters, severity, and follow-up lane are named.
+- Bug, feature, research, strategy, and coding handoff outcomes stay separate.
+- The next workflow is recommended before any implementation claim.
+
+## Recovery Notes
+
+- If feedback lacks source or severity, ask for the missing signal before coding handoff.
+- If the item is actually a plan or research request, route to that workflow instead of triage.
+
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.

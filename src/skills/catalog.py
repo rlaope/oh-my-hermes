@@ -80,6 +80,200 @@ def canonical_hermes_role(name: str, category: str, requested: str) -> str:
     return requested or "guide"
 
 
+_GENERAL_FINAL_CHECKLIST = (
+    "Confirm the workflow target, evidence boundary, and stop condition are named.",
+    "Report which outputs are prepared, observed, blocked, or missing.",
+    "Name the smallest next verification or handoff instead of claiming completion from narration.",
+)
+
+_GENERAL_RECOVERY_NOTES = (
+    "If required context is missing, ask one blocking question or route back to the narrower workflow.",
+    "If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.",
+)
+
+_HANDOFF_FINAL_CHECKLIST = (
+    "The selected coding or runtime owner is named before any implementation claim.",
+    "Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.",
+    "The final status cites observed runtime evidence or keeps the work prepared_not_observed.",
+)
+
+_HANDOFF_RECOVERY_NOTES = (
+    "If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.",
+    "If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.",
+)
+
+_CATEGORY_FINAL_CHECKLISTS = {
+    "accessibility": (
+        "The short-input or voice-like request is clarified enough to avoid accidental action.",
+        "The next action is readable, reversible when possible, and confirmation-gated when risky.",
+        "Delivery, notification, or platform behavior is not claimed without wrapper evidence.",
+    ),
+    "clarification": (
+        "The clarified brief names goals, non-goals, constraints, and one next planning or handoff path.",
+        "Remaining ambiguity is listed only when it changes the plan, risk, or stop condition.",
+        "No implementation handoff is prepared until the blocking decision is resolved.",
+    ),
+    "deliverables": (
+        "The deliverable type, audience, source inputs, QA ladder, and delivery boundary are named.",
+        "Prepared generation, generated file, render QA, approval, attachment, and delivery are separate states.",
+        "The next action says whether to generate, revise, QA, approve, attach, or deliver.",
+    ),
+    "gateway": (
+        "The origin platform, thread/session boundary, delivery target, and update policy are named.",
+        "Prepared card or command output is separate from platform registration, send, attachment, or delivery evidence.",
+        "The next wrapper action is explicit and platform-safe.",
+    ),
+    "knowledge": (
+        "The durable fact, source evidence, retrieval hint, and staleness risk are recorded.",
+        "Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.",
+        "Separate coding or docs tasks are extracted instead of buried in notes.",
+    ),
+    "materials": (
+        "The material source, target format, audience, structure, and QA expectation are named.",
+        "Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.",
+        "The next action identifies whether the package is planned, generated, QA-ready, or blocked.",
+    ),
+    "meeting": (
+        "The agenda, participants or audience, decisions needed, and record template are named.",
+        "Meeting prep, observed minutes, accepted decisions, and action ownership are separate states.",
+        "Missing context that would change the meeting structure is surfaced.",
+    ),
+    "observability": (
+        "The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.",
+        "Local telemetry, provider truth, billing truth, and completion evidence are separate states.",
+        "Warnings name the next measurement or operator review action.",
+    ),
+    "operator": (
+        "The local command, managed path, config surface, and state artifact inspected are named.",
+        "Blocking issues, warnings, and optional surfaces are separated.",
+        "The next repair action is explicit and does not claim a reload or runtime observation.",
+    ),
+    "planning": (
+        "The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.",
+        "Draft recommendations, accepted decisions, and executor handoffs are separate states.",
+        "Rejected options or unresolved tradeoffs are recorded before handoff.",
+    ),
+    "reporting": (
+        "The reporting window, inputs, audience, narrative, and evidence gaps are named.",
+        "Draft report, generated package, approval, and delivery are separate states.",
+        "The next action says whether to gather evidence, generate, revise, approve, or deliver.",
+    ),
+    "research": (
+        "The research question, source boundaries, recency assumptions, and confidence level are named.",
+        "Observed sources, inference, synthesis, and unresolved retrieval gaps are separated.",
+        "Follow-up planning or handoff uses the research summary without calling it execution evidence.",
+    ),
+    "review": (
+        "Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.",
+        "Open questions, residual risk, and missing verification are named.",
+        "Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.",
+    ),
+    "router": (
+        "The selected workflow, confidence reason, evidence boundary, and user-facing next action are named.",
+        "Low-confidence or conflicting signals return a picker or clarification instead of forced routing.",
+        "Catalog answers are rendered without shell approval when wrapper metadata is sufficient.",
+    ),
+    "strategy": (
+        "The decision, options, tradeoffs, assumptions, and rejected alternatives are named.",
+        "Observed signals are separated from strategic inference.",
+        "Accepted decisions and implementation follow-ups are not conflated.",
+    ),
+    "triage": (
+        "The source boundary, signal clusters, severity, and follow-up lane are named.",
+        "Bug, feature, research, strategy, and coding handoff outcomes stay separate.",
+        "The next workflow is recommended before any implementation claim.",
+    ),
+    "verification": (
+        "The scenario, expected behavior, observed result, and pass/fail basis are named.",
+        "Proposed fixes are separated from observed QA evidence.",
+        "Missing or failed verification routes back to plan, fix, or a narrower test.",
+    ),
+}
+
+_CATEGORY_RECOVERY_NOTES = {
+    "accessibility": (
+        "If transcript confidence or intent is weak, ask one short clarification before action.",
+        "If platform delivery is unavailable, keep the response in chat and mark delivery not_observed.",
+    ),
+    "clarification": (
+        "If the user answers with new ambiguity, ask the next decision-changing question instead of planning too early.",
+        "If repo evidence can answer the question, inspect it before asking the user.",
+    ),
+    "deliverables": (
+        "If generation tooling is missing, prepare a prompt or package handoff and mark file output not_observed.",
+        "If QA or attachment evidence is missing, keep generated/delivered states separate and show the next check.",
+    ),
+    "gateway": (
+        "If platform metadata is missing, keep the card platform-neutral and ask for the target surface.",
+        "If send or registration evidence is unavailable, show the adapter-owned action instead of claiming delivery.",
+    ),
+    "knowledge": (
+        "If source evidence conflicts, route to memory or knowledge review before writing durable guidance.",
+        "If the fact may be stale, record the staleness warning and next refresh action.",
+    ),
+    "materials": (
+        "If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.",
+        "If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.",
+    ),
+    "meeting": (
+        "If participants, purpose, or decision owner are missing, ask for the one field that changes the agenda.",
+        "If minutes or decisions were not observed, keep the output as prep rather than record.",
+    ),
+    "observability": (
+        "If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.",
+        "If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.",
+    ),
+    "operator": (
+        "If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.",
+        "If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.",
+    ),
+    "planning": (
+        "If acceptance criteria or verification are missing, route back to clarification before handoff.",
+        "If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.",
+    ),
+    "reporting": (
+        "If input evidence is incomplete, mark the section as pending rather than fabricating a report claim.",
+        "If delivery or attachment is unavailable, keep the report package prepared_not_observed.",
+    ),
+    "research": (
+        "If sources cannot be accessed, state the retrieval gap and use only observed local context.",
+        "If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.",
+    ),
+    "review": (
+        "If the reviewed target is missing, inspect the requested artifact or ask one target question.",
+        "If independent verification is unavailable, report the gap and avoid an approval-style claim.",
+    ),
+    "router": (
+        "If routing signals conflict, show the compact picker or ask one clarifying question.",
+        "If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.",
+    ),
+    "strategy": (
+        "If evidence is mostly assumption, label it and recommend a research or feedback-triage pass.",
+        "If the decision owner is missing, keep the output as options rather than accepted strategy.",
+    ),
+    "triage": (
+        "If feedback lacks source or severity, ask for the missing signal before coding handoff.",
+        "If the item is actually a plan or research request, route to that workflow instead of triage.",
+    ),
+    "verification": (
+        "If the expected behavior is unclear, route back to plan before running adversarial checks.",
+        "If verification fails, return to fix or research with the failed signal instead of advancing.",
+    ),
+}
+
+
+def _default_final_checklist(name: str, category: str, hermes_role: str, quality_tier: str) -> tuple[str, ...]:
+    if hermes_role == "handoff-guide" or quality_tier == "handoff-gated":
+        return _HANDOFF_FINAL_CHECKLIST
+    return _CATEGORY_FINAL_CHECKLISTS.get(category, _GENERAL_FINAL_CHECKLIST)
+
+
+def _default_recovery_notes(name: str, category: str, hermes_role: str, quality_tier: str) -> tuple[str, ...]:
+    if hermes_role == "handoff-guide" or quality_tier == "handoff-gated":
+        return _HANDOFF_RECOVERY_NOTES
+    return _CATEGORY_RECOVERY_NOTES.get(category, _GENERAL_RECOVERY_NOTES)
+
+
 @dataclass(frozen=True)
 class SkillExample:
     prompt: str
@@ -114,6 +308,8 @@ class SkillDefinition:
     do_not_use_when: tuple[str, ...] = ()
     good_example: SkillExample | None = None
     bad_example: SkillExample | None = None
+    final_checklist: tuple[str, ...] = ()
+    recovery_notes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "description", omh_description(self.description))
@@ -162,6 +358,18 @@ class SkillDefinition:
                     expected=f"Ask a clarification question or route to a narrower workflow instead of forcing `{self.name}`.",
                     why="The request lacks the required inputs or would overclaim work that Hermes did not observe.",
                 ),
+            )
+        if not self.final_checklist:
+            object.__setattr__(
+                self,
+                "final_checklist",
+                _default_final_checklist(self.name, self.category, self.hermes_role, self.quality_tier),
+            )
+        if not self.recovery_notes:
+            object.__setattr__(
+                self,
+                "recovery_notes",
+                _default_recovery_notes(self.name, self.category, self.hermes_role, self.quality_tier),
             )
 
 
@@ -544,6 +752,17 @@ _DEFINITIONS = [
             expected="Route to diagnosis or a direct answer instead of creating a durable goal.",
             why="A narrow explanation does not need checkpointed long-running state.",
         ),
+        final_checklist=(
+            "The goal_ledger/v1 names the current criteria, checkpoints, blockers, and next action.",
+            "The goal_completion_gate/v1 result passes from required evidence, not from a summary-only message.",
+            "All explicitly linked coding milestones have matching observed runtime evidence or are still named as gaps.",
+            "The final user-facing status says complete, blocked, or continue with the exact remaining checkpoint.",
+        ),
+        recovery_notes=(
+            "If the goal ledger is stale or missing, inspect .omh/goals and ask which checkpoint to resume before continuing.",
+            "If a blocker checkpoint exists, keep the goal open and record the blocker plus the smallest unblock action.",
+            "If linked runtime evidence is missing, keep coding milestones prepared_not_observed and do not close the goal.",
+        ),
     ),
     SkillDefinition(
         "loop",
@@ -618,6 +837,18 @@ _DEFINITIONS = [
             prompt="./loop merge this already reviewed one-line README fix.",
             expected="Use a direct delivery or PR workflow instead of starting a persistent loop.",
             why="The task is bounded and should stop after merge evidence rather than create ongoing cycles.",
+        ),
+        final_checklist=(
+            "The request is classified as task, project, north-star ambition, external-wait, or unclear before a loop starts.",
+            "The current loop_status_card/v1 names the queue item, tick status, verification_plan, and next action.",
+            "failure_mode_summary checks verification_gap, comprehension_debt, and cognitive_surrender before progress advances.",
+            "Completion is backed by linked goal/runtime evidence; queued loop ticks alone are not observed work.",
+        ),
+        recovery_notes=(
+            "If a queued tick is pending, show it as prepared queue state and use loop status/run-once before claiming progress.",
+            "If feedback is unclear, ask one gate question or route back to research/plan rather than advancing the loop.",
+            "If the goal turns into external waiting, record the waiting state and next observable signal instead of continuing locally.",
+            "If context or budget is exhausted, checkpoint the loop artifact and continue from the latest loop_cycle/v1 state.",
         ),
     ),
     SkillDefinition(
@@ -705,6 +936,18 @@ _DEFINITIONS = [
             expected="Route to `loop` or ask for a bounded goal rather than promise endless delivery.",
             why="Popularity and indefinite improvement need long-horizon loop management, not one PR-ready cycle.",
         ),
+        final_checklist=(
+            "Research and codebase context are captured before implementation handoff.",
+            "A ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.",
+            "The implementation owner is selected and handoff, dispatch, run, review, CI, and PR readiness are separated.",
+            "The code-review gate is observed or explicitly marked not_observed.",
+            "Docs sync is checked when behavior, setup, commands, examples, or public claims changed.",
+        ),
+        recovery_notes=(
+            "If the task expands beyond one delivery cycle, stop and route to loop with the current evidence as input.",
+            "If no implementation owner is selected, keep the work prepared_not_observed and ask for Codex, Claude Code, Hermes, or another runtime.",
+            "If review, CI, docs sync, or PR evidence is missing, report the stage gap instead of saying the process is complete.",
+        ),
     ),
     SkillDefinition(
         "deep-interview",
@@ -784,6 +1027,16 @@ _DEFINITIONS = [
             "Keep Hermes as coordinator and status narrator while coding lanes become runtime handoffs with explicit ownership.",
             "Integrate lane evidence before reporting combined progress.",
         ),
+        final_checklist=(
+            "Each lane has an owner, disjoint scope, expected output, and verification target.",
+            "Worker ACK, dispatch, result, integration, and verification evidence are separated when wrappers record them.",
+            "The integrated status names which lanes are observed, blocked, or still prepared_not_observed.",
+        ),
+        recovery_notes=(
+            "If two lanes are not independent, collapse them under one owner or re-plan before dispatch.",
+            "If a worker has no ACK or result, mark that lane not_observed or blocked rather than infer progress.",
+            "If integration reveals a shared-file conflict, stop lane fan-out and reassign ownership before continuing.",
+        ),
     ),
     SkillDefinition(
         "ultrawork",
@@ -823,6 +1076,17 @@ _DEFINITIONS = [
             prompt="$ultrawork refactor the central router in five agents at once.",
             expected="Keep one owner or re-plan boundaries before parallelization.",
             why="Shared core logic makes parallel edits likely to conflict or hide regressions.",
+        ),
+        final_checklist=(
+            "All work lanes are disjoint by file, invariant, or responsibility before preparing parallel handoffs.",
+            "Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.",
+            "Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.",
+            "Integration verification ran after lane results before the final status claims completion.",
+        ),
+        recovery_notes=(
+            "If lanes are non-disjoint, collapse to one owner or route back to ultragoal before coding starts.",
+            "If a worker does not ACK or return a result, keep that lane blocked/not_observed and expose the retry or reassignment action.",
+            "If a worktree or shared-file conflict appears, pause parallel delivery and re-plan ownership before more edits.",
         ),
     ),
     SkillDefinition(
@@ -2111,6 +2375,17 @@ _DEFINITIONS = [
             expected="Route implementation to a selected executor/runtime after review findings are established.",
             why="Review can identify the issue, but code mutation is a separate execution step.",
         ),
+        final_checklist=(
+            "Findings come first and are ranked by severity before summary or praise.",
+            "Every finding cites file, diff, command output, artifact, or expected behavior evidence.",
+            "No-issue reviews still name residual risk, missing tests, and independent review evidence if unavailable.",
+            "Fix implementation, architecture follow-up, and CI/merge claims stay separate from the review result.",
+        ),
+        recovery_notes=(
+            "If no diff, file set, PR, or artifact is available, inspect the requested target or ask one target question before reviewing.",
+            "If tests fail or are missing, cite the exact command gap and do not approve the change as verified.",
+            "If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.",
+        ),
     ),
     SkillDefinition(
         "ai-slop-cleaner",
@@ -2304,6 +2579,18 @@ _DEFINITIONS = [
             prompt="doctor implement a new uninstall command UX.",
             expected="Route to planning or implementation instead of health diagnostics.",
             why="That is product development work, not a local health check.",
+        ),
+        final_checklist=(
+            "Command availability, managed skills, Hermes registration, runtime state, and optional surfaces are grouped separately.",
+            "Blocking issues and warnings are separated, with one next repair action named for each blocking area.",
+            "Plugin install, plugin import/register smoke, and Hermes runtime load are not collapsed into one claim.",
+            "The final status says whether setup/update/doctor repaired anything or only observed health.",
+        ),
+        recovery_notes=(
+            "If managed skills are stale, recommend omh update or omh setup depending on whether registration also needs repair.",
+            "If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.",
+            "If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.",
+            "If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.",
         ),
     ),
 ]
