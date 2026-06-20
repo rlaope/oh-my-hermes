@@ -14,6 +14,7 @@ from .chat import (
     _add_chat_commands,
     cmd_chat_interact,
     cmd_chat_route,
+    cmd_chat_route_hint,
     cmd_chat_session_decision,
     cmd_chat_session_list,
     cmd_chat_session_prepare_handoff,

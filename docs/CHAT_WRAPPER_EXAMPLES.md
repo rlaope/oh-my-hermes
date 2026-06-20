@@ -15,6 +15,7 @@ uv run python examples/discord-adapter-shim.py
 uv run python examples/discord-adapter-shim.py examples/wrapper-events/discord-command-preview.json
 uv run python examples/slack-adapter-shim.py examples/wrapper-events/slack-command-preview.json
 uv run python examples/telegram-adapter-shim.py examples/wrapper-events/telegram-command-preview.json
+uv run python -m src.cli chat route-hint --source discord "make an image explaining the cron feature"
 uv run python -m src.cli chat native-command --source discord
 uv run python -m src.cli chat native-command --source slack
 uv run python -m src.cli chat native-command --source telegram
@@ -116,6 +117,35 @@ Hermes Agent
 The wrapper still owns rendering and state recording. The route hint is prompt
 context only; it is not workflow execution, image generation, scheduled job
 creation, review, CI, or delivery evidence.
+
+Wrappers do not need to wait for plugin load to show the same kind of hint. They
+can call the transport-free backend preview:
+
+```sh
+omh chat route-hint --source discord "make an image explaining the cron feature"
+```
+
+That returns `chat_route_hint/v1` with a `chat_response` card the adapter can
+render immediately:
+
+```text
+Hermes Agent  BOT
+[omh] img-summary looks relevant.
+
+I can open `img-summary` first because this request matches the materials and
+visuals lane. Next action: `prepare_visual_prompt_card`.
+
+[ Open img-summary ] [ Route for me ] [ Open omh ]
+
+State
+- Hint only: no workflow has been selected or executed.
+- Safe to render without shell approval.
+- Plugin load is not required.
+```
+
+Use `--prompt-context` only when a wrapper intentionally injects the compact
+`[OMH Route Hint]` text into Hermes context itself. The default response is the
+safer card/JSON contract and never echoes the raw prompt.
 
 ## Missed OMH Route Capture
 

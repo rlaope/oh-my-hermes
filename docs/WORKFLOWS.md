@@ -34,7 +34,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user already invoked a more specific installed skill and its routing signals are unambiguous.
   - The message is ordinary chat, status acknowledgement, or a question that does not need workflow routing.
   - The wrapper wants to claim execution, review, CI, or merge evidence that no observed artifact provides.
-- Strong routing signals: `oh-my-hermes`, `omh`, `./`, `/`, `./o`, `/o`, `./om`, `/om`, `./omh`, `/omh`, `./skills`, `/skills`, `skill picker`, `workflow picker`, `native command`, `command preview`, `fallback card`, `discord command`, `slack command`, `telegram command`, `skill routing`, `workflow routing`, `chat routing`, `request-to-handoff`, `plain request`, `role-owned next action`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
+- Strong routing signals: `oh-my-hermes`, `omh`, `./`, `/`, `./o`, `/o`, `./om`, `/om`, `./omh`, `/omh`, `./skills`, `/skills`, `skill picker`, `workflow picker`, `native command`, `command preview`, `route hint`, `route-hint`, `route hint card`, `fallback card`, `discord command`, `slack command`, `telegram command`, `skill routing`, `workflow routing`, `chat routing`, `request-to-handoff`, `plain request`, `role-owned next action`, `wrapper contract`, `prepared observed`, `evidence boundary`, `상태 기록`, `증거 경계`
 - Good example:
   - Prompt: Use OMH request-to-handoff for: safely add a feature to this repo.
   - Expected behavior: Classify the request, name the retained Hermes lane or prepared coding handoff, and expose the observed/prepared evidence boundary.
@@ -55,12 +55,14 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Hermes skill discovery context
 - Expected outputs:
   - selected workflow guidance
+  - chat_route_hint/v1 when a wrapper needs a lightweight preview
   - clarification question when routing is ambiguous
 - Artifact expectations:
   - runtime run record when a wrapper can observe request handling
 - Safety rules:
   - Prefer explicit skill invocation over weak keyword inference.
   - Treat partial `./`, `/`, `./o`, or `/om` input as command preview; show one top-level `omh` entry before opening the workflow picker.
+  - Use `omh chat route-hint` when a wrapper needs a metadata-only workflow preview without plugin load or shell catalog approval.
   - Use `omh chat native-command` contracts for Discord, Slack, Telegram, or Hermes command/menu registration; treat registration and button rendering as adapter-owned observed evidence.
   - Treat bare `./omh`, `/omh`, `./skills`, or `/skills` as a workflow picker request, not as implementation intent.
   - Ask one concise question when routing signals conflict.

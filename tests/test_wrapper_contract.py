@@ -14,6 +14,7 @@ from omh.wrapper_contract import (
     messenger_rendering_contract,
 )
 from omh.wrapper.native_commands import build_native_command_surface, render_native_command_response
+from omh.wrapper.route_hints import build_chat_route_hint_payload
 
 
 class WrapperContractTests(unittest.TestCase):
@@ -60,6 +61,38 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["source_metadata"]["timestamp"], "123.4")
         self.assertNotIn("raw", payload["source_metadata"])
         self.assertEqual(payload["thread_key"], "slack:c1:m1")
+
+    def test_route_hint_payload_is_metadata_only_and_wrapper_renderable(self) -> None:
+        message = "Users report a checkout bug"
+
+        payload = build_chat_route_hint_payload(
+            message,
+            source="discord",
+            source_metadata={"channel_ref": "c1", "user_ref": "u1"},
+        )
+
+        self.assertEqual(payload["schema_version"], "chat_route_hint/v1")
+        self.assertEqual(payload["route_hint"]["schema_version"], "omh_route_hint/v1")
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "feedback-triage")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "feedback-triage")
+        self.assertEqual(payload["chat_response"]["messenger_rendering"]["profile"], "discord")
+        self.assertTrue(payload["wrapper_contract"]["safe_to_render_without_shell_approval"])
+        action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
+        self.assertIn("open_workflow", action_ids)
+        self.assertIn("route_for_me", action_ids)
+        self.assertIn("open_picker", action_ids)
+        self.assertNotIn(message, json.dumps(payload))
+
+    def test_route_hint_payload_has_picker_fallback_when_no_hint_matches(self) -> None:
+        payload = build_chat_route_hint_payload("zzzzzz", source="slack")
+
+        self.assertEqual(payload["route_hint"]["status"], "no_hint")
+        self.assertEqual(payload["chat_response"]["kind"], "no_route_hint")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "")
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertIn("open_picker", actions)
+        self.assertIn("clarify", actions)
+        self.assertNotIn("zzzzzz", json.dumps(payload))
 
     def test_chat_interaction_surfaces_target_change_notice_without_overclaiming(self) -> None:
         notice = {

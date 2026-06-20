@@ -3098,6 +3098,39 @@ class CliTests(unittest.TestCase):
         self.assertIn("{message}", route["routing_prompt_template"])
         self.assertNotIn("risky refactor", json.dumps(route))
 
+    def test_chat_route_hint_exposes_wrapper_card_without_recording_route(self) -> None:
+        message = "make an image explaining the cron feature"
+        status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", message])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_route_hint/v1")
+        self.assertEqual(payload["route_hint"]["schema_version"], "omh_route_hint/v1")
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
+        self.assertEqual(payload["chat_response"]["kind"], "workflow_route_hint")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "img-summary")
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertIn("open_workflow", actions)
+        self.assertIn("route_for_me", actions)
+        self.assertIn("open_picker", actions)
+        self.assertTrue(payload["wrapper_contract"]["safe_to_render_without_shell_approval"])
+        self.assertTrue(payload["wrapper_contract"]["does_not_require_plugin_load"])
+        self.assertNotIn(message, json.dumps(payload))
+
+    def test_chat_route_hint_can_emit_manual_prompt_context(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--prompt-context", "missed route: OMH was not used"]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "workflow-learning")
+        self.assertIn("[OMH Route Hint]", payload["prompt_context"])
+        self.assertIn("workflow=workflow-learning", payload["prompt_context"])
+        self.assertIn("Prompt context is for Hermes routing guidance only", payload["prompt_context_boundary"])
+
     def test_chat_route_file_lookup_does_not_emit_workflow_clarification(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])
 
