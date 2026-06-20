@@ -115,9 +115,13 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 ctx = FakeCtx()
                 module.register(ctx)
                 handler = ctx.tools["omh_capabilities"]["args"][2]
+                recommend_handler = ctx.tools["omh_recommend"]["args"][2]
                 keywords = json.loads(handler({{"action": "export", "section": "keywords"}}))
                 exported = json.loads(handler({{"action": "export"}}))
                 summary = json.loads(handler({{"action": "summary"}}))
+                recommendation = json.loads(
+                    recommend_handler({{"message": "make an image summary for this PR with secret-token-123", "limit": 2}})
+                )
                 listed_tools = json.loads(handler({{"action": "list", "section": "tool_requirements"}}))
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
                 inspected = json.loads(handler({{"action": "inspect", "id": "handoff-guide"}}))
@@ -149,6 +153,12 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "source": exported["source"],
                     "summary_schema": summary["schema_version"],
                     "summary_source": summary["source"],
+                    "recommend_schema": recommendation["schema_version"],
+                    "recommend_source": recommendation["source"],
+                    "recommend_status": recommendation["status"],
+                    "recommend_raw_prompt_echoed": recommendation["message"]["raw_prompt_echoed"],
+                    "recommend_first_skill": recommendation["recommendations"][0]["skill"],
+                    "recommend_serialized": json.dumps(recommendation, sort_keys=True),
                     "summary_lanes": [lane["id"] for lane in summary["lanes"]],
                     "summary_visual_skills": [
                         lane["primary_skills"]
@@ -227,6 +237,13 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["source"], "standalone_plugin_bundle_fallback")
             self.assertEqual(payload["summary_schema"], "omh_capability_summary/v1")
             self.assertEqual(payload["summary_source"], "standalone_plugin_bundle_fallback")
+            self.assertEqual(payload["recommend_schema"], "omh_recommend_result/v1")
+            self.assertEqual(payload["recommend_source"], "standalone_plugin_bundle_fallback")
+            self.assertEqual(payload["recommend_status"], "recommended")
+            self.assertFalse(payload["recommend_raw_prompt_echoed"])
+            self.assertEqual(payload["recommend_first_skill"], "img-summary")
+            self.assertIn("<current user request>", payload["recommend_serialized"])
+            self.assertNotIn("secret-token-123", payload["recommend_serialized"])
             self.assertIn("intent_to_plan", payload["summary_lanes"])
             self.assertIn("img-summary", payload["summary_visual_skills"])
             self.assertIn("request-to-handoff", payload["summary_intent_playbooks"])

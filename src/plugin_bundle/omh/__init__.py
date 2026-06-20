@@ -11,6 +11,7 @@ def register(ctx):
     from .tools.capability_tool import OMH_CAPABILITIES_SCHEMA, omh_capabilities_handler
     from .tools.evidence_tool import OMH_EVIDENCE_SCHEMA, omh_evidence_handler
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
+    from .tools.recommend_tool import OMH_RECOMMEND_SCHEMA, omh_recommend_handler
     from .tools.role_tool import OMH_ROLE_SCHEMA, omh_role_handler
     from .tools.status_tool import OMH_STATUS_SCHEMA, omh_status_handler
 
@@ -34,6 +35,13 @@ def register(ctx):
         OMH_HUD_SCHEMA,
         omh_hud_handler,
         description=OMH_HUD_SCHEMA["description"],
+    )
+    ctx.register_tool(
+        "omh_recommend",
+        _TOOLSET,
+        OMH_RECOMMEND_SCHEMA,
+        omh_recommend_handler,
+        description=OMH_RECOMMEND_SCHEMA["description"],
     )
     ctx.register_tool(
         "omh_role",
