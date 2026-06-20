@@ -321,6 +321,15 @@ User-facing effect:
   render `Prepare worktree` before the open button. The action prepares wrapper
   UX and operator guidance; only `runtime_observation/v1` worktree evidence can
   mark the worktree as observed.
+- After a worktree is prepared, the wrapper can call
+  `omh worktree bind --path <worktree> --executor codex --session <session-id>`
+  to get `worktree_executor_binding/v1`. That payload contains resolved launch
+  command templates and messenger actions such as `Open in Codex`,
+  `Attach existing session`, and `Record opened`. For `claude-code`, it returns
+  Claude Code launch templates. For `hermes`, `omx-runtime`, `omo-runtime`, and
+  `omc-runtime`, it returns prompt/runtime guidance plus a separate runtime
+  observation recipe. The bind payload is still not executor dispatch or result
+  evidence.
 - Execution, verification, CI, merge-readiness, and merge stay separate.
 - The wrapper can keep editing the same thread as evidence arrives.
 

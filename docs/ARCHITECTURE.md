@@ -382,11 +382,14 @@ worktree is required before opening an executor. That record stores a compact
 snapshot of the generated workspace policy. When a wrapper or operator chooses
 the explicit workspace action, `omh worktree prepare` creates a local Git
 worktree and records `omh_worktree_observation/v1`; that observation is
-workspace-isolation evidence only. Runtime ladders still need a separate
-`runtime_observation/v1` `worktree_creation` event when the created worktree is
-attached to a prepared runtime handoff. The coding handoff also stores
-acceptance criteria, verification expectations, report contract, and evidence
-contract, runtime-specific invocation templates, and the
+workspace-isolation evidence only. `omh worktree bind` can then return a
+wrapper recipe for opening or attaching Codex, Claude Code, Hermes, or another
+runtime from that worktree; the recipe is still not executor dispatch or result
+evidence. Runtime ladders still need a separate `runtime_observation/v1`
+`worktree_creation` event when the created worktree is attached to a prepared
+runtime handoff. The coding handoff also stores acceptance criteria,
+verification expectations, report contract, and evidence contract,
+runtime-specific invocation templates, and the
 `runtime_observation/v1` recording contract, but not the raw prompt body. With
 `--record`,
 the companion `run.json` is marked as
@@ -492,8 +495,9 @@ claim. A `partial` row means OMH has deterministic guidance, handoff metadata,
 or observation records for that axis, while the live worker, executor session,
 MCP host load, or plugin runtime event still belongs to Hermes, the selected
 executor, or a future observed integration. Worktree isolation is available only
-for the explicit `omh worktree prepare/list` backend and its local
-`omh_worktree_observation/v1` ledger; it does not auto-launch an executor.
+for the explicit `omh worktree prepare/list/bind` backend and its local
+`omh_worktree_observation/v1` ledger plus wrapper binding recipes; it does not
+auto-launch an executor.
 
 ## Harness Contract
 

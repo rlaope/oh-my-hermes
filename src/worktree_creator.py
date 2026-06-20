@@ -130,6 +130,21 @@ def list_worktree_records(paths: OmhPaths, *, limit: int = 20) -> tuple[list[dic
     return list(reversed(records))[:limit], errors
 
 
+def latest_observed_worktree_record(paths: OmhPaths, worktree_path: str | Path) -> dict[str, Any]:
+    records, _errors = read_jsonl_objects(paths.runtime_worktrees_path)
+    target = str(expand_path(worktree_path))
+    for record in reversed(records):
+        if not isinstance(record, dict):
+            continue
+        if (
+            str(record.get("worktree_path", "")) == target
+            and record.get("observed")
+            and record.get("created")
+        ):
+            return record
+    return {}
+
+
 def _blocked_result(
     paths: OmhPaths,
     *,

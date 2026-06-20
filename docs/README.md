@@ -134,7 +134,8 @@ separate profile pack is explicitly selected.
 - Worktree/session isolation docs should describe `worktree_session_isolation/v1`
   as prepared workspace guidance and wrapper UX, and `omh worktree prepare` as
   explicit opt-in Git worktree creation that records workspace-isolation
-  evidence only.
+  evidence only. `omh worktree bind` may describe wrapper launch/attach recipes
+  for a prepared worktree, but must not claim executor dispatch or results.
 - Workflow learning docs should state that `workflow_learning_trace/v1` records
   are metadata-only process evidence. They can feed evals, readiness audits,
   review-only improvement candidates, human-review queues, regression cases,

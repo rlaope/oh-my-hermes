@@ -135,7 +135,8 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 - **Workspace-aware starts** - risky, parallel, or runtime-owned coding requests
   can show Prepare worktree before Hermes starts Codex, Claude Code, Hermes, or
   another configured coding-agent session; the backend can explicitly create the
-  local Git worktree when that button is used.
+  local Git worktree, then return a separate wrapper recipe for opening or
+  attaching the selected coding agent from that worktree.
 - **Useful beyond coding** - research, planning, feedback triage, meeting prep,
   reports, automation blueprints, material packages, and loop work all have
   Hermes-facing workflow paths.
@@ -214,7 +215,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
 | Route hint cards | Wrappers can preview the nearest OMH workflow with `chat_route_hint/v1`, even before plugin load is observed. |
 | Coding agent paths | Hermes can prepare work for Codex, Claude Code, Hermes itself, or another runtime without pretending the work already ran. |
-| Workspace isolation | Hermes can show whether the current workspace is ok, recommend or require a worktree, and use `omh worktree prepare` to create the local Git worktree only when explicitly chosen. |
+| Workspace isolation | Hermes can show whether the current workspace is ok, recommend or require a worktree, use `omh worktree prepare` to create one, and use `omh worktree bind` to render open/attach/record actions for the selected coding agent. |
 | Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
 | Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts, including missed OMH routes: metadata-only trace, deterministic eval, human review queue, non-applying patch proposal, regression case, audit, and export bundle. |

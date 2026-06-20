@@ -66,8 +66,11 @@ wrapper to keep the same workspace, recommend a worktree, or require a worktree
 before opening a coding agent. It is still prepared guidance until a wrapper or
 operator invokes or observes the workspace action. `omh worktree prepare` is the
 explicit opt-in backend that can create a local Git worktree and record
-`omh_worktree_observation/v1`; that record proves workspace isolation only, not
-executor dispatch, implementation, review, CI, or merge.
+`omh_worktree_observation/v1`. `omh worktree bind` can then return
+`worktree_executor_binding/v1` so a wrapper can show open/attach/record actions
+for the selected coding agent. Those records prove workspace isolation and
+session-start guidance only, not executor dispatch, implementation, review, CI,
+or merge.
 
 The optional MCP bridge uses `omh mcp serve` and exposes only `omh_status`,
 `omh_recommend`, and `omh_probe`. Bridge availability is not host-load evidence,

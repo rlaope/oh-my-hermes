@@ -124,8 +124,12 @@ def _worktree_creator_capability() -> Capability:
     return Capability(
         "worktree_creator",
         "available",
-        "omh worktree prepare; omh worktree list",
-        "OMH can explicitly create local Git worktrees and record omh_worktree_observation/v1 workspace-isolation evidence",
+        "omh worktree prepare; omh worktree list; omh worktree bind",
+        (
+            "OMH can explicitly create local Git worktrees, record omh_worktree_observation/v1 "
+            "workspace-isolation evidence, and return wrapper binding recipes for opening or attaching "
+            "the selected coding agent without launching it"
+        ),
     )
 
 

@@ -39,7 +39,7 @@ implementation or claim runtime behavior it did not observe.
 | Specialist role/profile system | Available | Skill catalog metadata, operating models, optional visible profile packs, wrapper role narration, plugin `omh_role`, and `[omh-role:name]` context injection. | Observed role execution still requires wrapper or runtime evidence; role context is not a hidden live agent. |
 | Bounded evidence probe | Available | Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as doctor, harness validation, docs checks, unittest, compileall, and whitespace checks. | It is not a general shell, executor dispatch, PR review, CI, merge, or live Hermes plugin-load signal. |
 | Team, swarm, and worker protocol | Partial | `team`, `ultrawork`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | OMH does not launch hidden tmux teams, spawn workers, or manage panes by itself. |
-| Worktree and project-session isolation | Available | `worktree_session_isolation/v1` plans in coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation. | OMH creates local Git worktrees only through the explicit opt-in backend command; it does not auto-launch executors or bind host sessions without wrapper/runtime evidence. |
+| Worktree and project-session isolation | Available | `worktree_session_isolation/v1` plans in coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation. | OMH creates local Git worktrees only through the explicit opt-in backend command; binding recipes show how wrappers can open or attach host sessions but do not auto-launch executors or claim runtime evidence. |
 | HUD, status, and session observability | Available | `omh hud`, plugin `omh_hud`/`omh_status`, wrapper sessions, runtime runs, and status cards. | Live host HUD rendering depends on Hermes/plugin support. |
 | MCP and tool bridge | Available | `omh setup --with-mcp`, `omh mcp manifest`, `omh mcp serve`, `omh mcp observe-host`, and `omh probe` preference/server/runtime/host-session/host-config separation. | OMH does not auto-enable host MCP config or independently inspect live host sessions; the host or wrapper must record load/session evidence. |
 | Loop and autopilot workflow | Available | `loop`, `ultraprocess`, `ralplan`, `ultragoal`, loop queue ticks, verification tiers, and failure-mode cards. | Scheduling, connector I/O, worktree creation, and subagent execution remain prepared or delegated until observed. |
@@ -61,6 +61,10 @@ implementation or claim runtime behavior it did not observe.
   `omh_worktree_observation/v1` workspace-isolation evidence. That evidence is
   still not executor dispatch, implementation, review, CI, merge-readiness, or
   merge evidence.
+- `omh worktree bind`, which returns `worktree_executor_binding/v1` so wrappers
+  can render Open in Codex, Open in Claude Code, Attach session, and runtime
+  observation record actions for a prepared worktree without launching the
+  executor or treating a terminal command as evidence.
 - A dependency-free stdio MCP bridge with allowlisted local `omh_status`,
   `omh_recommend`, and `omh_probe` tools plus manifest and probe evidence.
 - `omh_mcp_host_session/v1` records for host/wrapper-observed MCP bridge load
@@ -73,7 +77,6 @@ Next PR candidates:
 
 | Next PR | Why it matters |
 | --- | --- |
-| Worktree-to-executor session binding recipes | Shows wrappers how to connect an observed worktree to Codex, Claude Code, Hermes, or an oh-my runtime without auto-launching them. |
 | Host-specific MCP config recipes | Turns the manifest contract into copy-paste recipes for common MCP-capable host config shapes without auto-mutating them. |
 | Live Hermes plugin-load smoke evidence | Separates installed/importable plugin payloads from host-observed plugin runtime use. |
 
@@ -85,8 +88,9 @@ Next PR candidates:
   `omh_parity_matrix/v1`.
 - Team/swarm worker launch remains `partial` until observed runtime support
   exists. Worktree isolation is `available` only for explicit local Git
-  worktree creation and `omh_worktree_observation/v1` records; executor/session
-  use still needs separate runtime evidence. The MCP bridge axis is `available`
+  worktree creation, `omh_worktree_observation/v1` records, and
+  `worktree_executor_binding/v1` wrapper recipes; executor/session dispatch
+  still needs separate runtime evidence. The MCP bridge axis is `available`
   only for the local stdio server and allowlisted tools; host-specific
   load/session use must still be recorded through `omh_mcp_host_session/v1`
   before it is claimed.
@@ -103,7 +107,7 @@ Next PR candidates:
 
 - No hidden tmux team launcher.
 - No automatic Git worktree creator.
-- No executor launch or host-session binding from the worktree creator.
+- No executor launch from the worktree creator or binder.
 - No arbitrary MCP shell, connector runner, or auto-enabled host config.
 - No Discord/Slack transport implementation.
 - No Hermes core patch.

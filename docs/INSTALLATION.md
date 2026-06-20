@@ -712,8 +712,10 @@ Before calling the bot integration ready, verify these points:
   isolation. The plan remains `prepared_not_observed` until a wrapper invokes
   or observes the workspace action. `omh worktree prepare --repo <repo> --task
   "<task>"` is the explicit local backend action for creating the Git worktree;
-  linked runtime ladders still require separate `runtime_observation/v1`
-  records.
+  `omh worktree bind --path <worktree> --executor codex --session <session-id>`
+  returns the safe wrapper recipe for opening or attaching the selected coding
+  agent from that worktree. Linked runtime ladders still require separate
+  `runtime_observation/v1` records.
 - Executor-choice, runtime-handoff, clarify, fallback, and prompt-only handoffs
   return `runtime.recorded=false`; wrappers should not expect
   `runtime.run.run_id` for those paths.
