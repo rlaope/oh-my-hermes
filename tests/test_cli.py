@@ -822,6 +822,9 @@ class CliTests(unittest.TestCase):
             self.assertIn("Parity matrix", stdout)
             self.assertIn("Team, swarm, and worker protocol: available", stdout)
             self.assertIn("Worktree and project-session isolation: available", stdout)
+            self.assertIn("Capability roadmap", stdout)
+            self.assertIn("Gaps: 0 product setup", stdout)
+            self.assertIn("Record Hermes plugin runtime observation", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             with self.assertRaises(json.JSONDecodeError):
                 json.loads(stdout)

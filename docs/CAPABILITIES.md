@@ -74,7 +74,8 @@ session-start guidance only, not executor dispatch, implementation, review, CI,
 or merge.
 
 The optional MCP bridge uses `omh mcp serve` and exposes only `omh_status`,
-`omh_recommend`, and `omh_probe`. `omh mcp config-recipe --host
+`omh_recommend`, and `omh_probe`. `omh_probe` can include the parity matrix and
+capability roadmap when the host asks for them. `omh mcp config-recipe --host
 claude-code|codex|opencode|cursor|generic` can print copy-paste snippets for
 common MCP-capable hosts, but bridge availability and host config text are not
 host-load evidence. A host or wrapper that actually observes bridge load or use

@@ -474,7 +474,9 @@ requested bridge preference or config file from being mistaken for observed MCP
 host load, connector invocation, or coding execution.
 
 The MCP bridge is intentionally narrow. `omh mcp serve` speaks newline-delimited
-stdio JSON-RPC and exposes only `omh_status`, `omh_recommend`, and `omh_probe`.
+stdio JSON-RPC and exposes only `omh_status`, `omh_recommend`, and `omh_probe`;
+`omh_probe` can include parity and capability-roadmap projections when a host
+requests those advisory views.
 `omh mcp config-recipe --host ...` can print host-shaped config snippets for
 Claude Code, Codex, OpenCode, Cursor, and generic MCP hosts, but it does not
 mutate those host files. The bridge does not expose arbitrary shell commands,

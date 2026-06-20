@@ -31,6 +31,40 @@ class ProbeCliTests(unittest.TestCase):
             self.assertFalse(payload["plugin_distribution_ready"])
             self.assertFalse(payload["native_integration_claim_ready"])
 
+    def test_probe_roadmap_separates_product_setup_from_runtime_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(base + ["probe", "--roadmap", "--json"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            roadmap = json.loads(stdout)["capability_gap_roadmap"]
+            self.assertEqual(roadmap["schema_version"], "omh_capability_gap_roadmap/v1")
+            self.assertGreaterEqual(roadmap["summary"]["baseline_product_gaps"], 2)
+            self.assertFalse(roadmap["summary"]["baseline_ready"])
+            self.assertEqual(roadmap["next_actions"][0]["id"], "run_setup")
+            self.assertIn("not workflow execution evidence", roadmap["next_actions"][0]["boundary"])
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin"])[0], 0)
+            status, stdout, stderr = run_cli(base + ["probe", "--parity", "--json"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            roadmap = payload["capability_gap_roadmap"]
+            self.assertTrue(roadmap["summary"]["baseline_ready"])
+            self.assertEqual(roadmap["summary"]["baseline_product_gaps"], 0)
+            self.assertGreaterEqual(roadmap["summary"]["evidence_gaps"], 1)
+            self.assertIn("parity_matrix", payload)
+            actions = {action["id"]: action for action in roadmap["next_actions"]}
+            self.assertIn("observe_plugin_runtime", actions)
+            self.assertIn("record_wrapper_usage", actions)
+            self.assertIn("not coding execution", actions["observe_plugin_runtime"]["boundary"])
+            self.assertNotIn("command", actions["record_wrapper_usage"])
+            self.assertIn("operator_instruction", actions["record_wrapper_usage"])
+
     def test_probe_reports_available_local_evidence_after_install_and_wrapper_record(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -134,6 +168,33 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(caps["plugin_runtime_observed"]["status"], "unverified")
             self.assertTrue(payload["plugin_distribution_ready"])
             self.assertFalse(payload["native_integration_claim_ready"])
+
+    def test_probe_roadmap_points_to_repair_for_broken_optional_plugin(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin"])[0], 0)
+            (hermes_home / "plugins" / "omh" / "__init__.py").write_text("definitely not python: nope\n", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(base + ["probe", "--roadmap", "--json"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            caps = {capability["name"]: capability for capability in payload["capabilities"]}
+            self.assertEqual(caps["omh_plugin_bundle"]["status"], "available")
+            self.assertEqual(caps["plugin_import_smoke"]["status"], "missing")
+            self.assertEqual(caps["plugin_register_smoke"]["status"], "missing")
+            self.assertFalse(payload["plugin_distribution_ready"])
+            roadmap = payload["capability_gap_roadmap"]
+            self.assertEqual(roadmap["summary"]["baseline_product_gaps"], 0)
+            actions = {action["id"]: action for action in roadmap["next_actions"]}
+            self.assertIn("repair_optional_plugin", actions)
+            self.assertEqual(actions["repair_optional_plugin"]["command"], "omh setup --with-plugin --force")
+            self.assertIn("not proof that Hermes loaded", actions["repair_optional_plugin"]["boundary"])
 
 
 if __name__ == "__main__":
