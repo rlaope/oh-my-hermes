@@ -67,6 +67,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("Do not skip OMH merely because a generic tool", stdout)
 
         status, stdout, stderr = run_cli(
+            ["context", "brief", "--source", "discord", "what OMH workflows are available?"],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn("Catalog question: show_workflow_picker via omh_capabilities", stdout)
+
+        status, stdout, stderr = run_cli(
             [
                 "context",
                 "brief",
@@ -91,6 +100,49 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["message"]["raw_prompt_echoed"])
         self.assertFalse(payload["message"]["raw_prompt_stored"])
         self.assertNotIn("secret-token-123", stdout)
+
+        status, stdout, stderr = run_cli(
+            [
+                "context",
+                "brief",
+                "--source",
+                "discord",
+                "--json",
+                "what OMH workflows are available with secret-token-123?",
+            ],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        catalog_question = payload["catalog_question"]
+        self.assertEqual(catalog_question["schema_version"], "omh_catalog_question_hint/v1")
+        self.assertEqual(catalog_question["status"], "matched")
+        self.assertEqual(catalog_question["next_action"], "show_workflow_picker")
+        self.assertEqual(catalog_question["recommended_tool"], "omh_capabilities")
+        self.assertEqual(catalog_question["recommended_tool_args"], {"action": "summary"})
+        self.assertIn("omh_skill_picker/v1", catalog_question["wrapper_contracts"])
+        self.assertIn("omh_capability_summary/v1", catalog_question["wrapper_contracts"])
+        self.assertIn("./omh", catalog_question["direct_invocation_aliases"])
+        self.assertNotIn("secret-token-123", stdout)
+
+        status, stdout, stderr = run_cli(
+            [
+                "context",
+                "brief",
+                "--source",
+                "discord",
+                "--json",
+                "what does OMH do in src/routing/catalog_questions.py?",
+            ],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertNotIn("catalog_question", payload)
 
     def test_chat_interact_routes_workflow_learning_to_audit_actions(self) -> None:
         status, stdout, stderr = run_cli(

@@ -115,8 +115,14 @@ omh context brief --source discord --json "make an image card for this PR"
 
 The plugin-native form is the `omh_context` tool. Both return the same compact
 shape: OMH lanes, common cues, a generic-tool checkpoint, an optional route
-hint, and the response contract. The raw prompt is represented by hash/length
-metadata only.
+hint, catalog-question guidance, and the response contract. The raw prompt is
+represented by hash/length metadata only.
+
+When the message asks what OMH commands, workflows, or skills are available,
+the payload includes `catalog_question.schema_version ==
+omh_catalog_question_hint/v1`. Hermes can then summarize the lanes and offer
+`omh_skill_picker/v1` or call `omh_capabilities` with `{"action":"summary"}`
+without asking the user to approve `omh list`.
 
 For an image request, Hermes can then say:
 

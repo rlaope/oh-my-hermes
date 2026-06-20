@@ -34,6 +34,12 @@ def _print_context_brief_summary(payload: dict[str, object]) -> None:
             print(f"  Route hint: {primary} -> {action}")
         else:
             print("  Route hint: no strong message-specific hint")
+    catalog_question = payload.get("catalog_question")
+    if isinstance(catalog_question, dict) and catalog_question.get("status") == "matched":
+        print(
+            "  Catalog question: "
+            f"{catalog_question.get('next_action')} via {catalog_question.get('recommended_tool')}"
+        )
     print("Workflow lanes")
     lanes = payload.get("lanes", [])
     if isinstance(lanes, list):

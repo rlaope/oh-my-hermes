@@ -134,6 +134,23 @@ class HookManifestTests(unittest.TestCase):
         self.assertNotIn("[OMH Route Hint]", context)
         self.assertNotIn("workflow=img-summary", context)
 
+    def test_pre_llm_call_includes_catalog_question_hint_without_raw_message(self) -> None:
+        message = "what OMH workflows are available with secret-token-123?"
+
+        result = pre_llm_call(user_message=message, is_first_turn=False)
+        context_brief = result["omh_context_brief"] if result else {}
+        catalog_question = context_brief["catalog_question"]
+
+        self.assertEqual(catalog_question["schema_version"], "omh_catalog_question_hint/v1")
+        self.assertEqual(catalog_question["status"], "matched")
+        self.assertEqual(catalog_question["next_action"], "show_workflow_picker")
+        self.assertEqual(catalog_question["recommended_tool"], "omh_capabilities")
+        self.assertEqual(catalog_question["recommended_tool_args"], {"action": "summary"})
+        self.assertIn("omh_skill_picker/v1", catalog_question["wrapper_contracts"])
+        self.assertIn("omh_capability_summary/v1", catalog_question["wrapper_contracts"])
+        self.assertNotIn(message, str(context_brief))
+        self.assertNotIn("secret-token-123", str(context_brief))
+
     def test_pre_tool_call_injects_generic_tool_checkpoint_without_raw_input(self) -> None:
         cases = (
             ("image_generate", {}, "image_tools", "img-summary", "prepare_visual_prompt_card"),
