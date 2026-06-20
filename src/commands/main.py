@@ -133,7 +133,7 @@ from .setup import (
 from .state import _add_state_commands, cmd_state_clear, cmd_state_finish, cmd_state_start, cmd_state_status
 from .use_cases import _add_cases_commands, cmd_cases_inspect, cmd_cases_list, cmd_cases_recommend
 from .visual import _add_visual_commands, cmd_visual_observe, cmd_visual_prompt_card
-from .worktree import cmd_worktree_list, cmd_worktree_prepare, _add_worktree_commands
+from .worktree import cmd_worktree_bind, cmd_worktree_list, cmd_worktree_prepare, _add_worktree_commands
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -170,6 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh img-summary prompt-card --kind github_pr --visual-format auto --section summary:What_changed:Safer_setup_copy\n"
             "  omh img-summary prompt-card --kind report --aspect-ratio long_scroll --section summary:Executive_summary:Weekly_metrics_changed\n"
             "  omh worktree prepare --repo . --task \"risky refactor\" --dry-run\n"
+            "  omh worktree bind --path .worktrees/risky-refactor --executor codex --session <session-id>\n"
             "  omh runtime status\n\n"
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
@@ -250,6 +251,7 @@ Useful operator commands:
   omh materials list     List material-processing artifacts
   omh img-summary prompt-card Prepare image-generation-ready summary cards
   omh worktree prepare --repo . --task "risky refactor" --dry-run
+  omh worktree bind --path .worktrees/risky-refactor --executor codex --session <session-id>
   omh runtime status     Show local evidence artifacts
 
 After setup, restart or reload Hermes Agent and try:

@@ -87,13 +87,17 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         id="worktree_isolation",
         title="Worktree and project-session isolation",
         common_pattern="Use isolated workspaces so parallel agents can work without stepping on each other's files.",
-        omh_surface="`worktree_session_isolation/v1` plans inside coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation.",
+        omh_surface="`worktree_session_isolation/v1` plans inside coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation.",
         status="available",
         evidence=("src/isolation.py", "src/worktree_creator.py", "src/commands/worktree.py", "src/wrapper/executor_sessions.py", "tests/test_worktree_creator.py"),
-        missing_piece="OMH can explicitly create a local Git worktree, but it does not auto-launch executors or bind host agent sessions without wrapper/runtime evidence.",
-        v1_decision="Make worktree mutation explicit and opt-in: the wrapper may show Prepare worktree, and the backend can create the Git worktree only when invoked.",
-        user_value="Teams see when same workspace is acceptable, when an isolated worktree is recommended, and when it is required before opening a coding agent.",
-        claim_boundary="A worktree plan is not a created worktree; an OMH-created worktree is workspace-isolation evidence only, not executor dispatch or implementation evidence.",
+        missing_piece="OMH can explicitly create a local Git worktree and return binding recipes, but it does not auto-launch executors or claim host agent sessions without wrapper/runtime evidence.",
+        v1_decision="Make worktree mutation explicit and opt-in: the wrapper may show Prepare worktree, create it through the backend, then bind the selected coding agent with a recipe.",
+        user_value="Teams see when same workspace is acceptable, when an isolated worktree is recommended, and how to open or attach the chosen coding agent from that worktree.",
+        claim_boundary=(
+            "A worktree plan is not a created worktree; an OMH-created worktree is "
+            "workspace-isolation evidence only, and a binding recipe is session-start guidance only, "
+            "not executor dispatch or implementation evidence."
+        ),
     ),
     ParityCapability(
         id="hud_session_observability",
@@ -169,11 +173,6 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
                 "id": "observed-plugin-load",
                 "title": "Add live Hermes plugin load smoke evidence",
                 "why": "Separates installed/importable plugin payloads from host-observed plugin runtime use.",
-            },
-            {
-                "id": "worktree-session-binding-guides",
-                "title": "Add worktree-to-executor session binding recipes",
-                "why": "Shows wrappers how to connect an observed worktree to Codex, Claude Code, Hermes, or an oh-my runtime without auto-launching them.",
             },
             {
                 "id": "mcp-host-config-guides",

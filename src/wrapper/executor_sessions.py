@@ -263,6 +263,25 @@ def build_executor_session_actions(
     ]
 
 
+def build_executor_launch_contract(
+    executor: str,
+    *,
+    session_id: str = "worktree-binding",
+    handoff_state: str = "prepared",
+    isolation_status: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build a wrapper-facing launch contract without creating a session record."""
+    return _executor_launch_contract(
+        executor,
+        {
+            "session_id": session_id,
+            "status": handoff_state,
+            "selected_executor_profile": executor,
+        },
+        isolation_status=isolation_status,
+    )
+
+
 def read_executor_session(paths: OmhPaths, session_id: str) -> dict[str, Any] | None:
     record, error = read_executor_session_result(_session_dir(paths, session_id))
     return None if error else record
