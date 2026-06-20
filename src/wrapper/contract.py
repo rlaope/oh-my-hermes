@@ -1313,18 +1313,22 @@ def build_chat_response_from_omh_status_roadmap(paths: OmhPaths, *, thread_key: 
     setup_gaps = _intish(summary.get("baseline_product_gaps", 0))
     evidence_gaps = _intish(summary.get("evidence_gaps", 0))
     optional_unknowns = _intish(summary.get("optional_or_host_unknowns", 0))
+    next_action_sentence = _section_item_without_next_prefix(_roadmap_next_action_sentence(next_actions))
     body_lines = [
-        (
-            f"OMH setup gaps: {setup_gaps}; evidence gaps: {evidence_gaps}; "
-            f"optional/host unknowns: {optional_unknowns}."
-        ),
-        _roadmap_next_action_sentence(next_actions),
+        "Current status:",
+        f"- OMH setup gaps: {setup_gaps}.",
+        f"- Evidence gaps: {evidence_gaps}.",
+        f"- Optional/host unknowns: {optional_unknowns}.",
+        "",
+        "Next action:",
+        f"- {next_action_sentence}" if next_action_sentence else "- No immediate local action is required.",
+        "",
         "Boundary: local setup, plugin install, or smoke checks are not proof that Hermes loaded the plugin, ran an executor, reviewed code, passed CI, or merged anything.",
     ]
     return _chat_response(
         kind="status",
         headline="Here is the current OMH status and next action.",
-        body=" ".join(line for line in body_lines if line),
+        body="\n".join(body_lines),
         phase="status",
         next_action="show_status",
         thread_key=thread_key,
@@ -2073,6 +2077,13 @@ def _roadmap_next_action_sentence(actions: list[dict[str, object]]) -> str:
     if why:
         return f"Next: {label}. {why}"
     return f"Next: {label}."
+
+
+def _section_item_without_next_prefix(value: str) -> str:
+    text = value.strip()
+    if text.lower().startswith("next:"):
+        return text.split(":", 1)[1].strip()
+    return text
 
 
 def _intish(value: object, default: int = 0) -> int:
