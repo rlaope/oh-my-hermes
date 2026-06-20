@@ -45,6 +45,7 @@ _FALLBACK_SKILLS = ("oh-my-hermes", "plan", "deep-interview")
 _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/planning guidance."
 _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     {
+        "img_summary_before_materials_or_delivery",
         "missed_workflow_research_recovery",
         "missed_workflow_operating_record_recovery",
     }
@@ -465,9 +466,6 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     if explicit_skill != "automation-blueprint" and is_explicit_one_off_request(normalized_query, query_tokens):
         scored = [recommendation for recommendation in scored if recommendation.skill != "automation-blueprint"]
     matches = [recommendation for recommendation in scored if recommendation.score > 0]
-    if not matches:
-        matches = _fallback_recommendations(definitions, query)
-        return [recommendation.to_dict() for recommendation in matches[:limit]]
     if apply_guardrails:
         guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
         matches = _ensure_guardrail_candidates(matches, definitions, guards, query)
@@ -480,6 +478,10 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
             matches = [recommendation for recommendation in matches if recommendation.skill != "img-summary"]
             if not matches:
                 matches = _fallback_recommendations(definitions, query)
+                return [recommendation.to_dict() for recommendation in matches[:limit]]
+    if not matches:
+        matches = _fallback_recommendations(definitions, query)
+        return [recommendation.to_dict() for recommendation in matches[:limit]]
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
     return [recommendation.to_dict() for recommendation in matches[:limit]]
 

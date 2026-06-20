@@ -161,6 +161,10 @@ _AWARENESS_MESSAGE_MARKERS = (
     "pull request",
     "image card",
     "summary card",
+    "infographic",
+    "poster",
+    "shareable card",
+    "visual one-pager",
     "계획",
     "리서치",
     "회의",
@@ -177,7 +181,12 @@ _AWARENESS_MESSAGE_MARKERS = (
     "보고서",
     "자료",
     "이미지",
+    "포스터",
+    "공유용 카드",
     "요약 카드",
+    "画像",
+    "海报",
+    "海報",
 )
 _AWARENESS_TOKEN_MARKERS = frozenset(
     {
@@ -211,6 +220,9 @@ _AWARENESS_TOKEN_MARKERS = frozenset(
         "pdf",
         "spreadsheet",
         "image",
+        "infographic",
+        "poster",
+        "one-pager",
         "visual",
         "deliverable",
         "material",

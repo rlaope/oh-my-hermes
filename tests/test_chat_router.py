@@ -102,7 +102,13 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             "이미지 요약 카드 만들어줘",
             "이 내용을 공유용 요약 카드로 만들어줘",
+            "회의록을 공유용 카드로 만들어줘",
+            "PR 요약 포스터 만들어줘",
             "Create an image summary card from these notes.",
+            "make a poster explaining cron automation",
+            "make a visual one-pager for this release",
+            "作成して、PRの要約画像",
+            "生成一张发布说明海报",
             "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
             "The Hermes agent did not use OMH for this summary image.",
         )

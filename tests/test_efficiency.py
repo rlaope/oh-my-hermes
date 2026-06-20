@@ -137,6 +137,10 @@ class EfficiencyContractTests(unittest.TestCase):
 
     def test_mid_session_awareness_detector_is_bounded(self) -> None:
         self.assertTrue(awareness_context_matches_message("회의록을 세로 요약 이미지 카드로 만들어줘"))
+        self.assertTrue(awareness_context_matches_message("PR 요약 포스터 만들어줘"))
+        self.assertTrue(awareness_context_matches_message("make a poster explaining cron automation"))
+        self.assertTrue(awareness_context_matches_message("作成して、PRの要約画像"))
+        self.assertTrue(awareness_context_matches_message("生成一张发布说明海报"))
         self.assertTrue(awareness_context_matches_message("make a PR summary card for reviewers"))
         self.assertTrue(awareness_context_matches_message("what is the coding handoff status?"))
         self.assertFalse(awareness_context_matches_message("prepare a sandwich"))
