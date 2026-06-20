@@ -120,6 +120,7 @@ def _render_route_hint(source: str, payload: dict[str, object]) -> dict[str, obj
             "claim_boundary": response.get("claim_boundary", payload.get("claim_boundary", "")),
         },
         "route_hint": payload.get("route_hint", {}),
+        "generic_tool_checkpoint": payload.get("generic_tool_checkpoint", {}),
         "wrapper_contract": payload.get("wrapper_contract", {}),
         "privacy": payload.get("privacy", {}),
         "usage_trace": usage_trace,

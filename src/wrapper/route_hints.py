@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from ..plugin_bundle.omh.awareness import awareness_route_hint, awareness_route_hint_context
+from ..plugin_bundle.omh.awareness import (
+    awareness_generic_tool_checkpoint_payload,
+    awareness_route_hint,
+    awareness_route_hint_context,
+)
 
 CHAT_ROUTE_HINT_SCHEMA_VERSION = "chat_route_hint/v1"
 CHAT_ROUTE_HINT_RESPONSE_SCHEMA_VERSION = "chat_route_hint_response/v1"
@@ -16,21 +20,24 @@ def build_chat_route_hint_payload(
 ) -> dict[str, object]:
     """Return a wrapper-facing route hint without storing or echoing raw prompt text."""
     route_hint = awareness_route_hint(message, max_hints=max_hints)
+    generic_tool_checkpoint = _generic_tool_checkpoint()
     hints = [hint for hint in route_hint.get("hints", []) if isinstance(hint, dict)]
     primary_hint = hints[0] if hints else {}
-    response = _response_for_hint(primary_hint, hints, source=source)
+    response = _response_for_hint(primary_hint, hints, source=source, generic_tool_checkpoint=generic_tool_checkpoint)
     payload: dict[str, object] = {
         "schema_version": CHAT_ROUTE_HINT_SCHEMA_VERSION,
         "source": source,
         "message_length": len(message),
         "source_metadata": dict(source_metadata or {}),
         "route_hint": route_hint,
+        "generic_tool_checkpoint": generic_tool_checkpoint,
         "chat_response": response,
         "wrapper_contract": {
             "schema_version": "omh_route_hint_wrapper_contract/v1",
             "purpose": "Render a lightweight OMH hint before generic chat/tools when plugin context is unavailable or a wrapper wants an explicit preview.",
             "read_path": "chat_response",
             "state_path": "chat_response.state.route_hint",
+            "generic_tool_checkpoint_path": "generic_tool_checkpoint",
             "safe_to_render_without_shell_approval": True,
             "does_not_require_plugin_load": True,
             "next_backend_commands": _next_backend_commands(primary_hint),
@@ -51,7 +58,25 @@ def build_chat_route_hint_payload(
     return payload
 
 
-def _response_for_hint(primary_hint: dict[str, object], hints: list[dict[str, object]], *, source: str) -> dict[str, object]:
+def _generic_tool_checkpoint() -> dict[str, object]:
+    return awareness_generic_tool_checkpoint_payload()
+
+
+def _checkpoint_body_text(generic_tool_checkpoint: dict[str, object]) -> str:
+    body = str(generic_tool_checkpoint.get("body") or "").strip()
+    if not body:
+        return ""
+    return f"Checkpoint: {body}"
+
+
+def _response_for_hint(
+    primary_hint: dict[str, object],
+    hints: list[dict[str, object]],
+    *,
+    source: str,
+    generic_tool_checkpoint: dict[str, object],
+) -> dict[str, object]:
+    checkpoint_body = _checkpoint_body_text(generic_tool_checkpoint)
     if primary_hint:
         workflow = str(primary_hint.get("workflow") or "")
         next_action = str(primary_hint.get("next_action") or "")
@@ -61,6 +86,8 @@ def _response_for_hint(primary_hint: dict[str, object], hints: list[dict[str, ob
             f"I can open `{workflow}` first because this request matches the {lane.replace('_', ' ')} lane. "
             f"Next action: `{next_action}`. This is only a route hint until a workflow is selected and observed."
         )
+        if checkpoint_body:
+            body = f"{body} {checkpoint_body}"
         actions = [
             {
                 "id": "open_workflow",
@@ -92,6 +119,8 @@ def _response_for_hint(primary_hint: dict[str, object], hints: list[dict[str, ob
             "I do not have a strong OMH workflow hint from this message alone. "
             "Open the workflow picker or ask Hermes to clarify before choosing a workflow."
         )
+        if checkpoint_body:
+            body = f"{body} {checkpoint_body}"
         actions = [
             {
                 "id": "open_picker",
@@ -120,6 +149,7 @@ def _response_for_hint(primary_hint: dict[str, object], hints: list[dict[str, ob
             "profile": source,
             "title": headline,
             "body_text": body,
+            "checkpoint_text": checkpoint_body,
             "primary_action": actions[0],
             "secondary_actions": actions[1:],
         },

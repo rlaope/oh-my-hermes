@@ -16,6 +16,7 @@
           "route_for_me",
           "open_picker"
         ],
+        "generic_tool_checkpoint": "omh_generic_tool_checkpoint/v1",
         "messenger_rendering": "messenger_route_hint_rendering/v1",
         "safe_to_render_without_shell_approval": true
       },
@@ -35,6 +36,7 @@
           "route_for_me",
           "open_picker"
         ],
+        "generic_tool_checkpoint": "omh_generic_tool_checkpoint/v1",
         "messenger_rendering": "messenger_route_hint_rendering/v1",
         "safe_to_render_without_shell_approval": true
       },

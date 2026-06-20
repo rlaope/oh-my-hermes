@@ -306,6 +306,11 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertEqual(response["kind"], expected["kind"])
                 self.assertEqual(live["route_hint"]["primary_workflow"], expected["primary_workflow"])
                 self.assertEqual(response["state"]["next_action"], expected["next_action"])
+                self.assertEqual(
+                    live["generic_tool_checkpoint"]["schema_version"],
+                    expected["generic_tool_checkpoint"],
+                )
+                self.assertIn("prep/status/learning", live["generic_tool_checkpoint"]["body"])
                 self.assertEqual(response["messenger_rendering"]["schema_version"], expected["messenger_rendering"])
                 self.assertEqual(
                     [action["id"] for action in response["actions"]],
@@ -359,6 +364,8 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertEqual(payload["redaction_policy"], "metadata_only")
                 self.assertEqual(payload["response"]["kind"], "workflow_route_hint")
                 self.assertEqual(payload["route_hint"]["primary_workflow"], workflow)
+                self.assertEqual(payload["generic_tool_checkpoint"]["schema_version"], "omh_generic_tool_checkpoint/v1")
+                self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"]["body"])
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertEqual(payload["usage_trace"]["schema_version"], "omh_usage_trace/v1")
                 self.assertEqual(payload["usage_trace"]["visible_prefix"], f"[omh] {workflow}")

@@ -165,12 +165,15 @@ Hermes Agent  BOT
 [omh] img-summary looks relevant.
 
 I can open `img-summary` first because this request matches the materials and
-visuals lane. Next action: `prepare_visual_prompt_card`.
+visuals lane. Next action: `prepare_visual_prompt_card`. Checkpoint: Before
+generic tools, check OMH prep/status/learning; if relevant, name the workflow
+first.
 
 [ Open img-summary ] [ Route for me ] [ Open omh ]
 
 State
 - Hint only: no workflow has been selected or executed.
+- OMH-first checkpoint: visible before image/file/search/coding tools.
 - Safe to render without shell approval.
 - Plugin load is not required.
 ```
@@ -194,7 +197,9 @@ Hermes Agent  BOT
 [omh] img-summary looks relevant.
 
 I can open `img-summary` first because this request matches the materials and
-visuals lane. Next action: `prepare_visual_prompt_card`.
+visuals lane. Next action: `prepare_visual_prompt_card`. Checkpoint: Before
+generic tools, check OMH prep/status/learning; if relevant, name the workflow
+first.
 
 [ Open img-summary ] [ Route for me ] [ Open omh ]
 ```

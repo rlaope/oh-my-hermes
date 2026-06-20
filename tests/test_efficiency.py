@@ -23,6 +23,7 @@ from omh.capabilities.skills import skill_capabilities
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh.awareness import (
     awareness_context_matches_message,
+    awareness_generic_tool_checkpoint_payload,
     awareness_primer_payload,
     awareness_primer_context,
     awareness_primer_markdown,
@@ -128,6 +129,11 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
+        self.assertEqual(
+            awareness_generic_tool_checkpoint_payload()["schema_version"],
+            "omh_generic_tool_checkpoint/v1",
+        )
+        self.assertIn("prep/status/learning", awareness_generic_tool_checkpoint_payload()["body"])
         for card in cards.values():
             self.assertTrue(card["label"])
             self.assertTrue(card["user_examples"])

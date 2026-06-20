@@ -3282,6 +3282,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
         self.assertEqual(payload["chat_response"]["kind"], "workflow_route_hint")
         self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "img-summary")
+        self.assertEqual(payload["generic_tool_checkpoint"]["schema_version"], "omh_generic_tool_checkpoint/v1")
+        self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"]["body"])
+        self.assertIn("prep/status/learning", payload["chat_response"]["body"])
+        self.assertNotIn("generic_tool_checkpoint", payload["chat_response"]["state"])
+        self.assertIn("prep/status/learning", payload["chat_response"]["messenger_rendering"]["checkpoint_text"])
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertIn("open_workflow", actions)
         self.assertIn("route_for_me", actions)
