@@ -93,6 +93,27 @@ responses also include `omh_capability_summary/v1`, so Hermes can summarize the
 larger lanes, representative playbooks, and evidence boundary before or beside
 the picker.
 
+## Missed OMH Route Capture
+
+If Hermes or the user says a response did not use the expected OMH workflow, the
+wrapper can record that as review material without storing the raw chat prompt:
+
+```sh
+omh learning missed-route \
+  --source discord \
+  --expected-workflow img-summary \
+  --expected-harness img-summary \
+  --expected-next-action prepare_visual_prompt_card \
+  --fixture-message "make an image explaining the cron feature" \
+  "make an image explaining the cron feature"
+```
+
+This returns `learning_missed_route_result/v1`: a metadata-only trace, eval
+summary, regression-case id, and human-review candidate id. The command does
+not patch routing, rerun Hermes, execute a workflow, or prove future behavior is
+fixed. If the wrapper omits `--fixture-message`, OMH records a non-replayable
+placeholder and asks for an operator-minimized fixture before regression replay.
+
 ## Discord-Style Plan Response
 
 ```text

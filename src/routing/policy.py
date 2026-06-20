@@ -487,6 +487,8 @@ _WORKFLOW_LEARNING_PHRASES = (
     "make a regression case",
     "add a regression case",
     "why did this route",
+    "missed route",
+    "missed workflow",
     "record why this request",
     "future workflow behavior",
     "workflow should learn",
@@ -496,6 +498,10 @@ _WORKFLOW_LEARNING_PHRASES = (
     "다음에 스킬 개선",
     "라우팅 회귀",
     "회귀 케이스",
+    "omh 안 썼어",
+    "omh 안 썼",
+    "워크플로 누락",
+    "라우팅 누락",
 )
 _WORKFLOW_LEARNING_CONTEXT_TOKENS = _normalized_token_set(
     {
@@ -515,6 +521,8 @@ _WORKFLOW_LEARNING_CONTEXT_TOKENS = _normalized_token_set(
         "candidate",
         "next",
         "future",
+        "missed",
+        "missing",
         "학습",
         "스킬",
         "워크플로우",
@@ -522,6 +530,7 @@ _WORKFLOW_LEARNING_CONTEXT_TOKENS = _normalized_token_set(
         "회귀",
         "개선",
         "실행",
+        "누락",
     }
 )
 _EXECUTOR_RUNTIME_READINESS_PHRASES = (

@@ -108,6 +108,7 @@ VISIBLE_ACTIONS = (
     "refresh_agent_ops_status",
     "record_agent_ops_observation",
     "record_workflow_learning_trace",
+    "record_missed_route",
     "show_learning_review_queue",
     "show_learning_eval",
     "propose_skill_improvement",
@@ -710,6 +711,7 @@ def build_chat_response_from_route(
                 thread_key=thread_key,
                 actions=[
                     _action("record_workflow_learning_trace", "Record trace", "secondary"),
+                    _action("record_missed_route", "Record missed route", "secondary"),
                     _action("show_learning_review_queue", "Review queue", "secondary"),
                     _action("show_learning_eval", "Run eval", "secondary"),
                     _action("propose_skill_improvement", "Propose improvement", "secondary"),
@@ -735,6 +737,7 @@ def build_chat_response_from_route(
                     "artifact_schemas": [
                         "workflow_learning_trace/v1",
                         "workflow_eval_result/v1",
+                        "learning_missed_route_result/v1",
                         "regression_case/v1",
                         "improvement_candidate/v1",
                         "improvement_candidate_review_card/v1",
@@ -760,6 +763,7 @@ def build_chat_response_from_route(
                     ],
                     "learning_flow": [
                         "record_trace",
+                        "record_missed_route",
                         "run_eval",
                         "add_regression_case",
                         "review_queue",

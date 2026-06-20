@@ -96,6 +96,11 @@ contract shaped like this:
   why a workflow was chosen, what was prepared, what was observed, which
   deterministic checks passed, and what improvement candidate still needs human
   approval.
+- `omh learning missed-route` is the wrapper-friendly shortcut for "Hermes did
+  not use the expected OMH workflow." It records a metadata-only trace, eval,
+  regression placeholder, and review candidate in one step. A provided
+  `--fixture-message` is operator-minimized replay text; without it, replay is
+  skipped until a fixture is added.
 - `omh learning index check` and `omh learning index rebuild` keep the local
   workflow-learning index repairable if metadata records exist but the pointer
   index drifts. Rebuilding the index is not workflow execution, skill mutation,

@@ -258,6 +258,9 @@ future replay. It is deliberately projection-first: trace recording does not
 mutate skills, patch Hermes, train a model, or upgrade prepared work into
 observed evidence. This gives Hermes good process data to review while keeping
 status, verification, CI, merge, and skill changes separately observed.
+`omh learning missed-route` composes those primitives for the common wrapper
+case where Hermes did not use the expected OMH workflow; it records review
+material and an optional minimized replay fixture, not an automatic fix.
 
 `wrapper/sessions.py` owns metadata-only chat session persistence for wrappers.
 It records chat continuity, plan decisions, and a link to a prepared run id, but

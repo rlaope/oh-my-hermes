@@ -28,7 +28,7 @@ This is a Hermes-native `workflow-learning` workflow skill.
 
 Good example:
 
-- Prompt: workflow-learning record why this request went to plan and make a regression case.
+- Prompt: workflow-learning record that Hermes did not use OMH here and create a missed-route review bundle.
 - Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
@@ -51,9 +51,9 @@ Bad example:
 
 ## Use When
 
-Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, visible in a human review queue, auditable for learning readiness, reusable as a future regression, convertible into a human-reviewed patch handoff, exportable for review, or repairable after local index drift without storing raw prompts.
+Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, visible in a human review queue, auditable for learning readiness, reusable as a future regression, convertible into a human-reviewed patch handoff, exportable for review, repairable after local index drift, or captured as a missed-route signal without storing raw prompts.
 
-    Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning audit`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`
+    Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning audit`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
 
 ## Catalog Metadata
 
