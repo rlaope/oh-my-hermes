@@ -76,8 +76,9 @@ That is the normal path. The installer only prepares the isolated `omh` command
 package; `omh setup` is the explicit step that installs OMH workflows and
 registers them with Hermes. On a first install, press Enter through the
 recommended setup choices, then restart or reload Hermes Agent. If you want a
-short "what now?" card after setup, run `omh quickstart`; it shows the first
-Hermes prompts plus what has and has not been observed yet.
+short "what now?" card after setup, ask Hermes "what should I do next with
+OMH setup?" or run `omh quickstart`; both surfaces show the first Hermes
+prompts plus what has and has not been observed yet.
 
 If your Hermes environment supports skill taps, this Hermes-native path also
 works:

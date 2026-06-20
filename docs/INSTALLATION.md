@@ -27,18 +27,25 @@ First-run expectation:
 3. You restart or reload Hermes Agent.
 4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
-If the next step is still unclear, run:
+If the next step is still unclear, ask Hermes:
+
+```text
+what should I do next with OMH setup?
+```
+
+Hermes/wrappers can answer with the same compact quickstart card without asking
+for shell command approval. The backend command is:
 
 ```sh
 omh quickstart
 ```
 
-`omh quickstart` prints a compact first-use card instead of a deep diagnostic
+`omh quickstart` prints the compact first-use card instead of a deep diagnostic
 dump. It reads the current doctor/probe state, suggests the next Hermes chat
 prompt, and separates local readiness from evidence that still has to be
 observed by Hermes or a wrapper. The JSON form is `omh_quickstart_card/v1` and
-is intended for wrappers that want to render the same "what now?" card in a
-chat surface:
+is the same card that `omh chat interact` returns as
+`chat_response.kind == quickstart` for setup/first-use questions:
 
 ```sh
 omh quickstart --json
@@ -555,13 +562,14 @@ The backend flow is:
    it can use `omh context brief --json` or plugin tool `omh_context` to fetch
    `omh_context_brief/v1`: lanes, common cues, generic-tool checkpoint, optional
    route hint, and response rules without storing or echoing the raw prompt.
-8. If the user asks whether OMH is installed correctly, what OMH's current
-   status is, or what to do next after setup, the wrapper returns
-   `chat_response.kind == status` with `[omh] status`, a compact human summary,
-   and `chat_response.state.capability_gap_roadmap`. This is the chat-first
-   form of `omh probe --roadmap`: it separates missing product setup from
-   missing host/runtime evidence without making the user approve shell commands
-   just to understand OMH health.
+8. If the user asks what to do next after setup or install, the wrapper returns
+   `chat_response.kind == quickstart` with `[omh] quickstart`, the
+   `omh_quickstart_card/v1` payload, first-use Hermes prompts, and the same
+   capability roadmap metadata. If the user explicitly asks for detailed status,
+   the wrapper returns `chat_response.kind == status` with `[omh] status` and
+   `chat_response.state.capability_gap_roadmap`. Both paths separate missing
+   product setup from missing host/runtime evidence without making the user
+   approve shell commands just to understand OMH health.
 9. The wrapper renders `chat_response.headline`, `body`, `state`, `actions`, and
    `status_card` when present in the original channel or thread. The headline
    already starts with the visible OMH marker, such as `[omh] web-research`;
