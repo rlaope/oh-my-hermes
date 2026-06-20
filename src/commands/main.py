@@ -168,6 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Operator examples:\n"
             "  omh recommend \"risky refactor\"\n"
             "  omh cases recommend \"daily competitor digest\"\n"
+            "  omh cases demo --all\n"
             "  omh playbook recommend \"turn this issue into a PR\"\n"
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
             "  omh hud\n"
@@ -254,6 +255,7 @@ First five minutes:
 Useful operator commands:
   omh recommend "risky refactor"
   omh cases recommend "daily competitor digest"
+  omh cases demo --all  Show wrapper-ready G1-G10 use-case cards
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line

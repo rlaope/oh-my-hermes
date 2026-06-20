@@ -9,7 +9,8 @@
 - Richer routing catalog fields
 - More playbook-backed situation pipelines for wrapper UX, research, planning,
   and release flows
-- More artifact-backed application cases for Hermes-hosted chat surfaces
+- More artifact-backed application case fixtures beyond the G1-G10 demo-card
+  collection
 - More public-site examples that mirror wrapper contracts without becoming a
   separate documentation source
 - Optional `~/.hermes/plugins/omh` bridge hardening after v1 install smoke
@@ -41,6 +42,8 @@
 - Fixture-backed Hermes Agent wrapper examples that consume plugin
   `omh_interact` and render the resulting `chat_interaction/v1` without
   touching real user state
+- G1-G10 use-case demo cards through `omh cases demo`, including a checked-in
+  `omh_use_case_demo_collection/v1` fixture for wrapper rendering
 - Codex lifecycle helper commands over existing local runtime artifacts
 - Wrapper session plan decisions and restart recovery for accepted handoffs
 - Review, CI, merge-readiness, and merge observation records for delegated

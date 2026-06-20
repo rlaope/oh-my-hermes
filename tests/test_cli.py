@@ -653,6 +653,8 @@ class CliTests(unittest.TestCase):
             (["cases", "recommend", "daily", "competitor", "digest"], "OMH use-case recommendation", "recommendations"),
             (["cases", "list"], "OMH Hermes use cases", "use_cases"),
             (["cases", "inspect", "G10"], "OMH use case:", "use_case"),
+            (["cases", "demo", "G10"], "OMH use-case demo card:", "wrapper_card"),
+            (["cases", "demo", "--all"], "OMH G1-G10 use-case demo cards", "cards"),
             (["cases", "validate"], "OMH G1-G10 feature surface validation", "validated"),
             (["playbook", "list"], "OMH playbooks", "playbooks"),
             (["playbook", "inspect", "safe-feature-change"], "OMH playbook:", "playbook"),
@@ -735,6 +737,42 @@ class CliTests(unittest.TestCase):
                 self.assertTrue(item["checks"]["boundary_has_evidence_guard"])
                 self.assertGreaterEqual(len(item["proof_surfaces"]), 3)
                 self.assertIn("not", item["evidence_boundary"].lower())
+
+        status, stdout, stderr = run_cli(["cases", "demo", "G1", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        demo = json.loads(stdout)
+        self.assertEqual(demo["schema_version"], "omh_use_case_demo_card/v1")
+        self.assertEqual(demo["goal"], "G1")
+        self.assertEqual(demo["route"]["primary_skill"], "automation-blueprint")
+        self.assertEqual(demo["route"]["next_action"], "prepare_scheduled_ops_blueprint")
+        self.assertEqual(demo["wrapper_card"]["component"], "omh_use_case_card")
+        self.assertEqual(demo["wrapper_card"]["status"], "prepared_not_observed")
+        self.assertIn("prepared_not_observed", demo["chat_surface"]["status_line"])
+        self.assertEqual(demo["actions"][0]["id"], "prepare_scheduled_ops_blueprint")
+        self.assertEqual(demo["actions"][0]["kind"], "hermes_prompt")
+        self.assertIn("omh playbook inspect scheduled-ops-blueprint", demo["operator_commands"][1])
+        self.assertIn("connector_invocation", demo["evidence"]["not_evidence_until_observed"])
+        self.assertIn("executor_dispatch", demo["evidence"]["not_evidence_until_observed"])
+        self.assertIn("not host cron creation", demo["evidence"]["claim_boundary"])
+
+        status, stdout, stderr = run_cli(["cases", "demo", "--all", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        demo_collection = json.loads(stdout)
+        self.assertEqual(demo_collection["schema_version"], "omh_use_case_demo_collection/v1")
+        self.assertEqual(demo_collection["count"], 10)
+        self.assertEqual([card["goal"] for card in demo_collection["cards"]], [f"G{index}" for index in range(1, 11)])
+        for card in demo_collection["cards"]:
+            with self.subTest(demo_card=card["goal"]):
+                self.assertEqual(card["schema_version"], "omh_use_case_demo_card/v1")
+                self.assertEqual(card["wrapper_card"]["status"], "prepared_not_observed")
+                self.assertEqual(card["evidence"]["state"], "prepared_not_observed")
+                self.assertIn("not", card["evidence"]["claim_boundary"].lower())
+                self.assertEqual(card["actions"][0]["id"], card["route"]["next_action"])
+                self.assertTrue(card["chat_surface"]["headline"].startswith("[omh] "))
 
         examples = (
             ("Every morning send a competitor digest to Slack only if changed", "G1", "automation-blueprint"),
