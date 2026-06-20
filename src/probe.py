@@ -355,7 +355,10 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
         _dir_capability(
             "plugin_bundles",
             paths.hermes_home / "plugins",
-            "Plugin directory exists, but omh has no stable Hermes plugin bundle contract",
+            (
+                "Hermes plugin directory exists; managed OMH bundle install, import/register smoke, "
+                "and host-observed runtime load are reported by the dedicated plugin capabilities"
+            ),
             "No Hermes plugin directory detected by file probe",
         )
     )

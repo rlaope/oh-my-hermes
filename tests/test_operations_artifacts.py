@@ -22,6 +22,7 @@ from omh.hermes_ops import (
     build_scheduled_ops_blueprint,
     list_hermes_ops_blueprints,
     show_hermes_ops_blueprint,
+    staged_gap_map,
     validate_hermes_ops_blueprint,
     validate_hermes_ops_store,
     write_hermes_ops_blueprint,
@@ -61,7 +62,20 @@ class OperationsArtifactTests(unittest.TestCase):
         self.assertIn("merge", blueprint["not_evidence_until_observed"])
         self.assertEqual(blueprint["status_card"]["not_observed"], blueprint["not_evidence_until_observed"])
         self.assertIn("not host cron creation", blueprint["prepared_is_not"])
+        self.assertIn("not observed host/runtime execution evidence", blueprint["staged_gap_map_stage_contract"]["implemented"])
         self.assertEqual(validate_hermes_ops_blueprint(blueprint), [])
+
+    def test_staged_gap_map_tracks_implemented_operator_playbooks(self) -> None:
+        stages = {item["gap"]: item["stage"] for item in staged_gap_map()}
+
+        self.assertEqual(stages["automation_blueprints"], "implemented")
+        self.assertEqual(stages["github_pr_issue_event_ops"], "implemented")
+        self.assertEqual(stages["durable_agent_board"], "implemented")
+        self.assertEqual(stages["memory_curation"], "implemented")
+        self.assertEqual(stages["voice_operator_guidance"], "implemented")
+        self.assertEqual(stages["observability_cost_latency_evidence"], "implemented")
+        self.assertNotIn("planned", stages.values())
+        self.assertNotIn("partial", stages.values())
 
     def test_scheduled_ops_blueprint_does_not_treat_content_numbers_as_time(self) -> None:
         for request in (

@@ -36,6 +36,11 @@ PREPARED_IS_NOT_OBSERVED = (
     "A Hermes ops blueprint is projection metadata only. It is not host cron creation, gateway delivery, "
     "source retrieval, no-agent execution, plugin load, review, CI, merge-readiness, or merge evidence."
 )
+STAGED_GAP_MAP_STAGE_CONTRACT = {
+    "implemented": "The OMH feature surface exists in local skill, playbook, CLI, or artifact guidance; this is not observed host/runtime execution evidence.",
+    "prepared_only": "This blueprint can prepare policy or intent, but observed host/gateway evidence is still required before claiming execution.",
+    "supported_elsewhere": "The capability is covered by a different OMH surface and is not claimed by this scheduled ops blueprint.",
+}
 DEFAULT_NOT_EVIDENCE = (
     "host_cron_created",
     "hermes_automation_enabled",
@@ -217,6 +222,7 @@ def build_scheduled_ops_blueprint(
         "not_evidence_until_observed": list(DEFAULT_NOT_EVIDENCE),
         "observed_evidence_required": list(OBSERVED_EVIDENCE_REQUIRED),
         "prepared_is_not": PREPARED_IS_NOT_OBSERVED,
+        "staged_gap_map_stage_contract": dict(STAGED_GAP_MAP_STAGE_CONTRACT),
         "staged_gap_map": staged_gap_map(),
         "next_action": "Present the blueprint in Hermes, ask for schedule/delivery confirmation, then create host automation only outside this prepared artifact.",
         "status_card": _status_card(schedule_intent, delivery_intent, silence_policy, no_agent_suitability),
@@ -259,6 +265,14 @@ def validate_hermes_ops_blueprint(record: dict[str, Any]) -> list[str]:
         source_refs = projection.get("source_refs")
         if not isinstance(source_refs, list) or not source_refs:
             errors.append("projection.source_refs must be a non-empty list")
+    stage_contract = record.get("staged_gap_map_stage_contract")
+    if stage_contract is not None:
+        if not isinstance(stage_contract, dict):
+            errors.append("staged_gap_map_stage_contract must be an object")
+        elif "observed" in str(stage_contract.get("implemented", "")).lower() and "not observed" not in str(
+            stage_contract.get("implemented", "")
+        ).lower():
+            errors.append("staged_gap_map_stage_contract.implemented must not imply observed runtime evidence")
     for key in (
         "schedule_intent",
         "delivery_intent",
@@ -393,18 +407,18 @@ def staged_gap_map() -> list[dict[str, str]]:
         },
         {
             "gap": "github_pr_issue_event_ops",
-            "stage": "planned",
-            "scope": "future projection over issue/PR event intake and review status",
+            "stage": "implemented",
+            "scope": "github-event-ops playbook routes issue, PR, CI, and review events into review, triage, label, or fix-handoff cards",
         },
         {
             "gap": "durable_agent_board",
-            "stage": "planned",
-            "scope": "future board projection over multi-agent ownership and work lanes",
+            "stage": "implemented",
+            "scope": "agent-board playbook provides task, handoff, heartbeat, blocker, and completion card contracts",
         },
         {
             "gap": "memory_curation",
-            "stage": "planned",
-            "scope": "future memory/skill curation review projection",
+            "stage": "implemented",
+            "scope": "memory-curation-review playbook and memory inspect/apply flows support approve/reject/update cleanup",
         },
         {
             "gap": "gateway_delivery_intent",
@@ -423,8 +437,8 @@ def staged_gap_map() -> list[dict[str, str]]:
         },
         {
             "gap": "voice_operator_guidance",
-            "stage": "planned",
-            "scope": "future chat/voice concise status card copy",
+            "stage": "implemented",
+            "scope": "voice-operator playbook turns terse voice/mobile requests into clarify, plan, status, handoff, or confirmation actions",
         },
         {
             "gap": "toolbelt_mcp_readiness",
@@ -433,8 +447,8 @@ def staged_gap_map() -> list[dict[str, str]]:
         },
         {
             "gap": "observability_cost_latency_evidence",
-            "stage": "partial",
-            "scope": "status card lists missing evidence; full run/cost telemetry remains runtime-owned",
+            "stage": "implemented",
+            "scope": "ops-observability-card playbook standardizes wrapper-safe token, cost, latency, run-history, and failure-mode boundaries",
         },
     ]
 
@@ -567,12 +581,13 @@ def _prompt_outline(
     silence_policy: dict[str, object],
 ) -> dict[str, object]:
     skills = ", ".join(str(item["skill"]) for item in skill_suggestions) or "automation-blueprint"
+    delivery_surfaces = _string_list(delivery_intent.get("surfaces"))
     return {
         "system_intent": "Hermes should prepare a scheduled operation blueprint, not execute the schedule.",
         "operator_prompt": (
             f"Prepare scheduled ops for: {_preview(text, limit=160)}. "
             f"Use skills: {skills}. Cadence: {schedule_intent['cadence']}. "
-            f"Delivery: {', '.join(str(item) for item in delivery_intent['surfaces'])}. "
+            f"Delivery: {', '.join(delivery_surfaces)}. "
             f"Silence mode: {silence_policy['mode']}. Keep prepared-vs-observed boundaries explicit."
         ),
         "missing_decisions": _missing_decisions(schedule_intent, delivery_intent, silence_policy),

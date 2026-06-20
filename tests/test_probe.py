@@ -126,6 +126,8 @@ class ProbeCliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             payload = json.loads(stdout)
             caps = {capability["name"]: capability for capability in payload["capabilities"]}
+            self.assertIn("dedicated plugin capabilities", caps["plugin_bundles"]["message"])
+            self.assertNotIn("no stable Hermes plugin bundle contract", caps["plugin_bundles"]["message"])
             self.assertEqual(caps["omh_plugin_bundle"]["status"], "available")
             self.assertEqual(caps["plugin_import_smoke"]["status"], "available")
             self.assertEqual(caps["plugin_register_smoke"]["status"], "available")

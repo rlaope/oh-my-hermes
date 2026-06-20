@@ -128,6 +128,11 @@
     }
   ],
   "source": "example fixture",
+  "staged_gap_map_stage_contract": {
+    "implemented": "The OMH feature surface exists in local skill, playbook, CLI, or artifact guidance; this is not observed host/runtime execution evidence.",
+    "prepared_only": "This blueprint can prepare policy or intent, but observed host/gateway evidence is still required before claiming execution.",
+    "supported_elsewhere": "The capability is covered by a different OMH surface and is not claimed by this scheduled ops blueprint."
+  },
   "staged_gap_map": [
     {
       "gap": "automation_blueprints",
@@ -136,18 +141,18 @@
     },
     {
       "gap": "github_pr_issue_event_ops",
-      "scope": "future projection over issue/PR event intake and review status",
-      "stage": "planned"
+      "scope": "github-event-ops playbook routes issue, PR, CI, and review events into review, triage, label, or fix-handoff cards",
+      "stage": "implemented"
     },
     {
       "gap": "durable_agent_board",
-      "scope": "future board projection over multi-agent ownership and work lanes",
-      "stage": "planned"
+      "scope": "agent-board playbook provides task, handoff, heartbeat, blocker, and completion card contracts",
+      "stage": "implemented"
     },
     {
       "gap": "memory_curation",
-      "scope": "future memory/skill curation review projection",
-      "stage": "planned"
+      "scope": "memory-curation-review playbook and memory inspect/apply flows support approve/reject/update cleanup",
+      "stage": "implemented"
     },
     {
       "gap": "gateway_delivery_intent",
@@ -166,8 +171,8 @@
     },
     {
       "gap": "voice_operator_guidance",
-      "scope": "future chat/voice concise status card copy",
-      "stage": "planned"
+      "scope": "voice-operator playbook turns terse voice/mobile requests into clarify, plan, status, handoff, or confirmation actions",
+      "stage": "implemented"
     },
     {
       "gap": "toolbelt_mcp_readiness",
@@ -176,8 +181,8 @@
     },
     {
       "gap": "observability_cost_latency_evidence",
-      "scope": "status card lists missing evidence; full run/cost telemetry remains runtime-owned",
-      "stage": "partial"
+      "scope": "ops-observability-card playbook standardizes wrapper-safe token, cost, latency, run-history, and failure-mode boundaries",
+      "stage": "implemented"
     }
   ],
   "status": "prepared",
