@@ -20,6 +20,7 @@ repo-local contract for Codex agents working here.
 | Review stale local context and executor handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |
 | Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
 | Install from an AI-agent protocol | [Agent Install Protocol](../INSTALL_FOR_AGENTS.md) |
+| See the first-use Hermes prompt and evidence boundary | [Installation](INSTALLATION.md#quick-start) |
 | Understand responsibility roles and operating models | [Role Surface](ROLES.md) |
 | Choose a situation-level pipeline | [Playbooks](PLAYBOOKS.md) |
 | See Discord-style wrapper responses | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |

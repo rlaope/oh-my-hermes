@@ -27,6 +27,23 @@ First-run expectation:
 3. You restart or reload Hermes Agent.
 4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
+If the next step is still unclear, run:
+
+```sh
+omh quickstart
+```
+
+`omh quickstart` prints a compact first-use card instead of a deep diagnostic
+dump. It reads the current doctor/probe state, suggests the next Hermes chat
+prompt, and separates local readiness from evidence that still has to be
+observed by Hermes or a wrapper. The JSON form is `omh_quickstart_card/v1` and
+is intended for wrappers that want to render the same "what now?" card in a
+chat surface:
+
+```sh
+omh quickstart --json
+```
+
 ## What Setup Changes
 
 OMH's setup footprint is intentionally bounded:
