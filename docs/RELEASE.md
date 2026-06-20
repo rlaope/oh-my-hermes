@@ -62,6 +62,7 @@ python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
 python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli cases artifact --all --json
+python3 -m omh.cli cases replay --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
@@ -105,6 +106,12 @@ It also gates the G1-G10 use-case artifact bundle through
 runbooks with operator steps and proof surfaces for each use case. It is not
 evidence that those runbooks were accepted, executed, delivered, reviewed,
 verified, merged, or billed by any runtime.
+
+The same gate replays G1-G10 natural-language use-case fixtures through
+`omh cases replay --json`. That proves deterministic routing for the checked-in
+synthetic English/Korean operator corpus. It is not evidence that a live Hermes
+profile selected the route in chat or that any connector, executor, review, CI,
+merge, delivery, or billing event happened.
 
 ## Hermes CLI Install Smoke
 
