@@ -454,7 +454,7 @@ omh demo grounded-score
 The purpose of the matrix is to keep Hermes users command-agnostic while giving
 wrapper operators a concrete contract result to render.
 
-`omh demo grounded-score` is a deterministic contract-compliance demo over 27
+`omh demo grounded-score` is a deterministic contract-compliance demo over 28
 representative messages. The score is 10/10 only when the expected chat route,
 response kind, next action, playbook confidence, and coding-delegation evidence
 boundary all match. It does not award points for unobserved execution, review,
@@ -483,6 +483,7 @@ CI, or merge work.
 | English product shaping | `I need to improve our onboarding but I don't know where to start` | `deep-interview` / `answer_clarification` | `deep-interview-to-plan` | Hermes asks the blocking product-shaping question before planning or implementation. | `10/10` |
 | Workflow learning improvement | `I want Hermes to learn from this workflow and improve the skill next time` | `workflow-learning` / `audit_learning_readiness` | `workflow-learning` | Hermes prepares trace review and improvement candidates without silently patching a skill. | `10/10` |
 | Visual summary poster | `make a poster explaining cron automation` | `img-summary` / `prepare_visual_prompt_card` | `img-summary` | Hermes prepares the image prompt card; generation, QA, posting, and delivery remain observed-only. | `10/10` |
+| Korean meeting image summary | `회의록을 보기 좋은 세로 이미지로 요약해줘` | `img-summary` / `prepare_visual_prompt_card` | `img-summary` | Hermes prepares the image prompt card for meeting-note source material; generation, QA, posting, and delivery remain observed-only. | `10/10` |
 | Research department ops | `I need a weekly leadership brief from support tickets, competitor news, and release risks` | `research-department` / `prepare_research_department_plan` | `weekly-ops-review` | Hermes shapes the recurring research and briefing flow without claiming source retrieval or delivery. | `10/10` |
 | GitHub event ops delivery | `Make this GitHub issue into a PR, run review, update docs, and tell me what changed` | `github-event-ops` / `prepare_github_event_ops_card` | `github-event-ops` | Hermes prepares a GitHub event card without claiming webhook delivery, mutation, code execution, review, or docs sync. | `10/10` |
 | Executor runtime selection | `Should I use Codex or Claude Code for this coding task?` | `executor-runtime-readiness` / `prepare_executor_runtime_readiness` | `executor-runtime-readiness` | A Codex handoff can be prepared, but it remains `prepared_not_observed` until dispatch and runtime evidence exist. | `10/10` |
