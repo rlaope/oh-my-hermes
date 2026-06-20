@@ -1056,6 +1056,7 @@ def _ask_setup_scope(*, use_color: bool, language: str) -> str:
 
 def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
     use_color = _use_color()
+    explicit_profile_packs = list(getattr(args, "profile_pack", []) or [])
     print(_color(tr(language, "setup_title"), "1;36", use_color))
     print(tr(language, "wizard_subtitle"))
     print(f"{tr(language, 'hermes_home')}: {_color(str(paths.hermes_home), '36', use_color)}")
@@ -1092,10 +1093,9 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
             note=tr(language, "mcp_note"),
             language=language,
         )
-        args.profile_pack = _ask_team_profile_packs(use_color=use_color, language=language)
     else:
         args.with_mcp = False
-        args.profile_pack = []
+    args.profile_pack = explicit_profile_packs
     print("")
 
 
@@ -1103,39 +1103,21 @@ def _ask_default_executor(*, use_color: bool, language: str) -> str:
     options = [
         {
             "choice": "1",
-            "value": "choose",
-            "label": tr(language, "executor_choose_label"),
-            "description": tr(language, "executor_choose_desc"),
-        },
-        {
-            "choice": "2",
             "value": "codex",
             "label": tr(language, "executor_codex_label"),
             "description": tr(language, "executor_codex_desc"),
         },
         {
-            "choice": "3",
+            "choice": "2",
             "value": "claude-code",
             "label": tr(language, "executor_claude_label"),
             "description": tr(language, "executor_claude_desc"),
         },
         {
-            "choice": "4",
-            "value": "generic",
-            "label": tr(language, "executor_generic_label"),
-            "description": tr(language, "executor_generic_desc"),
-        },
-        {
-            "choice": "5",
+            "choice": "3",
             "value": "hermes",
             "label": tr(language, "executor_hermes_label"),
             "description": tr(language, "executor_hermes_desc"),
-        },
-        {
-            "choice": "6",
-            "value": "omx-runtime",
-            "label": tr(language, "executor_runtime_label"),
-            "description": tr(language, "executor_runtime_desc"),
         },
     ]
     value = _ask_single_choice(
@@ -1155,44 +1137,6 @@ def _ask_default_executor(*, use_color: bool, language: str) -> str:
         print(_color(tr(language, "invalid_executor", error=exc), "31", use_color))
         return "choose"
     return value
-
-
-def _ask_team_profile_packs(*, use_color: bool, language: str) -> list[str]:
-    catalog = list_team_profile_packs()
-    packs = catalog.get("packs", []) if isinstance(catalog, dict) else []
-    options = [
-        {
-            "choice": "0",
-            "value": "",
-            "label": tr(language, "team_none_label"),
-            "description": tr(language, "team_none_desc"),
-        }
-    ]
-    for idx, pack in enumerate(packs, start=1):
-        pack_id = str(pack["id"])
-        options.append(
-            {
-                "choice": str(idx),
-                "value": pack_id,
-                "label": str(pack["title"]),
-                "description": str(pack["summary"]),
-            }
-        )
-    while True:
-        value = _ask_single_choice(
-            tr(language, "team_title"),
-            [
-                tr(language, "team_intro_1"),
-                tr(language, "team_intro_2"),
-            ],
-            options,
-            default_choice="0",
-            use_color=use_color,
-            language=language,
-        )
-        if not value:
-            return []
-        return [value]
 
 
 def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:
@@ -2321,13 +2265,13 @@ def _add_top_level_commands(sub) -> None:
         "--default-executor",
         choices=CODING_EXECUTOR_TARGETS,
         default=None,
-        help="Default coding agent preference. Use 'choose' to ask each time.",
+        help="Default coding agent suggestion. Interactive setup only shows Codex, Claude Code, and Hermes.",
     )
     setup.add_argument(
         "--operating-model",
         choices=operating_model_ids(),
         default=None,
-        help="Record the Hermes-facing operating model, such as solo-operator, small-team, research-ops, or coding-runtime-team.",
+        help="Advanced: record a Hermes-facing operating model for this profile; normal setup lets Hermes choose per request.",
     )
     setup.add_argument(
         "--with-plugin",
@@ -2353,7 +2297,7 @@ def _add_top_level_commands(sub) -> None:
         "--profile-pack",
         action="append",
         default=[],
-        help="Install an optional Hermes agent/profile pack such as startup-delivery, engineering-delivery, research-strategy, or cto-loop.",
+        help="Advanced: install optional visible Hermes role/profile files such as startup-delivery, engineering-delivery, research-strategy, or cto-loop.",
     )
     setup.set_defaults(func=cmd_setup)
 
