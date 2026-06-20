@@ -86,6 +86,7 @@ left to `omh doctor`, `omh_status`, and machine-readable HUD JSON. A quiet idle
 line looks like
 `[omh] v1.0.1 | plugin:ready | target:single | coding-agent:idle(ask)`.
 The plugin also exposes `omh_recommend` for shell-free workflow choice,
+`omh_probe` for local setup/runtime status and capability-roadmap cards,
 `omh_role`, validates `[omh-role:name]` markers for delegated subagent prompts,
 and records a metadata-only session-end checkpoint when OMH runtime state
 exists. It also exposes `omh_gather_evidence` for

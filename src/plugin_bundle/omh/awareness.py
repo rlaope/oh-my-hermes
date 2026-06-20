@@ -700,6 +700,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "Use omh_capabilities action=summary when the user asks what OMH can do or which workflows are available.",
             "Use omh_recommend when the user gives a natural-language request and Hermes needs the nearest OMH workflow without shell approval.",
             "Use omh_capabilities for detailed workflow catalog and capability manifest lookup.",
+            "Use omh_probe when the user asks whether OMH is installed, what is missing, or what the next setup/runtime evidence step should be.",
             "Use omh_status or omh_hud for metadata-only runtime state.",
             "Use omh_role for responsibility context when a role marker is present.",
             "Use wrapper cards/actions for user-facing choices instead of asking users to approve shell catalog commands.",
@@ -775,8 +776,8 @@ def awareness_primer_context() -> str:
             f"Common cues: {cue_map}.",
             f"Tools: {tool_map}",
             (
-                "Tools: omh_recommend routes requests; omh_capabilities gives workflow/playbook catalog "
-                "context; omh_status/hud state; omh_role for responsibility context."
+                "Tools: omh_recommend routes; omh_capabilities catalogs; omh_probe gives setup/runtime roadmap; "
+                "omh_status/hud shows state; omh_role gives role context."
             ),
             str(payload["fallback_rule"]),
             "Boundary: " + str(payload["evidence_boundary"]),
@@ -826,7 +827,7 @@ def awareness_primer_markdown() -> str:
             "",
             "Tools:",
             "",
-            "- `omh_recommend`: route natural-language requests; `omh_capabilities`: catalog; `omh_status`/`omh_hud`: state; `omh_role`: role.",
+            "- `omh_recommend`: routes; `omh_capabilities`: catalog; `omh_probe`: roadmap; `omh_status`/`omh_hud`: state; `omh_role`: role.",
             "",
             str(payload["fallback_rule"]),
             "",

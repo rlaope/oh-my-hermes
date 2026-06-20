@@ -116,11 +116,20 @@ class PluginCapabilitiesTests(unittest.TestCase):
                 module.register(ctx)
                 handler = ctx.tools["omh_capabilities"]["args"][2]
                 recommend_handler = ctx.tools["omh_recommend"]["args"][2]
+                probe_handler = ctx.tools["omh_probe"]["args"][2]
                 keywords = json.loads(handler({{"action": "export", "section": "keywords"}}))
                 exported = json.loads(handler({{"action": "export"}}))
                 summary = json.loads(handler({{"action": "summary"}}))
                 recommendation = json.loads(
                     recommend_handler({{"message": "make an image summary for this PR with secret-token-123", "limit": 2}})
+                )
+                probe = json.loads(
+                    probe_handler({{
+                        "omh_home": {str(omh_home)!r},
+                        "hermes_home": {str(hermes_home)!r},
+                        "include_roadmap": True,
+                        "include_parity": True,
+                    }})
                 )
                 listed_tools = json.loads(handler({{"action": "list", "section": "tool_requirements"}}))
                 evidence = json.loads(handler({{"action": "export", "section": "evidence_boundaries"}}))
@@ -159,6 +168,16 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "recommend_raw_prompt_echoed": recommendation["message"]["raw_prompt_echoed"],
                     "recommend_first_skill": recommendation["recommendations"][0]["skill"],
                     "recommend_serialized": json.dumps(recommendation, sort_keys=True),
+                    "probe_schema": probe["schema_version"],
+                    "probe_source": probe["source"],
+                    "probe_degraded": probe["degraded"],
+                    "probe_tool": probe["plugin_tool"],
+                    "probe_runtime_observed": probe["plugin_runtime_observed"],
+                    "probe_native_ready": probe["native_integration_claim_ready"],
+                    "probe_capability_names": sorted(item["name"] for item in probe["capabilities"]),
+                    "probe_roadmap_schema": probe["capability_gap_roadmap"]["schema_version"],
+                    "probe_roadmap_actions": [item["id"] for item in probe["capability_gap_roadmap"]["next_actions"]],
+                    "probe_parity_status": probe["parity_matrix"]["status"],
                     "summary_lanes": [lane["id"] for lane in summary["lanes"]],
                     "summary_visual_skills": [
                         lane["primary_skills"]
@@ -244,6 +263,17 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["recommend_first_skill"], "img-summary")
             self.assertIn("<current user request>", payload["recommend_serialized"])
             self.assertNotIn("secret-token-123", payload["recommend_serialized"])
+            self.assertEqual(payload["probe_schema"], 1)
+            self.assertEqual(payload["probe_source"], "standalone_plugin_bundle_fallback")
+            self.assertTrue(payload["probe_degraded"])
+            self.assertEqual(payload["probe_tool"], "omh_probe")
+            self.assertFalse(payload["probe_runtime_observed"])
+            self.assertFalse(payload["probe_native_ready"])
+            self.assertIn("omh_plugin_bundle", payload["probe_capability_names"])
+            self.assertIn("plugin_tool_context", payload["probe_capability_names"])
+            self.assertEqual(payload["probe_roadmap_schema"], "omh_capability_gap_roadmap/v1")
+            self.assertIn("observe_plugin_runtime", payload["probe_roadmap_actions"])
+            self.assertEqual(payload["probe_parity_status"], "unavailable_without_package_backend")
             self.assertIn("intent_to_plan", payload["summary_lanes"])
             self.assertIn("img-summary", payload["summary_visual_skills"])
             self.assertIn("request-to-handoff", payload["summary_intent_playbooks"])
