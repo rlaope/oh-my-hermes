@@ -173,6 +173,28 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
     }
 )
 _VISUAL_SUMMARY_CARD_TOKENS = _normalized_token_set({"card", "poster", "one-pager", "카드", "포스터", "海报", "海報"})
+_VISUAL_SUMMARY_CAPABILITY_TOKENS = _normalized_token_set(
+    {
+        "support",
+        "supports",
+        "feature",
+        "features",
+        "capability",
+        "capabilities",
+        "available",
+        "help",
+        "does",
+        "can",
+        "기능",
+        "지원",
+        "가능",
+        "있어",
+        "있나요",
+        "できる",
+        "支持",
+        "功能",
+    }
+)
 _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
     {
         "debug",
@@ -1704,6 +1726,8 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
         return True
     if _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS & query_tokens:
         return False
+    if _VISUAL_SUMMARY_MODALITY_TOKENS & query_tokens and _VISUAL_SUMMARY_CAPABILITY_TOKENS & query_tokens:
+        return True
     if _VISUAL_SUMMARY_MODALITY_TOKENS & query_tokens and _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens:
         return True
     if _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS & query_tokens and _contains_phrase(

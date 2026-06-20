@@ -899,6 +899,9 @@ class WrapperContractTests(unittest.TestCase):
             "Make a PR summary card",
             "크론 기능 설명 이미지 하나 만들어줘",
             "이 회의록을 세로 이미지 카드로 만들어줘",
+            "이미지 생성 기능 뭐 있어?",
+            "what image generation features does OMH have?",
+            "does OMH support image generation?",
             "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
         )
 
@@ -940,6 +943,15 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("workflow's triggers", explanation["why_this_workflow"])
                 self.assertIn("image_generation_setup/v1", explanation["why_this_workflow"])
                 self.assertIn("visual QA", explanation["not_evidence_yet"])
+
+    def test_generic_catalog_question_still_uses_picker(self) -> None:
+        payload = build_chat_interaction_payload("OMH 기능 뭐 있어?", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+        self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
+        self.assertEqual(payload["next_action"], "choose_skill")
+        self.assertIn("skill_picker", payload["chat_response"]["state"])
 
     def test_complex_operator_patterns_route_to_dedicated_surfaces(self) -> None:
         cases = (

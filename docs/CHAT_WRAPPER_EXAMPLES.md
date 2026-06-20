@@ -127,6 +127,13 @@ can call the transport-free backend preview:
 omh chat route-hint --source discord "make an image explaining the cron feature"
 ```
 
+Capability-specific catalog questions should also stay workflow-native. If the
+user asks "이미지 생성 기능 뭐 있어?", "does OMH support image generation?", or
+"what image generation features does OMH have?", the wrapper should render the
+`img-summary` card with `show_visual_prompt_card`, `choose_image_generator`, and
+`image_generation_setup/v1` actions instead of falling back to the generic OMH
+workflow picker.
+
 That returns `chat_route_hint/v1` with a `chat_response` card the adapter can
 render immediately:
 

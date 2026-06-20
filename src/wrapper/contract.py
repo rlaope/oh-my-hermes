@@ -335,7 +335,7 @@ def build_chat_interaction_payload(
     resolved_mode = _resolve_mode(mode, route, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)
     route_payload = public_route_payload(route, include_message=include_message)
-    if _is_skill_catalog_question(message):
+    if _is_generic_skill_catalog_route(message, route_payload):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
 
@@ -456,7 +456,7 @@ def build_chat_response_from_route(
     action = str(decision.get("action", "fallback"))
     if _is_command_preview_invocation(message):
         return _command_preview_response(decision, thread_key=thread_key, message=message)
-    if _is_skill_catalog_question(message):
+    if _is_generic_skill_catalog_route(message, decision):
         return _skill_picker_response(decision, thread_key=thread_key, message=message)
     if action == "dispatch":
         selected = str(decision.get("selected_skill", "the selected workflow"))
@@ -1392,6 +1392,12 @@ def _workflow_explanation_reason_for_route(
     if reason and reason != "Matched trigger metadata for this task.":
         return reason
     return ""
+
+
+def _is_generic_skill_catalog_route(message: str, decision: dict[str, object]) -> bool:
+    if not _is_skill_catalog_question(message):
+        return False
+    return str(decision.get("selected_skill", "")) == _ROUTER_SKILL
 
 
 def _catalog_question_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
