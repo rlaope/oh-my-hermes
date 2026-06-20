@@ -618,6 +618,9 @@ class CliTests(unittest.TestCase):
             self.assertIn("Command availability: ok", stdout)
             self.assertIn("Managed skills: ok", stdout)
             self.assertIn("Hermes registration: ok", stdout)
+            self.assertIn("Observation boundaries", stdout)
+            self.assertIn("Plugin bridge: ready locally", stdout)
+            self.assertIn("Hermes runtime: not observed yet", stdout)
             self.assertIn("Use OMH request-to-handoff", stdout)
             self.assertIn("State log:", stdout)
             self.assertIn("last_doctor", stdout)
@@ -1370,6 +1373,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertIn("OMH doctor가 완료되었습니다.", stdout)
             self.assertIn("검사:", stdout)
+            self.assertIn("관측 경계", stdout)
+            self.assertIn("플러그인 브리지: 로컬 준비 완료", stdout)
+            self.assertIn("Hermes 런타임: 아직 관측 안 됨", stdout)
+            self.assertIn("Hermes Agent를 열고 시도하세요", stdout)
             self.assertIn("상태 로그:", stdout)
 
             install_root = root / "install"

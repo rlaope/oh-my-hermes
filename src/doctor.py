@@ -27,6 +27,7 @@ WARNING_NEXT_ACTION_PRIORITY = {
     "command_path": 100,
     "target_topology": 80,
 }
+DEFAULT_DOCTOR_NEXT_ACTION = "Open Hermes Agent and try: Use OMH request-to-handoff for: I want to safely add a feature to this repo."
 
 
 @dataclass(frozen=True)
@@ -292,7 +293,7 @@ def recommended_next_action(checks: list[Check]) -> str:
     )
     if prioritized_warnings:
         return prioritized_warnings[0].next_action
-    return "Open Hermes Agent and try: Use OMH request-to-handoff for: I want to safely add a feature to this repo."
+    return DEFAULT_DOCTOR_NEXT_ACTION
 
 
 def _plugin_bridge_message(plugin: dict) -> str:

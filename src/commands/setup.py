@@ -22,7 +22,7 @@ from ..command_path import inspect_omh_command_path
 from ..capabilities.registry import capability_summary
 from ..capabilities.skills import skill_capabilities
 from ..config_adapter import ensure_external_dir, external_dirs, read_config, remove_external_dir, write_config
-from ..doctor import doctor_ok, recommended_next_action, run_doctor
+from ..doctor import DEFAULT_DOCTOR_NEXT_ACTION, doctor_ok, recommended_next_action, run_doctor
 from ..executors import CODING_EXECUTOR_TARGETS
 from ..hashutil import sha256_file
 from ..installer import OmhError, install_skill_pack, uninstall_skill_pack
@@ -1604,6 +1604,11 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
                 f"  {tr(language, group_key)}: {tr(language, status_key)} "
                 f"({group.get('passing', 0)}/{group.get('total', 0)})"
             )
+    observation_lines = _doctor_observation_boundary_lines(checks, language=language)
+    if observation_lines:
+        print(_color(tr(language, "doctor_observation_boundaries"), "1;32", use_color))
+        for line in observation_lines:
+            print(f"  {line}")
     state_log = payload.get("state_log", {})
     if isinstance(state_log, dict) and state_log.get("path") and state_log.get("entry"):
         print(f"  {tr(language, 'state_log', path=state_log.get('path'), entry=state_log.get('entry'))}")
@@ -1619,9 +1624,41 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
     next_action = str(payload.get("recommended_next_action", "")).strip()
     print(_color(tr(language, "next"), "1;32", use_color))
     if next_action:
-        print(f"  {next_action}")
+        print(f"  {_doctor_human_next_action(next_action, language=language)}")
     print(f"  {tr(language, 'doctor_boundary')}")
     print(f"  {tr(language, 'machine_readable')}")
+
+
+def _doctor_human_next_action(next_action: str, *, language: str) -> str:
+    if next_action == DEFAULT_DOCTOR_NEXT_ACTION:
+        return tr(language, "doctor_default_next_action")
+    return next_action
+
+
+def _doctor_observation_boundary_lines(checks: list[object], *, language: str) -> list[str]:
+    check_map = {str(check.get("name", "")): check for check in checks if isinstance(check, dict)}
+    lines: list[str] = []
+    plugin_bundle = check_map.get("plugin_bundle")
+    plugin_register = check_map.get("plugin_register_smoke")
+    plugin_runtime = check_map.get("plugin_runtime_observed")
+
+    if plugin_register:
+        if plugin_register.get("ok"):
+            lines.append(tr(language, "doctor_plugin_bridge_ready"))
+        else:
+            lines.append(tr(language, "doctor_plugin_bridge_needs_attention"))
+    elif plugin_bundle:
+        lines.append(tr(language, "doctor_plugin_bridge_not_installed"))
+
+    if plugin_runtime:
+        if plugin_runtime.get("observed") and str(plugin_runtime.get("severity", "")) == "ok":
+            lines.append(tr(language, "doctor_plugin_runtime_observed"))
+        elif plugin_runtime.get("observed"):
+            lines.append(tr(language, "doctor_plugin_runtime_historical"))
+        else:
+            lines.append(tr(language, "doctor_plugin_runtime_not_observed"))
+
+    return lines
 
 
 def _print_uninstall_summary(payload: dict[str, object], *, language: str = "en") -> None:
