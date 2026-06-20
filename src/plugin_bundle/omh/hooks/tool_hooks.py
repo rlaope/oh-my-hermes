@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import json
 
-from ..awareness import generic_tool_checkpoint_routes
+from ..awareness import OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION, generic_tool_checkpoint_routes
 from ..host_observation import observe_plugin_hook_call
 from ..omh_roles import extract_role_marker, resolve_role_name, role_aliases, role_names
 
 
-def pre_tool_call(**kwargs) -> dict[str, str] | None:
+def pre_tool_call(**kwargs) -> dict[str, object] | None:
     """Inject bounded OMH context before tool calls without exposing tool input."""
     observe_plugin_hook_call("pre_tool_call", kwargs)
     context_parts: list[str] = []
+    payload: dict[str, object] = {}
     role_warning = _delegate_role_warning(kwargs)
     if role_warning:
         context_parts.append(role_warning)
@@ -18,10 +19,14 @@ def pre_tool_call(**kwargs) -> dict[str, str] | None:
     checkpoint = _generic_tool_checkpoint_context(kwargs)
     if checkpoint:
         context_parts.append(checkpoint)
+        structured_checkpoint = _generic_tool_checkpoint_payload(kwargs)
+        if structured_checkpoint:
+            payload["omh_generic_tool_checkpoint"] = structured_checkpoint
 
     if not context_parts:
         return None
-    return {"context": "\n\n".join(context_parts)}
+    payload["context"] = "\n\n".join(context_parts)
+    return payload
 
 
 def _delegate_role_warning(kwargs: dict) -> str:
@@ -73,6 +78,37 @@ def _generic_tool_checkpoint_context(kwargs: dict) -> str:
             "Boundary: advisory tool-use context only; not workflow selection, tool invocation, generated output, dispatch, verification, review, CI, merge, or delivery evidence.",
         ]
     )
+
+
+def _generic_tool_checkpoint_payload(kwargs: dict) -> dict[str, object]:
+    if kwargs.get("include_omh_tool_checkpoint", True) is False:
+        return {}
+    route = _generic_tool_route(kwargs)
+    if not route:
+        return {}
+    tool_name = str(kwargs.get("tool_name", "") or "").strip() or "unknown"
+    return {
+        "schema_version": OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION,
+        "source": "pre_tool_call",
+        "tool_name": _redacted_label(tool_name),
+        "tool_family": str(route.get("tool_family") or ""),
+        "applies_before": list(route.get("applies_before", [])),
+        "primary_workflow": str(route.get("primary_workflow") or ""),
+        "preferred_workflows": list(route.get("preferred_workflows", [])),
+        "primary_next_action": str(route.get("primary_next_action") or ""),
+        "fallback_action": str(route.get("fallback_action") or ""),
+        "not_evidence_yet": list(route.get("not_evidence_yet", [])),
+        "privacy": {
+            "mode": "metadata_only",
+            "raw_tool_input_stored": False,
+            "raw_tool_input_echoed": False,
+            "stored_fields": ["tool name label", "tool family", "workflow checkpoint"],
+        },
+        "claim_boundary": (
+            "Advisory tool-use context only; not workflow selection, tool invocation, generated output, dispatch, "
+            "verification, review, CI, merge, or delivery evidence."
+        ),
+    }
 
 
 def _generic_tool_route(kwargs: dict) -> dict[str, object]:
