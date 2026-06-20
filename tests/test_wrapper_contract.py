@@ -953,6 +953,28 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["next_action"], "choose_skill")
         self.assertIn("skill_picker", payload["chat_response"]["state"])
 
+    def test_specific_capability_catalog_questions_skip_generic_picker(self) -> None:
+        cases = (
+            ("does OMH support scheduled automation?", "automation-blueprint", "prepare_scheduled_ops_blueprint"),
+            ("can OMH help with MCP setup?", "toolbelt-readiness", "prepare_toolbelt_readiness"),
+            ("does OMH support memory cleanup?", "memory-curation-review", "prepare_memory_curation_review"),
+            ("does OMH support voice commands?", "voice-operator", "prepare_voice_operator_card"),
+            ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops", "prepare_github_event_ops_card"),
+        )
+
+        for message, selected_workflow, next_action in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
+                self.assertEqual(payload["next_action"], next_action)
+                self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
+                self.assertEqual(
+                    payload["chat_response"]["state"]["workflow_explanation"]["selected_workflow"],
+                    selected_workflow,
+                )
+
     def test_complex_operator_patterns_route_to_dedicated_surfaces(self) -> None:
         cases = (
             (

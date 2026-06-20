@@ -134,6 +134,15 @@ user asks "이미지 생성 기능 뭐 있어?", "does OMH support image generat
 `image_generation_setup/v1` actions instead of falling back to the generic OMH
 workflow picker.
 
+The same rule applies to other specific capability questions. A broad question
+such as "OMH 기능 뭐 있어?" still opens `omh_skill_picker/v1`, but "does OMH
+support scheduled automation?", "can OMH help with MCP setup?", "does OMH
+support memory cleanup?", "does OMH support voice commands?", or "OMH로 GitHub
+issue webhook 처리 가능해?" should open the matching workflow card directly.
+Selection remains routing intent only; host automation, credentials, memory
+updates, platform actions, and webhook effects stay unobserved until separate
+evidence is recorded.
+
 That returns `chat_route_hint/v1` with a `chat_response` card the adapter can
 render immediately:
 

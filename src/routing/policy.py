@@ -843,6 +843,25 @@ _VOICE_OPERATOR_TOKENS = _normalized_token_set(
         "접근성",
     }
 )
+_CAPABILITY_INTENT_TOKENS = _normalized_token_set(
+    {
+        "support",
+        "supports",
+        "feature",
+        "features",
+        "capability",
+        "capabilities",
+        "available",
+        "help",
+        "helps",
+        "can",
+        "기능",
+        "지원",
+        "가능",
+        "있어",
+        "있나요",
+    }
+)
 _DELIVERABLE_STRONG_TOKENS = _normalized_token_set(
     {
         "attachment",
@@ -1642,9 +1661,11 @@ def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]
         return True
     context = bool(_MEMORY_CURATION_CONTEXT_TOKENS & query_tokens)
     hermes_context = _contains_phrase(normalized_query, ("hermes", "헤르메스"))
+    omh_context = _contains_phrase(normalized_query, ("omh", "oh-my-hermes", "oh my hermes"))
     cleanup = _contains_phrase(normalized_query, ("cleanup", "curate", "review", "inspect", "정리", "점검", "검토"))
     stale = _contains_phrase(normalized_query, ("stale", "old", "duplicate", "conflicting", "오래된", "중복", "충돌"))
-    return context and (hermes_context or stale) and cleanup
+    capability_intent = bool(_CAPABILITY_INTENT_TOKENS & query_tokens)
+    return context and (hermes_context or omh_context or stale or capability_intent) and cleanup
 
 
 def _agent_board_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -1705,6 +1726,8 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
 
 def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _VOICE_OPERATOR_PHRASES):
+        return True
+    if _VOICE_OPERATOR_TOKENS & query_tokens and _CAPABILITY_INTENT_TOKENS & query_tokens:
         return True
     return bool(_VOICE_OPERATOR_TOKENS & query_tokens) and _contains_phrase(
         normalized_query,
