@@ -3964,6 +3964,10 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["chat_response"]["kind"], "context_brief")
                 self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] context - "))
                 self.assertIn("Hermes workflow layer", payload["chat_response"]["body"])
+                self.assertIn("Use it for:", payload["chat_response"]["body"])
+                self.assertIn("How to start:", payload["chat_response"]["body"])
+                rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
+                self.assertGreaterEqual(sum(1 for block in rendering_blocks if block["type"] == "bullet"), 3)
                 state = payload["chat_response"]["state"]
                 self.assertEqual(state["context_brief"]["schema_version"], "omh_context_brief/v1")
                 self.assertEqual(state["context_brief"]["source"], "discord")

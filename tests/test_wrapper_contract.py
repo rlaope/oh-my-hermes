@@ -837,7 +837,15 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertTrue(response["headline"].startswith("[omh] context - "))
                 self.assertIn("Hermes workflow layer", response["body"])
                 self.assertIn("install once", response["body"])
+                self.assertIn("Use it for:", response["body"])
+                self.assertIn("How to start:", response["body"])
                 self.assertIn("workflow picker", response["body"])
+                rendering_blocks = response["messenger_rendering"]["body_blocks"]
+                self.assertGreaterEqual(len(rendering_blocks), 5)
+                self.assertGreaterEqual(
+                    sum(1 for block in rendering_blocks if block["type"] == "bullet"),
+                    3,
+                )
                 state = response["state"]
                 self.assertEqual(state["status_source"], "omh_context_brief")
                 self.assertEqual(state["context_brief"]["schema_version"], "omh_context_brief/v1")

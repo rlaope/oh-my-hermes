@@ -1430,17 +1430,23 @@ def build_chat_response_from_omh_context_brief(
             use_for = str(lane.get("use_for", "")).strip()
             if label and use_for:
                 lane_summaries.append(f"{label}: {use_for}")
-    first_lane_sentence = " ".join(lane_summaries[:3])
     body_lines = [
         "OMH is the Hermes workflow layer: install once, then ask Hermes in chat instead of memorizing backend commands.",
-        first_lane_sentence,
-        "Start with: ask what you want in normal language, use ./omh to open the workflow picker when you want to choose manually, or ask what to do next after setup.",
+        "",
+        "Use it for:",
+        *[f"- {summary}" for summary in lane_summaries[:3]],
+        "",
+        "How to start:",
+        "- Ask what you want in normal language.",
+        "- Open the workflow picker with ./omh when you want to choose manually.",
+        "- Ask what to do next after setup when you want the first-use path.",
+        "",
         "Boundary: this context explains routing and workflow choices; it is not execution, delivery, verification, review, CI, or merge evidence.",
     ]
     return _chat_response(
         kind="context_brief",
         headline="Here is how OMH fits into Hermes.",
-        body=" ".join(line for line in body_lines if line),
+        body="\n".join(body_lines),
         phase="route",
         next_action="show_context_brief",
         thread_key=thread_key,
