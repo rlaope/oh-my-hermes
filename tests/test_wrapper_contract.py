@@ -686,8 +686,15 @@ class WrapperContractTests(unittest.TestCase):
                     self.assertEqual(payload["chat_response"]["kind"], "quickstart")
                     self.assertTrue(payload["chat_response"]["headline"].startswith("[omh] quickstart - "))
                     self.assertIn("OMH quickstart is", payload["chat_response"]["body"])
+                    self.assertIn("Local status:", payload["chat_response"]["body"])
+                    self.assertIn("Next in Hermes:", payload["chat_response"]["body"])
                     self.assertIn("Use OMH request-to-handoff", payload["chat_response"]["body"])
                     self.assertIn("Boundary:", payload["chat_response"]["body"])
+                    rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
+                    self.assertGreaterEqual(
+                        sum(1 for block in rendering_blocks if block["type"] == "bullet"),
+                        5,
+                    )
                     state = payload["chat_response"]["state"]
                     self.assertEqual(state["status_source"], "omh_quickstart")
                     self.assertEqual(state["quickstart_card"]["schema_version"], "omh_quickstart_card/v1")

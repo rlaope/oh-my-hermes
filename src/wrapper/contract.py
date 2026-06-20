@@ -1380,19 +1380,24 @@ def build_chat_response_from_omh_quickstart(
             f"OMH quickstart is {card.get('status', 'unknown')}: "
             f"{doctor.get('passing', 0)}/{doctor.get('total', 0)} local checks pass."
         ),
-        (
-            f"Plugin bridge: {str(plugin_bridge.get('status', 'unknown')).replace('_', ' ')}; "
-            f"Hermes plugin use: {'observed' if bool(local_status.get('plugin_runtime_active')) else 'not observed yet'}; "
-            f"wrapper usage: {str(wrapper_usage.get('status', 'missing')).replace('_', ' ')}."
-        ),
-        f"Next in Hermes: {first_prompt}" if first_prompt else "",
+        "",
+        "Local status:",
+        f"- Plugin bridge: {str(plugin_bridge.get('status', 'unknown')).replace('_', ' ')}.",
+        f"- Hermes plugin use: {'observed' if bool(local_status.get('plugin_runtime_active')) else 'not observed yet'}.",
+        f"- Wrapper usage: {str(wrapper_usage.get('status', 'missing')).replace('_', ' ')}.",
+        "",
+        "Next in Hermes:",
+        f"- {first_prompt}" if first_prompt else "- Ask Hermes what you want to do with OMH.",
+        "- Open the workflow picker with ./omh when you want to choose manually.",
+        "- Use Show detailed status only when setup or registration looks wrong.",
+        "",
         f"Boundary: {evidence_gap}",
     ]
     observed_gaps = [str(item) for item in evidence_gaps if str(item)] if isinstance(evidence_gaps, list) else []
     return _chat_response(
         kind="quickstart",
         headline="Here is the OMH first-use path.",
-        body=" ".join(line for line in body_lines if line),
+        body="\n".join(body_lines),
         phase="status",
         next_action="show_quickstart",
         thread_key=thread_key,
