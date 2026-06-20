@@ -28,7 +28,8 @@
 
 - Hermes plugin enablement automation when the runtime contract is stable
 - Deeper workflow telemetry that remains local and inspectable
-- Richer plugin hooks and tools after observed runtime-load evidence exists
+- Richer plugin hooks and tools after enough host-observed plugin load/use
+  evidence exists across real Hermes environments
 
 ## Recently Landed
 
@@ -48,3 +49,5 @@
   `recommend`
 - Default plugin distribution path through `omh setup`, with local
   import/register smoke and conservative runtime-claim boundaries
+- Host-observed plugin load/use records through `omh plugin observe-host`, kept
+  separate from local install smoke and from execution/review/CI evidence

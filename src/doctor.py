@@ -9,6 +9,11 @@ from .hashutil import sha256_file
 from .local_store import can_write_dir
 from .manifest import local_modifications, read_manifest
 from .paths import OmhPaths
+from .plugin_observations import (
+    PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS,
+    latest_plugin_host_observation,
+    plugin_host_runtime_readiness,
+)
 from .plugin_pack import inspect_plugin_bundle
 from .runtime.artifacts import read_state, read_state_error
 from .skill_pack import CORE_SKILLS
@@ -164,6 +169,17 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
         )
     )
     plugin = inspect_plugin_bundle(paths)
+    latest_plugin_observation, plugin_observation_errors = latest_plugin_host_observation(paths)
+    latest_plugin_readiness = ""
+    if latest_plugin_observation:
+        latest_plugin_readiness = str(
+            latest_plugin_observation.get("runtime_readiness")
+            or plugin_host_runtime_readiness(
+                event=str(latest_plugin_observation.get("event", "")),
+                status=str(latest_plugin_observation.get("status", "")),
+            )
+        )
+    latest_plugin_active = latest_plugin_readiness == "active_runtime_observed"
     plugin_expected = bool(plugin["plugin_dir_installed"]) or bool(state and state.get("last_plugin_distribution"))
     if not plugin_expected:
         checks.append(Check("plugin_bundle", True, f"managed OMH plugin bridge is not installed yet at {paths.hermes_plugin_dir}"))
@@ -189,10 +205,32 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
                 Check(
                     "plugin_runtime_observed",
                     True,
-                    "not required for doctor; Hermes runtime load/use must be observed separately before claiming native runtime readiness",
-                    severity="warning",
-                    next_action="Observe Hermes plugin load/use in the target Hermes runtime before claiming native runtime readiness.",
-                    observed=False,
+                    (
+                        f"{latest_plugin_readiness} by {latest_plugin_observation.get('host', 'unknown')} "
+                        f"({latest_plugin_observation.get('event', 'unknown')}, "
+                        f"session={latest_plugin_observation.get('session_id', 'unknown')})"
+                        if latest_plugin_observation and latest_plugin_observation.get("observed")
+                        else (
+                            f"plugin observation ledger unreadable: {'; '.join(plugin_observation_errors[:3])}"
+                            if plugin_observation_errors
+                            else (
+                                f"latest plugin host observation is {latest_plugin_observation.get('status', 'unknown')}; "
+                                "Hermes runtime load/use is not currently observed"
+                                if latest_plugin_observation
+                                else "not required for doctor; Hermes runtime load/use must be observed separately before claiming native runtime readiness"
+                            )
+                        )
+                    ),
+                    severity="ok" if latest_plugin_active else "warning",
+                    next_action=(
+                        ""
+                        if latest_plugin_active
+                        else (
+                            "Record an active Hermes plugin event "
+                            f"({', '.join(PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS)}) before claiming native runtime readiness."
+                        )
+                    ),
+                    observed=bool(latest_plugin_observation and latest_plugin_observation.get("observed")),
                 ),
             ]
         )

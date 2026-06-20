@@ -41,11 +41,20 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         common_pattern="Install a native skill/plugin payload, then let the host agent surface workflows without making users memorize backend commands.",
         omh_surface="`hermes skills ...` compatible skill pack, `omh setup`, and the optional `~/.hermes/plugins/omh` bridge.",
         status="available",
-        evidence=("skills/*/SKILL.md", "src/plugin_bundle/omh/plugin.yaml", "src/plugin_pack.py", "src/commands/setup.py"),
-        missing_piece="Observed Hermes plugin load/use still requires runtime evidence from the host.",
+        evidence=(
+            "skills/*/SKILL.md",
+            "src/plugin_bundle/omh/plugin.yaml",
+            "src/plugin_pack.py",
+            "src/plugin_observations.py",
+            "src/commands/plugin.py",
+        ),
+        missing_piece="Live Hermes plugin load/use is now recordable, but it still requires host or wrapper-supplied evidence.",
         v1_decision="Keep skills as the default surface and plugin as a thin metadata bridge.",
         user_value="Users install OMH once and then talk to Hermes; operators can still verify the local payload.",
-        claim_boundary="Plugin install/import/register smoke is not proof that Hermes loaded or used the plugin.",
+        claim_boundary=(
+            "Plugin install/import/register smoke is not proof that Hermes loaded or used the plugin; "
+            "omh_plugin_host_observation/v1 proves only the recorded host plugin event."
+        ),
     ),
     ParityCapability(
         id="specialist_roles",
@@ -170,11 +179,6 @@ def build_parity_matrix(probe_payload: dict[str, object] | None = None) -> dict[
         "probe_alignment": _probe_alignment(probe_payload or {}),
         "recommended_next_prs": [
             {
-                "id": "observed-plugin-load",
-                "title": "Add live Hermes plugin load smoke evidence",
-                "why": "Separates installed/importable plugin payloads from host-observed plugin runtime use.",
-            },
-            {
                 "id": "mcp-host-config-guides",
                 "title": "Add host-specific MCP config recipes",
                 "why": "Turns the manifest contract into copy-paste recipes for common MCP-capable host config shapes without auto-mutating them.",
@@ -199,6 +203,8 @@ def _probe_alignment(probe_payload: dict[str, object]) -> dict[str, object]:
         "external_skill_dirs": by_name.get("external_skill_dirs", "unknown"),
         "omh_plugin_bundle": by_name.get("omh_plugin_bundle", "unknown"),
         "plugin_register_smoke": by_name.get("plugin_register_smoke", "unknown"),
+        "plugin_runtime_observed": by_name.get("plugin_runtime_observed", "unknown"),
+        "plugin_runtime_active": "available" if probe_payload.get("plugin_runtime_active") else "unverified",
         "mcp_preference": by_name.get("mcp_preference", "unknown"),
         "mcp_bridge_server": by_name.get("mcp_bridge_server", "unknown"),
         "mcp_bridge_runtime": by_name.get("mcp_bridge_runtime", "unknown"),

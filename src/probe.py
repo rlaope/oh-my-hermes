@@ -7,6 +7,12 @@ from .config_adapter import external_dirs, read_config
 from .local_store import read_jsonl_objects
 from .parity import build_parity_matrix
 from .paths import OmhPaths
+from .plugin_observations import (
+    PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS,
+    PLUGIN_HOST_OBSERVATION_SCHEMA_VERSION,
+    plugin_host_runtime_readiness,
+    read_plugin_host_observations,
+)
 from .plugin_pack import inspect_plugin_bundle
 from .runtime.artifacts import read_state_result
 from .targets import summarize_target_registry
@@ -203,6 +209,74 @@ def _mcp_host_session_capability(paths: OmhPaths) -> Capability:
     )
 
 
+def _plugin_runtime_observed_capability(paths: OmhPaths) -> tuple[Capability, bool, bool]:
+    records, errors = read_plugin_host_observations(paths, limit=None)
+    evidence = str(paths.runtime_plugin_host_observations_path)
+    if errors:
+        return (
+            Capability(
+                "plugin_runtime_observed",
+                "unknown",
+                evidence,
+                f"Could not read OMH plugin host observations: {'; '.join(errors[:3])}",
+            ),
+            False,
+            False,
+        )
+    latest = next(
+        (
+            record
+            for record in records
+            if record.get("schema_version") == PLUGIN_HOST_OBSERVATION_SCHEMA_VERSION
+        ),
+        None,
+    )
+    if latest and latest.get("observed"):
+        host = str(latest.get("host", "unknown"))
+        event = str(latest.get("event", "unknown"))
+        session_id = str(latest.get("session_id", "unknown"))
+        readiness = str(latest.get("runtime_readiness") or plugin_host_runtime_readiness(event=event, status="observed"))
+        active = readiness == "active_runtime_observed"
+        return (
+            Capability(
+                "plugin_runtime_observed",
+                "available",
+                evidence,
+                (
+                    f"OMH plugin active runtime observed by {host} ({event}, session={session_id})"
+                    if active
+                    else f"OMH plugin historical runtime event observed by {host} ({event}, session={session_id}); active readiness requires one of {', '.join(PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS)}"
+                ),
+            ),
+            True,
+            active,
+        )
+    if latest:
+        host = str(latest.get("host", "unknown"))
+        status = str(latest.get("status", "unknown"))
+        event = str(latest.get("event", "unknown"))
+        return (
+            Capability(
+                "plugin_runtime_observed",
+                "unverified",
+                evidence,
+                f"Latest plugin host observation from {host} is {status} ({event}); Hermes plugin runtime is not currently observed",
+            ),
+            False,
+            False,
+        )
+    return (
+        Capability(
+            "plugin_runtime_observed",
+            "unverified",
+            evidence,
+            "No Hermes runtime load/use observation is recorded; local install smoke is not native runtime evidence",
+        ),
+        False,
+        False,
+    )
+
+
 def _dir_capability(name: str, path: Path, found_message: str, missing_message: str) -> Capability:
     found = _has_dir(path)
     return Capability(
@@ -286,6 +360,7 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
     )
     wrappers = _wrapper_artifacts(paths)
     plugin = inspect_plugin_bundle(paths)
+    plugin_runtime_capability, plugin_runtime_observed, plugin_runtime_active = _plugin_runtime_observed_capability(paths)
     plugins_dir_exists = _has_dir(paths.hermes_plugins_dir)
     capabilities.extend(
         [
@@ -317,12 +392,7 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
                     else "Installed OMH plugin has not passed fake Hermes register smoke"
                 ),
             ),
-            Capability(
-                "plugin_runtime_observed",
-                "unverified",
-                str(paths.hermes_plugin_dir),
-                "No Hermes runtime load/use observation is recorded; local install smoke is not native runtime evidence",
-            ),
+            plugin_runtime_capability,
         ]
     )
     capabilities.append(
@@ -362,9 +432,15 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False) -> dict
         "capabilities": [capability.to_dict() for capability in capabilities],
         "target_topology": target_topology,
         "plugin_distribution_ready": bool(plugin["plugin_distribution_ready"]),
+        "plugin_runtime_observed": plugin_runtime_observed,
+        "plugin_runtime_active": plugin_runtime_active,
         "mcp_host_session_observed": mcp_host_session.status == "available",
-        "native_integration_claim_ready": False,
-        "claim_boundary": "Prompt-level routing is the default unless a future stable Hermes extension surface and runtime evidence prove deeper integration.",
+        "native_integration_claim_ready": bool(plugin["plugin_distribution_ready"]) and plugin_runtime_active,
+        "claim_boundary": (
+            "Prompt-level routing is the default unless a stable Hermes extension surface and host-supplied "
+            "runtime evidence prove deeper integration. Plugin host observations prove plugin load/use only, "
+            "not coding execution, review, CI, or merge."
+        ),
     }
     if include_parity:
         payload["parity_matrix"] = build_parity_matrix(payload)

@@ -79,6 +79,14 @@ wrapper that actually observes bridge load or use can record
 `omh_mcp_host_session/v1` with `omh mcp observe-host`; that remains session
 evidence only.
 
+The optional plugin bridge has the same split. Local install/import/register
+smoke proves the bundle is present and importable. Host or wrapper evidence that
+Hermes actually loaded or used the plugin is recorded separately with
+`omh plugin observe-host` as `omh_plugin_host_observation/v1`. Active readiness
+requires the latest observed event to be `plugin_load`, `tool_call`, `hook_call`,
+or `status_query`; `blocked`, `session_end`, and `plugin_unload` do not make the
+native bridge active.
+
 ## Why This Exists
 
 Hermes and wrapper surfaces should not need to scrape README prose to know which

@@ -35,7 +35,7 @@ implementation or claim runtime behavior it did not observe.
 
 | Capability axis | OMH status | OMH surface | Missing or intentionally delegated |
 | --- | --- | --- | --- |
-| Skill and plugin distribution | Available | Tap-compatible `skills/*/SKILL.md`, `omh setup`, and optional `~/.hermes/plugins/omh` bridge. | Observed Hermes plugin load still needs host runtime evidence. |
+| Skill and plugin distribution | Available | Tap-compatible `skills/*/SKILL.md`, `omh setup`, optional `~/.hermes/plugins/omh` bridge, and `omh plugin observe-host` for host-observed plugin load/use. | Live plugin load/use must still be recorded by the host or wrapper; local install smoke is not runtime evidence. |
 | Specialist role/profile system | Available | Skill catalog metadata, operating models, optional visible profile packs, wrapper role narration, plugin `omh_role`, and `[omh-role:name]` context injection. | Observed role execution still requires wrapper or runtime evidence; role context is not a hidden live agent. |
 | Bounded evidence probe | Available | Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as doctor, harness validation, docs checks, unittest, compileall, and whitespace checks. | It is not a general shell, executor dispatch, PR review, CI, merge, or live Hermes plugin-load signal. |
 | Team, swarm, and worker protocol | Partial | `team`, `ultrawork`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | OMH does not launch hidden tmux teams, spawn workers, or manage panes by itself. |
@@ -53,6 +53,11 @@ implementation or claim runtime behavior it did not observe.
 - A plugin bridge with native role context lookup, role marker injection,
   delegate marker validation, session-end checkpoints, and bounded
   `omh_gather_evidence` probes.
+- `omh_plugin_host_observation/v1` records through `omh plugin observe-host`, so
+  operators can distinguish local plugin install/import/register smoke from
+  host-observed Hermes plugin load or use. Active native readiness requires the
+  latest observed event to be `plugin_load`, `tool_call`, `hook_call`, or
+  `status_query`; `session_end` and `plugin_unload` remain historical evidence.
 - `worktree_session_isolation/v1`, which gives coding handoffs and wrapper
   status cards a concrete same-workspace/worktree-recommended/worktree-required
   contract before any executor is opened.
@@ -78,7 +83,6 @@ Next PR candidates:
 | Next PR | Why it matters |
 | --- | --- |
 | Host-specific MCP config recipes | Turns the manifest contract into copy-paste recipes for common MCP-capable host config shapes without auto-mutating them. |
-| Live Hermes plugin-load smoke evidence | Separates installed/importable plugin payloads from host-observed plugin runtime use. |
 
 ## Acceptance Criteria
 
@@ -96,6 +100,11 @@ Next PR candidates:
   before it is claimed.
 - Specialist roles are `available` only as prompt context, marker validation,
   and profile guidance. They are not hidden runtime agents.
+- Plugin runtime observation is `available` only when a host or wrapper records
+  `omh_plugin_host_observation/v1` with an evidence reference. It is not coding
+  dispatch, implementation, review, CI, merge, or proof of unrecorded tool/hook
+  calls. `native_integration_claim_ready` is narrower than historical runtime
+  observation and requires an active plugin event.
 - Bounded evidence probes are `available` only as explicit allowlisted local
   command results. They are not executor dispatch, implementation, review, CI,
   merge, or plugin-load evidence.
