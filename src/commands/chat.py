@@ -112,6 +112,7 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
                 executor_target=_resolved_executor(args, default="choose"),
                 source_metadata=source_metadata,
                 target_notice=_target_notice(args, source_metadata),
+                paths=_paths(args),
             )
     except FileNotFoundError as exc:
         raise OmhError(f"runtime run not found: {args.run_id}") from exc

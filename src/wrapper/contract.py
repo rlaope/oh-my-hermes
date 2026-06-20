@@ -11,7 +11,9 @@ from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
 from ..operator_productivity import build_agent_operator_productivity_card
+from ..paths import OmhPaths, resolve_paths
 from ..plugin_bundle.omh.awareness import workflow_context_card_for_workflow, workflow_context_cards
+from ..probe import probe_capabilities
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
@@ -318,6 +320,7 @@ def build_chat_interaction_payload(
     executor_target: str = "choose",
     source_metadata: dict[str, str] | None = None,
     target_notice: dict[str, object] | None = None,
+    paths: OmhPaths | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported chat interaction source: {source}")
@@ -335,6 +338,16 @@ def build_chat_interaction_payload(
     if _is_skill_catalog_question(message):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
+
+    if _is_omh_status_question(message) and resolved_mode in {"route", "plan", "clarify"}:
+        base["mode"] = "status"
+        base["route"] = _omh_status_route_payload(route_payload)
+        base["chat_response"] = build_chat_response_from_omh_status_roadmap(
+            paths or resolve_paths(),
+            thread_key=str(base["thread_key"]),
+        )
+        base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_status"))
+        return _finish_interaction(base, target_notice)
 
     if resolved_mode == "route" and _is_command_preview_invocation(message):
         base["chat_response"] = build_chat_response_from_route(
@@ -1107,6 +1120,56 @@ def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_ke
     )
 
 
+def build_chat_response_from_omh_status_roadmap(paths: OmhPaths, *, thread_key: str = "") -> dict[str, object]:
+    probe = probe_capabilities(paths, include_roadmap=True)
+    roadmap = _nested(probe, "capability_gap_roadmap")
+    summary = _nested(roadmap, "summary")
+    next_actions = _roadmap_next_actions(roadmap, limit=3)
+    setup_gaps = _intish(summary.get("baseline_product_gaps", 0))
+    evidence_gaps = _intish(summary.get("evidence_gaps", 0))
+    optional_unknowns = _intish(summary.get("optional_or_host_unknowns", 0))
+    body_lines = [
+        (
+            f"OMH setup gaps: {setup_gaps}; evidence gaps: {evidence_gaps}; "
+            f"optional/host unknowns: {optional_unknowns}."
+        ),
+        _roadmap_next_action_sentence(next_actions),
+        "Boundary: local setup, plugin install, or smoke checks are not proof that Hermes loaded the plugin, ran an executor, reviewed code, passed CI, or merged anything.",
+    ]
+    return _chat_response(
+        kind="status",
+        headline="Here is the current OMH status and next action.",
+        body=" ".join(line for line in body_lines if line),
+        phase="status",
+        next_action="show_status",
+        thread_key=thread_key,
+        actions=[
+            _action("show_status", "Show status", "primary"),
+            _action("show_target_status", "Show target status", "secondary"),
+        ],
+        claim_boundary=str(roadmap.get("claim_boundary") or probe.get("claim_boundary") or _default_overclaim_guard()),
+        extra_state={
+            "status_source": "omh_probe",
+            "probe_summary": {
+                "plugin_distribution_ready": bool(probe.get("plugin_distribution_ready")),
+                "plugin_runtime_active": bool(probe.get("plugin_runtime_active")),
+                "native_integration_claim_ready": bool(probe.get("native_integration_claim_ready")),
+                "team_worker_readiness_ready": bool(probe.get("team_worker_readiness_ready")),
+                "mcp_host_session_observed": bool(probe.get("mcp_host_session_observed")),
+            },
+            "capability_gap_roadmap": roadmap,
+            "roadmap_next_actions": next_actions,
+            "workflow_explanation_reason": "The user asked for OMH status or the next operational action, so the wrapper shows local probe and roadmap evidence instead of drafting a new plan.",
+            "evidence_not_observed": [
+                "Hermes plugin runtime load",
+                "wrapper-visible workflow use",
+                "executor work",
+                "review, CI, or merge",
+            ],
+        },
+    )
+
+
 def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, object]:
     next_action = str(status_payload.get("next_action", "show_status"))
     kind, headline, body, claim_boundary = _status_copy(status_payload, next_action)
@@ -1229,7 +1292,8 @@ def _chat_response_with_target_notice(response: dict[str, object], target_notice
     notice_body = str(target_notice.get("body", ""))
     if notice_body and notice_body not in body:
         updated["body"] = f"{body} {notice_body}".strip()
-    actions = list(updated.get("actions", []))
+    raw_actions = updated.get("actions", [])
+    actions = [action for action in raw_actions if isinstance(action, dict)] if isinstance(raw_actions, list) else []
     action_ids = {str(action.get("id", "")) for action in actions if isinstance(action, dict)}
     if "show_target_status" not in action_ids:
         actions.append(_action("show_target_status", "Show target status", "secondary"))
@@ -1347,20 +1411,166 @@ def _catalog_question_route_payload(route_payload: dict[str, object]) -> dict[st
                     "evidence_boundary": "Skill picker routing is not plan acceptance, dispatch, execution, review, CI, or verification evidence.",
                     "matched": ["catalog_question"],
                     "next_action": "choose_skill",
-                    "score": max(10, int(updated.get("score", 0) or 0)),
+                    "score": max(10, _intish(updated.get("score", 0))),
                     "skill": _ROUTER_SKILL,
                     "wrapper_guidance": "Render the OMH workflow picker in chat; do not ask the user to approve `omh list` for catalog discovery.",
                 }
             ],
             "routing_instruction": "Show the OMH workflow picker for this catalog question.",
             "routing_prompt_template": "Show the OMH workflow picker for this catalog question.\n\nUser message:\n{message}",
-            "score": max(10, int(updated.get("score", 0) or 0)),
+            "score": max(10, _intish(updated.get("score", 0))),
             "selected_harness": harness,
             "selected_skill": _ROUTER_SKILL,
             "threshold": "high",
         }
     )
     return updated
+
+
+def _omh_status_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
+    updated = dict(route_payload)
+    harness = primary_harness_for_skill(_ROUTER_SKILL)
+    updated.update(
+        {
+            "action": "dispatch",
+            "ambiguous": False,
+            "candidate_harness": harness,
+            "candidate_skill": _ROUTER_SKILL,
+            "confidence": "high",
+            "reason": "OMH status or next-action question; show probe-backed status instead of drafting a plan.",
+            "recommendations": [
+                {
+                    "confidence": "high",
+                    "evidence_boundary": "Status and roadmap output is local probe evidence only; it is not host plugin load, executor work, review, CI, or merge evidence.",
+                    "matched": ["omh_status_question"],
+                    "next_action": "show_status",
+                    "score": max(10, _intish(updated.get("score", 0))),
+                    "skill": _ROUTER_SKILL,
+                    "wrapper_guidance": "Render the OMH status and capability roadmap in chat; do not ask for shell approval just to answer status.",
+                }
+            ],
+            "routing_instruction": "Show OMH status and next actions from the local probe roadmap.",
+            "routing_prompt_template": "Show OMH status and next actions from the local probe roadmap.\n\nUser message:\n{message}",
+            "score": max(10, _intish(updated.get("score", 0))),
+            "selected_harness": harness,
+            "selected_skill": _ROUTER_SKILL,
+            "threshold": "high",
+        }
+    )
+    return updated
+
+
+def _is_omh_status_question(message: str) -> bool:
+    text = message.strip().lower()
+    if not text:
+        return False
+    omh_markers = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
+    if not any(marker in text for marker in omh_markers):
+        return False
+    catalog_markers = (
+        "what can",
+        "what does",
+        "available",
+        "workflows",
+        "skills",
+        "commands",
+        "뭐 할",
+        "뭘 도와",
+        "명령어",
+        "스킬",
+        "워크플로",
+    )
+    if any(marker in text for marker in catalog_markers) and not any(
+        marker in text
+        for marker in ("status", "health", "doctor", "setup", "install", "installed", "next", "상태", "다음", "설치", "셋업", "세팅", "정상", "진단")
+    ):
+        return False
+    status_markers = (
+        "status",
+        "health",
+        "doctor",
+        "diagnose",
+        "installed",
+        "installation",
+        "setup",
+        "set up",
+        "next action",
+        "what next",
+        "what should i do next",
+        "what do i do next",
+        "상태",
+        "다음",
+        "액션",
+        "설치",
+        "셋업",
+        "세팅",
+        "정상",
+        "확인",
+        "헬스",
+        "진단",
+    )
+    return any(marker in text for marker in status_markers)
+
+
+def _roadmap_next_actions(roadmap: dict[str, Any], *, limit: int) -> list[dict[str, object]]:
+    actions = roadmap.get("next_actions", [])
+    if not isinstance(actions, list):
+        return []
+    compact: list[dict[str, object]] = []
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        item = {
+            "id": str(action.get("id", "")),
+            "kind": str(action.get("kind", "")),
+            "label": str(action.get("label", "")),
+            "why": str(action.get("why", "")),
+            "boundary": str(action.get("boundary", "")),
+            "capabilities": _as_string_list(action.get("capabilities", [])),
+        }
+        command = str(action.get("command", "")).strip()
+        operator_instruction = str(action.get("operator_instruction", "")).strip()
+        if command:
+            item["command"] = command
+        if operator_instruction:
+            item["operator_instruction"] = operator_instruction
+        compact.append(item)
+        if len(compact) >= limit:
+            break
+    return compact
+
+
+def _roadmap_next_action_sentence(actions: list[dict[str, object]]) -> str:
+    if not actions:
+        return "Next: no blocking OMH setup action is currently required."
+    first = actions[0]
+    label = str(first.get("label", "Check OMH status")).strip() or "Check OMH status"
+    kind = str(first.get("kind", "")).strip()
+    command = str(first.get("command", "")).strip()
+    operator_instruction = str(first.get("operator_instruction", "")).strip()
+    why = str(first.get("why", "")).strip()
+    if command and kind == "product_gap" and "<" not in command:
+        return f"Next: {label} with `{command}`."
+    if operator_instruction:
+        return f"Next: {label}: {operator_instruction}"
+    if why:
+        return f"Next: {label}. {why}"
+    return f"Next: {label}."
+
+
+def _intish(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
 
 
 def _is_skill_picker_invocation(message: str) -> bool:
@@ -1394,6 +1604,8 @@ def _is_command_preview_invocation(message: str) -> bool:
 
 def _command_preview_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     preview = _command_preview_state(message, source=str(decision.get("source", "generic")))
+    suggestions = _as_dict_list(preview.get("suggestions", []))
+    insert_text = str(suggestions[0].get("insert_text", "./omh")) if suggestions else "./omh"
     return _chat_response(
         kind="command_preview",
         headline="Open OMH.",
@@ -1408,7 +1620,7 @@ def _command_preview_response(decision: dict[str, object], *, thread_key: str = 
                 "primary",
                 payload={
                     "schema_version": COMMAND_PREVIEW_SCHEMA_VERSION,
-                    "suggestions": preview["suggestions"],
+                    "suggestions": suggestions,
                 },
             ),
             _action(
@@ -1416,7 +1628,7 @@ def _command_preview_response(decision: dict[str, object], *, thread_key: str = 
                 "Open picker",
                 "secondary",
                 payload={
-                    "insert_text": preview["suggestions"][0]["insert_text"] if preview["suggestions"] else "./omh",
+                    "insert_text": insert_text,
                     "opens_schema": SKILL_PICKER_SCHEMA_VERSION,
                 },
             ),
@@ -1585,16 +1797,14 @@ def _catalog_capability_summary() -> dict[str, object]:
 
     summary = capability_summary()
     compact_lanes = []
-    for lane in summary.get("lanes", []):
-        if not isinstance(lane, dict):
-            continue
+    for lane in _as_dict_list(summary.get("lanes", [])):
         compact_lanes.append(
             {
                 "id": lane.get("id", ""),
                 "label": lane.get("label", ""),
                 "owner_role": lane.get("owner_role", ""),
                 "use_for": lane.get("use_for", ""),
-                "primary_skills": list(lane.get("primary_skills", [])),
+                "primary_skills": _as_string_list(lane.get("primary_skills", [])),
                 "representative_playbooks": [
                     {
                         "id": playbook.get("id", ""),
@@ -1602,21 +1812,26 @@ def _catalog_capability_summary() -> dict[str, object]:
                         "owner_role": playbook.get("owner_role", ""),
                         "first_stage": playbook.get("first_stage", {}),
                     }
-                    for playbook in lane.get("representative_playbooks", [])[:3]
-                    if isinstance(playbook, dict)
+                    for playbook in _as_dict_list(lane.get("representative_playbooks", []))[:3]
                 ],
-                "wrapper_actions": list(lane.get("wrapper_actions", []))[:6],
-                "examples": list(lane.get("examples", []))[:3],
+                "wrapper_actions": _as_string_list(lane.get("wrapper_actions", []))[:6],
+                "examples": _as_string_list(lane.get("examples", []))[:3],
             }
         )
     return {
         "schema_version": summary.get("schema_version", "omh_capability_summary/v1"),
         "purpose": summary.get("purpose", ""),
         "lanes": compact_lanes,
-        "workflow_context_cards": list(summary.get("workflow_context_cards", [])),
+        "workflow_context_cards": _as_dict_list(summary.get("workflow_context_cards", [])),
         "direct_response_guidance": _as_string_list(summary.get("direct_response_guidance", [])),
         "evidence_boundary": _as_string_list(summary.get("evidence_boundary", [])),
     }
+
+
+def _as_dict_list(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
 
 
 def _as_string_list(value: object) -> list[str]:
@@ -2231,12 +2446,14 @@ def _action(action_id: str, label: str, style: str, *, enabled: bool = True, pay
 
 
 def _action_from_spec(spec: dict[str, object]) -> dict[str, object]:
+    payload_value = spec.get("payload")
+    payload = {str(key): value for key, value in payload_value.items()} if isinstance(payload_value, dict) else None
     return _action(
         str(spec.get("id", "")),
         str(spec.get("label", "")),
         str(spec.get("style", "")),
         enabled=bool(spec.get("enabled", True)),
-        payload=spec.get("payload") if isinstance(spec.get("payload"), dict) else None,
+        payload=payload,
     )
 
 
