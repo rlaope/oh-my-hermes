@@ -9,6 +9,7 @@ from ..release import (
     DEFAULT_HERMES_TAP,
     INSTALL_PATHS,
     hermes_release_smoke_plan,
+    release_evidence_bundle,
     product_readiness_report,
     release_readiness_checklist,
     run_hermes_release_smoke,
@@ -16,7 +17,7 @@ from ..release import (
     skill_content_smoke,
 )
 from ..release_install_smoke import install_script_smoke_plan, run_install_script_smoke
-from .common import _print_json, _wants_json
+from .common import _paths, _print_json, _wants_json
 
 
 def cmd_release_checklist(args: argparse.Namespace) -> int:
@@ -132,6 +133,23 @@ def cmd_release_product_readiness(args: argparse.Namespace) -> int:
     return 0 if payload["status"] == "ready" else 1
 
 
+def cmd_release_evidence_bundle(args: argparse.Namespace) -> int:
+    try:
+        payload = release_evidence_bundle(
+            version=args.version or __version__,
+            omh_command=args.omh_command,
+            paths=_paths(args),
+            write=args.write,
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_release_evidence_bundle_summary(payload)
+    return 0 if payload["status"] == "ready" else 1
+
+
 def _add_release_commands(sub) -> None:
     release = sub.add_parser("release", help="Plan or run release smoke checks for real Hermes installation paths.")
     release_sub = release.add_subparsers(dest="release_command", required=True)
@@ -219,6 +237,16 @@ def _add_release_commands(sub) -> None:
     product_readiness.add_argument("--json", action="store_true", help="Print the machine-readable product readiness payload.")
     product_readiness.set_defaults(func=cmd_release_product_readiness)
 
+    evidence_bundle = release_sub.add_parser(
+        "evidence-bundle",
+        help="Package local deterministic release evidence into one optional artifact.",
+    )
+    evidence_bundle.add_argument("--version", default="", help="Release version to bundle, such as 1.0.1 or v1.0.1.")
+    evidence_bundle.add_argument("--omh-command", default="omh", help="Installed OMH executable name/path shown in release gate commands.")
+    evidence_bundle.add_argument("--write", action="store_true", help="Write the bundle under .omh/runtime/release-evidence/.")
+    evidence_bundle.add_argument("--json", action="store_true", help="Print the machine-readable release evidence bundle payload.")
+    evidence_bundle.set_defaults(func=cmd_release_evidence_bundle)
+
 
 def _print_release_checklist_summary(payload: dict[str, object]) -> None:
     print(f"OMH release checklist for {payload['version']} ({payload['tag']})")
@@ -299,6 +327,38 @@ def _print_product_readiness_summary(payload: dict[str, object]) -> None:
         if isinstance(warnings, list) and warnings:
             print(f"    Warnings: {', '.join(str(warning) for warning in warnings)}")
     print("")
+    print("Next")
+    for action in payload.get("next_actions", []):
+        print(f"  - {action}")
+    print("")
+    print(f"Boundary: {payload.get('boundary')}")
+    print("For machine-readable output, rerun with `--json`.")
+
+
+def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
+    summary = payload.get("summary", {})
+    summary = summary if isinstance(summary, dict) else {}
+    print(f"OMH release evidence bundle for {payload.get('version')}")
+    print("Summary")
+    print(f"  Status: {payload.get('status')}")
+    print(f"  Written: {'yes' if payload.get('written') else 'no'}")
+    print(f"  Artifact: {payload.get('artifact_path')}")
+    print(f"  Product readiness: {summary.get('product_readiness_status')} ({summary.get('product_readiness_score')}/100)")
+    print(f"  Use-case readiness: {summary.get('use_case_readiness_status')} ({summary.get('use_case_readiness_score')}/100)")
+    print(f"  Local artifact store: {summary.get('local_artifact_store')}")
+    print("")
+    blocking = payload.get("blocking_failures", [])
+    if isinstance(blocking, list) and blocking:
+        print("Blocking")
+        for item in blocking:
+            print(f"  - {item}")
+        print("")
+    warnings = payload.get("warnings", [])
+    if isinstance(warnings, list) and warnings:
+        print("Warnings")
+        for item in warnings:
+            print(f"  - {item}")
+        print("")
     print("Next")
     for action in payload.get("next_actions", []):
         print(f"  - {action}")

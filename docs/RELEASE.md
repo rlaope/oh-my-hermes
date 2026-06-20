@@ -61,6 +61,7 @@ python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
 python3 -m omh.cli release product-readiness --version 1.0.1 --json
+python3 -m omh.cli release evidence-bundle --version 1.0.1 --write --json
 python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli cases replay --json
@@ -133,6 +134,19 @@ notes and maintainer handoff, but it is still local deterministic evidence only:
 it does not run the checklist, mutate Hermes, dispatch executors, review code,
 pass CI, merge, deliver messages, or spend provider budget.
 
+When the local release story is ready, write an attachable evidence bundle:
+
+```sh
+omh release evidence-bundle --version 1.0.1 --write --json
+```
+
+The bundle writes `omh_release_evidence_bundle/v1` under
+`.omh/runtime/release-evidence/` with the checklist, product readiness,
+skill-content smoke, use-case readiness, and parity snapshots. It is useful for
+release PRs and notes, but it is still local deterministic evidence only; live
+Hermes smoke, CI, review, merge, delivery, and GitHub release publication must
+be observed separately.
+
 ## Hermes CLI Install Smoke
 
 The release gate includes a deterministic smoke plan for the real Hermes CLI
@@ -177,6 +191,7 @@ command -v omh
 omh --help
 omh release skill-content-smoke --json
 omh release product-readiness --version 1.0.1 --json
+omh release evidence-bundle --version 1.0.1 --write --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 

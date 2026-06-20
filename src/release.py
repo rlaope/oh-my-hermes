@@ -18,6 +18,7 @@ from .command_path import (
     inspect_installed_command_path,
     path_check_kind,
 )
+from .local_store import atomic_write_json, read_json_object_result, utc_now
 from .plugin_bundle.omh.awareness import (
     awareness_primer_context,
     awareness_primer_markdown,
@@ -50,6 +51,7 @@ INSTALLED_COMMAND_SMOKE_SCHEMA = "installed_omh_command_smoke/v1"
 FIRST_USE_STATUS_SMOKE_SCHEMA = "first_use_status_smoke/v1"
 SKILL_CONTENT_SMOKE_SCHEMA = "skill_content_smoke/v1"
 PRODUCT_READINESS_SCHEMA = "omh_product_readiness/v1"
+RELEASE_EVIDENCE_BUNDLE_SCHEMA = "omh_release_evidence_bundle/v1"
 RELEASE_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*(?:[-_+.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$")
 DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
 DEFAULT_HERMES_SKILL = "oh-my-hermes"
@@ -239,6 +241,16 @@ def release_readiness_checklist(
             False,
             "Product readiness reports skill-content, G1-G10 use-case, parity, and release checklist gates as passing.",
             "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
+        ),
+        ReleaseChecklistItem(
+            "release_evidence_bundle",
+            "Write the local release evidence bundle",
+            f"{omh_display} release evidence-bundle --version {release_version} --write --json",
+            "evidence-packaging",
+            True,
+            False,
+            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, and parity snapshots.",
+            "The evidence bundle packages local deterministic evidence only; it is not live Hermes runtime use, connector execution, executor dispatch, review, CI, merge, delivery, or release publication evidence.",
         ),
         ReleaseChecklistItem(
             "stable_install_dry_run",
@@ -456,6 +468,7 @@ def product_readiness_report(
         "skill_content_smoke",
         "use_case_readiness",
         "product_readiness",
+        "release_evidence_bundle",
         "installed_command_smoke",
         "installer_smoke",
         "live_tap_smoke",
@@ -1201,6 +1214,7 @@ def _product_readiness_next_actions(blocking_failures: Sequence[Mapping[str, obj
             "Use the per-gate command to inspect the failing contract before tagging.",
         ]
     actions = [
+        "Write `omh release evidence-bundle --version <version> --write --json` and attach it to the release notes or PR.",
         "Attach observed evidence for each required release checklist item before tagging or publishing.",
         "Run one live Hermes tap smoke from the target profile before treating Hermes runtime visibility as observed.",
         "Use `omh release product-readiness --json` when a wrapper or release note needs the full machine-readable payload.",
@@ -1208,6 +1222,170 @@ def _product_readiness_next_actions(blocking_failures: Sequence[Mapping[str, obj
     if warning_count:
         actions.insert(0, "Review non-blocking warnings; they should be acknowledged but do not block local product readiness.")
     return actions
+
+
+def release_evidence_bundle(
+    *,
+    version: str = __version__,
+    omh_command: str = "omh",
+    paths: OmhPaths | None = None,
+    write: bool = False,
+) -> dict[str, object]:
+    release_version = _normalize_release_version(version)
+    resolved_paths = paths or OmhPaths(omh_home=Path("~/.omh").expanduser(), hermes_home=Path("~/.hermes").expanduser())
+    checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
+    product = product_readiness_report(version=release_version, omh_command=omh_command)
+    skill_content = skill_content_smoke()
+    use_cases = use_case_readiness(resolved_paths)
+    parity = build_parity_matrix()
+    local_store_status = _release_local_store_status(use_cases)
+    required_status = {
+        "release_checklist": "passed" if checklist.get("ok") else "failed",
+        "product_readiness": "passed" if product.get("status") == "ready" else "failed",
+        "skill_content": "passed" if skill_content.get("ok") else "failed",
+        "use_case_readiness": "passed" if use_cases.get("blocking_failures") == 0 else "failed",
+        "parity_contracts": "passed" if _parity_contracts_ready(parity) else "failed",
+    }
+    blocking_failures = [
+        f"{gate_id}: {status}"
+        for gate_id, status in required_status.items()
+        if status != "passed"
+    ]
+    warnings = []
+    if local_store_status != "passed":
+        warnings.append(f"local_artifact_store: {local_store_status}")
+    payload: dict[str, object] = {
+        "schema_version": RELEASE_EVIDENCE_BUNDLE_SCHEMA,
+        "mode": "live",
+        "observed": True,
+        "written": False,
+        "version": release_version,
+        "tag": f"v{release_version}",
+        "created_at": utc_now(),
+        "status": "ready" if not blocking_failures else "needs_attention",
+        "blocking_failures": blocking_failures,
+        "warnings": warnings,
+        "summary": {
+            "release_checklist_required_items": checklist.get("required_item_count"),
+            "product_readiness_status": product.get("status"),
+            "product_readiness_score": product.get("score"),
+            "skill_content_ok": skill_content.get("ok"),
+            "use_case_readiness_status": use_cases.get("status"),
+            "use_case_readiness_score": use_cases.get("score"),
+            "local_artifact_store": local_store_status,
+            "parity_available": (parity.get("summary") or {}).get("available")
+            if isinstance(parity.get("summary"), Mapping)
+            else None,
+            "parity_capability_count": (parity.get("summary") or {}).get("capability_count")
+            if isinstance(parity.get("summary"), Mapping)
+            else None,
+        },
+        "evidence": {
+            "release_checklist": checklist,
+            "product_readiness": product,
+            "skill_content": skill_content,
+            "use_case_readiness": use_cases,
+            "parity_contracts": parity,
+        },
+        "claims": [
+            "deterministic_local_package_contracts_checked",
+            "release_checklist_indexed",
+            "product_readiness_rollup_ready",
+            "skill_content_smoke_ready",
+            "g1_to_g10_use_case_readiness_ready",
+            "parity_contract_matrix_ready",
+        ],
+        "not_evidence_for": [
+            "live_hermes_chat_selection",
+            "connector_execution",
+            "executor_dispatch",
+            "implementation",
+            "review",
+            "ci",
+            "merge",
+            "delivery",
+            "billing_or_provider_budget",
+            "github_release_publication",
+        ],
+        "next_actions": _release_evidence_next_actions(blocking_failures, local_store_status),
+        "boundary": (
+            "A release evidence bundle packages deterministic local OMH evidence and optional local artifact-store state. "
+            "It does not mutate Hermes, run live profile smoke, call connectors, dispatch executors, review code, pass CI, "
+            "merge, deliver messages, publish GitHub releases, or prove provider billing/quota truth."
+        ),
+    }
+    if write:
+        artifact_path = resolved_paths.release_evidence_dir / f"omh-release-evidence-{release_version}.json"
+        payload["written"] = True
+        payload["artifact_path"] = str(artifact_path)
+        atomic_write_json(artifact_path, payload, private=True)
+        _write_release_evidence_index(resolved_paths, payload)
+    else:
+        payload["artifact_path"] = str(resolved_paths.release_evidence_dir / f"omh-release-evidence-{release_version}.json")
+    return payload
+
+
+def _release_evidence_next_actions(blocking_failures: Sequence[str], local_store_status: str) -> list[str]:
+    if blocking_failures:
+        return [
+            "Fix blocking bundle gates, then rerun `omh release evidence-bundle --write --json`.",
+            "Inspect the nested evidence payload for the failing gate before tagging.",
+        ]
+    actions = [
+        "Attach this bundle to the release PR or release notes as local deterministic evidence.",
+        "Run the required CI and live Hermes smoke separately; this bundle does not observe those remote/runtime gates.",
+    ]
+    if local_store_status != "passed":
+        actions.insert(0, "Run `omh cases artifact --all --write --json` if you want the optional local use-case artifact store populated.")
+    return actions
+
+
+def _release_local_store_status(use_case_payload: Mapping[str, object]) -> str:
+    gates = use_case_payload.get("gates", [])
+    if not isinstance(gates, Sequence) or isinstance(gates, (str, bytes)):
+        return "unknown"
+    for gate in gates:
+        if isinstance(gate, Mapping) and gate.get("id") == "local_artifact_store":
+            return str(gate.get("status") or "unknown")
+    return "missing"
+
+
+def _parity_contracts_ready(payload: Mapping[str, object]) -> bool:
+    summary = payload.get("summary")
+    if not isinstance(summary, Mapping):
+        return False
+    for key in ("partial", "planned", "deferred"):
+        if int(summary.get(key, 0) or 0) != 0:
+            return False
+    return int(summary.get("available", 0) or 0) == int(summary.get("capability_count", 0) or 0)
+
+
+def _write_release_evidence_index(paths: OmhPaths, payload: Mapping[str, object]) -> None:
+    version = str(payload.get("version") or "")
+    artifact_path = str(payload.get("artifact_path") or "")
+    existing, _ = read_json_object_result(paths.release_evidence_index_path)
+    entries = []
+    if existing and isinstance(existing.get("entries"), list):
+        entries = [entry for entry in existing["entries"] if isinstance(entry, dict) and entry.get("version") != version]
+    entries.append(
+        {
+            "version": version,
+            "tag": payload.get("tag"),
+            "status": payload.get("status"),
+            "created_at": payload.get("created_at"),
+            "artifact_path": artifact_path,
+            "schema_version": payload.get("schema_version"),
+        }
+    )
+    entries.sort(key=lambda entry: str(entry.get("created_at") or ""))
+    index = {
+        "schema_version": "omh_release_evidence_index/v1",
+        "latest_version": version,
+        "latest_artifact_path": artifact_path,
+        "count": len(entries),
+        "entries": entries,
+    }
+    atomic_write_json(paths.release_evidence_index_path, index, private=True)
 
 
 def _use_case_demo_card_failures(payload: Mapping[str, object]) -> list[str]:

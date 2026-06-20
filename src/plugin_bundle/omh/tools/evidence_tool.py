@@ -62,6 +62,7 @@ _DEFAULT_ALLOWLIST = (
     "omh docs workflows --check",
     "omh release checklist",
     "omh release product-readiness",
+    "omh release evidence-bundle",
     "python -m unittest",
     "python3 -m unittest",
     "python -m compileall",

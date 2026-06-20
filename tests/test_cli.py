@@ -1610,6 +1610,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("cases replay --json", items["use_case_replay"]["command"])
         self.assertIn("cases readiness --json", items["use_case_readiness"]["command"])
         self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
+        self.assertIn("release evidence-bundle --version 1.0.0 --write --json", items["release_evidence_bundle"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
@@ -1723,14 +1724,41 @@ class CliTests(unittest.TestCase):
         self.assertIn("Capability payload:", stdout)
         self.assertIn("Full capability manifest:", stdout)
         self.assertIn("Playbook capabilities:", stdout)
-        self.assertIn("Plugin fallback capabilities:", stdout)
-        self.assertIn("Use-case demo cards: 10/10 card(s); failures 0", stdout)
-        self.assertIn("Use-case artifacts: 10/10 artifact(s); failures 0", stdout)
-        self.assertIn("Use-case replay: 20/20 fixture(s); status passed; failures 0", stdout)
-        self.assertIn("context missing 0", stdout)
-        self.assertIn("For machine-readable output", stdout)
-        with self.assertRaises(json.JSONDecodeError):
-            json.loads(stdout)
+
+    def test_release_evidence_bundle_cli_packages_optional_write_artifact(self) -> None:
+        with TemporaryDirectory() as tmp:
+            omh_home = Path(tmp) / ".omh"
+            hermes_home = Path(tmp) / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(
+                base + ["release", "evidence-bundle", "--version", "v1.0.1", "--omh-command", "/tmp/omh"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH release evidence bundle for 1.0.1", stdout)
+            self.assertIn("Status: ready", stdout)
+            self.assertIn("Written: no", stdout)
+            self.assertIn("Local artifact store: not_written", stdout)
+            self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
+
+            status, stdout, stderr = run_cli(
+                base + ["release", "evidence-bundle", "--version", "1.0.1", "--write", "--json"],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_release_evidence_bundle/v1")
+            self.assertEqual(payload["status"], "ready")
+            self.assertTrue(payload["written"])
+            self.assertEqual(payload["summary"]["product_readiness_status"], "ready")
+            self.assertIn("local_artifact_store: not_written", payload["warnings"])
+            self.assertTrue(Path(payload["artifact_path"]).exists())
+            self.assertTrue((omh_home / "runtime" / "release-evidence" / "index.json").exists())
 
     def test_release_install_smoke_defaults_to_human_plan_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:

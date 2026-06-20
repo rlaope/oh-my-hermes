@@ -47,6 +47,14 @@ class OmhPaths:
         return self.runtime_dir / "worktrees.jsonl"
 
     @property
+    def release_evidence_dir(self) -> Path:
+        return self.runtime_dir / "release-evidence"
+
+    @property
+    def release_evidence_index_path(self) -> Path:
+        return self.release_evidence_dir / "index.json"
+
+    @property
     def operations_dir(self) -> Path:
         return self.omh_home / "operations"
 

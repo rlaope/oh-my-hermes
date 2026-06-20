@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import json
 import sys
 import subprocess
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from omh.paths import OmhPaths
 from omh.release import (
     hermes_release_smoke_plan,
     product_readiness_report,
+    release_evidence_bundle,
     release_readiness_checklist,
     run_hermes_release_smoke,
     skill_content_smoke,
@@ -37,6 +41,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("use_case_replay", items)
         self.assertIn("use_case_readiness", items)
         self.assertIn("product_readiness", items)
+        self.assertIn("release_evidence_bundle", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
         self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
@@ -76,6 +81,9 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(items["product_readiness"]["command"], "/tmp/omh release product-readiness --version 1.0.0 --json")
         self.assertIn("skill-content", items["product_readiness"]["evidence_required"])
         self.assertIn("product contracts", items["product_readiness"]["proof_boundary"])
+        self.assertEqual(items["release_evidence_bundle"]["command"], "/tmp/omh release evidence-bundle --version 1.0.0 --write --json")
+        self.assertIn("omh_release_evidence_bundle/v1", items["release_evidence_bundle"]["evidence_required"])
+        self.assertIn("local deterministic evidence", items["release_evidence_bundle"]["proof_boundary"])
         self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
         self.assertFalse(items["tag_and_publish"]["required"])
@@ -96,6 +104,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(
             items["product_readiness"]["command"],
             "'/tmp/omh command' release product-readiness --version 1.0.0 --json",
+        )
+        self.assertEqual(
+            items["release_evidence_bundle"]["command"],
+            "'/tmp/omh command' release evidence-bundle --version 1.0.0 --write --json",
         )
         self.assertIn("--omh-command '/tmp/omh command'", items["installed_command_smoke"]["command"])
         self.assertIn("'/tmp/omh command' release hermes-smoke --live", items["live_tap_smoke"]["command"])
@@ -231,6 +243,36 @@ class ReleaseSmokeTests(unittest.TestCase):
         )
         self.assertIn("deterministic local OMH package", payload["boundary"])
         self.assertIn("Attach observed evidence", " ".join(payload["next_actions"]))
+        self.assertIn("evidence-bundle", " ".join(payload["next_actions"]))
+
+    def test_release_evidence_bundle_packages_and_writes_local_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+
+            payload = release_evidence_bundle(version="v1.0.1", omh_command="/tmp/omh command", paths=paths)
+
+            self.assertEqual(payload["schema_version"], "omh_release_evidence_bundle/v1")
+            self.assertEqual(payload["status"], "ready")
+            self.assertFalse(payload["written"])
+            self.assertFalse(paths.release_evidence_index_path.exists())
+            self.assertIn("local_artifact_store: not_written", payload["warnings"])
+            self.assertEqual(payload["summary"]["product_readiness_status"], "ready")
+            self.assertEqual(payload["evidence"]["product_readiness"]["schema_version"], "omh_product_readiness/v1")
+            self.assertEqual(payload["evidence"]["release_checklist"]["schema_version"], "release_readiness_checklist/v1")
+            self.assertIn("executor_dispatch", payload["not_evidence_for"])
+
+            written = release_evidence_bundle(version="v1.0.1", omh_command="/tmp/omh command", paths=paths, write=True)
+
+            self.assertTrue(written["written"])
+            artifact_path = Path(str(written["artifact_path"]))
+            self.assertTrue(artifact_path.exists())
+            self.assertTrue(paths.release_evidence_index_path.exists())
+            stored = json.loads(artifact_path.read_text(encoding="utf-8"))
+            index = json.loads(paths.release_evidence_index_path.read_text(encoding="utf-8"))
+            self.assertEqual(stored["schema_version"], "omh_release_evidence_bundle/v1")
+            self.assertEqual(index["schema_version"], "omh_release_evidence_index/v1")
+            self.assertEqual(index["latest_version"], "1.0.1")
+            self.assertEqual(index["latest_artifact_path"], str(artifact_path))
 
     def test_release_readiness_checklist_rejects_empty_version(self) -> None:
         with self.assertRaises(ValueError):

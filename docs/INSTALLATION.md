@@ -276,6 +276,7 @@ command -v omh
 omh --help
 omh release skill-content-smoke --json
 omh release product-readiness --version 1.0.1 --json
+omh release evidence-bundle --version 1.0.1 --write --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 
@@ -294,6 +295,11 @@ Use `omh release product-readiness --version 1.0.1 --json` when you want a
 single release-candidate card that combines skill content, G1-G10 use-case
 readiness, parity contracts, and release checklist shape. It is still local
 contract evidence, not live Hermes chat or executor evidence.
+
+Use `omh release evidence-bundle --version 1.0.1 --write --json` when you want
+that local release-candidate evidence written under
+`.omh/runtime/release-evidence/` for a release PR or release note. The bundle is
+not CI, live Hermes smoke, executor, delivery, merge, or GitHub release evidence.
 
 ```sh
 omh release hermes-smoke --live --install-path tap --target-confirmed
