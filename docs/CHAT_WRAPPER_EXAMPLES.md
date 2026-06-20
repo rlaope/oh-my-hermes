@@ -139,9 +139,13 @@ such as "OMH 기능 뭐 있어?" still opens `omh_skill_picker/v1`, but "does OM
 support scheduled automation?", "can OMH help with MCP setup?", "does OMH
 support memory cleanup?", "does OMH support voice commands?", or "OMH로 GitHub
 issue webhook 처리 가능해?" should open the matching workflow card directly.
-Selection remains routing intent only; host automation, credentials, memory
-updates, platform actions, and webhook effects stay unobserved until separate
-evidence is recorded.
+The first visible action should be the matching workflow action, such as
+`prepare_scheduled_ops_blueprint`, `prepare_toolbelt_readiness`,
+`prepare_memory_curation_review`, `prepare_voice_operator_card`, or
+`prepare_github_event_ops_card`, followed by a status action. Selection remains
+routing intent only; host automation, credentials, memory updates, platform
+actions, and webhook effects stay unobserved until separate evidence is
+recorded.
 
 That returns `chat_route_hint/v1` with a `chat_response` card the adapter can
 render immediately:

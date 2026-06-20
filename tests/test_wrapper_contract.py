@@ -970,6 +970,11 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
+                actions = payload["chat_response"]["actions"]
+                action_ids = [str(action["id"]) for action in actions]
+                self.assertEqual(action_ids[0], next_action)
+                self.assertIn("show_status" if selected_workflow != "memory-curation-review" else "show_memory_status", action_ids)
+                self.assertEqual(actions[0]["style"], "primary")
                 self.assertEqual(
                     payload["chat_response"]["state"]["workflow_explanation"]["selected_workflow"],
                     selected_workflow,
@@ -1089,6 +1094,30 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_deliverable_package",
                 "deliverable path",
             ),
+            (
+                "can OMH help with MCP setup?",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                "MCP, CLI, API",
+            ),
+            (
+                "does OMH support memory cleanup?",
+                "memory-curation-review",
+                "prepare_memory_curation_review",
+                "approve, reject, or update",
+            ),
+            (
+                "does OMH support voice commands?",
+                "voice-operator",
+                "prepare_voice_operator_card",
+                "confirmation before risky actions",
+            ),
+            (
+                "OMH로 GitHub issue webhook 처리 가능해?",
+                "github-event-ops",
+                "prepare_github_event_ops_card",
+                "triage, review, label",
+            ),
         )
 
         for message, selected_workflow, next_action, body_marker in cases:
@@ -1100,6 +1129,8 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], next_action)
                 self.assertEqual(payload["chat_response"]["kind"], "ack")
                 self.assertIn(body_marker, payload["chat_response"]["body"])
+                action_ids = [str(action["id"]) for action in payload["chat_response"]["actions"]]
+                self.assertEqual(action_ids[0], next_action)
                 self.assertIn("workflow_context_id", payload["chat_response"]["usage_trace"])
                 self.assertNotIn("/v1", payload["chat_response"]["body"])
                 self.assertNotIn("schema", payload["chat_response"]["body"].lower())

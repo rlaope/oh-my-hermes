@@ -102,6 +102,16 @@ VISIBLE_ACTIONS = (
     "record_visual_qa",
     "record_visual_delivery",
     "show_visual_status",
+    "prepare_scheduled_ops_blueprint",
+    "prepare_research_department_plan",
+    "prepare_material_package",
+    "prepare_deliverable_package",
+    "prepare_github_event_ops_card",
+    "prepare_agent_board_card",
+    "prepare_executor_runtime_readiness",
+    "prepare_memory_curation_review",
+    "prepare_voice_operator_card",
+    "prepare_toolbelt_readiness",
     "show_agent_ops_review",
     "choose_ops_lane",
     "prepare_research_lane",
@@ -306,7 +316,47 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "I will prepare the deliverable path: which files are needed, who generates them, what QA must pass, "
         "and how attachment or delivery status should be recorded."
     ),
+    "github-event-ops": (
+        "I will classify the GitHub PR, issue, review, or CI event into triage, review, label, or fix-handoff "
+        "actions. Webhook delivery and GitHub mutations stay unobserved until a wrapper records them."
+    ),
+    "memory-curation-review": (
+        "I will surface stale, duplicate, or conflicting memory and context candidates for approve, reject, or "
+        "update choices. Nothing is written until approval is observed."
+    ),
+    "voice-operator": (
+        "I will turn the short voice or mobile request into a concise clarify, plan, status, handoff, or "
+        "confirmation card, and require confirmation before risky actions."
+    ),
+    "toolbelt-readiness": (
+        "I will map the MCP, CLI, API, credential, and connector pieces this workflow needs, show what is "
+        "observed versus missing, and suggest the safest setup or handoff next step."
+    ),
 }
+
+_ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
+    "prepare_scheduled_ops_blueprint": ("prepare_scheduled_ops_blueprint", "Prepare automation"),
+    "prepare_research_department_plan": ("prepare_research_department_plan", "Prepare research flow"),
+    "prepare_material_package": ("prepare_material_package", "Prepare package"),
+    "prepare_deliverable_package": ("prepare_deliverable_package", "Prepare deliverable"),
+    "prepare_github_event_ops_card": ("prepare_github_event_ops_card", "Open event card"),
+    "prepare_agent_board_card": ("prepare_agent_board_card", "Open agent board"),
+    "prepare_executor_runtime_readiness": ("prepare_executor_runtime_readiness", "Check runtime"),
+    "prepare_memory_curation_review": ("prepare_memory_curation_review", "Review memory"),
+    "prepare_voice_operator_card": ("prepare_voice_operator_card", "Open voice card"),
+    "prepare_toolbelt_readiness": ("prepare_toolbelt_readiness", "Check toolbelt"),
+}
+
+
+def _ack_actions_for_next_action(next_action: str) -> list[dict[str, object]]:
+    actions: list[dict[str, object]] = []
+    primary = _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION.get(next_action)
+    if primary:
+        actions.append(_action(primary[0], primary[1], "primary"))
+    status_action = "show_memory_status" if next_action == "prepare_memory_curation_review" else "show_status"
+    status_label = "Show memory status" if status_action == "show_memory_status" else "Show status"
+    actions.append(_action(status_action, status_label, "secondary"))
+    return actions
 
 
 def build_chat_interaction_payload(
@@ -806,7 +856,7 @@ def build_chat_response_from_route(
             phase="routed",
             next_action=next_action,
             thread_key=thread_key,
-            actions=[_action("show_status", "Show status", "secondary")],
+            actions=_ack_actions_for_next_action(next_action),
             claim_boundary=evidence_boundary,
             extra_state={
                 "route_action": action,
