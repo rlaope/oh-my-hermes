@@ -157,7 +157,11 @@ planning, research, ops, materials, visual summary, automation,
 workflow-learning, or coding-handoff work. That hook payload carries only
 hash/length metadata, matched cue labels, candidate workflow names, next
 actions, generic-tool checkpoint rules, and boundaries; it does not include the
-raw user message or prove a workflow executed. `omh hud`
+raw user message or prove a workflow executed. The `pre_tool_call` hook mirrors
+the generic-tool checkpoint as structured `omh_generic_tool_checkpoint/v1`
+metadata before image, file, search, or coding tools, while preserving the
+legacy text context for hosts that only consume prompt strings. It uses only
+tool labels and tool-family hints, never raw tool input. `omh hud`
 exposes the same status-line payload for local operator smoke tests. The HUD
 line stays limited to version, plugin bridge readiness, target topology, current
 or default coding agent, and evidence state. Host-supplied token metadata

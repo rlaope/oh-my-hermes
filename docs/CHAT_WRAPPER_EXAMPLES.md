@@ -240,9 +240,12 @@ before a generic tool, while image generation, file export, search retrieval,
 coding dispatch, review, CI, and merge remain observed-only claims.
 
 When the managed OMH plugin is loaded, its `pre_tool_call` hook can emit the
-same checkpoint before image, file, search, or coding tool calls. The hook uses
-tool metadata such as `tool_name` or `tool_family`; it does not copy the raw
-image prompt, file body, search query, or coding task into the context.
+same checkpoint before image, file, search, or coding tool calls. It returns the
+legacy text context plus a structured `omh_generic_tool_checkpoint/v1` payload
+with the tool family, preferred workflow, next action, fallback action, and
+not-yet-evidence list. The hook uses tool metadata such as `tool_name` or
+`tool_family`; it does not copy the raw image prompt, file body, search query,
+or coding task into the context or structured payload.
 
 Capability-specific catalog questions and short image requests should also stay
 workflow-native. If the user asks "이미지 생성 기능 뭐 있어?", "이미지 생성해줘",

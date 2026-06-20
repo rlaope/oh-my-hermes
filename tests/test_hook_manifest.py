@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from _local_package import load_local_package
@@ -150,6 +151,8 @@ class HookManifestTests(unittest.TestCase):
                     **extra_kwargs,
                 )
                 context = result["context"] if result else ""
+                checkpoint = result["omh_generic_tool_checkpoint"] if result else {}
+                serialized_checkpoint = json.dumps(checkpoint, sort_keys=True)
 
                 self.assertIn("[OMH Tool Checkpoint]", context)
                 self.assertIn("schema=omh_generic_tool_checkpoint/v1", context)
@@ -157,8 +160,19 @@ class HookManifestTests(unittest.TestCase):
                 self.assertIn(f"workflow={workflow}", context)
                 self.assertIn(f"next_action={next_action}", context)
                 self.assertIn("advisory tool-use context only", context)
+                self.assertEqual(checkpoint["schema_version"], "omh_generic_tool_checkpoint/v1")
+                self.assertEqual(checkpoint["source"], "pre_tool_call")
+                self.assertEqual(checkpoint["tool_name"], tool_name)
+                self.assertEqual(checkpoint["tool_family"], tool_family)
+                self.assertEqual(checkpoint["primary_workflow"], workflow)
+                self.assertEqual(checkpoint["primary_next_action"], next_action)
+                self.assertFalse(checkpoint["privacy"]["raw_tool_input_stored"])
+                self.assertFalse(checkpoint["privacy"]["raw_tool_input_echoed"])
+                self.assertIn("Advisory tool-use context only", checkpoint["claim_boundary"])
                 self.assertNotIn("secret-token-123", context)
                 self.assertNotIn("should never appear", context)
+                self.assertNotIn("secret-token-123", serialized_checkpoint)
+                self.assertNotIn("should never appear", serialized_checkpoint)
 
     def test_pre_tool_call_checkpoint_can_be_disabled(self) -> None:
         result = pre_tool_call(
