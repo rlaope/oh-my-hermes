@@ -97,7 +97,7 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["action"], "dispatch")
                 self.assertEqual(decision["selected_skill"], skill)
                 self.assertEqual(decision["selected_harness"], harness)
-        self.assertEqual(decision["confidence"], "high")
+                self.assertEqual(decision["confidence"], "high")
 
     def test_visual_summary_chat_dispatches_to_img_summary(self) -> None:
         cases = (
@@ -116,6 +116,7 @@ class ChatRouterTests(unittest.TestCase):
             "生成一张发布说明海报",
             "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
             "The Hermes agent did not use OMH for this summary image.",
+            "make a workflow learning image card",
         )
 
         for message in cases:
@@ -126,6 +127,22 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_skill"], "img-summary")
                 self.assertEqual(decision["selected_harness"], "img-summary")
                 self.assertEqual(decision["confidence"], "high")
+
+    def test_explicit_workflow_learning_feedback_wins_over_domain_terms(self) -> None:
+        cases = (
+            "Hermes did not use OMH for my image request; record this as workflow learning",
+            "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "workflow-learning")
+                self.assertEqual(decision["selected_harness"], "workflow-learning")
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn("guard:workflow_learning", decision["recommendations"][0]["matched"])
 
     def test_catalog_question_dispatches_to_router_without_shell_approval(self) -> None:
         for message in (

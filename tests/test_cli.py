@@ -79,7 +79,12 @@ class CliTests(unittest.TestCase):
             <= action_ids
         )
 
-        for message in ("missed route: OMH was not used", "OMH 안 썼어"):
+        for message in (
+            "missed route: OMH was not used",
+            "OMH 안 썼어",
+            "Hermes did not use OMH for my image request; record this as workflow learning",
+            "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
+        ):
             status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message], output_json=False)
 
             self.assertEqual(status, 0, stderr)
