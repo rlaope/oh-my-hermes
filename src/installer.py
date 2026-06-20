@@ -165,11 +165,11 @@ def _collect_command_package_removal(
     if venv_dir is None:
         kept.append({"path": "omh", "reason": "HOME is not available, so the install.sh-managed command venv cannot be located"})
         return
-    executable = Path(sys.executable).expanduser().resolve()
-    if not _is_relative_to(executable, venv_dir):
+    executable = Path(sys.executable).expanduser()
+    if not _is_relative_to_without_resolving_symlinks(executable, venv_dir):
         kept.append(
             {
-                "path": str(executable),
+                "path": str(executable.resolve()),
                 "reason": "current omh command is not running from the install.sh-managed OMH venv",
             }
         )
@@ -271,3 +271,16 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_relative_to_without_resolving_symlinks(path: Path, parent: Path) -> bool:
+    try:
+        _normalize_without_final_symlink(path).relative_to(_normalize_without_final_symlink(parent))
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_without_final_symlink(path: Path) -> Path:
+    expanded = path.expanduser()
+    return expanded.parent.resolve() / expanded.name
