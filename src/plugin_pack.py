@@ -81,6 +81,9 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
 def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
     target = paths.hermes_plugin_dir
     manifest = read_plugin_manifest(target)
+    bundled_records = bundled_plugin_records()
+    manifest_file_map = _manifest_file_map(manifest)
+    bundled_file_map = _record_file_map(bundled_records)
     plugin_yaml = target / "plugin.yaml"
     init_py = target / "__init__.py"
     errors: list[str] = []
@@ -89,8 +92,11 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
     if target.exists() and not manifest:
         errors.append(f"{target / PLUGIN_MANAGED_MANIFEST} is missing or unreadable")
     manifest_valid = _manifest_valid(manifest, target)
+    manifest_current = manifest_valid and manifest_file_map == bundled_file_map
     if target.exists() and not manifest_valid:
-        errors.append("plugin manifest is invalid or stale")
+        errors.append("plugin manifest is invalid or managed files changed")
+    if target.exists() and manifest_valid and not manifest_current:
+        errors.append("plugin bundle is stale relative to the installed OMH package; run `omh setup` to refresh it")
     if target.exists() and not plugin_yaml.exists():
         errors.append(f"{plugin_yaml} is missing")
     if target.exists() and not init_py.exists():
@@ -100,6 +106,15 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
     register_smoke = bool(smoke.get("register_smoke", False))
     if target.exists() and smoke.get("error"):
         errors.append(str(smoke["error"]))
+    missing_tools = [str(item) for item in smoke.get("missing_registered_tools", [])]
+    missing_hooks = [str(item) for item in smoke.get("missing_registered_hooks", [])]
+    if target.exists() and import_smoke and not register_smoke and (missing_tools or missing_hooks):
+        detail = []
+        if missing_tools:
+            detail.append(f"missing tools={missing_tools}")
+        if missing_hooks:
+            detail.append(f"missing hooks={missing_hooks}")
+        errors.append("plugin register smoke is incomplete: " + "; ".join(detail))
     return {
         "schema_version": PLUGIN_SCHEMA_VERSION,
         "plugin_name": PLUGIN_NAME,
@@ -108,12 +123,16 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
         "plugin_manifest_path": str(target / PLUGIN_MANAGED_MANIFEST),
         "plugin_manifest_present": manifest is not None,
         "plugin_manifest_valid": manifest_valid,
+        "plugin_manifest_current": manifest_current,
+        "plugin_bundle_stale": target.exists() and manifest_valid and not manifest_current,
         "plugin_yaml_present": plugin_yaml.exists(),
         "plugin_import_smoke": import_smoke,
         "plugin_register_smoke": register_smoke,
         "registered_tools": smoke.get("registered_tools", []),
         "registered_hooks": smoke.get("registered_hooks", []),
-        "plugin_distribution_ready": bool(target.exists() and manifest_valid and import_smoke and register_smoke),
+        "missing_registered_tools": missing_tools,
+        "missing_registered_hooks": missing_hooks,
+        "plugin_distribution_ready": bool(target.exists() and manifest_current and import_smoke and register_smoke),
         "plugin_runtime_observed": False,
         "requires_hermes_plugin_enable": target.exists(),
         "enable_hint": PLUGIN_ENABLE_HINT,
@@ -267,11 +286,15 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
         register(ctx)
         required_tools = set(PROVIDED_TOOLS)
         required_hooks = set(PROVIDED_HOOKS)
+        missing_tools = sorted(required_tools.difference(ctx.tools))
+        missing_hooks = sorted(required_hooks.difference(ctx.hooks))
         return {
             "import_smoke": True,
-            "register_smoke": required_tools.issubset(set(ctx.tools)) and required_hooks.issubset(set(ctx.hooks)),
+            "register_smoke": not missing_tools and not missing_hooks,
             "registered_tools": sorted(ctx.tools),
             "registered_hooks": sorted(ctx.hooks),
+            "missing_registered_tools": missing_tools,
+            "missing_registered_hooks": missing_hooks,
         }
     except Exception as exc:
         return {"import_smoke": False, "register_smoke": False, "error": f"plugin smoke failed: {exc}"}

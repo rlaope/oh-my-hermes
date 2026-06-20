@@ -57,6 +57,22 @@ def _has_any_file(paths: list[Path]) -> bool:
     return any(_has_file(path) for path in paths)
 
 
+def _plugin_smoke_message(plugin: dict) -> str:
+    errors = [str(item) for item in plugin.get("errors", []) if str(item)]
+    if errors:
+        return "; ".join(errors)
+    missing_tools = [str(item) for item in plugin.get("missing_registered_tools", [])]
+    missing_hooks = [str(item) for item in plugin.get("missing_registered_hooks", [])]
+    if missing_tools or missing_hooks:
+        details: list[str] = []
+        if missing_tools:
+            details.append(f"missing tools={missing_tools}")
+        if missing_hooks:
+            details.append(f"missing hooks={missing_hooks}")
+        return "Installed OMH plugin register smoke is incomplete: " + "; ".join(details)
+    return "Installed OMH plugin has not passed fake Hermes register smoke"
+
+
 def _marker_capability(name: str, markers: list[Path], found_message: str, missing_message: str) -> Capability:
     found = _has_any_file(markers)
     return Capability(
@@ -427,7 +443,7 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False, include
                 (
                     f"Installed OMH plugin registers tools={plugin['registered_tools']} hooks={plugin['registered_hooks']}"
                     if plugin["plugin_register_smoke"]
-                    else "Installed OMH plugin has not passed fake Hermes register smoke"
+                    else _plugin_smoke_message(plugin)
                 ),
             ),
             plugin_runtime_capability,

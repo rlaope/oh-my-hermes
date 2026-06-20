@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.resources as resources
 import importlib.util
 import json
@@ -190,6 +191,66 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("OMH status helper files were changed outside OMH", stderr)
             self.assertIn("omh setup --force", stderr)
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-plugin", "--force"])[0], 0)
+
+    def test_doctor_reports_stale_plugin_bundle_as_plain_setup_refresh(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin"])[0], 0)
+
+            plugin_dir = hermes_home / "plugins" / "omh"
+            init_py = plugin_dir / "__init__.py"
+            text = init_py.read_text(encoding="utf-8")
+            stale_text = text.replace(
+                '    ctx.register_tool(\n'
+                '        "omh_probe",\n'
+                "        _TOOLSET,\n"
+                "        OMH_PROBE_SCHEMA,\n"
+                "        omh_probe_handler,\n"
+                '        description=OMH_PROBE_SCHEMA["description"],\n'
+                "    )\n",
+                "",
+            ).replace(
+                '    ctx.register_tool(\n'
+                '        "omh_recommend",\n'
+                "        _TOOLSET,\n"
+                "        OMH_RECOMMEND_SCHEMA,\n"
+                "        omh_recommend_handler,\n"
+                '        description=OMH_RECOMMEND_SCHEMA["description"],\n'
+                "    )\n",
+                "",
+            )
+            init_py.write_text(stale_text, encoding="utf-8")
+            manifest_path = plugin_dir / ".omh-plugin-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for record in manifest["files"]:
+                if record["path"] == "__init__.py":
+                    record["sha256"] = hashlib.sha256(stale_text.encode("utf-8")).hexdigest()
+            manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
+            self.assertTrue(inspection["plugin_manifest_valid"])
+            self.assertFalse(inspection["plugin_manifest_current"])
+            self.assertTrue(inspection["plugin_bundle_stale"])
+            self.assertFalse(inspection["plugin_register_smoke"])
+            self.assertEqual(inspection["missing_registered_tools"], ["omh_probe", "omh_recommend"])
+            self.assertIn("stale relative to the installed OMH package", "; ".join(inspection["errors"]))
+
+            status, stdout, stderr = run_cli(base + ["doctor"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 1)
+            checks = {check["name"]: check for check in json.loads(stdout)["checks"]}
+            self.assertFalse(checks["plugin_bundle_current"]["ok"])
+            self.assertFalse(checks["plugin_register_smoke"]["ok"])
+            self.assertIn("omh setup", checks["plugin_register_smoke"]["next_action"])
+            self.assertNotIn("--force", checks["plugin_register_smoke"]["next_action"])
+            self.assertIn("omh_probe", checks["plugin_register_smoke"]["message"])
+
+            self.assertEqual(run_cli(base + ["setup"])[0], 0)
+            self.assertEqual(run_cli(base + ["doctor"])[0], 0)
 
     def test_doctor_fails_for_malformed_installed_plugin(self) -> None:
         with TemporaryDirectory() as tmp:
