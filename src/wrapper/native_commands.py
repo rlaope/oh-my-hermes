@@ -41,7 +41,7 @@ def build_native_command_surface(source: str = "generic") -> dict[str, object]:
             "When partial input cannot open native autocomplete, pass the message to `omh chat interact`.",
             "If the response kind is `command_preview`, render the fallback card and primary `Open omh` action.",
             "When the user selects the action, submit `./omh` or `/omh` back through the same wrapper.",
-            "Render `chat_response.state.skill_picker.options` only after the picker opens.",
+            "Render `chat_response.state.skill_picker.featured_options` first, then grouped `skill_picker.groups`; use `skill_picker.options` as the flat fallback.",
         ],
         "not_evidence": [
             "platform command installed",
@@ -99,6 +99,8 @@ def render_native_command_response(interaction: dict[str, object], *, source: st
             {
                 "render_kind": "workflow_picker",
                 "picker_schema": picker.get("schema_version", "omh_skill_picker/v1"),
+                "featured_options": picker.get("featured_options", []),
+                "groups": picker.get("groups", []),
                 "options": picker.get("options", []),
                 "component": _picker_component_for_source(source, picker),
             }
@@ -272,24 +274,75 @@ def _component_for_source(source: str, *, insert_text: str) -> dict[str, object]
 
 
 def _picker_component_for_source(source: str, picker: dict[str, object]) -> dict[str, object]:
-    options = [
-        {"label": str(option.get("label", "")), "value": str(option.get("id", ""))}
-        for option in _list_of_dicts(picker.get("options"))
-    ]
+    options = _picker_component_options(picker.get("options"))
+    featured_options = _picker_component_options(picker.get("featured_options"))
+    groups = _picker_component_groups(picker.get("groups"))
     if source == "discord":
-        return {"kind": "discord_select_menu", "custom_id": "omh.choose_workflow", "options": options}
+        return {
+            "kind": "discord_select_menu",
+            "custom_id": "omh.choose_workflow",
+            "featured_options": featured_options,
+            "groups": groups,
+            "fallback_options": options,
+        }
     if source == "slack":
-        return {"kind": "slack_static_select", "action_id": "omh.choose_workflow", "options": options}
+        return {
+            "kind": "slack_static_select",
+            "action_id": "omh.choose_workflow",
+            "featured_options": featured_options,
+            "groups": groups,
+            "fallback_options": options,
+        }
     if source == "telegram":
+        keyboard_options = [*featured_options, *[item for group in groups for item in group["options"]]]
+        keyboard_rows = [[_telegram_button_for_option(option)] for option in keyboard_options]
         return {
             "kind": "telegram_inline_keyboard",
-            "reply_markup": {
-                "inline_keyboard": [[{"text": option["label"], "callback_data": f"omh.workflow:{option['value']}"}] for option in options]
-            },
+            "featured_options": featured_options,
+            "groups": groups,
+            "fallback_options": options,
+            "reply_markup": {"inline_keyboard": keyboard_rows},
         }
     if source == "hermes":
-        return {"kind": "hermes_tui_command_list", "rows": options}
-    return {"kind": "generic_select", "options": options}
+        return {
+            "kind": "hermes_tui_command_list",
+            "featured_rows": featured_options,
+            "groups": groups,
+            "fallback_rows": options,
+        }
+    return {
+        "kind": "generic_select",
+        "featured_options": featured_options,
+        "groups": groups,
+        "fallback_options": options,
+    }
+
+
+def _picker_component_options(value: object) -> list[dict[str, str]]:
+    return [
+        {"label": str(option.get("label", "")), "value": str(option.get("id", ""))}
+        for option in _list_of_dicts(value)
+    ]
+
+
+def _picker_component_groups(value: object) -> list[dict[str, object]]:
+    groups = []
+    for group in _list_of_dicts(value):
+        options = _picker_component_options(group.get("options"))
+        if not options:
+            continue
+        groups.append(
+            {
+                "id": str(group.get("id", "")),
+                "label": str(group.get("label", "")),
+                "options": options,
+            }
+        )
+    return groups
+
+
+def _telegram_button_for_option(option: dict[str, str]) -> dict[str, str]:
+    return {"text": option["label"], "callback_data": f"omh.workflow:{option['value']}"}
 
 
 def _nested(payload: dict[str, object], key: str) -> dict[str, Any]:

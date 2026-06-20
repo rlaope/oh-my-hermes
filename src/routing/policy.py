@@ -179,6 +179,7 @@ _VISUAL_SUMMARY_CAPABILITY_TOKENS = _normalized_token_set(
         "supports",
         "feature",
         "features",
+        "generation",
         "capability",
         "capabilities",
         "available",
@@ -195,8 +196,23 @@ _VISUAL_SUMMARY_CAPABILITY_TOKENS = _normalized_token_set(
         "功能",
     }
 )
+_VISUAL_SUMMARY_SHORT_REQUEST_PHRASES = frozenset(
+    normalized_phrase(phrase)
+    for phrase in (
+        "make an image",
+        "create an image",
+        "generate an image",
+        "이미지 만들어줘",
+        "이미지 생성해줘",
+        "이미지 생성해 줘",
+        "이미지를 만들어줘",
+        "이미지를 생성해줘",
+    )
+)
 _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
     {
+        "classifier",
+        "component",
         "debug",
         "fix",
         "failure",
@@ -208,6 +224,13 @@ _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
         "uploads",
         "asset",
         "assets",
+        "processing",
+        "파이썬",
+        "python",
+        "script",
+        "스크립트",
+        "스크립트로",
+        "컴포넌트",
     }
 )
 _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = _normalized_token_set(
@@ -1773,6 +1796,8 @@ def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _is_short_visual_summary_request(normalized_query):
+        return True
     explicit_visual_phrase = _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
     if explicit_visual_phrase:
         return True
@@ -1796,6 +1821,11 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
     ):
         return True
     return False
+
+
+def _is_short_visual_summary_request(normalized_query: str) -> bool:
+    compact = normalized_query.strip(" \t\r\n.!?,;:()[]{}\"'`~。？！、，；：")
+    return compact in _VISUAL_SUMMARY_SHORT_REQUEST_PHRASES
 
 
 def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
