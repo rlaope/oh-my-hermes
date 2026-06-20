@@ -6,6 +6,7 @@ import json
 import sys
 import tomllib
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -78,6 +79,27 @@ class PluginDistributionTests(unittest.TestCase):
         for hook in PROVIDED_HOOKS:
             self.assertIn(f"  - {hook}", text)
 
+    def test_probe_tool_falls_back_only_when_package_is_absent(self) -> None:
+        from omh.plugin_bundle.omh.tools import probe_tool
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            args = {"omh_home": str(omh_home), "hermes_home": str(hermes_home)}
+            package_missing = ModuleNotFoundError("No module named 'omh'", name="omh")
+            backend_broken = ModuleNotFoundError("No module named 'omh.probe'", name="omh.probe")
+
+            with mock.patch.object(probe_tool, "_package_probe", side_effect=package_missing):
+                fallback_payload = json.loads(probe_tool.omh_probe_handler(args))
+
+            self.assertEqual(fallback_payload["source"], "standalone_plugin_bundle_fallback")
+            self.assertTrue(fallback_payload["degraded"])
+
+            with mock.patch.object(probe_tool, "_package_probe", side_effect=backend_broken):
+                with self.assertRaises(ModuleNotFoundError):
+                    probe_tool.omh_probe_handler(args)
+
     def test_setup_default_installs_plugin(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -114,7 +136,15 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue((plugin_dir / ".omh-plugin-manifest.json").exists())
             self.assertEqual(
                 plugin["registered_tools"],
-                ["omh_capabilities", "omh_gather_evidence", "omh_hud", "omh_recommend", "omh_role", "omh_status"],
+                [
+                    "omh_capabilities",
+                    "omh_gather_evidence",
+                    "omh_hud",
+                    "omh_probe",
+                    "omh_recommend",
+                    "omh_role",
+                    "omh_status",
+                ],
             )
             self.assertEqual(plugin["registered_hooks"], ["on_session_end", "pre_llm_call", "pre_tool_call"])
 
@@ -206,6 +236,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("omh_capabilities", ctx.tools)
             self.assertIn("omh_gather_evidence", ctx.tools)
             self.assertIn("omh_hud", ctx.tools)
+            self.assertIn("omh_probe", ctx.tools)
             self.assertIn("omh_role", ctx.tools)
             self.assertIn("omh_status", ctx.tools)
             self.assertIn("on_session_end", ctx.hooks)
@@ -218,6 +249,23 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("[omh]", hud_payload["display"]["line"])
             self.assertEqual(hud_payload["runtime"]["evidence_state"], "prepared_not_observed")
             self.assertEqual(hud_payload["tokens"]["status"], "unobserved")
+
+            probe_handler = ctx.tools["omh_probe"]["args"][2]
+            probe_payload = json.loads(
+                probe_handler(
+                    {
+                        "omh_home": str(omh_home),
+                        "hermes_home": str(hermes_home),
+                        "include_roadmap": True,
+                    }
+                )
+            )
+            self.assertEqual(probe_payload["source"], "package_probe_backend")
+            self.assertFalse(probe_payload["degraded"])
+            self.assertEqual(probe_payload["plugin_tool"], "omh_probe")
+            self.assertIn("capability_gap_roadmap", probe_payload)
+            self.assertEqual(probe_payload["capability_gap_roadmap"]["schema_version"], "omh_capability_gap_roadmap/v1")
+            self.assertIn("plugin_runtime_observed", {item["name"] for item in probe_payload["capabilities"]})
 
             handler = ctx.tools["omh_status"]["args"][2]
             payload = json.loads(handler({"omh_home": str(omh_home), "limit": 1}))
@@ -380,8 +428,9 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertIn("meeting-brief", context)
             self.assertIn("feedback-triage", context)
             self.assertIn("omh_capabilities", context)
-            self.assertIn("workflow/playbook catalog context", context)
-            self.assertIn("omh_role for responsibility context", context)
+            self.assertIn("omh_capabilities catalogs", context)
+            self.assertIn("omh_probe gives setup/runtime roadmap", context)
+            self.assertIn("omh_role gives role context", context)
             self.assertIn("external image tool", context)
             self.assertIn("[omh]", context)
             self.assertIn("prepared handoffs are not execution", context)

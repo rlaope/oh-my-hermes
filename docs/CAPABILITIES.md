@@ -32,9 +32,10 @@ omh capabilities inspect request-to-handoff --section playbooks --json
 ```
 
 The Hermes plugin exposes the same contract through the metadata-only
-`omh_capabilities` tool, and exposes `omh_recommend` when Hermes has a
-natural-language request and needs the nearest OMH workflow without asking the
-user to approve a shell command.
+`omh_capabilities` tool, exposes `omh_recommend` when Hermes has a
+natural-language request and needs the nearest OMH workflow, and exposes
+`omh_probe` when Hermes needs local setup/runtime status or a capability
+roadmap without asking the user to approve a shell command.
 Use `action=summary` when Hermes needs to answer "what can OMH do?" or render a
 small workflow picker/card without asking the user to approve a shell catalog
 command.
@@ -86,9 +87,11 @@ session evidence only.
 
 The managed plugin bridge has the same split. Local install/import/register
 smoke proves the bundle is present and importable, including tools such as
-`omh_recommend`, `omh_capabilities`, `omh_hud`, and `omh_status`. Host or
-wrapper evidence that Hermes actually loaded or used the plugin is recorded
-separately with
+`omh_recommend`, `omh_capabilities`, `omh_probe`, `omh_hud`, and `omh_status`.
+`omh_probe` can return the same capability roadmap shape as `omh probe
+--roadmap`; in standalone plugin-bundle mode it returns a degraded roadmap that
+only uses local files and metadata. Host or wrapper evidence that Hermes
+actually loaded or used the plugin is recorded separately with
 `omh plugin observe-host` as `omh_plugin_host_observation/v1`. Active readiness
 requires the latest observed event to be `plugin_load`, `tool_call`, `hook_call`,
 or `status_query`; `blocked`, `session_end`, and `plugin_unload` do not make the

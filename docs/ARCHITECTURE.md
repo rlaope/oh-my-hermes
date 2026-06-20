@@ -11,8 +11,8 @@ of copied prompt files.
 The architecture favors:
 
 - Hermes-native skill installation as the primary user-facing entry point
-- a thin Hermes plugin bridge for workflow recommendation and metadata-only
-  HUD/status context
+- a thin Hermes plugin bridge for workflow recommendation, capability probing,
+  and metadata-only HUD/status context
 - a small support command interface for bootstrap, verification, and wrappers
 - reversible local bootstrap installation
 - generated skill text from testable catalog data
@@ -42,7 +42,7 @@ flowchart LR
 
   user --> hermes
   skills --> hermes
-  plugin -->|"omh_recommend, omh_hud, omh_role, omh_status, evidence, hooks"| hermes
+  plugin -->|"omh_recommend, omh_probe, omh_hud, omh_role, omh_status, evidence, hooks"| hermes
   user --> wrapper
   wrapper -->|"chat_interaction/v1"| omh
   omh -->|"answer, clarify, plan, or status"| wrapper
@@ -145,10 +145,11 @@ OMH directly when Hermes taps are available.
 
 `plugin_bundle/omh/` is the Hermes plugin payload installed by `omh setup` to
 `~/.hermes/plugins/omh`. The v1 plugin registers deterministic
-`omh_recommend`, compact metadata-only `omh_hud`, detailed metadata-only
-`omh_status`, `omh_role` role context, a bounded `omh_gather_evidence` local
-verification probe, and passive lifecycle hooks for bounded status context,
-role marker validation, and metadata-only session-end checkpointing. The
+`omh_recommend`, metadata-only `omh_probe` capability status/roadmap, compact
+metadata-only `omh_hud`, detailed metadata-only `omh_status`, `omh_role` role
+context, a bounded `omh_gather_evidence` local verification probe, and passive
+lifecycle hooks for bounded status context, role marker validation, and
+metadata-only session-end checkpointing. The
 `pre_llm_call` hook can also add
 `omh_route_hint/v1` for messages that look like planning, research, ops,
 materials, visual summary, automation, workflow-learning, or coding-handoff

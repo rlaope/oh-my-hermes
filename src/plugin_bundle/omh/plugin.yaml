@@ -6,6 +6,7 @@ provides_tools:
   - omh_capabilities
   - omh_gather_evidence
   - omh_hud
+  - omh_probe
   - omh_recommend
   - omh_role
   - omh_status
