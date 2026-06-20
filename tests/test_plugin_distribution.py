@@ -114,7 +114,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue((plugin_dir / ".omh-plugin-manifest.json").exists())
             self.assertEqual(
                 plugin["registered_tools"],
-                ["omh_capabilities", "omh_gather_evidence", "omh_hud", "omh_role", "omh_status"],
+                ["omh_capabilities", "omh_gather_evidence", "omh_hud", "omh_recommend", "omh_role", "omh_status"],
             )
             self.assertEqual(plugin["registered_hooks"], ["on_session_end", "pre_llm_call", "pre_tool_call"])
 
@@ -226,6 +226,20 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue(payload["runs"][0]["prepared_handoff"])
             self.assertFalse(payload["runs"][0]["execution_observed"])
             self.assertIn("not execution evidence", payload["evidence_boundary"]["prepared_handoff"])
+
+            recommend_handler = ctx.tools["omh_recommend"]["args"][2]
+            recommendation = json.loads(
+                recommend_handler({"message": "make an image card for this PR with secret-token-123", "limit": 2})
+            )
+            self.assertEqual(recommendation["schema_version"], "omh_recommend_result/v1")
+            self.assertEqual(recommendation["status"], "recommended")
+            self.assertEqual(recommendation["source"], "package_recommend")
+            self.assertEqual(recommendation["message"]["raw_prompt_echoed"], False)
+            self.assertFalse(recommendation["message"]["raw_prompt_stored"])
+            self.assertTrue(recommendation["recommendations"])
+            self.assertEqual(recommendation["recommendations"][0]["skill"], "img-summary")
+            self.assertNotIn("secret-token-123", json.dumps(recommendation, sort_keys=True))
+            self.assertIn("<current user request>", recommendation["recommendations"][0]["suggested_prompt"])
 
             evidence_handler = ctx.tools["omh_gather_evidence"]["args"][2]
             evidence = json.loads(

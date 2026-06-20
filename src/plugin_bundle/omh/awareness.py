@@ -698,6 +698,7 @@ def awareness_primer_payload() -> dict[str, object]:
         ],
         "tool_hints": [
             "Use omh_capabilities action=summary when the user asks what OMH can do or which workflows are available.",
+            "Use omh_recommend when the user gives a natural-language request and Hermes needs the nearest OMH workflow without shell approval.",
             "Use omh_capabilities for detailed workflow catalog and capability manifest lookup.",
             "Use omh_status or omh_hud for metadata-only runtime state.",
             "Use omh_role for responsibility context when a role marker is present.",
@@ -774,8 +775,8 @@ def awareness_primer_context() -> str:
             f"Common cues: {cue_map}.",
             f"Tools: {tool_map}",
             (
-                "Tools: omh_capabilities for workflow/playbook catalog context; action=summary for catalog "
-                "questions; omh_status or omh_hud for state; omh_role for responsibility context."
+                "Tools: omh_recommend routes requests; omh_capabilities gives workflow/playbook catalog "
+                "context; omh_status/hud state; omh_role for responsibility context."
             ),
             str(payload["fallback_rule"]),
             "Boundary: " + str(payload["evidence_boundary"]),
@@ -825,7 +826,7 @@ def awareness_primer_markdown() -> str:
             "",
             "Tools:",
             "",
-            "- Use `omh_capabilities` for workflow/playbook catalog context, `omh_status`/`omh_hud` for state, and `omh_role` for responsibility.",
+            "- `omh_recommend`: route natural-language requests; `omh_capabilities`: catalog; `omh_status`/`omh_hud`: state; `omh_role`: role.",
             "",
             str(payload["fallback_rule"]),
             "",
@@ -837,7 +838,7 @@ def awareness_primer_markdown() -> str:
 def awareness_workflow_context_markdown(skill_name: str) -> str:
     payload = awareness_primer_payload()
     lane = _lane_for_skill(skill_name, payload["lanes"])
-    lane_line = "Use the `oh-my-hermes` router or `omh_capabilities` manifest when the request crosses workflow lanes."
+    lane_line = "Use `omh_recommend` or the `oh-my-hermes` router for workflow choice, and `omh_capabilities` for manifest detail."
     if lane:
         skills = "`, `".join(str(skill) for skill in lane["skills"])
         lane_line = f"Current lane: **{lane['label']}** (`{skills}`) - {lane['use_for']}."
