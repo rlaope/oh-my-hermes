@@ -175,6 +175,18 @@ class OmhPaths:
         return self.learning_dir / "index.json"
 
     @property
+    def use_cases_dir(self) -> Path:
+        return self.omh_home / "use-cases"
+
+    @property
+    def use_case_artifacts_dir(self) -> Path:
+        return self.use_cases_dir / "artifacts"
+
+    @property
+    def use_case_artifacts_index_path(self) -> Path:
+        return self.use_cases_dir / "index.json"
+
+    @property
     def hermes_config_path(self) -> Path:
         return self.hermes_home / "config.yaml"
 

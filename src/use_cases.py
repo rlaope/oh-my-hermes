@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import re
+from pathlib import Path
 from typing import Any
+
+from .local_store import atomic_write_json, ensure_dir, read_json_object, read_json_object_result, utc_now
+from .paths import OmhPaths
 
 
 USE_CASE_CATALOG_SCHEMA_VERSION = "omh_use_case_catalog/v1"
@@ -10,6 +14,11 @@ USE_CASE_DEMO_CARD_SCHEMA_VERSION = "omh_use_case_demo_card/v1"
 USE_CASE_DEMO_COLLECTION_SCHEMA_VERSION = "omh_use_case_demo_collection/v1"
 USE_CASE_RECOMMENDATION_SCHEMA_VERSION = "omh_use_case_recommendation/v1"
 USE_CASE_VALIDATION_SCHEMA_VERSION = "omh_use_case_validation/v1"
+USE_CASE_ARTIFACT_SCHEMA_VERSION = "omh_use_case_artifact/v1"
+USE_CASE_ARTIFACT_COLLECTION_SCHEMA_VERSION = "omh_use_case_artifact_collection/v1"
+USE_CASE_ARTIFACT_WRITE_SCHEMA_VERSION = "omh_use_case_artifact_write/v1"
+USE_CASE_ARTIFACT_INDEX_SCHEMA_VERSION = "omh_use_case_artifact_index/v1"
+_ARTIFACT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")
 
 
 @dataclass(frozen=True)
@@ -265,6 +274,241 @@ def demo_all_use_cases() -> dict[str, Any]:
     }
 
 
+def build_use_case_artifact(case_id: str) -> dict[str, Any]:
+    case = _find_case(case_id)
+    if case is None:
+        raise KeyError(case_id)
+    card = _demo_card(case)
+    artifact = {
+        "schema_version": USE_CASE_ARTIFACT_SCHEMA_VERSION,
+        "artifact_id": _artifact_id(case),
+        "goal": case.goal,
+        "id": case.id,
+        "title": case.title,
+        "status": "prepared",
+        "observation_status": "prepared_not_observed",
+        "source": "omh_use_case_catalog",
+        "summary": case.user_value,
+        "route": card["route"],
+        "chat_surface": card["chat_surface"],
+        "wrapper_card": card["wrapper_card"],
+        "workflow_contract": {
+            "primary_skill": case.primary_skill,
+            "playbook": case.playbook,
+            "harness": case.harness,
+            "next_action": case.next_action,
+            "direct_skill_invocation": case.direct_skill_invocation,
+            "hermes_chat_prompt": case.hermes_chat_prompt,
+        },
+        "operator_steps": _artifact_operator_steps(case),
+        "proof_surfaces": [
+            *case.proof_surfaces,
+            f"omh cases demo {case.goal} --json",
+            f"omh cases artifact {case.goal} --json",
+            "omh cases validate --json",
+        ],
+        "evidence": {
+            "state": "prepared_not_observed",
+            "claim_boundary": case.evidence_boundary,
+            "not_evidence_until_observed": card["evidence"]["not_evidence_until_observed"],
+            "observed_evidence_required": [
+                "wrapper or Hermes record that the user accepted this case route",
+                "runtime, connector, file, memory, executor, review, CI, merge, or delivery record matching the claimed action",
+                "human approval record before treating suggested skill, memory, or workflow changes as applied",
+            ],
+        },
+        "release_quality": {
+            "fixture_safe": True,
+            "contains_raw_user_prompt": False,
+            "eligible_for_release_smoke": True,
+            "recommended_gate": "omh cases artifact --all --json",
+        },
+        "boundary": (
+            "Use-case artifacts are prepared runbook metadata for Hermes and wrapper tests. "
+            "They are not observed runtime execution, connector, delivery, file, memory, executor, review, CI, merge, or billing evidence."
+        ),
+    }
+    errors = validate_use_case_artifact(artifact)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return artifact
+
+
+def build_all_use_case_artifacts() -> dict[str, Any]:
+    return {
+        "schema_version": USE_CASE_ARTIFACT_COLLECTION_SCHEMA_VERSION,
+        "count": len(USE_CASES),
+        "artifacts": [build_use_case_artifact(case.goal) for case in USE_CASES],
+        "boundary": (
+            "This collection is a prepared application-case artifact bundle. "
+            "It proves catalog-to-artifact projection only, not runtime execution."
+        ),
+    }
+
+
+def write_use_case_artifact(paths: OmhPaths, artifact: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
+    errors = validate_use_case_artifact(artifact)
+    if errors:
+        raise ValueError("; ".join(errors))
+    artifact_id = str(artifact["artifact_id"])
+    path = _use_case_artifact_path(paths, artifact_id)
+    existed = path.exists()
+    if existed and not force:
+        raise ValueError(f"use-case artifact already exists: {artifact_id}; pass --force to replace it")
+    atomic_write_json(path, artifact, private=True)
+    _write_use_case_artifact_index(paths)
+    return {
+        "schema_version": USE_CASE_ARTIFACT_WRITE_SCHEMA_VERSION,
+        "ok": True,
+        "mode": "write",
+        "artifact": artifact,
+        "artifact_path": str(path),
+        "index_path": str(paths.use_case_artifacts_index_path),
+        "replaced": existed and force,
+        "boundary": artifact["boundary"],
+    }
+
+
+def write_all_use_case_artifacts(paths: OmhPaths, *, force: bool = False) -> dict[str, Any]:
+    written = []
+    for artifact in build_all_use_case_artifacts()["artifacts"]:
+        if not isinstance(artifact, dict):
+            continue
+        written.append(write_use_case_artifact(paths, artifact, force=force))
+    return {
+        "schema_version": USE_CASE_ARTIFACT_WRITE_SCHEMA_VERSION,
+        "ok": True,
+        "mode": "write_all",
+        "count": len(written),
+        "artifacts": [
+            {
+                "artifact_id": item["artifact"]["artifact_id"],
+                "goal": item["artifact"]["goal"],
+                "title": item["artifact"]["title"],
+                "artifact_path": item["artifact_path"],
+                "replaced": item["replaced"],
+            }
+            for item in written
+        ],
+        "index_path": str(paths.use_case_artifacts_index_path),
+        "boundary": (
+            "Writing all use-case artifacts records prepared metadata only. "
+            "It is not evidence that any runtime, connector, delivery, file, memory, executor, review, CI, or merge action happened."
+        ),
+    }
+
+
+def list_use_case_artifacts(paths: OmhPaths, *, limit: int | None = None) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for artifact_path in sorted(paths.use_case_artifacts_dir.glob("*.json")):
+        record, error = read_json_object_result(artifact_path)
+        if error or not record:
+            continue
+        records.append(record)
+    records.sort(key=lambda item: str(item.get("goal", "")))
+    if limit is not None:
+        if limit < 1:
+            return []
+        records = records[-limit:]
+    return records
+
+
+def show_use_case_artifact(paths: OmhPaths, artifact_id: str) -> dict[str, Any]:
+    if not _valid_artifact_id(artifact_id):
+        raise FileNotFoundError(artifact_id)
+    record = read_json_object(_use_case_artifact_path(paths, artifact_id))
+    if record is None:
+        raise FileNotFoundError(artifact_id)
+    return record
+
+
+def validate_use_case_artifact(record: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if record.get("schema_version") != USE_CASE_ARTIFACT_SCHEMA_VERSION:
+        errors.append("schema_version must be omh_use_case_artifact/v1")
+    artifact_id = str(record.get("artifact_id", ""))
+    if not artifact_id:
+        errors.append("artifact_id is required")
+    elif not _valid_artifact_id(artifact_id):
+        errors.append("artifact_id must contain only letters, digits, and hyphens, and must not contain path separators")
+    goal = str(record.get("goal", ""))
+    case = _find_case(goal)
+    if case is None:
+        errors.append("goal must reference a known G1-G10 use case")
+    elif artifact_id != _artifact_id(case):
+        errors.append("artifact_id must match the canonical use-case artifact id")
+    if record.get("status") != "prepared":
+        errors.append("status must be prepared")
+    if record.get("observation_status") != "prepared_not_observed":
+        errors.append("observation_status must be prepared_not_observed")
+    for key in ("route", "chat_surface", "wrapper_card", "workflow_contract", "evidence", "release_quality"):
+        if not isinstance(record.get(key), dict):
+            errors.append(f"{key} must be an object")
+    for key in ("operator_steps", "proof_surfaces"):
+        if not isinstance(record.get(key), list) or not record.get(key):
+            errors.append(f"{key} must be a non-empty list")
+    route = record.get("route") if isinstance(record.get("route"), dict) else {}
+    workflow = record.get("workflow_contract") if isinstance(record.get("workflow_contract"), dict) else {}
+    wrapper = record.get("wrapper_card") if isinstance(record.get("wrapper_card"), dict) else {}
+    evidence = record.get("evidence") if isinstance(record.get("evidence"), dict) else {}
+    if case is not None:
+        if route.get("primary_skill") != case.primary_skill:
+            errors.append("route.primary_skill must match use-case primary skill")
+        if route.get("next_action") != case.next_action:
+            errors.append("route.next_action must match use-case next action")
+        if workflow.get("hermes_chat_prompt") != case.hermes_chat_prompt:
+            errors.append("workflow_contract.hermes_chat_prompt must match catalog prompt")
+    if wrapper.get("component") != "omh_use_case_card":
+        errors.append("wrapper_card.component must be omh_use_case_card")
+    if wrapper.get("status") != "prepared_not_observed":
+        errors.append("wrapper_card.status must be prepared_not_observed")
+    if evidence.get("state") != "prepared_not_observed":
+        errors.append("evidence.state must be prepared_not_observed")
+    boundary = str(evidence.get("claim_boundary", ""))
+    if "not " not in boundary.casefold() or "evidence" not in boundary.casefold():
+        errors.append("evidence.claim_boundary must preserve a not-evidence guard")
+    if not isinstance(evidence.get("not_evidence_until_observed"), list) or "executor_dispatch" not in evidence.get("not_evidence_until_observed", []):
+        errors.append("evidence.not_evidence_until_observed must include executor_dispatch")
+    release_quality = record.get("release_quality") if isinstance(record.get("release_quality"), dict) else {}
+    if release_quality.get("contains_raw_user_prompt") is not False:
+        errors.append("release_quality.contains_raw_user_prompt must be false")
+    return errors
+
+
+def validate_use_case_artifact_store(paths: OmhPaths) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    for artifact_path in sorted(paths.use_case_artifacts_dir.glob("*.json")):
+        record, error = read_json_object_result(artifact_path)
+        if error:
+            errors.append(f"{artifact_path}: {error}")
+            continue
+        if not record:
+            continue
+        records.append(record)
+        artifact_id = str(record.get("artifact_id", ""))
+        if artifact_id in seen:
+            errors.append(f"duplicate artifact_id: {artifact_id}")
+        seen.add(artifact_id)
+        for item_error in validate_use_case_artifact(record):
+            errors.append(f"{artifact_id or '<unknown>'}: {item_error}")
+    missing_goals = sorted({case.goal for case in USE_CASES} - {str(record.get("goal", "")) for record in records})
+    index = read_json_object(paths.use_case_artifacts_index_path)
+    if index and index.get("schema_version") != USE_CASE_ARTIFACT_INDEX_SCHEMA_VERSION:
+        errors.append("use-case artifact index cache has unsupported schema_version")
+    return {
+        "schema_version": "omh_use_case_artifact_validation/v1",
+        "ok": not errors,
+        "artifact_count": len(records),
+        "expected_count": len(USE_CASES),
+        "missing_goals": missing_goals,
+        "errors": errors,
+        "index_authority": "cache_only",
+        "boundary": "Validation proves local prepared artifact shape only, not runtime execution.",
+    }
+
+
 def recommend_use_cases(query: str, *, limit: int = 3) -> dict[str, Any]:
     clean_query = " ".join(query.split())
     if limit < 1:
@@ -506,6 +750,93 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
 
 def _action_label(action: str) -> str:
     return action.replace("_", " ").capitalize()
+
+
+def _artifact_operator_steps(case: UseCase) -> list[dict[str, str]]:
+    return [
+        {
+            "id": "inspect_case",
+            "kind": "operator_command",
+            "label": "Inspect use case",
+            "value": f"omh cases inspect {case.goal} --json",
+        },
+        {
+            "id": "render_demo_card",
+            "kind": "operator_command",
+            "label": "Render wrapper card",
+            "value": f"omh cases demo {case.goal} --json",
+        },
+        {
+            "id": "inspect_playbook",
+            "kind": "operator_command",
+            "label": "Inspect playbook",
+            "value": f"omh playbook inspect {case.playbook} --json",
+        },
+        {
+            "id": "inspect_harness",
+            "kind": "operator_command",
+            "label": "Inspect harness",
+            "value": f"omh harness inspect {case.harness} --json",
+        },
+        {
+            "id": "start_in_hermes",
+            "kind": "hermes_prompt",
+            "label": "Start in Hermes",
+            "value": case.hermes_chat_prompt,
+        },
+        {
+            "id": "record_observed_evidence",
+            "kind": "boundary",
+            "label": "Record observed evidence only after host/runtime action",
+            "value": case.evidence_boundary,
+        },
+    ]
+
+
+def _artifact_id(case: UseCase) -> str:
+    return f"{case.goal.lower()}-{case.id}"
+
+
+def _use_case_artifact_path(paths: OmhPaths, artifact_id: str) -> Path:
+    if not _valid_artifact_id(artifact_id):
+        raise ValueError("artifact_id must contain only letters, digits, and hyphens, and must not contain path separators")
+    path = paths.use_case_artifacts_dir / f"{artifact_id}.json"
+    root = paths.use_case_artifacts_dir.resolve()
+    resolved = path.resolve()
+    if resolved.parent != root:
+        raise ValueError("artifact_id escapes use-case artifact storage")
+    return path
+
+
+def _write_use_case_artifact_index(paths: OmhPaths) -> None:
+    records = list_use_case_artifacts(paths)
+    ensure_dir(paths.use_cases_dir, private=True)
+    atomic_write_json(
+        paths.use_case_artifacts_index_path,
+        {
+            "schema_version": USE_CASE_ARTIFACT_INDEX_SCHEMA_VERSION,
+            "updated_at": utc_now(),
+            "authority": "cache_only",
+            "artifacts": [
+                {
+                    "artifact_id": record.get("artifact_id", ""),
+                    "goal": record.get("goal", ""),
+                    "id": record.get("id", ""),
+                    "title": record.get("title", ""),
+                    "primary_skill": (record.get("route") or {}).get("primary_skill", "")
+                    if isinstance(record.get("route"), dict)
+                    else "",
+                    "observation_status": record.get("observation_status", ""),
+                }
+                for record in records
+            ],
+        },
+        private=True,
+    )
+
+
+def _valid_artifact_id(value: str) -> bool:
+    return bool(_ARTIFACT_ID_RE.fullmatch(str(value)))
 
 
 def _find_case(case_id: str) -> UseCase | None:

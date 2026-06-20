@@ -32,6 +32,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("installed_command_smoke", items)
         self.assertIn("installed_command_path", items)
         self.assertIn("use_case_demo_cards", items)
+        self.assertIn("use_case_artifact_bundle", items)
         self.assertIn("live_tap_smoke", items)
         self.assertIn("tag_and_publish", items)
         self.assertEqual(items["installed_command_path"]["command"], "command -v /tmp/omh")
@@ -43,6 +44,8 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("full capability manifest context", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("playbook capability context", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("standalone plugin capability fallback coverage", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("G1-G10 use-case demo cards", items["skill_content_smoke"]["evidence_required"])
+        self.assertIn("G1-G10 use-case artifact bundles", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("bounded prompt context budgets", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("bounded capability payload budgets", items["skill_content_smoke"]["evidence_required"])
         self.assertIn("--include-command-smoke", items["installed_command_smoke"]["command"])
@@ -54,6 +57,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("G1-G10", items["use_case_demo_cards"]["evidence_required"])
         self.assertIn("wrapper-renderable projections", items["use_case_demo_cards"]["proof_boundary"])
         self.assertIn("not prove", items["use_case_demo_cards"]["proof_boundary"])
+        self.assertEqual(items["use_case_artifact_bundle"]["command"], "uv run python -m src.cli cases artifact --all --json")
+        self.assertIn("prepared artifacts", items["use_case_artifact_bundle"]["evidence_required"])
+        self.assertIn("prepared runbook projection", items["use_case_artifact_bundle"]["proof_boundary"])
+        self.assertIn("not prove", items["use_case_artifact_bundle"]["proof_boundary"])
         self.assertTrue(items["live_tap_smoke"]["mutates_profile"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
         self.assertFalse(items["tag_and_publish"]["required"])
@@ -140,6 +147,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(payload["use_case_demo_card_count"], 10)
         self.assertEqual(payload["expected_use_case_demo_card_count"], 10)
         self.assertEqual(payload["use_case_demo_failures"], [])
+        self.assertEqual(payload["use_case_artifact_collection_schema"], "omh_use_case_artifact_collection/v1")
+        self.assertEqual(payload["use_case_artifact_count"], 10)
+        self.assertEqual(payload["expected_use_case_artifact_count"], 10)
+        self.assertEqual(payload["use_case_artifact_failures"], [])
         self.assertLessEqual(
             payload["awareness_primer_context_chars"],
             payload["awareness_context_char_limits"]["primer_context"],

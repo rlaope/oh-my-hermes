@@ -655,6 +655,8 @@ class CliTests(unittest.TestCase):
             (["cases", "inspect", "G10"], "OMH use case:", "use_case"),
             (["cases", "demo", "G10"], "OMH use-case demo card:", "wrapper_card"),
             (["cases", "demo", "--all"], "OMH G1-G10 use-case demo cards", "cards"),
+            (["cases", "artifact", "G10"], "OMH use-case artifact:", "artifact_id"),
+            (["cases", "artifact", "--all"], "OMH G1-G10 use-case artifacts", "artifacts"),
             (["cases", "validate"], "OMH G1-G10 feature surface validation", "validated"),
             (["playbook", "list"], "OMH playbooks", "playbooks"),
             (["playbook", "inspect", "safe-feature-change"], "OMH playbook:", "playbook"),
@@ -773,6 +775,69 @@ class CliTests(unittest.TestCase):
                 self.assertIn("not", card["evidence"]["claim_boundary"].lower())
                 self.assertEqual(card["actions"][0]["id"], card["route"]["next_action"])
                 self.assertTrue(card["chat_surface"]["headline"].startswith("[omh] "))
+
+        status, stdout, stderr = run_cli(["cases", "artifact", "G1", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        artifact = json.loads(stdout)
+        self.assertEqual(artifact["schema_version"], "omh_use_case_artifact/v1")
+        self.assertEqual(artifact["artifact_id"], "g1-natural-automation-blueprint")
+        self.assertEqual(artifact["goal"], "G1")
+        self.assertEqual(artifact["route"]["primary_skill"], "automation-blueprint")
+        self.assertEqual(artifact["workflow_contract"]["next_action"], "prepare_scheduled_ops_blueprint")
+        self.assertEqual(artifact["wrapper_card"]["status"], "prepared_not_observed")
+        self.assertEqual(artifact["evidence"]["state"], "prepared_not_observed")
+        self.assertFalse(artifact["release_quality"]["contains_raw_user_prompt"])
+        self.assertIn("omh cases validate --json", artifact["proof_surfaces"])
+        self.assertIn("executor_dispatch", artifact["evidence"]["not_evidence_until_observed"])
+        self.assertTrue(any(step["kind"] == "hermes_prompt" for step in artifact["operator_steps"]))
+
+        status, stdout, stderr = run_cli(["cases", "artifact", "--all", "--json"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        artifact_collection = json.loads(stdout)
+        self.assertEqual(artifact_collection["schema_version"], "omh_use_case_artifact_collection/v1")
+        self.assertEqual(artifact_collection["count"], 10)
+        self.assertEqual(
+            [artifact["goal"] for artifact in artifact_collection["artifacts"]],
+            [f"G{index}" for index in range(1, 11)],
+        )
+
+        with TemporaryDirectory() as tmp:
+            base = ["--omh-home", str(Path(tmp) / ".omh")]
+
+            status, stdout, stderr = run_cli(base + ["cases", "artifact", "--all", "--write", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            write_payload = json.loads(stdout)
+            self.assertEqual(write_payload["schema_version"], "omh_use_case_artifact_write/v1")
+            self.assertEqual(write_payload["count"], 10)
+            self.assertTrue(Path(write_payload["index_path"]).exists())
+            self.assertEqual(len(list((Path(tmp) / ".omh" / "use-cases" / "artifacts").glob("*.json"))), 10)
+
+            status, stdout, stderr = run_cli(base + ["cases", "artifact-validate", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            validation_payload = json.loads(stdout)
+            self.assertTrue(validation_payload["ok"])
+            self.assertEqual(validation_payload["artifact_count"], 10)
+            self.assertEqual(validation_payload["missing_goals"], [])
+
+            status, stdout, stderr = run_cli(base + ["cases", "artifact", "G1", "--write", "--json"], output_json=False)
+
+            self.assertEqual(status, 2)
+            self.assertEqual(stdout, "")
+            self.assertIn("already exists", stderr)
+
+            status, stdout, stderr = run_cli(base + ["cases", "artifact", "G1", "--write", "--force", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertTrue(json.loads(stdout)["replaced"])
 
         examples = (
             ("Every morning send a competitor digest to Slack only if changed", "G1", "automation-blueprint"),
@@ -1475,6 +1540,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Required gates:", stdout)
         self.assertIn("installed_command_smoke", stdout)
         self.assertIn("use_case_demo_cards", stdout)
+        self.assertIn("use_case_artifact_bundle", stdout)
         self.assertIn("/tmp/omh --help", stdout)
         self.assertIn("live_tap_smoke", stdout)
         self.assertIn("profile-mutating", stdout)
@@ -1495,6 +1561,7 @@ class CliTests(unittest.TestCase):
         items = {item["id"]: item for item in payload["items"]}
         self.assertIn("uv build", items["build_artifacts"]["command"])
         self.assertIn("cases demo --all --json", items["use_case_demo_cards"]["command"])
+        self.assertIn("cases artifact --all --json", items["use_case_artifact_bundle"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertTrue(items["live_tap_smoke"]["requires_release_authority"])
@@ -1528,6 +1595,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["use_case_demo_card_count"], 10)
         self.assertEqual(payload["expected_use_case_demo_card_count"], 10)
         self.assertEqual(payload["use_case_demo_failures"], [])
+        self.assertEqual(payload["use_case_artifact_collection_schema"], "omh_use_case_artifact_collection/v1")
+        self.assertEqual(payload["use_case_artifact_count"], 10)
+        self.assertEqual(payload["expected_use_case_artifact_count"], 10)
+        self.assertEqual(payload["use_case_artifact_failures"], [])
         self.assertLessEqual(
             payload["full_capability_skill_section_chars"],
             payload["capability_context_char_limits"]["full_skill_section"],
@@ -1556,6 +1627,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Playbook capabilities:", stdout)
         self.assertIn("Plugin fallback capabilities:", stdout)
         self.assertIn("Use-case demo cards: 10/10 card(s); failures 0", stdout)
+        self.assertIn("Use-case artifacts: 10/10 artifact(s); failures 0", stdout)
         self.assertIn("context missing 0", stdout)
         self.assertIn("For machine-readable output", stdout)
         with self.assertRaises(json.JSONDecodeError):
