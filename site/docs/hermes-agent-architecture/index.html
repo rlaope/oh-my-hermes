@@ -49,38 +49,100 @@
               loops. OMH should sit on top as a workflow pack and evidence
               layer, not as a hidden runtime replacement.
             </p>
+            <div class="architecture-hero-board" aria-label="Architecture highlights">
+              <span><i class="hero-board-icon hero-board-icon--surface" aria-hidden="true"></i>Surfaces</span>
+              <span><i class="hero-board-icon hero-board-icon--memory" aria-hidden="true"></i>Memory</span>
+              <span><i class="hero-board-icon hero-board-icon--skills" aria-hidden="true"></i>Skills</span>
+              <span><i class="hero-board-icon hero-board-icon--tools" aria-hidden="true"></i>Tools</span>
+              <span><i class="hero-board-icon hero-board-icon--omh" aria-hidden="true"></i>OMH evidence</span>
+            </div>
           </header>
 
-          <section class="architecture-article-section architecture-article-section--visual">
-            <div class="architecture-system-map" aria-label="Hermes Agent architecture map">
-              <div class="system-ring system-ring--surface">
+          <section class="architecture-blog-section architecture-prose architecture-prose--lead">
+            <p class="blog-kicker">The easiest mistake is to describe Hermes as "a CLI agent."</p>
+            <p>
+              That description is technically true, but it hides the interesting
+              part. Hermes is closer to a small operating system for agentic
+              work: a conversation surface, a prompt compiler, a memory layer, a
+              skill runtime, a tool/plugin registry, scheduled automation, and a
+              messaging gateway all wrapped around one agent loop.
+            </p>
+            <p>
+              This matters for OMH because OMH should not compete with Hermes by
+              pretending to be a second runtime. OMH should make Hermes easier to
+              install into real workflows, easier to explain to non-experts, and
+              safer to inspect when a chat request becomes research, planning,
+              image generation, automation, or coding delegation.
+            </p>
+            <aside class="architecture-thesis">
+              <span>Thesis</span>
+              <strong>
+                Hermes is the capable worker. OMH is the workflow lens that
+                makes the worker routable, reviewable, and evidence-aware.
+              </strong>
+            </aside>
+          </section>
+
+          <section class="architecture-article-section architecture-article-section--visual architecture-diagram-section">
+            <div class="diagram-heading">
+              <span class="diagram-heading__icon" aria-hidden="true"></span>
+              <div>
+                <p class="eyebrow">Mermaid-style component map</p>
+                <h2>One user message crosses six layers before it becomes useful work.</h2>
+                <p>
+                  The boxes below are intentionally high level. They show how a
+                  message moves from a human-facing surface into the agent loop,
+                  picks up memory and skills, reaches tools or automation, and
+                  returns as a response with optional OMH workflow evidence.
+                </p>
+              </div>
+            </div>
+            <div class="architecture-mermaid-map" aria-label="Hermes Agent component map">
+              <div class="arch-node arch-node--surface">
+                <span class="arch-node__icon arch-node__icon--surface" aria-hidden="true"></span>
                 <span>Surfaces</span>
-                <strong>Terminal, CLI, gateway, Telegram, Discord, Slack, WhatsApp, Signal</strong>
+                <strong>TUI, CLI, gateway, platform adapters</strong>
               </div>
-              <div class="system-ring system-ring--agent">
-                <span>Core loop</span>
-                <strong>AIAgent, prompt builder, model transport, tool loop, session persistence</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--prompt">
+                <span class="arch-node__icon arch-node__icon--prompt" aria-hidden="true"></span>
+                <span>Prompt compiler</span>
+                <strong>Identity, files, skills, memory hints, platform context</strong>
               </div>
-              <div class="system-ring system-ring--context">
-                <span>Context brain</span>
-                <strong>Memory manager, session search, context files, compression, user model</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--core">
+                <span class="arch-node__icon arch-node__icon--core" aria-hidden="true"></span>
+                <span>Agent loop</span>
+                <strong>AIAgent, model transport, tool loop, session state</strong>
               </div>
-              <div class="system-ring system-ring--workflow">
-                <span>Workflow body</span>
-                <strong>Skills, skill creation, curator, cron, kanban, profiles, subagents</strong>
-              </div>
-              <div class="system-ring system-ring--extension">
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--tools">
+                <span class="arch-node__icon arch-node__icon--tools" aria-hidden="true"></span>
                 <span>Extension ports</span>
-                <strong>Tools, toolsets, MCP, plugins, platform registry, terminal backends</strong>
+                <strong>Toolsets, MCP, plugins, cron, delivery targets</strong>
               </div>
-              <div class="system-ring system-ring--omh">
-                <span>OMH layer</span>
-                <strong>Installable workflows, routing, handoffs, status cards, evidence contracts</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--omh">
+                <span class="arch-node__icon arch-node__icon--omh" aria-hidden="true"></span>
+                <span>OMH lens</span>
+                <strong>Workflow route, handoff, status card, evidence boundary</strong>
               </div>
+            </div>
+            <div class="platform-chip-wall" aria-label="Gateway surfaces">
+              <span>Terminal</span>
+              <span>CLI</span>
+              <span>Telegram</span>
+              <span>Discord</span>
+              <span>Slack</span>
+              <span>WhatsApp</span>
+              <span>Signal</span>
+              <span>Webhook</span>
+              <span>Email</span>
+              <span>Matrix</span>
             </div>
           </section>
 
-          <section class="architecture-article-section">
+          <section class="architecture-blog-section architecture-prose">
             <h2>The simple mental model</h2>
             <p>
               A normal chatbot answers one conversation. Hermes Agent is built
@@ -315,38 +377,100 @@
               함께 묶습니다. OMH는 그 위에서 숨은 실행기가 아니라,
               workflow pack과 evidence layer로 붙어야 합니다.
             </p>
+            <div class="architecture-hero-board" aria-label="Architecture highlights">
+              <span><i class="hero-board-icon hero-board-icon--surface" aria-hidden="true"></i>Surfaces</span>
+              <span><i class="hero-board-icon hero-board-icon--memory" aria-hidden="true"></i>Memory</span>
+              <span><i class="hero-board-icon hero-board-icon--skills" aria-hidden="true"></i>Skills</span>
+              <span><i class="hero-board-icon hero-board-icon--tools" aria-hidden="true"></i>Tools</span>
+              <span><i class="hero-board-icon hero-board-icon--omh" aria-hidden="true"></i>OMH evidence</span>
+            </div>
           </header>
 
-          <section class="architecture-article-section architecture-article-section--visual">
-            <div class="architecture-system-map" aria-label="Hermes Agent architecture map">
-              <div class="system-ring system-ring--surface">
-                <span>접점</span>
-                <strong>Terminal, CLI, gateway, Telegram, Discord, Slack, WhatsApp, Signal</strong>
+          <section class="architecture-blog-section architecture-prose architecture-prose--lead">
+            <p class="blog-kicker">Hermes를 "CLI 에이전트"라고만 부르면 핵심을 놓칩니다.</p>
+            <p>
+              그 말은 틀리진 않지만, 진짜 흥미로운 부분을 가립니다. Hermes는
+              에이전트 작업을 위한 작은 운영체제에 가깝습니다. 대화 접점,
+              프롬프트 컴파일러, 메모리 층, 스킬 런타임, 도구/플러그인
+              레지스트리, 예약 자동화, 메신저 게이트웨이가 하나의 에이전트
+              루프를 감싸고 있습니다.
+            </p>
+            <p>
+              그래서 OMH는 Hermes와 경쟁하는 두 번째 runtime인 척하면 안
+              됩니다. OMH는 Hermes가 실제 업무 흐름에 더 쉽게 설치되고,
+              비전문가에게 더 쉽게 설명되고, 채팅 요청이 리서치, 기획, 이미지
+              생성, 자동화, 코딩 위임으로 바뀔 때 더 안전하게 점검되도록
+              만들어야 합니다.
+            </p>
+            <aside class="architecture-thesis">
+              <span>핵심 주장</span>
+              <strong>
+                Hermes가 능력 있는 worker라면, OMH는 그 worker를 routable,
+                reviewable, evidence-aware하게 만드는 workflow lens입니다.
+              </strong>
+            </aside>
+          </section>
+
+          <section class="architecture-article-section architecture-article-section--visual architecture-diagram-section">
+            <div class="diagram-heading">
+              <span class="diagram-heading__icon" aria-hidden="true"></span>
+              <div>
+                <p class="eyebrow">Mermaid-style component map</p>
+                <h2>사용자 메시지 하나는 유용한 일이 되기 전 여섯 층을 지나갑니다.</h2>
+                <p>
+                  아래 박스들은 의도적으로 높은 수준의 구조만 보여줍니다.
+                  메시지가 사람-facing surface에서 agent loop로 들어가고,
+                  memory와 skills를 붙이고, tools나 automation으로 뻗고,
+                  OMH workflow evidence와 함께 응답으로 돌아오는 흐름입니다.
+                </p>
               </div>
-              <div class="system-ring system-ring--agent">
-                <span>핵심 루프</span>
-                <strong>AIAgent, prompt builder, model transport, tool loop, session persistence</strong>
+            </div>
+            <div class="architecture-mermaid-map" aria-label="Hermes Agent component map">
+              <div class="arch-node arch-node--surface">
+                <span class="arch-node__icon arch-node__icon--surface" aria-hidden="true"></span>
+                <span>Surfaces</span>
+                <strong>TUI, CLI, gateway, platform adapters</strong>
               </div>
-              <div class="system-ring system-ring--context">
-                <span>맥락 두뇌</span>
-                <strong>Memory manager, session search, context files, compression, user model</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--prompt">
+                <span class="arch-node__icon arch-node__icon--prompt" aria-hidden="true"></span>
+                <span>Prompt compiler</span>
+                <strong>Identity, files, skills, memory hints, platform context</strong>
               </div>
-              <div class="system-ring system-ring--workflow">
-                <span>작업 몸체</span>
-                <strong>Skills, skill creation, curator, cron, kanban, profiles, subagents</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--core">
+                <span class="arch-node__icon arch-node__icon--core" aria-hidden="true"></span>
+                <span>Agent loop</span>
+                <strong>AIAgent, model transport, tool loop, session state</strong>
               </div>
-              <div class="system-ring system-ring--extension">
-                <span>확장 포트</span>
-                <strong>Tools, toolsets, MCP, plugins, platform registry, terminal backends</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--tools">
+                <span class="arch-node__icon arch-node__icon--tools" aria-hidden="true"></span>
+                <span>Extension ports</span>
+                <strong>Toolsets, MCP, plugins, cron, delivery targets</strong>
               </div>
-              <div class="system-ring system-ring--omh">
-                <span>OMH 층</span>
-                <strong>Installable workflows, routing, handoffs, status cards, evidence contracts</strong>
+              <i aria-hidden="true"></i>
+              <div class="arch-node arch-node--omh">
+                <span class="arch-node__icon arch-node__icon--omh" aria-hidden="true"></span>
+                <span>OMH lens</span>
+                <strong>Workflow route, handoff, status card, evidence boundary</strong>
               </div>
+            </div>
+            <div class="platform-chip-wall" aria-label="Gateway surfaces">
+              <span>Terminal</span>
+              <span>CLI</span>
+              <span>Telegram</span>
+              <span>Discord</span>
+              <span>Slack</span>
+              <span>WhatsApp</span>
+              <span>Signal</span>
+              <span>Webhook</span>
+              <span>Email</span>
+              <span>Matrix</span>
             </div>
           </section>
 
-          <section class="architecture-article-section">
+          <section class="architecture-blog-section architecture-prose">
             <h2>가장 쉬운 이해 방식</h2>
             <p>
               보통 챗봇은 한 대화에 답합니다. Hermes Agent는 그보다
