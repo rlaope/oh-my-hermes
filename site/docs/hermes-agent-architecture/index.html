@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hermes Agent Architecture - OMH</title>
+    <meta
+      name="description"
+      content="A bilingual visual guide to how Hermes Agent is structured, why it feels workflow-native, and where OMH fits without overclaiming execution."
+    >
+    <link rel="stylesheet" href="../../styles.css">
+  </head>
+  <body class="docs-page architecture-post-page">
+    <header class="topbar topbar--solid" aria-label="Primary">
+      <a class="brand brand--link" href="../../">OMH</a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="../">Docs</a>
+        <a
+          class="nav__icon"
+          href="https://github.com/rlaope/oh-my-hermes"
+          aria-label="Open OMH repository on GitHub"
+          title="GitHub repository"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.52 2.87 8.35 6.85 9.7.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.37 9.37 0 0 1 12 6.92c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.8c0 .27.18.58.69.48A10.06 10.06 0 0 0 22 12.22C22 6.58 17.52 2 12 2Z"></path>
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="architecture-post">
+      <input class="language-radio" type="radio" name="architecture-language" id="arch-lang-en" checked>
+      <input class="language-radio" type="radio" name="architecture-language" id="arch-lang-ko">
+
+      <div class="architecture-post-shell">
+        <div class="language-switch" aria-label="Language switch">
+          <label for="arch-lang-en">English</label>
+          <label for="arch-lang-ko">한국어</label>
+        </div>
+
+        <article class="lang-panel lang-panel--en">
+          <header class="architecture-article-hero">
+            <p class="eyebrow">Architecture guide</p>
+            <h1>Hermes Agent is not just a chat box. It is a work operating layer.</h1>
+            <p>
+              Hermes Agent combines a terminal UI, messenger gateway, memory,
+              skills, cron jobs, tools, plugins, platform adapters, and agent
+              loops. OMH should sit on top as a workflow pack and evidence
+              layer, not as a hidden runtime replacement.
+            </p>
+          </header>
+
+          <section class="architecture-article-section architecture-article-section--visual">
+            <div class="architecture-system-map" aria-label="Hermes Agent architecture map">
+              <div class="system-ring system-ring--surface">
+                <span>Surfaces</span>
+                <strong>Terminal, CLI, gateway, Telegram, Discord, Slack, WhatsApp, Signal</strong>
+              </div>
+              <div class="system-ring system-ring--agent">
+                <span>Core loop</span>
+                <strong>AIAgent, prompt builder, model transport, tool loop, session persistence</strong>
+              </div>
+              <div class="system-ring system-ring--context">
+                <span>Context brain</span>
+                <strong>Memory manager, session search, context files, compression, user model</strong>
+              </div>
+              <div class="system-ring system-ring--workflow">
+                <span>Workflow body</span>
+                <strong>Skills, skill creation, curator, cron, kanban, profiles, subagents</strong>
+              </div>
+              <div class="system-ring system-ring--extension">
+                <span>Extension ports</span>
+                <strong>Tools, toolsets, MCP, plugins, platform registry, terminal backends</strong>
+              </div>
+              <div class="system-ring system-ring--omh">
+                <span>OMH layer</span>
+                <strong>Installable workflows, routing, handoffs, status cards, evidence contracts</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="architecture-article-section">
+            <h2>The simple mental model</h2>
+            <p>
+              A normal chatbot answers one conversation. Hermes Agent is built
+              closer to an operating surface for work. It can be entered from
+              the terminal or a messaging gateway. It builds a prompt from
+              identity, context, skills, memory, and platform hints. It can call
+              tools, run scheduled jobs, spawn delegated work, persist session
+              history, and use skills as procedural memory.
+            </p>
+            <p>
+              That is why OMH should not sell itself as "more commands." The
+              product value is making those Hermes capabilities easier to start,
+              safer to inspect, and clearer to explain in chat.
+            </p>
+          </section>
+
+          <section class="architecture-article-section architecture-stack-grid" aria-label="Hermes Agent subsystems">
+            <article>
+              <span>01</span>
+              <h3>Conversation surface</h3>
+              <p>
+                Hermes exposes both terminal UX and gateway UX. The gateway
+                registry lets built-in or plugin platform adapters register
+                auth, setup, delivery, privacy, and cron delivery behavior.
+              </p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Agent loop</h3>
+              <p>
+                <code>run_agent.py</code> hosts <code>AIAgent</code>, session
+                transitions, context engine lifecycle, tool calls, response
+                handling, persistence, and background review hooks.
+              </p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Memory and context</h3>
+              <p>
+                <code>agent/memory_manager.py</code> coordinates built-in memory
+                plus at most one external provider, prefetch, sync, and streaming
+                scrubbing so recalled context does not leak into final output.
+              </p>
+            </article>
+            <article>
+              <span>04</span>
+              <h3>Skills and learning</h3>
+              <p>
+                The prompt builder tells Hermes when to save or patch skills.
+                The curator keeps agent-created skills maintainable. This gives
+                Hermes a learning-friendly loop without requiring OMH to train a
+                model.
+              </p>
+            </article>
+            <article>
+              <span>05</span>
+              <h3>Cron and work orchestration</h3>
+              <p>
+                <code>cron/scheduler.py</code> uses locks, protected toolset
+                policy, delivery targets, parallel pools, and prompt-injection
+                scanning to run scheduled work with guardrails.
+              </p>
+            </article>
+            <article>
+              <span>06</span>
+              <h3>OMH contract layer</h3>
+              <p>
+                OMH gives Hermes workflow recipes, deterministic routing, status
+                cards, coding handoff contracts, and prepared-vs-observed
+                boundaries so wrappers can show what happened without guessing.
+              </p>
+            </article>
+          </section>
+
+          <section class="architecture-article-section">
+            <h2>Where OMH fits</h2>
+            <div class="omh-fit-flow" aria-label="Where OMH fits in Hermes work">
+              <div>
+                <span>User asks Hermes</span>
+                <strong>"Can you make this safer, clearer, or ready to ship?"</strong>
+              </div>
+              <i aria-hidden="true"></i>
+              <div>
+                <span>Hermes thinks and talks</span>
+                <strong>Clarify, research, summarize, plan, and narrate status.</strong>
+              </div>
+              <i aria-hidden="true"></i>
+              <div>
+                <span>OMH shapes the workflow</span>
+                <strong>Pick a workflow, prepare a handoff, record local evidence state.</strong>
+              </div>
+              <i aria-hidden="true"></i>
+              <div>
+                <span>Executor or wrapper observes</span>
+                <strong>Dispatch, result, review, CI, delivery, or merge evidence.</strong>
+              </div>
+            </div>
+            <p>
+              The key rule is still conservative: prepared is not observed. A
+              plan, route, prompt, button, or handoff is useful, but it is not
+              proof that code ran, an image was generated, a cron job delivered,
+              a PR passed review, or CI went green.
+            </p>
+          </section>
+
+          <section class="architecture-article-section architecture-learning-loop">
+            <div>
+              <h2>Why GEPA-style thinking matters here</h2>
+              <p>
+                Hermes can improve from execution traces, memories, and skills.
+                OMH's job is not to replace that intelligence. OMH should make
+                the traces cleaner: original request, chosen workflow, prepared
+                handoff, observed evidence, user satisfaction, failed claims,
+                and patch candidates.
+              </p>
+              <p>
+                In other words, Hermes is the capable worker. OMH is the operating layer that makes the work inspectable, routable, reviewable, and improvable over time.
+              </p>
+            </div>
+            <ol>
+              <li><strong>Trace</strong><span>request, route, tool, handoff, evidence</span></li>
+              <li><strong>Evaluate</strong><span>schema, install, status, workflow criteria</span></li>
+              <li><strong>Review</strong><span>human approval before skill or workflow mutation</span></li>
+              <li><strong>Regress</strong><span>replay the examples that used to fail</span></li>
+            </ol>
+          </section>
+
+          <section class="architecture-article-section source-ledger">
+            <h2>Local sources inspected</h2>
+            <p>
+              This page is based on local repository inspection rather than
+              marketing copy alone. The important surfaces are:
+            </p>
+            <div class="source-chip-grid">
+              <span>README.md</span>
+              <span>run_agent.py</span>
+              <span>agent/prompt_builder.py</span>
+              <span>agent/memory_manager.py</span>
+              <span>agent/skill_utils.py</span>
+              <span>agent/curator.py</span>
+              <span>gateway/run.py</span>
+              <span>gateway/platform_registry.py</span>
+              <span>cron/scheduler.py</span>
+              <span>docs/kanban/multi-gateway.md</span>
+              <span>skills/autonomous-ai-agents/hermes-agent/SKILL.md</span>
+            </div>
+          </section>
+        </article>
+
+        <article class="lang-panel lang-panel--ko" lang="ko">
+          <header class="architecture-article-hero">
+            <p class="eyebrow">아키텍처 가이드</p>
+            <h1>Hermes Agent는 단순 채팅창이 아니라, 일하는 방식을 담는 운영층입니다.</h1>
+            <p>
+              Hermes Agent는 터미널 UI, 메신저 게이트웨이, 메모리, 스킬,
+              크론 작업, 도구, 플러그인, 플랫폼 어댑터, 에이전트 루프를
+              함께 묶습니다. OMH는 그 위에서 숨은 실행기가 아니라,
+              workflow pack과 evidence layer로 붙어야 합니다.
+            </p>
+          </header>
+
+          <section class="architecture-article-section architecture-article-section--visual">
+            <div class="architecture-system-map" aria-label="Hermes Agent architecture map">
+              <div class="system-ring system-ring--surface">
+                <span>접점</span>
+                <strong>Terminal, CLI, gateway, Telegram, Discord, Slack, WhatsApp, Signal</strong>
+              </div>
+              <div class="system-ring system-ring--agent">
+                <span>핵심 루프</span>
+                <strong>AIAgent, prompt builder, model transport, tool loop, session persistence</strong>
+              </div>
+              <div class="system-ring system-ring--context">
+                <span>맥락 두뇌</span>
+                <strong>Memory manager, session search, context files, compression, user model</strong>
+              </div>
+              <div class="system-ring system-ring--workflow">
+                <span>작업 몸체</span>
+                <strong>Skills, skill creation, curator, cron, kanban, profiles, subagents</strong>
+              </div>
+              <div class="system-ring system-ring--extension">
+                <span>확장 포트</span>
+                <strong>Tools, toolsets, MCP, plugins, platform registry, terminal backends</strong>
+              </div>
+              <div class="system-ring system-ring--omh">
+                <span>OMH 층</span>
+                <strong>Installable workflows, routing, handoffs, status cards, evidence contracts</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="architecture-article-section">
+            <h2>가장 쉬운 이해 방식</h2>
+            <p>
+              보통 챗봇은 한 대화에 답합니다. Hermes Agent는 그보다
+              작업 운영면에 가깝습니다. 터미널이나 메신저 게이트웨이에서
+              들어올 수 있고, identity, context, skills, memory, platform
+              hints를 묶어 프롬프트를 만듭니다. 도구를 부르고, 예약 작업을
+              돌리고, 위임 작업을 만들고, 세션 기록을 남기고, 스킬을
+              절차적 기억처럼 사용합니다.
+            </p>
+            <p>
+              그래서 OMH는 "명령어가 더 많은 제품"으로 보이면 약합니다.
+              진짜 가치는 Hermes의 능력을 더 쉽게 시작하게 하고, 더 안전하게
+              점검하게 하고, 채팅 안에서 더 명확하게 설명하게 하는 데 있습니다.
+            </p>
+          </section>
+
+          <section class="architecture-article-section architecture-stack-grid" aria-label="Hermes Agent subsystems">
+            <article>
+              <span>01</span>
+              <h3>대화 접점</h3>
+              <p>
+                Hermes는 터미널 UX와 gateway UX를 모두 제공합니다. gateway
+                registry는 built-in 또는 plugin platform adapter가 auth,
+                setup, delivery, privacy, cron delivery behavior를 등록하게 합니다.
+              </p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>에이전트 루프</h3>
+              <p>
+                <code>run_agent.py</code>의 <code>AIAgent</code>가 session
+                transition, context engine lifecycle, tool call, response
+                handling, persistence, background review hook을 담당합니다.
+              </p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>메모리와 맥락</h3>
+              <p>
+                <code>agent/memory_manager.py</code>는 built-in memory와 최대
+                하나의 external provider를 함께 조율하고, prefetch, sync,
+                streaming scrub을 통해 recall된 맥락이 최종 응답에 새지 않도록
+                다룹니다.
+              </p>
+            </article>
+            <article>
+              <span>04</span>
+              <h3>스킬과 개선 루프</h3>
+              <p>
+                prompt builder는 언제 skill을 저장하거나 고쳐야 하는지 Hermes에
+                알려줍니다. curator는 agent-created skills를 관리합니다. 즉
+                OMH가 모델을 학습시키지 않아도, Hermes가 개선 가능한 작업장을
+                갖게 됩니다.
+              </p>
+            </article>
+            <article>
+              <span>05</span>
+              <h3>크론과 작업 오케스트레이션</h3>
+              <p>
+                <code>cron/scheduler.py</code>는 lock, protected toolset policy,
+                delivery target, parallel pool, prompt-injection scanning으로
+                예약 작업을 가드레일 안에서 실행합니다.
+              </p>
+            </article>
+            <article>
+              <span>06</span>
+              <h3>OMH 계약층</h3>
+              <p>
+                OMH는 Hermes에게 workflow recipe, deterministic routing,
+                status card, coding handoff contract, prepared-vs-observed
+                boundary를 제공해서 wrapper가 추측 없이 상태를 보여주게 합니다.
+              </p>
+            </article>
+          </section>
+
+          <section class="architecture-article-section">
+            <h2>OMH는 어디에 붙는가</h2>
+            <div class="omh-fit-flow" aria-label="Where OMH fits in Hermes work">
+              <div>
+                <span>사용자가 Hermes에게 말함</span>
+                <strong>"이걸 더 안전하게, 명확하게, 출시 가능하게 만들어줘."</strong>
+              </div>
+              <i aria-hidden="true"></i>
+              <div>
+                <span>Hermes가 생각하고 말함</span>
+                <strong>질문, 리서치, 요약, 계획, 상태 설명.</strong>
+              </div>
+              <i aria-hidden="true"></i>
+              <div>
+                <span>OMH가 workflow를 형성함</span>
+                <strong>workflow 선택, handoff 준비, local evidence state 기록.</strong>
+              </div>
+              <i aria-hidden="true"></i>
+              <div>
+                <span>executor 또는 wrapper가 관측함</span>
+                <strong>dispatch, result, review, CI, delivery, merge evidence.</strong>
+              </div>
+            </div>
+            <p>
+              핵심 규칙은 계속 보수적입니다. 준비된 것은 관측된 것이 아닙니다.
+              plan, route, prompt, button, handoff는 유용하지만, 코드가 실행됐거나
+              이미지가 생성됐거나, 크론이 전달됐거나, PR 리뷰가 통과됐거나,
+              CI가 초록불이라는 증거는 아닙니다.
+            </p>
+          </section>
+
+          <section class="architecture-article-section architecture-learning-loop">
+            <div>
+              <h2>GEPA식 사고가 여기서 중요한 이유</h2>
+              <p>
+                Hermes는 실행 기록, 메모리, 스킬을 바탕으로 더 나아질 수
+                있습니다. OMH의 역할은 그 지능을 대체하는 게 아닙니다. OMH는
+                original request, chosen workflow, prepared handoff, observed
+                evidence, user satisfaction, failed claim, patch candidate 같은
+                학습 가능한 과정을 더 깨끗하게 남겨야 합니다.
+              </p>
+              <p>
+                다시 말해 Hermes가 능력 있는 worker라면, OMH는 그 일이
+                inspectable, routable, reviewable, improvable해지도록 만드는
+                operating layer입니다.
+              </p>
+            </div>
+            <ol>
+              <li><strong>Trace</strong><span>request, route, tool, handoff, evidence</span></li>
+              <li><strong>Evaluate</strong><span>schema, install, status, workflow criteria</span></li>
+              <li><strong>Review</strong><span>skill 또는 workflow 변경 전 사람 승인</span></li>
+              <li><strong>Regress</strong><span>전에 실패했던 예제를 다시 돌려보기</span></li>
+            </ol>
+          </section>
+
+          <section class="architecture-article-section source-ledger">
+            <h2>확인한 로컬 근거</h2>
+            <p>
+              이 페이지는 홍보 문구만이 아니라 로컬 repository inspection에
+              기반합니다. 주요 근거 표면은 다음과 같습니다.
+            </p>
+            <div class="source-chip-grid">
+              <span>README.md</span>
+              <span>run_agent.py</span>
+              <span>agent/prompt_builder.py</span>
+              <span>agent/memory_manager.py</span>
+              <span>agent/skill_utils.py</span>
+              <span>agent/curator.py</span>
+              <span>gateway/run.py</span>
+              <span>gateway/platform_registry.py</span>
+              <span>cron/scheduler.py</span>
+              <span>docs/kanban/multi-gateway.md</span>
+              <span>skills/autonomous-ai-agents/hermes-agent/SKILL.md</span>
+            </div>
+          </section>
+        </article>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>
+        OMH explains Hermes-native work without claiming hidden execution.
+      </span>
+      <span>
+        Developed by <a href="https://github.com/rlaope">rlaope</a>.
+      </span>
+    </footer>
+  </body>
+</html>

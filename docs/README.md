@@ -13,6 +13,7 @@ repo-local contract for Codex agents working here.
 | --- | --- |
 | Understand what OMH is and is not | [Direction](DIRECTION.md) |
 | Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
+| Understand Hermes Agent memory, skills, gateway, cron, plugins, and OMH's role | [Hermes Agent Architecture Guide](../site/docs/hermes-agent-architecture/index.html) |
 | Compare common oh-my runtime axes and OMH gaps | [Parity Matrix](PARITY.md) |
 | Inspect runtime-readable OMH capability manifests | [Capabilities](CAPABILITIES.md) |
 | Understand safe orchestration pattern contracts | [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) |
@@ -168,7 +169,10 @@ separate profile pack is explicitly selected.
 - Memory/context docs should state that OMH reviews local or wrapper-supplied
   context only; it does not read or mutate opaque Hermes internal memory.
 - The GitHub Pages site should stay a short public entry point that links back
-  to this docs set instead of becoming a second source of truth.
+  to this docs set instead of becoming a second source of truth. The
+  Hermes Agent architecture guide may use visual education copy, but claims
+  should stay grounded in inspected Hermes Agent files and OMH evidence
+  boundaries.
 
 ## Update Checklist
 
