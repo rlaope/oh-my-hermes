@@ -15,6 +15,7 @@
       <a class="brand brand--link" href="../../">OMH</a>
       <nav class="nav" aria-label="Primary navigation">
         <a href="../">Docs</a>
+        <a aria-current="page" href="./">Hermes Deepdive</a>
         <a
           class="nav__icon"
           href="https://github.com/rlaope/oh-my-hermes"
@@ -96,6 +97,46 @@
             </p>
           </section>
 
+          <section class="architecture-article-section architecture-journey">
+            <h2>A request does not just become an answer. It becomes a route.</h2>
+            <p>
+              The most useful way to understand Hermes is to follow one message.
+              A user can ask from a terminal, Discord, Slack, Telegram, or
+              another gateway surface. Hermes builds context, loads relevant
+              skills, decides whether memory or tools matter, then returns a
+              user-facing response. OMH adds the missing product shape: what
+              workflow was chosen, what the next action is, and what still has
+              not been observed.
+            </p>
+            <div class="journey-rail" aria-label="Hermes request journey">
+              <article>
+                <span>1</span>
+                <h3>Message arrives</h3>
+                <p>CLI, TUI, or gateway session provides platform, thread, and user context.</p>
+              </article>
+              <article>
+                <span>2</span>
+                <h3>Prompt is built</h3>
+                <p>Identity, skills, memory guidance, context files, platform hints, and safety checks are assembled.</p>
+              </article>
+              <article>
+                <span>3</span>
+                <h3>Tools may run</h3>
+                <p>Hermes can call allowed tools, search sessions, use memory, or prepare scheduled work.</p>
+              </article>
+              <article>
+                <span>4</span>
+                <h3>OMH names the workflow</h3>
+                <p>The response can show plan, research, feedback triage, loop, image card, or coding handoff.</p>
+              </article>
+              <article>
+                <span>5</span>
+                <h3>Evidence advances later</h3>
+                <p>Status moves only when wrapper, executor, CI, delivery, or review evidence is recorded.</p>
+              </article>
+            </div>
+          </section>
+
           <section class="architecture-article-section architecture-stack-grid" aria-label="Hermes Agent subsystems">
             <article>
               <span>01</span>
@@ -154,6 +195,26 @@
             </article>
           </section>
 
+          <section class="architecture-article-section architecture-myth-grid" aria-label="Architecture myths and reality">
+            <h2>Myths and reality</h2>
+            <article>
+              <h3>Myth: OMH should become the executor.</h3>
+              <p>Reality: Hermes and selected executors already own runtime work. OMH should make the route, handoff, status, and evidence boundary visible.</p>
+            </article>
+            <article>
+              <h3>Myth: more commands equals a stronger product.</h3>
+              <p>Reality: normal users talk to Hermes. Commands are installer, verifier, backend, and operator infrastructure.</p>
+            </article>
+            <article>
+              <h3>Myth: a plan is progress evidence.</h3>
+              <p>Reality: a plan is prepared work. Dispatch, implementation, review, CI, and delivery need separate observations.</p>
+            </article>
+            <article>
+              <h3>Myth: self-improvement means automatic mutation.</h3>
+              <p>Reality: the safer loop is trace, evaluate, propose, review, patch, and replay. Human review keeps the skill base from drifting.</p>
+            </article>
+          </section>
+
           <section class="architecture-article-section">
             <h2>Where OMH fits</h2>
             <div class="omh-fit-flow" aria-label="Where OMH fits in Hermes work">
@@ -182,6 +243,21 @@
               plan, route, prompt, button, or handoff is useful, but it is not
               proof that code ran, an image was generated, a cron job delivered,
               a PR passed review, or CI went green.
+            </p>
+          </section>
+
+          <section class="architecture-article-section architecture-prompt-strip">
+            <h2>What users can ask Hermes after installing OMH</h2>
+            <div>
+              <code>Use OMH web-research for: compare these three competitors and brief me.</code>
+              <code>Use OMH loop for: improve this repo's first-run experience until the friction is lower.</code>
+              <code>Use OMH img-summary for: make a PR summary card reviewers can read quickly.</code>
+              <code>Use OMH request-to-handoff for: turn this issue into a PR-ready implementation path.</code>
+            </div>
+            <p>
+              The point is not that the user knows every backend command. The
+              point is that Hermes can recognize the work shape and return a
+              clear workflow, next action, and evidence state.
             </p>
           </section>
 
@@ -287,6 +363,46 @@
             </p>
           </section>
 
+          <section class="architecture-article-section architecture-journey">
+            <h2>요청은 그냥 답변이 되지 않습니다. route가 됩니다.</h2>
+            <p>
+              Hermes를 이해하는 가장 쉬운 방법은 메시지 하나를 따라가보는
+              것입니다. 사용자는 터미널, Discord, Slack, Telegram, 또는 다른
+              gateway surface에서 요청합니다. Hermes는 context를 만들고,
+              관련 skill을 보고, memory나 tool이 필요한지 판단한 뒤 사용자에게
+              답합니다. OMH는 여기에 제품적인 형태를 붙입니다. 어떤 workflow가
+              선택됐는지, 다음 action이 무엇인지, 아직 관측되지 않은 것은
+              무엇인지 보여줍니다.
+            </p>
+            <div class="journey-rail" aria-label="Hermes request journey">
+              <article>
+                <span>1</span>
+                <h3>메시지가 들어옴</h3>
+                <p>CLI, TUI, gateway session이 platform, thread, user context를 제공합니다.</p>
+              </article>
+              <article>
+                <span>2</span>
+                <h3>프롬프트가 구성됨</h3>
+                <p>Identity, skills, memory guidance, context files, platform hints, safety checks가 묶입니다.</p>
+              </article>
+              <article>
+                <span>3</span>
+                <h3>도구가 실행될 수 있음</h3>
+                <p>Hermes는 허용된 도구를 부르거나 session search, memory, scheduled work 준비를 할 수 있습니다.</p>
+              </article>
+              <article>
+                <span>4</span>
+                <h3>OMH가 workflow를 이름 붙임</h3>
+                <p>응답은 plan, research, feedback triage, loop, image card, coding handoff를 보여줄 수 있습니다.</p>
+              </article>
+              <article>
+                <span>5</span>
+                <h3>증거는 나중에 전진함</h3>
+                <p>Status는 wrapper, executor, CI, delivery, review evidence가 기록될 때만 올라갑니다.</p>
+              </article>
+            </div>
+          </section>
+
           <section class="architecture-article-section architecture-stack-grid" aria-label="Hermes Agent subsystems">
             <article>
               <span>01</span>
@@ -346,6 +462,26 @@
             </article>
           </section>
 
+          <section class="architecture-article-section architecture-myth-grid" aria-label="Architecture myths and reality">
+            <h2>오해와 실제</h2>
+            <article>
+              <h3>오해: OMH가 executor가 되어야 한다.</h3>
+              <p>실제: Hermes와 선택된 executor가 runtime work를 담당합니다. OMH는 route, handoff, status, evidence boundary를 보이게 해야 합니다.</p>
+            </article>
+            <article>
+              <h3>오해: 명령어가 많을수록 제품이 강하다.</h3>
+              <p>실제: 보통 사용자는 Hermes에게 말합니다. 명령어는 installer, verifier, backend, operator infrastructure입니다.</p>
+            </article>
+            <article>
+              <h3>오해: plan은 진행 증거다.</h3>
+              <p>실제: plan은 prepared work입니다. dispatch, implementation, review, CI, delivery는 따로 관측되어야 합니다.</p>
+            </article>
+            <article>
+              <h3>오해: 자기개선은 자동 변경이다.</h3>
+              <p>실제: 더 안전한 루프는 trace, evaluate, propose, review, patch, replay입니다. 사람 리뷰가 skill drift를 막습니다.</p>
+            </article>
+          </section>
+
           <section class="architecture-article-section">
             <h2>OMH는 어디에 붙는가</h2>
             <div class="omh-fit-flow" aria-label="Where OMH fits in Hermes work">
@@ -374,6 +510,21 @@
               plan, route, prompt, button, handoff는 유용하지만, 코드가 실행됐거나
               이미지가 생성됐거나, 크론이 전달됐거나, PR 리뷰가 통과됐거나,
               CI가 초록불이라는 증거는 아닙니다.
+            </p>
+          </section>
+
+          <section class="architecture-article-section architecture-prompt-strip">
+            <h2>OMH 설치 후 사용자가 Hermes에게 물어볼 수 있는 것</h2>
+            <div>
+              <code>Use OMH web-research for: compare these three competitors and brief me.</code>
+              <code>Use OMH loop for: improve this repo's first-run experience until the friction is lower.</code>
+              <code>Use OMH img-summary for: make a PR summary card reviewers can read quickly.</code>
+              <code>Use OMH request-to-handoff for: turn this issue into a PR-ready implementation path.</code>
+            </div>
+            <p>
+              핵심은 사용자가 backend command를 외우는 게 아닙니다. Hermes가
+              작업의 형태를 알아보고, 명확한 workflow, next action, evidence
+              state를 돌려주는 것입니다.
             </p>
           </section>
 
