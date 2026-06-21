@@ -912,6 +912,7 @@ class RouterContentTests(unittest.TestCase):
             Path("site/docs/index.html"),
             Path("site/docs/loop/index.html"),
             Path("site/docs/image-gen/index.html"),
+            Path("site/docs/hermes-agent-architecture/index.html"),
             Path("site/docs/intent-to-plan/index.html"),
             Path("site/docs/product-ops/index.html"),
             Path("site/docs/executor-handoff/index.html"),
@@ -939,6 +940,7 @@ class RouterContentTests(unittest.TestCase):
         site_docs = Path("site/docs/index.html").read_text(encoding="utf-8")
         site_loop = Path("site/docs/loop/index.html").read_text(encoding="utf-8")
         site_image_gen = Path("site/docs/image-gen/index.html").read_text(encoding="utf-8")
+        site_architecture_post = Path("site/docs/hermes-agent-architecture/index.html").read_text(encoding="utf-8")
         site_intent = Path("site/docs/intent-to-plan/index.html").read_text(encoding="utf-8")
         site_product_ops = Path("site/docs/product-ops/index.html").read_text(encoding="utf-8")
         site_handoff = Path("site/docs/executor-handoff/index.html").read_text(encoding="utf-8")
@@ -1089,6 +1091,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Prepared handoff is not execution evidence", runbook)
         self.assertIn("examples/wrapper-golden/hermes-agent-integration.json", runbook)
         self.assertIn("Hermes Agent Integration Runbook", docs_readme)
+        self.assertIn("Hermes Agent Architecture Guide", docs_readme)
         self.assertIn("Role Surface", docs_readme)
         self.assertIn("Agent Install Protocol", docs_readme)
         self.assertIn("`deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`", docs_readme)
@@ -1160,6 +1163,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Image gen prompt cards", site)
         self.assertIn("Visual summaries that match the source.", site)
         self.assertIn('href="docs/image-gen/"', site)
+        self.assertIn('href="docs/hermes-agent-architecture/"', site)
+        self.assertIn("Hermes Agent architecture, explained.", site)
         self.assertIn("assets/omh-img-summary-card.png", site)
         self.assertIn("source-specific cards for meetings, reports", site)
         self.assertIn("If no image tool is connected", site)
@@ -1187,6 +1192,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("visual_prompt_card/v1", site_docs)
         self.assertIn("visual_observation/v1", site_docs)
         self.assertIn("image_generation_setup/v1", site_docs)
+        self.assertIn('href="hermes-agent-architecture/"', site_docs)
+        self.assertIn("Hermes Agent explained", site_docs)
         self.assertIn('href="image-gen/"', site_docs)
         self.assertIn('href="intent-to-plan/"', site_docs)
         self.assertIn('href="product-ops/"', site_docs)
@@ -1230,6 +1237,21 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('href="../image-gen/"', site_product_ops)
         self.assertIn("Executor-ready handoff", site_handoff)
         self.assertIn("Codex, Claude Code", site_handoff)
+        self.assertIn("Hermes Agent Architecture - OMH", site_architecture_post)
+        self.assertIn("English", site_architecture_post)
+        self.assertIn("한국어", site_architecture_post)
+        self.assertIn("Hermes Agent is not just a chat box", site_architecture_post)
+        self.assertIn("Hermes Agent는 단순 채팅창", site_architecture_post)
+        self.assertIn("run_agent.py", site_architecture_post)
+        self.assertIn("agent/prompt_builder.py", site_architecture_post)
+        self.assertIn("agent/memory_manager.py", site_architecture_post)
+        self.assertIn("agent/curator.py", site_architecture_post)
+        self.assertIn("gateway/platform_registry.py", site_architecture_post)
+        self.assertIn("cron/scheduler.py", site_architecture_post)
+        self.assertIn("skills/autonomous-ai-agents/hermes-agent/SKILL.md", site_architecture_post)
+        self.assertIn("prepared-vs-observed", site_architecture_post)
+        self.assertIn("GEPA-style", site_architecture_post)
+        self.assertIn("OMH is the operating layer", site_architecture_post)
         topbar = site.split('<header class="topbar"', 1)[1].split("</header>", 1)[0]
         self.assertIn('href="docs/"', topbar)
         self.assertNotIn('href="#architecture"', topbar)
