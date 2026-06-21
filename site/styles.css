@@ -2906,7 +2906,7 @@ h1 {
   border-radius: 28px;
   color: #ffffff;
   background:
-    linear-gradient(135deg, rgba(14, 24, 34, 0.84), rgba(14, 24, 34, 0.36)),
+    linear-gradient(135deg, rgba(14, 24, 34, 0.92), rgba(14, 24, 34, 0.68)),
     url("assets/hermes-agent-hero.png") center / cover no-repeat;
   box-shadow: var(--shadow-strong);
 }
@@ -2934,8 +2934,8 @@ h1 {
 
 .architecture-article-hero h1 {
   margin: 0;
-  font-size: clamp(42px, 7vw, 84px);
-  line-height: 0.94;
+  font-size: clamp(38px, 6vw, 74px);
+  line-height: 0.98;
   letter-spacing: 0;
 }
 
@@ -2945,15 +2945,111 @@ h1 {
   font-size: clamp(18px, 2.1vw, 23px);
 }
 
-.architecture-article-section {
+.architecture-hero-board {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-top: 28px;
-  padding: clamp(26px, 4vw, 42px);
-  border: 1px solid rgba(15, 24, 34, 0.08);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: var(--shadow);
 }
 
+.architecture-hero-board span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(5, 12, 18, 0.32);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.hero-board-icon {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(156, 240, 229, 0.72);
+  border-radius: 8px;
+}
+
+.hero-board-icon::before,
+.hero-board-icon::after {
+  content: "";
+  position: absolute;
+  color: #9cf0e5;
+}
+
+.hero-board-icon--surface::before {
+  inset: 5px 4px 7px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+}
+
+.hero-board-icon--memory::before {
+  inset: 5px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.hero-board-icon--skills::before {
+  inset: 5px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  transform: rotate(45deg);
+}
+
+.hero-board-icon--tools::before {
+  inset: 5px 9px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  transform: rotate(35deg);
+}
+
+.hero-board-icon--tools::after {
+  inset: 9px 5px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  transform: rotate(35deg);
+}
+
+.hero-board-icon--omh::before {
+  inset: 5px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+}
+
+.hero-board-icon--omh::after {
+  inset: 9px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.architecture-blog-section,
+.architecture-article-section {
+  max-width: 900px;
+  margin: 52px auto 0;
+}
+
+.architecture-prose {
+  color: var(--ink);
+}
+
+.architecture-prose--lead {
+  margin-top: 42px;
+}
+
+.blog-kicker {
+  color: var(--accent-strong);
+  font-size: clamp(20px, 2.4vw, 28px);
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.architecture-blog-section h2,
 .architecture-article-section h2 {
   margin: 0 0 14px;
   font-size: clamp(28px, 4vw, 46px);
@@ -2961,21 +3057,240 @@ h1 {
   letter-spacing: 0;
 }
 
+.architecture-blog-section p,
 .architecture-article-section p {
-  max-width: 870px;
   margin: 0 0 16px;
   color: var(--muted);
-  font-size: 17px;
+  font-size: clamp(17px, 1.55vw, 20px);
+  line-height: 1.74;
 }
 
+.architecture-blog-section p:last-child,
 .architecture-article-section p:last-child {
   margin-bottom: 0;
 }
 
+.architecture-thesis {
+  margin-top: 28px;
+  padding: 24px clamp(22px, 4vw, 34px);
+  border-left: 5px solid var(--accent);
+  border-radius: 0 22px 22px 0;
+  background:
+    linear-gradient(135deg, rgba(238, 250, 245, 0.96), rgba(255, 255, 255, 0.86));
+  box-shadow: 0 18px 52px rgba(16, 28, 40, 0.08);
+}
+
+.architecture-thesis span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.architecture-thesis strong {
+  display: block;
+  color: var(--ink);
+  font-size: clamp(22px, 3vw, 34px);
+  line-height: 1.18;
+}
+
 .architecture-article-section--visual {
+  max-width: none;
+  padding: clamp(26px, 4vw, 42px);
+  border: 1px solid rgba(15, 24, 34, 0.08);
+  border-radius: 24px;
   background:
     radial-gradient(circle at 20% 10%, rgba(126, 215, 194, 0.34), transparent 28%),
     linear-gradient(135deg, #14202b, #203349);
+  box-shadow: var(--shadow-strong);
+}
+
+.architecture-diagram-section {
+  color: #ffffff;
+}
+
+.diagram-heading {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+
+.diagram-heading h2 {
+  color: #ffffff;
+}
+
+.diagram-heading p:not(.eyebrow) {
+  max-width: 920px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.diagram-heading__icon,
+.arch-node__icon {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(126, 215, 194, 0.26), rgba(255, 255, 255, 0.08));
+}
+
+.diagram-heading__icon::before,
+.arch-node__icon::before,
+.arch-node__icon::after {
+  content: "";
+  position: absolute;
+  inset: 15px;
+  border: 2px solid currentColor;
+  color: #9cf0e5;
+}
+
+.diagram-heading__icon::before {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 8px rgba(126, 215, 194, 0.08),
+    inset 0 0 0 5px rgba(126, 215, 194, 0.12);
+}
+
+.arch-node__icon--surface::before {
+  border-radius: 6px;
+}
+
+.arch-node__icon--surface::after {
+  inset: auto 18px 12px;
+  height: 2px;
+  border: 0;
+  background: currentColor;
+}
+
+.arch-node__icon--prompt::before {
+  inset: 13px 18px;
+  border-radius: 999px;
+}
+
+.arch-node__icon--prompt::after {
+  inset: 25px 12px auto;
+  height: 2px;
+  border: 0;
+  background: currentColor;
+}
+
+.arch-node__icon--core::before {
+  border-radius: 50%;
+}
+
+.arch-node__icon--core::after {
+  inset: 21px;
+  border-radius: 50%;
+}
+
+.arch-node__icon--tools::before {
+  inset: 13px 21px;
+  border-radius: 999px;
+  transform: rotate(35deg);
+}
+
+.arch-node__icon--tools::after {
+  inset: 21px 13px;
+  border-radius: 999px;
+  transform: rotate(35deg);
+}
+
+.arch-node__icon--omh::before {
+  border-radius: 7px;
+  transform: rotate(45deg);
+}
+
+.arch-node__icon--omh::after {
+  inset: 22px;
+  border-radius: 50%;
+}
+
+.architecture-mermaid-map {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 28px minmax(150px, 1fr) 28px minmax(150px, 1fr) 28px minmax(150px, 1fr) 28px minmax(150px, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.architecture-mermaid-map > i {
+  align-self: center;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(126, 215, 194, 0.2), rgba(156, 240, 229, 0.92));
+}
+
+.arch-node {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 12px;
+  min-height: 230px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+}
+
+.arch-node > span:not(.arch-node__icon) {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.arch-node strong {
+  color: #ffffff;
+  font-size: clamp(17px, 1.8vw, 21px);
+  line-height: 1.16;
+}
+
+.arch-node--surface {
+  background: linear-gradient(160deg, rgba(49, 93, 140, 0.66), rgba(255, 255, 255, 0.08));
+}
+
+.arch-node--prompt {
+  background: linear-gradient(160deg, rgba(179, 107, 22, 0.58), rgba(255, 255, 255, 0.08));
+}
+
+.arch-node--core {
+  background: linear-gradient(160deg, rgba(25, 116, 102, 0.66), rgba(255, 255, 255, 0.08));
+}
+
+.arch-node--tools {
+  background: linear-gradient(160deg, rgba(84, 84, 126, 0.62), rgba(255, 255, 255, 0.08));
+}
+
+.arch-node--omh {
+  background: linear-gradient(160deg, rgba(126, 215, 194, 0.46), rgba(25, 116, 102, 0.28));
+}
+
+.platform-chip-wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.platform-chip-wall span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.11);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .architecture-system-map {
@@ -3405,6 +3720,7 @@ h1 {
   .docs-grid,
   .docs-feature-grid,
   .architecture-system-map,
+  .architecture-mermaid-map,
   .architecture-stack-grid,
   .journey-rail,
   .architecture-myth-grid,
@@ -3501,6 +3817,16 @@ h1 {
   .language-switch {
     position: static;
     justify-content: flex-start;
+  }
+
+  .diagram-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-mermaid-map > i {
+    width: 2px;
+    height: 20px;
+    justify-self: center;
   }
 
   .architecture-system-map {
