@@ -3077,15 +3077,25 @@ h1 {
 }
 
 .architecture-longform h2 {
-  margin: 58px 0 16px;
+  margin: 0 0 16px;
   color: var(--ink);
   font-size: clamp(30px, 4vw, 48px);
   line-height: 1.05;
   letter-spacing: 0;
 }
 
-.architecture-longform h2:first-child {
+.architecture-longform .article-section-label:first-child {
   margin-top: 0;
+}
+
+.article-section-label {
+  margin: 58px 0 10px;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .architecture-longform p {
