@@ -3104,6 +3104,115 @@ h1 {
   font-size: 15px;
 }
 
+.architecture-journey {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(237, 248, 250, 0.92));
+}
+
+.journey-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.journey-rail article {
+  position: relative;
+  min-height: 230px;
+  padding: 18px;
+  border: 1px solid rgba(15, 24, 34, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.journey-rail article:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 34px;
+  right: -10px;
+  z-index: 1;
+  width: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--blue));
+}
+
+.journey-rail span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: #ffffff;
+  background: var(--accent);
+  font-weight: 900;
+}
+
+.journey-rail h3 {
+  margin: 18px 0 8px;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.journey-rail p {
+  font-size: 14px;
+}
+
+.architecture-myth-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  background:
+    linear-gradient(135deg, rgba(15, 24, 34, 0.96), rgba(32, 51, 73, 0.92));
+}
+
+.architecture-myth-grid h2 {
+  grid-column: 1 / -1;
+  color: #ffffff;
+}
+
+.architecture-myth-grid article {
+  min-height: 230px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.architecture-myth-grid h3 {
+  margin: 0 0 10px;
+  color: #ffffff;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.architecture-myth-grid p {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 14px;
+}
+
+.architecture-prompt-strip {
+  background:
+    linear-gradient(135deg, rgba(238, 250, 245, 0.94), rgba(255, 255, 255, 0.94));
+}
+
+.architecture-prompt-strip > div {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.architecture-prompt-strip code {
+  display: block;
+  padding: 15px 16px;
+  border: 1px solid rgba(25, 116, 102, 0.16);
+  border-radius: 16px;
+  color: #0d302a;
+  background: rgba(255, 255, 255, 0.82);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .omh-fit-flow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr);
@@ -3293,6 +3402,8 @@ h1 {
   .docs-feature-grid,
   .architecture-system-map,
   .architecture-stack-grid,
+  .journey-rail,
+  .architecture-myth-grid,
   .architecture-learning-loop {
     grid-template-columns: 1fr;
   }
@@ -3410,6 +3521,23 @@ h1 {
     width: 2px;
     height: 18px;
     justify-self: center;
+  }
+
+  .journey-rail article {
+    min-height: 0;
+  }
+
+  .journey-rail article:not(:last-child)::after {
+    top: auto;
+    right: auto;
+    bottom: -10px;
+    left: 28px;
+    width: 2px;
+    height: 20px;
+  }
+
+  .architecture-myth-grid h2 {
+    grid-column: auto;
   }
 
   .arch-arrow {
