@@ -1174,9 +1174,9 @@ h1 {
 
 .flagship-showcase {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: clamp(22px, 4vw, 48px);
-  align-items: center;
+  grid-template-columns: minmax(300px, 0.86fr) minmax(0, 1.14fr);
+  gap: clamp(18px, 3vw, 34px);
+  align-items: start;
 }
 
 .poster-frame {
@@ -1195,13 +1195,14 @@ h1 {
 
 .flagship-list {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .flagship-item {
   display: block;
-  min-height: 164px;
-  padding: 22px;
+  min-height: 0;
+  padding: 16px;
   border: 1px solid rgba(126, 215, 194, 0.24);
   border-radius: 8px;
   background:
@@ -1223,24 +1224,26 @@ h1 {
 
 .flagship-item span {
   display: block;
-  margin-bottom: 9px;
+  margin-bottom: 7px;
   color: #7ed7c2;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .flagship-item h3 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: #ffffff;
-  font-size: 19px;
+  font-size: 15px;
   line-height: 1.25;
 }
 
 .flagship-item p {
   margin: 0;
   color: rgba(224, 239, 245, 0.78);
+  font-size: 14px;
+  line-height: 1.42;
 }
 
 .flagship-item code {
@@ -1249,9 +1252,9 @@ h1 {
 
 .text-link {
   display: inline-flex;
-  margin-top: 12px;
+  margin-top: 8px;
   color: #9cf0e5;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
   text-decoration-color: rgba(126, 215, 194, 0.34);
   text-underline-offset: 3px;
@@ -1997,12 +2000,12 @@ h1 {
 
 .docs-feature-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .flagship-item--docs {
-  min-height: 220px;
+  min-height: 0;
   border-color: rgba(25, 116, 102, 0.2);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 250, 245, 0.78));
@@ -3387,6 +3390,7 @@ h1 {
   .case-grid,
   .case-grid--docs,
   .flagship-showcase,
+  .flagship-list,
   .loop-spotlight,
   .imagegen-spotlight,
   .feature-section--split,
