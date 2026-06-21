@@ -3034,6 +3034,12 @@ h1 {
   margin: 52px auto 0;
 }
 
+.architecture-longform {
+  max-width: 880px;
+  margin: 58px auto 0;
+  color: var(--ink);
+}
+
 .architecture-prose {
   color: var(--ink);
 }
@@ -3068,6 +3074,73 @@ h1 {
 .architecture-blog-section p:last-child,
 .architecture-article-section p:last-child {
   margin-bottom: 0;
+}
+
+.architecture-longform h2 {
+  margin: 58px 0 16px;
+  color: var(--ink);
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.architecture-longform h2:first-child {
+  margin-top: 0;
+}
+
+.architecture-longform p {
+  margin: 0 0 22px;
+  color: rgba(36, 51, 66, 0.86);
+  font-size: clamp(18px, 1.65vw, 21px);
+  line-height: 1.82;
+}
+
+.architecture-longform code {
+  padding: 2px 6px;
+  border: 1px solid rgba(25, 116, 102, 0.14);
+  border-radius: 7px;
+  color: #0d302a;
+  background: rgba(238, 250, 245, 0.78);
+  font-size: 0.88em;
+}
+
+.article-callout {
+  margin: 34px 0 46px;
+  padding: 26px clamp(22px, 4vw, 34px);
+  border: 0;
+  border-left: 6px solid var(--accent);
+  border-radius: 0 22px 22px 0;
+  color: #09241f;
+  background:
+    linear-gradient(135deg, rgba(238, 250, 245, 0.96), rgba(255, 255, 255, 0.88));
+  box-shadow: 0 18px 52px rgba(16, 28, 40, 0.08);
+  font-size: clamp(21px, 2.2vw, 30px);
+  font-weight: 900;
+  line-height: 1.32;
+}
+
+.architecture-example-lines {
+  display: grid;
+  gap: 11px;
+  margin: 40px 0 50px;
+  padding: 22px;
+  border: 1px solid rgba(25, 116, 102, 0.14);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(126, 215, 194, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(238, 250, 245, 0.86));
+  box-shadow: 0 22px 60px rgba(16, 28, 40, 0.08);
+}
+
+.architecture-example-lines code {
+  display: block;
+  padding: 14px 16px;
+  border-color: rgba(25, 116, 102, 0.16);
+  border-radius: 16px;
+  color: #0d302a;
+  background: rgba(255, 255, 255, 0.82);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .architecture-thesis {
