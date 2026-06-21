@@ -143,7 +143,8 @@
           </section>
 
           <section class="architecture-longform architecture-prose">
-            <h2>The simple mental model</h2>
+            <p class="article-section-label">01 / Routing Layer</p>
+            <h2>Work Routing</h2>
             <p>
               A request does not just become an answer. It becomes a route. The
               first decision Hermes makes is not only "what should I say?" but
@@ -179,7 +180,8 @@
               replayable, and honest about evidence.
             </blockquote>
 
-            <h2>The prompt builder is where Hermes becomes more than a chat window.</h2>
+            <p class="article-section-label">02 / Prompt Context</p>
+            <h2>Prompt Builder</h2>
             <p>
               The prompt builder is the architecture's throat. It is where a
               surface message becomes an agent request with identity, files,
@@ -208,7 +210,8 @@
               this looks like a coding handoff that still needs an executor.
             </p>
 
-            <h2>The agent loop is where intent becomes tool-shaped work.</h2>
+            <p class="article-section-label">03 / Runtime Loop</p>
+            <h2>Agent Loop</h2>
             <p>
               <code>run_agent.py</code> and the <code>AIAgent</code> loop are
               the work chamber. Session transitions, model transport, context
@@ -236,7 +239,8 @@
               confident storytelling.
             </p>
 
-            <h2>Memory is not a drawer of notes; it is retrieval discipline.</h2>
+            <p class="article-section-label">04 / Recall Rules</p>
+            <h2>Memory Discipline</h2>
             <p>
               <code>agent/memory_manager.py</code> coordinates built-in memory
               with at most one external provider, prefetch behavior, sync, and
@@ -263,7 +267,8 @@
               data Hermes can later inspect or improve from.
             </p>
 
-            <h2>Skills are procedural memory.</h2>
+            <p class="article-section-label">05 / Procedural Knowledge</p>
+            <h2>Skills</h2>
             <p>
               A skill is not just documentation. It is a repeatable operating
               pattern that stops Hermes from guessing the same process every
@@ -293,7 +298,8 @@
               changes.
             </p>
 
-            <h2>Cron and gateway support turn Hermes into an operator, not just an answer box.</h2>
+            <p class="article-section-label">06 / Operating Surfaces</p>
+            <h2>Cron And Gateway</h2>
             <p>
               Gateway code such as <code>gateway/platform_registry.py</code>
               and scheduled work such as <code>cron/scheduler.py</code> are
@@ -321,7 +327,8 @@
               here is what still needs human judgment.
             </p>
 
-            <h2>Where OMH belongs</h2>
+            <p class="article-section-label">07 / OMH Position</p>
+            <h2>OMH Layer</h2>
             <p>
               OMH belongs above this as a workflow and evidence lens, not below
               it as a hidden executor. It should help Hermes turn vague intent
@@ -358,7 +365,8 @@
               <code>Use OMH request-to-handoff for: turn this issue into a PR-ready implementation path.</code>
             </div>
 
-            <h2>What to remember</h2>
+            <p class="article-section-label">08 / Summary</p>
+            <h2>Takeaway</h2>
             <p>
               Hermes Agent is strongest when it is understood as a full work
               runtime: surfaces, prompt builder, agent loop, memory, skills,
@@ -500,7 +508,8 @@
           </section>
 
           <section class="architecture-longform architecture-prose">
-            <h2>먼저, Hermes는 답하기 전에 일을 분류합니다.</h2>
+            <p class="article-section-label">01 / 라우팅</p>
+            <h2>작업 분류</h2>
             <p>
               요청은 그냥 답변이 되지 않습니다. route가 됩니다. Hermes가 먼저
               정해야 하는 것은 "뭐라고 대답할까?"가 아니라 "이건 어떤 종류의
@@ -533,7 +542,8 @@
               어디로 흘렀고 무엇이 확인됐는지를 남기는 쪽입니다.
             </blockquote>
 
-            <h2>프롬프트 빌더에서 Hermes는 단순 채팅창을 넘어섭니다.</h2>
+            <p class="article-section-label">02 / 프롬프트 맥락</p>
+            <h2>프롬프트 빌더</h2>
             <p>
               프롬프트 빌더는 Hermes의 목에 해당합니다. 사람이 보낸 문장이
               여기서 identity, files, skills, memory hints, platform context,
@@ -562,7 +572,8 @@
               흔들리지 않습니다.
             </p>
 
-            <h2>에이전트 루프에서는 말이 실제 작업 모양을 갖습니다.</h2>
+            <p class="article-section-label">03 / 실행 루프</p>
+            <h2>에이전트 루프</h2>
             <p>
               <code>run_agent.py</code>와 <code>AIAgent</code> loop는 Hermes의
               작업실입니다. session transition, model transport, context engine
@@ -589,7 +600,8 @@
               쉽게 미끄러집니다.
             </p>
 
-            <h2>메모리는 메모장 서랍이 아니라, 무엇을 꺼낼지 정하는 규칙입니다.</h2>
+            <p class="article-section-label">04 / 기억과 검색</p>
+            <h2>메모리 규칙</h2>
             <p>
               <code>agent/memory_manager.py</code>는 built-in memory와 최대 하나의
               external provider, prefetch behavior, sync, streaming scrub rule을
@@ -616,7 +628,8 @@
               있는 재료가 생깁니다.
             </p>
 
-            <h2>스킬은 Hermes가 몸에 익히는 절차적 기억입니다.</h2>
+            <p class="article-section-label">05 / 절차적 지식</p>
+            <h2>스킬</h2>
             <p>
               skill은 단순 문서가 아닙니다. Hermes가 매번 같은 절차를 즉석에서
               추측하지 않도록 붙잡아주는 반복 가능한 operating pattern입니다.
@@ -644,7 +657,8 @@
               편이 안전합니다.
             </p>
 
-            <h2>크론과 게이트웨이가 붙으면 Hermes는 답변기가 아니라 운영자가 됩니다.</h2>
+            <p class="article-section-label">06 / 운영 표면</p>
+            <h2>크론과 게이트웨이</h2>
             <p>
               <code>gateway/platform_registry.py</code> 같은 gateway code와
               <code>cron/scheduler.py</code> 같은 scheduled work는 Hermes를 실제
@@ -671,7 +685,8 @@
               수 있어야 합니다.
             </p>
 
-            <h2>OMH는 어디에 붙어야 하는가</h2>
+            <p class="article-section-label">07 / OMH 포지션</p>
+            <h2>OMH의 자리</h2>
             <p>
               OMH는 Hermes 아래에서 몰래 실행되는 executor가 아니라, Hermes 위에
               붙는 workflow와 evidence lens여야 합니다. 막연한 요청을 named
@@ -707,7 +722,8 @@
               <code>Use OMH request-to-handoff for: turn this issue into a PR-ready implementation path.</code>
             </div>
 
-            <h2>마지막으로 기억할 것</h2>
+            <p class="article-section-label">08 / 핵심 정리</p>
+            <h2>요약</h2>
             <p>
               Hermes Agent는 surfaces, prompt builder, agent loop, memory,
               skills, tools, plugins, cron, gateway, delivery가 함께 맞물릴 때
