@@ -14,6 +14,7 @@ from .policy import (
     meets_confidence_threshold,
 )
 from .recommend import recommend_skills
+from .task_cards import classify_task, task_card_recommendation
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
 
@@ -94,6 +95,7 @@ class ChatRouteDecision:
     reason: str
     clarification: str
     routing_prompt: str
+    task_card: dict[str, object] | None
     recommendations: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -121,6 +123,10 @@ def route_chat_message(
 
     definitions = routable_definitions()
     full_recommendations = recommend_skills(message, limit=len(definitions))
+    explicit_skill = explicit_skill_invocation(message, definitions)
+    task_card = classify_task(message)
+    if task_card and not explicit_skill:
+        full_recommendations = _prioritize_recommendation(full_recommendations, task_card_recommendation(task_card))
     catalog_question = is_skill_catalog_question(message)
     specific_catalog_match = (
         _specific_capability_catalog_match(full_recommendations)
@@ -131,7 +137,6 @@ def route_chat_message(
         full_recommendations = _prioritize_recommendation(full_recommendations, specific_catalog_match)
     recommendations = tuple(full_recommendations[:limit])
     top = full_recommendations[0]
-    explicit_skill = explicit_skill_invocation(message, definitions)
     candidate_skill = str(top["skill"])
     candidate_harness = primary_harness_for_skill(candidate_skill)
     candidate_score = _int_value(top["score"])
@@ -143,6 +148,16 @@ def route_chat_message(
         selected_skill = explicit_skill
         action = "dispatch"
         reason = "Explicit workflow invocation wins over heuristic routing."
+        ambiguous = False
+        task_card = None
+    elif task_card:
+        selected_skill = str(task_card.get("selected_workflow_rail", candidate_skill))
+        candidate_skill = selected_skill
+        candidate_harness = primary_harness_for_skill(candidate_skill)
+        candidate_score = max(candidate_score, _int_value(task_card.get("score", 0)))
+        candidate_confidence = str(task_card.get("confidence", "high"))
+        action = "dispatch"
+        reason = str(task_card.get("routing_reason", "Matched high-level task abstraction before workflow routing."))
         ambiguous = False
     elif catalog_question and specific_catalog_match is not None:
         selected_skill = candidate_skill
@@ -207,6 +222,7 @@ def route_chat_message(
         reason=reason,
         clarification=clarification,
         routing_prompt=_routing_prompt(action, selected_skill, candidate_skill, reason, message),
+        task_card=task_card,
         recommendations=recommendations,
     )
     return decision.to_dict()
@@ -239,6 +255,8 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
     )
     if not include_message:
         route.pop("routing_prompt", None)
+    if not route.get("task_card"):
+        route.pop("task_card", None)
     return route
 
 
@@ -255,7 +273,7 @@ def routing_record_payload(
     channel_ref: str = "",
     user_ref: str = "",
 ) -> dict[str, object]:
-    return {
+    payload = {
         "source": decision["source"],
         "action": decision["action"],
         "selected_skill": decision["selected_skill"],
@@ -275,6 +293,10 @@ def routing_record_payload(
         "user_ref": user_ref,
         "recommendations": _compact_recommendations(decision.get("recommendations", [])),
     }
+    task_card = decision.get("task_card")
+    if isinstance(task_card, dict) and task_card:
+        payload["task_card"] = task_card
+    return payload
 
 
 def _is_ambiguous(recommendations: list[dict[str, object]]) -> bool:
