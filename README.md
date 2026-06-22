@@ -170,7 +170,7 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | --- | --- | --- |
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Shape fuzzy intent into an interview, plan, goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Keep product signals, source-backed research, and decisions in non-coding workflows. | "Payment failures keep coming up." |
-| `research-department` / `web-research` / `research-brief` / `report-package` | Prepare Scout -> Analyst -> Briefer research operations with source inbox and briefing status boundaries. | "Every morning, watch competitor news and brief me if something changed." |
+| `source-finder` / `research-department` / `web-research` / `research-brief` / `report-package` | Prepare typed source candidates, Scout -> Analyst -> Briefer research operations, source-backed evidence, and briefing status boundaries. | "Find papers, datasets, and repos for this topic." |
 | `paper-learning` | Explain a supplied paper or paper PDF at very easy, moderate, or expert level while preserving a coverage ledger. | "Explain this arXiv paper without dropping details." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
@@ -230,7 +230,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 
 | Surface | What it means in practice |
 | --- | --- |
-| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `web-research`, `paper-learning`, `materials-package`, `img-summary`, and `ultraprocess`. |
+| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `source-finder`, `web-research`, `paper-learning`, `materials-package`, `img-summary`, and `ultraprocess`. |
 | Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
 | OMH context brief | Hermes or a wrapper can fetch a compact OMH mental model, generic-tool checkpoint, and route hint before falling back to ordinary chat/tools. |

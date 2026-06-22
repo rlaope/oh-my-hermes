@@ -11,12 +11,16 @@ EXPLICIT_INVOCATION_PREFIXES = ("$", "/", "./", "@")
 _EXPLICIT_SKILL_ALIASES = {
     "ohmy": "oh-my-hermes",
     "paper-explainer": "paper-learning",
+    "source-acquisition": "source-finder",
+    "source-intake": "source-finder",
 }
 _PREFIXED_SKILL_ALIASES = {
     "omh": "oh-my-hermes",
     "ohmy": "oh-my-hermes",
     "skills": "oh-my-hermes",
     "paper-explainer": "paper-learning",
+    "source-acquisition": "source-finder",
+    "source-intake": "source-finder",
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
@@ -257,6 +261,118 @@ _PAPER_LEARNING_VALIDATION_PHRASES = (
     "팩트체크",
     "증명 검토",
     "재현해",
+)
+_SOURCE_FINDER_ACTION_TOKENS = _normalized_token_set(
+    {
+        "find",
+        "discover",
+        "collect",
+        "gather",
+        "candidate",
+        "candidates",
+        "intake",
+        "acquisition",
+        "download",
+        "downloadable",
+        "lookup",
+        "찾아",
+        "찾아줘",
+        "후보",
+        "수집",
+        "자료",
+        "출처",
+    }
+)
+_SOURCE_FINDER_KIND_TOKENS = _normalized_token_set(
+    {
+        "paper",
+        "papers",
+        "arxiv",
+        "doi",
+        "dataset",
+        "datasets",
+        "benchmark",
+        "github",
+        "repo",
+        "repos",
+        "repository",
+        "repositories",
+        "oss",
+        "open-source",
+        "presentation",
+        "presentations",
+        "slides",
+        "deck",
+        "docs",
+        "documentation",
+        "spec",
+        "specs",
+        "rfc",
+        "links",
+        "논문",
+        "데이터셋",
+        "데이터",
+        "깃허브",
+        "저장소",
+        "오픈소스",
+        "발표자료",
+        "슬라이드",
+        "문서",
+        "스펙",
+        "링크",
+    }
+)
+_SOURCE_FINDER_PHRASES = (
+    "source-finder",
+    "source finder",
+    "source acquisition",
+    "source intake",
+    "source candidates",
+    "find source candidates",
+    "find papers and datasets",
+    "find datasets and repos",
+    "find papers",
+    "find datasets",
+    "find github repos",
+    "find github repositories",
+    "find oss repos",
+    "find open source repos",
+    "find presentations",
+    "find public slides",
+    "find docs and specs",
+    "downloadable sources",
+    "자료 후보",
+    "출처 후보",
+    "논문 데이터셋 찾아",
+    "논문과 데이터셋",
+    "깃허브 저장소 찾아",
+    "오픈소스 저장소 찾아",
+    "공개 발표자료 찾아",
+    "문서 스펙 찾아",
+)
+_SOURCE_FINDER_EXCLUSION_PHRASES = (
+    "find current citations",
+    "current citations",
+    "citation check",
+    "verify citations",
+    "source backed synthesis",
+    "source-backed synthesis",
+    "summarize what the sources say",
+    "official docs",
+    "official documentation",
+    "official guide",
+    "official guidance",
+    "upstream guidance",
+    "best practice",
+    "best practices",
+    "best practice docs",
+    "current api",
+    "current version",
+    "latest version",
+    "fact check",
+    "fact-check",
+    "latest news",
+    "current evidence",
 )
 _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
     {
@@ -1360,6 +1476,15 @@ WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; web, source, or freshness requests should start with source-backed Hermes research.",
     activation_status="active",
 )
+SOURCE_FINDER_GUARD = RoutingGuardRule(
+    id="source_finder_before_generic_web_research",
+    rule="Typed source candidate acquisition should route to source-finder before generic web research.",
+    matched_label="guard:source_finder",
+    preferred_skills=("source-finder",),
+    score_boost=36,
+    why="Matched guard/trigger metadata; typed source acquisition should prepare candidates, acquisition state, and downstream routing before evidence synthesis.",
+    activation_status="active",
+)
 MISSED_WORKFLOW_WEB_RESEARCH_GUARD = RoutingGuardRule(
     id="missed_workflow_research_recovery",
     rule="Missed-OMH feedback about research/source work should recover to web-research instead of broad router help.",
@@ -1521,6 +1646,7 @@ ROUTING_GUARD_RULES = (
     PAPER_LEARNING_GUARD,
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
+    SOURCE_FINDER_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
     MISSED_WORKFLOW_WEB_RESEARCH_GUARD,
     MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD,
@@ -1601,9 +1727,17 @@ def active_routing_guard_rules(
         and not research_department_applies
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
+    source_finder_applies = (
+        not delivery_cycle_applies
+        and not paper_learning_applies
+        and not research_department_applies
+        and _source_finder_guard_applies(normalized_query, query_tokens)
+    )
+    if source_finder_applies:
+        rules.append(SOURCE_FINDER_GUARD)
     if _missed_workflow_operating_record_guard_applies(normalized_query, query_tokens):
         rules.append(MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD)
-    if _web_research_guard_applies(normalized_query, query_tokens) and not paper_learning_applies:
+    if _web_research_guard_applies(normalized_query, query_tokens) and not paper_learning_applies and not source_finder_applies:
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
     if _missed_workflow_research_guard_applies(normalized_query, query_tokens):
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
@@ -1783,6 +1917,33 @@ def _research_department_guard_applies(normalized_query: str, query_tokens: set[
     )
     explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
     return recurring and research and (support or specific_research_domain or explicit_research_ops)
+
+
+def _source_finder_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _explicit_material_export_requested(normalized_query, query_tokens):
+        return False
+    if _paper_learning_guard_applies(normalized_query, query_tokens):
+        return False
+    if _research_department_guard_applies(normalized_query, query_tokens):
+        return False
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _SOURCE_FINDER_EXCLUSION_PHRASES):
+        return False
+    if _paper_validation_or_citation_requested(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _SOURCE_FINDER_PHRASES):
+        return True
+    action = bool(_SOURCE_FINDER_ACTION_TOKENS & query_tokens)
+    source_kind = bool(_SOURCE_FINDER_KIND_TOKENS & query_tokens)
+    multiple_source_kinds = len(_SOURCE_FINDER_KIND_TOKENS & query_tokens) >= 2
+    acquisition_noun = _contains_phrase(
+        normalized_query,
+        ("source candidate", "source candidates", "downloadable source", "acquisition status", "출처 후보", "자료 후보"),
+    )
+    return action and (source_kind or acquisition_noun or multiple_source_kinds)
 
 
 def is_explicit_one_off_request(normalized_query: str, query_tokens: set[str]) -> bool:

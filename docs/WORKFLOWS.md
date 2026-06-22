@@ -579,6 +579,72 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Separate quoted evidence from inference.
   - State retrieval limits, dates, and missing-source gaps for unstable facts.
 
+### source-finder
+
+[omh] Hermes Source Finder workflow: prepare typed source candidates and acquisition status before downstream work.
+
+- Category: `research`
+- Phase: `source-acquisition`
+- Hermes role: `researcher`
+- Quality tier: `source-acquisition-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when the user asks to find or classify source candidates before learning, research, materials, or coding work.
+- Handoff policy: Keep source acquisition planning in Hermes. Do not claim search, download, clone, extraction, license check, verification, or downstream processing unless a wrapper or user records observed evidence.
+- Why this exists: `source-finder` exists so Hermes can turn vague source discovery requests into typed candidates, acquisition status, and downstream workflow choice without pretending OMH searched, downloaded, or verified the material.
+- Use when: Use when Hermes should prepare a typed source candidate set across papers, web links, datasets, GitHub repositories, public presentations, docs/specs, or unknown source material before choosing paper-learning, web-research, research-brief, research-department, materials-package, or ultraprocess.
+- Do not use when:
+  - The user asks for current citations, fact-finding, or source-backed synthesis; use `web-research`.
+  - The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `paper-learning`.
+  - The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.
+  - The user asks to export, convert, render, package, or attach a file; use `materials-package` or `deliverable-package`.
+  - The user asks for an image card or visual summary; use `img-summary`.
+- Strong routing signals: `source-finder`, `source finder`, `source acquisition`, `source intake`, `find papers and datasets`, `find datasets and repos`, `find papers`, `find datasets`, `find github repos`, `find oss repos`, `find presentations`, `find public slides`, `find docs and specs`, `find source candidates`, `download candidate`, `source candidate`, `acquisition status`, `자료 후보`, `출처 후보`, `논문 데이터셋 찾아`, `깃허브 저장소 찾아`, `공개 발표자료 찾아`, `문서 스펙 찾아`
+- Good example:
+  - Prompt: source-finder find papers, datasets, and GitHub repos for evaluating browser agent benchmarks.
+  - Expected behavior: Prepare source_finder_plan/v1 with typed candidates, acquisition states, missing observed evidence, and downstream choices.
+  - Why: The user needs source candidates before deciding whether to learn, research, package, or implement.
+- Bad example:
+  - Prompt: source-finder find current citations and summarize what the sources say.
+  - Expected behavior: Route to `web-research` because the user asks for current evidence and synthesis, not candidate acquisition status.
+  - Why: Source-finder prepares acquisition lifecycle metadata; web-research owns current evidence synthesis.
+- Quality bar:
+  - Name source kinds from: paper, web_link, dataset, github_repo, presentation, docs_spec, unknown.
+  - Record acquisition state from: candidate_prepared, link_observed, download_link_prepared, download_observed, file_hash_recorded, text_extraction_observed, license_checked, verification_observed, downstream_selected.
+  - Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.
+  - Attach observation provenance before treating any acquisition state as evidence.
+  - Recommend the next downstream workflow without pretending that downstream work already ran.
+- Completion checklist:
+  - Source kinds, source boundaries, and downstream intent are named.
+  - Each candidate has a source_candidate/v1 shape and acquisition state.
+  - Observed states include provenance before being treated as evidence.
+  - The next downstream workflow is recommended without claiming it ran.
+  - Search, download, clone, extraction, hash, license, verification, and downstream processing gaps are explicit.
+- Recovery notes:
+  - If the user asks for facts or citations, route to `web-research`.
+  - If a candidate lacks a link or file reference, keep it candidate_prepared and ask for the next observable source step.
+  - If the user wants to process a selected source, route to the downstream workflow instead of continuing source acquisition.
+- Required inputs:
+  - source target or topic
+  - desired source kinds
+  - source boundaries or exclusion criteria
+  - downstream intent when known
+- Expected outputs:
+  - source_finder_plan/v1
+  - source_candidate/v1
+  - source_candidate_set/v1
+  - source_acquisition_status/v1
+  - downstream workflow recommendation
+  - not-evidence boundary
+- Artifact expectations:
+  - source_finder_plan/v1 under .omh/source-finder when a wrapper or CLI records it
+- Safety rules:
+  - Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.
+  - Do not redefine research-department's source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.
+  - Route current citations and source-backed synthesis to `web-research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.
+
 ### research-brief
 
 [omh] Hermes Research Brief workflow: source-backed business research without pretending evidence was fetched.
@@ -3547,6 +3613,75 @@ Prepare source-specific, premium domain-aware, and poster-archetype-aware visual
   - A connected image-generation capability changes available actions only; it is not execution evidence.
   - A generated image observation does not prove visual QA or delivery.
 - Fallback: If image capability is unavailable, show choose/setup image tool fallback actions plus copy/revise/status actions, and keep generation prompt-only until capability is connected.
+
+### source-finder
+
+Prepare typed source candidates, acquisition states, observation provenance, and downstream workflow choices without doing network acquisition.
+
+- Use when: Use when Hermes should find, classify, or intake source candidates such as papers, links, datasets, GitHub repos, presentations, docs/specs, or unknown sources before downstream processing.
+- Quality tier: `source-acquisition-gated`
+- Quality bar:
+  - Keep source acquisition separate from current-source synthesis, paper explanation, recurring monitoring, materials export, and image cards.
+  - Use source_candidate_set/v1 instead of research-department's source_inbox/v1.
+  - Require observation provenance before reporting an observed acquisition state.
+  - Recommend a downstream workflow without claiming it already ran.
+- Inputs:
+  - source target or topic
+  - desired source kinds
+  - source boundaries or exclusions
+  - downstream intent when known
+- Outputs:
+  - source_finder_plan/v1
+  - source_candidate/v1
+  - source_candidate_set/v1
+  - source_acquisition_status/v1
+  - downstream workflow recommendation
+  - not-evidence boundary
+- Stop conditions:
+  - source kind and acquisition scope are named
+  - source candidates are prepared or observed with provenance
+  - downstream workflow is selected or explicitly unknown
+  - not-observed acquisition and verification gaps are listed
+- Verification:
+  - validate source_finder_plan/v1
+  - check source kind enum
+  - check acquisition state enum
+  - check observation provenance before observed claims
+  - verify not_evidence_until_observed lists search, download, extraction, license, verification, and downstream gaps
+- Evidence ladder:
+  - `source_scope_named`
+  - `source_kind_selected`
+  - `candidate_set_prepared`
+  - `acquisition_status_prepared`
+  - `observed_source_evidence_recorded_when_available`
+  - `downstream_workflow_selected`
+- Wrapper actions:
+  - `prepare_source_finder_plan`
+  - `show_source_candidates`
+  - `record_source_candidate`
+  - `record_source_link_observed`
+  - `record_download_observed`
+  - `record_file_hash`
+  - `record_text_extraction_observed`
+  - `record_license_check`
+  - `choose_source`
+  - `route_to_downstream_workflow`
+  - `show_acquisition_status`
+  - `show_status`
+- Artifact events:
+  - `source_scope_named`
+  - `source_kind_selected`
+  - `candidate_set_prepared`
+  - `acquisition_status_prepared`
+  - `observed_source_evidence_recorded_when_available`
+  - `downstream_workflow_selected`
+- Delegation expectation: Record source-finder as Hermes-retained acquisition planning; record search, download, clone, extraction, license, verification, and downstream processing only from observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A source_finder_plan/v1 artifact is not web search, download, clone, extraction, license check, source verification, or downstream processing evidence.
+  - A source candidate is not proof the source exists, is accessible, is licensed, or supports the user's claim until observed evidence exists.
+  - A downstream workflow recommendation is not proof that paper-learning, web-research, materials-package, research-department, or ultraprocess ran.
+- Fallback: If a request asks for current facts, citations, explanation, recurring monitoring, file packaging, or image-card generation, route to the narrower downstream workflow.
 
 ### paper-learning
 

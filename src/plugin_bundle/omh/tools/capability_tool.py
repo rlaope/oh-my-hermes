@@ -50,7 +50,7 @@ LANE_OWNER_ROLES = {
 }
 STANDALONE_LANE_PLAYBOOK_IDS = {
     "intent_to_plan": ("request-to-handoff", "safe-feature-change"),
-    "research_and_ops": ("research-department", "source-backed-research", "feedback-triage"),
+    "research_and_ops": ("source-finder", "research-department", "source-backed-research", "feedback-triage"),
     "materials_and_visuals": ("materials-processing",),
     "automation_and_status": ("scheduled-ops-blueprint",),
     "coding_handoff": ("idea-to-deploy",),
@@ -612,6 +612,18 @@ def _standalone_playbook_capabilities() -> list[dict[str, object]]:
             "Keep research requests grounded in sources, caveats, synthesis, and decision-ready output.",
             "Use when Hermes should research before recommending or planning.",
             ("question", "source_gathering", "synthesis", "brief", "status_card"),
+            "researcher",
+            context_rule,
+            chat_rule,
+            fallback_rule,
+            evidence_boundary,
+        ),
+        _standalone_playbook(
+            "source-finder",
+            "Source finder",
+            "Prepare typed source candidates, acquisition status, provenance, and downstream workflow choice.",
+            "Use when Hermes should find or classify papers, links, datasets, repos, presentations, docs, or specs before downstream work.",
+            ("source_scope", "candidate_set", "acquisition_status", "downstream_choice"),
             "researcher",
             context_rule,
             chat_rule,

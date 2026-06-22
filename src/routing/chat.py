@@ -41,6 +41,7 @@ _SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset(
         "paper-learning",
         "report-package",
         "research-department",
+        "source-finder",
         "strategy-brief",
         "toolbelt-readiness",
         "ultraprocess",

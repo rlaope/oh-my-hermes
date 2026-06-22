@@ -96,6 +96,17 @@ VISIBLE_ACTIONS = (
     "revise_research_sources",
     "confirm_cadence_delivery_tooling",
     "record_source_observation",
+    "prepare_source_finder_plan",
+    "show_source_candidates",
+    "record_source_candidate",
+    "record_source_link_observed",
+    "record_download_observed",
+    "record_file_hash",
+    "record_text_extraction_observed",
+    "record_license_check",
+    "choose_source",
+    "route_to_downstream_workflow",
+    "show_acquisition_status",
     "prepare_paper_learning",
     "choose_explanation_level",
     "show_paper_source_requirements",
@@ -192,6 +203,7 @@ _SKILL_PICKER_ENTRIES = (
     ("ultraprocess", "Ultra Process", "Run one research-plan-implement-review-sync cycle.", "./ultraprocess <request>"),
     ("feedback-triage", "Feedback Triage", "Turn customer or product signals into investigation.", "./feedback-triage <signal>"),
     ("web-research", "Web Research", "Gather source-backed current evidence.", "./web-research <question>"),
+    ("source-finder", "Source Finder", "Prepare typed source candidates before downstream work.", "./source-finder <target>"),
     ("research-department", "Research Department", "Prepare Scout, Analyst, and Briefer research ops.", "./research-department <topic>"),
     ("paper-learning", "Paper Learning", "Explain a paper by level without dropping coverage.", "./paper-learning <paper>"),
     ("agent-ops-review", "Agent Ops Review", "See quality, blockers, next action, and throughput levers.", "./agent-ops-review <request>"),
@@ -211,7 +223,7 @@ _CONTEXT_PRIMER_GROUPS = (
     {
         "id": "company_product_ops",
         "label": "Company and product ops",
-        "workflows": ("feedback-triage", "research-department", "paper-learning", "web-research", "strategy-brief", "automation-blueprint"),
+        "workflows": ("feedback-triage", "research-department", "source-finder", "paper-learning", "web-research", "strategy-brief", "automation-blueprint"),
         "use_when": "The user needs customer-signal triage, source-backed research, recurring ops, meeting/report work, or strategy synthesis.",
     },
     {
@@ -234,6 +246,7 @@ _DIRECT_WORKFLOW_SKILLS = {
     "code-review",
     "best-practice-research",
     "autoresearch-goal",
+    "source-finder",
     "doctor",
     "skill",
     "wiki",
@@ -351,6 +364,11 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "I will explain this paper at the selected level without shrinking it into a short summary. I will first "
         "mark what paper text or PDF extraction is actually observed, then walk section by section with a coverage ledger."
     ),
+    "source-finder": (
+        "I will prepare typed source candidates and acquisition status first: papers, links, datasets, repos, presentations, "
+        "or docs/specs. Search, download, extraction, license checks, verification, and downstream processing stay unobserved "
+        "until a wrapper or user records evidence."
+    ),
     "materials-package": (
         "I will shape this into a material package: target files, source inputs, missing data, outline, "
         "generation owner, and QA checks. I will not claim the files exist until export evidence is observed."
@@ -443,6 +461,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_reliability_review": ("prepare_reliability_review", "Review reliability"),
     "prepare_scheduled_ops_blueprint": ("prepare_scheduled_ops_blueprint", "Prepare automation"),
     "prepare_research_department_plan": ("prepare_research_department_plan", "Prepare research flow"),
+    "prepare_source_finder_plan": ("prepare_source_finder_plan", "Prepare sources"),
     "prepare_paper_learning": ("prepare_paper_learning", "Prepare paper learning"),
     "prepare_material_package": ("prepare_material_package", "Prepare package"),
     "prepare_deliverable_package": ("prepare_deliverable_package", "Prepare deliverable"),

@@ -272,6 +272,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["img-summary"].next_action, "prepare_visual_prompt_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["paper-learning"].next_action, "prepare_paper_learning")
+        self.assertEqual(recommend_module._SKILL_POLICIES["source-finder"].next_action, "prepare_source_finder_plan")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
         self.assertEqual(recommend_module._SKILL_POLICIES["github-event-ops"].next_action, "prepare_github_event_ops_card")
@@ -328,6 +329,7 @@ class RouterContentTests(unittest.TestCase):
                 "research",
                 "research-department",
                 "paper-learning",
+                "source-finder",
                 "business-research",
                 "strategy-synthesis",
                 "meeting-facilitation",
@@ -508,6 +510,42 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("coverage ledger", templates["paper-learning"].content)
         self.assertIn("Preferred harness for this skill: `paper-learning`", templates["paper-learning"].content)
 
+    def test_source_finder_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("source-finder", definitions)
+        self.assertIn("source-finder", harnesses)
+        self.assertIn("source-finder", templates)
+        self.assertEqual(primary_harness_for_skill("source-finder"), "source-finder")
+        self.assertEqual(definitions["source-finder"].category, "research")
+        self.assertEqual(definitions["source-finder"].phase, "source-acquisition")
+        self.assertIn("source_finder_plan/v1", definitions["source-finder"].expected_outputs)
+        self.assertIn("source_candidate_set/v1", definitions["source-finder"].expected_outputs)
+        self.assertIn("source_acquisition_status/v1", harnesses["source-finder"].expected_outputs)
+        self.assertIn("candidate_set_prepared", harnesses["source-finder"].evidence_ladder)
+        self.assertIn("record_source_link_observed", harnesses["source-finder"].wrapper_actions)
+        self.assertIn("route_to_downstream_workflow", harnesses["source-finder"].wrapper_actions)
+        self.assertTrue(
+            {
+                "prepare_source_finder_plan",
+                "show_source_candidates",
+                "record_source_candidate",
+                "record_source_link_observed",
+                "record_download_observed",
+                "record_file_hash",
+                "record_text_extraction_observed",
+                "record_license_check",
+                "choose_source",
+                "route_to_downstream_workflow",
+                "show_acquisition_status",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("source_finder_plan/v1", templates["source-finder"].content)
+        self.assertIn("source_candidate_set/v1", templates["source-finder"].content)
+        self.assertIn("Preferred harness for this skill: `source-finder`", templates["source-finder"].content)
+
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
         for definition in builtin_definitions():
             self.assertTrue(definition.description.startswith("[omh] "), definition.name)
@@ -607,6 +645,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("report-package"), "report-package")
         self.assertEqual(primary_harness_for_skill("materials-package"), "materials-package")
         self.assertEqual(primary_harness_for_skill("img-summary"), "img-summary")
+        self.assertEqual(primary_harness_for_skill("source-finder"), "source-finder")
         self.assertEqual(primary_harness_for_skill("paper-learning"), "paper-learning")
         self.assertEqual(primary_harness_for_skill("reliability-review"), "reliability-review")
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
@@ -633,6 +672,7 @@ class RouterContentTests(unittest.TestCase):
                 "report-package",
                 "materials-package",
                 "img-summary",
+                "source-finder",
                 "paper-learning",
                 "reliability-review",
                 "idea-to-deploy",
@@ -1011,7 +1051,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`idea-to-deploy`, `ultragoal`, `loop`, and `ultraprocess`", readme)
         self.assertIn("`ultraprocess`", readme)
         self.assertIn("`deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`", readme)
-        self.assertIn("`research-department` / `web-research` / `research-brief` / `report-package`", readme)
+        self.assertIn("`source-finder` / `research-department` / `web-research` / `research-brief` / `report-package`", readme)
         self.assertIn("`automation-blueprint` / `web-research` / `report-package`", readme)
         self.assertIn("## Organization Patterns", readme)
         self.assertIn("role-interaction patterns, not hidden workers", readme)

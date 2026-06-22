@@ -39,6 +39,7 @@ files.
 | --- | --- | --- |
 | `request-to-handoff` | A user sends a natural request and needs the first role-owned next action. | Route request -> select role -> plan or prepare -> handoff or retain -> status card. |
 | `safe-feature-change` | A user wants a safe feature, bug fix, or refactor flow. | Recommend -> plan -> accept -> coding handoff -> status card. |
+| `source-finder` | A user needs typed source candidates before deciding whether to learn, research, package, or implement. | Scope source kinds -> prepare candidates -> track acquisition status -> choose downstream workflow. |
 | `source-backed-research` | A user needs current, official, comparative, or citation-backed evidence. | Clarify scope -> gather sources -> synthesize -> report confidence. |
 | `research-department` | A user wants ongoing market, competitor, paper, news, or source-monitoring research without hand-building Hermes profiles and delivery glue. | Scope research -> source inbox -> Scout/Analyst/Briefer lanes -> integration readiness -> briefing status. |
 | `research-to-strategy-brief` | A user wants business or customer evidence shaped into strategy. | Scope research -> evidence table -> meeting topics -> strategy options -> decision record. |

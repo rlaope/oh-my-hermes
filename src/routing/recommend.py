@@ -47,6 +47,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     {
         "img_summary_before_materials_or_delivery",
         "paper_learning_before_materials_or_research_ops",
+        "source_finder_before_generic_web_research",
         "missed_workflow_research_recovery",
         "missed_workflow_operating_record_recovery",
         "product_shaping_before_ops_review",
@@ -161,6 +162,17 @@ _SKILL_POLICIES = {
         wrapper_guidance=(
             "Prepare paper_learning_card/v1 with level choice, source_state, coverage ledger, section-by-section outline, "
             "and not-observed extraction/validation boundaries before presenting the explanation as complete."
+        ),
+    ),
+    "source-finder": RecommendationPolicy(
+        next_action="prepare_source_finder_plan",
+        evidence_boundary=(
+            "A source finder plan is not web search, download, repository clone, file extraction, file hash verification, "
+            "license verification, source correctness verification, or downstream processing evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare source_finder_plan/v1 with source_candidate_set/v1, source_acquisition_status/v1, "
+            "observation provenance, not-evidence boundaries, and a downstream workflow recommendation."
         ),
     ),
     "reliability-review": RecommendationPolicy(

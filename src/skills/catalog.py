@@ -12,6 +12,16 @@ from ..paper_learning import (
     PAPER_LEARNING_NOT_OBSERVED,
     PAPER_LEARNING_SOURCE_STATES,
 )
+from ..source_finder import (
+    SOURCE_ACQUISITION_STATUS_SCHEMA_VERSION,
+    SOURCE_CANDIDATE_SCHEMA_VERSION,
+    SOURCE_CANDIDATE_SET_SCHEMA_VERSION,
+    SOURCE_FINDER_ACTIONS,
+    SOURCE_FINDER_ACQUISITION_STATES,
+    SOURCE_FINDER_NOT_OBSERVED,
+    SOURCE_FINDER_PLAN_SCHEMA_VERSION,
+    SOURCE_FINDER_SOURCE_KINDS,
+)
 
 
 OMH_DESCRIPTION_PREFIX = "[omh] "
@@ -529,6 +539,7 @@ _CODING_INTENT_BY_SKILL = {
     "materials-package": "planning",
     "img-summary": "planning",
     "paper-learning": "planning",
+    "source-finder": "planning",
     "automation-blueprint": "planning",
     "reliability-review": "planning",
     "idea-to-deploy": "planning",
@@ -1175,6 +1186,109 @@ _DEFINITIONS = [
             prompt="웹리서치부터 계획, 구현, 리뷰, 문서, PR까지 한 사이클로 끝내줘.",
             expected="Route to `ultraprocess` because the user asked for a bounded delivery cycle, not a research-only lane.",
             why="Research is only one stage of the requested delivery process.",
+        ),
+    ),
+    SkillDefinition(
+        "source-finder",
+        "Hermes Source Finder workflow: prepare typed source candidates and acquisition status before downstream work.",
+        (
+            "source-finder",
+            "source finder",
+            "source acquisition",
+            "source intake",
+            "find papers and datasets",
+            "find datasets and repos",
+            "find papers",
+            "find datasets",
+            "find github repos",
+            "find oss repos",
+            "find presentations",
+            "find public slides",
+            "find docs and specs",
+            "find source candidates",
+            "download candidate",
+            "source candidate",
+            "acquisition status",
+            "자료 후보",
+            "출처 후보",
+            "논문 데이터셋 찾아",
+            "깃허브 저장소 찾아",
+            "공개 발표자료 찾아",
+            "문서 스펙 찾아",
+        ),
+        (
+            "Use when Hermes should prepare a typed source candidate set across papers, web links, datasets, "
+            "GitHub repositories, public presentations, docs/specs, or unknown source material before choosing "
+            "paper-learning, web-research, research-brief, research-department, materials-package, or ultraprocess."
+        ),
+        category="research",
+        phase="source-acquisition",
+        hermes_role="retained-cognition",
+        delegation_boundary="retained-catalog-intent",
+        handoff_policy=(
+            "Keep source acquisition planning in Hermes. Do not claim search, download, clone, extraction, license check, "
+            "verification, or downstream processing unless a wrapper or user records observed evidence."
+        ),
+        required_inputs=(
+            "source target or topic",
+            "desired source kinds",
+            "source boundaries or exclusion criteria",
+            "downstream intent when known",
+        ),
+        expected_outputs=(
+            SOURCE_FINDER_PLAN_SCHEMA_VERSION,
+            SOURCE_CANDIDATE_SCHEMA_VERSION,
+            SOURCE_CANDIDATE_SET_SCHEMA_VERSION,
+            SOURCE_ACQUISITION_STATUS_SCHEMA_VERSION,
+            "downstream workflow recommendation",
+            "not-evidence boundary",
+        ),
+        artifact_expectations=("source_finder_plan/v1 under .omh/source-finder when a wrapper or CLI records it",),
+        safety_rules=(
+            "Do not claim web search, download, repository clone, file extraction, file hash verification, license verification, or source correctness from a prepared candidate.",
+            "Do not redefine research-department's source_inbox/v1; source-finder owns source_candidate_set/v1 and source_acquisition_status/v1 only.",
+            "Route current citations and source-backed synthesis to `web-research`, supplied-paper explanation to `paper-learning`, recurring monitoring to `research-department`, file export to `materials-package`, and image cards to `img-summary`.",
+        ),
+        quality_tier="source-acquisition-gated",
+        quality_bar=(
+            "Name source kinds from: " + ", ".join(SOURCE_FINDER_SOURCE_KINDS) + ".",
+            "Record acquisition state from: " + ", ".join(SOURCE_FINDER_ACQUISITION_STATES) + ".",
+            "Separate candidate preparation, observed link, observed download, file hash, text extraction, license check, verification, and downstream selection.",
+            "Attach observation provenance before treating any acquisition state as evidence.",
+            "Recommend the next downstream workflow without pretending that downstream work already ran.",
+        ),
+        why_this_exists=(
+            "`source-finder` exists so Hermes can turn vague source discovery requests into typed candidates, acquisition status, "
+            "and downstream workflow choice without pretending OMH searched, downloaded, or verified the material."
+        ),
+        do_not_use_when=(
+            "The user asks for current citations, fact-finding, or source-backed synthesis; use `web-research`.",
+            "The user supplies a paper/PDF/arXiv/DOI/excerpt and wants explanation; use `paper-learning`.",
+            "The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.",
+            "The user asks to export, convert, render, package, or attach a file; use `materials-package` or `deliverable-package`.",
+            "The user asks for an image card or visual summary; use `img-summary`.",
+        ),
+        good_example=SkillExample(
+            prompt="source-finder find papers, datasets, and GitHub repos for evaluating browser agent benchmarks.",
+            expected="Prepare source_finder_plan/v1 with typed candidates, acquisition states, missing observed evidence, and downstream choices.",
+            why="The user needs source candidates before deciding whether to learn, research, package, or implement.",
+        ),
+        bad_example=SkillExample(
+            prompt="source-finder find current citations and summarize what the sources say.",
+            expected="Route to `web-research` because the user asks for current evidence and synthesis, not candidate acquisition status.",
+            why="Source-finder prepares acquisition lifecycle metadata; web-research owns current evidence synthesis.",
+        ),
+        final_checklist=(
+            "Source kinds, source boundaries, and downstream intent are named.",
+            "Each candidate has a source_candidate/v1 shape and acquisition state.",
+            "Observed states include provenance before being treated as evidence.",
+            "The next downstream workflow is recommended without claiming it ran.",
+            "Search, download, clone, extraction, hash, license, verification, and downstream processing gaps are explicit.",
+        ),
+        recovery_notes=(
+            "If the user asks for facts or citations, route to `web-research`.",
+            "If a candidate lacks a link or file reference, keep it candidate_prepared and ask for the next observable source step.",
+            "If the user wants to process a selected source, route to the downstream workflow instead of continuing source acquisition.",
         ),
     ),
     SkillDefinition(
@@ -3092,6 +3206,14 @@ _DEFINITIONS.extend(_FEATURE_SURFACE_SKILLS)
 _DEFAULT_SURFACE_PROJECTIONS = ("routable", "installable", "workflow_reference", "capability")
 _SURFACE_EXPOSURES = (
     SurfaceExposure(
+        "source-finder",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user asks to find or classify source candidates before learning, research, materials, or coding work.",
+    ),
+    SurfaceExposure(
         "paper-learning",
         "workflow_skill",
         ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
@@ -3711,6 +3833,70 @@ _HARNESSES = [
             "An image_generation_setup/v1 fallback is connector preparation only, not generated image evidence.",
             "A connected image-generation capability changes available actions only; it is not execution evidence.",
             "A generated image observation does not prove visual QA or delivery.",
+        ),
+    ),
+    HarnessDefinition(
+        "source-finder",
+        "Prepare typed source candidates, acquisition states, observation provenance, and downstream workflow choices without doing network acquisition.",
+        "Use when Hermes should find, classify, or intake source candidates such as papers, links, datasets, GitHub repos, presentations, docs/specs, or unknown sources before downstream processing.",
+        (
+            "source target or topic",
+            "desired source kinds",
+            "source boundaries or exclusions",
+            "downstream intent when known",
+        ),
+        (
+            SOURCE_FINDER_PLAN_SCHEMA_VERSION,
+            SOURCE_CANDIDATE_SCHEMA_VERSION,
+            SOURCE_CANDIDATE_SET_SCHEMA_VERSION,
+            SOURCE_ACQUISITION_STATUS_SCHEMA_VERSION,
+            "downstream workflow recommendation",
+            "not-evidence boundary",
+        ),
+        (
+            "source kind and acquisition scope are named",
+            "source candidates are prepared or observed with provenance",
+            "downstream workflow is selected or explicitly unknown",
+            "not-observed acquisition and verification gaps are listed",
+        ),
+        (
+            "validate source_finder_plan/v1",
+            "check source kind enum",
+            "check acquisition state enum",
+            "check observation provenance before observed claims",
+            "verify not_evidence_until_observed lists search, download, extraction, license, verification, and downstream gaps",
+        ),
+        "If a request asks for current facts, citations, explanation, recurring monitoring, file packaging, or image-card generation, route to the narrower downstream workflow.",
+        (
+            "source_scope_named",
+            "source_kind_selected",
+            "candidate_set_prepared",
+            "acquisition_status_prepared",
+            "observed_source_evidence_recorded_when_available",
+            "downstream_workflow_selected",
+        ),
+        "Record source-finder as Hermes-retained acquisition planning; record search, download, clone, extraction, license, verification, and downstream processing only from observed evidence.",
+        "metadata_only",
+        quality_tier="source-acquisition-gated",
+        quality_bar=(
+            "Keep source acquisition separate from current-source synthesis, paper explanation, recurring monitoring, materials export, and image cards.",
+            "Use source_candidate_set/v1 instead of research-department's source_inbox/v1.",
+            "Require observation provenance before reporting an observed acquisition state.",
+            "Recommend a downstream workflow without claiming it already ran.",
+        ),
+        evidence_ladder=(
+            "source_scope_named",
+            "source_kind_selected",
+            "candidate_set_prepared",
+            "acquisition_status_prepared",
+            "observed_source_evidence_recorded_when_available",
+            "downstream_workflow_selected",
+        ),
+        wrapper_actions=SOURCE_FINDER_ACTIONS,
+        overclaim_guards=(
+            "A source_finder_plan/v1 artifact is not web search, download, clone, extraction, license check, source verification, or downstream processing evidence.",
+            "A source candidate is not proof the source exists, is accessible, is licensed, or supports the user's claim until observed evidence exists.",
+            "A downstream workflow recommendation is not proof that paper-learning, web-research, materials-package, research-department, or ultraprocess ran.",
         ),
     ),
     HarnessDefinition(
@@ -4348,6 +4534,7 @@ _PRIMARY_HARNESSES = {
     "report-package": "report-package",
     "materials-package": "materials-package",
     "img-summary": "img-summary",
+    "source-finder": "source-finder",
     "paper-learning": "paper-learning",
     "automation-blueprint": "scheduled-ops-blueprint",
     "research-department": "research-department",
