@@ -144,6 +144,107 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("guard:workflow_learning", decision["recommendations"][0]["matched"])
 
+    def test_runtime_portability_task_card_sits_above_workflow_route(self) -> None:
+        message = (
+            "I want to reproduce this Hermes and Friren setup on another MacBook, "
+            "back it up to a private GitHub repo, move the Discord gateway, and make sure only one bot answers."
+        )
+
+        decision = route_chat_message(message, source="discord")
+        task_card = decision["task_card"]
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "agent-ops-review")
+        self.assertEqual(decision["recommendations"][0]["skill"], "agent-ops-review")
+        self.assertIn("task_card:runtime_portability", decision["recommendations"][0]["matched"])
+        self.assertEqual(task_card["schema_version"], "omh_task_card/v1")
+        self.assertEqual(task_card["task_type"], "runtime_portability")
+        self.assertEqual(task_card["route_level"], "task_abstraction")
+        self.assertEqual(task_card["selected_workflow_rail"], "agent-ops-review")
+        self.assertIn("migration", task_card["not_a_workflow"])
+        self.assertTrue(
+            {
+                "inventory",
+                "package",
+                "credential_policy",
+                "distribution",
+                "restore",
+                "verify",
+                "gateway_ownership_transfer",
+            }
+            <= set(task_card["operation_primitives"])
+        )
+        self.assertTrue({"secrets", "duplicate_gateway_responders"} <= set(task_card["risk_domains"]))
+        workflow_rails = {rail["skill"] for rail in task_card["workflow_rails"]}
+        self.assertTrue(
+            {
+                "agent-ops-review",
+                "toolbelt-readiness",
+                "gateway-intent-card",
+                "workflow-learning",
+                "doctor",
+            }
+            <= workflow_rails
+        )
+        self.assertEqual(task_card["evidence_boundary"]["prepared"], "task card, inventory plan, package plan, restore checklist")
+        self.assertIn("runtime restore on the second machine", task_card["evidence_boundary"]["not_observed"])
+        self.assertIn("encrypt before private GitHub upload", task_card["secret_policy"]["recommended_action"])
+        self.assertIn("residual risk", task_card["secret_policy"]["if_user_proceeds"])
+        self.assertEqual(task_card["gateway_transfer"]["invariant"], "exactly_one_active_responder")
+        self.assertIn("one responder", task_card["user_facing_summary"])
+
+    def test_korean_runtime_portability_task_card(self) -> None:
+        decision = route_chat_message(
+            "다른 맥북에 헤르메스 프리렌 세팅 재현하고 개인 깃허브에 백업하고 "
+            "디스코드 게이트웨이 응답자가 하나만 되게 해줘",
+            source="discord",
+        )
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "agent-ops-review")
+        self.assertEqual(decision["task_card"]["task_type"], "runtime_portability")
+        self.assertGreaterEqual(decision["recommendations"][0]["score"], 60)
+        self.assertIn("task_card:runtime_portability", decision["recommendations"][0]["matched"])
+
+    def test_plain_backup_or_migration_without_runtime_context_does_not_task_cardify(self) -> None:
+        for message in (
+            "backup my photos to private GitHub",
+            "migrate this setup to another laptop",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertIsNone(decision["task_card"])
+                self.assertNotIn("task_card:runtime_portability", decision["recommendations"][0]["matched"])
+
+    def test_router_design_feedback_prefers_workflow_learning_over_feedback_triage(self) -> None:
+        cases = (
+            "This should be a higher-level task abstraction, not a migration workflow.",
+            "Why did OMH route this wrong? Fix the router design.",
+            "피드백인데 OMH 라우팅 설계가 잘못됐어.",
+            "더 상위레벨에서 마이그레이션이라는 개념을 한 task로 인식해야지.",
+            "이번 작업 회고하면서 OMH가 얼마나 관여했는지 봐줘.",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                task_card = decision["task_card"]
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "workflow-learning")
+                self.assertEqual(decision["selected_harness"], "workflow-learning")
+                self.assertEqual(task_card["task_type"], "router_design_feedback")
+                self.assertEqual(task_card["selected_workflow_rail"], "workflow-learning")
+                self.assertNotEqual(decision["selected_skill"], "feedback-triage")
+                self.assertIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+
+    def test_generic_korean_omh_feedback_does_not_become_router_design_card(self) -> None:
+        decision = route_chat_message("피드백인데 OMH 문서가 좋아요.", source="discord")
+
+        self.assertIsNone(decision["task_card"])
+        self.assertNotIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+
     def test_catalog_question_dispatches_to_router_without_shell_approval(self) -> None:
         for message in (
             "OMH로 할 수 있는 workflow가 뭐야?",

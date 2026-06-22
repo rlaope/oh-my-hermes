@@ -324,7 +324,7 @@ stay thin and point at the deeper source-owner modules.
 
 ## Routing
 
-Routing, planning, and delegation have eight local surfaces:
+Routing, planning, and delegation have these local surfaces:
 
 1. Hermes-native installed skills. The tap-compatible `skills/` directory and
    the managed `~/.omh/skills` bootstrap directory expose the same generated
@@ -335,29 +335,35 @@ Routing, planning, and delegation have eight local surfaces:
 3. Situation playbooks. `omh playbook recommend` lets wrappers map a natural
    request to a higher-level pipeline before they choose a lower-level skill,
    plan, research lane, or handoff.
-4. Wrapper-native chat orchestration. Plugin `omh_interact` and
+4. Task abstraction cards. `omh_task_card/v1` lets wrappers classify work such
+   as runtime portability, environment reproduction, or router-design feedback
+   before selecting a workflow. The card names operation primitives, workflow
+   rails, risk domains, and prepared/observed boundaries, so a request like
+   "reproduce this Hermes setup on another MacBook" is not collapsed into a
+   narrow migration workflow.
+5. Wrapper-native chat orchestration. Plugin `omh_interact` and
    `omh chat interact` let Discord, Slack, or hosted Hermes wrappers receive
    one platform-neutral `chat_interaction/v1` envelope with renderable chat
    copy, state, action buttons, and a thread key.
-5. Wrapper session persistence. `omh chat session` lets wrappers persist
+6. Wrapper session persistence. `omh chat session` lets wrappers persist
    metadata-only plan decisions, recover status by `session_id`, and link an
    accepted plan to a prepared coding run without owning execution evidence.
-6. Wrapper-native executor session actions. After a handoff is prepared, the
+7. Wrapper-native executor session actions. After a handoff is prepared, the
    wrapper can render action buttons and record observed open/attach/result or
    verification-request events as `executor_session/v1` metadata. This is the
    layer that lets a Discord or Hermes chat user ask "what is happening with
    Codex or Claude Code?" without typing backend commands.
-7. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
+8. Wrapper-assisted chat routing. `omh chat route` lets Discord, Slack, or
    hosted Hermes wrappers run a deterministic pre-dispatch decision before they
    forward a plain user message to Hermes.
-8. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
+9. Wrapper-assisted coding delegation. `omh coding delegate` lets wrappers turn
    implementation-shaped messages into a deterministic `coding_delegation/v1`
    handoff payload for an executor lane.
-9. Runtime observation recording. `omh runtime observe` lets wrappers or
+10. Runtime observation recording. `omh runtime observe` lets wrappers or
    operators append `runtime_observation/v1` evidence for selected runtime
    handoffs without implying unrecorded worktree, worker, verification, review,
    CI, or merge steps.
-10. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
+11. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
    operators create deterministic `hermes_plan/v1` planning scaffolds under
    `.hermes/plans/` without claiming that execution or review already happened.
 

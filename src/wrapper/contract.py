@@ -481,6 +481,8 @@ def build_chat_interaction_payload(
     if _is_generic_skill_catalog_route(message, route_payload):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
+    if isinstance(route_payload.get("task_card"), dict):
+        base["task_card"] = route_payload["task_card"]
 
     if _is_omh_intro_question(message) and resolved_mode in {"route", "plan", "clarify"}:
         base["mode"] = "route"
@@ -658,6 +660,14 @@ def build_chat_response_from_route(
         policy = _selected_recommendation_policy(decision, selected)
         policy_next_action = str(policy.get("next_action", ""))
         workflow_explanation_reason = _workflow_explanation_reason_for_route(decision, policy, selected)
+        task_card = _route_task_card(decision)
+        if task_card and str(task_card.get("task_type", "")) != "router_design_feedback":
+            return _chat_response_from_task_card(
+                task_card,
+                decision=decision,
+                thread_key=thread_key,
+                workflow_explanation_reason=workflow_explanation_reason,
+            )
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (
@@ -971,6 +981,7 @@ def build_chat_response_from_route(
                         "export_redacted_bundle",
                         "human_review_improvement_candidate",
                     ],
+                    **_task_card_state(decision),
                 },
             )
         next_action = policy_next_action if policy_next_action and policy_next_action != "show_workflow_guidance" else "dispatch_to_workflow"
@@ -1052,6 +1063,106 @@ def _is_file_lookup_fallback(decision: dict[str, object]) -> bool:
         for key in ("reason", "clarification", "routing_instruction")
     ).lower()
     return "file or text lookup" in text or "file/text lookup" in text
+
+
+def _route_task_card(decision: dict[str, object]) -> dict[str, object]:
+    task_card = decision.get("task_card")
+    return dict(task_card) if isinstance(task_card, dict) else {}
+
+
+def _task_card_state(decision: dict[str, object]) -> dict[str, object]:
+    task_card = _route_task_card(decision)
+    return {"task_card": task_card} if task_card else {}
+
+
+def _chat_response_from_task_card(
+    task_card: dict[str, object],
+    *,
+    decision: dict[str, object],
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object]:
+    task_type = str(task_card.get("task_type", "task")).replace("_", " ")
+    next_action = str(task_card.get("recommended_next_action", "prepare_agent_ops_review"))
+    rails = _task_card_rails(task_card)
+    risk_domains = _string_items(task_card.get("risk_domains", []))
+    primitives = _string_items(task_card.get("operation_primitives", []))
+    evidence_boundary = _nested(task_card, "evidence_boundary")
+    not_observed = _string_items(evidence_boundary.get("not_observed", []))
+    secret_policy = _nested(task_card, "secret_policy")
+    gateway_transfer = _nested(task_card, "gateway_transfer")
+    first_safe_action = str(task_card.get("first_safe_action", "")).strip()
+    secret_action = str(secret_policy.get("recommended_action", "")).strip()
+    invariant = str(gateway_transfer.get("invariant", "")).strip().replace("_", " ")
+
+    body_lines = [
+        f"This is a {task_type} task, not a migration workflow.",
+        f"First safe action: {first_safe_action}" if first_safe_action else "",
+        f"Use workflow rails: {', '.join(rails[:4])}." if rails else "",
+        f"Track primitives: {', '.join(_display_items(primitives[:7]))}." if primitives else "",
+        f"Risks to surface: {', '.join(_display_items(risk_domains[:5]))}." if risk_domains else "",
+        f"Secret policy: {secret_action}." if secret_action else "",
+        f"Gateway invariant: {invariant}." if invariant else "",
+        f"Not observed yet: {', '.join(_display_items(not_observed[:4]))}." if not_observed else "",
+    ]
+    body = " ".join(line for line in body_lines if line)
+    return _chat_response(
+        kind="task_card",
+        headline="I will frame this as a high-level task first.",
+        body=body,
+        phase="task_card_prepared",
+        next_action=next_action,
+        thread_key=thread_key,
+        actions=[
+            _action(next_action, _label_for_action(next_action), "primary"),
+            _action("show_status", "Show status", "secondary"),
+            _action("record_workflow_learning_trace", "Record learning trace", "secondary"),
+        ],
+        claim_boundary=str(task_card.get("claim_boundary", "A prepared task card is not observed execution evidence.")),
+        extra_state={
+            "route_action": decision.get("action", "dispatch"),
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": decision.get("selected_skill", ""),
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "task_card": task_card,
+            "task_type": task_card.get("task_type", ""),
+            "route_level": task_card.get("route_level", ""),
+            "workflow_rails": task_card.get("workflow_rails", []),
+            "operation_primitives": primitives,
+            "risk_domains": risk_domains,
+            "evidence_not_observed": not_observed,
+        },
+    )
+
+
+def _task_card_rails(task_card: dict[str, object]) -> list[str]:
+    rails: list[str] = []
+    raw_rails = task_card.get("workflow_rails", [])
+    if not isinstance(raw_rails, list):
+        return rails
+    for rail in raw_rails:
+        if isinstance(rail, dict):
+            skill = str(rail.get("skill", "")).strip()
+            if skill:
+                rails.append(skill)
+    return rails
+
+
+def _string_items(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def _display_items(items: list[str]) -> list[str]:
+    return [item.replace("_", " ") for item in items]
+
+
+def _label_for_action(action_id: str) -> str:
+    for known_action, label in _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION.values():
+        if known_action == action_id:
+            return label
+    return action_id.replace("_", " ").title()
 
 
 def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key: str = "") -> dict[str, object]:

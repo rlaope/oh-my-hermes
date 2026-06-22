@@ -130,6 +130,28 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("clarify", actions)
         self.assertNotIn("zzzzzz", json.dumps(payload))
 
+    def test_chat_interaction_renders_task_abstraction_card_without_cli_copy(self) -> None:
+        message = (
+            "Reproduce this Hermes and Friren setup on another MacBook, backup the state to private GitHub, "
+            "and transfer the Discord gateway without duplicate responders."
+        )
+
+        payload = build_chat_interaction_payload(message, source="discord")
+
+        self.assertEqual(payload["schema_version"], "chat_interaction/v1")
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "agent-ops-review")
+        self.assertEqual(payload["route"]["task_card"]["schema_version"], "omh_task_card/v1")
+        self.assertEqual(payload["route"]["task_card"]["task_type"], "runtime_portability")
+        self.assertEqual(payload["chat_response"]["kind"], "task_card")
+        self.assertEqual(payload["chat_response"]["state"]["task_card"]["route_level"], "task_abstraction")
+        self.assertEqual(payload["next_action"], "prepare_agent_ops_review")
+        self.assertIn("runtime portability", payload["chat_response"]["body"])
+        self.assertIn("not a migration workflow", payload["chat_response"]["body"])
+        self.assertIn("encrypt before private GitHub upload", payload["chat_response"]["body"])
+        self.assertNotIn("omh migration", json.dumps(payload).lower())
+        self.assertNotIn(message, json.dumps(payload))
+
     def test_chat_interaction_surfaces_target_change_notice_without_overclaiming(self) -> None:
         notice = {
             "schema_version": "omh_target_change_notice/v1",

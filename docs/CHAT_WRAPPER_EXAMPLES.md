@@ -148,6 +148,36 @@ the local install, `omh list --json` also includes
 hints, and evidence boundaries, so a catalog answer does not degrade into a flat
 name list.
 
+## Task Abstraction Before Workflow Routing
+
+Some requests are bigger than one workflow name. If a user says "reproduce this
+Hermes and Friren setup on another MacBook, back it up to private GitHub, and
+make sure only one Discord bot answers", OMH should not invent a narrow
+`migration` workflow. The wrapper can render the `omh_task_card/v1` that sits
+above the workflow rails:
+
+```text
+Hermes Agent  BOT
+[omh] task-card - I will frame this as a high-level task first.
+
+This is a runtime portability task, not a migration workflow. First safe
+action: inventory configs, local state, plugin paths, managed skills, gateways,
+and secret locations before packaging. Use workflow rails:
+agent-ops-review, toolbelt-readiness, gateway-intent-card, doctor. Secret
+policy: encrypt before private GitHub upload. Gateway invariant: exactly one
+active responder. Not observed yet: encrypted backup archive, private GitHub
+upload, runtime restore on the second machine, gateway responder cutover.
+
+[ Open ops review ] [ Show status ] [ Record learning trace ]
+```
+
+The task card is still prepared guidance only. Backup creation, private repo
+upload, restore, gateway transfer, liveness, and verification remain
+observed-only claims until a wrapper or operator records matching evidence.
+If the user says the routing model itself was wrong, including Korean feedback
+such as "피드백인데 OMH 라우팅 설계가 잘못됐어", the same abstraction layer routes
+to `workflow-learning` instead of customer `feedback-triage`.
+
 ## Plugin-Native Chat Interaction
 
 When the managed OMH plugin is loaded, a Hermes wrapper can call the plugin
