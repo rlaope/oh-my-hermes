@@ -10,11 +10,13 @@ CONFIDENCE_LEVELS = ("low", "medium", "high")
 EXPLICIT_INVOCATION_PREFIXES = ("$", "/", "./", "@")
 _EXPLICIT_SKILL_ALIASES = {
     "ohmy": "oh-my-hermes",
+    "paper-explainer": "paper-learning",
 }
 _PREFIXED_SKILL_ALIASES = {
     "omh": "oh-my-hermes",
     "ohmy": "oh-my-hermes",
     "skills": "oh-my-hermes",
+    "paper-explainer": "paper-learning",
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
@@ -147,6 +149,114 @@ _RESEARCH_DEPARTMENT_PHRASES = (
     "경쟁사 리서치",
     "시장 리서치",
     "수집 합성 브리핑",
+)
+_PAPER_LEARNING_PAPER_TOKENS = _normalized_token_set(
+    {
+        "paper",
+        "papers",
+        "arxiv",
+        "doi",
+        "pdf",
+        "research paper",
+        "논문",
+        "피디에프",
+    }
+)
+_PAPER_LEARNING_EXPLANATION_TOKENS = _normalized_token_set(
+    {
+        "explain",
+        "explainer",
+        "explanation",
+        "walkthrough",
+        "learn",
+        "learning",
+        "easy",
+        "moderate",
+        "expert",
+        "technical",
+        "details",
+        "설명",
+        "해설",
+        "쉽게",
+        "난이도",
+        "전문가급",
+        "내용",
+        "줄이지",
+    }
+)
+_PAPER_LEARNING_PHRASES = (
+    "paper-learning",
+    "paper learning",
+    "paper-explainer",
+    "paper explainer",
+    "paper explanation",
+    "explain this paper",
+    "explain this arxiv paper",
+    "explain the attached paper",
+    "paper walkthrough",
+    "research paper explanation",
+    "arxiv paper explain",
+    "pdf paper explain",
+    "paper pdf explanation",
+    "without dropping details",
+    "very easy paper explanation",
+    "moderate paper explanation",
+    "expert paper explanation",
+    "논문 설명",
+    "논문 해설",
+    "논문 쉽게 설명",
+    "논문 아주 쉽게",
+    "논문 적당한 난이도",
+    "논문 전문가급",
+    "이 논문 설명해줘",
+    "이 논문 pdf 설명해줘",
+    "논문 pdf 쉽게 설명",
+    "논문 내용 줄이지 말고",
+)
+_PAPER_LEARNING_EXPORT_PHRASES = (
+    "pdf to ppt",
+    "pdf into ppt",
+    "convert pdf",
+    "export pdf",
+    "export a pdf",
+    "make a pdf",
+    "make ppt",
+    "make a ppt",
+    "make a deck",
+    "create a ppt",
+    "create a deck",
+    "as a deck",
+    "as a pdf",
+    "package it as a pdf",
+    "turn into ppt",
+    "turn into a deck",
+    "render qa",
+    "pdf를 ppt",
+    "pdf를 ppt로",
+    "pdf로 만들",
+    "ppt로 만들",
+    "파일 생성",
+    "파일 변환",
+)
+_PAPER_LEARNING_VALIDATION_PHRASES = (
+    "verify citations",
+    "validate citations",
+    "citation check",
+    "external citation check",
+    "check the citations",
+    "verify the claims",
+    "validate the claims",
+    "fact check",
+    "fact-check",
+    "proof review",
+    "math proof review",
+    "reproduce the benchmark",
+    "인용 확인",
+    "인용 검증",
+    "주장 검증",
+    "팩트체크",
+    "증명 검토",
+    "재현해",
 )
 _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
     {
@@ -674,6 +784,15 @@ _MATERIALS_PACKAGE_PHRASES = (
     "ppt와 pdf",
     "pdf와 ppt",
     "pdf랑 ppt로",
+    "make a ppt",
+    "make a deck",
+    "create a ppt",
+    "create a deck",
+    "as a deck",
+    "export a pdf",
+    "export pdf",
+    "as a pdf",
+    "package it as a pdf",
     "ppt로 만들",
     "pdf로 만들",
 )
@@ -1385,11 +1504,21 @@ RESEARCH_DEPARTMENT_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; recurring research operations should prepare a Scout/Analyst/Briefer research department plan.",
     activation_status="active",
 )
+PAPER_LEARNING_GUARD = RoutingGuardRule(
+    id="paper_learning_before_materials_or_research_ops",
+    rule="One-off paper or paper-PDF explanation requests should route to paper-learning before generic file packaging or research ops.",
+    matched_label="guard:paper_learning",
+    preferred_skills=("paper-learning",),
+    score_boost=42,
+    why="Matched guard/trigger metadata; paper explanation requests need level selection, source-state evidence, and a coverage ledger.",
+    activation_status="active",
+)
 ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
     PRODUCT_SHAPING_GUARD,
     WORKFLOW_LEARNING_GUARD,
+    PAPER_LEARNING_GUARD,
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
     WEB_RESEARCH_BEFORE_PROCESS_GUARD,
@@ -1454,8 +1583,15 @@ def active_routing_guard_rules(
     if _workflow_learning_guard_applies(normalized_query, query_tokens):
         rules.append(WORKFLOW_LEARNING_GUARD)
     delivery_cycle_applies = _delivery_cycle_guard_applies(normalized_query, query_tokens)
+    paper_learning_applies = (
+        not delivery_cycle_applies and _paper_learning_guard_applies(normalized_query, query_tokens)
+    )
+    if paper_learning_applies:
+        rules.append(PAPER_LEARNING_GUARD)
     research_department_applies = (
-        not delivery_cycle_applies and _research_department_guard_applies(normalized_query, query_tokens)
+        not delivery_cycle_applies
+        and not paper_learning_applies
+        and _research_department_guard_applies(normalized_query, query_tokens)
     )
     if research_department_applies:
         rules.append(RESEARCH_DEPARTMENT_GUARD)
@@ -1467,13 +1603,13 @@ def active_routing_guard_rules(
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     if _missed_workflow_operating_record_guard_applies(normalized_query, query_tokens):
         rules.append(MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD)
-    if _web_research_guard_applies(normalized_query, query_tokens):
+    if _web_research_guard_applies(normalized_query, query_tokens) and not paper_learning_applies:
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
     if _missed_workflow_research_guard_applies(normalized_query, query_tokens):
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
-    if _materials_package_guard_applies(normalized_query, query_tokens):
+    if _materials_package_guard_applies(normalized_query, query_tokens) and not paper_learning_applies:
         rules.append(MATERIALS_PACKAGE_GUARD)
     if _memory_curation_guard_applies(normalized_query, query_tokens):
         rules.append(MEMORY_CURATION_GUARD)
@@ -1540,6 +1676,88 @@ def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: 
     if _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens and _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens:
         return True
     return _contains_phrase(normalized_query, _SCHEDULED_OPS_PHRASES)
+
+
+def _paper_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _explicit_material_export_requested(normalized_query, query_tokens):
+        return False
+    if _paper_validation_or_citation_requested(normalized_query, query_tokens):
+        return False
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        recurring_paper_ops = bool(_PAPER_LEARNING_PAPER_TOKENS & query_tokens) or _contains_phrase(
+            normalized_query, ("paper", "논문")
+        )
+        if recurring_paper_ops and not bool(_PAPER_LEARNING_EXPLANATION_TOKENS & query_tokens):
+            return False
+    if _contains_phrase(normalized_query, _PAPER_LEARNING_PHRASES):
+        return True
+    paper_context = bool(_PAPER_LEARNING_PAPER_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("research paper", "arxiv paper", "paper pdf", "pdf paper", "논문 pdf"),
+    )
+    explanation_context = bool(_PAPER_LEARNING_EXPLANATION_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("explain", "walk through", "walkthrough", "without dropping details", "내용 줄이지", "설명해줘", "해설해줘"),
+    )
+    search_only = bool({"find", "search", "latest", "current", "fresh"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("find papers", "search papers", "latest papers", "current papers", "논문 찾아", "최신 논문"),
+    )
+    return paper_context and explanation_context and not search_only
+
+
+def _paper_validation_or_citation_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _PAPER_LEARNING_VALIDATION_PHRASES):
+        return True
+    validation_tokens = {"verify", "validate", "factcheck", "citation", "citations", "proof", "reproduce"}
+    paper_context = bool(_PAPER_LEARNING_PAPER_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("paper", "arxiv", "논문"),
+    )
+    return paper_context and bool(validation_tokens & query_tokens)
+
+
+def _explicit_material_export_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _PAPER_LEARNING_EXPORT_PHRASES):
+        return True
+    action = bool(_MATERIALS_PACKAGE_ACTION_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("make", "turn into", "prepare", "export", "package", "만들", "변환"),
+    )
+    if not action:
+        return False
+    output_formats = _MATERIALS_PACKAGE_FORMAT_TOKENS & query_tokens
+    non_source_pdf_formats = {
+        "ppt",
+        "pptx",
+        "spreadsheet",
+        "excel",
+        "xlsx",
+        "docx",
+        "hwp",
+        "document",
+        "엑셀",
+        "문서",
+        "자료",
+        "첨부",
+    }
+    if output_formats & non_source_pdf_formats:
+        return True
+    return _contains_phrase(
+        normalized_query,
+        (
+            "export a pdf",
+            "export pdf",
+            "as a pdf",
+            "make a pdf",
+            "create a pdf",
+            "package it as a pdf",
+            "pdf로 만들",
+            "pdf로 변환",
+        ),
+    )
 
 
 def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -1705,6 +1923,8 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
 
 def _materials_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, ("report package", "leadership status deck", "monthly leadership status")):
         return False
     if _contains_phrase(normalized_query, _MATERIALS_PACKAGE_PHRASES):
         return True

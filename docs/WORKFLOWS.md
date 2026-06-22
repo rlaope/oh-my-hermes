@@ -694,6 +694,75 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Keep raw findings, processed notes, briefs, conflicts, and verification needs in separate source inbox buckets.
   - Treat vendor-specific tool names as optional aliases for synthesis-tool and knowledge-store readiness unless observed evidence exists.
 
+### paper-learning
+
+[omh] Hermes Paper Learning workflow: explain a supplied paper or paper/PDF at a selected level while preserving full section coverage and source evidence boundaries.
+
+- Category: `research`
+- Phase: `paper-learning`
+- Hermes role: `researcher`
+- Quality tier: `paper-learning-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when the user asks to understand a supplied paper or paper PDF by level without dropping section coverage.
+- Handoff policy: Keep paper explanation in Hermes. Route file export to `materials-package`, current-source discovery to `web-research`, recurring monitoring to `research-department`, and reproduction or implementation to an accepted coding handoff only after the explanation plan is accepted.
+- Why this exists: `paper-learning` exists so Hermes can act like a strong human tutor for papers: choose the right explanation level, walk through the full paper section by section, and keep PDF extraction and validation evidence honest.
+- Use when: Use when Hermes should explain a supplied paper, arXiv entry, paper PDF, pasted excerpt, or extracted paper text at a selected level while keeping a coverage ledger instead of shrinking the paper into a lossy summary.
+- Do not use when:
+  - The request asks to export, convert, render, or package a file; use `materials-package`.
+  - The request asks for daily/weekly paper monitoring, digest, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.
+  - The request asks to find current papers or sources when no supplied paper exists; use `web-research`.
+  - The request asks for a visual/image card; use `img-summary`.
+  - The request asks to implement or reproduce the paper's code; prepare a coding handoff only after a paper learning or reproduction plan is accepted.
+- Strong routing signals: `paper-learning`, `paper learning`, `paper-explainer`, `paper explainer`, `paper explanation`, `explain this paper`, `explain this arxiv paper`, `paper walkthrough`, `research paper explanation`, `arxiv paper explain`, `pdf paper explain`, `paper pdf explanation`, `explain the attached paper`, `explain this pdf paper`, `without dropping details`, `very easy paper explanation`, `moderate paper explanation`, `expert paper explanation`, `논문 설명`, `논문 해설`, `논문 쉽게 설명`, `논문 아주 쉽게`, `논문 적당한 난이도`, `논문 전문가급`, `이 논문 설명해줘`, `이 논문 PDF 설명해줘`, `논문 PDF 쉽게 설명`, `논문 내용 줄이지 말고`
+- Good example:
+  - Prompt: paper-learning 이 논문 PDF를 아주 쉽게 설명해줘. 내용은 줄이지 말고 섹션별로.
+  - Expected behavior: Prepare paper_learning_card/v1, ask or record level=very_easy, mark PDF extraction/source_state evidence, then explain section-by-section with a coverage ledger.
+  - Why: The user supplied a paper/PDF explanation intent with an explicit level and coverage-preserving constraint.
+- Bad example:
+  - Prompt: paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.
+  - Expected behavior: Route to `materials-package` because the user wants file conversion/export, not conceptual paper explanation.
+  - Why: PDF file output and render QA are material packaging work, not paper learning evidence.
+- Quality bar:
+  - Ask for or state the explanation level before drafting: very easy, moderate, or expert.
+  - Record source_state as one of: metadata_only, excerpt_text_observed, file_text_extraction_observed, full_text_observed, unknown_or_missing.
+  - Preserve the coverage policy `coverage_preserving_not_lossy_summary` through a section-by-section ledger.
+  - Explain by chunks when the source is long; keep each chunk linked to coverage_ledger status.
+  - List missing sections and not-observed claims before presenting the explanation as complete.
+- Completion checklist:
+  - The selected explanation level is one of: very_easy, moderate, expert, choose.
+  - The source_state is recorded and scoped to observed text or extraction evidence.
+  - The coverage ledger lists observed, missing, or prepared sections before claiming completion.
+  - The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.
+  - Not-observed boundaries remain visible: full_pdf_extraction, figure_ocr, external_citation_check, math_proof_validation, code_or_benchmark_reproduction, peer_review_or_claim_correctness.
+- Recovery notes:
+  - If no paper text is observed, prepare the learning card from metadata only and ask for an attachment, excerpt, or extraction evidence.
+  - If only an abstract or excerpt is supplied, label the result as excerpt explanation and list missing sections.
+  - If context is too long, continue section-by-section and keep covered / next / missing state in the ledger.
+  - If the user asks for validation, citation checking, math proof review, or reproduction, create a separate observed-evidence or coding handoff path.
+- Required inputs:
+  - paper identity or attachment reference
+  - observed text scope or extraction evidence
+  - explanation level: very_easy, moderate, expert, or choose
+  - coverage scope: full paper, selected sections, or supplied excerpt
+  - output language when different from the source
+- Expected outputs:
+  - paper_learning_card/v1
+  - explanation level metadata
+  - source_state boundary
+  - coverage ledger
+  - section-by-section explanation outline
+  - missing-section and not-observed list
+- Artifact expectations:
+  - paper_learning_card/v1 under .omh/paper-learning when a wrapper or CLI records it
+- Safety rules:
+  - Do not claim full PDF extraction, figure OCR, external citation checking, math validation, code reproduction, peer review, or full-paper coverage without observed evidence.
+  - A pasted abstract or excerpt supports only excerpt explanation until the remaining sections are observed.
+  - Level changes may change scaffolding, vocabulary, analogies, and critique depth, but must not drop substantive content.
+  - End each chunk with covered / next / missing rather than done unless the coverage ledger is complete.
+
 ### strategy-brief
 
 [omh] Hermes Strategy Brief workflow: options, tradeoffs, recommendation, and decision notes.
@@ -3478,6 +3547,75 @@ Prepare source-specific, premium domain-aware, and poster-archetype-aware visual
   - A connected image-generation capability changes available actions only; it is not execution evidence.
   - A generated image observation does not prove visual QA or delivery.
 - Fallback: If image capability is unavailable, show choose/setup image tool fallback actions plus copy/revise/status actions, and keep generation prompt-only until capability is connected.
+
+### paper-learning
+
+Explain supplied papers or paper PDFs at a chosen level with full section coverage, source-state evidence, and observed-only validation boundaries.
+
+- Use when: Use when Hermes should tutor a user through a supplied paper, arXiv paper, paper PDF, pasted excerpt, or extracted paper text without reducing substantive content.
+- Quality tier: `paper-learning-gated`
+- Quality bar:
+  - Choose or ask for very_easy, moderate, or expert before drafting the explanation.
+  - Treat metadata, excerpt text, file extraction, and full text as separate source states.
+  - Preserve coverage with `coverage_preserving_not_lossy_summary` and a section ledger.
+  - Use chunked section-by-section explanation for long papers; never call an excerpt a full-paper explanation.
+  - Keep validation and correctness claims unavailable until observed evidence exists.
+- Inputs:
+  - paper identity or attachment reference
+  - observed text scope or extraction evidence
+  - explanation level
+  - coverage scope
+  - output language
+- Outputs:
+  - paper_learning_card/v1
+  - source_state boundary
+  - level contract
+  - coverage ledger
+  - section-by-section explanation outline
+  - missing-section and not-observed list
+- Stop conditions:
+  - level is selected or choose-level action is visible
+  - source/extraction state is recorded
+  - coverage ledger separates observed, missing, and prepared sections
+  - validation and extraction claims stay observed-only
+- Verification:
+  - validate paper_learning_card/v1
+  - check level and source_state enums
+  - check coverage ledger status for every section
+  - verify not_observed lists extraction, figure OCR, citation check, math validation, reproduction, and peer review gaps
+- Evidence ladder:
+  - `paper_source_scoped`
+  - `explanation_level_selected`
+  - `extraction_state_recorded`
+  - `coverage_ledger_prepared`
+  - `section_explanation_prepared`
+  - `user_review_or_revision_recorded_when_available`
+- Wrapper actions:
+  - `choose_explanation_level`
+  - `show_paper_source_requirements`
+  - `record_paper_metadata`
+  - `record_paper_excerpt_observed`
+  - `record_file_text_extraction_observed`
+  - `show_paper_learning`
+  - `continue_next_section`
+  - `revise_explanation_level`
+  - `show_coverage_ledger`
+  - `record_user_review`
+  - `show_status`
+- Artifact events:
+  - `paper_source_scoped`
+  - `explanation_level_selected`
+  - `extraction_state_recorded`
+  - `coverage_ledger_prepared`
+  - `section_explanation_prepared`
+  - `user_review_or_revision_recorded_when_available`
+- Delegation expectation: Record paper-learning as Hermes-retained explanation planning; record PDF extraction, OCR, external citation checks, math validation, reproduction, peer review, and user approval only from observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A paper_learning_card/v1 artifact is not full PDF extraction, figure OCR, citation checking, math validation, code reproduction, peer review, or proof that paper claims are true.
+  - A pasted abstract, title, DOI, arXiv id, or filename is not full-paper coverage.
+  - Expert-level explanation is not correctness validation.
+- Fallback: If only metadata exists, prepare the learning card and ask for observed text, attachment extraction evidence, or the next section before explaining full-paper coverage.
 
 ### scheduled-ops-blueprint
 

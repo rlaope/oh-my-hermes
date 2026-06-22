@@ -4,6 +4,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from ..harness_quality import build_harness_quality_contract, unknown_harness_quality_contract
+from ..paper_learning import (
+    PAPER_LEARNING_ACTIONS,
+    PAPER_LEARNING_CARD_SCHEMA_VERSION,
+    PAPER_LEARNING_COVERAGE_POLICY,
+    PAPER_LEARNING_LEVELS,
+    PAPER_LEARNING_NOT_OBSERVED,
+    PAPER_LEARNING_SOURCE_STATES,
+)
 
 
 OMH_DESCRIPTION_PREFIX = "[omh] "
@@ -520,6 +528,7 @@ _CODING_INTENT_BY_SKILL = {
     "report-package": "planning",
     "materials-package": "planning",
     "img-summary": "planning",
+    "paper-learning": "planning",
     "automation-blueprint": "planning",
     "reliability-review": "planning",
     "idea-to-deploy": "planning",
@@ -1298,6 +1307,116 @@ _DEFINITIONS = [
             prompt="research-department prove the synthesis tool queried the knowledge base and posted the Slack brief.",
             expected="Ask for observed synthesis-tool and gateway delivery evidence or mark those states as not_observed.",
             why="The workflow pack can prepare the operating pattern, but it cannot prove external tool execution or delivery.",
+        ),
+    ),
+    SkillDefinition(
+        "paper-learning",
+        "Hermes Paper Learning workflow: explain a supplied paper or paper/PDF at a selected level while preserving full section coverage and source evidence boundaries.",
+        (
+            "paper-learning",
+            "paper learning",
+            "paper-explainer",
+            "paper explainer",
+            "paper explanation",
+            "explain this paper",
+            "explain this arxiv paper",
+            "paper walkthrough",
+            "research paper explanation",
+            "arxiv paper explain",
+            "pdf paper explain",
+            "paper pdf explanation",
+            "explain the attached paper",
+            "explain this pdf paper",
+            "without dropping details",
+            "very easy paper explanation",
+            "moderate paper explanation",
+            "expert paper explanation",
+            "논문 설명",
+            "논문 해설",
+            "논문 쉽게 설명",
+            "논문 아주 쉽게",
+            "논문 적당한 난이도",
+            "논문 전문가급",
+            "이 논문 설명해줘",
+            "이 논문 PDF 설명해줘",
+            "논문 PDF 쉽게 설명",
+            "논문 내용 줄이지 말고",
+        ),
+        (
+            "Use when Hermes should explain a supplied paper, arXiv entry, paper PDF, pasted excerpt, or extracted paper text "
+            "at a selected level while keeping a coverage ledger instead of shrinking the paper into a lossy summary."
+        ),
+        category="research",
+        phase="paper-learning",
+        hermes_role="retained-cognition",
+        delegation_boundary="retained-catalog-intent",
+        handoff_policy=(
+            "Keep paper explanation in Hermes. Route file export to `materials-package`, current-source discovery to `web-research`, "
+            "recurring monitoring to `research-department`, and reproduction or implementation to an accepted coding handoff only after the explanation plan is accepted."
+        ),
+        required_inputs=(
+            "paper identity or attachment reference",
+            "observed text scope or extraction evidence",
+            "explanation level: very_easy, moderate, expert, or choose",
+            "coverage scope: full paper, selected sections, or supplied excerpt",
+            "output language when different from the source",
+        ),
+        expected_outputs=(
+            PAPER_LEARNING_CARD_SCHEMA_VERSION,
+            "explanation level metadata",
+            "source_state boundary",
+            "coverage ledger",
+            "section-by-section explanation outline",
+            "missing-section and not-observed list",
+        ),
+        artifact_expectations=("paper_learning_card/v1 under .omh/paper-learning when a wrapper or CLI records it",),
+        safety_rules=(
+            "Do not claim full PDF extraction, figure OCR, external citation checking, math validation, code reproduction, peer review, or full-paper coverage without observed evidence.",
+            "A pasted abstract or excerpt supports only excerpt explanation until the remaining sections are observed.",
+            "Level changes may change scaffolding, vocabulary, analogies, and critique depth, but must not drop substantive content.",
+            "End each chunk with covered / next / missing rather than done unless the coverage ledger is complete.",
+        ),
+        quality_tier="paper-learning-gated",
+        quality_bar=(
+            "Ask for or state the explanation level before drafting: very easy, moderate, or expert.",
+            "Record source_state as one of: " + ", ".join(PAPER_LEARNING_SOURCE_STATES) + ".",
+            "Preserve the coverage policy `" + PAPER_LEARNING_COVERAGE_POLICY + "` through a section-by-section ledger.",
+            "Explain by chunks when the source is long; keep each chunk linked to coverage_ledger status.",
+            "List missing sections and not-observed claims before presenting the explanation as complete.",
+        ),
+        why_this_exists=(
+            "`paper-learning` exists so Hermes can act like a strong human tutor for papers: choose the right explanation level, "
+            "walk through the full paper section by section, and keep PDF extraction and validation evidence honest."
+        ),
+        do_not_use_when=(
+            "The request asks to export, convert, render, or package a file; use `materials-package`.",
+            "The request asks for daily/weekly paper monitoring, digest, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.",
+            "The request asks to find current papers or sources when no supplied paper exists; use `web-research`.",
+            "The request asks for a visual/image card; use `img-summary`.",
+            "The request asks to implement or reproduce the paper's code; prepare a coding handoff only after a paper learning or reproduction plan is accepted.",
+        ),
+        good_example=SkillExample(
+            prompt="paper-learning 이 논문 PDF를 아주 쉽게 설명해줘. 내용은 줄이지 말고 섹션별로.",
+            expected="Prepare paper_learning_card/v1, ask or record level=very_easy, mark PDF extraction/source_state evidence, then explain section-by-section with a coverage ledger.",
+            why="The user supplied a paper/PDF explanation intent with an explicit level and coverage-preserving constraint.",
+        ),
+        bad_example=SkillExample(
+            prompt="paper-learning 이 PDF를 PPT로 변환해서 공유용 파일 만들어줘.",
+            expected="Route to `materials-package` because the user wants file conversion/export, not conceptual paper explanation.",
+            why="PDF file output and render QA are material packaging work, not paper learning evidence.",
+        ),
+        final_checklist=(
+            "The selected explanation level is one of: " + ", ".join(PAPER_LEARNING_LEVELS) + ".",
+            "The source_state is recorded and scoped to observed text or extraction evidence.",
+            "The coverage ledger lists observed, missing, or prepared sections before claiming completion.",
+            "The explanation is section-aware and does not compress away claims, equations, figures, limitations, or reproducibility notes.",
+            "Not-observed boundaries remain visible: " + ", ".join(PAPER_LEARNING_NOT_OBSERVED) + ".",
+        ),
+        recovery_notes=(
+            "If no paper text is observed, prepare the learning card from metadata only and ask for an attachment, excerpt, or extraction evidence.",
+            "If only an abstract or excerpt is supplied, label the result as excerpt explanation and list missing sections.",
+            "If context is too long, continue section-by-section and keep covered / next / missing state in the ledger.",
+            "If the user asks for validation, citation checking, math proof review, or reproduction, create a separate observed-evidence or coding handoff path.",
         ),
     ),
     SkillDefinition(
@@ -2973,6 +3092,14 @@ _DEFINITIONS.extend(_FEATURE_SURFACE_SKILLS)
 _DEFAULT_SURFACE_PROJECTIONS = ("routable", "installable", "workflow_reference", "capability")
 _SURFACE_EXPOSURES = (
     SurfaceExposure(
+        "paper-learning",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user asks to understand a supplied paper or paper PDF by level without dropping section coverage.",
+    ),
+    SurfaceExposure(
         "automation-blueprint",
         "workflow_skill",
         ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
@@ -3587,6 +3714,71 @@ _HARNESSES = [
         ),
     ),
     HarnessDefinition(
+        "paper-learning",
+        "Explain supplied papers or paper PDFs at a chosen level with full section coverage, source-state evidence, and observed-only validation boundaries.",
+        "Use when Hermes should tutor a user through a supplied paper, arXiv paper, paper PDF, pasted excerpt, or extracted paper text without reducing substantive content.",
+        (
+            "paper identity or attachment reference",
+            "observed text scope or extraction evidence",
+            "explanation level",
+            "coverage scope",
+            "output language",
+        ),
+        (
+            PAPER_LEARNING_CARD_SCHEMA_VERSION,
+            "source_state boundary",
+            "level contract",
+            "coverage ledger",
+            "section-by-section explanation outline",
+            "missing-section and not-observed list",
+        ),
+        (
+            "level is selected or choose-level action is visible",
+            "source/extraction state is recorded",
+            "coverage ledger separates observed, missing, and prepared sections",
+            "validation and extraction claims stay observed-only",
+        ),
+        (
+            "validate paper_learning_card/v1",
+            "check level and source_state enums",
+            "check coverage ledger status for every section",
+            "verify not_observed lists extraction, figure OCR, citation check, math validation, reproduction, and peer review gaps",
+        ),
+        "If only metadata exists, prepare the learning card and ask for observed text, attachment extraction evidence, or the next section before explaining full-paper coverage.",
+        (
+            "paper_source_scoped",
+            "explanation_level_selected",
+            "extraction_state_recorded",
+            "coverage_ledger_prepared",
+            "section_explanation_prepared",
+            "user_review_or_revision_recorded_when_available",
+        ),
+        "Record paper-learning as Hermes-retained explanation planning; record PDF extraction, OCR, external citation checks, math validation, reproduction, peer review, and user approval only from observed evidence.",
+        "metadata_only",
+        quality_tier="paper-learning-gated",
+        quality_bar=(
+            "Choose or ask for very_easy, moderate, or expert before drafting the explanation.",
+            "Treat metadata, excerpt text, file extraction, and full text as separate source states.",
+            "Preserve coverage with `" + PAPER_LEARNING_COVERAGE_POLICY + "` and a section ledger.",
+            "Use chunked section-by-section explanation for long papers; never call an excerpt a full-paper explanation.",
+            "Keep validation and correctness claims unavailable until observed evidence exists.",
+        ),
+        evidence_ladder=(
+            "paper_source_scoped",
+            "explanation_level_selected",
+            "extraction_state_recorded",
+            "coverage_ledger_prepared",
+            "section_explanation_prepared",
+            "user_review_or_revision_recorded_when_available",
+        ),
+        wrapper_actions=PAPER_LEARNING_ACTIONS,
+        overclaim_guards=(
+            "A paper_learning_card/v1 artifact is not full PDF extraction, figure OCR, citation checking, math validation, code reproduction, peer review, or proof that paper claims are true.",
+            "A pasted abstract, title, DOI, arXiv id, or filename is not full-paper coverage.",
+            "Expert-level explanation is not correctness validation.",
+        ),
+    ),
+    HarnessDefinition(
         "scheduled-ops-blueprint",
         "Prepare recurring Hermes operations as schedule/delivery/silence blueprints without claiming runtime execution.",
         "Use when recurring, cron-like, digest, monitoring, or platform-delivery requests need a Hermes-native setup plan and status card.",
@@ -4156,6 +4348,7 @@ _PRIMARY_HARNESSES = {
     "report-package": "report-package",
     "materials-package": "materials-package",
     "img-summary": "img-summary",
+    "paper-learning": "paper-learning",
     "automation-blueprint": "scheduled-ops-blueprint",
     "research-department": "research-department",
     "reliability-review": "reliability-review",
