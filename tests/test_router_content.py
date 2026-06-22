@@ -271,6 +271,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["img-summary"].next_action, "prepare_visual_prompt_card")
+        self.assertEqual(recommend_module._SKILL_POLICIES["paper-learning"].next_action, "prepare_paper_learning")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
         self.assertEqual(recommend_module._SKILL_POLICIES["reliability-review"].next_action, "prepare_reliability_review")
         self.assertEqual(recommend_module._SKILL_POLICIES["github-event-ops"].next_action, "prepare_github_event_ops_card")
@@ -326,6 +327,7 @@ class RouterContentTests(unittest.TestCase):
                 "planning",
                 "research",
                 "research-department",
+                "paper-learning",
                 "business-research",
                 "strategy-synthesis",
                 "meeting-facilitation",
@@ -466,6 +468,46 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("image_generation_setup/v1", templates["img-summary"].content)
         self.assertIn("Preferred harness for this skill: `img-summary`", templates["img-summary"].content)
 
+    def test_paper_learning_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("paper-learning", definitions)
+        self.assertIn("paper-learning", harnesses)
+        self.assertIn("paper-learning", templates)
+        self.assertEqual(primary_harness_for_skill("paper-learning"), "paper-learning")
+        self.assertEqual(definitions["paper-learning"].category, "research")
+        self.assertEqual(definitions["paper-learning"].phase, "paper-learning")
+        self.assertIn("paper_learning_card/v1", definitions["paper-learning"].expected_outputs)
+        self.assertIn("source_state boundary", definitions["paper-learning"].expected_outputs)
+        self.assertIn("coverage ledger", definitions["paper-learning"].expected_outputs)
+        self.assertIn("metadata_only", " ".join(definitions["paper-learning"].quality_bar))
+        self.assertIn("file_text_extraction_observed", " ".join(definitions["paper-learning"].quality_bar))
+        self.assertIn("full_pdf_extraction", " ".join(definitions["paper-learning"].final_checklist))
+        self.assertIn("paper_learning_card/v1", harnesses["paper-learning"].expected_outputs)
+        self.assertIn("coverage_ledger_prepared", harnesses["paper-learning"].evidence_ladder)
+        self.assertIn("show_coverage_ledger", harnesses["paper-learning"].wrapper_actions)
+        self.assertIn("record_file_text_extraction_observed", harnesses["paper-learning"].wrapper_actions)
+        self.assertTrue(
+            {
+                "prepare_paper_learning",
+                "choose_explanation_level",
+                "show_paper_source_requirements",
+                "record_paper_metadata",
+                "record_paper_excerpt_observed",
+                "record_file_text_extraction_observed",
+                "show_paper_learning",
+                "continue_next_section",
+                "revise_explanation_level",
+                "show_coverage_ledger",
+                "record_user_review",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("paper_learning_card/v1", templates["paper-learning"].content)
+        self.assertIn("coverage ledger", templates["paper-learning"].content)
+        self.assertIn("Preferred harness for this skill: `paper-learning`", templates["paper-learning"].content)
+
     def test_catalog_definitions_expose_required_metadata_fields(self) -> None:
         for definition in builtin_definitions():
             self.assertTrue(definition.description.startswith("[omh] "), definition.name)
@@ -565,6 +607,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(primary_harness_for_skill("report-package"), "report-package")
         self.assertEqual(primary_harness_for_skill("materials-package"), "materials-package")
         self.assertEqual(primary_harness_for_skill("img-summary"), "img-summary")
+        self.assertEqual(primary_harness_for_skill("paper-learning"), "paper-learning")
         self.assertEqual(primary_harness_for_skill("reliability-review"), "reliability-review")
         self.assertEqual(primary_harness_for_skill("idea-to-deploy"), "app-delivery-loop")
         self.assertEqual(primary_harness_for_skill("cto-loop"), "app-delivery-loop")
@@ -590,6 +633,7 @@ class RouterContentTests(unittest.TestCase):
                 "report-package",
                 "materials-package",
                 "img-summary",
+                "paper-learning",
                 "reliability-review",
                 "idea-to-deploy",
                 "cto-loop",

@@ -23,7 +23,7 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "tool_family": "file_tools",
         "applies_before": ("PPT/PDF/XLSX/DOC/HWP generation", "file conversion", "attachment packaging"),
         "primary_workflow": "materials-package",
-        "preferred_workflows": ("materials-package", "deliverable-package", "report-package"),
+        "preferred_workflows": ("materials-package", "paper-learning", "deliverable-package", "report-package"),
         "primary_next_action": "prepare_material_package",
         "fallback_action": "confirm_target_format_and_generator",
         "not_evidence_yet": ("file export", "render QA", "attachment", "delivery"),
@@ -32,7 +32,7 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "tool_family": "search_tools",
         "applies_before": ("web search", "source lookup", "market/news/paper research"),
         "primary_workflow": "web-research",
-        "preferred_workflows": ("web-research", "research-department", "research-brief"),
+        "preferred_workflows": ("web-research", "paper-learning", "research-department", "research-brief"),
         "primary_next_action": "gather_source_backed_evidence",
         "fallback_action": "ask_for_scope_or_source_constraints",
         "not_evidence_yet": ("source retrieval", "source verification", "synthesis approval", "delivery"),
@@ -55,6 +55,7 @@ ROUTER_KEYWORD_SKILLS = (
     "ultraprocess",
     "web-research",
     "research-department",
+    "paper-learning",
     "feedback-triage",
     "materials-package",
     "img-summary",
@@ -74,6 +75,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     ],
     "research_and_ops": [
         "customer signal -> feedback-triage -> investigation plan -> coding handoff -> status",
+        "supplied paper -> paper-learning -> level choice -> coverage ledger -> section walkthrough",
         "market topic -> web-research -> research-brief -> strategy-brief -> operating-rhythm",
     ],
     "materials_and_visuals": [
@@ -106,7 +108,7 @@ WORKFLOW_CONTEXT_CARDS = (
         "label": "Research and ops",
         "user_signal": "customer signal, meeting notes, market question, strategy request, or operating record",
         "omh_pattern": "collect evidence, separate source notes from synthesis, then create a brief, decision, or status artifact",
-        "representative_workflows": ("web-research", "research-department", "feedback-triage", "meeting-brief", "strategy-brief"),
+        "representative_workflows": ("web-research", "paper-learning", "research-department", "feedback-triage", "meeting-brief", "strategy-brief"),
         "user_examples": ("Payment failures keep coming up", "Track competitor news every morning"),
         "first_response_shape": "Name the source/synthesis split, pick the research or ops workflow, then ask for missing source evidence or cadence only when needed.",
         "not_evidence_until_observed": ("source retrieval", "decision approval", "delivery"),
@@ -162,6 +164,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "performance-goal": "intent_to_plan",
     "web-research": "research_and_ops",
     "research-department": "research_and_ops",
+    "paper-learning": "research_and_ops",
     "research-brief": "research_and_ops",
     "best-practice-research": "research_and_ops",
     "autoresearch-goal": "research_and_ops",
@@ -366,6 +369,29 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": ("cron", "schedule", "scheduled", "recurring", "digest"),
         "adjacent_workflows": ("research-department", "ops-observability-card"),
+    },
+    {
+        "id": "paper_learning",
+        "workflow": "paper-learning",
+        "lane": "research_and_ops",
+        "next_action": "prepare_paper_learning",
+        "reason": "The user is asking Hermes to explain a supplied paper or paper PDF at a chosen difficulty without dropping coverage.",
+        "fallback_action": "choose_level_or_request_observed_paper_text",
+        "phrases": (
+            "paper learning",
+            "paper explanation",
+            "explain this paper",
+            "explain this arxiv paper",
+            "paper walkthrough",
+            "pdf paper explain",
+            "without dropping details",
+            "논문 설명",
+            "논문 해설",
+            "논문 쉽게 설명",
+            "논문 전문가급",
+        ),
+        "tokens": ("paper", "arxiv", "pdf", "explain", "expert", "논문", "설명", "해설"),
+        "adjacent_workflows": ("web-research", "research-department", "materials-package"),
     },
     {
         "id": "source_research",
@@ -591,6 +617,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "strategy-brief",
                 "feedback-triage",
                 "research-department",
+                "paper-learning",
                 "meeting-brief",
                 "operating-rhythm",
                 "ops-review",
@@ -651,12 +678,11 @@ def awareness_primer_payload() -> dict[str, object]:
         "purpose": "Give Hermes a compact first-turn mental model for using OMH across all workflow-shaped requests.",
         "product_context": (
             "OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, "
-            "show status, and hand off without hiding unobserved execution."
+            "show status, and hand off with observed evidence boundaries."
         ),
         "first_turn_rule": (
-            "When a request asks for planning, research, ops records, files/materials, visual summaries, image cards, "
-            "automation, coding delegation, review, status, or long-running loops, consider OMH before generic chat "
-            "or generic tools."
+            "For planning, research, ops records, materials, visual summaries, automation, coding delegation, "
+            "review, status, or long loops, consider OMH before generic chat or generic tools."
         ),
         "all_skill_context_rule": (
             "Across every OMH skill: match intent to a lane, name adjacent workflows, "
@@ -726,8 +752,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "delivery, review, CI, merge-readiness, or merge evidence."
         ),
         "fallback_rule": (
-            "If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection "
-            "fallback instead of claiming the action happened."
+            "If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback."
         ),
         "non_goals": [
             "no hidden executor dispatch",
@@ -874,7 +899,7 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
 def _compact_workflow_cue_line() -> str:
     return (
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
-        "feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; "
+        "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
         "decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
         "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; "
         "trace/improve/regression -> workflow-learning"
@@ -893,7 +918,7 @@ def _compact_workflow_context_cards_line() -> str:
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; file->materials-package; "
+        "image->img-summary; supplied paper->paper-learning; file->materials-package; "
         "search->web-research; code->ultraprocess/ralplan/review"
     )
 

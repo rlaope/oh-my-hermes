@@ -554,9 +554,9 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
                     "awareness_lane_label": lane_label,
                     "use_for": str(lane.get("use_for") or ""),
                     "workflow_routing_hint": (
-                        f"Use `{skill_id}` when the request fits {lane_label}: "
+                        f"Use `{skill_id}` for {lane_label}: "
                         f"{lane.get('use_for') or 'OMH workflow guidance'}. "
-                        "If the request crosses lanes, name the adjacent OMH workflow first."
+                        "If it crosses lanes, name the adjacent workflow."
                     ),
                     "workflow_context_rule": context_rule,
                     "chat_rule": chat_rule,

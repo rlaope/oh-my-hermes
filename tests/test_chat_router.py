@@ -126,6 +126,47 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "img-summary")
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
+        explanation_cases = (
+            "이 논문 PDF 아주 쉽게 설명해줘",
+            "Explain this arXiv paper at expert level without dropping details",
+            "./paper-explainer explain the attached paper at moderate difficulty",
+        )
+        for message in explanation_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "paper-learning")
+                self.assertEqual(decision["selected_harness"], "paper-learning")
+                self.assertEqual(decision["confidence"], "high")
+
+        recurring = route_chat_message("weekly paper review", source="discord")
+        self.assertEqual(recurring["selected_skill"], "research-department")
+        self.assertEqual(recurring["selected_harness"], "research-department")
+
+        citation_check = route_chat_message("explain this paper and verify citations", source="discord")
+        self.assertEqual(citation_check["selected_skill"], "web-research")
+        self.assertEqual(citation_check["selected_harness"], "research")
+
+        file_export = route_chat_message("PDF를 PPT로 바꿔줘", source="discord")
+        self.assertEqual(file_export["selected_skill"], "materials-package")
+        self.assertEqual(file_export["selected_harness"], "materials-package")
+
+        mixed_export_cases = (
+            "explain this paper and make a PPT",
+            "explain this paper as a deck",
+            "explain this paper PDF and export a PDF",
+            "explain this paper and package it as a PDF",
+        )
+        for message in mixed_export_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "materials-package")
+                self.assertEqual(decision["selected_harness"], "materials-package")
+
     def test_explicit_workflow_learning_feedback_wins_over_domain_terms(self) -> None:
         cases = (
             "Hermes did not use OMH for my image request; record this as workflow learning",

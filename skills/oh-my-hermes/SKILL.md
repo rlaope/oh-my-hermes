@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `workflow-learning`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `paper-learning`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `workflow-learning`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
@@ -57,9 +57,9 @@ Bad example:
 
 ## OMH Awareness Primer
 
-OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off without hiding unobserved execution.
+OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off with observed evidence boundaries.
 
-When a request asks for planning, research, ops records, files/materials, visual summaries, image cards, automation, coding delegation, review, status, or long-running loops, consider OMH before generic chat or generic tools.
+For planning, research, ops records, materials, visual summaries, automation, coding delegation, review, status, or long loops, consider OMH before generic chat or generic tools.
 
 Across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH because a generic tool can render or execute.
 
@@ -78,15 +78,15 @@ Workflow context cards:
 intent -> deep-interview/ralplan/loop/ultraprocess; signals -> web-research/research-department/feedback-triage/meeting-brief; materials -> materials-package/report-package/img-summary; automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; code -> ultraprocess/code-review/team/ultrawork/ultraqa.
 
 Common cues before generic tools:
-notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; trace/improve/regression -> workflow-learning.
+notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; trace/improve/regression -> workflow-learning.
 
 Generic tool map:
-image->img-summary; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
+image->img-summary; supplied paper->paper-learning; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
 
 Tools:
 - Tools: `omh_interact`; `omh_context`; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.
 
-If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback instead of claiming the action happened.
+If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback.
 
 Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
 
@@ -96,7 +96,7 @@ If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview wi
 
 For messenger-native setup, wrappers can call `omh chat native-command --source discord`, `--source slack`, or `--source telegram` to get the platform command/menu registration contract. When plain-message autocomplete is not available, render the returned `omh_command_fallback_card/v1` as an `Open omh` button/card before opening the picker.
 
-If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `research-department`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
+If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `research-department`, `paper-learning`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
 
 In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.featured_options` first, then `chat_response.state.skill_picker.groups` as short sections. Keep `chat_response.state.skill_picker.options` as a backward-compatible flat-list fallback. In Hermes TUI, render the same grouped sections as a compact command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.
 
@@ -122,7 +122,7 @@ Use installed primary workflow skills plus compatibility surfaces in this regist
 - `memory-keeper`: `wiki`, `memory-curation-review`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`
 - `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
-- `researcher`: `web-research`, `research-brief`, `research-department`, `best-practice-research`, `autoresearch-goal`
+- `researcher`: `web-research`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `ultraqa`, `code-review`, `ask`
 - `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `workflow-learning`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
@@ -197,6 +197,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `web-research`: `web-research`, `web research`, `web search`, `search the web`, `internet search`, `latest`, `fresh sources`
 - `research-brief`: `research-brief`, `business-research`, `business research`, `research brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`
 - `research-department`: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`
+- `paper-learning`: `paper-learning`, `paper learning`, `paper-explainer`, `paper explainer`, `paper explanation`, `explain this paper`, `explain this arxiv paper`
 - `strategy-brief`: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`
 - `meeting-brief`: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`, `decisions needed`, `record template`
 - `feedback-triage`: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`, `bug or feature`, `feature request triage`
@@ -254,6 +255,7 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `report-package`: Package supplied inputs into reports, executive briefs, and PPT-ready Markdown/JSON outlines. Tier `report-gated`. Ladder: `report_scope_recorded` -> `inputs_organized` -> `package_outline_prepared` -> `approval_boundary_recorded`. Actions: `show_report`, `export_markdown`, `export_json`, `record_approval`, `show_status`. Privacy `metadata_only`.
 - `materials-package`: Plan, hand off, and verify material-processing work across decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary exports. Tier `material-gated`. Ladder: `material_scope_recorded` -> `source_inputs_organized` -> `format_qa_ladder_prepared` -> `generation_handoff_prepared_if_needed` -> `export_qa_observed_when_available`. Actions: `show_material_plan`, `choose_target_format`, `prepare_generation_handoff`, `record_export`, `record_qa`, `record_approval`. Privacy `metadata_only`.
 - `img-summary`: Prepare source-specific, premium domain-aware, and poster-archetype-aware visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation. Tier `visual-card-gated`. Ladder: `source_kind_selected` -> `visual_format_selected` -> `poster_archetype_selected` -> `card_copy_prepared` -> `prompt_card_prepared` -> `image_generation_capability_checked`. Actions: `show_visual_prompt_card`, `copy_visual_prompt`, `revise_visual_card`, `change_visual_language`, `choose_image_generator`, `setup_image_generator`. Privacy `metadata_only`.
+- `paper-learning`: Explain supplied papers or paper PDFs at a chosen level with full section coverage, source-state evidence, and observed-only validation boundaries. Tier `paper-learning-gated`. Ladder: `paper_source_scoped` -> `explanation_level_selected` -> `extraction_state_recorded` -> `coverage_ledger_prepared` -> `section_explanation_prepared` -> `user_review_or_revision_recorded_when_available`. Actions: `choose_explanation_level`, `show_paper_source_requirements`, `record_paper_metadata`, `record_paper_excerpt_observed`, `record_file_text_extraction_observed`, `show_paper_learning`. Privacy `metadata_only`.
 - `scheduled-ops-blueprint`: Prepare recurring Hermes operations as schedule/delivery/silence blueprints without claiming runtime execution. Tier `ops-blueprint-gated`. Ladder: `blueprint_scope_recorded` -> `schedule_policy_prepared` -> `delivery_policy_prepared` -> `silence_policy_prepared` -> `context_chain_prepared` -> `runtime_observed_when_available`. Actions: `show_blueprint`, `revise_schedule`, `confirm_delivery_policy`, `prepare_host_schedule`, `record_observed_runtime`, `show_status`. Privacy `metadata_only`.
 - `research-department`: Prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries. Tier `research-ops-gated`. Ladder: `research_plan_scope_recorded` -> `source_inbox_prepared` -> `briefing_status_prepared` -> `tooling_readiness_prepared` -> `observed_evidence_recorded_when_available`. Actions: `show_research_department_plan`, `revise_research_sources`, `confirm_cadence_delivery_tooling`, `record_source_observation`, `show_status`. Privacy `metadata_only`.
 - `reliability-review`: Review incidents, SLOs, error budgets, and remediation follow-ups with strict observed evidence boundaries. Tier `reliability-gated`. Ladder: `reliability_scope_recorded` -> `evidence_boundary_recorded` -> `review_prepared_or_observed` -> `remediation_boundary_recorded`. Actions: `show_evidence`, `record_gap`, `prepare_handoff`, `record_metric`, `show_status`. Privacy `metadata_only`.

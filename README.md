@@ -171,6 +171,7 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Shape fuzzy intent into an interview, plan, goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
 | `feedback-triage` / `research-brief` / `strategy-brief` | Keep product signals, source-backed research, and decisions in non-coding workflows. | "Payment failures keep coming up." |
 | `research-department` / `web-research` / `research-brief` / `report-package` | Prepare Scout -> Analyst -> Briefer research operations with source inbox and briefing status boundaries. | "Every morning, watch competitor news and brief me if something changed." |
+| `paper-learning` | Explain a supplied paper or paper PDF at very easy, moderate, or expert level while preserving a coverage ledger. | "Explain this arXiv paper without dropping details." |
 | `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
@@ -229,7 +230,7 @@ tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
 
 | Surface | What it means in practice |
 | --- | --- |
-| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `web-research`, `materials-package`, `img-summary`, and `ultraprocess`. |
+| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `web-research`, `paper-learning`, `materials-package`, `img-summary`, and `ultraprocess`. |
 | Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
 | Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
 | OMH context brief | Hermes or a wrapper can fetch a compact OMH mental model, generic-tool checkpoint, and route hint before falling back to ordinary chat/tools. |
@@ -265,6 +266,7 @@ files remain an explicit advanced option.
 | "Payment failures keep coming up." | Route to feedback triage or investigation first; prepare reproduction and evidence needs before coding. |
 | "Can this issue become a PR?" | Convert the issue into a plan, acceptance criteria, verification commands, and an executor/runtime-neutral handoff. |
 | "Prepare next week's strategy meeting." | Use research, meeting, and strategy skills without defaulting to implementation. |
+| "Explain this paper at expert level without dropping details." | Use `paper-learning` to choose the explanation level, mark source/PDF extraction evidence, preserve section coverage, and keep figure OCR, citation checking, math validation, reproduction, and peer review unobserved until recorded. |
 | "Turn the revenue spreadsheet into an Excel and PDF package with render QA." | Use `materials-package` to scope audience, source inputs, target formats, missing data, QA ladder, and generation handoff without claiming files, screenshots, formulas, approval, or delivery were observed. |
 | "Make this repo feel 10k-star quality." | Treat it as a north star, choose a smaller loopable goal, and keep the next verification visible. |
 | "Are we ready to release?" | Separate prepared claims from observed test, review, CI, and merge-readiness evidence. |

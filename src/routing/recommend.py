@@ -46,6 +46,7 @@ _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/pl
 _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     {
         "img_summary_before_materials_or_delivery",
+        "paper_learning_before_materials_or_research_ops",
         "missed_workflow_research_recovery",
         "missed_workflow_operating_record_recovery",
         "product_shaping_before_ops_review",
@@ -149,6 +150,17 @@ _SKILL_POLICIES = {
         wrapper_guidance=(
             "Prepare research_department_plan/v1 with Scout, Analyst, and Briefer lanes, source_inbox/v1 buckets, "
             "briefing_status/v1 counts, knowledge-store and synthesis-tool preferences, and observed-only evidence requirements."
+        ),
+    ),
+    "paper-learning": RecommendationPolicy(
+        next_action="prepare_paper_learning",
+        evidence_boundary=(
+            "A paper learning card is not full PDF extraction, figure OCR, external citation checking, math validation, "
+            "code reproduction, peer review, or proof that paper claims are true."
+        ),
+        wrapper_guidance=(
+            "Prepare paper_learning_card/v1 with level choice, source_state, coverage ledger, section-by-section outline, "
+            "and not-observed extraction/validation boundaries before presenting the explanation as complete."
         ),
     ),
     "reliability-review": RecommendationPolicy(

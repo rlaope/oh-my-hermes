@@ -38,6 +38,7 @@ _SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset(
         "memory-curation-review",
         "operating-rhythm",
         "ops-observability-card",
+        "paper-learning",
         "report-package",
         "research-department",
         "strategy-brief",
