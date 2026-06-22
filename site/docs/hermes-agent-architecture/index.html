@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hermes Agent Architecture - OMH</title>
+    <title>Hermes Agent Anatomy</title>
     <meta
       name="description"
-      content="A bilingual visual guide to how Hermes Agent is structured, why it feels workflow-native, and where OMH fits without overclaiming execution."
+      content="A bilingual visual guide to how Hermes Agent is structured: surfaces, prompt assembly, agent loop, memory, skills, tools, cron, gateway, and evidence boundaries."
     >
     <link rel="stylesheet" href="../../styles.css">
   </head>
@@ -46,15 +46,16 @@
             <p>
               Hermes Agent combines a terminal UI, messenger gateway, memory,
               skills, cron jobs, tools, plugins, platform adapters, and agent
-              loops. OMH should sit on top as a workflow pack and evidence
-              layer, not as a hidden runtime replacement.
+              loops. This page dissects those pieces as Hermes Agent anatomy:
+              how a message enters, how context is assembled, how tools run,
+              and where execution evidence must stay explicit.
             </p>
             <div class="architecture-hero-board" aria-label="Architecture highlights">
               <span><i class="hero-board-icon hero-board-icon--surface" aria-hidden="true"></i>Surfaces</span>
               <span><i class="hero-board-icon hero-board-icon--memory" aria-hidden="true"></i>Memory</span>
               <span><i class="hero-board-icon hero-board-icon--skills" aria-hidden="true"></i>Skills</span>
               <span><i class="hero-board-icon hero-board-icon--tools" aria-hidden="true"></i>Tools</span>
-              <span><i class="hero-board-icon hero-board-icon--omh" aria-hidden="true"></i>OMH evidence</span>
+              <span><i class="hero-board-icon hero-board-icon--omh" aria-hidden="true"></i>Evidence</span>
             </div>
           </header>
 
@@ -68,17 +69,18 @@
               messaging gateway all wrapped around one agent loop.
             </p>
             <p>
-              This matters for OMH because OMH should not compete with Hermes by
-              pretending to be a second runtime. OMH should make Hermes easier to
-              install into real workflows, easier to explain to non-experts, and
-              safer to inspect when a chat request becomes research, planning,
-              image generation, automation, or coding delegation.
+              The important part is the coupling between those pieces. A chat
+              message does not jump straight into a model response. It picks up
+              identity, files, memory, skills, tool availability, platform
+              metadata, safety policy, and session state before the agent loop
+              decides what kind of work can happen.
             </p>
             <aside class="architecture-thesis">
               <span>Thesis</span>
               <strong>
-                Hermes is the capable worker. OMH is the workflow lens that
-                makes the worker routable, reviewable, and evidence-aware.
+                Hermes Agent is best understood as a layered work runtime:
+                surfaces collect intent, the prompt builder compiles context,
+                the agent loop acts, and persistence keeps the work inspectable.
               </strong>
             </aside>
           </section>
@@ -93,7 +95,8 @@
                   The boxes below are intentionally high level. They show how a
                   message moves from a human-facing surface into the agent loop,
                   picks up memory and skills, reaches tools or automation, and
-                  returns as a response with optional OMH workflow evidence.
+                  returns through the same session with evidence about what was
+                  actually observed.
                 </p>
               </div>
             </div>
@@ -124,8 +127,8 @@
               <i aria-hidden="true"></i>
               <div class="arch-node arch-node--omh">
                 <span class="arch-node__icon arch-node__icon--omh" aria-hidden="true"></span>
-                <span>OMH lens</span>
-                <strong>Workflow route, handoff, status card, evidence boundary</strong>
+                <span>Evidence boundary</span>
+                <strong>Prepared state, observed result, verification, delivery</strong>
               </div>
             </div>
             <div class="platform-chip-wall" aria-label="Gateway surfaces">
@@ -167,17 +170,17 @@
               after the message arrives.
             </p>
             <p>
-              This is also where OMH has to be careful. The user should not need
-              to memorize backend commands, but the backend commands still
-              matter to Hermes, wrappers, operators, tests, and automation. The
-              product is chat-first, not command-blind. Commands remain the
-              inspectable machinery behind setup, doctor, routing fixtures,
-              status cards, and workflow verification.
+              Routing is not a separate marketing feature. It is the first
+              architectural pressure point. If Hermes loses the source channel,
+              target thread, permission boundary, or delivery context, the rest
+              of the work becomes ambiguous. A good route keeps the human
+              request tied to the surface it came from and the evidence it can
+              later return.
             </p>
             <blockquote class="article-callout">
-              OMH is the workflow lens. Hermes is the capable worker. OMH is the
-              operating layer that makes Hermes work routable, reviewable,
-              replayable, and honest about evidence.
+              The anatomy is layered: surface, prompt context, agent loop,
+              memory, skills, extension ports, and evidence boundary. Each layer
+              answers a different question before the agent claims work was done.
             </blockquote>
 
             <p class="article-section-label">02 / Prompt Context</p>
@@ -202,12 +205,11 @@
               execution, verification, review, CI, or delivery.
             </p>
             <p>
-              OMH should therefore avoid presenting itself as a replacement
-              intelligence layer. Its stronger job is to give the prompt builder
-              clean workflow contracts: this looks like <code>ralplan</code>,
-              this looks like <code>feedback-triage</code>, this looks like
-              <code>img-summary</code>, this looks like <code>loop</code>, and
-              this looks like a coding handoff that still needs an executor.
+              That makes prompt building less like text templating and more like
+              context compilation. The builder has to decide which instructions
+              are durable, which details belong only to the current turn, which
+              memories are safe to include, and which tools or platform actions
+              the agent is allowed to consider.
             </p>
 
             <p class="article-section-label">03 / Runtime Loop</p>
@@ -216,9 +218,12 @@
               <code>run_agent.py</code> and the <code>AIAgent</code> loop are
               the work chamber. Session transitions, model transport, context
               engine lifecycle, tool calls, response handling, persistence, and
-              background review hooks meet there. This is the point where a
-              request can stop being prose and become a tool call, a retrieved
-              memory, a planned handoff, a scheduled run, or a status update.
+              background review hooks meet there. The split-out pieces matter:
+              <code>agent/conversation_loop.py</code> tracks turn progression,
+              <code>agent/tool_executor.py</code> owns sequential or concurrent
+              tool execution, and <code>agent/transports/base.py</code> keeps
+              provider-specific message and tool conversion behind one
+              interface.
             </p>
             <p>
               That power creates a product responsibility. If Hermes prepares a
@@ -231,12 +236,11 @@
               starts depending on them.
             </p>
             <p>
-              OMH's prepared-vs-observed boundary exists for this exact reason.
-              It lets Hermes speak naturally while still preserving the line
-              between plan, prepared handoff, observed dispatch, observed
-              result, verification, review, CI, delivery, and merge readiness.
-              Without that line, every agent product eventually drifts into
-              confident storytelling.
+              This is why Hermes has to separate intention from observation. A
+              plan, a queued action, a tool call, a streamed result, a saved
+              artifact, and a delivered answer are different runtime states.
+              Without that line, an agent stops reporting work and starts
+              narrating a story about work.
             </p>
 
             <p class="article-section-label">04 / Recall Rules</p>
@@ -260,10 +264,10 @@
               terminal log.
             </p>
             <p>
-              OMH can make that memory more useful by producing structured
-              traces instead of prose piles: request, route, workflow, prepared
-              handoff, observed evidence, result, user feedback, improvement
-              candidate, and regression example. That is the kind of process
+              Structured memory is more useful than a pile of prose. A good
+              trace records the original request, route, prompt context,
+              selected skill, tool attempt, observed evidence, result, user
+              feedback, and follow-up candidate. That is the kind of process
               data Hermes can later inspect or improve from.
             </p>
 
@@ -284,30 +288,32 @@
               and improve the way it behaves without retraining a model. But
               self-improvement only works if the trace is clean. "The agent did
               something and it seemed okay" is not a learning event. "The user
-              asked for issue-to-PR preparation, OMH routed to the wrong
-              workflow, the acceptance criteria were missing, the reviewer found
-              that gap, and this skill patch would prevent recurrence" is a
+              asked for issue-to-PR preparation, the selected skill skipped
+              acceptance criteria, the reviewer found that gap, and this skill
+              patch would prevent recurrence" is a
               learning event.
             </p>
             <p>
               That is why automatic mutation should not be the default product
               story. The safer loop is trace, evaluate, propose, review, patch,
-              and replay. Hermes can draft the improvement. OMH can keep the
-              evidence ladder and regression corpus honest. A human or trusted
-              review gate should decide when a workflow or skill actually
-              changes.
+              and replay. Hermes can draft the improvement, but a human or
+              trusted review gate should decide when a workflow or skill
+              actually changes.
             </p>
 
             <p class="article-section-label">06 / Operating Surfaces</p>
             <h2>Cron And Gateway</h2>
             <p>
-              Gateway code such as <code>gateway/platform_registry.py</code>
-              and scheduled work such as <code>cron/scheduler.py</code> are
-              what make Hermes feel operational. A useful agent does not only
-              answer when watched. It can receive work from a platform, preserve
-              session context, respect platform delivery policy, run scheduled
-              checks, use protected toolsets, hold locks, scan for prompt
-              injection, and return results through the right channel.
+              Gateway code such as <code>gateway/platform_registry.py</code>,
+              <code>gateway/session.py</code>, and
+              <code>gateway/delivery.py</code> plus scheduled work such as
+              <code>cron/scheduler.py</code> and
+              <code>cron/scheduler_provider.py</code> are what make Hermes feel
+              operational. A useful agent does not only answer when watched. It
+              can receive work from a platform, preserve session context,
+              respect platform delivery policy, run scheduled checks, use
+              protected toolsets, hold locks, scan for prompt injection, and
+              return results through the right channel.
             </p>
             <p>
               That does not mean every workflow should become unattended
@@ -320,49 +326,41 @@
               at important boundaries.
             </p>
             <p>
-              OMH's loop and workflow-learning features should make that cost
-              dial visible. They should help Hermes say: here is the next loop
-              step, here is the cheap verification, here is the expensive
-              verification, here is what failed, here is why we loop back, and
-              here is what still needs human judgment.
+              Hermes should make that cost dial visible. A healthy runtime can
+              say: here is the next step, here is the cheap verification, here
+              is the expensive verification, here is what failed, here is why we
+              loop back, and here is what still needs human judgment.
             </p>
 
-            <p class="article-section-label">07 / OMH Position</p>
-            <h2>OMH Layer</h2>
+            <p class="article-section-label">07 / Boundary Model</p>
+            <h2>Evidence Boundary</h2>
             <p>
-              OMH belongs above this as a workflow and evidence lens, not below
-              it as a hidden executor. It should help Hermes turn vague intent
-              into named workflows, decide when a request is a direct task,
-              loopable project, north-star ambition, scheduled operation,
-              research pipeline, image summary, material package, or coding
-              delegation. It should help wrappers show useful actions without
-              forcing users to know command names.
+              The most important product boundary inside Hermes is not "can the
+              agent say the right sentence?" It is "what can the agent truthfully
+              claim happened?" Prepared work, queued work, dispatched work,
+              completed work, verified work, reviewed work, and delivered work
+              should not collapse into one vague success state.
             </p>
             <p>
-              The common myth is still worth naming: Myth: more commands equals
-              a stronger product. Reality: more commands only help if Hermes,
-              wrappers, tests, and operators can use them as reliable contracts.
-              A normal user should be able to ask "payment failures keep coming
-              up" and receive a product-ops route. A maintainer should be able
-              to ask "turn this issue into a PR-ready plan" and receive a
-              scoped handoff. A team should be able to ask "make a briefing
-              image for this release" and get an <code>img-summary</code>
-              prompt, layout, negative prompt, and QA checklist without OMH
-              pretending the pixels already exist.
+              This matters for every extension point. A tool schema can exist
+              without a tool call happening. A plugin can be installed without
+              being loaded in the active session. A scheduled job can be
+              declared without waking. A gateway can receive a message without
+              successfully delivering the answer. The runtime needs different
+              states for those facts.
             </p>
             <p>
-              The right public story is therefore not "install a dashboard" or
-              "learn many commands." It is: install OMH, talk to Hermes, and let
-              Hermes use OMH to choose a workflow, prepare the next action,
-              preserve the evidence boundary, and keep a local trace that can be
-              inspected later.
+              That boundary is what keeps an agent useful under real operations.
+              It lets Hermes speak naturally to a user while still preserving
+              the machine-readable difference between intent, action, evidence,
+              verification, delivery, and follow-up.
             </p>
 
             <div class="architecture-example-lines" aria-label="Example Hermes prompts">
-              <code>Use OMH web-research for: compare these three competitors and brief me.</code>
-              <code>Use OMH loop for: improve this repo's first-run experience until the friction is lower.</code>
-              <code>Use OMH img-summary for: make a PR summary card reviewers can read quickly.</code>
-              <code>Use OMH request-to-handoff for: turn this issue into a PR-ready implementation path.</code>
+              <code>"Summarize this thread, but show what was observed versus inferred."</code>
+              <code>"Prepare a scheduled research check and tell me what still needs confirmation."</code>
+              <code>"Open a coding task, but do not claim execution until the executor reports back."</code>
+              <code>"Review this failed run and propose the smallest skill guidance patch."</code>
             </div>
 
             <p class="article-section-label">08 / Summary</p>
@@ -370,11 +368,10 @@
             <p>
               Hermes Agent is strongest when it is understood as a full work
               runtime: surfaces, prompt builder, agent loop, memory, skills,
-              tools, plugins, cron, gateway, and delivery. OMH is strongest
-              when it makes that runtime easier to use without stealing the
-              runtime's claims. The boundary is simple: OMH can prepare,
-              explain, route, record, and verify contracts; observed execution
-              still needs observed evidence.
+              tools, plugins, cron, gateway, and delivery. The boundary is
+              simple: Hermes can plan, call tools, persist context, and return
+              results, but every operational claim should map to an observed
+              runtime fact.
             </p>
             <p>
               This page is based on local repository inspection rather than
@@ -383,9 +380,15 @@
               <code>agent/prompt_builder.py</code>,
               <code>agent/memory_manager.py</code>,
               <code>agent/skill_utils.py</code>, <code>agent/curator.py</code>,
-              <code>gateway/run.py</code>,
+              <code>agent/conversation_loop.py</code>,
+              <code>agent/tool_executor.py</code>,
+              <code>agent/transports/base.py</code>, <code>model_tools.py</code>,
+              <code>toolsets.py</code>, <code>tools/mcp_tool.py</code>,
+              <code>gateway/run.py</code>, <code>gateway/session.py</code>,
+              <code>gateway/delivery.py</code>,
               <code>gateway/platform_registry.py</code>,
               <code>cron/scheduler.py</code>,
+              <code>cron/scheduler_provider.py</code>,
               <code>docs/kanban/multi-gateway.md</code>, and
               <code>skills/autonomous-ai-agents/hermes-agent/SKILL.md</code>.
             </p>
@@ -396,8 +399,16 @@
               <span>agent/memory_manager.py</span>
               <span>agent/skill_utils.py</span>
               <span>agent/curator.py</span>
+              <span>agent/conversation_loop.py</span>
+              <span>agent/tool_executor.py</span>
+              <span>agent/transports/base.py</span>
+              <span>model_tools.py</span>
+              <span>tools/mcp_tool.py</span>
+              <span>gateway/session.py</span>
+              <span>gateway/delivery.py</span>
               <span>gateway/platform_registry.py</span>
               <span>cron/scheduler.py</span>
+              <span>cron/scheduler_provider.py</span>
               <span>skills/autonomous-ai-agents/hermes-agent/SKILL.md</span>
             </div>
           </section>
@@ -410,16 +421,17 @@
             <p>
               겉으로는 터미널 UI나 메신저 봇처럼 보일 수 있습니다. 하지만
               안쪽에서는 메모리, 스킬, 크론, 도구, 플러그인, 플랫폼 어댑터,
-              에이전트 루프가 한 번에 엮입니다. OMH는 이 구조를 대신 실행하는
-              비밀 런타임이 아니라, Hermes가 어떤 일을 준비했고 어디까지
-              확인했는지 정리해주는 workflow와 evidence layer로 붙어야 합니다.
+              에이전트 루프가 한 번에 엮입니다. 이 글은 그 구조를 Hermes Agent
+              anatomy로 뜯어봅니다. 메시지는 어디서 들어오고, 프롬프트 맥락은
+              어떻게 조립되며, 도구 실행과 예약 작업, 전달 결과는 어디서
+              관측되는지 코드 기준으로 따라갑니다.
             </p>
             <div class="architecture-hero-board" aria-label="Architecture highlights">
               <span><i class="hero-board-icon hero-board-icon--surface" aria-hidden="true"></i>Surfaces</span>
               <span><i class="hero-board-icon hero-board-icon--memory" aria-hidden="true"></i>Memory</span>
               <span><i class="hero-board-icon hero-board-icon--skills" aria-hidden="true"></i>Skills</span>
               <span><i class="hero-board-icon hero-board-icon--tools" aria-hidden="true"></i>Tools</span>
-              <span><i class="hero-board-icon hero-board-icon--omh" aria-hidden="true"></i>OMH evidence</span>
+              <span><i class="hero-board-icon hero-board-icon--omh" aria-hidden="true"></i>Evidence</span>
             </div>
           </header>
 
@@ -433,17 +445,18 @@
               작업 운영면에 가깝습니다.
             </p>
             <p>
-              그래서 OMH가 해야 할 일도 선명합니다. Hermes보다 더 똑똑한 척하는
-              두 번째 런타임이 되면 안 됩니다. 대신 Hermes가 실제 업무 흐름에
-              자연스럽게 붙도록 돕고, 사용자가 채팅으로 던진 말이 리서치, 기획,
-              이미지 요약, 자동화, 코딩 위임으로 바뀌는 과정을 더 읽기 쉽게
-              만들어야 합니다.
+              중요한 건 부품들이 따로 노는 게 아니라 서로 이어진다는 점입니다.
+              채팅 한 줄은 곧장 모델 답변으로 가지 않습니다. identity, files,
+              memory, skills, tool availability, platform metadata, safety,
+              session state를 붙인 뒤에야 에이전트 루프가 어떤 일을 할지
+              결정합니다.
             </p>
             <aside class="architecture-thesis">
               <span>핵심 주장</span>
               <strong>
-                Hermes가 일을 해내는 worker라면, OMH는 그 일이 어디로 라우팅됐고
-                무엇이 검증됐는지 보여주는 workflow lens입니다.
+                Hermes Agent는 layered work runtime입니다. surface가 의도를 받고,
+                prompt builder가 맥락을 컴파일하고, agent loop가 행동하며,
+                persistence가 일을 나중에 점검할 수 있게 남깁니다.
               </strong>
             </aside>
           </section>
@@ -457,7 +470,7 @@
                 <p>
                   이 그림은 구현 세부를 전부 욱여넣기 위한 도표가 아닙니다.
                   사람이 보낸 말이 어디서 들어오고, 어떤 맥락을 붙이고, 어떤
-                  루프를 지나 도구나 자동화로 이어지며, 마지막에 OMH의 workflow
+                  루프를 지나 도구나 자동화로 이어지며, 마지막에 실제 관측된
                   evidence와 함께 어떻게 돌아오는지를 한 번에 보는 지도입니다.
                 </p>
               </div>
@@ -489,8 +502,8 @@
               <i aria-hidden="true"></i>
               <div class="arch-node arch-node--omh">
                 <span class="arch-node__icon arch-node__icon--omh" aria-hidden="true"></span>
-                <span>OMH lens</span>
-                <strong>Workflow route, handoff, status card, evidence boundary</strong>
+                <span>Evidence boundary</span>
+                <strong>Prepared state, observed result, verification, delivery</strong>
               </div>
             </div>
             <div class="platform-chip-wall" aria-label="Gateway surfaces">
@@ -529,17 +542,16 @@
               어디까지가 실제 증거인지가 유지되어야 합니다.
             </p>
             <p>
-              여기서 OMH의 위치도 정해집니다. 사용자는 backend command를 외울
-              필요가 없어야 합니다. 다만 명령어가 쓸모없다는 뜻은 아닙니다.
-              Hermes, wrapper, operator, test, automation 입장에서는 setup,
-              doctor, routing fixture, status card, workflow verification이
-              모두 확인 가능한 장치여야 합니다. OMH는 chat-first여야 하지만,
-              command-blind일 필요는 없습니다.
+              라우팅은 별도 마케팅 기능이 아니라 첫 번째 아키텍처 압력점입니다.
+              Hermes가 source channel, target thread, permission boundary,
+              delivery context를 잃어버리면 뒤의 작업은 전부 흐릿해집니다. 좋은
+              route는 사용자의 요청을 들어온 표면과 나중에 돌려줄 수 있는
+              evidence에 계속 묶어둡니다.
             </p>
             <blockquote class="article-callout">
-              OMH는 숨은 실행기가 아니라 workflow와 evidence를 정리하는
-              렌즈입니다. Hermes가 일을 처리하는 쪽이라면, OMH는 그 일이
-              어디로 흘렀고 무엇이 확인됐는지를 남기는 쪽입니다.
+              구조는 layered입니다. surface, prompt context, agent loop,
+              memory, skills, extension ports, evidence boundary가 각각 다른
+              질문에 답한 뒤에야 Hermes는 일이 끝났다고 말할 수 있습니다.
             </blockquote>
 
             <p class="article-section-label">02 / 프롬프트 맥락</p>
@@ -563,13 +575,11 @@
               됩니다.
             </p>
             <p>
-              OMH는 이 지점에서 강해져야 합니다. Hermes보다 똑똑한 레이어인 척
-              하는 게 아니라, 프롬프트 빌더가 바로 쓸 수 있는 깨끗한 workflow
-              contract를 주는 것입니다. 이 요청은 <code>ralplan</code>에 가깝다,
-              이건 <code>feedback-triage</code>다, 이건 <code>img-summary</code>다,
-              이건 <code>loop</code>로 판단해야 한다, 이건 executor를 골라야 하는
-              coding handoff다. 이렇게 이름 붙일 수 있어야 Hermes의 답변도
-              흔들리지 않습니다.
+              그래서 프롬프트 빌딩은 단순 문자열 템플릿이 아니라 context
+              compilation에 가깝습니다. 어떤 지시가 오래 유지되는 규칙인지,
+              어떤 정보가 이번 턴에만 필요한지, 어떤 기억은 안전하게 넣을 수
+              있는지, 어떤 도구나 플랫폼 action을 고려해도 되는지를 정해야
+              합니다.
             </p>
 
             <p class="article-section-label">03 / 실행 루프</p>
@@ -578,9 +588,11 @@
               <code>run_agent.py</code>와 <code>AIAgent</code> loop는 Hermes의
               작업실입니다. session transition, model transport, context engine
               lifecycle, tool call, response handling, persistence, background
-              review hook이 이곳에서 만납니다. 사용자의 말은 여기서 단순 문장을
-              벗어나 tool call, memory retrieval, prepared handoff, scheduled
-              run, status update 같은 작업 형태를 갖기 시작합니다.
+              review hook이 이곳에서 만납니다. 쪼개진 파일들도 중요합니다.
+              <code>agent/conversation_loop.py</code>는 turn 진행을 다루고,
+              <code>agent/tool_executor.py</code>는 순차/병렬 tool execution을
+              맡고, <code>agent/transports/base.py</code>는 provider별 message와
+              tool 변환을 하나의 interface 뒤에 둡니다.
             </p>
             <p>
               문제는 여기서부터입니다. 무언가를 준비했다는 말과 실제로
@@ -592,12 +604,11 @@
               끝났고, brief가 전달됐다는 말과 다릅니다.
             </p>
             <p>
-              OMH의 prepared-vs-observed boundary는 이 차이를 지키기 위한
-              장치입니다. Hermes가 자연스럽게 말하더라도 plan, prepared handoff,
-              observed dispatch, observed result, verification, review, CI,
-              delivery, merge readiness를 나눠야 합니다. 이 선이 흐려지는 순간,
-              agent product는 일을 한 것이 아니라 일을 한 것처럼 말하는 쪽으로
-              쉽게 미끄러집니다.
+              그래서 Hermes는 의도와 관측을 분리해야 합니다. plan, queued action,
+              tool call, streamed result, saved artifact, delivered answer는 모두
+              다른 runtime state입니다. 이 선이 흐려지는 순간, agent product는
+              일을 보고하는 것이 아니라 일한 것처럼 보이는 이야기를 만들기
+              쉽습니다.
             </p>
 
             <p class="article-section-label">04 / 기억과 검색</p>
@@ -621,11 +632,11 @@
               같이 살아 있어야 합니다.
             </p>
             <p>
-              OMH가 남겨야 하는 것은 긴 설명 더미가 아니라 structured trace입니다.
-              original request, route, workflow, prepared handoff, observed
-              evidence, result, user feedback, improvement candidate, regression
-              example이 남으면, Hermes가 나중에 자기 실행을 돌아보고 고칠 수
-              있는 재료가 생깁니다.
+              그래서 긴 설명 더미보다 structured memory가 더 쓸모 있습니다.
+              original request, route, prompt context, selected skill, tool
+              attempt, observed evidence, result, user feedback, follow-up
+              candidate가 남아야 Hermes가 나중에 자기 실행을 점검하거나 개선할
+              수 있습니다.
             </p>
 
             <p class="article-section-label">05 / 절차적 지식</p>
@@ -652,21 +663,24 @@
             <p>
               그래서 자기개선의 기본값이 곧바로 자동 변경이어서는 안 됩니다.
               더 안전한 순서는 trace, evaluate, propose, review, patch, replay입니다.
-              Hermes가 개선안을 만들고, OMH가 evidence ladder와 regression corpus를
-              정리하고, 사람 또는 신뢰된 review gate가 실제 변경 여부를 결정하는
-              편이 안전합니다.
+              Hermes가 개선안을 만들 수는 있지만, workflow나 skill이 실제로
+              바뀌는 순간에는 사람 또는 신뢰된 review gate가 끼어드는 편이
+              안전합니다.
             </p>
 
             <p class="article-section-label">06 / 운영 표면</p>
             <h2>크론과 게이트웨이</h2>
             <p>
-              <code>gateway/platform_registry.py</code> 같은 gateway code와
-              <code>cron/scheduler.py</code> 같은 scheduled work는 Hermes를 실제
-              운영 환경에 붙게 만듭니다. 쓸 만한 에이전트는 사람이 쳐다볼 때만
-              답하는 존재가 아닙니다. platform에서 일을 받고, session context를
-              보존하고, delivery policy를 지키고, scheduled check를 실행하고,
-              protected toolset을 사용하고, lock을 잡고, prompt injection을
-              확인하고, 올바른 channel로 결과를 돌려줘야 합니다.
+              <code>gateway/platform_registry.py</code>,
+              <code>gateway/session.py</code>, <code>gateway/delivery.py</code>와
+              <code>cron/scheduler.py</code>,
+              <code>cron/scheduler_provider.py</code> 같은 scheduled work는
+              Hermes를 실제 운영 환경에 붙게 만듭니다. 쓸 만한 에이전트는
+              사람이 쳐다볼 때만 답하는 존재가 아닙니다. platform에서 일을 받고,
+              session context를 보존하고, delivery policy를 지키고, scheduled
+              check를 실행하고, protected toolset을 사용하고, lock을 잡고,
+              prompt injection을 확인하고, 올바른 channel로 결과를 돌려줘야
+              합니다.
             </p>
             <p>
               그렇다고 모든 workflow를 무인 자동화로 밀어 넣자는 뜻은 아닙니다.
@@ -678,48 +692,41 @@
               중요한 경계에서 돌립니다.
             </p>
             <p>
-              OMH의 loop와 workflow-learning은 이 비용 다이얼을 보이게 해야
-              합니다. Hermes가 "다음 loop step은 이것이고, 빠른 검증은 이것이며,
-              무거운 검증은 나중에 필요하고, 실패한 지점은 여기라서 plan으로
-              돌아가야 하며, 아직 사람 판단이 필요한 부분은 이것이다"라고 말할
-              수 있어야 합니다.
+              Hermes runtime은 이 비용 다이얼을 보이게 해야 합니다. "다음 단계는
+              이것이고, 빠른 검증은 이것이며, 무거운 검증은 나중에 필요하고,
+              실패한 지점은 여기라서 plan으로 돌아가야 하며, 아직 사람 판단이
+              필요한 부분은 이것이다"라고 말할 수 있어야 합니다.
             </p>
 
-            <p class="article-section-label">07 / OMH 포지션</p>
-            <h2>OMH의 자리</h2>
+            <p class="article-section-label">07 / 경계 모델</p>
+            <h2>증거 경계</h2>
             <p>
-              OMH는 Hermes 아래에서 몰래 실행되는 executor가 아니라, Hermes 위에
-              붙는 workflow와 evidence lens여야 합니다. 막연한 요청을 named
-              workflow로 바꾸고, 이 일이 direct task인지, loopable project인지,
-              north-star ambition인지, scheduled operation인지, research pipeline인지,
-              image summary인지, material package인지, coding delegation인지
-              판단하도록 도와야 합니다. wrapper는 이 정보를 바탕으로 사용자가
-              command name을 몰라도 누를 수 있는 action을 보여줄 수 있습니다.
+              Hermes 안에서 가장 중요한 제품 경계는 "에이전트가 맞는 말을
+              했는가?"만이 아닙니다. 더 중요한 질문은 "에이전트가 무엇이 실제로
+              일어났다고 말할 수 있는가?"입니다. prepared work, queued work,
+              dispatched work, completed work, verified work, reviewed work,
+              delivered work가 하나의 vague success state로 뭉개지면 안 됩니다.
             </p>
             <p>
-              여기서 흔한 오해를 다시 적어둘 만합니다. 오해: 명령어가 많을수록
-              제품이 강하다. 실제로는 Hermes, wrapper, test, operator가 그
-              명령어를 reliable contract로 쓸 수 있을 때만 강해집니다. 사용자가
-              "결제 실패 이슈가 자주 나와"라고 말하면 product-ops route가
-              나와야 합니다. maintainer가 "이 issue를 PR-ready plan으로 만들어줘"라고
-              말하면 scoped handoff가 나와야 합니다. 팀이 "이번 release를
-              공유용 이미지로 정리해줘"라고 말하면 <code>img-summary</code>
-              prompt, layout, negative prompt, QA checklist가 나와야 합니다.
-              대신 OMH가 실제 픽셀을 이미 만들었다고 말하면 안 됩니다.
+              이 경계는 모든 extension point에서 필요합니다. tool schema가
+              존재하는 것과 tool call이 실제로 일어난 것은 다릅니다. plugin이
+              설치된 것과 active session에서 load된 것도 다릅니다. scheduled job이
+              선언된 것과 실제로 깨어난 것도 다르고, gateway가 메시지를 받은
+              것과 답변 전달에 성공한 것도 다릅니다. runtime은 이 사실들을 서로
+              다른 상태로 다뤄야 합니다.
             </p>
             <p>
-              그래서 공개 메시지도 단순해야 합니다. "대시보드를 하나 더
-              설치하세요"도 아니고, "명령어를 많이 외우세요"도 아닙니다. 더
-              정확한 말은 이겁니다. OMH를 설치하고 Hermes에게 말하면, Hermes가
-              OMH를 사용해 workflow를 고르고, 다음 action을 준비하고, evidence
-              boundary를 지키고, 나중에 확인할 수 있는 local trace를 남깁니다.
+              이 경계가 있어야 Hermes는 자연스럽게 말하면서도 운영적으로
+              정직할 수 있습니다. 사용자에게는 읽기 쉬운 답을 주되, 기계가 읽는
+              상태에는 intent, action, evidence, verification, delivery,
+              follow-up을 분리해서 남겨야 합니다.
             </p>
 
             <div class="architecture-example-lines" aria-label="Example Hermes prompts">
-              <code>Use OMH web-research for: compare these three competitors and brief me.</code>
-              <code>Use OMH loop for: improve this repo's first-run experience until the friction is lower.</code>
-              <code>Use OMH img-summary for: make a PR summary card reviewers can read quickly.</code>
-              <code>Use OMH request-to-handoff for: turn this issue into a PR-ready implementation path.</code>
+              <code>"이 스레드를 요약하되, 관측된 사실과 추론을 나눠서 보여줘."</code>
+              <code>"정기 리서치 체크를 준비하고, 아직 확인이 필요한 부분을 알려줘."</code>
+              <code>"코딩 작업을 열되, executor가 보고하기 전에는 실행됐다고 말하지 마."</code>
+              <code>"실패한 실행을 보고 가장 작은 skill guidance patch를 제안해줘."</code>
             </div>
 
             <p class="article-section-label">08 / 핵심 정리</p>
@@ -727,10 +734,9 @@
             <p>
               Hermes Agent는 surfaces, prompt builder, agent loop, memory,
               skills, tools, plugins, cron, gateway, delivery가 함께 맞물릴 때
-              가장 강합니다. OMH는 이 runtime의 claim을 빼앗지 않을 때 가장
-              강합니다. OMH가 할 수 있는 일은 prepare, explain, route, record,
-              verify contract입니다. 실제 실행을 주장하려면 실제로 관측된
-              evidence가 필요합니다.
+              가장 강합니다. 경계는 단순합니다. Hermes는 계획하고, 도구를
+              호출하고, 맥락을 저장하고, 결과를 돌려줄 수 있습니다. 하지만
+              운영상의 claim은 실제 관측된 runtime fact와 연결되어야 합니다.
             </p>
             <p>
               이 글은 홍보 문구가 아니라 local repository inspection을 바탕으로
@@ -738,9 +744,15 @@
               <code>run_agent.py</code>, <code>agent/prompt_builder.py</code>,
               <code>agent/memory_manager.py</code>,
               <code>agent/skill_utils.py</code>, <code>agent/curator.py</code>,
-              <code>gateway/run.py</code>,
+              <code>agent/conversation_loop.py</code>,
+              <code>agent/tool_executor.py</code>,
+              <code>agent/transports/base.py</code>, <code>model_tools.py</code>,
+              <code>toolsets.py</code>, <code>tools/mcp_tool.py</code>,
+              <code>gateway/run.py</code>, <code>gateway/session.py</code>,
+              <code>gateway/delivery.py</code>,
               <code>gateway/platform_registry.py</code>,
               <code>cron/scheduler.py</code>,
+              <code>cron/scheduler_provider.py</code>,
               <code>docs/kanban/multi-gateway.md</code>,
               <code>skills/autonomous-ai-agents/hermes-agent/SKILL.md</code>입니다.
             </p>
@@ -751,8 +763,16 @@
               <span>agent/memory_manager.py</span>
               <span>agent/skill_utils.py</span>
               <span>agent/curator.py</span>
+              <span>agent/conversation_loop.py</span>
+              <span>agent/tool_executor.py</span>
+              <span>agent/transports/base.py</span>
+              <span>model_tools.py</span>
+              <span>tools/mcp_tool.py</span>
+              <span>gateway/session.py</span>
+              <span>gateway/delivery.py</span>
               <span>gateway/platform_registry.py</span>
               <span>cron/scheduler.py</span>
+              <span>cron/scheduler_provider.py</span>
               <span>skills/autonomous-ai-agents/hermes-agent/SKILL.md</span>
             </div>
           </section>
@@ -762,7 +782,7 @@
 
     <footer class="footer">
       <span>
-        OMH explains Hermes-native work without claiming hidden execution.
+        A Hermes Agent anatomy guide based on repository inspection.
       </span>
       <span>
         Developed by <a href="https://github.com/rlaope">rlaope</a>.
