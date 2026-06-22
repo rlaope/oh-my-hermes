@@ -167,6 +167,50 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_skill"], "materials-package")
                 self.assertEqual(decision["selected_harness"], "materials-package")
 
+    def test_source_finder_routes_typed_acquisition_without_stealing_related_lanes(self) -> None:
+        acquisition_cases = (
+            "find papers and datasets for browser agent benchmarks",
+            "find GitHub repos, datasets, and public presentations for this idea",
+            "./source-finder find docs and specs for browser automation standards",
+            "논문 데이터셋 찾아서 후보로 정리해줘",
+        )
+        for message in acquisition_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "source-finder")
+                self.assertEqual(decision["selected_harness"], "source-finder")
+                self.assertEqual(decision["confidence"], "high")
+
+        citation_check = route_chat_message("find current citations for this claim", source="discord")
+        self.assertEqual(citation_check["selected_skill"], "web-research")
+        self.assertEqual(citation_check["selected_harness"], "research")
+
+        paper_explanation = route_chat_message("explain this paper at expert level", source="discord")
+        self.assertEqual(paper_explanation["selected_skill"], "paper-learning")
+        self.assertEqual(paper_explanation["selected_harness"], "paper-learning")
+
+        recurring = route_chat_message("weekly paper review", source="discord")
+        self.assertEqual(recurring["selected_skill"], "research-department")
+        self.assertEqual(recurring["selected_harness"], "research-department")
+
+        file_export = route_chat_message("turn this PDF into a PPT package", source="discord")
+        self.assertEqual(file_export["selected_skill"], "materials-package")
+        self.assertEqual(file_export["selected_harness"], "materials-package")
+
+        image_card = route_chat_message("make an image summary card from this research", source="discord")
+        self.assertEqual(image_card["selected_skill"], "img-summary")
+        self.assertEqual(image_card["selected_harness"], "img-summary")
+
+        official_docs = route_chat_message("find official docs for the current OpenAI API version", source="discord")
+        self.assertEqual(official_docs["selected_skill"], "best-practice-research")
+        self.assertEqual(official_docs["selected_harness"], "research")
+
+        best_practice = route_chat_message("find best practice docs for Python packaging", source="discord")
+        self.assertEqual(best_practice["selected_skill"], "best-practice-research")
+        self.assertEqual(best_practice["selected_harness"], "research")
+
     def test_explicit_workflow_learning_feedback_wins_over_domain_terms(self) -> None:
         cases = (
             "Hermes did not use OMH for my image request; record this as workflow learning",

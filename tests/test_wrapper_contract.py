@@ -86,6 +86,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(checkpoint_routes["image_tools"]["primary_workflow"], "img-summary")
         self.assertEqual(checkpoint_routes["file_tools"]["primary_workflow"], "materials-package")
         self.assertEqual(checkpoint_routes["search_tools"]["primary_workflow"], "web-research")
+        self.assertIn("source-finder", checkpoint_routes["search_tools"]["preferred_workflows"])
         self.assertEqual(checkpoint_routes["coding_tools"]["primary_workflow"], "ultraprocess")
         self.assertIn("prep/status/learning", payload["chat_response"]["body"])
         self.assertNotIn("generic_tool_checkpoint", payload["chat_response"]["state"])
@@ -776,11 +777,13 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(picker["selection_mode"], "single_select")
         option_ids = {option["id"] for option in picker["options"]}
         self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
+        self.assertIn("source-finder", option_ids)
         self.assertIn("paper-learning", option_ids)
         self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
         picker_groups = {group["id"]: group for group in picker["groups"]}
         self.assertTrue({"intent_to_plan", "company_product_ops", "deliverables_and_visuals", "coding_and_runtime"} <= picker_groups.keys())
         self.assertIn("loop", picker_groups["intent_to_plan"]["option_ids"])
+        self.assertIn("source-finder", picker_groups["company_product_ops"]["option_ids"])
         self.assertIn("paper-learning", picker_groups["company_product_ops"]["option_ids"])
         self.assertIn("img-summary", picker_groups["deliverables_and_visuals"]["option_ids"])
         self.assertIn("code-review", picker_groups["coding_and_runtime"]["option_ids"])
@@ -791,6 +794,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(actions["choose_skill"]["payload"]["featured_options"][0]["id"], "oh-my-hermes")
         action_groups = {group["id"]: group for group in actions["choose_skill"]["payload"]["groups"]}
         self.assertIn("feedback-triage", action_groups["company_product_ops"]["option_ids"])
+        self.assertIn("source-finder", action_groups["company_product_ops"]["option_ids"])
         self.assertIn("paper-learning", action_groups["company_product_ops"]["option_ids"])
         self.assertIn("routing intent only", payload["chat_response"]["claim_boundary"])
 
@@ -841,6 +845,7 @@ class WrapperContractTests(unittest.TestCase):
                 picker = payload["chat_response"]["state"]["skill_picker"]
                 option_ids = {option["id"] for option in picker["options"]}
                 self.assertTrue({"oh-my-hermes", "loop", "ultraprocess"} <= option_ids)
+                self.assertIn("source-finder", option_ids)
                 self.assertIn("paper-learning", option_ids)
                 self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
                 picker_groups = {group["id"]: group for group in picker["groups"]}
@@ -854,9 +859,11 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("img-summary", groups["deliverables_and_visuals"]["workflows"])
                 self.assertIn("loop", groups["intent_to_plan"]["workflows"])
                 self.assertIn("feedback-triage", groups["company_product_ops"]["workflows"])
+                self.assertIn("source-finder", groups["company_product_ops"]["workflows"])
                 self.assertIn("paper-learning", groups["company_product_ops"]["workflows"])
                 self.assertIn("code-review", groups["coding_and_runtime"]["workflows"])
                 primer_cards = {card["id"]: card for card in primer["workflow_context_cards"]}
+                self.assertIn("source-finder", primer_cards["research_and_ops"]["representative_workflows"])
                 self.assertIn("paper-learning", primer_cards["research_and_ops"]["representative_workflows"])
                 self.assertIn("img-summary", primer_cards["materials_and_visuals"]["representative_workflows"])
                 self.assertIn("ultraprocess", primer_cards["coding_handoff"]["representative_workflows"])
@@ -869,6 +876,7 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
                 self.assertIn("ultraprocess", lanes["intent_to_plan"]["primary_skills"])
                 self.assertIn("feedback-triage", summary_cards["research_and_ops"]["representative_workflows"])
+                self.assertIn("source-finder", summary_cards["research_and_ops"]["representative_workflows"])
                 self.assertIn("paper-learning", summary_cards["research_and_ops"]["representative_workflows"])
                 self.assertIn("code-review", lanes["coding_handoff"]["primary_skills"])
                 intent_playbooks = {playbook["id"] for playbook in lanes["intent_to_plan"]["representative_playbooks"]}

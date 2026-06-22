@@ -153,6 +153,7 @@ _NAMED_WORKFLOW_MARKERS = (
     "ultraprocess",
     "web-research",
     "research-department",
+    "source-finder",
     "paper-learning",
     "feedback-triage",
     "materials-package",

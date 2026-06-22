@@ -281,7 +281,7 @@ If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview wi
 
 For messenger-native setup, wrappers can call `omh chat native-command --source discord`, `--source slack`, or `--source telegram` to get the platform command/menu registration contract. When plain-message autocomplete is not available, render the returned `omh_command_fallback_card/v1` as an `Open omh` button/card before opening the picker.
 
-If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `research-department`, `paper-learning`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
+If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `source-finder`, `web-research`, `research-department`, `paper-learning`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
 
 In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.featured_options` first, then `chat_response.state.skill_picker.groups` as short sections. Keep `chat_response.state.skill_picker.options` as a backward-compatible flat-list fallback. In Hermes TUI, render the same grouped sections as a compact command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.
 

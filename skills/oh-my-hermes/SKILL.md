@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `paper-learning`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `workflow-learning`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `source-finder`, `paper-learning`, `feedback-triage`, `materials-package`, `img-summary`, `automation-blueprint`, `workflow-learning`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
@@ -69,7 +69,7 @@ Every generated workflow skill carries this rail.
 
 Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
 - **Intent -> plan**: ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects. Key: `oh-my-hermes`, `deep-interview`, `plan`, `ralplan`.
-- **Research and company ops**: source-backed research, customer signals, product operations, and briefing workflows. Key: `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`.
+- **Research and company ops**: source-backed research, customer signals, product operations, and briefing workflows. Key: `source-finder`, `web-research`, `best-practice-research`, `autoresearch-goal`.
 - **Materials and visual summaries**: decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages. Key: `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
 - **Automation and status**: scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review. Key: `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`.
 - **Coding handoff**: Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking. Key: `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `code-review`.
@@ -96,7 +96,7 @@ If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview wi
 
 For messenger-native setup, wrappers can call `omh chat native-command --source discord`, `--source slack`, or `--source telegram` to get the platform command/menu registration contract. When plain-message autocomplete is not available, render the returned `omh_command_fallback_card/v1` as an `Open omh` button/card before opening the picker.
 
-If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `web-research`, `research-department`, `paper-learning`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
+If the user types `./omh`, `/omh`, `./skills`, or `/skills` without a task, show a compact workflow picker instead of creating a plan. Keep real skill names unchanged; present options such as `deep-interview`, `ralplan`, `loop`, `ultraprocess`, `feedback-triage`, `source-finder`, `web-research`, `research-department`, `paper-learning`, `code-review`, `materials-package`, `automation-blueprint`, and `doctor`.
 
 In Discord, Slack, or similar wrappers, render `chat_response.state.skill_picker.featured_options` first, then `chat_response.state.skill_picker.groups` as short sections. Keep `chat_response.state.skill_picker.options` as a backward-compatible flat-list fallback. In Hermes TUI, render the same grouped sections as a compact command list. Choosing a skill is routing intent, not plan acceptance, dispatch, execution, or verification evidence.
 
@@ -122,7 +122,7 @@ Use installed primary workflow skills plus compatibility surfaces in this regist
 - `memory-keeper`: `wiki`, `memory-curation-review`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`
 - `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
-- `researcher`: `web-research`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
+- `researcher`: `web-research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `ultraqa`, `code-review`, `ask`
 - `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `workflow-learning`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
@@ -195,6 +195,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `team`: `team`, `$team`, `swarm`, `parallel agents`, `coordinated workers`
 - `ultrawork`: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
 - `web-research`: `web-research`, `web research`, `web search`, `search the web`, `internet search`, `latest`, `fresh sources`
+- `source-finder`: `source-finder`, `source finder`, `source acquisition`, `source intake`, `find papers and datasets`, `find datasets and repos`, `find papers`
 - `research-brief`: `research-brief`, `business-research`, `business research`, `research brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`
 - `research-department`: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`
 - `paper-learning`: `paper-learning`, `paper learning`, `paper-explainer`, `paper explainer`, `paper explanation`, `explain this paper`, `explain this arxiv paper`
@@ -255,6 +256,7 @@ Use these harnesses to shape the response before adding new skills. They are qua
 - `report-package`: Package supplied inputs into reports, executive briefs, and PPT-ready Markdown/JSON outlines. Tier `report-gated`. Ladder: `report_scope_recorded` -> `inputs_organized` -> `package_outline_prepared` -> `approval_boundary_recorded`. Actions: `show_report`, `export_markdown`, `export_json`, `record_approval`, `show_status`. Privacy `metadata_only`.
 - `materials-package`: Plan, hand off, and verify material-processing work across decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary exports. Tier `material-gated`. Ladder: `material_scope_recorded` -> `source_inputs_organized` -> `format_qa_ladder_prepared` -> `generation_handoff_prepared_if_needed` -> `export_qa_observed_when_available`. Actions: `show_material_plan`, `choose_target_format`, `prepare_generation_handoff`, `record_export`, `record_qa`, `record_approval`. Privacy `metadata_only`.
 - `img-summary`: Prepare source-specific, premium domain-aware, and poster-archetype-aware visual prompt cards for meetings, reports, PRs, issue feedback, research briefings, and release announcements without claiming image generation. Tier `visual-card-gated`. Ladder: `source_kind_selected` -> `visual_format_selected` -> `poster_archetype_selected` -> `card_copy_prepared` -> `prompt_card_prepared` -> `image_generation_capability_checked`. Actions: `show_visual_prompt_card`, `copy_visual_prompt`, `revise_visual_card`, `change_visual_language`, `choose_image_generator`, `setup_image_generator`. Privacy `metadata_only`.
+- `source-finder`: Prepare typed source candidates, acquisition states, observation provenance, and downstream workflow choices without doing network acquisition. Tier `source-acquisition-gated`. Ladder: `source_scope_named` -> `source_kind_selected` -> `candidate_set_prepared` -> `acquisition_status_prepared` -> `observed_source_evidence_recorded_when_available` -> `downstream_workflow_selected`. Actions: `prepare_source_finder_plan`, `show_source_candidates`, `record_source_candidate`, `record_source_link_observed`, `record_download_observed`, `record_file_hash`. Privacy `metadata_only`.
 - `paper-learning`: Explain supplied papers or paper PDFs at a chosen level with full section coverage, source-state evidence, and observed-only validation boundaries. Tier `paper-learning-gated`. Ladder: `paper_source_scoped` -> `explanation_level_selected` -> `extraction_state_recorded` -> `coverage_ledger_prepared` -> `section_explanation_prepared` -> `user_review_or_revision_recorded_when_available`. Actions: `choose_explanation_level`, `show_paper_source_requirements`, `record_paper_metadata`, `record_paper_excerpt_observed`, `record_file_text_extraction_observed`, `show_paper_learning`. Privacy `metadata_only`.
 - `scheduled-ops-blueprint`: Prepare recurring Hermes operations as schedule/delivery/silence blueprints without claiming runtime execution. Tier `ops-blueprint-gated`. Ladder: `blueprint_scope_recorded` -> `schedule_policy_prepared` -> `delivery_policy_prepared` -> `silence_policy_prepared` -> `context_chain_prepared` -> `runtime_observed_when_available`. Actions: `show_blueprint`, `revise_schedule`, `confirm_delivery_policy`, `prepare_host_schedule`, `record_observed_runtime`, `show_status`. Privacy `metadata_only`.
 - `research-department`: Prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries. Tier `research-ops-gated`. Ladder: `research_plan_scope_recorded` -> `source_inbox_prepared` -> `briefing_status_prepared` -> `tooling_readiness_prepared` -> `observed_evidence_recorded_when_available`. Actions: `show_research_department_plan`, `revise_research_sources`, `confirm_cadence_delivery_tooling`, `record_source_observation`, `show_status`. Privacy `metadata_only`.
