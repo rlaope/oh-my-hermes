@@ -332,8 +332,36 @@ class WorkReportingTests(unittest.TestCase):
 
         self.assertEqual(validate_work_observation_summary(summary), [])
         self.assertEqual(summary["status"], "failed")
+        self.assertEqual(summary["observations"]["evidence_refs"], ["executor-result.json", "pytest-failed"])
         self.assertIn("Completion is not observed yet", rendered)
+        self.assertIn("pytest-failed", rendered)
         self.assertNotIn("Completed:", rendered)
+
+    def test_not_observed_event_refs_do_not_render_as_evidence(self) -> None:
+        summary = build_work_observation_summary(
+            work_id="run-event-boundary",
+            title="Runtime event boundary",
+            report_kind="status",
+            status="blocked",
+            observed_events=[
+                {"event_type": "worker_result", "status": "observed", "evidence_refs": ["runtime/result.json"]},
+                {"event_type": "verification", "status": "failed", "evidence_refs": ["pytest-failed"]},
+                {"event_type": "ci", "status": "not_observed", "evidence_refs": ["ci-placeholder"]},
+            ],
+            next_action="record_ci_evidence",
+        )
+        rendered = render_status_report(summary)
+
+        ci_event = next(event for event in summary["observations"]["events"] if event["event_type"] == "ci")
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["observations"]["evidence_refs"], ["runtime/result.json", "pytest-failed"])
+        self.assertEqual(ci_event["evidence_refs"], [])
+        self.assertIn("ci", summary["observations"]["not_observed_events"])
+        self.assertIn("runtime/result.json", rendered)
+        self.assertIn("pytest-failed", rendered)
+        self.assertNotIn("ci-placeholder", summary["observations"]["evidence_refs"])
+        self.assertNotIn("ci-placeholder", rendered)
 
 
 if __name__ == "__main__":

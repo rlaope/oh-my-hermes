@@ -57,6 +57,8 @@ _POST_PREPARED_NEXT_ACTIONS = {
 }
 _VERIFICATION_SUCCESS_STATUSES = {"passed", "satisfied", "completed", "verified"}
 _NON_PROGRESS_STATUSES = {"", "not_observed", "not_required", "pending"}
+_OBSERVATION_EVENT_STATUSES = ("observed", "blocked", "failed", "not_observed")
+_OBSERVATION_EVENT_EVIDENCE_STATUSES = {"observed", "blocked", "failed"}
 
 
 def build_work_observation_summary(
@@ -243,6 +245,7 @@ def build_work_observation_summary_from_status(
     status = _status_from_status_payload(status_payload)
     evidence_refs = [
         *_observed_stage_evidence_refs(execution),
+        *_observed_stage_evidence_refs(verification),
         *_observed_stage_evidence_refs(review),
         *_observed_stage_evidence_refs(ci),
         *_observed_stage_evidence_refs(merge),
@@ -504,12 +507,14 @@ def _compact_observation_events(events: list[dict[str, Any]] | tuple[dict[str, A
         if len(compacted) >= MAX_OBSERVATION_EVENTS:
             omitted += 1
             continue
-        evidence_refs, omitted_refs = compact_context_refs(event.get("evidence_refs", []))
+        status = _observation_event_status(event)
+        refs = event.get("evidence_refs", []) if status in _OBSERVATION_EVENT_EVIDENCE_STATUSES else []
+        evidence_refs, omitted_refs = compact_context_refs(refs)
         compacted.append(
             {
                 "schema_version": WORK_OBSERVATION_EVENT_REF_SCHEMA_VERSION,
                 "event_type": _token(str(event.get("event_type") or "status_update")),
-                "status": _choice(str(event.get("status") or "observed"), ("observed", "blocked", "failed", "not_observed"), "observed"),
+                "status": status,
                 "summary": compact_visible_text(_strip_code_fences(event.get("summary", "")), max_chars=180),
                 "evidence_refs": evidence_refs,
                 "raw_content_included": False,
@@ -522,9 +527,13 @@ def _compact_observation_events(events: list[dict[str, Any]] | tuple[dict[str, A
 def _event_evidence_refs(events: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> list[str]:
     refs: list[str] = []
     for event in events:
-        if isinstance(event, dict):
+        if isinstance(event, dict) and _observation_event_status(event) in _OBSERVATION_EVENT_EVIDENCE_STATUSES:
             refs.extend(_string_items(event.get("evidence_refs")))
     return refs
+
+
+def _observation_event_status(event: dict[str, Any]) -> str:
+    return _choice(str(event.get("status") or "observed"), _OBSERVATION_EVENT_STATUSES, "observed")
 
 
 def _compact_strings(values: list[str] | tuple[str, ...], *, max_items: int, max_chars: int) -> tuple[list[str], int]:
