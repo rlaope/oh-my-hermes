@@ -1399,6 +1399,7 @@ class CliTests(unittest.TestCase):
                     "1",
                     "y",
                     "y",
+                    "n",
                 ]
             ) + "\n"
 
@@ -7179,6 +7180,56 @@ class CliTests(unittest.TestCase):
             self.assertEqual(setup["steps"]["profile"]["selected_categories"], ["prompt-only-coding"])
             self.assertEqual(setup["steps"]["profile"]["default_executor"], "claude-code")
             self.assertEqual(setup["steps"]["profile"]["dispatch_policy"], "prepare_only")
+
+    def test_setup_github_star_helper_uses_gh_best_effort(self) -> None:
+        completed = subprocess.CompletedProcess(["gh"], 0, stdout="", stderr="")
+        with patch("omh.commands.setup.subprocess.run", return_value=completed) as run:
+            result = setup_commands._try_star_github_repo()
+
+        self.assertTrue(result["ok"])
+        run.assert_called_once_with(
+            ["gh", "api", "-X", "PUT", "/user/starred/rlaope/oh-my-hermes"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+        )
+
+    def test_setup_github_star_helper_reports_missing_gh_without_blocking(self) -> None:
+        with patch("omh.commands.setup.subprocess.run", side_effect=FileNotFoundError):
+            result = setup_commands._try_star_github_repo()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("GitHub CLI", result["reason"])
+
+    def test_setup_github_star_helper_reports_broken_gh_without_blocking(self) -> None:
+        with patch("omh.commands.setup.subprocess.run", side_effect=PermissionError("bad gh")):
+            result = setup_commands._try_star_github_repo()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("could not run", result["reason"])
+
+    def test_setup_github_star_prompt_uses_localized_copy(self) -> None:
+        output = io.StringIO()
+        with patch("omh.commands.setup._ask_yes_no", return_value=False) as ask, patch("sys.stdout", output):
+            setup_commands._offer_github_star_before_setup(language="ko", use_color=False)
+
+        ask.assert_called_once()
+        self.assertEqual(ask.call_args.kwargs["note"], "선택 사항입니다. 어떤 답을 골라도 setup은 계속 진행됩니다.")
+        self.assertIn("GitHub에서 oh-my-hermes에 star를 눌러줄까요?", ask.call_args.args[0])
+        self.assertIn("🥲 괜찮아요", output.getvalue())
+
+    def test_setup_github_star_prompt_dry_run_does_not_call_github(self) -> None:
+        output = io.StringIO()
+        with (
+            patch("omh.commands.setup._ask_yes_no", return_value=True),
+            patch("omh.commands.setup._try_star_github_repo") as star,
+            patch("sys.stdout", output),
+        ):
+            setup_commands._offer_github_star_before_setup(language="en", use_color=False, dry_run=True)
+
+        star.assert_not_called()
+        self.assertIn("Dry run only", output.getvalue())
 
     def test_setup_choice_menu_uses_cursor_not_checkbox(self) -> None:
         from omh.commands.setup import _choice_menu_lines

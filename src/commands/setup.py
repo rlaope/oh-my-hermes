@@ -877,6 +877,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
             args.scope = _ask_setup_scope(use_color=_use_color(), language=language)
             paths = _paths(args)
         _run_setup_wizard(args, paths, language)
+        _offer_github_star_before_setup(language=language, use_color=_use_color(), dry_run=bool(args.dry_run))
 
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
@@ -1192,6 +1193,48 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
         args.with_mcp = False
     args.profile_pack = explicit_profile_packs
     print("")
+
+
+def _offer_github_star_before_setup(*, language: str, use_color: bool, dry_run: bool = False) -> None:
+    wants_star = _ask_yes_no(
+        tr(language, "github_star_question"),
+        default=False,
+        use_color=use_color,
+        note=tr(language, "github_star_note"),
+        language=language,
+    )
+    if not wants_star:
+        print(tr(language, "github_star_declined"))
+        print("")
+        return
+    if dry_run:
+        print(_color(tr(language, "github_star_dry_run"), "33", use_color))
+        print("")
+        return
+    result = _try_star_github_repo()
+    if result["ok"]:
+        print(_color(tr(language, "github_star_thanks"), "1;32", use_color))
+    else:
+        reason = str(result.get("reason") or "GitHub star was not recorded")
+        print(_color(tr(language, "github_star_failed", reason=reason), "33", use_color))
+        print(tr(language, "github_star_continue"))
+    print("")
+
+
+def _try_star_github_repo() -> dict[str, object]:
+    command = ["gh", "api", "-X", "PUT", "/user/starred/rlaope/oh-my-hermes"]
+    try:
+        completed = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+    except FileNotFoundError:
+        return {"ok": False, "reason": "GitHub CLI `gh` is not installed or not on PATH."}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "reason": "GitHub CLI star command timed out."}
+    except OSError as exc:
+        return {"ok": False, "reason": f"GitHub CLI could not run: {exc}"}
+    if completed.returncode == 0:
+        return {"ok": True, "reason": "starred_or_already_starred"}
+    detail = (completed.stderr or completed.stdout or "gh repo star failed").strip()
+    return {"ok": False, "reason": detail}
 
 
 def _ask_default_executor(*, use_color: bool, language: str) -> str:
