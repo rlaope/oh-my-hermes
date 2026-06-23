@@ -1083,27 +1083,17 @@ def generic_tool_checkpoint_routes() -> list[dict[str, object]]:
 
 def awareness_primer_context() -> str:
     payload = awareness_primer_payload()
-    pattern_line = _compact_workflow_context_cards_line()
-    cue_map = _compact_workflow_cue_line()
-    tool_map = _compact_generic_tool_checkpoint_line()
     return "\n".join(
         [
             "[OMH Awareness]",
-            str(payload["product_context"]),
-            str(payload["first_turn_rule"]),
-            str(payload["all_skill_context_rule"]),
-            str(payload["generic_tool_checkpoint"]),
-            str(payload["skill_coverage"]),
-            str(payload["chat_rule"]),
-            f"Pattern cards: {pattern_line}.",
-            f"Common cues: {cue_map}.",
+            "OMH is Hermes-native workflow guidance, not hidden execution or a transport/runtime patch.",
             (
-                f"Tools: {tool_map}; omh_interact records chat/session metadata; "
-                "omh_context primes; omh_recommend routes; omh_capabilities catalogs; omh_probe; "
-                "omh_status/hud state; omh_role role context."
+                "For planning, research, files, visuals, automation, coding, review, status, or loops, "
+                "consider OMH before generic tools."
             ),
-            str(payload["fallback_rule"]),
+            "Use message-specific route hints when present; they should outrank this always-on rail.",
             "Boundary: " + str(payload["evidence_boundary"]),
+            "Expand only when needed with omh_context, omh_capabilities, and omh_status/omh_hud.",
         ]
     )
 
