@@ -5260,6 +5260,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("Codex changed files.", progress["chat_summary"])
             self.assertNotIn("do not expose hidden reasoning", json.dumps(progress))
 
+            status, stdout, stderr = run_cli(home_args + ["chat", "codex-progress", "--jsonl", str(root / "missing.jsonl")])
+            self.assertNotEqual(status, 0)
+            self.assertEqual(stdout, "")
+            self.assertIn("missing.jsonl", stderr)
+
             message = "risky refactor"
             status, stdout, stderr = run_cli(
                 home_args
@@ -5315,6 +5320,42 @@ class CliTests(unittest.TestCase):
             self.assertEqual(opened["status"]["result"], "not_observed")
             self.assertEqual(opened["status"]["verification"], "not_requested")
 
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "codex-review",
+                    "--codex-session-ref",
+                    "codex-session-1",
+                    "--codex-thread-ref",
+                    "codex-thread-1",
+                    "--codex-log-jsonl",
+                    str(log_path),
+                    "--codex-log-ref",
+                    "codex-jsonl",
+                    "--evidence-ref",
+                    "codex-review-summary",
+                    "--codex-review-status",
+                    "changes_requested",
+                    "--codex-review-summary",
+                    "Codex review found one bounded issue for the executor to fix.",
+                    "--codex-review-finding-count",
+                    "1",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            review = json.loads(stdout)
+            self.assertEqual(review["schema_version"], "codex_review_adapter/v1")
+            self.assertEqual(review["codex_review"]["schema_version"], "codex_review_summary/v1")
+            self.assertEqual(review["codex_review"]["status"], "changes_requested")
+            self.assertEqual(review["codex_review"]["finding_count"], 1)
+            self.assertEqual(review["codex_review"]["handback"]["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertFalse(review["adapter_contract"]["raw_logs_exposed"])
+            self.assertFalse(review["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertIn("Codex review found one bounded issue", review["chat_summary"])
+            self.assertNotIn("do not expose hidden reasoning", json.dumps(review))
+
             follow_up_prompt = "continue the same PR with a small follow-up"
             status, stdout, stderr = run_cli(
                 home_args
@@ -5327,6 +5368,14 @@ class CliTests(unittest.TestCase):
                     str(log_path),
                     "--codex-log-ref",
                     "codex-jsonl",
+                    "--evidence-ref",
+                    "codex-review-summary",
+                    "--codex-review-status",
+                    "changes_requested",
+                    "--codex-review-summary",
+                    "Codex review found one bounded issue for the executor to fix.",
+                    "--codex-review-finding-count",
+                    "1",
                     follow_up_prompt,
                 ]
             )
@@ -5339,6 +5388,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(followup["active_codex"]["latest_progress"]["event_count"], 4)
             self.assertFalse(followup["adapter_contract"]["raw_logs_exposed"])
             self.assertFalse(followup["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertEqual(followup["codex_review"]["status"], "changes_requested")
+            self.assertEqual(followup["codex_review"]["handback"]["recommended_action"], "resume_codex_for_review_fixes")
+            self.assertEqual(followup["codex_review"]["handback"]["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
             self.assertNotIn(follow_up_prompt, json.dumps(followup))
 
             status, stdout, stderr = run_cli(home_args + ["chat", "codex-followup", "separate task"])

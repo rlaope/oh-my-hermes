@@ -188,7 +188,32 @@ omh chat session status "$SESSION_ID"
 wrappers can pipe Codex JSONL or process output into it and render the compact
 `chat_summary` instead of dumping event streams into chat. The output is an
 observable event summary, not think-log access; it must not expose hidden
-reasoning, raw JSON events, or unobserved review/CI/merge claims.
+reasoning, raw JSON events, or unobserved review/CI/merge claims. If an
+explicit JSONL path cannot be read, the adapter must surface that as missing
+evidence instead of treating it as an empty observed log.
+
+When Codex performs a review, wrappers can expose a human-readable review
+context summary without raw logs:
+
+```sh
+omh chat codex-review \
+  --codex-session-ref "$CODEX_SESSION" \
+  --codex-thread-ref "$CODEX_THREAD" \
+  --codex-log-jsonl "$CODEX_JSONL" \
+  --codex-log-ref codex-jsonl \
+  --evidence-ref codex-review-summary \
+  --codex-review-status changes_requested \
+  --codex-review-summary "$HUMAN_READABLE_CODEX_REVIEW_SUMMARY" \
+  --codex-review-finding-count 2
+```
+
+`codex_review_summary/v1` is review-context metadata for Hermes narration. It
+separates the observed Codex-reviewed result from Hermes' own summary text,
+does not expose raw JSONL or hidden reasoning, and does not claim CI,
+merge-readiness, merge, or review-fix evidence. If the review requests fixes
+and an explicit `codex_session_ref` was observed, the handback contract includes
+a copyable `codex exec resume <session_id>` template for the wrapper/operator.
+OMH core still does not launch Codex or claim that fixes were applied.
 
 When a follow-up prompt arrives while Codex is still active, wrappers can combine
 the latest observed progress with a safe handling recommendation:
@@ -197,17 +222,24 @@ the latest observed progress with a safe handling recommendation:
 omh chat codex-followup "$FOLLOW_UP" \
   --session-id "$SESSION_ID" \
   --codex-log-jsonl "$CODEX_JSONL" \
-  --codex-log-ref codex-jsonl
+  --codex-log-ref codex-jsonl \
+  --codex-review-status changes_requested \
+  --codex-review-summary "$HUMAN_READABLE_CODEX_REVIEW_SUMMARY"
 ```
 
 The follow-up contract returns a prompt hash/length, the latest observable Codex
 activity summary, and a recommendation to append to the observed Codex session
 only when a same-goal wrapper session or explicit same-goal assertion is present.
 Otherwise it recommends clarifying or routing a new task. It does not append the
-prompt, launch Codex, expose raw logs, or claim review/CI/merge evidence.
+prompt, launch Codex, expose raw logs, or claim review/CI/merge evidence. When a
+review summary is provided, it is carried as compact review context for the
+resumed Codex session; it is not a hidden think log and not proof that review
+fixes have already happened.
 
 When `codex_session_ref` is observed, status includes a resume-capable launch
-contract such as `codex exec resume <session_id>`. That is still a wrapper or
+contract such as `codex exec resume <session_id>`. A generic
+`external_session_ref` or thread reference is shown as observed context only; it
+does not produce a resume command by itself. Resume remains a wrapper or
 operator action. OMH records the reference and summary metadata only; it does
 not launch Codex, and it does not claim resumed work until the wrapper records
 observed session/result evidence.

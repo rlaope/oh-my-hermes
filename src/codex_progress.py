@@ -11,6 +11,7 @@ CODEX_PROGRESS_SCHEMA_VERSION = "codex_progress_summary/v1"
 CODEX_SESSION_OBSERVATION_SCHEMA_VERSION = "codex_session_observation/v1"
 CODEX_RESUME_CONTRACT_SCHEMA_VERSION = "codex_resume_contract/v1"
 CODEX_PROMPT_HANDLING_SCHEMA_VERSION = "codex_prompt_handling_contract/v1"
+CODEX_REVIEW_SUMMARY_SCHEMA_VERSION = "codex_review_summary/v1"
 
 _HIDDEN_KEYS = {
     "analysis",
@@ -30,9 +31,10 @@ _VISIBLE_MESSAGE_TYPES = {
     "response",
     "response_item",
 }
-_TERMINAL_FAILURE_WORDS = ("error", "failed", "failure", "traceback")
-_TERMINAL_SUCCESS_WORDS = ("completed", "complete", "success", "succeeded", "passed")
+_TERMINAL_FAILURE_RE = re.compile(r"\b(error|failed|failure|traceback)\b")
+_TERMINAL_SUCCESS_RE = re.compile(r"\b(completed|complete|success|succeeded|passed)\b")
 _MAX_VISIBLE_MESSAGE = 180
+_CODEX_REVIEW_STATUSES = ("not_observed", "pending", "passed", "failed", "blocked", "changes_requested", "commented")
 
 
 def summarize_codex_jsonl_file(
@@ -41,10 +43,7 @@ def summarize_codex_jsonl_file(
     evidence_refs: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, object]:
     source = str(path)
-    try:
-        text = Path(path).read_text(encoding="utf-8")
-    except OSError:
-        text = ""
+    text = Path(path).read_text(encoding="utf-8")
     return summarize_codex_jsonl_text(text, evidence_refs=evidence_refs, source=source)
 
 
@@ -89,16 +88,16 @@ def summarize_codex_jsonl_text(
             activity_counts["testing"] += 1
         if _is_waiting_review_event(lowered):
             activity_counts["waiting_review"] += 1
-        if not terminal_status and any(word in lowered for word in _TERMINAL_FAILURE_WORDS):
+        if not terminal_status and _TERMINAL_FAILURE_RE.search(lowered):
             terminal_status = "failed_or_error_observed"
-        if any(word in lowered for word in _TERMINAL_SUCCESS_WORDS):
+        if _terminal_success_observed(lowered):
             terminal_status = "completed_or_passed_observed"
         visible = _assistant_visible_message(event)
         if visible:
             visible_decisions.append(visible)
             activity_counts["assistant_visible_decisions"] += 1
     activities = _observable_activity(activity_counts)
-    status = terminal_status or ("activity_observed" if parsed_events else "no_observable_events")
+    status = terminal_status or ("activity_observed" if activities or visible_decisions else "no_observable_events")
     return {
         "schema_version": CODEX_PROGRESS_SCHEMA_VERSION,
         "source": source,
@@ -131,7 +130,7 @@ def build_codex_session_observation(
     if selected_executor_profile != "codex":
         return {}
     progress = progress_summary if isinstance(progress_summary, dict) else {}
-    session_ref = (codex_session_ref or external_session_ref).strip()
+    session_ref = codex_session_ref.strip()
     thread_ref = (codex_thread_ref or external_session_ref).strip()
     observed = bool(session_ref or thread_ref or progress.get("event_count"))
     resume = build_codex_resume_contract(session_ref)
@@ -184,6 +183,7 @@ def build_codex_prompt_handling_contract(
     wrapper_session_id: str = "",
     same_goal: bool = False,
     evidence_refs: list[str] | tuple[str, ...] | None = None,
+    codex_review_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     progress = progress_summary if isinstance(progress_summary, dict) else {}
     observation = build_codex_session_observation(
@@ -228,10 +228,80 @@ def build_codex_prompt_handling_contract(
             "prompts, expose raw logs, or claim review/CI/merge evidence."
         ),
     }
+    if isinstance(codex_review_summary, dict) and codex_review_summary:
+        payload["codex_review"] = codex_review_summary
     resume = observation.get("resume", {})
     if isinstance(resume, dict) and resume.get("available"):
         payload["resume"] = resume
     return payload
+
+
+def build_codex_review_summary(
+    *,
+    review_status: str = "not_observed",
+    reviewer: str = "codex",
+    summary: str = "",
+    finding_count: int | None = None,
+    progress_summary: dict[str, object] | None = None,
+    codex_session_ref: str = "",
+    codex_thread_ref: str = "",
+    external_session_ref: str = "",
+    evidence_refs: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, object]:
+    normalized_status = _normalize_review_status(review_status, summary=summary)
+    progress = progress_summary if isinstance(progress_summary, dict) else {}
+    observation = build_codex_session_observation(
+        selected_executor_profile="codex",
+        external_session_ref=external_session_ref,
+        codex_session_ref=codex_session_ref,
+        codex_thread_ref=codex_thread_ref,
+        evidence_refs=evidence_refs or [],
+        progress_summary=progress,
+    )
+    observed = normalized_status != "not_observed" or bool(summary.strip()) or bool(evidence_refs)
+    requires_fixes = normalized_status in {"failed", "blocked", "changes_requested"}
+    resume = observation.get("resume", {}) if isinstance(observation.get("resume"), dict) else {}
+    return {
+        "schema_version": CODEX_REVIEW_SUMMARY_SCHEMA_VERSION,
+        "observed": observed,
+        "reviewer": reviewer.strip() or "codex",
+        "status": normalized_status,
+        "satisfied": normalized_status == "passed",
+        "requires_fixes": requires_fixes,
+        "finding_count": max(0, int(finding_count)) if finding_count is not None else 0,
+        "finding_count_observed": finding_count is not None,
+        "human_summary": _compact_visible_message(summary) if summary.strip() else _default_review_summary(normalized_status),
+        "codex_session": observation,
+        "progress_context": _progress_context(progress),
+        "evidence_refs": _compact_list(evidence_refs or []),
+        "handback": {
+            "can_resume_for_fixes": bool(requires_fixes and resume.get("available")),
+            "resume": resume if resume.get("available") else {},
+            "recommended_action": "resume_codex_for_review_fixes" if requires_fixes else "record_review_context_only",
+            "core_launches_codex": False,
+            "raw_finding_logs_required": False,
+            "claim_boundary": (
+                "Review findings can be handed back to a wrapper/operator-managed Codex session. OMH core does not launch "
+                "Codex or claim fixes until observed executor evidence is recorded."
+            ),
+        },
+        "adapter_contract": {
+            "metadata_only": True,
+            "human_readable_summary_only": True,
+            "raw_logs_exposed": False,
+            "raw_review_events_exposed": False,
+            "hidden_reasoning_exposed": False,
+            "core_launches_codex": False,
+            "claim_boundary": (
+                "This is an observed Codex review context summary for Hermes narration. It is not raw JSONL, hidden "
+                "reasoning, CI evidence, merge-readiness evidence, or merge evidence."
+            ),
+        },
+        "claim_boundary": (
+            "A Codex review summary is review-context metadata only. It does not prove review fixes, CI, merge readiness, "
+            "or merge unless separate observed evidence is recorded."
+        ),
+    }
 
 
 def _prompt_recommendation(*, session_ref: str, same_session_scope: bool) -> dict[str, object]:
@@ -272,15 +342,23 @@ def _safe_search_text(event: dict[str, Any]) -> str:
 
 
 def _hidden_event(event: dict[str, Any]) -> bool:
+    return _hidden_marker(event)
+
+
+def _hidden_marker(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
     for key in ("type", "event", "role"):
-        value = str(event.get(key, "")).casefold()
-        if any(hidden in value for hidden in _HIDDEN_KEYS):
+        marker = str(value.get(key, "")).casefold()
+        if any(hidden in marker for hidden in _HIDDEN_KEYS):
             return True
     return False
 
 
 def _collect_safe_strings(value: Any, parts: list[str], *, parent_key: str = "") -> None:
     if parent_key.casefold() in _HIDDEN_KEYS:
+        return
+    if _hidden_marker(value):
         return
     if isinstance(value, str):
         parts.append(value[:500])
@@ -296,6 +374,8 @@ def _collect_safe_strings(value: Any, parts: list[str], *, parent_key: str = "")
         for key, item in value.items():
             if str(key).casefold() in _HIDDEN_KEYS:
                 continue
+            if _hidden_marker(item):
+                continue
             parts.append(str(key))
             _collect_safe_strings(item, parts, parent_key=str(key))
 
@@ -303,6 +383,10 @@ def _collect_safe_strings(value: Any, parts: list[str], *, parent_key: str = "")
 def _assistant_visible_message(event: dict[str, Any]) -> str:
     if _hidden_event(event):
         return ""
+    for key in ("data", "item", "payload"):
+        payload = event.get(key)
+        if _hidden_marker(payload):
+            return ""
     event_type = str(event.get("type") or event.get("event") or event.get("role") or "").casefold()
     if event_type not in _VISIBLE_MESSAGE_TYPES and str(event.get("role", "")).casefold() != "assistant":
         return ""
@@ -317,6 +401,63 @@ def _assistant_visible_message(event: dict[str, Any]) -> str:
             if key in payload and isinstance(payload[key], str):
                 return _compact_visible_message(payload[key])
     return ""
+
+
+def _normalize_review_status(status: str, *, summary: str = "") -> str:
+    normalized = status.strip().casefold().replace("-", "_").replace(" ", "_") or "not_observed"
+    aliases = {
+        "approved": "passed",
+        "approve": "passed",
+        "request_changes": "changes_requested",
+        "requested_changes": "changes_requested",
+        "needs_changes": "changes_requested",
+        "comment": "commented",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized == "not_observed" and summary.strip():
+        normalized = "commented"
+    if normalized not in _CODEX_REVIEW_STATUSES:
+        raise ValueError(f"Codex review status must be one of: {', '.join(_CODEX_REVIEW_STATUSES)}")
+    return normalized
+
+
+def _default_review_summary(status: str) -> str:
+    if status == "passed":
+        return "Codex review passed."
+    if status == "changes_requested":
+        return "Codex review requested changes."
+    if status == "failed":
+        return "Codex review failed."
+    if status == "blocked":
+        return "Codex review is blocked."
+    if status == "pending":
+        return "Codex review is pending."
+    if status == "commented":
+        return "Codex review produced human-readable context."
+    return "Codex review has not been observed."
+
+
+def _progress_context(progress: dict[str, object]) -> dict[str, object]:
+    if not progress:
+        return {}
+    return {
+        "schema_version": str(progress.get("schema_version", "")),
+        "status": str(progress.get("status", "")),
+        "event_count": int(progress.get("event_count", 0) or 0),
+        "observable_activity": list(progress.get("observable_activity", [])) if isinstance(progress.get("observable_activity"), list) else [],
+        "chat_summary": str(progress.get("chat_summary", "")),
+        "evidence_refs": _compact_list(progress.get("evidence_refs", [])),
+        "claim_boundary": str(progress.get("claim_boundary", "")),
+    }
+
+
+def _terminal_success_observed(text: str) -> bool:
+    for match in _TERMINAL_SUCCESS_RE.finditer(text):
+        prefix = text[max(0, match.start() - 24) : match.start()]
+        if re.search(r"\b(no|not|never|without|pending|awaiting)\b", prefix):
+            continue
+        return True
+    return False
 
 
 def _compact_visible_message(value: str) -> str:
