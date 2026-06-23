@@ -250,24 +250,7 @@ def build_work_observation_summary_from_status(
         *_observed_stage_evidence_refs(ci),
         *_observed_stage_evidence_refs(merge),
     ]
-    observed_events = [
-        *[
-            {"event_type": event_type, "status": "observed"}
-            for event_type in _string_items(runtime_observation.get("observed_events"))
-        ],
-        *[
-            {"event_type": event_type, "status": "blocked"}
-            for event_type in _string_items(runtime_observation.get("blocked_events"))
-        ],
-        *[
-            {"event_type": event_type, "status": "failed"}
-            for event_type in _string_items(runtime_observation.get("failed_events"))
-        ],
-        *[
-            {"event_type": event_type, "status": "not_observed"}
-            for event_type in _string_items(runtime_observation.get("missing_events"))
-        ],
-    ]
+    observed_events = _runtime_observation_events(runtime_observation)
     progress_events = _string_items(status_payload.get("safe_summary"))
     return build_work_observation_summary(
         work_id=run_id,
@@ -679,6 +662,39 @@ def _observed_stage_evidence_refs(stage: dict[str, Any]) -> list[str]:
     if stage.get("observed") is True or stage.get("satisfied") is True:
         return _string_items(stage.get("evidence_refs"))
     return []
+
+
+def _runtime_observation_events(runtime_observation: dict[str, Any]) -> list[dict[str, Any]]:
+    latest = _object(runtime_observation.get("latest"))
+    events: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for field, fallback_status in (
+        ("observed_events", "observed"),
+        ("blocked_events", "blocked"),
+        ("failed_events", "failed"),
+        ("not_observed_events", "not_observed"),
+        ("missing_events", "not_observed"),
+    ):
+        for event_type in _string_items(runtime_observation.get(field)):
+            event_key = _token(event_type)
+            if event_key in seen:
+                continue
+            seen.add(event_key)
+            events.append(_runtime_observation_event(latest, event_type, fallback_status))
+    return events
+
+
+def _runtime_observation_event(latest: dict[str, Any], event_type: str, fallback_status: str) -> dict[str, Any]:
+    record = _object(latest.get(event_type))
+    status = fallback_status if fallback_status == "not_observed" else str(record.get("status") or fallback_status)
+    event: dict[str, Any] = {
+        "event_type": str(record.get("event_type") or event_type),
+        "status": status,
+    }
+    if record:
+        event["summary"] = str(record.get("summary") or "")
+        event["evidence_refs"] = _string_items(record.get("evidence_refs"))
+    return event
 
 
 def _failed_or_blocked_status(*stages: dict[str, Any]) -> str:

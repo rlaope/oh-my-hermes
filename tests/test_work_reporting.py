@@ -337,6 +337,75 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("pytest-failed", rendered)
         self.assertNotIn("Completed:", rendered)
 
+    def test_status_projection_preserves_runtime_latest_event_evidence(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-runtime-latest",
+            "prepared": {
+                "workflow": "team",
+                "harness": "coding-handling",
+                "status": "prepared_not_observed",
+                "executor_target": "omx-runtime",
+            },
+            "wrapper": {"prompt_dispatched": True, "completion_status": "started"},
+            "execution": {"observed": False, "status": "not_observed", "evidence_refs": []},
+            "verification": {"observed": False, "status": "not_observed", "satisfied": False, "evidence_refs": []},
+            "review": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "ci": {"required": True, "observed": False, "status": "pending", "evidence_refs": []},
+            "merge": {"required": True, "observed": False, "status": "not_observed", "evidence_refs": []},
+            "runtime_observation": {
+                "observed_events": ["worker_result", "verification"],
+                "blocked_events": [],
+                "failed_events": [],
+                "not_observed_events": ["ci"],
+                "missing_events": ["review", "merge"],
+                "latest": {
+                    "worker_result": {
+                        "event_type": "worker_result",
+                        "status": "observed",
+                        "summary": "worker reported completion metadata",
+                        "evidence_refs": ["runtime/runtime_observations.jsonl#worker_result"],
+                    },
+                    "verification": {
+                        "event_type": "verification",
+                        "status": "observed",
+                        "summary": "focused tests passed",
+                        "evidence_refs": ["pytest tests/test_work_reporting.py -v"],
+                    },
+                    "ci": {
+                        "event_type": "ci",
+                        "status": "not_observed",
+                        "summary": "CI is pending",
+                        "evidence_refs": ["ci-placeholder"],
+                    },
+                },
+            },
+            "next_action": "record_ci_evidence",
+            "lifecycle_status": "awaiting_ci",
+            "safe_summary": "Runtime handoff has worker and verification observations; CI is not observed.",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="progress")
+        rendered = render_progress_report(summary)
+        events = {event["event_type"]: event for event in summary["observations"]["events"]}
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "in_progress")
+        self.assertEqual(
+            summary["observations"]["evidence_refs"],
+            ["runtime/runtime_observations.jsonl#worker_result", "pytest tests/test_work_reporting.py -v"],
+        )
+        self.assertEqual(events["worker_result"]["summary"], "worker reported completion metadata")
+        self.assertEqual(events["worker_result"]["evidence_refs"], ["runtime/runtime_observations.jsonl#worker_result"])
+        self.assertEqual(events["verification"]["evidence_refs"], ["pytest tests/test_work_reporting.py -v"])
+        self.assertEqual(events["ci"]["status"], "not_observed")
+        self.assertEqual(events["ci"]["evidence_refs"], [])
+        self.assertIn("ci", summary["observations"]["not_observed_events"])
+        self.assertIn("runtime/runtime_observations.jsonl#worker_result", rendered)
+        self.assertIn("pytest tests/test_work_reporting.py -v", rendered)
+        self.assertNotIn("ci-placeholder", summary["observations"]["evidence_refs"])
+        self.assertNotIn("ci-placeholder", rendered)
+
     def test_not_observed_event_refs_do_not_render_as_evidence(self) -> None:
         summary = build_work_observation_summary(
             work_id="run-event-boundary",
