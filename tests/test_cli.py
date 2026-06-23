@@ -17,7 +17,7 @@ from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
-from omh.skill_pack import builtin_skill_templates
+from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 class CliTests(unittest.TestCase):
     def test_no_arg_cli_shows_welcome_instead_of_error(self) -> None:
         status, stdout, stderr = run_cli([], output_json=False)
@@ -1455,7 +1455,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("관측 경계", stdout)
             self.assertIn("플러그인 브리지: 로컬 준비 완료", stdout)
             self.assertIn("Hermes 런타임: 아직 관측 안 됨", stdout)
-            self.assertIn("Hermes Agent를 열고 시도하세요", stdout)
+            self.assertTrue(
+                "Hermes Agent를 열고 시도하세요" in stdout
+                or "설치기가 출력한 절대 경로" in stdout
+            )
+            self.assertNotIn("Use the absolute command path printed by the installer", stdout)
             self.assertIn("상태 로그:", stdout)
 
             install_root = root / "install"
@@ -7689,10 +7693,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             checked = json.loads(stdout)
+            expected_tap_files = len(builtin_skill_templates()) + len(builtin_skill_reference_templates())
             self.assertIn("checked", checked)
             self.assertTrue(checked["tap_skills"]["ok"])
-            self.assertEqual(checked["tap_skills"]["expected"], len(builtin_skill_templates()))
-            self.assertEqual(checked["tap_skills"]["checked"], len(builtin_skill_templates()))
+            self.assertEqual(checked["tap_skills"]["expected"], expected_tap_files)
+            self.assertEqual(checked["tap_skills"]["checked"], expected_tap_files)
             self.assertEqual(checked["tap_skills"]["missing"], [])
             self.assertEqual(checked["tap_skills"]["stale"], [])
             self.assertEqual(checked["tap_skills"]["extra"], [])
