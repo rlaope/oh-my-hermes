@@ -153,6 +153,23 @@ class WrapperContractTests(unittest.TestCase):
         self.assertNotIn("omh migration", json.dumps(payload).lower())
         self.assertNotIn(message, json.dumps(payload))
 
+    def test_chat_interaction_renders_omh_maintenance_card_without_coding_handoff(self) -> None:
+        payload = build_chat_interaction_payload("omh update", source="discord")
+
+        self.assertEqual(payload["schema_version"], "chat_interaction/v1")
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+        self.assertEqual(payload["route"]["task_card"]["task_type"], "omh_cli_maintenance")
+        self.assertEqual(payload["route"]["task_card"]["route_level"], "operator_maintenance_command")
+        self.assertEqual(payload["chat_response"]["kind"], "task_card")
+        self.assertEqual(payload["next_action"], "run_omh_update")
+        self.assertIn("maintenance update path", payload["chat_response"]["body"])
+        self.assertIn("code changes require a separate request", payload["chat_response"]["body"])
+        self.assertIn("run requested command", payload["chat_response"]["body"])
+        self.assertIn("Hermes reload", payload["chat_response"]["claim_boundary"])
+        self.assertIn("coding work", payload["chat_response"]["claim_boundary"])
+        self.assertNotIn("prepare_coding_handoff", json.dumps(payload))
+
     def test_chat_interaction_surfaces_target_change_notice_without_overclaiming(self) -> None:
         notice = {
             "schema_version": "omh_target_change_notice/v1",

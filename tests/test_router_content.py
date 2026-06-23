@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import re
 from pathlib import Path
 import unittest
@@ -15,6 +16,7 @@ from omh.roles import role_definitions, role_file_markdown, roles_reference_mark
 from omh.skill_pack import (
     builtin_definitions,
     builtin_harnesses,
+    builtin_skill_reference_templates,
     builtin_skill_templates,
     installable_skill_definitions,
     routable_definitions,
@@ -78,21 +80,29 @@ class RouterContentTests(unittest.TestCase):
 
     def test_router_documents_best_effort_and_recovery(self) -> None:
         router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
+        references = {
+            str(Path(template.skill_name) / template.relative_path): template.content
+            for template in builtin_skill_reference_templates()
+        }
+        workflow_registry = references["oh-my-hermes/references/workflow-registry.md"]
+        wrapper_routing = references["oh-my-hermes/references/wrapper-routing.md"]
+        maintenance = references["oh-my-hermes/references/operator-maintenance.md"]
+        evidence = references["oh-my-hermes/references/evidence-boundaries.md"]
 
+        self.assertLess(len(router.content.encode("utf-8")), 12_000)
         self.assertIn("best-effort Hermes prompt guidance", router.content)
         self.assertIn("does not override Hermes core routing", router.content)
         self.assertIn(router_keyword_summary(), router.content)
         self.assertIn(router_keyword_summary(), WORKSPACE_SNIPPET)
         for skill_name in ROUTER_KEYWORD_SKILLS:
-            self.assertIn(f"`{skill_name}`", router.content)
+            self.assertIn(f"`{skill_name}`", workflow_registry)
             self.assertIn(f"`{skill_name}`", WORKSPACE_SNIPPET)
         self.assertIn("OMH Awareness Primer", router.content)
-        self.assertIn("consider OMH before generic chat or generic tools", router.content)
         self.assertIn("Materials and visual summaries", router.content)
         self.assertIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
         self.assertIn("Coding handoff", router.content)
         self.assertIn("omh chat route", router.content)
-        self.assertIn("omh coding delegate", router.content)
+        self.assertIn("omh coding delegate", wrapper_routing)
         self.assertIn("deterministic wrapper-side decision layer", router.content)
         self.assertIn("Normal users should talk to Hermes Agent", router.content)
         self.assertIn("Direct Picker Aliases", router.content)
@@ -104,26 +114,67 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("chat_response.state.skill_picker.options", router.content)
         self.assertIn("Do not make the user approve `omh list`", router.content)
         self.assertIn("executor_readiness/v1", router.content)
-        self.assertIn("omh coding executor-readiness --executor <profile>", router.content)
-        self.assertIn("retry at most once", router.content)
+        self.assertIn("retry only after that state changes", wrapper_routing)
         self.assertIn("Hermes-native install paths should converge", router.content)
         self.assertIn("skills.external_dirs", router.content)
-        self.assertIn("Skill Role Classification", router.content)
-        self.assertIn("advisory wrapper guidance", router.content)
-        self.assertIn("This role metadata is advisory", router.content)
-        self.assertIn("Responsibility Roles", router.content)
-        self.assertIn("Responsibility role details are generated in `docs/WORKFLOWS.md`", router.content)
-        self.assertIn("Installed workflow skill policies live in generated workflow skills", router.content)
-        self.assertIn("compatibility/reference-only surface policies live in `docs/WORKFLOWS.md`", router.content)
+        self.assertIn("workflow-registry.md", router.content)
+        self.assertIn("harness-registry.md", router.content)
+        self.assertIn("wrapper-routing.md", router.content)
+        self.assertIn("operator-maintenance.md", router.content)
+        self.assertIn("evidence-boundaries.md", router.content)
+        self.assertIn("Role Registry", workflow_registry)
+        self.assertIn("Installed workflow skill policies live in generated workflow skills", workflow_registry)
         self.assertIn("Hermes should retain routing, web/source research, deep interview, planning, status, and evidence narration", router.content)
         self.assertIn("selected executor/runtime profile", router.content)
         self.assertIn("prepared_not_observed", router.content)
-        self.assertIn("Multi-Agent Target Awareness", router.content)
-        self.assertIn("omh_target_topology/v1", router.content)
-        self.assertIn("single_to_multi", router.content)
+        self.assertIn("operator_maintenance_command", maintenance)
+        self.assertIn("run_requested_command", maintenance)
+        self.assertIn("compact human summaries", maintenance)
+        self.assertIn("Multi-Agent Target Awareness", evidence)
+        self.assertIn("omh_target_topology/v1", evidence)
+        self.assertIn("single_to_multi", evidence)
         self.assertIn("skills_list", router.content)
         self.assertIn("skill_view", router.content)
         self.assertIn("name collides", router.content)
+
+    def test_context_surfaces_stay_within_compact_budgets(self) -> None:
+        from omh.plugin_bundle.omh.tools.capability_tool import OMH_CAPABILITIES_SCHEMA
+        from omh.plugin_bundle.omh.tools.chat_tool import OMH_INTERACT_SCHEMA
+        from omh.plugin_bundle.omh.tools.context_tool import OMH_CONTEXT_SCHEMA
+        from omh.plugin_bundle.omh.tools.evidence_tool import OMH_EVIDENCE_SCHEMA
+        from omh.plugin_bundle.omh.tools.hud_tool import OMH_HUD_SCHEMA
+        from omh.plugin_bundle.omh.tools.probe_tool import OMH_PROBE_SCHEMA
+        from omh.plugin_bundle.omh.tools.recommend_tool import OMH_RECOMMEND_SCHEMA
+        from omh.plugin_bundle.omh.tools.role_tool import OMH_ROLE_SCHEMA
+        from omh.plugin_bundle.omh.tools.status_tool import OMH_STATUS_SCHEMA
+        from omh.wrapper.contract import build_chat_interaction_payload
+
+        router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
+        self.assertLess(len(router.content.encode("utf-8")), 12_000)
+        for template in builtin_skill_reference_templates():
+            self.assertLess(len(template.content.encode("utf-8")), 24_000, template.relative_path)
+
+        schemas = (
+            OMH_CAPABILITIES_SCHEMA,
+            OMH_CONTEXT_SCHEMA,
+            OMH_EVIDENCE_SCHEMA,
+            OMH_HUD_SCHEMA,
+            OMH_INTERACT_SCHEMA,
+            OMH_PROBE_SCHEMA,
+            OMH_RECOMMEND_SCHEMA,
+            OMH_ROLE_SCHEMA,
+            OMH_STATUS_SCHEMA,
+        )
+        for schema in schemas:
+            with self.subTest(tool=schema["name"]):
+                self.assertLessEqual(len(schema["description"]), 260)
+
+        maintenance_payload = build_chat_interaction_payload("omh update", source="discord")
+        route_payload = build_chat_interaction_payload("웹서치해서 최신 자료 정리해줘", source="discord")
+        context_payload = build_chat_interaction_payload("what can OMH do?", source="discord")
+        self.assertLess(len(json.dumps(maintenance_payload, sort_keys=True)), 25_000)
+        self.assertLess(len(json.dumps(route_payload, sort_keys=True)), 15_000)
+        self.assertLess(len(json.dumps(context_payload, sort_keys=True)), 60_000)
 
     def test_role_surface_docs_match_catalog_and_avoid_runtime_claims(self) -> None:
         roles_doc = Path("docs/ROLES.md").read_text(encoding="utf-8")
@@ -305,20 +356,35 @@ class RouterContentTests(unittest.TestCase):
 
     def test_repo_root_tap_skills_match_generated_templates(self) -> None:
         templates = {template.name: template for template in builtin_skill_templates()}
+        reference_templates = {
+            Path(template.skill_name) / template.relative_path: template for template in builtin_skill_reference_templates()
+        }
 
         for name, template in templates.items():
             path = Path("skills") / name / "SKILL.md"
             self.assertTrue(path.exists(), f"{path} should be present for Hermes skill taps")
             self.assertEqual(path.read_text(encoding="utf-8"), template.content)
+        for rel_path, template in reference_templates.items():
+            path = Path("skills") / rel_path
+            self.assertTrue(path.exists(), f"{path} should be present for Hermes skill tap references")
+            self.assertEqual(path.read_text(encoding="utf-8"), template.content)
 
         self.assertEqual({path.parent.name for path in Path("skills").glob("*/SKILL.md")}, set(templates))
+        self.assertEqual(
+            {path.relative_to(Path("skills")) for path in Path("skills").glob("*/references/*.md")},
+            set(reference_templates),
+        )
         hidden = {name for name, (_, installable) in FEATURE_SURFACE_EXPOSURES.items() if not installable}
         self.assertTrue(hidden)
         for name in hidden:
             self.assertFalse((Path("skills") / name / "SKILL.md").exists(), f"{name} should stay routable only")
 
     def test_router_renders_representative_harness_registry(self) -> None:
-        router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
+        references = {
+            str(Path(template.skill_name) / template.relative_path): template.content
+            for template in builtin_skill_reference_templates()
+        }
+        harness_registry = references["oh-my-hermes/references/harness-registry.md"]
         harnesses = {harness.name for harness in builtin_harnesses()}
 
         self.assertEqual(
@@ -362,16 +428,16 @@ class RouterContentTests(unittest.TestCase):
             },
             harnesses,
         )
-        self.assertIn("Representative Harness Registry", router.content)
-        self.assertIn("quality lanes, not proof that a separate runtime role exists", router.content)
+        self.assertIn("Representative Harnesses", harness_registry)
+        self.assertIn("not proof that a separate runtime role exists", harness_registry)
         for harness in harnesses:
-            self.assertIn(f"`{harness}`", router.content)
-        self.assertIn("Tier `", router.content)
-        self.assertIn("Ladder:", router.content)
-        self.assertIn("Actions:", router.content)
-        self.assertIn("Privacy `metadata_only`", router.content)
-        self.assertNotIn("Inputs:", router.content)
-        self.assertNotIn("Quality Bar:", router.content)
+            self.assertIn(f"`{harness}`", harness_registry)
+        self.assertIn("Tier `", harness_registry)
+        self.assertIn("Ladder:", harness_registry)
+        self.assertIn("Actions:", harness_registry)
+        self.assertIn("Privacy `metadata_only`", harness_registry)
+        self.assertNotIn("Inputs:", harness_registry)
+        self.assertNotIn("Quality Bar:", harness_registry)
 
     def test_research_harness_exposes_source_quality_ladder(self) -> None:
         contract = harness_quality_contract("research")

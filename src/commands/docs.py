@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..installer import OmhError
 from ..local_store import atomic_write_text
-from ..skill_pack import builtin_harnesses, builtin_skill_templates
+from ..skill_pack import builtin_harnesses, builtin_skill_reference_templates, builtin_skill_templates
 from ..skills.render import workflow_reference_markdown, workflow_reference_payload
 from ..skills.validation import harness_inspection_payload, harness_summary_payload, validate_catalog_contract
 from .common import _print_json
@@ -44,18 +44,28 @@ def cmd_docs_workflows(args: argparse.Namespace) -> int:
 
 def _tap_skills_check_payload(skills_root: Path) -> dict[str, object]:
     templates = {template.name: template for template in builtin_skill_templates()}
+    reference_templates = {
+        Path(template.skill_name) / template.relative_path: template for template in builtin_skill_reference_templates()
+    }
     paths = {path.parent.name: path for path in skills_root.glob("*/SKILL.md")}
+    reference_paths = {path.relative_to(skills_root): path for path in skills_root.glob("*/references/*.md")}
     missing = sorted(name for name in templates if name not in paths)
+    missing.extend(str(path) for path in sorted(reference_templates) if path not in reference_paths)
     extra = sorted(name for name in paths if name not in templates)
+    extra.extend(str(path) for path in sorted(reference_paths) if path not in reference_templates)
     stale: list[str] = []
     for name, path in sorted(paths.items()):
         if name in templates and path.read_text(encoding="utf-8") != templates[name].content:
             stale.append(name)
+    for rel_path, path in sorted(reference_paths.items()):
+        template = reference_templates.get(rel_path)
+        if template and path.read_text(encoding="utf-8") != template.content:
+            stale.append(str(rel_path))
     return {
         "ok": not missing and not stale and not extra,
         "root": str(skills_root.resolve()),
-        "expected": len(templates),
-        "checked": len(paths),
+        "expected": len(templates) + len(reference_templates),
+        "checked": len(paths) + len(reference_paths),
         "missing": missing,
         "stale": stale,
         "extra": extra,

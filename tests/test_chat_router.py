@@ -303,6 +303,92 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertIsNone(decision["task_card"])
                 self.assertNotIn("task_card:runtime_portability", decision["recommendations"][0]["matched"])
 
+    def test_short_omh_maintenance_commands_use_operator_task_card(self) -> None:
+        cases = (
+            ("omh update", "update", "oh-my-hermes"),
+            ("omh setup", "setup", "oh-my-hermes"),
+            ("omh doctor", "doctor", "doctor"),
+            ("omh install", "install", "oh-my-hermes"),
+            ("omh list", "list", "oh-my-hermes"),
+            ("omh 업데이트해줘", "update", "oh-my-hermes"),
+            ("omh 닥터 돌려줘", "doctor", "doctor"),
+            ("omh 셋업해줘", "setup", "oh-my-hermes"),
+            ("./omh update", "update", "oh-my-hermes"),
+        )
+
+        for message, command, selected_skill in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                task_card = decision["task_card"]
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], selected_skill)
+                self.assertEqual(decision["recommendations"][0]["skill"], selected_skill)
+                self.assertIn("task_card:omh_cli_maintenance", decision["recommendations"][0]["matched"])
+                self.assertIn("operator_maintenance_command", decision["recommendations"][0]["matched"])
+                self.assertEqual(task_card["schema_version"], "omh_task_card/v1")
+                self.assertEqual(task_card["task_type"], "omh_cli_maintenance")
+                self.assertEqual(task_card["route_level"], "operator_maintenance_command")
+                self.assertEqual(task_card["command"], command)
+                self.assertEqual(task_card["command_argv"], ["omh", command])
+                self.assertEqual(task_card["recommended_next_action"], f"run_omh_{command}")
+                self.assertIn("code changes require a separate request", task_card["user_facing_summary"])
+                self.assertTrue(
+                    {
+                        "coding_handoff",
+                        "router_design_feedback",
+                        "runtime_portability",
+                        "migration",
+                        "workflow_implementation",
+                    }
+                    <= set(task_card["not_a_workflow"])
+                )
+                self.assertTrue(
+                    {
+                        "run_requested_command",
+                        "optional_health_check",
+                        "report_observed_output",
+                        "avoid_repo_mutation",
+                    }
+                    <= set(task_card["operation_primitives"])
+                )
+                self.assertTrue(
+                    {"stale_context_inheritance", "over_execution", "unrequested_repo_mutation"}
+                    <= set(task_card["risk_domains"])
+                )
+                self.assertIn("Hermes restart or plugin reload", task_card["evidence_boundary"]["not_observed"])
+
+    def test_omh_maintenance_guard_does_not_swallow_code_change_request(self) -> None:
+        decision = route_chat_message("fix the omh update router implementation", source="discord")
+
+        self.assertIsNone(decision["task_card"])
+        self.assertNotIn("task_card:omh_cli_maintenance", decision["recommendations"][0]["matched"])
+
+        explanation = route_chat_message("omh update 설명해줘", source="discord")
+        self.assertIsNone(explanation["task_card"])
+        self.assertNotIn("task_card:omh_cli_maintenance", explanation["recommendations"][0]["matched"])
+
+    def test_issue_251_representative_routes_stay_compact_and_correct(self) -> None:
+        cases = (
+            ("웹서치해서 최신 자료 정리해줘", "web-research", None),
+            ("PDF를 PPT로 바꿔줘", "materials-package", None),
+            ("이미지 요약 카드 만들어줘", "img-summary", None),
+            ("OMH 업데이트해줘", "oh-my-hermes", "omh_cli_maintenance"),
+            ("왜 OMH 라우팅 틀렸어?", "workflow-learning", "router_design_feedback"),
+            ("다른 맥북에 프리렌 세팅 옮겨줘", "agent-ops-review", "runtime_portability"),
+        )
+
+        for message, selected_skill, task_type in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], selected_skill)
+                if task_type is None:
+                    self.assertIsNone(decision["task_card"])
+                else:
+                    self.assertEqual(decision["task_card"]["task_type"], task_type)
+
     def test_router_design_feedback_prefers_workflow_learning_over_feedback_triage(self) -> None:
         cases = (
             "This should be a higher-level task abstraction, not a migration workflow.",

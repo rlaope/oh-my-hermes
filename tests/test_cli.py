@@ -3821,6 +3821,29 @@ class CliTests(unittest.TestCase):
         self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
         self.assertNotIn("choose the right workflow", response["body"])
 
+    def test_chat_route_and_interact_guard_short_omh_maintenance_command(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "omh update"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertEqual(route["selected_skill"], "oh-my-hermes")
+        self.assertEqual(route["task_card"]["task_type"], "omh_cli_maintenance")
+        self.assertEqual(route["task_card"]["route_level"], "operator_maintenance_command")
+        self.assertEqual(route["task_card"]["recommended_next_action"], "run_omh_update")
+        self.assertIn("avoid_repo_mutation", route["task_card"]["operation_primitives"])
+
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "omh update"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["next_action"], "run_omh_update")
+        self.assertEqual(payload["chat_response"]["kind"], "task_card")
+        self.assertIn("maintenance update path", payload["chat_response"]["body"])
+        self.assertIn("code changes require a separate request", payload["chat_response"]["body"])
+        self.assertIn("Hermes reload", payload["chat_response"]["claim_boundary"])
+
     def test_chat_interact_safe_feature_presents_plan_and_disabled_handoff(self) -> None:
         message = "I want to safely add a feature to this repo"
         status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
@@ -6474,6 +6497,14 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "apply"])[0], 0)
                 self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "list"])[0], 0)
                 self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])[0], 0)
+                list_status, list_stdout, list_stderr = run_cli(
+                    ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "list"],
+                    output_json=False,
+                )
+                self.assertEqual(list_stderr, "")
+                self.assertEqual(list_status, 0)
+                self.assertLess(len(list_stdout), 4_000)
+                self.assertIn("--json", list_stdout)
 
             manifest = json.loads((omh_home / "manifest.json").read_text(encoding="utf-8"))
             names = {skill["name"] for skill in manifest["skills"]}

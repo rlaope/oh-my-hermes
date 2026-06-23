@@ -11,7 +11,7 @@ from .local_store import atomic_write_text, read_json_object_result
 from .manifest import local_modifications, new_manifest, read_manifest, skill_records, write_manifest
 from .paths import OmhPaths
 from .profiles.team import TEAM_PROFILE_SCHEMA_VERSION
-from .skill_pack import SkillTemplate, builtin_skill_templates
+from .skill_pack import SkillReferenceTemplate, SkillTemplate, builtin_skill_reference_templates, builtin_skill_templates
 
 
 def _write_skill(skills_dir: Path, template: SkillTemplate, force: bool = False, managed: bool = False) -> None:
@@ -24,6 +24,20 @@ def _write_skill(skills_dir: Path, template: SkillTemplate, force: bool = False,
     atomic_write_text(target_file, template.content)
 
 
+def _write_skill_reference(
+    skills_dir: Path,
+    template: SkillReferenceTemplate,
+    force: bool = False,
+    managed: bool = False,
+) -> None:
+    target_file = skills_dir / template.skill_name / template.relative_path
+    if target_file.exists() and not force and not managed:
+        existing = target_file.read_text(encoding="utf-8")
+        if existing != template.content:
+            raise OmhError(f"local skill reference differs, refusing to overwrite without --force: {target_file}")
+    atomic_write_text(target_file, template.content)
+
+
 def install_skill_pack(
     paths: OmhPaths,
     *,
@@ -33,6 +47,7 @@ def install_skill_pack(
     dry_run: bool = False,
 ) -> dict:
     templates = convert_from_dir(source_dir) if source_dir else builtin_skill_templates()
+    reference_templates = [] if source_dir else builtin_skill_reference_templates()
     manifest = read_manifest(paths.manifest_path)
     modified = local_modifications(manifest, paths.skills_dir)
     if modified and not force:
@@ -48,6 +63,8 @@ def install_skill_pack(
     managed = manifest is not None
     for template in templates:
         _write_skill(paths.skills_dir, template, force=force, managed=managed)
+    for template in reference_templates:
+        _write_skill_reference(paths.skills_dir, template, force=force, managed=managed)
     records = skill_records(paths.skills_dir, source)
     manifest_data = new_manifest(source, paths.skills_dir, records)
     write_manifest(paths.manifest_path, manifest_data)

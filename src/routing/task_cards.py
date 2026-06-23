@@ -6,6 +6,7 @@ from .intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 
 TASK_CARD_SCHEMA_VERSION = "omh_task_card/v1"
 TASK_CARD_ROUTE_LEVEL = "task_abstraction"
+TASK_CARD_MAINTENANCE_ROUTE_LEVEL = "operator_maintenance_command"
 
 _RUNTIME_PORTABILITY_PHRASES = (
     "another macbook",
@@ -93,6 +94,84 @@ _ROUTER_DESIGN_CONTEXT_PHRASES = (
     "omh 관여",
     "얼마나 관여",
 )
+_MAINTENANCE_COMMAND_ALIASES = {
+    "update": ("update", "upgrade", "refresh", "업데이트", "업뎃", "갱신"),
+    "setup": ("setup", "set up", "셋업", "설정"),
+    "doctor": ("doctor", "health", "diagnose", "닥터", "진단", "헬스"),
+    "install": ("install", "설치"),
+    "list": ("list", "목록", "리스트"),
+}
+_MAINTENANCE_SURFACE_PHRASES = ("omh", "./omh", "/omh", "oh my hermes", "oh-my-hermes")
+_MAINTENANCE_RUN_CUES = (
+    "run",
+    "please",
+    "돌려",
+    "돌려줘",
+    "실행",
+    "실행해",
+    "해줘",
+    "해주세요",
+    "해",
+)
+_MAINTENANCE_EXPLANATION_CUES = (
+    "guide",
+    "docs",
+    "documentation",
+    "explain",
+    "what is",
+    "how do",
+    "why",
+    "문서",
+    "가이드",
+    "설명",
+    "뭐야",
+    "무엇",
+    "어떻게",
+    "왜",
+)
+_MAINTENANCE_CODE_CHANGE_CUES = (
+    "implement",
+    "implementation",
+    "code change",
+    "edit",
+    "patch",
+    "fix",
+    "pr",
+    "branch",
+    "test",
+    "tests",
+    "router",
+    "routing",
+    "workflow implementation",
+    "구현",
+    "수정",
+    "패치",
+    "테스트",
+    "브랜치",
+    "라우터",
+    "라우팅",
+)
+_MAINTENANCE_FILLER_TOKENS = frozenset(
+    {
+        "can",
+        "you",
+        "please",
+        "run",
+        "the",
+        "command",
+        "cli",
+        "omh",
+        "oh",
+        "my",
+        "hermes",
+        "좀",
+        "제발",
+        "명령",
+        "명령어",
+        "실행",
+    }
+)
+
 
 def classify_task(message: str) -> dict[str, object] | None:
     """Classify high-level user tasks before choosing lower-level workflow rails."""
@@ -102,6 +181,9 @@ def classify_task(message: str) -> dict[str, object] | None:
     tokens.update(normalized.split())
     intent = classify_workflow_intent(message)
 
+    maintenance_command = _maintenance_command(normalized, compact, tokens)
+    if maintenance_command:
+        return _maintenance_command_card(maintenance_command)
     if _is_router_design_feedback(normalized, compact, tokens, intent):
         return _router_design_feedback_card()
     if _is_runtime_portability(normalized, compact, tokens):
@@ -116,12 +198,79 @@ def task_card_recommendation(card: dict[str, object]) -> dict[str, object]:
         "skill": selected,
         "score": int(card.get("score", 12)),
         "confidence": str(card.get("confidence", "high")),
-        "matched": [f"task_card:{task_type}", "task_abstraction"],
+        "matched": [f"task_card:{task_type}", str(card.get("route_level", TASK_CARD_ROUTE_LEVEL))],
         "next_action": str(card.get("recommended_next_action", "show_workflow_guidance")),
         "evidence_boundary": str(card.get("claim_boundary", "")),
         "wrapper_guidance": str(card.get("wrapper_guidance", "")),
         "why": str(card.get("routing_reason", "Matched high-level task abstraction before workflow routing.")),
     }
+
+
+def _maintenance_command(normalized: str, compact: str, tokens: set[str]) -> str | None:
+    if not _maintenance_surface_hit(normalized, compact, tokens):
+        return None
+    for command, aliases in _MAINTENANCE_COMMAND_ALIASES.items():
+        if (
+            _maintenance_alias_hit(command, aliases, normalized, compact, tokens)
+            and _is_near_exact_maintenance_request(
+                normalized,
+                compact,
+                tokens,
+            )
+        ):
+            return command
+    return None
+
+
+def _maintenance_surface_hit(normalized: str, compact: str, tokens: set[str]) -> bool:
+    if "omh" in tokens or "oh-my-hermes" in normalized or "oh my hermes" in normalized:
+        return True
+    return any(surface.replace(" ", "") in compact for surface in _MAINTENANCE_SURFACE_PHRASES)
+
+
+def _maintenance_alias_hit(
+    command: str,
+    aliases: tuple[str, ...],
+    normalized: str,
+    compact: str,
+    tokens: set[str],
+) -> bool:
+    for alias in aliases:
+        normalized_alias = normalized_phrase(alias)
+        if not normalized_alias:
+            continue
+        compact_alias = normalized_alias.replace(" ", "")
+        for surface in _MAINTENANCE_SURFACE_PHRASES:
+            normalized_surface = normalized_phrase(surface)
+            compact_surface = normalized_surface.replace(" ", "")
+            if f"{normalized_surface} {normalized_alias}" in normalized:
+                return True
+            if f"{compact_surface}{compact_alias}" in compact:
+                return True
+        if normalized.startswith("omh") and (normalized_alias in normalized or compact_alias in compact):
+            return True
+    return command in tokens and "omh" in tokens
+
+
+def _is_near_exact_maintenance_request(normalized: str, compact: str, tokens: set[str]) -> bool:
+    if _phrase_hit(_MAINTENANCE_CODE_CHANGE_CUES, normalized, compact):
+        return False
+    explain_hit = _phrase_hit(_MAINTENANCE_EXPLANATION_CUES, normalized, compact)
+    run_hit = _phrase_hit(_MAINTENANCE_RUN_CUES, normalized, compact)
+    exact_hit = any(
+        compact == f"{normalized_phrase(surface).replace(' ', '')}{normalized_phrase(alias).replace(' ', '')}"
+        for surface in _MAINTENANCE_SURFACE_PHRASES
+        for aliases in _MAINTENANCE_COMMAND_ALIASES.values()
+        for alias in aliases
+    )
+    meaningful = {token for token in tokens if token not in _MAINTENANCE_FILLER_TOKENS}
+    if exact_hit:
+        return True
+    if explain_hit:
+        return False
+    if run_hit and len(meaningful) <= 8:
+        return True
+    return normalized.lstrip("`'\"“”‘’ ").startswith(("omh", "./omh", "/omh")) and len(meaningful) <= 4
 
 
 def _is_runtime_portability(normalized: str, compact: str, tokens: set[str]) -> bool:
@@ -285,6 +434,84 @@ def _runtime_portability_card() -> dict[str, object]:
         "claim_boundary": (
             "This task card is prepared guidance only. It is not backup creation, private repo upload, restore, "
             "gateway cutover, liveness, verification, or completion evidence."
+        ),
+    }
+
+
+def _maintenance_command_card(command: str) -> dict[str, object]:
+    selected_skill = "doctor" if command == "doctor" else "oh-my-hermes"
+    command_argv = ["omh", command]
+    if command == "list":
+        first_safe_action = "Run `omh list` and summarize the installed workflow catalog without starting repo work."
+    else:
+        first_safe_action = f"Run `omh {command}` and report only the observed maintenance output."
+    return {
+        "schema_version": TASK_CARD_SCHEMA_VERSION,
+        "task_type": "omh_cli_maintenance",
+        "route_level": TASK_CARD_MAINTENANCE_ROUTE_LEVEL,
+        "confidence": "high",
+        "score": 80,
+        "selected_workflow_rail": selected_skill,
+        "recommended_next_action": f"run_omh_{command}",
+        "command": command,
+        "command_argv": command_argv,
+        "user_facing_summary": (
+            f"I will run the OMH maintenance {command} path; code changes require a separate request."
+        ),
+        "not_a_workflow": [
+            "coding_handoff",
+            "router_design_feedback",
+            "runtime_portability",
+            "migration",
+            "workflow_implementation",
+        ],
+        "operation_primitives": [
+            "run_requested_command",
+            "optional_health_check",
+            "report_observed_output",
+            "avoid_repo_mutation",
+        ],
+        "workflow_rails": [
+            {
+                "skill": selected_skill,
+                "purpose": "Keep the response scoped to the requested OMH maintenance command and observed output.",
+            },
+            {
+                "skill": "doctor",
+                "purpose": "Use only when the requested command or follow-up health check needs install verification.",
+            },
+        ],
+        "risk_domains": [
+            "stale_context_inheritance",
+            "over_execution",
+            "unrequested_repo_mutation",
+        ],
+        "evidence_boundary": {
+            "prepared": "operator maintenance command route and command argv",
+            "observed": [],
+            "not_observed": [
+                f"`omh {command}` output",
+                "doctor status after the command",
+                "Hermes restart or plugin reload",
+                "future Hermes chat/plugin runtime use",
+            ],
+            "degraded": [
+                "command unavailable",
+                "shell output missing",
+                "maintenance command exits non-zero",
+            ],
+        },
+        "first_safe_action": first_safe_action,
+        "routing_reason": (
+            "Matched a short OMH CLI maintenance command; route as operator maintenance before inheriting stale coding context."
+        ),
+        "wrapper_guidance": (
+            "Render this as an operator maintenance command. Run the requested `omh` command, summarize observed output, "
+            "and do not create branches, edit files, run implementation tests, or prepare coding handoffs unless the user asks separately."
+        ),
+        "claim_boundary": (
+            "The maintenance route is prepared only. Only the requested command output and optional doctor status become observed evidence; "
+            "Hermes reload, plugin runtime use, coding work, review, CI, and repository mutation remain unobserved unless separately verified."
         ),
     }
 
