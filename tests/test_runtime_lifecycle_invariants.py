@@ -39,8 +39,14 @@ class RuntimeLifecycleInvariantTests(unittest.TestCase):
             self.assertFalse(status["execution"]["observed"])
             self.assertFalse(status["verification"]["observed"])
             self.assertEqual(status["next_action"], "dispatch_to_executor")
+            policy = status["progress_reporting_policy"]
+            self.assertTrue(policy["metadata_only"])
+            self.assertFalse(policy["raw_content_included"])
+            self.assertTrue(policy["final_only_silence_rejected"])
+            self.assertIn("raw_log_dumping", policy["forbidden_patterns"])
             self.assertTrue(validate_runtime(paths, run_id)["ok"])
             self.assertNotIn(message, json.dumps(prepared))
+            self.assertNotIn(message, json.dumps(policy))
 
             run_path = paths.runtime_runs_dir / run_id / "run.json"
             run = json.loads(run_path.read_text(encoding="utf-8"))

@@ -20,6 +20,49 @@ from omh.paths import resolve_paths
 
 
 class CodingLifecycleTests(unittest.TestCase):
+    def test_started_codex_lifecycle_exposes_progress_reporting_policy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            payload = start_codex_delegation_lifecycle(paths, "diagnose installation health")
+
+            policy = payload["status"]["progress_reporting_policy"]
+            self.assertEqual(policy["schema_version"], "coding_progress_reporting_policy/v1")
+            self.assertEqual(policy["mode"], "event_triggered")
+            self.assertIn("workflow_started", policy["reportable_events"])
+            self.assertIn("dispatch_to_executor", policy["reportable_events"])
+
+    def test_progress_policy_guides_lifecycle_transitions_without_final_only_silence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = start_codex_delegation_lifecycle(paths, "diagnose installation health")
+            run_id = started["run"]["run_id"]
+
+            prepared_policy = started["status"]["progress_reporting_policy"]
+            self.assertTrue(prepared_policy["final_only_silence_rejected"])
+            self.assertTrue(prepared_policy["raw_log_dumping_rejected"])
+            self.assertEqual(prepared_policy["state_guidance"]["next_action"], "dispatch_to_executor")
+            self.assertIn("workflow_started", prepared_policy["state_guidance"]["reportable_events"])
+            self.assertIn("dispatch_to_executor", prepared_policy["state_guidance"]["reportable_events"])
+
+            dispatched = record_codex_dispatch(paths, run_id)
+            dispatched_policy = dispatched["status"]["progress_reporting_policy"]
+            self.assertEqual(dispatched_policy["state_guidance"]["next_action"], "wait_for_executor_evidence")
+            self.assertIn("blocker_encountered", dispatched_policy["state_guidance"]["reportable_events"])
+            self.assertIn("targeted_tests_failed", dispatched_policy["state_guidance"]["reportable_events"])
+            self.assertIn("targeted_tests_passed", dispatched_policy["state_guidance"]["reportable_events"])
+
+            result = record_codex_result(paths, run_id, result="completed", evidence_refs=["codex-log"])
+            result_policy = result["status"]["progress_reporting_policy"]
+            self.assertEqual(result_policy["state_guidance"]["next_action"], "record_verification_evidence")
+            self.assertIn("full_tests_started", result_policy["state_guidance"]["reportable_events"])
+
+            verified = record_codex_verification(paths, run_id)
+            verified_policy = verified["status"]["progress_reporting_policy"]
+            self.assertEqual(verified_policy["state_guidance"]["next_action"], "report_completion_with_evidence")
+            self.assertIn("full_tests_passed", verified_policy["state_guidance"]["reportable_events"])
+            self.assertIn("workflow_completed", verified_policy["state_guidance"]["reportable_events"])
+
     def test_start_codex_lifecycle_creates_prepared_handoff_without_raw_message(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

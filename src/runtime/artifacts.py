@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..context_safety import build_coding_progress_reporting_policy
 from ..harness_quality import build_harness_progress
 from ..local_store import (
     atomic_write_json,
@@ -516,6 +517,7 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
         "merge": merge_status,
         "runtime_observation": summarize_runtime_observation_status(runtime_observations),
         "next_action": next_action,
+        "progress_reporting_policy": build_coding_progress_reporting_policy(next_action=next_action),
         "safe_summary": _delegated_status_summary(
             prepared=prepared,
             action=action,
