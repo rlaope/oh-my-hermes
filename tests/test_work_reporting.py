@@ -699,6 +699,42 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("Background process", rendered)
         self.assertNotIn("Here's the final output", rendered)
 
+    def test_check_rollup_loose_parser_uses_status_tokens_not_name_substrings(self) -> None:
+        rendered = build_background_completion_report(
+            exit_code=0,
+            command="gh pr checks --watch",
+            output="\n".join(
+                [
+                    "compass pending https://github.example/checks/compass",
+                    "failover tests pass https://github.example/checks/failover",
+                ]
+            ),
+        )
+
+        self.assertIsNotNone(rendered)
+        assert rendered is not None
+        self.assertIn("- compass: pending https://github.example/checks/compass.", rendered)
+        self.assertIn("- failover tests: pass https://github.example/checks/failover.", rendered)
+        self.assertNotIn("- com: pass", rendered)
+        self.assertNotIn("- over tests: fail", rendered)
+
+    def test_check_name_cleanup_preserves_names_starting_with_x(self) -> None:
+        rendered = format_check_rollup(
+            "\n".join(
+                [
+                    "xcodebuild\tpass\t1m\thttps://github.example/checks/xcodebuild",
+                    "x86 tests\tpass\t2m\thttps://github.example/checks/x86",
+                    "x legacy marker\tfail\t3m\thttps://github.example/checks/legacy",
+                ]
+            )
+        )
+
+        self.assertIn("- xcodebuild: pass (1m) https://github.example/checks/xcodebuild.", rendered)
+        self.assertIn("- x86 tests: pass (2m) https://github.example/checks/x86.", rendered)
+        self.assertIn("- legacy marker: fail (3m) https://github.example/checks/legacy.", rendered)
+        self.assertNotIn("- codebuild", rendered)
+        self.assertNotIn("- 86 tests", rendered)
+
     def test_background_check_output_ignores_github_summary_prose(self) -> None:
         rendered = build_background_completion_report(
             exit_code=1,

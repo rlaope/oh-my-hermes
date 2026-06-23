@@ -1041,7 +1041,7 @@ def _check_row_from_loose_line(line: str) -> dict[str, str]:
     url = _first_url([line])
     without_url = line.replace(url, "").strip() if url else line
     match = re.search(
-        r"(?P<status>pass(?:ed)?|fail(?:ed)?|pending|queued|in[ _-]?progress|running|success(?:ful)?|skipped|cancelled|canceled|error)",
+        r"(?<![A-Za-z0-9_])(?P<status>pass(?:ed)?|fail(?:ed)?|pending|queued|in[ _-]?progress|running|success(?:ful)?|skipped|cancelled|canceled|error)(?![A-Za-z0-9_])",
         without_url,
         flags=re.IGNORECASE,
     )
@@ -1155,7 +1155,9 @@ def _is_check_header(line: str) -> bool:
 
 
 def _clean_check_name(value: str) -> str:
-    return re.sub(r"^[✓✔✗✘x!•*\-\s]+", "", value).strip(" :-—–")
+    cleaned = re.sub(r"^[✓✔✗✘!•*\-\s]+", "", value).strip(" :-—–")
+    cleaned = re.sub(r"^(?i:x)\s+", "", cleaned).strip(" :-—–")
+    return cleaned
 
 
 def _first_url(values: list[str]) -> str:
