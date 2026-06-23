@@ -298,6 +298,27 @@ class RuntimeArtifactTests(unittest.TestCase):
 
             self.assertEqual(validator(legacy), [])
 
+    def test_write_coding_delegation_preserves_legacy_executor_handoff_without_local_capability_strategy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            payload = build_coding_delegation_payload(
+                "risky refactor",
+                source="discord",
+                executor_target="codex",
+                include_message=True,
+            )
+            del payload["executor_handoff"]["executor_local_capability_strategy"]
+
+            record = write_coding_delegation(paths.runtime_runs_dir / run["run_id"], payload)
+
+            self.assertNotIn("executor_local_capability_strategy", record["executor_handoff"])
+            self.assertEqual(validate_coding_delegation_record(record), [])
+            self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
+
     def test_v1_handoff_validators_still_reject_invalid_local_capability_strategy_when_present(self) -> None:
         executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
         prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]

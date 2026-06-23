@@ -876,9 +876,6 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
         "send_action": str(value.get("send_action", "")),
         "codex_skill": str(value.get("codex_skill", "")),
         "codex_invocation": _compact_codex_invocation(value.get("codex_invocation", {})),
-        "executor_local_capability_strategy": _compact_executor_local_capability_strategy(
-            value.get("executor_local_capability_strategy", {})
-        ),
         "status": str(value.get("status", "")),
         "recording_contract": str(value.get("recording_contract", "")),
         "dispatch_contract": str(value.get("dispatch_contract", "")),
@@ -892,6 +889,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
         "report_contract": _compact_report_contract(value.get("report_contract", {})),
         "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
     }
+    strategy = _compact_optional_executor_local_capability_strategy(value)
+    if strategy:
+        compact["executor_local_capability_strategy"] = strategy
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -923,9 +923,6 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
         "selected_executor_profile": str(value.get("selected_executor_profile", "")),
         "dispatchable": bool(value.get("dispatchable", False)),
         "invocation": _compact_prompt_invocation(value.get("invocation", {})),
-        "executor_local_capability_strategy": _compact_executor_local_capability_strategy(
-            value.get("executor_local_capability_strategy", {})
-        ),
         "status": str(value.get("status", "")),
         "recording_contract": str(value.get("recording_contract", "")),
         "dispatch_contract": str(value.get("dispatch_contract", "")),
@@ -937,6 +934,9 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
         "verification": _compact_string_list(value.get("verification", [])),
         "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
     }
+    strategy = _compact_optional_executor_local_capability_strategy(value)
+    if strategy:
+        compact["executor_local_capability_strategy"] = strategy
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -969,9 +969,6 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
         "runtime_profile": _compact_runtime_profile(value.get("runtime_profile", {})),
         "dispatchable": bool(value.get("dispatchable", False)),
         "invocation": _compact_runtime_invocation(value.get("invocation", {})),
-        "executor_local_capability_strategy": _compact_executor_local_capability_strategy(
-            value.get("executor_local_capability_strategy", {})
-        ),
         "status": str(value.get("status", "")),
         "recording_contract": str(value.get("recording_contract", "")),
         "dispatch_contract": str(value.get("dispatch_contract", "")),
@@ -988,6 +985,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
         "verification": _compact_string_list(value.get("verification", [])),
         "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
     }
+    strategy = _compact_optional_executor_local_capability_strategy(value)
+    if strategy:
+        compact["executor_local_capability_strategy"] = strategy
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -1059,6 +1059,13 @@ def _compact_executor_readiness(value: Any) -> dict[str, Any]:
     if isinstance(profiles, list):
         compact["profiles"] = [_compact_executor_readiness(profile) for profile in profiles if isinstance(profile, dict)]
     return compact
+
+
+def _compact_optional_executor_local_capability_strategy(value: dict[str, Any]) -> dict[str, Any]:
+    strategy = value.get("executor_local_capability_strategy")
+    if not isinstance(strategy, dict) or not strategy:
+        return {}
+    return _compact_executor_local_capability_strategy(strategy)
 
 
 def _compact_executor_local_capability_strategy(value: Any) -> dict[str, Any]:

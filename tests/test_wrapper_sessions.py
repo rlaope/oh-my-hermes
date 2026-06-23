@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import hashlib
 import shutil
@@ -356,6 +357,24 @@ class WrapperSessionTests(unittest.TestCase):
             session_path = paths.runtime_wrapper_sessions_dir / session_id / "session.json"
             self.assertNotIn(message, session_path.read_text(encoding="utf-8"))
 
+    def test_write_wrapper_session_preserves_legacy_prompt_handoff_without_local_capability_strategy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "claude-code")
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message)
+            legacy_session = deepcopy(prepared["session"])
+            del legacy_session["prompt_handoff"]["executor_local_capability_strategy"]
+
+            rewritten = write_wrapper_session(paths, legacy_session)
+
+            self.assertNotIn("executor_local_capability_strategy", rewritten["prompt_handoff"])
+            self.assertEqual(validate_wrapper_session_record(rewritten), [])
+            self.assertTrue(validate_runtime(paths)["ok"])
+
     def test_hermes_selection_prepares_runtime_handoff_without_executor_run(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -393,6 +412,24 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertIn("record_runtime_observation", prepared_actions)
             self.assertEqual(prepared["status"]["next_action"], "show_runtime_handoff")
             self.assertEqual(validate_runtime(paths)["runs"], [])
+
+    def test_write_wrapper_session_preserves_legacy_runtime_handoff_without_local_capability_strategy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "hermes")
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message)
+            legacy_session = deepcopy(prepared["session"])
+            del legacy_session["runtime_handoff"]["executor_local_capability_strategy"]
+
+            rewritten = write_wrapper_session(paths, legacy_session)
+
+            self.assertNotIn("executor_local_capability_strategy", rewritten["runtime_handoff"])
+            self.assertEqual(validate_wrapper_session_record(rewritten), [])
+            self.assertTrue(validate_runtime(paths)["ok"])
 
     def test_hermes_coding_team_path_status_uses_runtime_observations(self) -> None:
         with TemporaryDirectory() as tmp:
