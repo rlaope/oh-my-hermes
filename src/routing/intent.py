@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 
 from .localization import normalized_phrase, routing_tokens
 
@@ -27,6 +28,10 @@ RUNTIME_VOCABULARY = {
 }
 META_OR_FEEDBACK_INTENTS = frozenset({"meta_discussion", "feedback_signal"})
 
+# These aliases preserve known English/Korean wrapper behavior. They are not a
+# multilingual understanding strategy, and new languages should not be added here
+# as an ever-growing keyword table. Prefer the structural cues below; broader
+# multilingual interpretation belongs in Hermes/LLM clarification or wrapper UX.
 _META_CUES = (
     "test",
     "testing",
@@ -134,6 +139,24 @@ _MISSING_REQUIREMENTS_CUES = (
     "요구사항 없음",
     "아직 요구사항",
 )
+_REFERENCE_CONTEXT_TOKENS = frozenset(
+    {
+        "context",
+        "hint",
+        "literal",
+        "log",
+        "ref",
+        "reference",
+        "route",
+        "routing",
+        "status",
+        "term",
+        "terminology",
+        "token",
+        "vocabulary",
+    }
+)
+_NEGATABLE_EXECUTION_CUES = frozenset(_EXECUTION_CUES)
 
 
 @dataclass(frozen=True)
@@ -142,6 +165,7 @@ class WorkflowIntent:
     explicit_execution: bool
     mentioned_workflows: tuple[str, ...]
     mentioned_runtime_terms: tuple[str, ...]
+    structural_cues: tuple[str, ...]
     meta_cues: tuple[str, ...]
     feedback_cues: tuple[str, ...]
     planning_cues: tuple[str, ...]
@@ -173,26 +197,42 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
 
     mentioned_workflows = _mentioned_workflows(normalized, tokens)
     mentioned_runtime_terms = _mentioned_runtime_terms(normalized)
+    structural_cues = _structural_cues(message, normalized, tokens)
     meta_cues = _matched_cues(_META_CUES, normalized, compact)
     feedback_cues = _matched_cues(_FEEDBACK_CUES, normalized, compact)
     planning_cues = _matched_cues(_PLANNING_CUES, normalized, compact)
-    negated_execution_cues = _matched_cues(_NEGATED_EXECUTION_CUES, normalized, compact)
+    negated_execution_cues = _compact_tuple(
+        (*_matched_cues(_NEGATED_EXECUTION_CUES, normalized, compact), *_structural_negated_execution_cues(normalized))
+    )
     execution_cues = _suppress_negated_execution_cues(
         _matched_cues(_EXECUTION_CUES, normalized, compact),
         negated_execution_cues,
     )
     missing_requirements_cues = _matched_cues(_MISSING_REQUIREMENTS_CUES, normalized, compact)
-    explicit_execution = bool(execution_cues or (_explicit_workflow_invocation(normalized, tokens) and not negated_execution_cues))
     routing_context = _routing_context(normalized, tokens)
 
     specific_runtime_reference = any(term != "Codex" for term in mentioned_runtime_terms)
     workflow_or_specific_runtime = bool(mentioned_workflows or specific_runtime_reference)
+    structural_reference = _structural_reference_context(
+        structural_cues,
+        workflow_or_specific_runtime=workflow_or_specific_runtime,
+        routing_context=routing_context,
+    )
+    explicit_workflow_marker = _explicit_workflow_invocation(normalized, tokens)
+    explicit_execution = bool(
+        execution_cues
+        or (
+            explicit_workflow_marker
+            and not negated_execution_cues
+            and not structural_reference
+        )
+    )
 
     if explicit_execution:
         intent_class = "delivery_intent"
     elif missing_requirements_cues or (feedback_cues and (routing_context or workflow_or_specific_runtime)):
         intent_class = "feedback_signal"
-    elif meta_cues and (routing_context or workflow_or_specific_runtime):
+    elif (meta_cues or structural_reference) and (routing_context or workflow_or_specific_runtime):
         intent_class = "meta_discussion"
     elif planning_cues:
         intent_class = "planning_request"
@@ -203,6 +243,7 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
         explicit_execution=explicit_execution,
         mentioned_workflows=mentioned_workflows,
         mentioned_runtime_terms=mentioned_runtime_terms,
+        structural_cues=structural_cues,
         meta_cues=meta_cues,
         feedback_cues=feedback_cues,
         planning_cues=planning_cues,
@@ -239,6 +280,56 @@ def _mentioned_runtime_terms(normalized: str) -> tuple[str, ...]:
     return tuple(mentioned)
 
 
+def _structural_cues(message: str, normalized: str, tokens: set[str]) -> tuple[str, ...]:
+    cues: list[str] = []
+    if _explicit_workflow_invocation(normalized, tokens):
+        cues.append("workflow_marker")
+    if _quoted_known_term_reference(message):
+        cues.append("quoted_known_term")
+    if tokens & _REFERENCE_CONTEXT_TOKENS:
+        cues.append("reference_context_token")
+    if _symbolic_negated_execution(normalized):
+        cues.append("symbolic_negated_execution")
+    if _routing_context(normalized, tokens):
+        cues.append("routing_context")
+    return tuple(cues)
+
+
+def _quoted_known_term_reference(message: str) -> bool:
+    normalized = normalized_phrase(message)
+    quoted_chunks = re.findall(r"[`\"']([^`\"']+)[`\"']", normalized)
+    if not quoted_chunks:
+        return False
+    known_terms = tuple(normalized_phrase(term) for term in (*WORKFLOW_VOCABULARY, *RUNTIME_VOCABULARY))
+    return any(any(term and term in chunk for term in known_terms) for chunk in quoted_chunks)
+
+
+def _structural_reference_context(
+    structural_cues: tuple[str, ...],
+    *,
+    workflow_or_specific_runtime: bool,
+    routing_context: bool,
+) -> bool:
+    cues = set(structural_cues)
+    if {"quoted_known_term", "symbolic_negated_execution"} & cues:
+        return True
+    return bool(
+        "reference_context_token" in cues
+        and workflow_or_specific_runtime
+        and (routing_context or "workflow_marker" in cues)
+    )
+
+
+def _structural_negated_execution_cues(normalized: str) -> tuple[str, ...]:
+    return ("symbolic_negated_execution",) if _symbolic_negated_execution(normalized) else ()
+
+
+def _symbolic_negated_execution(normalized: str) -> bool:
+    if "!=" not in normalized and "≠" not in normalized:
+        return False
+    return any(normalized_phrase(cue) in normalized for cue in _EXECUTION_CUES)
+
+
 def _matched_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple[str, ...]:
     matches: list[str] = []
     for cue in cues:
@@ -250,13 +341,21 @@ def _matched_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple
     return tuple(matches)
 
 
+def _compact_tuple(values: tuple[str, ...]) -> tuple[str, ...]:
+    seen: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.append(value)
+    return tuple(seen)
+
+
 def _suppress_negated_execution_cues(
     execution_cues: tuple[str, ...],
     negated_execution_cues: tuple[str, ...],
 ) -> tuple[str, ...]:
     if not negated_execution_cues:
         return execution_cues
-    return tuple(cue for cue in execution_cues if cue not in {"implement", "implementation", "구현", "구현해", "구현해줘"})
+    return tuple(cue for cue in execution_cues if cue not in _NEGATABLE_EXECUTION_CUES)
 
 
 def _explicit_workflow_invocation(normalized: str, tokens: set[str]) -> bool:

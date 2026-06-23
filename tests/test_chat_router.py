@@ -13,6 +13,7 @@ from omh.chat_router import (
     route_chat_message,
     routing_record_payload,
 )
+from omh.routing.intent import classify_workflow_intent
 from omh.skills.catalog import primary_harness_for_skill
 
 
@@ -332,6 +333,7 @@ class ChatRouterTests(unittest.TestCase):
             "가상 프로젝트로 OMH 라우팅을 테스트해보자. 아직 요구사항은 없어.",
             "OMH developer note: one-cycle delivery is only vocabulary in this setup test.",
             "OMH developer test: Codex handoff vocabulary, not asking to implement.",
+            "OMH route: `$ultraprocess` ≠ ejecutar; Codex handoff token only.",
         )
 
         for message in cases:
@@ -345,6 +347,20 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(task_card["task_type"], "router_design_feedback")
                 self.assertFalse(decision["explicit"])
                 self.assertNotEqual(decision["selected_skill"], "ultraprocess")
+
+    def test_workflow_intent_prefers_structural_cues_over_language_tables(self) -> None:
+        intent = classify_workflow_intent("OMH route: `$ultraprocess` ≠ ejecutar; Codex handoff token only.")
+
+        self.assertEqual(intent.intent_class, "meta_discussion")
+        self.assertFalse(intent.explicit_execution)
+        self.assertIn("quoted_known_term", intent.structural_cues)
+        self.assertIn("reference_context_token", intent.structural_cues)
+        self.assertIn("ultraprocess", intent.not_executed)
+        self.assertIn("Codex", intent.not_executed)
+
+        delivery = classify_workflow_intent("$ultraprocess implement this change")
+        self.assertEqual(delivery.intent_class, "delivery_intent")
+        self.assertTrue(delivery.explicit_execution)
 
     def test_generic_korean_omh_feedback_does_not_become_router_design_card(self) -> None:
         decision = route_chat_message("피드백인데 OMH 문서가 좋아요.", source="discord")

@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from ..codex_progress import summarize_codex_jsonl_file, summarize_codex_jsonl_text
+from ..codex_progress import build_codex_prompt_handling_contract, summarize_codex_jsonl_file, summarize_codex_jsonl_text
 from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..ingress import CHAT_SOURCES, extract_message_text
 from ..installer import OmhError
@@ -378,6 +378,55 @@ def cmd_chat_codex_progress(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat_codex_followup(args: argparse.Namespace) -> int:
+    message = _chat_message(args)
+    if not message:
+        raise OmhError("codex-followup requires a new prompt")
+    try:
+        progress = _codex_progress_from_args(args)
+        session_ref = args.codex_session_ref or ""
+        thread_ref = args.codex_thread_ref or ""
+        external_ref = args.external_session_ref or ""
+        wrapper_session: dict[str, object] = {}
+        if args.session_id:
+            status = build_wrapper_session_status(_paths(args), args.session_id)
+            executor_status = status.get("executor_session_status", {}) if isinstance(status.get("executor_session_status"), dict) else {}
+            codex_session = executor_status.get("codex_session", {}) if isinstance(executor_status.get("codex_session"), dict) else {}
+            codex_progress = executor_status.get("codex_progress", {}) if isinstance(executor_status.get("codex_progress"), dict) else {}
+            session_ref = session_ref or str(codex_session.get("session_ref", ""))
+            thread_ref = thread_ref or str(codex_session.get("thread_ref", ""))
+            external_ref = external_ref or str(codex_session.get("external_session_ref", ""))
+            if progress is None and codex_progress:
+                progress = codex_progress
+            wrapper_session = {
+                "session_id": args.session_id,
+                "session_status": status.get("session_status", ""),
+                "executor_session": executor_status.get("executor_session", ""),
+                "dispatch": executor_status.get("dispatch", ""),
+                "result": executor_status.get("result", ""),
+                "verification": executor_status.get("verification", ""),
+            }
+        evidence_refs = list(args.evidence_ref or [])
+        payload = build_codex_prompt_handling_contract(
+            new_prompt=message,
+            progress_summary=progress,
+            codex_session_ref=session_ref,
+            codex_thread_ref=thread_ref,
+            external_session_ref=external_ref,
+            wrapper_session_id=args.session_id or "",
+            same_goal=bool(args.same_goal),
+            evidence_refs=evidence_refs,
+        )
+        if wrapper_session:
+            payload["wrapper_session"] = wrapper_session
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
 def _codex_progress_from_args(args: argparse.Namespace) -> dict[str, object] | None:
     path = getattr(args, "codex_log_jsonl", None)
     if not path:
@@ -511,6 +560,23 @@ def _add_chat_commands(sub) -> None:
     codex_progress.add_argument("--stdin", action="store_true", help="Read observed Codex JSONL or process output from stdin.")
     codex_progress.add_argument("--evidence-ref", action="append", help="Evidence reference for the observed log/source.")
     codex_progress.set_defaults(func=cmd_chat_codex_progress)
+
+    codex_followup = chat_sub.add_parser(
+        "codex-followup",
+        help="Summarize active Codex progress and recommend safe handling for a new prompt.",
+    )
+    codex_followup.add_argument("message", nargs="*", help="New user prompt to handle without echoing raw text in the result.")
+    codex_followup.add_argument("--stdin", action="store_true", help="Read the new user prompt from stdin.")
+    codex_followup.add_argument("--event-json", default=None, help="Read a Slack/Discord/Hermes-like JSON event for the new prompt.")
+    codex_followup.add_argument("--session-id", default="", help="Existing wrapper session id that may already have observed Codex metadata.")
+    codex_followup.add_argument("--same-goal", action="store_true", help="Wrapper-observed assertion that the new prompt belongs to the same goal.")
+    codex_followup.add_argument("--external-session-ref", default="", help="Observed Codex thread/session reference from the wrapper.")
+    codex_followup.add_argument("--codex-session-ref", default="", help="Observed Codex session id suitable for resume contracts.")
+    codex_followup.add_argument("--codex-thread-ref", default="", help="Observed Codex thread/conversation reference when distinct from the session id.")
+    codex_followup.add_argument("--codex-log-jsonl", default=None, help="Observed Codex JSONL/process output to summarize; raw events are not echoed.")
+    codex_followup.add_argument("--codex-log-ref", default="", help="Evidence reference for the observed Codex log source.")
+    codex_followup.add_argument("--evidence-ref", action="append", help="Evidence reference for the observed session/log/source.")
+    codex_followup.set_defaults(func=cmd_chat_codex_followup)
 
     session = chat_sub.add_parser("session")
     session_sub = session.add_subparsers(dest="session_command", required=True)

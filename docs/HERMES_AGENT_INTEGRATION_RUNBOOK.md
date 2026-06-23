@@ -190,6 +190,22 @@ wrappers can pipe Codex JSONL or process output into it and render the compact
 observable event summary, not think-log access; it must not expose hidden
 reasoning, raw JSON events, or unobserved review/CI/merge claims.
 
+When a follow-up prompt arrives while Codex is still active, wrappers can combine
+the latest observed progress with a safe handling recommendation:
+
+```sh
+omh chat codex-followup "$FOLLOW_UP" \
+  --session-id "$SESSION_ID" \
+  --codex-log-jsonl "$CODEX_JSONL" \
+  --codex-log-ref codex-jsonl
+```
+
+The follow-up contract returns a prompt hash/length, the latest observable Codex
+activity summary, and a recommendation to append to the observed Codex session
+only when a same-goal wrapper session or explicit same-goal assertion is present.
+Otherwise it recommends clarifying or routing a new task. It does not append the
+prompt, launch Codex, expose raw logs, or claim review/CI/merge evidence.
+
 When `codex_session_ref` is observed, status includes a resume-capable launch
 contract such as `codex exec resume <session_id>`. That is still a wrapper or
 operator action. OMH records the reference and summary metadata only; it does

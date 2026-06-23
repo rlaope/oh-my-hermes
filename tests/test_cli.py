@@ -5315,6 +5315,37 @@ class CliTests(unittest.TestCase):
             self.assertEqual(opened["status"]["result"], "not_observed")
             self.assertEqual(opened["status"]["verification"], "not_requested")
 
+            follow_up_prompt = "continue the same PR with a small follow-up"
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "codex-followup",
+                    "--session-id",
+                    session_id,
+                    "--codex-log-jsonl",
+                    str(log_path),
+                    "--codex-log-ref",
+                    "codex-jsonl",
+                    follow_up_prompt,
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            followup = json.loads(stdout)
+            self.assertEqual(followup["schema_version"], "codex_prompt_handling_contract/v1")
+            self.assertEqual(followup["recommendation"]["action"], "append_followup_to_observed_codex_session")
+            self.assertEqual(followup["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertEqual(followup["active_codex"]["latest_progress"]["event_count"], 4)
+            self.assertFalse(followup["adapter_contract"]["raw_logs_exposed"])
+            self.assertFalse(followup["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertNotIn(follow_up_prompt, json.dumps(followup))
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "codex-followup", "separate task"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["recommendation"]["action"], "route_new_or_clarify")
+
     def test_runtime_observe_rejects_plain_workflow_run_without_runtime_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

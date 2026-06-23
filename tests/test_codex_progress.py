@@ -6,7 +6,7 @@ import unittest
 from _local_package import load_local_package
 
 load_local_package()
-from omh.codex_progress import build_codex_session_observation, summarize_codex_jsonl_text
+from omh.codex_progress import build_codex_prompt_handling_contract, build_codex_session_observation, summarize_codex_jsonl_text
 
 
 class CodexProgressTests(unittest.TestCase):
@@ -60,6 +60,40 @@ class CodexProgressTests(unittest.TestCase):
         self.assertEqual(observation["resume"]["argv_template"], ["codex", "exec", "resume", "session-1"])
         self.assertTrue(observation["resume"]["not_omh_backend_execution"])
         self.assertIn("do not prove", observation["claim_boundary"])
+
+    def test_followup_contract_recommends_append_only_for_same_observed_session(self) -> None:
+        progress = summarize_codex_jsonl_text(
+            json.dumps({"type": "tool_call", "tool": "rg", "args": "rg codex"}),
+            evidence_refs=["codex-jsonl"],
+        )
+
+        append = build_codex_prompt_handling_contract(
+            new_prompt="continue the same PR",
+            progress_summary=progress,
+            codex_session_ref="session-1",
+            codex_thread_ref="thread-1",
+            wrapper_session_id="ws-1",
+        )
+
+        self.assertEqual(append["recommendation"]["action"], "append_followup_to_observed_codex_session")
+        self.assertEqual(append["resume"]["argv_template"], ["codex", "exec", "resume", "session-1"])
+        self.assertEqual(append["new_prompt"]["raw_prompt_stored"], False)
+        self.assertNotIn("continue the same PR", json.dumps(append))
+        self.assertFalse(append["adapter_contract"]["raw_logs_exposed"])
+        self.assertFalse(append["adapter_contract"]["hidden_reasoning_exposed"])
+
+        clarify = build_codex_prompt_handling_contract(
+            new_prompt="maybe a separate task",
+            progress_summary=progress,
+            codex_session_ref="session-1",
+        )
+
+        self.assertEqual(clarify["recommendation"]["action"], "clarify_before_append_or_route_new")
+        self.assertIn("resume", clarify)
+
+        new_route = build_codex_prompt_handling_contract(new_prompt="new task", progress_summary=progress)
+        self.assertEqual(new_route["recommendation"]["action"], "route_new_or_clarify")
+        self.assertNotIn("resume", new_route)
 
 
 if __name__ == "__main__":

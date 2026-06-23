@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 CODEX_PROGRESS_SCHEMA_VERSION = "codex_progress_summary/v1"
 CODEX_SESSION_OBSERVATION_SCHEMA_VERSION = "codex_session_observation/v1"
 CODEX_RESUME_CONTRACT_SCHEMA_VERSION = "codex_resume_contract/v1"
+CODEX_PROMPT_HANDLING_SCHEMA_VERSION = "codex_prompt_handling_contract/v1"
 
 _HIDDEN_KEYS = {
     "analysis",
@@ -169,6 +171,95 @@ def build_codex_resume_contract(session_ref: str) -> dict[str, object]:
             "The resume command is a wrapper/operator launch contract only. The wrapper backend does not launch Codex or "
             "claim resumed work until it records observed session or result evidence."
         ),
+    }
+
+
+def build_codex_prompt_handling_contract(
+    *,
+    new_prompt: str,
+    progress_summary: dict[str, object] | None = None,
+    codex_session_ref: str = "",
+    codex_thread_ref: str = "",
+    external_session_ref: str = "",
+    wrapper_session_id: str = "",
+    same_goal: bool = False,
+    evidence_refs: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, object]:
+    progress = progress_summary if isinstance(progress_summary, dict) else {}
+    observation = build_codex_session_observation(
+        selected_executor_profile="codex",
+        external_session_ref=external_session_ref,
+        codex_session_ref=codex_session_ref,
+        codex_thread_ref=codex_thread_ref,
+        evidence_refs=evidence_refs or [],
+        progress_summary=progress,
+    )
+    session_ref = str(observation.get("session_ref", "")).strip()
+    same_session_scope = bool(session_ref and (same_goal or wrapper_session_id))
+    recommendation = _prompt_recommendation(session_ref=session_ref, same_session_scope=same_session_scope)
+    payload = {
+        "schema_version": CODEX_PROMPT_HANDLING_SCHEMA_VERSION,
+        "new_prompt": {
+            "sha256": hashlib.sha256(new_prompt.encode("utf-8")).hexdigest(),
+            "length": len(new_prompt),
+            "raw_prompt_stored": False,
+            "raw_prompt_echoed": False,
+        },
+        "active_codex": {
+            "observed": bool(observation.get("observed")),
+            "session_ref": session_ref,
+            "thread_ref": str(observation.get("thread_ref", "")).strip(),
+            "event_count": int(observation.get("event_count", 0) or 0),
+            "latest_progress": progress,
+        },
+        "recommendation": recommendation,
+        "adapter_contract": {
+            "metadata_only": True,
+            "raw_logs_exposed": False,
+            "hidden_reasoning_exposed": False,
+            "core_launches_codex": False,
+            "claim_boundary": (
+                "This contract summarizes observed Codex session metadata and recommends prompt handling. It is not "
+                "execution, review, CI, merge-readiness, merge, or hidden think-log evidence."
+            ),
+        },
+        "claim_boundary": (
+            "Codex follow-up handling is wrapper/operator metadata only. The core backend does not launch Codex, append "
+            "prompts, expose raw logs, or claim review/CI/merge evidence."
+        ),
+    }
+    resume = observation.get("resume", {})
+    if isinstance(resume, dict) and resume.get("available"):
+        payload["resume"] = resume
+    return payload
+
+
+def _prompt_recommendation(*, session_ref: str, same_session_scope: bool) -> dict[str, object]:
+    if session_ref and same_session_scope:
+        return {
+            "action": "append_followup_to_observed_codex_session",
+            "can_append_to_existing_session": True,
+            "requires_clarification": False,
+            "reason": "An observed Codex session_ref exists for the same wrapper session or confirmed same goal.",
+            "next_step": "Use the wrapper/operator resume path and append the follow-up prompt to the observed Codex session.",
+            "not_evidence": ["execution_result", "review", "ci", "merge_readiness", "merge"],
+        }
+    if session_ref:
+        return {
+            "action": "clarify_before_append_or_route_new",
+            "can_append_to_existing_session": False,
+            "requires_clarification": True,
+            "reason": "A Codex session_ref exists, but the new prompt is not confirmed to belong to the same goal/session.",
+            "next_step": "Ask whether to append to the observed Codex session or start/route a separate task.",
+            "not_evidence": ["execution_result", "review", "ci", "merge_readiness", "merge"],
+        }
+    return {
+        "action": "route_new_or_clarify",
+        "can_append_to_existing_session": False,
+        "requires_clarification": True,
+        "reason": "No observed Codex session_ref is available for safe resume or append handling.",
+        "next_step": "Route the prompt as a new task or ask one clarification before dispatch.",
+        "not_evidence": ["execution_result", "review", "ci", "merge_readiness", "merge"],
     }
 
 
