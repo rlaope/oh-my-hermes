@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 try:  # Keep installed plugin bundles usable even when the full package is absent.
-    from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
+    from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_omh_quality_intent, classify_workflow_intent
 except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
     from dataclasses import dataclass
 
@@ -27,6 +27,146 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             if self.intent_class == "delivery_intent":
                 return ()
             return (*self.mentioned_workflows, *self.mentioned_runtime_terms)
+
+    @dataclass(frozen=True)
+    class _FallbackOmhQualityIntent:
+        applies: bool
+        target_cues: tuple[str, ...]
+        improvement_cues: tuple[str, ...]
+        quality_cues: tuple[str, ...]
+        loop_cues: tuple[str, ...]
+        handoff_cues: tuple[str, ...]
+        customer_feedback_cues: tuple[str, ...]
+        matched_label: str = "semantic:omh_quality_improvement_loop"
+        primary_workflow: str = "ultraprocess"
+
+        @property
+        def matched_cues(self) -> tuple[str, ...]:
+            return (
+                *(f"target:{cue}" for cue in self.target_cues),
+                *(f"improve:{cue}" for cue in self.improvement_cues),
+                *(f"quality:{cue}" for cue in self.quality_cues),
+                *(f"loop:{cue}" for cue in self.loop_cues),
+                *(f"handoff:{cue}" for cue in self.handoff_cues),
+            )
+
+    def _fallback_contains_non_ascii(value: str) -> bool:
+        return any(ord(char) > 127 for char in value)
+
+    def _fallback_contains_bounded_english_cue(text: str, cue: str) -> bool:
+        parts = re.findall(r"[a-z0-9]+", cue)
+        if not parts:
+            return False
+        separator = r"[\s_-]+"
+        pattern = r"(?<![a-z0-9])" + separator.join(re.escape(part) for part in parts) + r"(?![a-z0-9])"
+        return re.search(pattern, text) is not None
+
+    def _fallback_matched_omh_quality_cues(cues: tuple[str, ...], text: str, compact: str) -> tuple[str, ...]:
+        matches = []
+        for cue in cues:
+            normalized_cue = unicodedata.normalize("NFKC", cue).casefold()
+            if not normalized_cue:
+                continue
+            if _fallback_contains_non_ascii(normalized_cue):
+                if normalized_cue in text or normalized_cue.replace(" ", "") in compact:
+                    matches.append(cue)
+                continue
+            if _fallback_contains_bounded_english_cue(text, normalized_cue):
+                matches.append(cue)
+        return tuple(matches)
+
+    def classify_omh_quality_intent(message: str) -> _FallbackOmhQualityIntent:
+        text = unicodedata.normalize("NFKC", message).casefold()
+        compact = text.replace(" ", "")
+        system_target_cues = []
+        if re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", text):
+            system_target_cues.append("omh")
+        system_target_cues.extend(cue for cue in ("oh-my-hermes", "oh my hermes") if cue in text and cue not in system_target_cues)
+        quality_domain_cues = _fallback_matched_omh_quality_cues(
+            (
+                "route quality",
+                "router",
+                "routing",
+                "route hint",
+                "context loss",
+                "context-loss",
+                "context safety",
+                "progress reporting",
+                "progress evidence",
+                "coding handoff",
+                "handoff reliability",
+                "라우터",
+                "라우팅",
+                "맥락",
+                "컨텍스트",
+                "컨텍스트 손실",
+                "진행상태",
+                "진행 상태",
+                "코딩 handoff",
+            ),
+            text,
+            compact,
+        )
+        improvement_cues = _fallback_matched_omh_quality_cues(
+            (
+                "improve",
+                "improvement",
+                "fix",
+                "fixed",
+                "fixes",
+                "fixing",
+                "harden",
+                "audit",
+                "find and fix",
+                "개선",
+                "고쳐",
+                "찾아",
+                "점검",
+            ),
+            text,
+            compact,
+        )
+        quality_cues = _fallback_matched_omh_quality_cues(
+            (
+                "bug",
+                "bugs",
+                "failure",
+                "loss",
+                "regression",
+                "reliability",
+                "quality",
+                "버그",
+                "유사버그",
+                "손실",
+                "신뢰성",
+                "품질",
+            ),
+            text,
+            compact,
+        )
+        loop_cues = _fallback_matched_omh_quality_cues(
+            ("loop", "continuous", "keep", "keeps", "keeping", "루프", "계속"),
+            text,
+            compact,
+        )
+        handoff_cues = _fallback_matched_omh_quality_cues(("coding handoff", "handoff", "코딩"), text, compact)
+        customer_feedback_cues = _fallback_matched_omh_quality_cues(
+            ("customer", "payment", "고객", "결제", "피드백", "제보"),
+            text,
+            compact,
+        )
+        applies = bool(system_target_cues and (quality_domain_cues or handoff_cues) and (improvement_cues or loop_cues or quality_cues))
+        if customer_feedback_cues and not system_target_cues:
+            applies = False
+        return _FallbackOmhQualityIntent(
+            applies=applies,
+            target_cues=(*tuple(system_target_cues), *quality_domain_cues),
+            improvement_cues=improvement_cues,
+            quality_cues=quality_cues,
+            loop_cues=loop_cues,
+            handoff_cues=handoff_cues,
+            customer_feedback_cues=customer_feedback_cues,
+        )
 
     def classify_workflow_intent(message: str) -> _FallbackWorkflowIntent:
         text = unicodedata.normalize("NFKC", message).casefold()
@@ -606,11 +746,18 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
     tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", normalized))
     hint_limit = max(max_hints, 0)
     intent = classify_workflow_intent(message)
+    omh_quality_intent = classify_omh_quality_intent(message)
     hints: list[dict[str, object]] = []
     if normalized.strip() and hint_limit:
-        if _prefers_workflow_learning_hint(intent):
+        if omh_quality_intent.applies:
+            hints.append(_omh_quality_improvement_hint(omh_quality_intent))
+        if len(hints) < hint_limit and _prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies:
             hints.append(_workflow_vocabulary_reference_hint(intent))
         for rule in _ROUTE_HINT_RULES:
+            if len(hints) >= hint_limit:
+                break
+            if _rule_suppressed_by_omh_quality_intent(rule, omh_quality_intent):
+                continue
             if _rule_suppressed_by_reference_intent(rule, intent):
                 continue
             phrase_matches = [phrase for phrase in rule["phrases"] if phrase in normalized]
@@ -618,6 +765,8 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
             if not phrase_matches and not token_matches:
                 continue
             workflow = str(rule["workflow"])
+            if any(isinstance(hint, dict) and hint.get("workflow") == workflow for hint in hints):
+                continue
             if workflow == "workflow-learning" and any(hint.get("workflow") == workflow for hint in hints):
                 continue
             context_card = workflow_context_card_for_workflow(workflow)
@@ -1079,6 +1228,28 @@ def _prefers_workflow_learning_hint(intent: object) -> bool:
     )
 
 
+def _omh_quality_improvement_hint(intent: object) -> dict[str, object]:
+    workflow = "ultraprocess"
+    context_card = workflow_context_card_for_workflow(workflow)
+    return {
+        "id": "omh_quality_improvement_loop",
+        "workflow": workflow,
+        "lane": "coding_handoff",
+        "next_action": "prepare_one_cycle_delivery",
+        "reason": (
+            "The whole request is about improving OMH routing, context, progress, or coding-handoff quality; "
+            "bug or failure words are evidence for a coding/process lane, not customer feedback triage."
+        ),
+        "fallback_action": "prepare_loop_or_coding_handoff_quality_regression",
+        "matched_cues": _bounded_matches([str(item) for item in getattr(intent, "matched_cues", ())]),
+        "adjacent_workflows": ["loop", "workflow-learning", "code-review", "agent-ops-review"],
+        "workflow_context_card": context_card,
+        "not_evidence_yet": list(context_card.get("not_evidence_until_observed", []))
+        if isinstance(context_card, dict)
+        else [],
+    }
+
+
 def _workflow_vocabulary_reference_hint(intent: object) -> dict[str, object]:
     workflow = "workflow-learning"
     context_card = workflow_context_card_for_workflow(workflow)
@@ -1109,6 +1280,10 @@ def _rule_suppressed_by_reference_intent(rule: dict[str, object], intent: object
     if not _prefers_workflow_learning_hint(intent):
         return False
     return str(rule.get("id", "")) == "coding_delivery"
+
+
+def _rule_suppressed_by_omh_quality_intent(rule: dict[str, object], intent: object) -> bool:
+    return bool(getattr(intent, "applies", False)) and str(rule.get("id", "")) == "customer_signal"
 
 
 def _unique_strings(values: object) -> list[str]:
