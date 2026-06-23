@@ -1900,8 +1900,8 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
             "coding_delegation executor_handoff codex_invocation.dispatch_text_template must keep {message} placeholder",
         )
     errors.extend(
-        validate_executor_local_capability_strategy(
-            handoff.get("executor_local_capability_strategy"),
+        validate_optional_executor_local_capability_strategy(
+            handoff,
             "coding_delegation executor_handoff executor_local_capability_strategy",
             expected_profile="codex",
         )
@@ -2033,6 +2033,21 @@ def validate_executor_local_capability_strategy(strategy: Any, label: str, *, ex
     return errors
 
 
+def validate_optional_executor_local_capability_strategy(
+    handoff: dict[str, Any],
+    label: str,
+    *,
+    expected_profile: str,
+) -> list[str]:
+    if "executor_local_capability_strategy" not in handoff:
+        return []
+    return validate_executor_local_capability_strategy(
+        handoff["executor_local_capability_strategy"],
+        label,
+        expected_profile=expected_profile,
+    )
+
+
 def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
     errors: list[str] = []
     _require(isinstance(handoff, dict), errors, "coding_delegation runtime_handoff must be an object")
@@ -2094,8 +2109,8 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
             _require(isinstance(invocation.get(key), str), errors, f"coding_delegation runtime_handoff invocation.{key} must be a string")
         _require("{message}" in str(invocation.get("dispatch_text_template", "")), errors, "coding_delegation runtime_handoff invocation.dispatch_text_template must keep {message}")
     errors.extend(
-        validate_executor_local_capability_strategy(
-            handoff.get("executor_local_capability_strategy"),
+        validate_optional_executor_local_capability_strategy(
+            handoff,
             "coding_delegation runtime_handoff executor_local_capability_strategy",
             expected_profile=str(handoff.get("selected_executor_profile", "")),
         )
@@ -2366,8 +2381,8 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
         _require(invocation.get("mode") == "copy_prompt", errors, "coding_delegation prompt_handoff invocation.mode must be copy_prompt")
         _require("{message}" in str(invocation.get("dispatch_text_template", "")), errors, "coding_delegation prompt_handoff invocation.dispatch_text_template must keep {message}")
     errors.extend(
-        validate_executor_local_capability_strategy(
-            handoff.get("executor_local_capability_strategy"),
+        validate_optional_executor_local_capability_strategy(
+            handoff,
             "coding_delegation prompt_handoff executor_local_capability_strategy",
             expected_profile=str(handoff.get("selected_executor_profile", "")),
         )

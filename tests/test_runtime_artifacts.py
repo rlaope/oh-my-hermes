@@ -44,7 +44,13 @@ from omh.runtime_artifacts import (
     write_runtime_observation,
     write_wrapper_contract,
 )
-from omh.runtime.records import RUNTIME_OBSERVATION_EVENTS, validate_coding_runtime_handoff, validate_isolation_plan
+from omh.runtime.records import (
+    RUNTIME_OBSERVATION_EVENTS,
+    validate_coding_executor_handoff,
+    validate_coding_prompt_handoff,
+    validate_coding_runtime_handoff,
+    validate_isolation_plan,
+)
 
 
 class RuntimeArtifactTests(unittest.TestCase):
@@ -276,6 +282,67 @@ class RuntimeArtifactTests(unittest.TestCase):
             errors = validate_coding_delegation_record(record)
 
             self.assertTrue(any("unsupported keys" in error and "message" in error for error in errors))
+
+    def test_v1_handoff_validators_accept_legacy_records_without_local_capability_strategy(self) -> None:
+        executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
+        prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
+        runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
+
+        for handoff, validator in (
+            (executor, validate_coding_executor_handoff),
+            (prompt, validate_coding_prompt_handoff),
+            (runtime, validate_coding_runtime_handoff),
+        ):
+            legacy = deepcopy(handoff)
+            del legacy["executor_local_capability_strategy"]
+
+            self.assertEqual(validator(legacy), [])
+
+    def test_v1_handoff_validators_still_reject_invalid_local_capability_strategy_when_present(self) -> None:
+        executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
+        prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
+        runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
+
+        for handoff, validator in (
+            (executor, validate_coding_executor_handoff),
+            (prompt, validate_coding_prompt_handoff),
+            (runtime, validate_coding_runtime_handoff),
+        ):
+            non_object = deepcopy(handoff)
+            non_object["executor_local_capability_strategy"] = None
+            self.assertIn("executor_local_capability_strategy must be an object", json.dumps(validator(non_object)))
+
+            invalid_schema = deepcopy(handoff)
+            invalid_schema["executor_local_capability_strategy"]["schema_version"] = "executor_local_capability_strategy/v0"
+            self.assertIn("executor_local_capability_strategy schema_version is invalid", json.dumps(validator(invalid_schema)))
+
+            invalid_boundary = deepcopy(handoff)
+            invalid_boundary["executor_local_capability_strategy"]["claim_boundary"] = "Use local capability output as evidence."
+            self.assertIn(
+                "executor_local_capability_strategy claim_boundary must preserve evidence boundary",
+                json.dumps(validator(invalid_boundary)),
+            )
+
+    def test_validate_runtime_accepts_legacy_executor_handoff_without_local_capability_strategy(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            payload = build_coding_delegation_payload("risky refactor", source="discord", executor_target="codex")
+            record = write_coding_delegation(
+                run_dir,
+                coding_delegation_record_payload(payload, "risky refactor"),
+            )
+            del record["executor_handoff"]["executor_local_capability_strategy"]
+            (run_dir / "coding_delegation.json").write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(summarize_delegated_coding_status(paths, run["run_id"])["prepared"]["status"], "prepared_not_observed")
 
     def test_validate_runtime_handoff_requires_boundary_evidence_contract(self) -> None:
         handoff = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
