@@ -171,6 +171,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "send_action",
     "codex_skill",
     "codex_invocation",
+    "executor_local_capability_strategy",
     "status",
     "recording_contract",
     "dispatch_contract",
@@ -195,6 +196,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "selected_executor_profile",
     "dispatchable",
     "invocation",
+    "executor_local_capability_strategy",
     "status",
     "recording_contract",
     "dispatch_contract",
@@ -218,6 +220,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "runtime_profile",
     "dispatchable",
     "invocation",
+    "executor_local_capability_strategy",
     "status",
     "recording_contract",
     "dispatch_contract",
@@ -266,6 +269,20 @@ CODING_RUNTIME_OBSERVATION_CONTRACT_KEYS = (
     "record_with",
     "allowed_events",
     "status_ladder",
+    "claim_boundary",
+)
+EXECUTOR_LOCAL_CAPABILITY_STRATEGY_SCHEMA_VERSION = "executor_local_capability_strategy/v1"
+EXECUTOR_LOCAL_CAPABILITY_STRATEGY_KEYS = (
+    "schema_version",
+    "profile",
+    "mode",
+    "installation_observed",
+    "execution_observed",
+    "preferred_sources",
+    "stage_guidance",
+    "examples_if_available",
+    "selection_rule",
+    "fallback",
     "claim_boundary",
 )
 EXECUTOR_READINESS_SCHEMA_VERSION = "executor_readiness/v1"
@@ -872,6 +889,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
         "report_contract": _compact_report_contract(value.get("report_contract", {})),
         "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
     }
+    strategy = _compact_optional_executor_local_capability_strategy(value)
+    if strategy:
+        compact["executor_local_capability_strategy"] = strategy
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -914,6 +934,9 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
         "verification": _compact_string_list(value.get("verification", [])),
         "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
     }
+    strategy = _compact_optional_executor_local_capability_strategy(value)
+    if strategy:
+        compact["executor_local_capability_strategy"] = strategy
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -962,6 +985,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
         "verification": _compact_string_list(value.get("verification", [])),
         "evidence_contract": _compact_evidence_contract(value.get("evidence_contract", {})),
     }
+    strategy = _compact_optional_executor_local_capability_strategy(value)
+    if strategy:
+        compact["executor_local_capability_strategy"] = strategy
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -1033,6 +1059,42 @@ def _compact_executor_readiness(value: Any) -> dict[str, Any]:
     if isinstance(profiles, list):
         compact["profiles"] = [_compact_executor_readiness(profile) for profile in profiles if isinstance(profile, dict)]
     return compact
+
+
+def _compact_optional_executor_local_capability_strategy(value: dict[str, Any]) -> dict[str, Any]:
+    strategy = value.get("executor_local_capability_strategy")
+    if not isinstance(strategy, dict) or not strategy:
+        return {}
+    return _compact_executor_local_capability_strategy(strategy)
+
+
+def _compact_executor_local_capability_strategy(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or not value:
+        return {}
+    examples = value.get("examples_if_available", {})
+    compact_examples = {
+        str(key): _compact_string_list(items)
+        for key, items in examples.items()
+        if isinstance(items, list)
+    } if isinstance(examples, dict) else {}
+    stage_guidance = value.get("stage_guidance", {})
+    compact_stage_guidance = {
+        str(key): str(item)
+        for key, item in stage_guidance.items()
+    } if isinstance(stage_guidance, dict) else {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "profile": str(value.get("profile", "")),
+        "mode": str(value.get("mode", "")),
+        "installation_observed": bool(value.get("installation_observed", False)),
+        "execution_observed": bool(value.get("execution_observed", False)),
+        "preferred_sources": _compact_string_list(value.get("preferred_sources", [])),
+        "stage_guidance": compact_stage_guidance,
+        "examples_if_available": compact_examples,
+        "selection_rule": str(value.get("selection_rule", "")),
+        "fallback": str(value.get("fallback", "")),
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
 
 
 def _compact_prompt_invocation(value: Any) -> dict[str, str]:
@@ -1844,6 +1906,13 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
             errors,
             "coding_delegation executor_handoff codex_invocation.dispatch_text_template must keep {message} placeholder",
         )
+    errors.extend(
+        validate_optional_executor_local_capability_strategy(
+            handoff,
+            "coding_delegation executor_handoff executor_local_capability_strategy",
+            expected_profile="codex",
+        )
+    )
     brief = handoff.get("execution_brief")
     _require(isinstance(brief, dict), errors, "coding_delegation executor_handoff execution_brief must be an object")
     if isinstance(brief, dict):
@@ -1927,6 +1996,65 @@ def validate_executor_selection(selection: Any, label: str) -> list[str]:
     return errors
 
 
+def validate_executor_local_capability_strategy(strategy: Any, label: str, *, expected_profile: str) -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(strategy, dict), errors, f"{label} must be an object")
+    if not isinstance(strategy, dict):
+        return errors
+    extra_keys = sorted(set(strategy) - set(EXECUTOR_LOCAL_CAPABILITY_STRATEGY_KEYS))
+    missing_keys = sorted(set(EXECUTOR_LOCAL_CAPABILITY_STRATEGY_KEYS) - set(strategy))
+    _require(not extra_keys, errors, f"{label} has unsupported keys: {extra_keys}")
+    _require(not missing_keys, errors, f"{label} is missing keys: {missing_keys}")
+    _require(
+        strategy.get("schema_version") == EXECUTOR_LOCAL_CAPABILITY_STRATEGY_SCHEMA_VERSION,
+        errors,
+        f"{label} schema_version is invalid",
+    )
+    _require(strategy.get("profile") == expected_profile, errors, f"{label} profile must match selected executor")
+    _require(strategy.get("mode") == "discover_then_use_when_helpful", errors, f"{label} mode is invalid")
+    _require(strategy.get("installation_observed") is False, errors, f"{label} installation_observed must be false")
+    _require(strategy.get("execution_observed") is False, errors, f"{label} execution_observed must be false")
+    for key in ("preferred_sources",):
+        _require(isinstance(strategy.get(key), list), errors, f"{label} {key} must be a list")
+        if isinstance(strategy.get(key), list):
+            for index, value in enumerate(strategy[key]):
+                _require(isinstance(value, str), errors, f"{label} {key}[{index}] must be a string")
+    stage_guidance = strategy.get("stage_guidance")
+    _require(isinstance(stage_guidance, dict), errors, f"{label} stage_guidance must be an object")
+    if isinstance(stage_guidance, dict):
+        for key, value in stage_guidance.items():
+            _require(isinstance(key, str), errors, f"{label} stage_guidance keys must be strings")
+            _require(isinstance(value, str), errors, f"{label} stage_guidance.{key} must be a string")
+    examples = strategy.get("examples_if_available")
+    _require(isinstance(examples, dict), errors, f"{label} examples_if_available must be an object")
+    if isinstance(examples, dict):
+        for key, values in examples.items():
+            _require(isinstance(key, str), errors, f"{label} examples_if_available keys must be strings")
+            _require(isinstance(values, list), errors, f"{label} examples_if_available.{key} must be a list")
+            if isinstance(values, list):
+                for index, value in enumerate(values):
+                    _require(isinstance(value, str), errors, f"{label} examples_if_available.{key}[{index}] must be a string")
+    for key in ("selection_rule", "fallback", "claim_boundary"):
+        _require(isinstance(strategy.get(key), str), errors, f"{label} {key} must be a string")
+    _require("not evidence" in str(strategy.get("claim_boundary", "")).lower(), errors, f"{label} claim_boundary must preserve evidence boundary")
+    return errors
+
+
+def validate_optional_executor_local_capability_strategy(
+    handoff: dict[str, Any],
+    label: str,
+    *,
+    expected_profile: str,
+) -> list[str]:
+    if "executor_local_capability_strategy" not in handoff:
+        return []
+    return validate_executor_local_capability_strategy(
+        handoff["executor_local_capability_strategy"],
+        label,
+        expected_profile=expected_profile,
+    )
+
+
 def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
     errors: list[str] = []
     _require(isinstance(handoff, dict), errors, "coding_delegation runtime_handoff must be an object")
@@ -1987,6 +2115,13 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         for key in CODING_RUNTIME_HANDOFF_INVOCATION_KEYS:
             _require(isinstance(invocation.get(key), str), errors, f"coding_delegation runtime_handoff invocation.{key} must be a string")
         _require("{message}" in str(invocation.get("dispatch_text_template", "")), errors, "coding_delegation runtime_handoff invocation.dispatch_text_template must keep {message}")
+    errors.extend(
+        validate_optional_executor_local_capability_strategy(
+            handoff,
+            "coding_delegation runtime_handoff executor_local_capability_strategy",
+            expected_profile=str(handoff.get("selected_executor_profile", "")),
+        )
+    )
 
     brief = handoff.get("runtime_brief")
     _require(isinstance(brief, dict), errors, "coding_delegation runtime_handoff runtime_brief must be an object")
@@ -2252,6 +2387,13 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
             _require(isinstance(invocation.get(key), str), errors, f"coding_delegation prompt_handoff invocation.{key} must be a string")
         _require(invocation.get("mode") == "copy_prompt", errors, "coding_delegation prompt_handoff invocation.mode must be copy_prompt")
         _require("{message}" in str(invocation.get("dispatch_text_template", "")), errors, "coding_delegation prompt_handoff invocation.dispatch_text_template must keep {message}")
+    errors.extend(
+        validate_optional_executor_local_capability_strategy(
+            handoff,
+            "coding_delegation prompt_handoff executor_local_capability_strategy",
+            expected_profile=str(handoff.get("selected_executor_profile", "")),
+        )
+    )
     for key in ("scope", "non_goals", "acceptance_criteria", "verification"):
         _require(isinstance(handoff.get(key), list), errors, f"coding_delegation prompt_handoff {key} must be a list")
         if isinstance(handoff.get(key), list):

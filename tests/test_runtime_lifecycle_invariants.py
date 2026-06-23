@@ -85,6 +85,35 @@ class RuntimeLifecycleInvariantTests(unittest.TestCase):
             self.assertIn("worktree_creation", runtime_handoff["handoff"]["runtime_handoff"]["evidence_contract"]["prepared_is_not"])
             self.assertEqual(validate_runtime(paths)["runs"], [])
 
+    def test_legacy_prompt_and_runtime_handoffs_without_local_capability_strategy_validate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            prompt_only = create_or_resume_wrapper_session(paths, "risky refactor", source="discord")
+            prompt_only_id = str(prompt_only["session"]["session_id"])
+            record_plan_decision(paths, prompt_only_id, "accept")
+            select_wrapper_session_executor(paths, prompt_only_id, "claude-code")
+            prepare_wrapper_session_handoff(paths, prompt_only_id, "risky refactor")
+            prompt_session_path = paths.runtime_wrapper_sessions_dir / prompt_only_id / "session.json"
+            prompt_session = json.loads(prompt_session_path.read_text(encoding="utf-8"))
+            del prompt_session["prompt_handoff"]["executor_local_capability_strategy"]
+            prompt_session_path.write_text(json.dumps(prompt_session, sort_keys=True), encoding="utf-8")
+
+            runtime = create_or_resume_wrapper_session(paths, "safe feature implementation plan", source="slack")
+            runtime_id = str(runtime["session"]["session_id"])
+            record_plan_decision(paths, runtime_id, "accept")
+            select_wrapper_session_executor(paths, runtime_id, "hermes")
+            prepare_wrapper_session_handoff(paths, runtime_id, "safe feature implementation plan")
+            runtime_session_path = paths.runtime_wrapper_sessions_dir / runtime_id / "session.json"
+            runtime_session = json.loads(runtime_session_path.read_text(encoding="utf-8"))
+            del runtime_session["runtime_handoff"]["executor_local_capability_strategy"]
+            runtime_session_path.write_text(json.dumps(runtime_session, sort_keys=True), encoding="utf-8")
+
+            validation = validate_runtime(paths)
+
+            self.assertTrue(validation["ok"], validation)
+            self.assertEqual(validation["runs"], [])
+
     def test_runtime_completion_claim_waits_for_dispatch_result_and_verification(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

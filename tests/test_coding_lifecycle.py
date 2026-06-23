@@ -76,6 +76,12 @@ class CodingLifecycleTests(unittest.TestCase):
             self.assertEqual(payload["status"]["lifecycle_status"], "prepared")
             self.assertEqual(payload["status"]["next_action"], "dispatch_to_executor")
             self.assertEqual(record["executor_handoff"]["executor_target"], "codex")
+            strategy = record["executor_handoff"]["executor_local_capability_strategy"]
+            self.assertEqual(strategy["schema_version"], "executor_local_capability_strategy/v1")
+            self.assertEqual(strategy["profile"], "codex")
+            self.assertFalse(strategy["installation_observed"])
+            self.assertFalse(strategy["execution_observed"])
+            self.assertIn("plain Codex", strategy["fallback"])
             self.assertFalse(payload["status"]["execution"]["observed"])
             self.assertNotIn(message, json.dumps(payload))
             self.assertTrue((paths.runtime_runs_dir / run_id / "coding_delegation.json").exists())
