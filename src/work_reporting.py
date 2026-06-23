@@ -331,7 +331,14 @@ def build_work_observation_summary_from_status(
         ],
         safe_summary=str(status_payload.get("safe_summary", "")),
         next_action=str(status_payload.get("next_action") or "show_status"),
-        not_evidence_until_observed=_status_payload_active_gaps(execution, verification, review, ci, merge),
+        not_evidence_until_observed=_status_payload_active_gaps(
+            execution,
+            verification,
+            review,
+            ci,
+            merge,
+            runtime_observation=runtime_observation,
+        ),
     )
 
 
@@ -1248,6 +1255,8 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
     runtime_failed_or_blocked = _runtime_failed_or_blocked_status(runtime_observation)
     if runtime_failed_or_blocked:
         return runtime_failed_or_blocked
+    if terminal_requested and _runtime_completion_satisfied(runtime_observation):
+        return "completed"
     if terminal_requested and _terminal_evidence_satisfied(execution, verification, review, ci, merge):
         return "completed"
     if next_action.startswith("surface_") or "blocker" in next_action:
@@ -1271,7 +1280,11 @@ def _status_payload_active_gaps(
     review: dict[str, Any],
     ci: dict[str, Any],
     merge: dict[str, Any],
+    *,
+    runtime_observation: dict[str, Any] | None = None,
 ) -> list[str]:
+    if _runtime_completion_satisfied(_object(runtime_observation)):
+        return []
     return [
         item
         for item in (
@@ -1364,7 +1377,7 @@ def _runtime_observation_events(runtime_observation: dict[str, Any]) -> list[dic
 
 def _runtime_observation_event(latest: dict[str, Any], event_type: str, fallback_status: str) -> dict[str, Any]:
     record = _object(latest.get(event_type))
-    status = fallback_status if fallback_status == "not_observed" else str(record.get("status") or fallback_status)
+    status = fallback_status if fallback_status == "not_observed" else _runtime_observation_event_status(record, fallback_status)
     event: dict[str, Any] = {
         "event_type": str(record.get("event_type") or event_type),
         "status": status,
@@ -1373,6 +1386,15 @@ def _runtime_observation_event(latest: dict[str, Any], event_type: str, fallback
         event["summary"] = str(record.get("summary") or "")
         event["evidence_refs"] = _string_items(record.get("evidence_refs"))
     return event
+
+
+def _runtime_observation_event_status(record: dict[str, Any], fallback_status: str) -> str:
+    status = _token(record.get("status") or fallback_status)
+    if status in {"observed", "completed", "passed", "satisfied", "success", "succeeded", "verified"}:
+        return "observed"
+    if status in {"blocked", "failed"}:
+        return status
+    return "not_observed"
 
 
 def _failed_or_blocked_status(*stages: dict[str, Any]) -> str:
@@ -1400,6 +1422,26 @@ def _runtime_failed_or_blocked_status(runtime_observation: dict[str, Any]) -> st
         if status == "blocked":
             blocked = True
     return "blocked" if blocked else ""
+
+
+def _runtime_completion_satisfied(runtime_observation: dict[str, Any]) -> bool:
+    if not runtime_observation:
+        return False
+    if _string_items(runtime_observation.get("failed_events")) or _string_items(runtime_observation.get("blocked_events")):
+        return False
+    if _string_items(runtime_observation.get("not_observed_events")) or _string_items(runtime_observation.get("missing_events")):
+        return False
+    observed_events = _string_items(runtime_observation.get("observed_events"))
+    if not observed_events:
+        return False
+    latest = _object(runtime_observation.get("latest"))
+    success_statuses = {"", "observed", "completed", "passed", "satisfied", "success", "succeeded", "verified"}
+    for event_type in observed_events:
+        record = _object(latest.get(event_type))
+        status = _token(record.get("status") or "observed")
+        if status not in success_statuses:
+            return False
+    return True
 
 
 def _post_prepared_work_observed(

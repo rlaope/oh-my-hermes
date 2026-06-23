@@ -558,6 +558,45 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("merge", summary["observations"]["not_observed_events"])
         self.assertNotIn("Still waiting on observed proof for", rendered)
 
+    def test_runtime_observation_only_completion_overrides_legacy_stage_gaps(self) -> None:
+        status_payload = {
+            "run_id": "run-runtime-complete",
+            "prepared": {"status": "prepared_not_observed", "workflow": "team", "harness": "coding"},
+            "execution": {"observed": False, "status": "not_observed", "evidence_refs": []},
+            "verification": {"observed": False, "status": "not_observed", "evidence_refs": []},
+            "runtime_observation": {
+                "observed_events": ["worker_result", "verification"],
+                "blocked_events": [],
+                "failed_events": [],
+                "not_observed_events": [],
+                "missing_events": [],
+                "latest": {
+                    "worker_result": {
+                        "status": "observed",
+                        "summary": "runtime worker completed",
+                        "evidence_refs": ["runtime/result.jsonl#worker_result"],
+                    },
+                    "verification": {
+                        "status": "passed",
+                        "summary": "runtime verification passed",
+                        "evidence_refs": ["runtime/result.jsonl#verification"],
+                    },
+                },
+            },
+            "next_action": "report_runtime_observed",
+            "lifecycle_status": "reportable",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="completion")
+        rendered = render_completion_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(summary["observations"]["not_observed_events"], [])
+        self.assertIn("runtime/result.jsonl#worker_result", summary["observations"]["evidence_refs"])
+        self.assertIn("runtime/result.jsonl#verification", summary["observations"]["evidence_refs"])
+        self.assertNotIn("Still waiting on observed proof for", rendered)
+
     def test_empty_successful_background_completion_is_silent(self) -> None:
         rendered = build_background_completion_report(
             output="[Background process proc_b05484479563 finished with exit code 0~ Here's the final output:]",
