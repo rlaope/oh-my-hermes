@@ -234,7 +234,7 @@ def route_chat_message(
 def _task_card_overrides_explicit_invocation(task_card: dict[str, object] | None) -> bool:
     if not isinstance(task_card, dict):
         return False
-    return task_card.get("task_type") == "router_design_feedback"
+    return task_card.get("task_type") in {"router_design_feedback", "omh_cli_maintenance"}
 
 
 def route_chat_event(

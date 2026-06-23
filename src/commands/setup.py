@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - Windows compatibility guard.
     tty = None
 
 from .. import __version__
-from ..command_path import inspect_omh_command_path
+from ..command_path import COMMAND_PATH_MISSING_NEXT_ACTION, inspect_omh_command_path
 from ..capabilities.registry import capability_summary
 from ..capabilities.skills import skill_capabilities
 from ..config_adapter import ensure_external_dir, external_dirs, read_config, remove_external_dir, write_config
@@ -1632,6 +1632,8 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
 def _doctor_human_next_action(next_action: str, *, language: str) -> str:
     if next_action == DEFAULT_DOCTOR_NEXT_ACTION:
         return tr(language, "doctor_default_next_action")
+    if next_action == COMMAND_PATH_MISSING_NEXT_ACTION:
+        return tr(language, "command_path_missing_next")
     return next_action
 
 

@@ -20,8 +20,8 @@ from .catalog import (
     surface_exposure_for_skill,
     workflow_reference_definitions,
 )
-from .packaging import builtin_skill_templates
-from .render import SkillTemplate, router_skill, workflow_reference_payload, workflow_skill
+from .packaging import builtin_skill_reference_templates, builtin_skill_templates
+from .render import SkillReferenceTemplate, SkillTemplate, router_skill, workflow_reference_payload, workflow_skill
 
 __all__ = [
     "CORE_SKILLS",
@@ -31,6 +31,7 @@ __all__ = [
     "SkillExample",
     "SurfaceExposure",
     "SkillTemplate",
+    "SkillReferenceTemplate",
     "builtin_definitions",
     "builtin_harnesses",
     "capability_definitions",
@@ -44,6 +45,7 @@ __all__ = [
     "surface_exposure_for_skill",
     "workflow_reference_definitions",
     "builtin_skill_templates",
+    "builtin_skill_reference_templates",
     "router_skill",
     "workflow_reference_payload",
     "workflow_skill",

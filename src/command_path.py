@@ -6,6 +6,8 @@ import shutil
 
 COMMAND_PATH_SCHEMA_VERSION = "omh_command_path/v1"
 INSTALLED_COMMAND_PATH_CHECK_SCHEMA = "installed_omh_path_check/v1"
+COMMAND_PATH_FOUND_NEXT_ACTION = "Run `omh doctor` after setup to verify Hermes registration."
+COMMAND_PATH_MISSING_NEXT_ACTION = "Use the absolute command path printed by the installer, or add that directory to PATH."
 
 
 def inspect_omh_command_path(command: str = "omh") -> dict[str, object]:
@@ -25,9 +27,9 @@ def inspect_omh_command_path(command: str = "omh") -> dict[str, object]:
             else f"`{command}` is not discoverable on PATH for this shell"
         ),
         "next_action": (
-            "Run `omh doctor` after setup to verify Hermes registration."
+            COMMAND_PATH_FOUND_NEXT_ACTION
             if found
-            else "Use the absolute command path printed by the installer, or add that directory to PATH."
+            else COMMAND_PATH_MISSING_NEXT_ACTION
         ),
         "observed": found,
     }

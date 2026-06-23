@@ -451,6 +451,10 @@ by default: `omh install`, `omh update`, `omh uninstall`, `omh apply`,
 `omh list`, `omh recommend`, `omh playbook ...`, `omh profile ...`,
 `omh probe`, and `omh snippet --output`. Use `--json` on those commands, or set
 `OMH_OUTPUT=json`, when a wrapper or automation needs the complete payload.
+Short chat requests such as `omh update`, `omh setup`, `omh doctor`, `omh
+install`, and `omh list` should stay in that maintenance lane: run the requested
+command, summarize observed output, and avoid repo changes unless the user asks
+for code work separately.
 Backend/control-plane commands such as `chat`, `coding`, `runtime`, `goal`,
 `loop`, `memory`, `state`, `harness`, `release`, and `demo` print JSON by
 design because they are wrapper contracts rather than the normal human chat

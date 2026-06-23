@@ -17,7 +17,7 @@ from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
-from omh.skill_pack import builtin_skill_templates
+from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 class CliTests(unittest.TestCase):
     def test_no_arg_cli_shows_welcome_instead_of_error(self) -> None:
         status, stdout, stderr = run_cli([], output_json=False)
@@ -1455,7 +1455,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("관측 경계", stdout)
             self.assertIn("플러그인 브리지: 로컬 준비 완료", stdout)
             self.assertIn("Hermes 런타임: 아직 관측 안 됨", stdout)
-            self.assertIn("Hermes Agent를 열고 시도하세요", stdout)
+            self.assertTrue(
+                "Hermes Agent를 열고 시도하세요" in stdout
+                or "설치기가 출력한 절대 경로" in stdout
+            )
+            self.assertNotIn("Use the absolute command path printed by the installer", stdout)
             self.assertIn("상태 로그:", stdout)
 
             install_root = root / "install"
@@ -3820,6 +3824,29 @@ class CliTests(unittest.TestCase):
         self.assertIn("file or text lookup", response["body"])
         self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
         self.assertNotIn("choose the right workflow", response["body"])
+
+    def test_chat_route_and_interact_guard_short_omh_maintenance_command(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "omh update"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertEqual(route["selected_skill"], "oh-my-hermes")
+        self.assertEqual(route["task_card"]["task_type"], "omh_cli_maintenance")
+        self.assertEqual(route["task_card"]["route_level"], "operator_maintenance_command")
+        self.assertEqual(route["task_card"]["recommended_next_action"], "run_omh_update")
+        self.assertIn("avoid_repo_mutation", route["task_card"]["operation_primitives"])
+
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "omh update"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["next_action"], "run_omh_update")
+        self.assertEqual(payload["chat_response"]["kind"], "task_card")
+        self.assertIn("maintenance update path", payload["chat_response"]["body"])
+        self.assertIn("code changes require a separate request", payload["chat_response"]["body"])
+        self.assertIn("Hermes reload", payload["chat_response"]["claim_boundary"])
 
     def test_chat_interact_safe_feature_presents_plan_and_disabled_handoff(self) -> None:
         message = "I want to safely add a feature to this repo"
@@ -6474,6 +6501,14 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "apply"])[0], 0)
                 self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "list"])[0], 0)
                 self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "doctor"])[0], 0)
+                list_status, list_stdout, list_stderr = run_cli(
+                    ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "list"],
+                    output_json=False,
+                )
+                self.assertEqual(list_stderr, "")
+                self.assertEqual(list_status, 0)
+                self.assertLess(len(list_stdout), 4_000)
+                self.assertIn("--json", list_stdout)
 
             manifest = json.loads((omh_home / "manifest.json").read_text(encoding="utf-8"))
             names = {skill["name"] for skill in manifest["skills"]}
@@ -7658,10 +7693,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             checked = json.loads(stdout)
+            expected_tap_files = len(builtin_skill_templates()) + len(builtin_skill_reference_templates())
             self.assertIn("checked", checked)
             self.assertTrue(checked["tap_skills"]["ok"])
-            self.assertEqual(checked["tap_skills"]["expected"], len(builtin_skill_templates()))
-            self.assertEqual(checked["tap_skills"]["checked"], len(builtin_skill_templates()))
+            self.assertEqual(checked["tap_skills"]["expected"], expected_tap_files)
+            self.assertEqual(checked["tap_skills"]["checked"], expected_tap_files)
             self.assertEqual(checked["tap_skills"]["missing"], [])
             self.assertEqual(checked["tap_skills"]["stale"], [])
             self.assertEqual(checked["tap_skills"]["extra"], [])

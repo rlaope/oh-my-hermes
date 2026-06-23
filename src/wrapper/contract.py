@@ -186,6 +186,11 @@ VISIBLE_ACTIONS = (
     "replay_regression_cases",
     "check_learning_index",
     "rebuild_learning_index",
+    "run_omh_update",
+    "run_omh_setup",
+    "run_omh_doctor",
+    "run_omh_install",
+    "run_omh_list",
     "cancel",
 )
 _ROUTE_TO_MODE = {"dispatch": "plan", "clarify": "clarify", "fallback": "clarify"}
@@ -442,6 +447,11 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_agent_ops_review": ("prepare_agent_ops_review", "Open ops review"),
     "start_ultraprocess": ("start_ultraprocess", "Start ultraprocess"),
     "audit_learning_readiness": ("audit_learning_readiness", "Audit learning"),
+    "run_omh_update": ("run_omh_update", "Run omh update"),
+    "run_omh_setup": ("run_omh_setup", "Run omh setup"),
+    "run_omh_doctor": ("run_omh_doctor", "Run omh doctor"),
+    "run_omh_install": ("run_omh_install", "Run omh install"),
+    "run_omh_list": ("run_omh_list", "Run omh list"),
     "run_hermes_research": ("run_hermes_research", "Start research"),
     "prepare_strategy_brief": ("prepare_strategy_brief", "Prepare strategy"),
     "prepare_meeting_brief": ("prepare_meeting_brief", "Prepare brief"),
@@ -1128,11 +1138,14 @@ def _chat_response_from_task_card(
     secret_policy = _nested(task_card, "secret_policy")
     gateway_transfer = _nested(task_card, "gateway_transfer")
     first_safe_action = str(task_card.get("first_safe_action", "")).strip()
+    summary = str(task_card.get("user_facing_summary", "")).strip()
+    not_a_workflow = _string_items(task_card.get("not_a_workflow", []))
     secret_action = str(secret_policy.get("recommended_action", "")).strip()
     invariant = str(gateway_transfer.get("invariant", "")).strip().replace("_", " ")
 
     body_lines = [
-        f"This is a {task_type} task, not a migration workflow.",
+        summary or f"This is a {task_type} task.",
+        f"Not a workflow: {', '.join(_display_items(not_a_workflow[:5]))}." if not_a_workflow else "",
         f"First safe action: {first_safe_action}" if first_safe_action else "",
         f"Use workflow rails: {', '.join(rails[:4])}." if rails else "",
         f"Track primitives: {', '.join(_display_items(primitives[:7]))}." if primitives else "",
@@ -1810,6 +1823,8 @@ def _resolve_mode(mode: str, route: dict[str, object], *, message: str = "") -> 
     action = str(route.get("action", "fallback"))
     if action != "dispatch":
         return _ROUTE_TO_MODE.get(action, "clarify")
+    if isinstance(route.get("task_card"), dict):
+        return "route"
     selected = str(route.get("selected_skill", ""))
     if selected == "cancel":
         return "route"
