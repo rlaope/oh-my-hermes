@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
 
 
@@ -1467,6 +1468,21 @@ WORKFLOW_LEARNING_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; workflow improvement requests should become a learning trace, review candidate, or regression instead of generic skill management.",
     activation_status="active",
 )
+OMH_QUALITY_IMPROVEMENT_GUARD = RoutingGuardRule(
+    id="omh_quality_improvement_loop_before_feedback_triage",
+    rule=(
+        "OMH self-improvement requests about router quality, context loss, progress reporting, or coding-handoff "
+        "reliability should route to the process/coding lane even when bug words are present."
+    ),
+    matched_label="guard:omh_quality_improvement_loop",
+    preferred_skills=("ultraprocess",),
+    score_boost=48,
+    why=(
+        "Matched semantic OMH quality-improvement intent; bug/failure terms are evidence for improving OMH "
+        "routing/context/handoff behavior, not customer feedback triage."
+    ),
+    activation_status="active",
+)
 WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     id="web_research_before_process",
     rule="Plain web/source/current-evidence requests should route to web research before one-cycle delivery.",
@@ -1643,6 +1659,7 @@ ROUTING_GUARD_RULES = (
     FEEDBACK_BEFORE_CODING_GUARD,
     PRODUCT_SHAPING_GUARD,
     WORKFLOW_LEARNING_GUARD,
+    OMH_QUALITY_IMPROVEMENT_GUARD,
     PAPER_LEARNING_GUARD,
     RESEARCH_DEPARTMENT_GUARD,
     SCHEDULED_OPS_BLUEPRINT_GUARD,
@@ -1708,6 +1725,8 @@ def active_routing_guard_rules(
         rules.append(PRODUCT_SHAPING_GUARD)
     if _workflow_learning_guard_applies(normalized_query, query_tokens):
         rules.append(WORKFLOW_LEARNING_GUARD)
+    if _omh_quality_improvement_guard_applies(normalized_query):
+        rules.append(OMH_QUALITY_IMPROVEMENT_GUARD)
     delivery_cycle_applies = _delivery_cycle_guard_applies(normalized_query, query_tokens)
     paper_learning_applies = (
         not delivery_cycle_applies and _paper_learning_guard_applies(normalized_query, query_tokens)
@@ -1800,6 +1819,10 @@ def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[st
     if future_improvement and workflow_or_skill and bool(_WORKFLOW_LEARNING_CONTEXT_TOKENS & query_tokens):
         return True
     return False
+
+
+def _omh_quality_improvement_guard_applies(normalized_query: str) -> bool:
+    return classify_omh_quality_intent(normalized_query).applies
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

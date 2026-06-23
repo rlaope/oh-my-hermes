@@ -188,6 +188,31 @@ class WorkflowIntent:
         return (*self.mentioned_workflows, *self.mentioned_runtime_terms)
 
 
+@dataclass(frozen=True)
+class OmhQualityIntent:
+    applies: bool
+    target_cues: tuple[str, ...]
+    improvement_cues: tuple[str, ...]
+    quality_cues: tuple[str, ...]
+    loop_cues: tuple[str, ...]
+    handoff_cues: tuple[str, ...]
+    customer_feedback_cues: tuple[str, ...]
+    matched_label: str = "semantic:omh_quality_improvement_loop"
+    primary_workflow: str = "ultraprocess"
+
+    @property
+    def matched_cues(self) -> tuple[str, ...]:
+        return _compact_tuple(
+            (
+                *(f"target:{cue}" for cue in self.target_cues),
+                *(f"improve:{cue}" for cue in self.improvement_cues),
+                *(f"quality:{cue}" for cue in self.quality_cues),
+                *(f"loop:{cue}" for cue in self.loop_cues),
+                *(f"handoff:{cue}" for cue in self.handoff_cues),
+            )
+        )
+
+
 def classify_workflow_intent(message: str) -> WorkflowIntent:
     """Classify whether workflow vocabulary is a reference or execution intent."""
     normalized = normalized_phrase(message)
@@ -251,6 +276,160 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
         missing_requirements_cues=missing_requirements_cues,
         routing_context=routing_context,
     )
+
+
+_OMH_SYSTEM_TARGET_CUES = (
+    "omh",
+    "oh-my-hermes",
+    "oh my hermes",
+)
+_OMH_QUALITY_DOMAIN_CUES = (
+    "route quality",
+    "router quality",
+    "router",
+    "routing",
+    "route hint",
+    "context loss",
+    "context-loss",
+    "context safety",
+    "context-safety",
+    "progress reporting",
+    "progress evidence",
+    "event progress",
+    "coding handoff",
+    "handoff reliability",
+    "라우터",
+    "라우팅",
+    "맥락",
+    "컨텍스트",
+    "컨텍스트 손실",
+    "진행상태",
+    "진행 상태",
+    "코딩 handoff",
+)
+_OMH_IMPROVEMENT_CUES = (
+    "improve",
+    "improvement",
+    "fix",
+    "harden",
+    "strengthen",
+    "audit",
+    "find and fix",
+    "keep finding",
+    "개선",
+    "개선해",
+    "고쳐",
+    "찾아",
+    "점검",
+    "강화",
+)
+_OMH_QUALITY_PROBLEM_CUES = (
+    "bug",
+    "bugs",
+    "failure",
+    "failures",
+    "loss",
+    "missing",
+    "regression",
+    "reliability",
+    "quality",
+    "performance balance",
+    "버그",
+    "유사버그",
+    "실패",
+    "손실",
+    "누락",
+    "회귀",
+    "신뢰성",
+    "품질",
+    "성능균형",
+)
+_OMH_LOOP_CUES = (
+    "loop",
+    "continuous",
+    "continue",
+    "keep",
+    "recurring",
+    "루프",
+    "계속",
+    "반복",
+)
+_OMH_HANDOFF_CUES = (
+    "coding handoff",
+    "handoff",
+    "코딩",
+    "위임",
+)
+_CUSTOMER_FEEDBACK_CUES = (
+    "customer",
+    "customers",
+    "user feedback",
+    "payment failure",
+    "payment failures",
+    "payment",
+    "billing",
+    "checkout",
+    "product feedback",
+    "feature request",
+    "고객",
+    "사용자",
+    "결제",
+    "피드백",
+    "제보",
+)
+
+
+def classify_omh_quality_intent(message: str) -> OmhQualityIntent:
+    """Classify deterministic OMH self-improvement loop intent.
+
+    This is a semantic feature layer over local cues: product/customer bug words
+    are only decisive when the request subject is customer feedback; OMH bug
+    words become evidence for improving routing, context, progress, or handoff
+    quality when the request is about OMH itself.
+    """
+    normalized = normalized_phrase(message)
+    compact = normalized.replace(" ", "")
+
+    system_target_cues = _matched_omh_system_target_cues(normalized)
+    quality_domain_cues = _matched_cues(_OMH_QUALITY_DOMAIN_CUES, normalized, compact)
+    improvement_cues = _matched_cues(_OMH_IMPROVEMENT_CUES, normalized, compact)
+    quality_cues = _matched_cues(_OMH_QUALITY_PROBLEM_CUES, normalized, compact)
+    loop_cues = _matched_cues(_OMH_LOOP_CUES, normalized, compact)
+    handoff_cues = _matched_cues(_OMH_HANDOFF_CUES, normalized, compact)
+    customer_feedback_cues = _matched_cues(_CUSTOMER_FEEDBACK_CUES, normalized, compact)
+
+    target_cues = _compact_tuple((*system_target_cues, *quality_domain_cues))
+    has_omh_subject = bool(system_target_cues)
+    has_quality_domain = bool(quality_domain_cues or handoff_cues)
+    has_improvement_motion = bool(improvement_cues or loop_cues)
+    has_quality_evidence = bool(quality_cues)
+    customer_feedback_subject = bool(customer_feedback_cues) and not has_omh_subject
+    applies = (
+        has_omh_subject
+        and has_quality_domain
+        and (has_improvement_motion or has_quality_evidence)
+        and not customer_feedback_subject
+    )
+
+    return OmhQualityIntent(
+        applies=applies,
+        target_cues=target_cues,
+        improvement_cues=improvement_cues,
+        quality_cues=quality_cues,
+        loop_cues=loop_cues,
+        handoff_cues=handoff_cues,
+        customer_feedback_cues=customer_feedback_cues,
+    )
+
+
+def _matched_omh_system_target_cues(normalized: str) -> tuple[str, ...]:
+    cues: list[str] = []
+    if re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", normalized):
+        cues.append("omh")
+    for cue in ("oh-my-hermes", "oh my hermes"):
+        if cue in normalized and cue not in cues:
+            cues.append(cue)
+    return tuple(cues)
 
 
 def is_workflow_meta_or_feedback(message: str) -> bool:

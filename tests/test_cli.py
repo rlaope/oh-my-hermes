@@ -147,6 +147,53 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertNotIn("catalog_question", payload)
 
+    def test_context_brief_routes_omh_quality_loops_to_process_before_feedback_triage(self) -> None:
+        cases = (
+            "updated OMH로 라우터/맥락/컨텍스트 손실/성능균형/코딩 handoff 유사버그를 계속 찾아 개선하는 루프 실행",
+            "Run a loop to find and fix OMH router context-loss and coding handoff bugs with progress evidence.",
+            "OMH 라우팅 품질과 진행상태 보고 버그를 계속 찾아서 코딩 handoff 신뢰성을 개선해줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(
+                    ["context", "brief", "--source", "discord", "--prompt-context", "--json", message],
+                    output_json=False,
+                )
+
+                self.assertEqual(status, 0, stderr)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                route_hint = payload["route_hint"]
+                self.assertEqual(route_hint["primary_workflow"], "ultraprocess")
+                self.assertEqual(route_hint["primary_next_action"], "prepare_one_cycle_delivery")
+                self.assertNotEqual(route_hint["hints"][0]["workflow"], "feedback-triage")
+                self.assertIn("selected=ultraprocess", payload["prompt_context"])
+                self.assertIn("not workflow execution", route_hint["claim_boundary"])
+                self.assertFalse(payload["message"]["raw_prompt_echoed"])
+                self.assertFalse(payload["message"]["raw_prompt_stored"])
+
+    def test_context_brief_keeps_customer_bug_reports_on_feedback_triage(self) -> None:
+        cases = (
+            "고객 버그 제보를 분류해줘",
+            "payment failures keep coming up from customer feedback",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(
+                    ["context", "brief", "--source", "discord", "--prompt-context", "--json", message],
+                    output_json=False,
+                )
+
+                self.assertEqual(status, 0, stderr)
+                self.assertEqual(stderr, "")
+                payload = json.loads(stdout)
+                route_hint = payload["route_hint"]
+                self.assertEqual(route_hint["primary_workflow"], "feedback-triage")
+                self.assertEqual(route_hint["primary_next_action"], "classify_signal_and_prepare_investigation")
+                self.assertIn("selected=feedback-triage", payload["prompt_context"])
+
     def test_chat_interact_routes_workflow_learning_to_audit_actions(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "interact", "--source", "discord", "learn from this workflow run"],
@@ -2845,6 +2892,43 @@ class CliTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["skill"], "feedback-triage")
         self.assertEqual(recommendations[0]["next_action"], "triage_feedback")
         self.assertIn("Feedback triage", recommendations[0]["evidence_boundary"])
+
+    def test_recommend_omh_quality_loop_routes_to_process_despite_bug_terms(self) -> None:
+        cases = (
+            "updated OMH로 라우터/맥락/컨텍스트 손실/성능균형/코딩 handoff 유사버그를 계속 찾아 개선하는 루프 실행",
+            "Run a loop to find and fix OMH router context-loss and coding handoff bugs with progress evidence.",
+            "OMH 라우팅 품질과 진행상태 보고 버그를 계속 찾아서 코딩 handoff 신뢰성을 개선해줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "ultraprocess")
+                self.assertEqual(recommendations[0]["next_action"], "start_ultraprocess")
+                self.assertIn("guard:omh_quality_improvement_loop", recommendations[0]["matched"])
+                self.assertNotEqual(recommendations[0]["skill"], "feedback-triage")
+                self.assertIn("process orchestration", recommendations[0]["evidence_boundary"])
+
+    def test_recommend_customer_bug_feedback_stays_feedback_triage(self) -> None:
+        cases = (
+            "고객 버그 제보를 분류해줘",
+            "payment failures keep coming up from customer feedback",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "feedback-triage")
+                self.assertEqual(recommendations[0]["next_action"], "triage_feedback")
+                self.assertIn("Feedback triage", recommendations[0]["evidence_boundary"])
 
     def test_recommend_multilingual_signals_route_without_external_translation(self) -> None:
         cases = (

@@ -52,6 +52,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         "missed_workflow_operating_record_recovery",
         "product_shaping_before_ops_review",
         "workflow_learning_before_skill_management",
+        "omh_quality_improvement_loop_before_feedback_triage",
     }
 )
 
