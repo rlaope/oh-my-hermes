@@ -177,6 +177,8 @@ class CodingLifecycleTests(unittest.TestCase):
 
             self.assertFalse(payload["wrapper"]["verification_observed"])
             self.assertEqual(payload["wrapper"]["completion_status"], "failed")
+            self.assertEqual(payload["status"]["verification"]["status"], "failed")
+            self.assertFalse(payload["status"]["verification"]["satisfied"])
             self.assertEqual(payload["status"]["next_action"], "record_verification_evidence")
             self.assertFalse(payload["status"]["can_report_completion"])
             self.assertIn("tests failed", payload["status"]["wrapper"]["unobserved_gaps"])

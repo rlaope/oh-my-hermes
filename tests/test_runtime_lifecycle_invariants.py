@@ -38,6 +38,8 @@ class RuntimeLifecycleInvariantTests(unittest.TestCase):
             self.assertFalse(status["wrapper"]["prompt_dispatched"])
             self.assertFalse(status["execution"]["observed"])
             self.assertFalse(status["verification"]["observed"])
+            self.assertEqual(status["verification"]["status"], "not_observed")
+            self.assertFalse(status["verification"]["satisfied"])
             self.assertEqual(status["next_action"], "dispatch_to_executor")
             policy = status["progress_reporting_policy"]
             self.assertTrue(policy["metadata_only"])
@@ -138,6 +140,8 @@ class RuntimeLifecycleInvariantTests(unittest.TestCase):
             self.assertEqual(status["next_action"], "report_completion_with_evidence")
             self.assertTrue(status["execution"]["observed"])
             self.assertTrue(status["verification"]["observed"])
+            self.assertEqual(status["verification"]["status"], "passed")
+            self.assertTrue(status["verification"]["satisfied"])
             self.assertTrue(validate_runtime(paths, run_id)["ok"])
 
 

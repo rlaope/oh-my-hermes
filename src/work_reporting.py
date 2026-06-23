@@ -48,6 +48,15 @@ _FORBIDDEN_RAW_KEYS = {
     "transcript",
     "conversation",
 }
+_POST_PREPARED_NEXT_ACTIONS = {
+    "wait_for_executor_evidence",
+    "record_verification_evidence",
+    "record_review_evidence",
+    "record_ci_evidence",
+    "record_merge_readiness",
+}
+_VERIFICATION_SUCCESS_STATUSES = {"passed", "satisfied", "completed", "verified"}
+_NON_PROGRESS_STATUSES = {"", "not_observed", "not_required", "pending"}
 
 
 def build_work_observation_summary(
@@ -586,6 +595,7 @@ def _plain(lines: list[str]) -> str:
 
 def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
     prepared = _object(status_payload.get("prepared"))
+    wrapper = _object(status_payload.get("wrapper"))
     execution = _object(status_payload.get("execution"))
     verification = _object(status_payload.get("verification"))
     review = _object(status_payload.get("review"))
@@ -598,11 +608,22 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
         "report_merge_ready",
         "report_merged",
     }
+    failed_or_blocked = _failed_or_blocked_status(execution, verification, review, ci, merge)
+    if failed_or_blocked:
+        return failed_or_blocked
     if terminal_requested and _terminal_evidence_satisfied(execution, verification, review, ci, merge):
         return "completed"
     if next_action.startswith("surface_") or "blocker" in next_action:
         return "blocked"
-    if str(prepared.get("status", "")) == "prepared_not_observed":
+    if str(prepared.get("status", "")) == "prepared_not_observed" and not _post_prepared_work_observed(
+        next_action=next_action,
+        wrapper=wrapper,
+        execution=execution,
+        verification=verification,
+        review=review,
+        ci=ci,
+        merge=merge,
+    ):
         return "prepared_not_observed"
     return "in_progress"
 
@@ -617,11 +638,17 @@ def _terminal_evidence_satisfied(
     return (
         execution.get("observed") is True
         and str(execution.get("status", "")) == "completed"
-        and verification.get("observed") is True
+        and _verification_satisfied(verification)
         and _gate_satisfied(review)
         and _gate_satisfied(ci)
         and _gate_satisfied(merge)
     )
+
+
+def _verification_satisfied(verification: dict[str, Any]) -> bool:
+    if verification.get("satisfied") is True:
+        return True
+    return verification.get("observed") is True and str(verification.get("status", "")) in _VERIFICATION_SUCCESS_STATUSES
 
 
 def _gate_satisfied(stage: dict[str, Any]) -> bool:
@@ -643,6 +670,43 @@ def _observed_stage_evidence_refs(stage: dict[str, Any]) -> list[str]:
     if stage.get("observed") is True or stage.get("satisfied") is True:
         return _string_items(stage.get("evidence_refs"))
     return []
+
+
+def _failed_or_blocked_status(*stages: dict[str, Any]) -> str:
+    blocked = False
+    for stage in stages:
+        status = str(stage.get("status", ""))
+        if status == "failed":
+            return "failed"
+        if status == "blocked":
+            blocked = True
+    return "blocked" if blocked else ""
+
+
+def _post_prepared_work_observed(
+    *,
+    next_action: str,
+    wrapper: dict[str, Any],
+    execution: dict[str, Any],
+    verification: dict[str, Any],
+    review: dict[str, Any],
+    ci: dict[str, Any],
+    merge: dict[str, Any],
+) -> bool:
+    if next_action in _POST_PREPARED_NEXT_ACTIONS:
+        return True
+    if wrapper.get("prompt_dispatched") is True or wrapper.get("hermes_response_observed") is True:
+        return True
+    return any(_stage_has_observed_progress(stage) for stage in (execution, verification, review, ci, merge))
+
+
+def _stage_has_observed_progress(stage: dict[str, Any]) -> bool:
+    if not stage:
+        return False
+    status = str(stage.get("status", ""))
+    if status in _NON_PROGRESS_STATUSES:
+        return False
+    return stage.get("observed") is True or stage.get("satisfied") is True or bool(_string_items(stage.get("evidence_refs")))
 
 
 def _status_phrase(status: str) -> str:

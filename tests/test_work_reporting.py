@@ -181,6 +181,67 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("```", rendered)
         self.assertNotIn("{", rendered)
 
+    def test_status_projection_advances_after_dispatch_even_if_prepared_status_remains(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-dispatched",
+            "prepared": {
+                "workflow": "plan",
+                "harness": "coding-handling",
+                "status": "prepared_not_observed",
+                "executor_target": "codex",
+            },
+            "wrapper": {"prompt_dispatched": True, "completion_status": "started"},
+            "execution": {"observed": False, "status": "not_observed", "evidence_refs": []},
+            "verification": {"observed": False, "status": "not_observed", "satisfied": False, "expected": ["pytest"]},
+            "review": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "ci": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "merge": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "next_action": "wait_for_executor_evidence",
+            "lifecycle_status": "dispatched",
+            "safe_summary": "A codex coding handoff was dispatched, but executor completion is not observed yet.",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="progress")
+        rendered = render_progress_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "in_progress")
+        self.assertIn("in progress", rendered)
+        self.assertNotIn("prepared but not observed", rendered)
+        self.assertIn("execution", summary["evidence_boundary"]["not_evidence_until_observed"])
+
+    def test_status_projection_advances_after_executor_result_even_if_prepared_status_remains(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-awaiting-verification",
+            "prepared": {
+                "workflow": "plan",
+                "harness": "coding-handling",
+                "status": "prepared_not_observed",
+                "executor_target": "codex",
+            },
+            "wrapper": {"prompt_dispatched": True, "completion_status": "started"},
+            "execution": {"observed": True, "status": "completed", "evidence_refs": ["executor-result.json"]},
+            "verification": {"observed": False, "status": "not_observed", "satisfied": False, "expected": ["pytest"]},
+            "review": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "ci": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "merge": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "next_action": "record_verification_evidence",
+            "lifecycle_status": "awaiting_verification",
+            "safe_summary": "The codex executor is observed as completed, but verification evidence is not observed yet.",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="progress")
+        rendered = render_progress_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "in_progress")
+        self.assertEqual(summary["observations"]["evidence_refs"], ["executor-result.json"])
+        self.assertIn("in progress", rendered)
+        self.assertIn("executor-result.json", rendered)
+        self.assertNotIn("prepared but not observed", rendered)
+
     def test_status_projection_does_not_complete_or_render_unobserved_refs(self) -> None:
         status_payload = {
             "schema_version": "delegated_coding_status/v1",
@@ -224,7 +285,7 @@ class WorkReportingTests(unittest.TestCase):
                 "executor_target": "codex",
             },
             "execution": {"observed": True, "status": "completed", "evidence_refs": ["executor-result.json"]},
-            "verification": {"observed": True, "expected": ["pytest"]},
+            "verification": {"observed": True, "status": "passed", "satisfied": True, "expected": ["pytest"]},
             "review": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
             "ci": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
             "merge": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
@@ -239,6 +300,40 @@ class WorkReportingTests(unittest.TestCase):
         self.assertEqual(summary["observations"]["evidence_refs"], ["executor-result.json"])
         self.assertIn("Completed: Work status for run-complete.", rendered)
         self.assertIn("executor-result.json", rendered)
+
+    def test_status_projection_rejects_terminal_completion_when_verification_failed(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-failed-verification",
+            "prepared": {
+                "workflow": "plan",
+                "harness": "coding-handling",
+                "status": "prepared_not_observed",
+                "executor_target": "codex",
+            },
+            "execution": {"observed": True, "status": "completed", "evidence_refs": ["executor-result.json"]},
+            "verification": {
+                "observed": True,
+                "status": "failed",
+                "satisfied": False,
+                "expected": ["pytest"],
+                "evidence_refs": ["pytest-failed"],
+            },
+            "review": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "ci": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "merge": {"required": False, "observed": True, "status": "not_required", "satisfied": True, "evidence_refs": []},
+            "next_action": "report_completion_with_evidence",
+            "lifecycle_status": "reportable",
+            "safe_summary": "Verification failed after executor completion.",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="completion")
+        rendered = render_completion_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "failed")
+        self.assertIn("Completion is not observed yet", rendered)
+        self.assertNotIn("Completed:", rendered)
 
 
 if __name__ == "__main__":
