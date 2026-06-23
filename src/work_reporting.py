@@ -1270,6 +1270,7 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
         review=review,
         ci=ci,
         merge=merge,
+        runtime_observation=runtime_observation,
     ):
         return "prepared_not_observed"
     return "in_progress"
@@ -1360,6 +1361,7 @@ def _runtime_observation_events(runtime_observation: dict[str, Any]) -> list[dic
     latest = _object(runtime_observation.get("latest"))
     events: list[dict[str, Any]] = []
     seen: set[str] = set()
+    runtime_applicable = _runtime_observation_applicable(runtime_observation)
     for field, fallback_status in (
         ("observed_events", "observed"),
         ("blocked_events", "blocked"),
@@ -1367,6 +1369,8 @@ def _runtime_observation_events(runtime_observation: dict[str, Any]) -> list[dic
         ("not_observed_events", "not_observed"),
         ("missing_events", "not_observed"),
     ):
+        if field in {"not_observed_events", "missing_events"} and not runtime_applicable:
+            continue
         for event_type in _string_items(runtime_observation.get(field)):
             event_key = _token(event_type)
             if event_key in seen:
@@ -1374,6 +1378,17 @@ def _runtime_observation_events(runtime_observation: dict[str, Any]) -> list[dic
             seen.add(event_key)
             events.append(_runtime_observation_event(latest, event_type, fallback_status))
     return events
+
+
+def _runtime_observation_applicable(runtime_observation: dict[str, Any]) -> bool:
+    return bool(
+        _string_items(runtime_observation.get("observed_events"))
+        or _string_items(runtime_observation.get("blocked_events"))
+        or _string_items(runtime_observation.get("failed_events"))
+        or _token(runtime_observation.get("next_action") or "") in {"report_runtime_observed", "record_runtime_observation"}
+        or _token(runtime_observation.get("status") or runtime_observation.get("lifecycle_status") or "")
+        in {"running", "started", "completed", "reportable", "runtime_observed"}
+    )
 
 
 def _runtime_observation_event(latest: dict[str, Any], event_type: str, fallback_status: str) -> dict[str, Any]:
@@ -1464,12 +1479,23 @@ def _post_prepared_work_observed(
     review: dict[str, Any],
     ci: dict[str, Any],
     merge: dict[str, Any],
+    runtime_observation: dict[str, Any] | None = None,
 ) -> bool:
     if next_action in _POST_PREPARED_NEXT_ACTIONS:
         return True
     if wrapper.get("prompt_dispatched") is True or wrapper.get("hermes_response_observed") is True:
         return True
+    if _runtime_observation_has_progress(_object(runtime_observation)):
+        return True
     return any(_stage_has_observed_progress(stage) for stage in (execution, verification, review, ci, merge))
+
+
+def _runtime_observation_has_progress(runtime_observation: dict[str, Any]) -> bool:
+    return bool(
+        _string_items(runtime_observation.get("observed_events"))
+        or _string_items(runtime_observation.get("blocked_events"))
+        or _string_items(runtime_observation.get("failed_events"))
+    )
 
 
 def _stage_has_observed_progress(stage: dict[str, Any]) -> bool:

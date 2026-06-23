@@ -383,6 +383,69 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("pytest-failed", rendered)
         self.assertNotIn("Completed:", rendered)
 
+    def test_runtime_observed_start_counts_as_progress_not_prepared_only(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-runtime-started",
+            "prepared": {"status": "prepared_not_observed", "workflow": "team", "harness": "coding"},
+            "execution": {"observed": False, "status": "not_observed", "evidence_refs": []},
+            "verification": {"observed": False, "status": "not_observed", "evidence_refs": []},
+            "runtime_observation": {
+                "observed_events": ["runtime_start"],
+                "blocked_events": [],
+                "failed_events": [],
+                "not_observed_events": [],
+                "missing_events": ["worker_result", "verification"],
+                "latest": {
+                    "runtime_start": {
+                        "status": "observed",
+                        "summary": "runtime started",
+                        "evidence_refs": ["runtime/runtime_observations.jsonl#runtime_start"],
+                    }
+                },
+            },
+            "next_action": "wait_for_executor_evidence",
+            "lifecycle_status": "running",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="progress")
+        rendered = render_progress_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "in_progress")
+        self.assertIn("runtime/runtime_observations.jsonl#runtime_start", summary["observations"]["evidence_refs"])
+        self.assertIn("runtime/runtime_observations.jsonl#runtime_start", rendered)
+        self.assertNotIn("prepared but not observed", rendered)
+
+    def test_legacy_completed_status_ignores_absent_runtime_missing_ladder(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-legacy-complete",
+            "prepared": {"status": "prepared_not_observed", "workflow": "plan", "harness": "coding"},
+            "execution": {"observed": True, "status": "completed", "evidence_refs": ["exec"]},
+            "verification": {"observed": True, "status": "passed", "satisfied": True, "evidence_refs": ["pytest"]},
+            "runtime_observation": {
+                "observed_events": [],
+                "blocked_events": [],
+                "failed_events": [],
+                "not_observed_events": [],
+                "missing_events": ["runtime_start", "worktree_creation", "worker_result", "verification"],
+                "latest": {},
+            },
+            "next_action": "report_completion_with_evidence",
+            "lifecycle_status": "reportable",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="completion")
+        rendered = render_completion_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(summary["observations"]["not_observed_events"], [])
+        self.assertNotIn("runtime_start", rendered)
+        self.assertNotIn("worker_result", rendered)
+        self.assertNotIn("Still waiting on observed proof for", rendered)
+
     def test_runtime_observation_terminal_events_override_in_progress_status(self) -> None:
         for field, event_status, expected_status in (
             ("failed_events", "failed", "failed"),
