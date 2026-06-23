@@ -1218,7 +1218,7 @@ def _offer_github_star_before_setup(*, language: str, use_color: bool) -> None:
 
 
 def _try_star_github_repo() -> dict[str, object]:
-    command = ["gh", "repo", "star", "rlaope/oh-my-hermes"]
+    command = ["gh", "api", "-X", "PUT", "/user/starred/rlaope/oh-my-hermes"]
     try:
         completed = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
     except FileNotFoundError:

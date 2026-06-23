@@ -7188,7 +7188,7 @@ class CliTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         run.assert_called_once_with(
-            ["gh", "repo", "star", "rlaope/oh-my-hermes"],
+            ["gh", "api", "-X", "PUT", "/user/starred/rlaope/oh-my-hermes"],
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
