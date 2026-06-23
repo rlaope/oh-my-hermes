@@ -560,6 +560,31 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("Background process", rendered)
         self.assertNotIn("Here's the final output", rendered)
 
+    def test_background_completion_does_not_mislabel_plain_command_output_as_checks(self) -> None:
+        rendered = build_background_completion_report(
+            exit_code=0,
+            command="pytest tests/test_work_reporting.py",
+            output="1 passed in 0.2s",
+        )
+
+        self.assertIsNotNone(rendered)
+        assert rendered is not None
+        self.assertIn("completed successfully", rendered)
+        self.assertIn("1 passed in 0.2s", rendered)
+        self.assertNotIn("Checks:", rendered)
+        self.assertNotIn("Checks: 1 pass", rendered)
+
+    def test_background_completion_can_summarize_tabular_check_output_without_command_hint(self) -> None:
+        rendered = build_background_completion_report(
+            exit_code=0,
+            output="DCO\tpass\t4s\thttps://github.example/checks/dco",
+        )
+
+        self.assertIsNotNone(rendered)
+        assert rendered is not None
+        self.assertIn("Checks: 1 pass.", rendered)
+        self.assertIn("- DCO: pass (4s) https://github.example/checks/dco.", rendered)
+
     def test_structured_check_rollup_keeps_status_duration_and_links(self) -> None:
         rendered = format_check_rollup(
             [

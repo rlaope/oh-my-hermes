@@ -426,7 +426,7 @@ def build_background_completion_report(
     visible_output = sanitize_user_report_text(visible_output, locale=locale, voice=voice)
     if resolved_exit_code == 0 and not visible_output.strip():
         return None
-    if visible_output.strip() or "gh pr checks" in command.casefold():
+    if _should_render_background_check_rollup(command=command, output=visible_output):
         check_rollup = format_check_rollup(visible_output, locale=locale, voice=voice)
         if check_rollup:
             return check_rollup
@@ -912,6 +912,34 @@ def _meaningful_output_lines(output: str) -> list[str]:
         if len(lines) >= 4:
             break
     return lines
+
+
+def _should_render_background_check_rollup(*, command: str, output: str) -> bool:
+    """Return true when background output is plausibly CI/check rollup text."""
+
+    if not str(output or "").strip():
+        return False
+    command_lower = str(command or "").casefold()
+    if "gh pr checks" in command_lower or "gh run watch" in command_lower:
+        return True
+    meaningful_lines = [
+        _strip_ansi(line).strip()
+        for line in str(output or "").splitlines()
+        if line.strip() and not _is_check_watch_noise(line) and not _is_check_header(line)
+    ]
+    if not meaningful_lines:
+        return False
+    for line in meaningful_lines:
+        # `gh pr checks` rows are tabular (`name<TAB>status<TAB>duration<TAB>url`) or
+        # aligned by repeated spaces. Avoid treating ordinary text like
+        # `1 passed in 0.2s` as a check row.
+        if "\t" in line:
+            pieces = [piece.strip() for piece in re.split(r"\t+", line) if piece.strip()]
+        else:
+            pieces = [piece.strip() for piece in re.split(r"\s{2,}", line) if piece.strip()]
+        if len(pieces) >= 2 and any(_normalize_check_status(piece) for piece in pieces[1:]):
+            return True
+    return False
 
 
 def _strip_check_watch_noise(output: str) -> str:
