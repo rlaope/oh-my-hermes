@@ -1255,7 +1255,8 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
     runtime_failed_or_blocked = _runtime_failed_or_blocked_status(runtime_observation)
     if runtime_failed_or_blocked:
         return runtime_failed_or_blocked
-    if terminal_requested and _runtime_completion_satisfied(runtime_observation):
+    runtime_terminal_requested = _runtime_terminal_requested(runtime_observation)
+    if (terminal_requested or runtime_terminal_requested) and _runtime_completion_satisfied(runtime_observation):
         return "completed"
     if terminal_requested and _terminal_evidence_satisfied(execution, verification, review, ci, merge):
         return "completed"
@@ -1442,6 +1443,16 @@ def _runtime_completion_satisfied(runtime_observation: dict[str, Any]) -> bool:
         if status not in success_statuses:
             return False
     return True
+
+
+def _runtime_terminal_requested(runtime_observation: dict[str, Any]) -> bool:
+    next_action = _token(runtime_observation.get("next_action") or "")
+    status = _token(runtime_observation.get("status") or runtime_observation.get("lifecycle_status") or "")
+    return next_action in {"report_runtime_observed", "report_completion_with_evidence"} or status in {
+        "completed",
+        "reportable",
+        "runtime_observed",
+    }
 
 
 def _post_prepared_work_observed(

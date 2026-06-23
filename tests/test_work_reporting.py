@@ -570,6 +570,7 @@ class WorkReportingTests(unittest.TestCase):
                 "failed_events": [],
                 "not_observed_events": [],
                 "missing_events": [],
+                "next_action": "report_runtime_observed",
                 "latest": {
                     "worker_result": {
                         "status": "observed",
@@ -583,8 +584,8 @@ class WorkReportingTests(unittest.TestCase):
                     },
                 },
             },
-            "next_action": "report_runtime_observed",
-            "lifecycle_status": "reportable",
+            "next_action": "wait_for_executor_evidence",
+            "lifecycle_status": "awaiting_executor",
         }
 
         summary = build_work_observation_summary_from_status(status_payload, report_kind="completion")
