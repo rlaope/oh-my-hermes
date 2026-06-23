@@ -287,7 +287,7 @@ class PluginDistributionTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "Safely add feature without overclaiming.",
+                    "implement safe status feature in src/runtime/status.py without overclaiming",
                 ]
             )
             self.assertEqual(status, 0)
@@ -369,7 +369,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(context_brief["source_backend"], "package_context")
             self.assertEqual(context_brief["route_hint"]["primary_workflow"], "img-summary")
             self.assertIn("generic tool can render", context_brief["normal_response_contract"]["when_generic_tool_is_available"])
-            self.assertIn("workflow=img-summary", context_brief["prompt_context"])
+            self.assertIn("selected=img-summary", context_brief["prompt_context"])
             self.assertFalse(context_brief["message"]["raw_prompt_echoed"])
             self.assertNotIn("secret-token-123", json.dumps(context_brief, sort_keys=True))
 

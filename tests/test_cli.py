@@ -98,7 +98,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["source"], "discord")
         self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
         self.assertEqual(payload["route_hint"]["primary_next_action"], "prepare_visual_prompt_card")
-        self.assertIn("workflow=img-summary", payload["prompt_context"])
+        self.assertIn("selected=img-summary", payload["prompt_context"])
         self.assertIn("generic tool can render", payload["normal_response_contract"]["when_generic_tool_is_available"])
         self.assertFalse(payload["message"]["raw_prompt_echoed"])
         self.assertFalse(payload["message"]["raw_prompt_stored"])
@@ -3788,7 +3788,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["route_hint"]["primary_workflow"], "workflow-learning")
         self.assertIn("[OMH Route Hint]", payload["prompt_context"])
-        self.assertIn("workflow=workflow-learning", payload["prompt_context"])
+        self.assertIn("selected=workflow-learning", payload["prompt_context"])
         self.assertIn("Prompt context is for Hermes routing guidance only", payload["prompt_context_boundary"])
 
     def test_chat_route_file_lookup_does_not_emit_workflow_clarification(self) -> None:
@@ -5235,6 +5235,169 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(json.loads(stdout)["status"]["verification"], "requested")
 
+    def test_chat_codex_progress_sanitizes_logs_and_session_status_exposes_resume(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home_args = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            raw_log = "\n".join(
+                [
+                    json.dumps({"type": "tool_call", "tool": "rg", "args": "rg codex tests"}),
+                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/codex_progress.py"}),
+                    json.dumps({"type": "reasoning", "analysis": "do not expose hidden reasoning"}),
+                    json.dumps({"role": "assistant", "content": "I changed files and will run tests."}),
+                ]
+            )
+            log_path = root / "codex.jsonl"
+            log_path.write_text(raw_log, encoding="utf-8")
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "codex-progress", "--stdin", "--evidence-ref", "codex-raw"], stdin_text=raw_log)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            progress = json.loads(stdout)
+            self.assertEqual(progress["schema_version"], "codex_progress_adapter/v1")
+            self.assertFalse(progress["adapter_contract"]["raw_events_exposed"])
+            self.assertFalse(progress["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertIn("Codex changed files.", progress["chat_summary"])
+            self.assertNotIn("do not expose hidden reasoning", json.dumps(progress))
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "codex-progress", "--jsonl", str(root / "missing.jsonl")])
+            self.assertNotEqual(status, 0)
+            self.assertEqual(stdout, "")
+            self.assertIn("missing.jsonl", stderr)
+
+            message = "risky refactor"
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "start",
+                    "--source",
+                    "discord",
+                    "--source-event-id",
+                    "m1",
+                    "--channel-ref",
+                    "c1",
+                    message,
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            session_id = json.loads(stdout)["session"]["session_id"]
+            self.assertEqual(run_cli(home_args + ["chat", "session", "accept-plan", session_id])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "select-executor", session_id, "codex"])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "prepare-handoff", session_id, message])[0], 0)
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "open-executor",
+                    session_id,
+                    "--observed",
+                    "--external-session-ref",
+                    "codex-thread-1",
+                    "--codex-session-ref",
+                    "codex-session-1",
+                    "--codex-thread-ref",
+                    "codex-thread-1",
+                    "--codex-log-jsonl",
+                    str(log_path),
+                    "--codex-log-ref",
+                    "codex-jsonl",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            opened = json.loads(stdout)
+            codex_session = opened["status"]["codex_session"]
+            self.assertEqual(codex_session["session_ref"], "codex-session-1")
+            self.assertEqual(codex_session["thread_ref"], "codex-thread-1")
+            self.assertEqual(codex_session["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertEqual(opened["status"]["codex_progress"]["event_count"], 4)
+            self.assertIn("Codex changed files.", opened["status"]["codex_progress"]["observable_activity"])
+            self.assertEqual(opened["status"]["result"], "not_observed")
+            self.assertEqual(opened["status"]["verification"], "not_requested")
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "codex-review",
+                    "--codex-session-ref",
+                    "codex-session-1",
+                    "--codex-thread-ref",
+                    "codex-thread-1",
+                    "--codex-log-jsonl",
+                    str(log_path),
+                    "--codex-log-ref",
+                    "codex-jsonl",
+                    "--evidence-ref",
+                    "codex-review-summary",
+                    "--codex-review-status",
+                    "changes_requested",
+                    "--codex-review-summary",
+                    "Codex review found one bounded issue for the executor to fix.",
+                    "--codex-review-finding-count",
+                    "1",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            review = json.loads(stdout)
+            self.assertEqual(review["schema_version"], "codex_review_adapter/v1")
+            self.assertEqual(review["codex_review"]["schema_version"], "codex_review_summary/v1")
+            self.assertEqual(review["codex_review"]["status"], "changes_requested")
+            self.assertEqual(review["codex_review"]["finding_count"], 1)
+            self.assertEqual(review["codex_review"]["handback"]["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertFalse(review["adapter_contract"]["raw_logs_exposed"])
+            self.assertFalse(review["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertIn("Codex review found one bounded issue", review["chat_summary"])
+            self.assertNotIn("do not expose hidden reasoning", json.dumps(review))
+
+            follow_up_prompt = "continue the same PR with a small follow-up"
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "codex-followup",
+                    "--session-id",
+                    session_id,
+                    "--codex-log-jsonl",
+                    str(log_path),
+                    "--codex-log-ref",
+                    "codex-jsonl",
+                    "--evidence-ref",
+                    "codex-review-summary",
+                    "--codex-review-status",
+                    "changes_requested",
+                    "--codex-review-summary",
+                    "Codex review found one bounded issue for the executor to fix.",
+                    "--codex-review-finding-count",
+                    "1",
+                    follow_up_prompt,
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            followup = json.loads(stdout)
+            self.assertEqual(followup["schema_version"], "codex_prompt_handling_contract/v1")
+            self.assertEqual(followup["recommendation"]["action"], "append_followup_to_observed_codex_session")
+            self.assertEqual(followup["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertEqual(followup["active_codex"]["latest_progress"]["event_count"], 4)
+            self.assertFalse(followup["adapter_contract"]["raw_logs_exposed"])
+            self.assertFalse(followup["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertEqual(followup["codex_review"]["status"], "changes_requested")
+            self.assertEqual(followup["codex_review"]["handback"]["recommended_action"], "resume_codex_for_review_fixes")
+            self.assertEqual(followup["codex_review"]["handback"]["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertNotIn(follow_up_prompt, json.dumps(followup))
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "codex-followup", "separate task"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["recommendation"]["action"], "route_new_or_clarify")
+
     def test_runtime_observe_rejects_plain_workflow_run_without_runtime_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -5363,7 +5526,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
-            hostile = "refactor api; rm -rf / # nope"
+            hostile = "implement cleanup of duplicated routing code in src/routing/policy.py with secret-token-123"
 
             status, stdout, stderr = run_cli(
                 [
@@ -5405,6 +5568,133 @@ class CliTests(unittest.TestCase):
             self.assertEqual(shown["coding_delegation"]["executor_handoff"]["executor_target"], "codex")
             self.assertNotIn(hostile, json.dumps(shown["coding_delegation"]))
 
+    def test_coding_delegate_record_blocks_meta_vocabulary_without_runtime_mutation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            message = (
+                "OMH developer test: Codex coding handoff and ultraprocess one-cycle delivery "
+                "are vocabulary only; no requirements yet."
+            )
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    message,
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "coding_delegation/v1")
+            self.assertEqual(payload["status"], "blocked_requirements_missing")
+            self.assertFalse(payload["recorded"])
+            self.assertEqual(payload["runtime"]["recorded"], False)
+            self.assertEqual(payload["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertEqual(payload["runtime"]["run_created"], False)
+            self.assertEqual(payload["runtime"]["record_status"], "blocked_requirements_missing")
+            self.assertEqual(payload["runtime"]["next_action"], "ask_requirements_or_prepare_plan")
+            self.assertFalse((omh_home / "runtime" / "runs").exists())
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "hud", "--json"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            hud = json.loads(stdout)
+            self.assertNotIn("coding-agent:prepared(codex)", hud["display"]["line"])
+            self.assertEqual(hud["runtime"]["evidence_state"], "idle")
+
+            forced_home = root / ".omh-forced"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(forced_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--force-record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    message,
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            forced = json.loads(stdout)
+            self.assertEqual(forced["status"], "blocked_requirements_missing")
+            self.assertEqual(forced["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertFalse((forced_home / "runtime" / "runs").exists())
+
+            vague_home = root / ".omh-vague"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(vague_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    "risky refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            vague = json.loads(stdout)
+            self.assertEqual(vague["status"], "blocked_requirements_missing")
+            self.assertEqual(vague["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertFalse((vague_home / "runtime" / "runs").exists())
+
+            forced_vague_home = root / ".omh-vague-forced"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(forced_vague_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--force-record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    "risky refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            vague = json.loads(stdout)
+            self.assertEqual(vague["status"], "blocked_requirements_missing")
+            self.assertEqual(vague["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertFalse((forced_vague_home / "runtime" / "runs").exists())
+
     def test_runtime_delegation_status_summarizes_prepared_codex_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -5422,8 +5712,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "risky",
-                    "refactor",
+                    "implement risky status migration in src/runtime/status.py",
                 ]
             )
 
@@ -5492,8 +5781,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "risky",
-                    "refactor",
+                    "implement risky status migration in src/runtime/status.py",
                 ]
             )
             self.assertEqual(status, 0)
@@ -5758,8 +6046,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "risky",
-                    "refactor",
+                    "implement status badge in src/runtime/status.py",
                 ]
             )
             self.assertEqual(stderr, "")

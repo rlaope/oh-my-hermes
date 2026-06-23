@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from pathlib import Path
 
+from ..codex_progress import (
+    build_codex_prompt_handling_contract,
+    build_codex_review_summary,
+    summarize_codex_jsonl_file,
+    summarize_codex_jsonl_text,
+)
 from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..ingress import CHAT_SOURCES, extract_message_text
 from ..installer import OmhError
@@ -222,6 +230,13 @@ def _add_render_profile_option(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_codex_observation_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--codex-session-ref", default="", help="Observed Codex session id suitable for resume contracts.")
+    parser.add_argument("--codex-thread-ref", default="", help="Observed Codex thread/conversation reference when distinct from the session id.")
+    parser.add_argument("--codex-log-jsonl", default=None, help="Observed Codex JSONL/process output to summarize; raw events are not echoed.")
+    parser.add_argument("--codex-log-ref", default="", help="Evidence reference for the observed Codex log source.")
+
+
 def cmd_chat_session_select_executor(args: argparse.Namespace) -> int:
     try:
         _print_json(select_wrapper_session_executor(_paths(args), args.session_id, args.executor))
@@ -242,6 +257,7 @@ def cmd_chat_session_status(args: argparse.Namespace) -> int:
 
 def cmd_chat_session_open_executor(args: argparse.Namespace) -> int:
     try:
+        codex_progress = _codex_progress_from_args(args)
         _print_json(
             open_executor_session(
                 _paths(args),
@@ -250,17 +266,21 @@ def cmd_chat_session_open_executor(args: argparse.Namespace) -> int:
                 external_session_ref=args.external_session_ref or "",
                 evidence_refs=args.evidence_ref or [],
                 summary=args.summary or "",
+                codex_session_ref=args.codex_session_ref or "",
+                codex_thread_ref=args.codex_thread_ref or "",
+                codex_progress_summary=codex_progress,
             )
         )
     except FileNotFoundError as exc:
         raise OmhError(f"wrapper session not found: {args.session_id}") from exc
-    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+    except (OSError, ExecutorSessionError, WrapperSessionError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     return 0
 
 
 def cmd_chat_session_attach_executor(args: argparse.Namespace) -> int:
     try:
+        codex_progress = _codex_progress_from_args(args)
         _print_json(
             attach_executor_session(
                 _paths(args),
@@ -268,17 +288,21 @@ def cmd_chat_session_attach_executor(args: argparse.Namespace) -> int:
                 external_session_ref=args.external_session_ref,
                 evidence_refs=args.evidence_ref or [],
                 summary=args.summary or "",
+                codex_session_ref=args.codex_session_ref or "",
+                codex_thread_ref=args.codex_thread_ref or "",
+                codex_progress_summary=codex_progress,
             )
         )
     except FileNotFoundError as exc:
         raise OmhError(f"wrapper session not found: {args.session_id}") from exc
-    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+    except (OSError, ExecutorSessionError, WrapperSessionError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     return 0
 
 
 def cmd_chat_session_record_executor(args: argparse.Namespace) -> int:
     try:
+        codex_progress = _codex_progress_from_args(args)
         _print_json(
             record_executor_session_result(
                 _paths(args),
@@ -286,11 +310,12 @@ def cmd_chat_session_record_executor(args: argparse.Namespace) -> int:
                 result=args.result,
                 evidence_refs=args.evidence_ref or [],
                 summary=args.summary or "",
+                codex_progress_summary=codex_progress,
             )
         )
     except FileNotFoundError as exc:
         raise OmhError(f"wrapper session not found: {args.session_id}") from exc
-    except (ExecutorSessionError, WrapperSessionError, ValueError) as exc:
+    except (OSError, ExecutorSessionError, WrapperSessionError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     return 0
 
@@ -331,6 +356,158 @@ def cmd_chat_native_command(args: argparse.Namespace) -> int:
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     return 0
+
+
+def cmd_chat_codex_progress(args: argparse.Namespace) -> int:
+    try:
+        if args.jsonl:
+            progress = summarize_codex_jsonl_file(args.jsonl, evidence_refs=args.evidence_ref or [])
+        else:
+            text = sys.stdin.read() if args.stdin else ""
+            progress = summarize_codex_jsonl_text(text, evidence_refs=args.evidence_ref or [], source="stdin")
+    except OSError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "codex_progress_adapter/v1",
+            "progress": progress,
+            "chat_summary": progress.get("chat_summary", ""),
+            "adapter_contract": {
+                "purpose": "Turn raw Codex JSONL or process output into compact chat-safe progress/final summaries.",
+                "raw_events_exposed": False,
+                "hidden_reasoning_exposed": False,
+                "claim_boundary": progress.get("claim_boundary", ""),
+            },
+        }
+    )
+    return 0
+
+
+def cmd_chat_codex_review(args: argparse.Namespace) -> int:
+    try:
+        progress = _codex_progress_from_args(args)
+        review = _codex_review_from_args(args, progress_summary=progress)
+        if review is None:
+            review = build_codex_review_summary(
+                progress_summary=progress,
+                codex_session_ref=args.codex_session_ref or "",
+                codex_thread_ref=args.codex_thread_ref or "",
+                external_session_ref=args.external_session_ref or "",
+                evidence_refs=args.evidence_ref or [],
+            )
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "codex_review_adapter/v1",
+            "codex_review": review,
+            "chat_summary": review.get("human_summary", ""),
+            "adapter_contract": review.get("adapter_contract", {}),
+        }
+    )
+    return 0
+
+
+def cmd_chat_codex_followup(args: argparse.Namespace) -> int:
+    message = _chat_message(args)
+    if not message:
+        raise OmhError("codex-followup requires a new prompt")
+    try:
+        progress = _codex_progress_from_args(args)
+        session_ref = args.codex_session_ref or ""
+        thread_ref = args.codex_thread_ref or ""
+        external_ref = args.external_session_ref or ""
+        wrapper_session: dict[str, object] = {}
+        if args.session_id:
+            status = build_wrapper_session_status(_paths(args), args.session_id)
+            executor_status = status.get("executor_session_status", {}) if isinstance(status.get("executor_session_status"), dict) else {}
+            codex_session = executor_status.get("codex_session", {}) if isinstance(executor_status.get("codex_session"), dict) else {}
+            codex_progress = executor_status.get("codex_progress", {}) if isinstance(executor_status.get("codex_progress"), dict) else {}
+            session_ref = session_ref or str(codex_session.get("session_ref", ""))
+            thread_ref = thread_ref or str(codex_session.get("thread_ref", ""))
+            external_ref = external_ref or str(codex_session.get("external_session_ref", ""))
+            if progress is None and codex_progress:
+                progress = codex_progress
+            wrapper_session = {
+                "session_id": args.session_id,
+                "session_status": status.get("session_status", ""),
+                "executor_session": executor_status.get("executor_session", ""),
+                "dispatch": executor_status.get("dispatch", ""),
+                "result": executor_status.get("result", ""),
+                "verification": executor_status.get("verification", ""),
+            }
+        evidence_refs = list(args.evidence_ref or [])
+        review_summary = _codex_review_from_args(
+            args,
+            progress_summary=progress,
+            codex_session_ref=session_ref,
+            codex_thread_ref=thread_ref,
+            external_session_ref=external_ref,
+        )
+        payload = build_codex_prompt_handling_contract(
+            new_prompt=message,
+            progress_summary=progress,
+            codex_session_ref=session_ref,
+            codex_thread_ref=thread_ref,
+            external_session_ref=external_ref,
+            wrapper_session_id=args.session_id or "",
+            same_goal=bool(args.same_goal),
+            evidence_refs=evidence_refs,
+            codex_review_summary=review_summary,
+        )
+        if wrapper_session:
+            payload["wrapper_session"] = wrapper_session
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def _codex_progress_from_args(args: argparse.Namespace) -> dict[str, object] | None:
+    path = getattr(args, "codex_log_jsonl", None)
+    if not path:
+        return None
+    refs = list(getattr(args, "evidence_ref", None) or [])
+    log_ref = str(getattr(args, "codex_log_ref", "") or "").strip()
+    if log_ref:
+        refs.append(log_ref)
+    return summarize_codex_jsonl_file(Path(path), evidence_refs=refs)
+
+
+def _codex_review_from_args(
+    args: argparse.Namespace,
+    *,
+    progress_summary: dict[str, object] | None = None,
+    codex_session_ref: str = "",
+    codex_thread_ref: str = "",
+    external_session_ref: str = "",
+) -> dict[str, object] | None:
+    status = str(getattr(args, "codex_review_status", "") or "").strip()
+    summary = str(getattr(args, "codex_review_summary", "") or "").strip()
+    finding_count = getattr(args, "codex_review_finding_count", None)
+    reviewer = str(getattr(args, "codex_reviewer", "") or "codex")
+    if not status and not summary and finding_count is None:
+        return None
+    return build_codex_review_summary(
+        review_status=status or "not_observed",
+        reviewer=reviewer,
+        summary=summary,
+        finding_count=finding_count,
+        progress_summary=progress_summary,
+        codex_session_ref=codex_session_ref or str(getattr(args, "codex_session_ref", "") or ""),
+        codex_thread_ref=codex_thread_ref or str(getattr(args, "codex_thread_ref", "") or ""),
+        external_session_ref=external_session_ref or str(getattr(args, "external_session_ref", "") or ""),
+        evidence_refs=list(getattr(args, "evidence_ref", None) or []),
+    )
+
+
+def _add_codex_review_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--codex-review-status", default="", help="Observed Codex review status, such as passed or changes_requested.")
+    parser.add_argument("--codex-review-summary", default="", help="Human-readable Codex review summary; raw logs are not echoed.")
+    parser.add_argument("--codex-review-finding-count", type=int, default=None, help="Optional observed count of summarized Codex review findings.")
+    parser.add_argument("--codex-reviewer", default="codex", help="Observed reviewer label for the Codex review summary.")
 
 
 def _add_chat_commands(sub) -> None:
@@ -447,6 +624,46 @@ def _add_chat_commands(sub) -> None:
     )
     native_command.set_defaults(func=cmd_chat_native_command)
 
+    codex_progress = chat_sub.add_parser(
+        "codex-progress",
+        help="Summarize raw Codex JSONL or process output into compact chat-safe progress text.",
+    )
+    codex_progress.add_argument("--jsonl", default=None, help="Path to observed Codex JSONL or process output.")
+    codex_progress.add_argument("--stdin", action="store_true", help="Read observed Codex JSONL or process output from stdin.")
+    codex_progress.add_argument("--evidence-ref", action="append", help="Evidence reference for the observed log/source.")
+    codex_progress.set_defaults(func=cmd_chat_codex_progress)
+
+    codex_review = chat_sub.add_parser(
+        "codex-review",
+        help="Summarize observed Codex review context without raw logs or hidden reasoning.",
+    )
+    codex_review.add_argument("--external-session-ref", default="", help="Observed Codex thread/session reference from the wrapper.")
+    codex_review.add_argument("--codex-session-ref", default="", help="Observed Codex session id suitable for resume contracts.")
+    codex_review.add_argument("--codex-thread-ref", default="", help="Observed Codex thread/conversation reference when distinct from the session id.")
+    codex_review.add_argument("--codex-log-jsonl", default=None, help="Observed Codex JSONL/process output to summarize; raw events are not echoed.")
+    codex_review.add_argument("--codex-log-ref", default="", help="Evidence reference for the observed Codex log source.")
+    codex_review.add_argument("--evidence-ref", action="append", help="Evidence reference for the observed review/session/log/source.")
+    _add_codex_review_options(codex_review)
+    codex_review.set_defaults(func=cmd_chat_codex_review)
+
+    codex_followup = chat_sub.add_parser(
+        "codex-followup",
+        help="Summarize active Codex progress and recommend safe handling for a new prompt.",
+    )
+    codex_followup.add_argument("message", nargs="*", help="New user prompt to handle without echoing raw text in the result.")
+    codex_followup.add_argument("--stdin", action="store_true", help="Read the new user prompt from stdin.")
+    codex_followup.add_argument("--event-json", default=None, help="Read a Slack/Discord/Hermes-like JSON event for the new prompt.")
+    codex_followup.add_argument("--session-id", default="", help="Existing wrapper session id that may already have observed Codex metadata.")
+    codex_followup.add_argument("--same-goal", action="store_true", help="Wrapper-observed assertion that the new prompt belongs to the same goal.")
+    codex_followup.add_argument("--external-session-ref", default="", help="Observed Codex thread/session reference from the wrapper.")
+    codex_followup.add_argument("--codex-session-ref", default="", help="Observed Codex session id suitable for resume contracts.")
+    codex_followup.add_argument("--codex-thread-ref", default="", help="Observed Codex thread/conversation reference when distinct from the session id.")
+    codex_followup.add_argument("--codex-log-jsonl", default=None, help="Observed Codex JSONL/process output to summarize; raw events are not echoed.")
+    codex_followup.add_argument("--codex-log-ref", default="", help="Evidence reference for the observed Codex log source.")
+    codex_followup.add_argument("--evidence-ref", action="append", help="Evidence reference for the observed session/log/source.")
+    _add_codex_review_options(codex_followup)
+    codex_followup.set_defaults(func=cmd_chat_codex_followup)
+
     session = chat_sub.add_parser("session")
     session_sub = session.add_subparsers(dest="session_command", required=True)
 
@@ -514,6 +731,7 @@ def _add_chat_commands(sub) -> None:
     session_open_executor.add_argument("--external-session-ref", default="")
     session_open_executor.add_argument("--evidence-ref", action="append")
     session_open_executor.add_argument("--summary", default="")
+    _add_codex_observation_options(session_open_executor)
     session_open_executor.set_defaults(func=cmd_chat_session_open_executor)
 
     session_attach_executor = session_sub.add_parser("attach-executor")
@@ -521,6 +739,7 @@ def _add_chat_commands(sub) -> None:
     session_attach_executor.add_argument("--external-session-ref", required=True)
     session_attach_executor.add_argument("--evidence-ref", action="append")
     session_attach_executor.add_argument("--summary", default="")
+    _add_codex_observation_options(session_attach_executor)
     session_attach_executor.set_defaults(func=cmd_chat_session_attach_executor)
 
     session_record_executor = session_sub.add_parser("record-executor")
@@ -528,6 +747,8 @@ def _add_chat_commands(sub) -> None:
     session_record_executor.add_argument("--result", choices=("completed", "blocked", "failed"), required=True)
     session_record_executor.add_argument("--evidence-ref", action="append")
     session_record_executor.add_argument("--summary", default="")
+    session_record_executor.add_argument("--codex-log-jsonl", default=None, help="Observed Codex JSONL/process output to summarize; raw events are not echoed.")
+    session_record_executor.add_argument("--codex-log-ref", default="", help="Evidence reference for the observed Codex log source.")
     session_record_executor.set_defaults(func=cmd_chat_session_record_executor)
 
     session_request_verification = session_sub.add_parser("request-verification")

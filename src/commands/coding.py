@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from ..executor_readiness import EXECUTOR_READINESS_PROFILES, probe_executor_rea
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..memory import read_handoff_context_pack_file
+from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
+from ..routing.localization import normalized_phrase, routing_tokens
 from ..runtime.artifacts import create_prepared_coding_delegation_run, write_coding_delegation
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
@@ -48,8 +51,24 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             executor_target=_resolved_executor(args, default="generic"),
             context_pack=_context_pack(args),
         )
-        runtime_skip_reason = _coding_delegate_runtime_skip_reason(payload) if args.record else ""
+        runtime_skip_reason = ""
+        if args.record:
+            runtime_skip_reason = _coding_delegate_record_readiness_skip_reason(
+                message,
+                force_record=bool(args.force_record),
+            )
+            if not runtime_skip_reason:
+                runtime_skip_reason = _coding_delegate_runtime_skip_reason(payload)
+            if not runtime_skip_reason:
+                runtime_skip_reason = _coding_delegate_record_readiness_skip_reason(
+                    message,
+                    force_record=bool(args.force_record),
+                    require_dispatchable_requirements=True,
+                )
         if runtime_skip_reason:
+            if runtime_skip_reason == "requirements_or_dispatch_intent_missing":
+                payload["status"] = "blocked_requirements_missing"
+                payload["recorded"] = False
             payload["runtime"] = {
                 "recorded": False,
                 "reason": runtime_skip_reason,
@@ -101,13 +120,92 @@ def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
     return ""
 
 
+def _coding_delegate_record_readiness_skip_reason(
+    message: str,
+    *,
+    force_record: bool = False,
+    require_dispatchable_requirements: bool = False,
+) -> str:
+    intent = classify_workflow_intent(message)
+    if intent.missing_requirements_cues:
+        return "requirements_or_dispatch_intent_missing"
+    if intent.intent_class in META_OR_FEEDBACK_INTENTS and not intent.explicit_execution:
+        return "requirements_or_dispatch_intent_missing"
+    if require_dispatchable_requirements and (
+        not _coding_delegate_dispatch_intent_present(intent, force_record=force_record)
+        or not _coding_delegate_requirements_present(message)
+    ):
+        return "requirements_or_dispatch_intent_missing"
+    return ""
+
+
+def _coding_delegate_dispatch_intent_present(intent: object, *, force_record: bool = False) -> bool:
+    return bool(force_record or getattr(intent, "explicit_execution", False))
+
+
+_VAGUE_RECORD_TOKENS = frozenset(
+    {
+        "agent",
+        "code",
+        "codex",
+        "coding",
+        "cleanup",
+        "delegate",
+        "fix",
+        "handoff",
+        "implement",
+        "implementation",
+        "improve",
+        "maybe",
+        "pr",
+        "ready",
+        "refactor",
+        "request",
+        "review",
+        "risky",
+        "task",
+        "update",
+    }
+)
+
+
+def _coding_delegate_requirements_present(message: str) -> bool:
+    normalized = normalized_phrase(message)
+    tokens = set(routing_tokens(message, stopwords=set()))
+    concrete_tokens = {token for token in tokens if len(token) > 1 and token not in _VAGUE_RECORD_TOKENS}
+    if len(concrete_tokens) >= 2:
+        return True
+    if re.search(r"(?:src|tests|docs|\.github)/|[A-Za-z_][A-Za-z0-9_./-]*\.[A-Za-z0-9]+", message):
+        return True
+    concrete_phrases = (
+        "api",
+        "module",
+        "repo",
+        "auth",
+        "router",
+        "runtime",
+        "workflow",
+        "기능",
+        "이슈",
+        "변경",
+        "버그",
+        "라우팅",
+        "워크플로",
+    )
+    return any(phrase in normalized for phrase in concrete_phrases) and len(tokens) >= 3
+
+
 def _coding_delegate_record_status(reason: str) -> str:
+    if reason == "requirements_or_dispatch_intent_missing":
+        return "blocked_requirements_missing"
     if reason == "executor_choice_required":
         return "record_skipped_until_executor_selected"
     return "record_skipped"
 
 
 def _coding_delegate_record_notice(reason: str) -> str:
+    if reason == "requirements_or_dispatch_intent_missing":
+        return "Coding delegate record blocked until concrete requirements and explicit dispatch intent are present; no run was created."
     if reason == "executor_choice_required":
         return "Runtime record skipped until executor selected; no run was created."
     if reason == "prompt_only_handoff_is_wrapper_session_only":
@@ -120,6 +218,8 @@ def _coding_delegate_record_notice(reason: str) -> str:
 
 
 def _coding_delegate_record_next_action(reason: str) -> str:
+    if reason == "requirements_or_dispatch_intent_missing":
+        return "ask_requirements_or_prepare_plan"
     if reason == "executor_choice_required":
         return "select_executor_then_record"
     if reason == "prompt_only_handoff_is_wrapper_session_only":
@@ -261,6 +361,11 @@ def _add_coding_commands(sub) -> None:
         help="Include raw message and expanded delegation prompt in stdout for non-logging wrappers.",
     )
     delegate.add_argument("--record", action="store_true", help="Record a metadata-only coding delegation artifact under .omh/runtime.")
+    delegate.add_argument(
+        "--force-record",
+        action="store_true",
+        help="Override the meta/test readiness guard when an operator intentionally records a prepared Codex handoff.",
+    )
     delegate.add_argument(
         "--context-pack",
         default=None,

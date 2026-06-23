@@ -93,12 +93,33 @@ class HookManifestTests(unittest.TestCase):
         self.assertEqual(payload["primary_workflow"], "workflow-learning")
         self.assertEqual(payload["primary_next_action"], "record_missed_route")
         self.assertEqual(payload["hints"][0]["next_action"], "record_missed_route")
-        self.assertIn("workflow=workflow-learning", context)
+        self.assertIn("selected=workflow-learning", context)
         self.assertIn("next_action=record_missed_route", context)
         self.assertNotIn(message, serialized)
         self.assertNotIn(message, context)
         self.assertNotIn("secret-token-123", serialized)
         self.assertNotIn("secret-token-123", context)
+
+    def test_awareness_route_hint_marks_workflow_vocabulary_as_mentioned_not_selected(self) -> None:
+        message = "왜 ultraprocess 로그가 떠? Codex handoff 테스트 용어일 뿐이야."
+
+        payload = awareness_route_hint(message)
+        context_result = pre_llm_call(user_message=message, is_first_turn=False)
+        context = context_result["context"] if context_result else ""
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "workflow-learning")
+        self.assertEqual(payload["selected_workflow"], "workflow-learning")
+        self.assertIn(payload["intent_class"], {"meta_discussion", "feedback_signal"})
+        self.assertIn("ultraprocess", payload["mentioned_workflows"])
+        self.assertIn("Codex", payload["mentioned_runtime_terms"])
+        self.assertIn("ultraprocess", payload["not_executed"])
+        self.assertIn("Codex", payload["not_executed"])
+        self.assertIn("selected=workflow-learning", context)
+        self.assertIn("mentioned_workflows=ultraprocess", context)
+        self.assertIn("not_executed=ultraprocess, Codex", context)
+        self.assertNotIn("selected=ultraprocess", context)
+        self.assertNotIn(message, context)
 
     def test_pre_llm_call_includes_bounded_route_hint_without_raw_message(self) -> None:
         message = "make an image explaining the cron feature with secret-token-123"
@@ -109,8 +130,8 @@ class HookManifestTests(unittest.TestCase):
 
         self.assertIn("[OMH Awareness]", context)
         self.assertIn("[OMH Route Hint]", context)
-        self.assertIn("workflow=img-summary", context)
-        self.assertIn("workflow=automation-blueprint", context)
+        self.assertIn("selected=img-summary", context)
+        self.assertIn("selected=automation-blueprint", context)
         self.assertIn("first_response_shape=Separate copy/layout/package prep", context)
         self.assertIn("fallback_action=choose_image_generator_or_prompt_only_when_missing", context)
         self.assertIn("fallback_action=confirm_schedule_delivery_and_tools", context)
@@ -143,7 +164,7 @@ class HookManifestTests(unittest.TestCase):
 
         self.assertNotIn("[OMH Awareness]", context)
         self.assertNotIn("[OMH Route Hint]", context)
-        self.assertNotIn("workflow=img-summary", context)
+        self.assertNotIn("selected=img-summary", context)
 
     def test_pre_llm_call_includes_catalog_question_hint_without_raw_message(self) -> None:
         message = "what OMH workflows are available with secret-token-123?"

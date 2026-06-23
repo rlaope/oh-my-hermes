@@ -23,7 +23,13 @@ def build_chat_route_hint_payload(
     generic_tool_checkpoint = _generic_tool_checkpoint()
     hints = [hint for hint in route_hint.get("hints", []) if isinstance(hint, dict)]
     primary_hint = hints[0] if hints else {}
-    response = _response_for_hint(primary_hint, hints, source=source, generic_tool_checkpoint=generic_tool_checkpoint)
+    response = _response_for_hint(
+        primary_hint,
+        hints,
+        route_hint=route_hint,
+        source=source,
+        generic_tool_checkpoint=generic_tool_checkpoint,
+    )
     payload: dict[str, object] = {
         "schema_version": CHAT_ROUTE_HINT_SCHEMA_VERSION,
         "source": source,
@@ -73,6 +79,7 @@ def _response_for_hint(
     primary_hint: dict[str, object],
     hints: list[dict[str, object]],
     *,
+    route_hint: dict[str, object],
     source: str,
     generic_tool_checkpoint: dict[str, object],
 ) -> dict[str, object]:
@@ -162,6 +169,12 @@ def _response_for_hint(
                 "schema_version": "omh_route_hint/v1",
                 "primary_workflow": workflow,
                 "primary_next_action": next_action,
+                "intent_class": str(route_hint.get("intent_class") or ""),
+                "selected_workflow": str(route_hint.get("selected_workflow") or workflow),
+                "mentioned_workflows": list(route_hint.get("mentioned_workflows", [])),
+                "mentioned_runtime_terms": list(route_hint.get("mentioned_runtime_terms", [])),
+                "adjacent_workflows": list(route_hint.get("adjacent_workflows", [])),
+                "not_executed": list(route_hint.get("not_executed", [])),
                 "hints": hints,
             },
         },

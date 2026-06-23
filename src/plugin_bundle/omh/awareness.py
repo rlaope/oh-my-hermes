@@ -4,6 +4,98 @@ import hashlib
 import re
 import unicodedata
 
+try:  # Keep installed plugin bundles usable even when the full package is absent.
+    from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
+except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+    from dataclasses import dataclass
+
+    META_OR_FEEDBACK_INTENTS = frozenset({"meta_discussion", "feedback_signal"})
+
+    @dataclass(frozen=True)
+    class _FallbackWorkflowIntent:
+        intent_class: str
+        explicit_execution: bool
+        mentioned_workflows: tuple[str, ...]
+        mentioned_runtime_terms: tuple[str, ...]
+        meta_cues: tuple[str, ...]
+        feedback_cues: tuple[str, ...]
+        missing_requirements_cues: tuple[str, ...]
+        routing_context: bool
+
+        @property
+        def not_executed(self) -> tuple[str, ...]:
+            if self.intent_class == "delivery_intent":
+                return ()
+            return (*self.mentioned_workflows, *self.mentioned_runtime_terms)
+
+    def classify_workflow_intent(message: str) -> _FallbackWorkflowIntent:
+        text = unicodedata.normalize("NFKC", message).casefold()
+        delivery_workflows = {
+            "ultraprocess",
+            "ralplan",
+            "ultragoal",
+            "loop",
+            "workflow-learning",
+            "code-review",
+            "team",
+            "ultrawork",
+            "ultraqa",
+        }
+        mentioned_workflows = tuple(
+            workflow for workflow in ROUTER_KEYWORD_SKILLS if workflow in text and workflow in delivery_workflows
+        )
+        runtime_terms = []
+        for term, label in (
+            ("codex", "Codex"),
+            ("coding handoff", "coding handoff"),
+            ("coding delegate", "coding delegate"),
+            ("one-cycle delivery", "one-cycle delivery"),
+            ("one cycle delivery", "one-cycle delivery"),
+        ):
+            if term in text and label not in runtime_terms:
+                runtime_terms.append(label)
+        meta_cues = tuple(
+            cue
+            for cue in ("test", "developer", "operator", "vocabulary", "route hint", "hud", "log", "trigger", "테스트", "개발자", "용어", "로그", "트리거", "오해")
+            if cue in text
+        )
+        feedback_cues = tuple(cue for cue in ("why", "wrong route", "missed route", "왜", "잘못", "오해", "누락") if cue in text)
+        missing = tuple(cue for cue in ("no requirements", "missing requirements", "요구사항은 없어", "요구사항 없음") if cue in text)
+        negated_execution = tuple(
+            cue
+            for cue in ("not asking to implement", "not asking for implementation", "not implement", "do not implement", "don't implement", "without implementation", "no implementation")
+            if cue in text
+        )
+        execution = tuple(
+            cue
+            for cue in ("implement", "make a pr", "open a pr", "dispatch", "delegate", "send to codex", "run ultraprocess", "구현", "pr 만들어", "codex로", "맡겨", "실행")
+            if cue in text and not (negated_execution and cue in {"implement", "구현"})
+        )
+        routing_context = any(
+            cue in text.split() or cue in text
+            for cue in ("routing", "route", "workflow", "handoff", "coding", "route hint", "coding handoff", "coding delegate", "라우팅", "워크플로", "코딩")
+        ) or " omh " in f" {text} "
+        specific_runtime_reference = any(term != "Codex" for term in runtime_terms)
+        workflow_or_specific_runtime = bool(mentioned_workflows or specific_runtime_reference)
+        if execution:
+            intent_class = "delivery_intent"
+        elif missing or (feedback_cues and (routing_context or workflow_or_specific_runtime)):
+            intent_class = "feedback_signal"
+        elif meta_cues and (routing_context or workflow_or_specific_runtime):
+            intent_class = "meta_discussion"
+        else:
+            intent_class = "unknown"
+        return _FallbackWorkflowIntent(
+            intent_class=intent_class,
+            explicit_execution=bool(execution),
+            mentioned_workflows=mentioned_workflows,
+            mentioned_runtime_terms=tuple(runtime_terms),
+            meta_cues=meta_cues,
+            feedback_cues=feedback_cues,
+            missing_requirements_cues=missing,
+            routing_context=routing_context,
+        )
+
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
 OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION = "omh_generic_tool_checkpoint/v1"
@@ -513,14 +605,21 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
     normalized = unicodedata.normalize("NFKC", message).casefold()
     tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", normalized))
     hint_limit = max(max_hints, 0)
+    intent = classify_workflow_intent(message)
     hints: list[dict[str, object]] = []
     if normalized.strip() and hint_limit:
+        if _prefers_workflow_learning_hint(intent):
+            hints.append(_workflow_vocabulary_reference_hint(intent))
         for rule in _ROUTE_HINT_RULES:
+            if _rule_suppressed_by_reference_intent(rule, intent):
+                continue
             phrase_matches = [phrase for phrase in rule["phrases"] if phrase in normalized]
             token_matches = [token for token in rule["tokens"] if token in tokens]
             if not phrase_matches and not token_matches:
                 continue
             workflow = str(rule["workflow"])
+            if workflow == "workflow-learning" and any(hint.get("workflow") == workflow for hint in hints):
+                continue
             context_card = workflow_context_card_for_workflow(workflow)
             hints.append(
                 {
@@ -540,12 +639,25 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
             )
             if len(hints) >= hint_limit:
                 break
+    primary_workflow = str(hints[0]["workflow"]) if hints else ""
+    adjacent_workflows = _unique_strings(
+        str(item)
+        for hint in hints
+        if isinstance(hint, dict)
+        for item in hint.get("adjacent_workflows", [])
+    )
     return {
         "schema_version": OMH_ROUTE_HINT_SCHEMA_VERSION,
         "status": "hinted" if hints else "no_hint",
         "message_sha256": hashlib.sha256(message.encode("utf-8")).hexdigest() if message else "",
         "message_length": len(message),
-        "primary_workflow": str(hints[0]["workflow"]) if hints else "",
+        "intent_class": intent.intent_class,
+        "selected_workflow": primary_workflow,
+        "mentioned_workflows": list(intent.mentioned_workflows),
+        "mentioned_runtime_terms": list(intent.mentioned_runtime_terms),
+        "adjacent_workflows": adjacent_workflows,
+        "not_executed": list(intent.not_executed),
+        "primary_workflow": primary_workflow,
         "primary_next_action": str(hints[0]["next_action"]) if hints else "",
         "hints": hints,
         "privacy": {
@@ -565,16 +677,29 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
     payload = awareness_route_hint(message, max_hints=max_hints)
     if payload.get("status") != "hinted":
         return ""
+    adjacent_summary = ", ".join(str(item) for item in payload.get("adjacent_workflows", []))
+    mentioned_summary = ", ".join(str(item) for item in payload.get("mentioned_workflows", []))
+    not_executed_summary = ", ".join(str(item) for item in payload.get("not_executed", []))
     lines = [
         "[OMH Route Hint]",
         "Use this message-specific OMH hint before generic chat/tools when it fits the user intent.",
+        (
+            f"intent={payload.get('intent_class')}; selected={payload.get('selected_workflow')}; "
+            f"confidence=medium"
+        ),
     ]
+    if mentioned_summary:
+        lines.append(f"mentioned_workflows={mentioned_summary}.")
+    if adjacent_summary:
+        lines.append(f"adjacent_workflows={adjacent_summary}.")
+    if not_executed_summary:
+        lines.append(f"not_executed={not_executed_summary}.")
     for hint in payload["hints"]:
         if not isinstance(hint, dict):
             continue
         adjacent = ", ".join(str(item) for item in hint.get("adjacent_workflows", []))
         lines.append(
-            f"- workflow={hint.get('workflow')}; lane={hint.get('lane')}; "
+            f"- selected={hint.get('workflow')}; lane={hint.get('lane')}; "
             f"next_action={hint.get('next_action')}; reason={hint.get('reason')}"
         )
         context_card = hint.get("workflow_context_card")
@@ -939,6 +1064,59 @@ def _bounded_matches(matches: list[str]) -> list[str]:
             seen.append(value)
         if len(seen) >= 4:
             break
+    return seen
+
+
+def _prefers_workflow_learning_hint(intent: object) -> bool:
+    return (
+        getattr(intent, "intent_class", "") in META_OR_FEEDBACK_INTENTS
+        and not bool(getattr(intent, "explicit_execution", False))
+        and (
+            bool(getattr(intent, "mentioned_workflows", ()))
+            or bool(getattr(intent, "mentioned_runtime_terms", ()))
+            or bool(getattr(intent, "routing_context", False))
+        )
+    )
+
+
+def _workflow_vocabulary_reference_hint(intent: object) -> dict[str, object]:
+    workflow = "workflow-learning"
+    context_card = workflow_context_card_for_workflow(workflow)
+    next_action = "record_missed_route" if getattr(intent, "intent_class", "") == "feedback_signal" else "audit_learning_readiness"
+    matched_cues = list(getattr(intent, "feedback_cues", ())) + list(getattr(intent, "meta_cues", ()))
+    matched_cues.extend(getattr(intent, "mentioned_workflows", ()))
+    matched_cues.extend(getattr(intent, "mentioned_runtime_terms", ()))
+    return {
+        "id": "workflow_vocabulary_reference",
+        "workflow": workflow,
+        "lane": "automation_and_status",
+        "next_action": next_action,
+        "reason": "The message discusses OMH workflow or coding-handoff vocabulary rather than asking to execute it.",
+        "fallback_action": "record_learning_trace_or_prepare_route_review",
+        "matched_cues": _bounded_matches([str(item) for item in matched_cues]),
+        "adjacent_workflows": ["doctor", "agent-ops-review"],
+        "mentioned_workflows": list(getattr(intent, "mentioned_workflows", ())),
+        "mentioned_runtime_terms": list(getattr(intent, "mentioned_runtime_terms", ())),
+        "not_executed": list(getattr(intent, "not_executed", ())),
+        "workflow_context_card": context_card,
+        "not_evidence_yet": list(context_card.get("not_evidence_until_observed", []))
+        if isinstance(context_card, dict)
+        else [],
+    }
+
+
+def _rule_suppressed_by_reference_intent(rule: dict[str, object], intent: object) -> bool:
+    if not _prefers_workflow_learning_hint(intent):
+        return False
+    return str(rule.get("id", "")) == "coding_delivery"
+
+
+def _unique_strings(values: object) -> list[str]:
+    seen: list[str] = []
+    for item in values:
+        value = str(item).strip()
+        if value and value not in seen:
+            seen.append(value)
     return seen
 
 

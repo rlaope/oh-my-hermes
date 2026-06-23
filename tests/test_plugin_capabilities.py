@@ -269,6 +269,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
                         "limit": 2,
                     }})
                 )
+                context_meta = json.loads(
+                    context_handler({{
+                        "message": "왜 ultraprocess 로그가 떠? Codex handoff 테스트 용어일 뿐이야.",
+                        "source": "discord",
+                        "limit": 2,
+                        "include_prompt_context": True,
+                    }})
+                )
                 interaction = json.loads(
                     interact_handler({{
                         "message": "make an image summary for this PR with secret-token-123",
@@ -360,6 +368,10 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "context_catalog_next_action": context_catalog["catalog_question"]["next_action"],
                     "context_catalog_tool": context_catalog["catalog_question"]["recommended_tool"],
                     "context_catalog_serialized": json.dumps(context_catalog, sort_keys=True),
+                    "context_meta_primary_workflow": context_meta["route_hint"]["primary_workflow"],
+                    "context_meta_mentioned_workflows": context_meta["route_hint"]["mentioned_workflows"],
+                    "context_meta_runtime_terms": context_meta["route_hint"]["mentioned_runtime_terms"],
+                    "context_meta_prompt_context": context_meta["prompt_context"],
                     "interaction_schema": interaction["schema_version"],
                     "interaction_degraded": interaction["degraded"],
                     "interaction_source": interaction["source_backend"],
@@ -474,13 +486,18 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["context_source"], "standalone_plugin_bundle_fallback")
             self.assertEqual(payload["context_plugin_tool"], "omh_context")
             self.assertEqual(payload["context_primary_workflow"], "img-summary")
-            self.assertIn("workflow=img-summary", payload["context_prompt_context"])
+            self.assertIn("selected=img-summary", payload["context_prompt_context"])
             self.assertIn("generic tool can render", payload["context_serialized"])
             self.assertNotIn("secret-token-123", payload["context_serialized"])
             self.assertEqual(payload["context_catalog_status"], "matched")
             self.assertEqual(payload["context_catalog_next_action"], "show_workflow_picker")
             self.assertEqual(payload["context_catalog_tool"], "omh_capabilities")
             self.assertNotIn("secret-token-123", payload["context_catalog_serialized"])
+            self.assertEqual(payload["context_meta_primary_workflow"], "workflow-learning")
+            self.assertIn("ultraprocess", payload["context_meta_mentioned_workflows"])
+            self.assertIn("Codex", payload["context_meta_runtime_terms"])
+            self.assertIn("selected=workflow-learning", payload["context_meta_prompt_context"])
+            self.assertNotIn("selected=ultraprocess", payload["context_meta_prompt_context"])
             self.assertEqual(payload["interaction_schema"], "chat_interaction/v1")
             self.assertTrue(payload["interaction_degraded"])
             self.assertEqual(payload["interaction_source"], "standalone_plugin_bundle_fallback")

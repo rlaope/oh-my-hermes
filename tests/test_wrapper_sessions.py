@@ -11,6 +11,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.coding_lifecycle import record_codex_dispatch, record_codex_result, record_codex_verification, start_codex_delegation_lifecycle
+from omh.codex_progress import summarize_codex_jsonl_text
 from omh.paths import resolve_paths
 from omh.runtime_artifacts import (
     create_run,
@@ -709,6 +710,9 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(codex_launch["command_templates"][0]["shell_command_template"], "codex {executor_prompt_shell_quoted}")
             self.assertEqual(codex_launch["command_templates"][1]["argv_template"], ["codex", "--cd", "{workspace_path}", "{executor_prompt}"])
             self.assertEqual(codex_launch["command_templates"][1]["shell_command_template"], "codex --cd {workspace_path_shell_quoted} {executor_prompt_shell_quoted}")
+            self.assertEqual(codex_launch["command_templates"][2]["argv_template"], ["codex", "exec", "resume", "{codex_session_ref}"])
+            self.assertEqual(codex_launch["resume_capability"]["argv_template"], ["codex", "exec", "resume", "{codex_session_ref}"])
+            self.assertTrue(codex_launch["resume_capability"]["not_omh_backend_execution"])
             self.assertEqual(codex_launch["after_launch_backend_action"], "open-executor")
             self.assertIn("not proof of execution", codex_launch["claim_boundary"])
             self.assertEqual(prepared_actions["attach_executor_session"]["label"], "Attach coding session")
@@ -728,13 +732,31 @@ class WrapperSessionTests(unittest.TestCase):
                 session_id,
                 observed=True,
                 external_session_ref="codex-thread-1",
+                codex_session_ref="codex-session-1",
+                codex_thread_ref="codex-thread-1",
                 evidence_refs=["discord-button"],
+                codex_progress_summary=summarize_codex_jsonl_text(
+                    "\n".join(
+                        [
+                            json.dumps({"type": "tool_call", "tool": "rg", "args": "rg executor_session tests"}),
+                            json.dumps({"role": "assistant", "content": "I am inspecting files before editing."}),
+                        ]
+                    ),
+                    evidence_refs=["codex-jsonl"],
+                ),
             )
 
             opened_status = opened["status"]
             self.assertEqual(opened_status["coding_agent"], "running(codex)")
             self.assertEqual(opened_status["executor_session"], "attached")
             self.assertEqual(opened_status["dispatch"], "observed")
+            self.assertEqual(opened_status["codex_session"]["session_ref"], "codex-session-1")
+            self.assertEqual(opened_status["codex_session"]["thread_ref"], "codex-thread-1")
+            self.assertEqual(opened_status["codex_session"]["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertEqual(opened_status["codex_progress"]["event_count"], 2)
+            self.assertIn("Codex is inspecting files/tests.", opened_status["codex_progress"]["observable_activity"])
+            self.assertIn("codex-session: observed(codex-session-1)", opened_status["status_lines"])
+            self.assertIn("Observed Codex metadata: session codex-session-1, thread codex-thread-1", "\n".join(opened_status["display_status_lines"]))
             self.assertEqual(opened_status["linked_lifecycle_status"]["next_action"], "wait_for_executor_evidence")
             opened_actions = {action["id"]: action for action in opened_status["actions"]}
             self.assertFalse(opened_actions["open_executor_session"]["enabled"])
@@ -748,10 +770,22 @@ class WrapperSessionTests(unittest.TestCase):
                 session_id,
                 result="completed",
                 evidence_refs=["codex-summary"],
+                codex_progress_summary=summarize_codex_jsonl_text(
+                    "\n".join(
+                        [
+                            json.dumps({"type": "tool_call", "command": "python -m unittest tests/test_wrapper_sessions.py"}),
+                            json.dumps({"role": "assistant", "content": "Tests passed; waiting on review."}),
+                        ]
+                    ),
+                    evidence_refs=["codex-final-jsonl"],
+                ),
             )
 
             self.assertEqual(completed["status"]["coding_agent"], "completed(codex)")
             self.assertEqual(completed["status"]["result"], "completed")
+            self.assertEqual(completed["status"]["codex_progress"]["event_count"], 2)
+            self.assertIn("Codex is running tests.", completed["status"]["codex_progress"]["observable_activity"])
+            self.assertIn("summary_only", completed["executor_session"]["codex_progress"]["privacy"])
             self.assertEqual(completed["status"]["linked_lifecycle_status"]["next_action"], "record_verification_evidence")
             with self.assertRaisesRegex(ExecutorSessionError, "after executor result is recorded"):
                 attach_executor_session(paths, session_id, external_session_ref="codex-thread-2")
