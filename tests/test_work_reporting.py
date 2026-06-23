@@ -699,6 +699,26 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("Background process", rendered)
         self.assertNotIn("Here's the final output", rendered)
 
+    def test_background_check_output_ignores_github_summary_prose(self) -> None:
+        rendered = build_background_completion_report(
+            exit_code=1,
+            command="gh pr checks --watch",
+            output="\n".join(
+                [
+                    "Some checks were not successful",
+                    "1 failing, 0 successful, 0 skipped, 0 pending",
+                    "unit tests\tfail\t2m10s\thttps://github.example/checks/tests",
+                ]
+            ),
+        )
+
+        self.assertIsNotNone(rendered)
+        assert rendered is not None
+        self.assertIn("Checks: 1 fail.", rendered)
+        self.assertIn("- unit tests: fail (2m10s) https://github.example/checks/tests.", rendered)
+        self.assertNotIn("Some checks were not: pass", rendered)
+        self.assertNotIn("1: fail", rendered)
+
     def test_background_completion_does_not_mislabel_plain_command_output_as_checks(self) -> None:
         rendered = build_background_completion_report(
             exit_code=0,

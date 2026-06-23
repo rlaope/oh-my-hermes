@@ -992,12 +992,25 @@ def _check_rows_from_text(output: str) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for raw_line in output.splitlines():
         line = _strip_ansi(raw_line).strip()
-        if not line or _is_check_watch_noise(line) or _is_check_header(line):
+        if not line or _is_check_watch_noise(line) or _is_check_header(line) or _is_check_summary_prose(line):
             continue
         row = _check_row_from_line(line)
         if row:
             rows.append(row)
     return rows
+
+
+def _is_check_summary_prose(line: str) -> bool:
+    normalized = " ".join(str(line or "").casefold().split())
+    if not normalized:
+        return False
+    if normalized.startswith("some checks were") or normalized.startswith("all checks"):
+        return True
+    if re.match(r"^\d+\s+(failing|failed|successful|pending|skipped|cancelled|canceled)\b", normalized):
+        return True
+    if "checks were not successful" in normalized or "checks have failed" in normalized:
+        return True
+    return False
 
 
 def _check_row_from_line(line: str) -> dict[str, str]:
