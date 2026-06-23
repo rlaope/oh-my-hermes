@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import tempfile
 from typing import Any
 
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
@@ -217,15 +218,19 @@ def _matches_allowlist(tokens: list[str], allowlist: tuple[str, ...]) -> bool:
 
 def _run_command(command_text: str, tokens: list[str], *, workdir: Path, timeout: int, truncate: int) -> dict[str, object]:
     try:
-        proc = subprocess.run(
-            tokens,
-            cwd=str(workdir),
-            shell=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
+        env = os.environ.copy()
+        with tempfile.TemporaryDirectory(prefix="omh-evidence-pycache-") as pycache_dir:
+            env["PYTHONPYCACHEPREFIX"] = pycache_dir
+            proc = subprocess.run(
+                tokens,
+                cwd=str(workdir),
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+                env=env,
+            )
     except FileNotFoundError:
         return _rejected_result(command_text, f"command not found: {tokens[0] if tokens else command_text}")
     except subprocess.TimeoutExpired:

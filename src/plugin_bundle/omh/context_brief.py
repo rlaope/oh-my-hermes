@@ -4,6 +4,7 @@ import hashlib
 
 from .awareness import (
     awareness_generic_tool_checkpoint_payload,
+    awareness_primer_context,
     awareness_primer_payload,
     awareness_route_hint,
     awareness_route_hint_context,
@@ -71,7 +72,11 @@ def build_context_brief(
         ),
     }
     if include_prompt_context:
-        payload["prompt_context"] = awareness_route_hint_context(text, max_hints=limit) if text.strip() else ""
+        prompt_context_parts = [awareness_primer_context()]
+        route_hint_context = awareness_route_hint_context(text, max_hints=limit) if text.strip() else ""
+        if route_hint_context:
+            prompt_context_parts.append(route_hint_context)
+        payload["prompt_context"] = "\n".join(prompt_context_parts)
         payload["prompt_context_boundary"] = (
             "Prompt context is for Hermes routing guidance only; it is not workflow execution or observed evidence."
         )
