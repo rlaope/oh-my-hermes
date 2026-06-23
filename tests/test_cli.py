@@ -7202,6 +7202,23 @@ class CliTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("GitHub CLI", result["reason"])
 
+    def test_setup_github_star_helper_reports_broken_gh_without_blocking(self) -> None:
+        with patch("omh.commands.setup.subprocess.run", side_effect=PermissionError("bad gh")):
+            result = setup_commands._try_star_github_repo()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("could not run", result["reason"])
+
+    def test_setup_github_star_prompt_uses_localized_copy(self) -> None:
+        output = io.StringIO()
+        with patch("omh.commands.setup._ask_yes_no", return_value=False) as ask, patch("sys.stdout", output):
+            setup_commands._offer_github_star_before_setup(language="ko", use_color=False)
+
+        ask.assert_called_once()
+        self.assertEqual(ask.call_args.kwargs["note"], "선택 사항입니다. 어떤 답을 골라도 setup은 계속 진행됩니다.")
+        self.assertIn("GitHub에서 oh-my-hermes에 star를 눌러줄까요?", ask.call_args.args[0])
+        self.assertIn("🥲 괜찮아요", output.getvalue())
+
     def test_setup_choice_menu_uses_cursor_not_checkbox(self) -> None:
         from omh.commands.setup import _choice_menu_lines
 

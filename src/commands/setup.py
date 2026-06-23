@@ -1197,23 +1197,23 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
 
 def _offer_github_star_before_setup(*, language: str, use_color: bool) -> None:
     wants_star = _ask_yes_no(
-        "Would you like to star oh-my-hermes on GitHub?",
+        tr(language, "github_star_question"),
         default=False,
         use_color=use_color,
-        note="This is optional. Setup continues either way.",
+        note=tr(language, "github_star_note"),
         language=language,
     )
     if not wants_star:
-        print("🥲 No worries — continuing setup.")
+        print(tr(language, "github_star_declined"))
         print("")
         return
     result = _try_star_github_repo()
     if result["ok"]:
-        print(_color("Thanks!", "1;32", use_color))
+        print(_color(tr(language, "github_star_thanks"), "1;32", use_color))
     else:
         reason = str(result.get("reason") or "GitHub star was not recorded")
-        print(_color(f"Could not record the GitHub star: {reason}", "33", use_color))
-        print("Continuing setup.")
+        print(_color(tr(language, "github_star_failed", reason=reason), "33", use_color))
+        print(tr(language, "github_star_continue"))
     print("")
 
 
@@ -1225,6 +1225,8 @@ def _try_star_github_repo() -> dict[str, object]:
         return {"ok": False, "reason": "GitHub CLI `gh` is not installed or not on PATH."}
     except subprocess.TimeoutExpired:
         return {"ok": False, "reason": "GitHub CLI star command timed out."}
+    except OSError as exc:
+        return {"ok": False, "reason": f"GitHub CLI could not run: {exc}"}
     if completed.returncode == 0:
         return {"ok": True, "reason": "starred_or_already_starred"}
     detail = (completed.stderr or completed.stdout or "gh repo star failed").strip()
