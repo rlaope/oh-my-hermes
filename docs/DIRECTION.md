@@ -34,12 +34,57 @@ Quality should show up as:
 
 - better request classification from local catalog metadata
 - better Hermes-side interview, research, and planning output
+- observation-first reporting that helps Hermes explain what happened after work
+  starts or completes
 - clearer wrapper response states and actions
 - stronger prepared handoff payloads for coding executors
 - stricter evidence boundaries for dispatch, execution, review, CI, and merge
 - documentation and tests that keep public claims aligned with code
 
 The goal is parity of seriousness, not parity of implementation shape.
+
+## Observation-First Reporting
+
+OMH should optimize for helping Hermes observe, summarize, and explain work,
+not for exhaustively unifying every possible handoff order. Reverts and reruns
+are often cheap. Losing the context of what Hermes invoked, what was observed,
+what remains unobserved, and how to explain that to the user is more expensive.
+
+The reporting direction is:
+
+- structured state is the internal truth
+- plain text is the default user experience
+- markdown is a secondary durable knowledge surface
+- workflow learning receives selected, sanitized summaries only
+
+Structured summaries should be metadata-only by default. They can store schema
+versions, work ids, workflow ids, message hashes and lengths, bounded evidence
+references, progress events, observation refs, and claim boundaries. They must
+not store raw prompts, raw platform events, raw logs, hidden reasoning, or
+transcripts by default.
+
+Hermes-facing progress, completion, and blocker updates should render as plain
+language unless the user asks for JSON, schema output, debug data, or an API
+payload. JSON/code-block output is an internal or opt-in surface, not normal
+chat UX.
+
+Internal awareness rails such as `[OMH Awareness]`, native bridge status
+context, evidence-boundary reminders, process wrappers, and raw CI/watch
+transcripts are inputs to reporting, not user-facing status copy. Adapters
+should omit silent successful completions and summarize meaningful output into
+the channel's natural voice. For example, Discord/Korean progress can use a
+calm friendly voice while CI/DCO output becomes compact check status lines with
+names, pass/pending/fail state, durations, and links instead of raw watcher
+text.
+
+Markdown export is useful for a wiki, notes, release recap, or later review,
+but it is not a backend requirement for the first reporting slice. A
+deterministic markdown projection from the structured summary is enough until a
+real wiki store is intentionally designed.
+
+Workflow learning should consume selected report summaries and bounded evidence
+refs. It should not learn by dumping every chat message, executor log, or
+private transcript into a learning artifact.
 
 ## Project Type
 

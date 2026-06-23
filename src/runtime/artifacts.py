@@ -426,6 +426,11 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     response_observed = bool(wrapper.get("hermes_response_observed", False))
     verification_observed = bool(wrapper.get("verification_observed", False))
     completion_status = str(wrapper.get("completion_status") or "unknown")
+    verification_status = _verification_status_summary(
+        observed=verification_observed,
+        completion_status=completion_status,
+        unobserved_gaps=wrapper.get("unobserved_gaps", []),
+    )
     review_required = bool(review.get("required", coding.get("review_required", False)))
     review_workflow = review.get("workflow") if review else coding.get("review_workflow")
     review_status = _review_status_summary(review_required, review_workflow, review, review_record)
@@ -497,6 +502,7 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
             "unobserved_gaps": wrapper.get("unobserved_gaps", []),
         },
         "verification": {
+            **verification_status,
             "observed": verification_observed,
             "expected": coding.get("verification", []),
         },
@@ -773,6 +779,19 @@ def _downstream_gate_progress_state(
     if review_status.get("satisfied") and ci_status.get("satisfied") and merge_status.get("satisfied"):
         return "complete"
     return "pending"
+
+
+def _verification_status_summary(*, observed: bool, completion_status: str, unobserved_gaps: Any) -> dict[str, Any]:
+    gaps = _string_list(unobserved_gaps)
+    if observed:
+        status = "passed"
+    elif completion_status == "failed":
+        status = "failed"
+    elif completion_status == "blocked" or gaps:
+        status = "blocked"
+    else:
+        status = "not_observed"
+    return {"status": status, "satisfied": observed}
 
 
 def _object_or_empty(value: Any) -> dict[str, Any]:
