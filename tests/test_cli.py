@@ -7219,6 +7219,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("GitHub에서 oh-my-hermes에 star를 눌러줄까요?", ask.call_args.args[0])
         self.assertIn("🥲 괜찮아요", output.getvalue())
 
+    def test_setup_github_star_prompt_dry_run_does_not_call_github(self) -> None:
+        output = io.StringIO()
+        with (
+            patch("omh.commands.setup._ask_yes_no", return_value=True),
+            patch("omh.commands.setup._try_star_github_repo") as star,
+            patch("sys.stdout", output),
+        ):
+            setup_commands._offer_github_star_before_setup(language="en", use_color=False, dry_run=True)
+
+        star.assert_not_called()
+        self.assertIn("Dry run only", output.getvalue())
+
     def test_setup_choice_menu_uses_cursor_not_checkbox(self) -> None:
         from omh.commands.setup import _choice_menu_lines
 

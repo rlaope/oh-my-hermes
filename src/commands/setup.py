@@ -877,7 +877,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
             args.scope = _ask_setup_scope(use_color=_use_color(), language=language)
             paths = _paths(args)
         _run_setup_wizard(args, paths, language)
-        _offer_github_star_before_setup(language=language, use_color=_use_color())
+        _offer_github_star_before_setup(language=language, use_color=_use_color(), dry_run=bool(args.dry_run))
 
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
@@ -1195,7 +1195,7 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
     print("")
 
 
-def _offer_github_star_before_setup(*, language: str, use_color: bool) -> None:
+def _offer_github_star_before_setup(*, language: str, use_color: bool, dry_run: bool = False) -> None:
     wants_star = _ask_yes_no(
         tr(language, "github_star_question"),
         default=False,
@@ -1205,6 +1205,10 @@ def _offer_github_star_before_setup(*, language: str, use_color: bool) -> None:
     )
     if not wants_star:
         print(tr(language, "github_star_declined"))
+        print("")
+        return
+    if dry_run:
+        print(_color(tr(language, "github_star_dry_run"), "33", use_color))
         print("")
         return
     result = _try_star_github_repo()
