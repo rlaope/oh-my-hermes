@@ -62,56 +62,22 @@ easier to start, easier to trust, and more natural to apply in real work.
 
 ## Quick Start
 
-Install the `omh` command, then connect it to Hermes:
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
-
-# check omh status
 omh doctor
 ```
 
-That is the normal path. The installer only prepares the isolated `omh` command
-package; `omh setup` is the explicit step that installs OMH workflows and
-registers them with Hermes. On a first install, press Enter through the
-recommended setup choices, then restart or reload Hermes Agent. If you want a
-short "what now?" card after setup, ask Hermes "what should I do next with
-OMH setup?" or run `omh quickstart`; both surfaces show the first Hermes
-prompts plus what has and has not been observed yet.
-
-If you are not sure what OMH is, ask Hermes "what is OMH and how do I use it?"
-and it can answer with a compact overview before opening the full workflow
-picker.
-
-If your Hermes environment supports skill taps, this Hermes-native path also
-works:
+Hermes skill tap path:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes
 hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
-Then talk to Hermes:
-
 ```text
 Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
-
-Hermes should route the request, name the responsible role, show the next
-action, and keep the prepared handoff separate from observed work. When the
-plugin surface is available, Hermes can use `omh_interact` to build the same
-chat response and record a metadata-only wrapper session without asking for
-shell approval; session records include producer provenance so plugin-authored
-metadata stays distinguishable from wrapper/backend metadata. Normal users do
-not need to know `omh recommend`, `omh chat interact`, or other backend
-commands.
-
-OMH's setup footprint is deliberately small: it installs Hermes-visible skills,
-records local status contracts, and can repair managed `skills.external_dirs`
-drift without patching Hermes core. Localized terminal output, project-local
-setup, pinned releases, manual `./omh` picker behavior, and wrapper
-registration contracts live in the [installation guide](docs/INSTALLATION.md).
 
 [Website](https://rlaope.github.io/oh-my-hermes/) -
 [Documentation](docs/README.md) -
@@ -133,38 +99,29 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 
 ## Why OMH
 
-<p align="center">
-  <img src="assets/omh-flagship-workflows-poster.png" alt="OMH flagship command sets poster" width="920">
-</p>
-
-- **Chat-first** - users ask Hermes in plain language; `omh` commands stay in
-  the background for setup, repair, verification, and wrapper backends.
-- **Install-first** - OMH adds Hermes-visible skills and workflow defaults
-  without asking teams to adopt another dashboard.
-- **Safe handoffs** - coding can go to Codex, Claude Code, Hermes, or another
-  selected runtime, while OMH keeps "prepared" separate from "observed."
-- **Workspace-aware starts** - risky, parallel, or runtime-owned coding requests
-  can show Prepare worktree before Hermes starts Codex, Claude Code, Hermes, or
-  another configured coding-agent session; the backend can explicitly create the
-  local Git worktree, then return a separate wrapper recipe for opening or
-  attaching the selected coding agent from that worktree.
-- **Team-ready without hidden workers** - Hermes/team/swarm paths expose worker
-  protocol, runtime templates, wrapper actions, and observed ledger status via
-  `omh runtime team-readiness` while keeping worker launch and results
-  evidence-only.
-- **Useful beyond coding** - research, planning, feedback triage, meeting prep,
-  reports, automation blueprints, material packages, and loop work all have
-  Hermes-facing workflow paths.
-- **Application-case ready** - the G1-G10 use-case map can be exported as
-  wrapper-ready demo cards, local runbook artifacts, deterministic replay
-  fixtures, and a readiness rollup so operators see the route, next action,
-  and evidence boundary before wiring a chat surface.
+- **Hermes stays the surface** - users ask in plain language, and Hermes can
+  answer with the right workflow, role, next action, or handoff.
+- **Skills install into the workflow you already use** - OMH adds
+  Hermes-visible skills and setup repair without asking teams to adopt another
+  dashboard.
+- **Research and planning feel first-class** - source finding, paper learning,
+  web research, briefs, interviews, plans, and strategy work have dedicated
+  Hermes-facing paths.
+- **Coding is delegated deliberately** - Codex, Claude Code, Hermes, or another
+  selected executor can receive a scoped handoff with non-goals, acceptance
+  criteria, and verification expectations.
+- **Prepared is not observed** - OMH keeps planned handoffs, generated prompts,
+  status cards, execution, review, CI, and merge evidence separate.
 - **Local and inspectable** - skills, manifests, plans, sessions, and status
   records stay in user-owned local directories.
 
 <br>
 
 ## Core Workflows
+
+<p align="center">
+  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
+</p>
 
 | Need | OMH helps Hermes do this | Example |
 | --- | --- | --- |
@@ -175,54 +132,23 @@ registration contracts live in the [installation guide](docs/INSTALLATION.md).
 | `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
 | `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
 | `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
-| `img-summary` | Prepare provider-neutral image-card prompts whose format follows the source, whose scene follows the domain, and whose poster archetype sets the design grammar. | "Make a PR summary card for reviewers." |
+| `img-summary` | Turn notes, PRs, issues, research, or reports into image-card prompts for a connected image tool. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 | `agent-ops-review` | Show a manager view of AI-agent research, coding, review, blockers, next actions, and throughput levers. | "As a manager, show the quality and progress of agent work." |
 
 ### Img Summary Skill
 
-`img-summary` helps Hermes turn source material into an image-card prompt
-that another connected image tool can use. It is not one fixed template.
-OMH separates three design decisions: source kind chooses the information
-structure, domain chooses the scene/material world, and poster archetype
-chooses the visual grammar. A PR can become a technical systems poster, a
-security issue can become cinematic key art, a sports research card can feel
-like an event poster, and a fashion report can become a luxury lookbook. Use
-`--poster-archetype auto` for the default or choose styles such as
-`swiss_grid`, `cinematic_key_art`, `data_infographic`, `sports_event`, and
-`luxury_lookbook`. Use `--aspect-ratio long_scroll` when the card needs room
-for more sections or denser copy. Generated images, visual QA, and delivery
-stay separate until they are recorded as observed evidence. If no image
-generator is connected yet, Hermes can ask which tool to use: a GPT image
-tool, an existing Hermes connector, a generic image tool, or prompt-only mode.
+`img-summary` helps Hermes turn source material into a shareable image-card
+prompt. It adapts the card to the source and topic instead of forcing every
+summary into one fixed template.
 
-> <p align="center">
->   <img src="assets/omh-img-summary-card.png" alt="OMH img-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
-> </p>
->
-> **Made with `img-summary`.** Hermes uses this skill to turn notes, PRs,
-> issues, research, reports, or release notes into a shareable image-card
-> prompt for a connected image tool.
->
-> **How it works.** OMH prepares `visual_prompt_card/v1` plus
-> `poster_archetype/v1`: source kind, source-specific format, detected
-> `domain_key`, domain-aware visual theme, poster grammar, readable card copy, generation prompt,
-> negative prompt, QA checklist, and wrapper actions. The prompt asks image
-> tools to keep the source badge, content modules, evidence footer, and small
-> `OMH generated` mark stable while changing the background plate, scene,
-> material texture, camera treatment, lighting, motifs, palette, layout
-> density, and poster language for the subject. It explicitly rejects flat
-> vector clipart, plain gradients, generic glass cards, color-swapped
-> templates, and low-detail wallpaper.
->
-> **Rules.** A prepared card is not a generated image. Image generation,
-> visual QA, attachment, and delivery stay unobserved until a wrapper or user
-> records `visual_observation/v1`.
->
-> **Screen meaning.** The card shows the expected flow: source material ->
-> prompt card -> connected image tool -> observed evidence. If no image tool is
-> connected, Hermes asks the user to choose GPT image, a Hermes connector, a
-> generic image tool, or prompt-only mode.
+OMH prepares the prompt and handoff. Image generation, visual QA, attachment,
+and delivery remain separate until a connected tool or user records them as
+observed.
+
+<p align="center">
+  <img src="assets/omh-img-summary-card.png" alt="OMH img-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
+</p>
 
 <br>
 
