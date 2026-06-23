@@ -303,6 +303,50 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("Completed: Work status for run-complete.", rendered)
         self.assertIn("executor-result.json", rendered)
 
+    def test_completion_report_does_not_render_default_boundaries_as_active_gaps(self) -> None:
+        summary = build_work_observation_summary(
+            work_id="run-complete-boundary",
+            title="Completed runtime report",
+            report_kind="completion",
+            status="completed",
+            observed_events=[
+                {"event_type": "execution", "status": "observed", "evidence_refs": ["executor-result.json"]},
+                {"event_type": "verification", "status": "observed", "evidence_refs": ["pytest"]},
+            ],
+        )
+
+        rendered = render_completion_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertIn("execution", summary["evidence_boundary"]["not_evidence_until_observed"])
+        self.assertEqual(summary["evidence_boundary"]["active_not_observed_gaps"], [])
+        self.assertIn("Completed: Completed runtime report.", rendered)
+        self.assertIn("Claim rule:", rendered)
+        self.assertNotIn("Still waiting on observed proof", rendered)
+        self.assertNotIn("prepared_not_observed", rendered)
+
+    def test_status_report_renders_only_actual_unobserved_gaps(self) -> None:
+        summary = build_work_observation_summary(
+            work_id="run-ci-gap",
+            title="Runtime report with CI gap",
+            report_kind="status",
+            status="in_progress",
+            observed_events=[
+                {"event_type": "execution", "status": "observed", "evidence_refs": ["executor-result.json"]},
+                {"event_type": "ci", "status": "not_observed", "evidence_refs": ["ci-placeholder"]},
+            ],
+            next_action="record_ci_evidence",
+        )
+
+        rendered = render_status_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["evidence_boundary"]["active_not_observed_gaps"], ["ci"])
+        self.assertIn("Still waiting on observed proof for: ci.", rendered)
+        self.assertNotIn("Still waiting on observed proof for: prepared_not_observed", rendered)
+        self.assertNotIn("execution, verification, review", rendered)
+        self.assertNotIn("ci-placeholder", rendered)
+
     def test_status_projection_rejects_terminal_completion_when_verification_failed(self) -> None:
         status_payload = {
             "schema_version": "delegated_coding_status/v1",
@@ -338,6 +382,50 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("Completion is not observed yet", rendered)
         self.assertIn("pytest-failed", rendered)
         self.assertNotIn("Completed:", rendered)
+
+    def test_runtime_observation_terminal_events_override_in_progress_status(self) -> None:
+        for field, event_status, expected_status in (
+            ("failed_events", "failed", "failed"),
+            ("blocked_events", "blocked", "blocked"),
+        ):
+            with self.subTest(field=field):
+                status_payload = {
+                    "schema_version": "delegated_coding_status/v1",
+                    "run_id": f"run-runtime-{event_status}",
+                    "prepared": {
+                        "workflow": "team",
+                        "harness": "coding-handling",
+                        "status": "prepared_not_observed",
+                        "executor_target": "omx-runtime",
+                    },
+                    "wrapper": {"prompt_dispatched": True, "completion_status": "started"},
+                    "execution": {"observed": False, "status": "not_observed", "evidence_refs": []},
+                    "verification": {"observed": False, "status": "not_observed", "satisfied": False, "evidence_refs": []},
+                    "review": {"required": False, "observed": True, "status": "not_required", "satisfied": True},
+                    "ci": {"required": False, "observed": True, "status": "not_required", "satisfied": True},
+                    "merge": {"required": False, "observed": True, "status": "not_required", "satisfied": True},
+                    "runtime_observation": {
+                        "observed_events": [],
+                        field: ["worker_result"],
+                        "latest": {
+                            "worker_result": {
+                                "event_type": "worker_result",
+                                "status": event_status,
+                                "summary": f"worker result is {event_status}",
+                                "evidence_refs": [f"runtime/runtime_observations.jsonl#{event_status}"],
+                            },
+                        },
+                    },
+                    "next_action": "wait_for_executor_evidence",
+                    "lifecycle_status": "running",
+                    "safe_summary": f"Runtime observation is {event_status}.",
+                }
+
+                summary = build_work_observation_summary_from_status(status_payload, report_kind="status")
+
+                self.assertEqual(validate_work_observation_summary(summary), [])
+                self.assertEqual(summary["status"], expected_status)
+                self.assertIn(f"runtime/runtime_observations.jsonl#{event_status}", summary["observations"]["evidence_refs"])
 
     def test_status_projection_preserves_runtime_latest_event_evidence(self) -> None:
         status_payload = {
@@ -495,6 +583,23 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("- DCO: pass (3s) https://github.example/checks/dco.", rendered)
         self.assertIn("- integration tests: pending (1m) https://github.example/checks/integration.", rendered)
 
+    def test_structured_check_completed_without_success_conclusion_is_unknown(self) -> None:
+        rendered = format_check_rollup(
+            [
+                {
+                    "name": "lint",
+                    "status": "completed",
+                    "duration": "5s",
+                    "url": "https://github.example/checks/lint",
+                }
+            ]
+        )
+
+        self.assertIn("Checks: 1 unknown.", rendered)
+        self.assertIn("- lint: unknown (5s) https://github.example/checks/lint.", rendered)
+        self.assertNotIn("1 pass", rendered)
+        self.assertNotIn("lint: pass", rendered)
+
     def test_friendly_korean_progress_report_uses_channel_voice(self) -> None:
         summary = build_work_observation_summary(
             work_id="run-ko-friendly",
@@ -523,6 +628,39 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("Next:", rendered)
         self.assertNotIn("Evidence boundary", rendered)
         self.assertNotIn("한다", rendered)
+
+    def test_korean_progress_report_voice_is_explicit_and_deterministic(self) -> None:
+        summary = build_work_observation_summary(
+            work_id="run-ko-voice",
+            title="PR #259",
+            report_kind="progress",
+            status="in_progress",
+            safe_summary="CI는 통과했고, 리뷰 결과를 다시 확인 중입니다.",
+            progress_events=[
+                {
+                    "event_type": "status_update",
+                    "status": "observed",
+                    "summary": "CI는 통과했고, 리뷰 결과를 다시 확인 중입니다.",
+                }
+            ],
+            evidence_refs=["https://github.example/checks/tests"],
+            next_action="record_review_evidence",
+        )
+
+        friendly = render_progress_report(summary, locale="ko", voice="friendly")
+        polite = render_progress_report(summary, locale="ko", voice="polite")
+        formal = render_progress_report(summary, locale="ko", voice="formal")
+        default_ko = render_progress_report(summary, locale="ko")
+
+        self.assertIn("PR #259 작업은 진행 중이야.", friendly)
+        self.assertIn("다음은 record_review_evidence 쪽을 볼게.", friendly)
+        self.assertIn("PR #259 작업은 진행 중입니다.", polite)
+        self.assertIn("다음은 record_review_evidence 항목을 확인하겠습니다.", polite)
+        self.assertEqual(formal, polite)
+        self.assertEqual(default_ko, polite)
+        self.assertNotIn("진행 중이야", polite)
+        self.assertNotIn("볼게", polite)
+        self.assertNotIn("Progress:", polite)
 
     def test_user_report_scrubs_awareness_and_native_bridge_context(self) -> None:
         internal_context = """

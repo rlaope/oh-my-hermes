@@ -70,12 +70,10 @@ _CHECK_STATUS_ALIASES = {
     "pass": "pass",
     "passed": "pass",
     "passing": "pass",
-    "completed": "pass",
     "success": "pass",
     "successful": "pass",
     "succeeded": "pass",
     "ok": "pass",
-    "neutral": "pass",
     "skip": "skipped",
     "skipped": "skipped",
     "pending": "pending",
@@ -142,8 +140,17 @@ def build_work_observation_summary(
     compact_events, omitted_events = _compact_observation_events(observed_events or [])
     compact_progress, omitted_progress = compact_progress_events(progress_events or [])
     compact_blockers, omitted_blockers = _compact_strings(blockers or [], max_items=MAX_BLOCKERS, max_chars=180)
+    explicit_boundary_items = [item for item in (not_evidence_until_observed or []) if str(item).strip()]
     boundary_items, omitted_boundary = compact_context_refs(
-        [*_DEFAULT_NOT_EVIDENCE, *(not_evidence_until_observed or [])],
+        [*_DEFAULT_NOT_EVIDENCE, *explicit_boundary_items],
+        max_items=16,
+        max_chars=80,
+    )
+    active_boundary_items, omitted_active_boundary = compact_context_refs(
+        [
+            *explicit_boundary_items,
+            *[event["event_type"] for event in compact_events if event["status"] == "not_observed"],
+        ],
         max_items=16,
         max_chars=80,
     )
@@ -224,7 +231,9 @@ def build_work_observation_summary(
         "evidence_boundary": {
             "schema_version": "work_evidence_boundary/v1",
             "not_evidence_until_observed": boundary_items,
+            "active_not_observed_gaps": active_boundary_items,
             "omitted_not_evidence_count": omitted_boundary,
+            "omitted_active_gap_count": omitted_active_boundary,
             "claim_boundary": (
                 "This report summarizes metadata and observed references only. Prepared handoffs and summaries are not "
                 "execution, verification, review, CI, merge-readiness, or merge evidence until matching observations exist."
@@ -237,6 +246,8 @@ def build_work_observation_summary(
             "tone_policy": "adapter_selected_channel_voice",
             "default_voice": "conservative",
             "supported_tone_options": ["locale", "voice"],
+            "supported_voices": ["friendly", "polite", "formal", "conservative"],
+            "korean_default_voice": "polite",
             "internal_rails_policy": "summarize_or_omit_prompt_only_context",
             "plain_text_renderers": ["progress", "completion", "blocker", "status"],
             "machine_readable_payload": "internal_or_opt_in",
@@ -320,13 +331,7 @@ def build_work_observation_summary_from_status(
         ],
         safe_summary=str(status_payload.get("safe_summary", "")),
         next_action=str(status_payload.get("next_action") or "show_status"),
-        not_evidence_until_observed=[
-            "execution" if execution.get("observed") is not True else "",
-            "verification" if verification.get("observed") is not True else "",
-            "review" if str(review.get("status", "not_observed")) in {"not_observed", "pending"} else "",
-            "ci" if str(ci.get("status", "not_observed")) in {"not_observed", "pending"} else "",
-            "merge" if str(merge.get("status", "not_observed")) in {"not_observed", "pending", "not_ready"} else "",
-        ],
+        not_evidence_until_observed=_status_payload_active_gaps(execution, verification, review, ci, merge),
     )
 
 
@@ -338,6 +343,8 @@ def render_progress_report(summary: dict[str, Any], *, locale: str = "", voice: 
     status = _status_phrase(str(summary.get("status", "unknown")))
     if _friendly_ko(locale=locale, voice=voice):
         return _render_friendly_ko_progress_report(summary)
+    if _polite_ko(locale=locale, voice=voice):
+        return _render_polite_ko_progress_report(summary)
     lines = [f"Progress: {title} is {status}."]
     latest = _object(_object(summary.get("progress")).get("latest_event"))
     safe_summary = str(_object(summary.get("progress")).get("safe_summary", ""))
@@ -363,6 +370,8 @@ def render_completion_report(summary: dict[str, Any], *, locale: str = "", voice
         raise ValueError("; ".join(validate))
     if _friendly_ko(locale=locale, voice=voice):
         return _render_friendly_ko_completion_report(summary)
+    if _polite_ko(locale=locale, voice=voice):
+        return _render_polite_ko_completion_report(summary)
     title = str(summary["title"])
     if summary.get("status") == "completed":
         lines = [f"Completed: {title}."]
@@ -382,6 +391,8 @@ def render_blocker_report(summary: dict[str, Any], *, locale: str = "", voice: s
         raise ValueError("; ".join(validate))
     if _friendly_ko(locale=locale, voice=voice):
         return _render_friendly_ko_blocker_report(summary)
+    if _polite_ko(locale=locale, voice=voice):
+        return _render_polite_ko_blocker_report(summary)
     title = str(summary["title"])
     blockers = _string_items(summary.get("blockers"))
     lines = [f"Blocked: {title}."]
@@ -441,10 +452,16 @@ def format_check_rollup(checks: Any, *, locale: str = "", voice: str = "") -> st
     for row in rows:
         counts[row["status"]] = counts.get(row["status"], 0) + 1
     if _friendly_ko(locale=locale, voice=voice):
-        lines = [_ko_check_summary(counts)]
+        lines = [_friendly_ko_check_summary(counts)]
         lines.extend(_ko_check_line(row) for row in rows[:12])
         if len(rows) > 12:
             lines.append(f"- 외 {len(rows) - 12}개 체크")
+        return _plain(lines, locale=locale, voice=voice)
+    if _polite_ko(locale=locale, voice=voice):
+        lines = [_polite_ko_check_summary(counts)]
+        lines.extend(_ko_check_line(row) for row in rows[:12])
+        if len(rows) > 12:
+            lines.append(f"- 외 {len(rows) - 12}개 체크입니다.")
         return _plain(lines, locale=locale, voice=voice)
     lines = [_english_check_summary(counts)]
     lines.extend(_english_check_line(row) for row in rows[:12])
@@ -534,6 +551,8 @@ def validate_work_observation_summary(summary: dict[str, Any]) -> list[str]:
         _require(isinstance(observations.get(key), list), errors, f"observations.{key} must be a list")
     boundary = _object(summary.get("evidence_boundary"))
     _require(isinstance(boundary.get("not_evidence_until_observed"), list), errors, "evidence boundary must list non-evidence")
+    if "active_not_observed_gaps" in boundary:
+        _require(isinstance(boundary.get("active_not_observed_gaps"), list), errors, "active evidence gaps must be a list")
     _require("not" in str(boundary.get("claim_boundary", "")).lower(), errors, "claim boundary must preserve non-evidence language")
     user_report = _object(summary.get("user_report"))
     _require(user_report.get("default_format") == "plain_text", errors, "default user report format must be plain_text")
@@ -729,6 +748,51 @@ def _render_friendly_ko_blocker_report(summary: dict[str, Any]) -> str:
     return _plain(lines, locale="ko", voice="friendly")
 
 
+def _render_polite_ko_progress_report(summary: dict[str, Any]) -> str:
+    title = str(summary["title"])
+    status = str(summary.get("status", "unknown"))
+    latest = _object(_object(summary.get("progress")).get("latest_event"))
+    safe_summary = str(_object(summary.get("progress")).get("safe_summary", ""))
+    detail = str(latest.get("summary") or safe_summary)
+    lines = [_ko_polite_status_sentence(title, status)]
+    if detail:
+        lines.append(detail)
+    lines.extend(_ko_evidence_lines(summary))
+    next_action = str(summary.get("next_action", "show_status"))
+    if next_action and next_action != "show_status":
+        lines.append(f"다음은 {next_action} 항목을 확인하겠습니다.")
+    lines.append(_boundary_line(summary, locale="ko", voice="polite"))
+    return _plain(lines, locale="ko", voice="polite")
+
+
+def _render_polite_ko_completion_report(summary: dict[str, Any]) -> str:
+    title = str(summary["title"])
+    status = str(summary.get("status", "unknown"))
+    lines = [f"{title} 작업은 완료되었습니다." if status == "completed" else f"{title} 작업은 아직 완료로 확인되지 않았습니다."]
+    observed = _string_items(_object(summary.get("observations")).get("observed_events"))
+    if observed:
+        lines.append(f"확인된 항목은 {', '.join(observed[:5])}입니다.")
+    lines.extend(_ko_evidence_lines(summary))
+    lines.append(_boundary_line(summary, locale="ko", voice="polite"))
+    return _plain(lines, locale="ko", voice="polite")
+
+
+def _render_polite_ko_blocker_report(summary: dict[str, Any]) -> str:
+    title = str(summary["title"])
+    blockers = _string_items(summary.get("blockers"))
+    lines = [f"{title} 작업은 현재 막혀 있습니다."]
+    if blockers:
+        lines.append(f"이유: {'; '.join(blockers[:3])}입니다.")
+    else:
+        lines.append("아직 필요한 확인 근거가 관찰되지 않았습니다.")
+    next_action = str(summary.get("next_action", "show_status"))
+    if next_action and next_action != "show_status":
+        lines.append(f"다음은 {next_action} 항목을 확인하겠습니다.")
+    lines.extend(_ko_evidence_lines(summary))
+    lines.append(_boundary_line(summary, locale="ko", voice="polite"))
+    return _plain(lines, locale="ko", voice="polite")
+
+
 def _ko_status_sentence(title: str, status: str) -> str:
     if status == "completed":
         return f"{title} 작업은 끝났어."
@@ -743,6 +807,20 @@ def _ko_status_sentence(title: str, status: str) -> str:
     return f"{title} 작업은 진행 중이야."
 
 
+def _ko_polite_status_sentence(title: str, status: str) -> str:
+    if status == "completed":
+        return f"{title} 작업은 완료되었습니다."
+    if status == "blocked":
+        return f"{title} 작업은 현재 막혀 있습니다."
+    if status == "failed":
+        return f"{title} 작업에서 실패가 확인되었습니다."
+    if status == "prepared_not_observed":
+        return f"{title} 작업은 준비되었고, 아직 실행 확인을 기다리는 중입니다."
+    if status == "unknown":
+        return f"{title} 작업 상태는 아직 확실하지 않습니다."
+    return f"{title} 작업은 진행 중입니다."
+
+
 def _ko_evidence_lines(summary: dict[str, Any]) -> list[str]:
     refs = _string_items(_object(summary.get("observations")).get("evidence_refs"))
     if not refs:
@@ -750,13 +828,21 @@ def _ko_evidence_lines(summary: dict[str, Any]) -> list[str]:
     return [f"확인한 근거: {', '.join(refs[:4])}."]
 
 
+def _korean_locale(locale: str) -> bool:
+    return _token(locale) in {"ko", "ko_kr", "kr", "korean"}
+
+
 def _friendly_ko(*, locale: str, voice: str) -> bool:
-    return _token(locale) in {"ko", "ko_kr", "kr", "korean"} and _token(voice) in {
+    return _korean_locale(locale) and _token(voice) in {
         "friendly",
         "casual",
         "discord",
         "calm",
     }
+
+
+def _polite_ko(*, locale: str, voice: str) -> bool:
+    return _korean_locale(locale) and not _friendly_ko(locale=locale, voice=voice)
 
 
 def _parse_background_completion(output: str) -> dict[str, Any]:
@@ -801,6 +887,12 @@ def _background_completion_status_line(
         if exit_code is None:
             return "백그라운드 작업이 끝났고, 출력만 요약할게."
         return f"백그라운드 작업이 exit code {exit_code}로 끝났어."
+    if _polite_ko(locale=locale, voice=voice):
+        if succeeded:
+            return "백그라운드 작업은 조용히 완료되었습니다."
+        if exit_code is None:
+            return "백그라운드 작업이 완료되어 출력을 요약하겠습니다."
+        return f"백그라운드 작업이 exit code {exit_code}로 종료되었습니다."
     if succeeded:
         return f"Background process {label} completed successfully."
     if exit_code is None:
@@ -850,14 +942,7 @@ def _check_rows(checks: Any) -> list[dict[str, str]]:
 
 def _check_row_from_dict(value: dict[str, Any]) -> dict[str, str]:
     name = str(value.get("name") or value.get("check") or value.get("workflow") or value.get("title") or "").strip()
-    raw_status = str(
-        value.get("conclusion")
-        or value.get("status")
-        or value.get("state")
-        or value.get("result")
-        or ""
-    )
-    status = _normalize_check_status(raw_status)
+    status = _check_status_from_structured_row(value)
     if not name or not status:
         return {}
     duration = str(value.get("duration") or value.get("elapsed") or value.get("time") or "").strip()
@@ -941,6 +1026,41 @@ def _normalize_check_status(value: str) -> str:
     return _CHECK_STATUS_ALIASES.get(lowered, "")
 
 
+def _check_status_from_structured_row(value: dict[str, Any]) -> str:
+    explicit_result = value.get("conclusion")
+    if explicit_result in ("", None):
+        explicit_result = value.get("result")
+    if explicit_result not in ("", None):
+        return _normalize_check_conclusion(str(explicit_result))
+    state = str(value.get("status") or value.get("state") or "")
+    if _token(state) == "completed":
+        return "unknown"
+    return _normalize_check_status(state)
+
+
+def _normalize_check_conclusion(value: str) -> str:
+    normalized = _token(value)
+    if normalized in {"success", "successful", "succeeded", "pass", "passed", "passing", "ok"}:
+        return "pass"
+    if normalized in {"skip", "skipped"}:
+        return "skipped"
+    if normalized in {
+        "fail",
+        "failed",
+        "failure",
+        "error",
+        "cancelled",
+        "canceled",
+        "timed_out",
+        "action_required",
+        "startup_failure",
+    }:
+        return "fail"
+    if normalized in {"pending", "queued", "waiting", "requested", "expected", "in_progress", "progress", "running"}:
+        return "pending"
+    return "unknown"
+
+
 def _english_check_summary(counts: dict[str, int]) -> str:
     parts = [f"{counts[status]} {status}" for status in _CHECK_STATUS_ORDER if counts.get(status)]
     return f"Checks: {', '.join(parts)}." if parts else "Checks: no check rows found."
@@ -951,10 +1071,16 @@ def _english_check_line(row: dict[str, str]) -> str:
     return f"- {row['name']}: {row['status']}{suffix}"
 
 
-def _ko_check_summary(counts: dict[str, int]) -> str:
+def _friendly_ko_check_summary(counts: dict[str, int]) -> str:
     labels = {"pass": "통과", "pending": "대기 중", "fail": "실패", "skipped": "건너뜀", "unknown": "상태 미확인"}
     parts = [f"{counts[status]}개 {labels[status]}" for status in _CHECK_STATUS_ORDER if counts.get(status)]
     return f"체크는 {', '.join(parts)}이야." if parts else "확인할 체크 행은 없었어."
+
+
+def _polite_ko_check_summary(counts: dict[str, int]) -> str:
+    labels = {"pass": "통과", "pending": "대기 중", "fail": "실패", "skipped": "건너뜀", "unknown": "상태 미확인"}
+    parts = [f"{counts[status]}개 {labels[status]}" for status in _CHECK_STATUS_ORDER if counts.get(status)]
+    return f"체크는 {', '.join(parts)}입니다." if parts else "확인할 체크 행은 없습니다."
 
 
 def _ko_check_line(row: dict[str, str]) -> str:
@@ -1008,6 +1134,8 @@ def _contains_internal_report_marker(text: str) -> bool:
 def _internal_context_user_summary(*, locale: str, voice: str) -> str:
     if _friendly_ko(locale=locale, voice=voice):
         return "내부 OMH 상태는 확인했고, 사용자에게는 필요한 진행 상황만 짧게 전할게."
+    if _polite_ko(locale=locale, voice=voice):
+        return "내부 OMH 상태는 확인했으며, 사용자에게는 필요한 진행 상황만 요약하겠습니다."
     return "Internal OMH status context was observed; user-facing output should summarize only the relevant status."
 
 
@@ -1019,12 +1147,34 @@ def _evidence_lines(summary: dict[str, Any]) -> list[str]:
 
 
 def _boundary_line(summary: dict[str, Any], *, locale: str = "", voice: str = "") -> str:
-    items = _string_items(_object(summary.get("evidence_boundary")).get("not_evidence_until_observed"))
+    boundary = _object(summary.get("evidence_boundary"))
+    items = _active_boundary_items(summary)
+    claim_boundary = str(boundary.get("claim_boundary") or "")
     if not items:
+        if _friendly_ko(locale=locale, voice=voice):
+            return "준비된 핸드오프나 요약은 실제 관찰 기록이 있어야 실행, 검증, 리뷰, CI, 머지 근거로 볼 수 있어."
+        if _polite_ko(locale=locale, voice=voice):
+            return "준비된 핸드오프나 요약은 실제 관찰 기록이 있어야 실행, 검증, 리뷰, CI, 머지 근거로 볼 수 있습니다."
+        if claim_boundary:
+            return (
+                "Claim rule: prepared handoffs and summaries need matching observations before they count as "
+                "execution, verification, review, CI, merge-readiness, or merge evidence."
+            )
         return ""
     if _friendly_ko(locale=locale, voice=voice):
         return f"아직 확인 근거가 필요한 부분: {', '.join(items[:5])}."
+    if _polite_ko(locale=locale, voice=voice):
+        return f"아직 확인 근거가 필요한 부분: {', '.join(items[:5])}입니다."
     return f"Still waiting on observed proof for: {', '.join(items[:5])}."
+
+
+def _active_boundary_items(summary: dict[str, Any]) -> list[str]:
+    boundary = _object(summary.get("evidence_boundary"))
+    active = _string_items(boundary.get("active_not_observed_gaps"))
+    if active:
+        return active
+    observations = _object(summary.get("observations"))
+    return _string_items(observations.get("not_observed_events"))
 
 
 def _default_summary(summary: dict[str, Any]) -> str:
@@ -1053,6 +1203,7 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
     review = _object(status_payload.get("review"))
     ci = _object(status_payload.get("ci"))
     merge = _object(status_payload.get("merge"))
+    runtime_observation = _object(status_payload.get("runtime_observation"))
     next_action = str(status_payload.get("next_action", ""))
     lifecycle = str(status_payload.get("lifecycle_status", ""))
     terminal_requested = lifecycle in {"reportable", "merge_ready", "merged"} or next_action in {
@@ -1063,6 +1214,9 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
     failed_or_blocked = _failed_or_blocked_status(execution, verification, review, ci, merge)
     if failed_or_blocked:
         return failed_or_blocked
+    runtime_failed_or_blocked = _runtime_failed_or_blocked_status(runtime_observation)
+    if runtime_failed_or_blocked:
+        return runtime_failed_or_blocked
     if terminal_requested and _terminal_evidence_satisfied(execution, verification, review, ci, merge):
         return "completed"
     if next_action.startswith("surface_") or "blocker" in next_action:
@@ -1078,6 +1232,26 @@ def _status_from_status_payload(status_payload: dict[str, Any]) -> str:
     ):
         return "prepared_not_observed"
     return "in_progress"
+
+
+def _status_payload_active_gaps(
+    execution: dict[str, Any],
+    verification: dict[str, Any],
+    review: dict[str, Any],
+    ci: dict[str, Any],
+    merge: dict[str, Any],
+) -> list[str]:
+    return [
+        item
+        for item in (
+            "execution" if execution.get("observed") is not True else "",
+            "verification" if verification.get("observed") is not True else "",
+            "review" if str(review.get("status", "not_observed")) in {"not_observed", "pending"} else "",
+            "ci" if str(ci.get("status", "not_observed")) in {"not_observed", "pending"} else "",
+            "merge" if str(merge.get("status", "not_observed")) in {"not_observed", "pending", "not_ready"} else "",
+        )
+        if item
+    ]
 
 
 def _terminal_evidence_satisfied(
@@ -1161,6 +1335,22 @@ def _failed_or_blocked_status(*stages: dict[str, Any]) -> str:
     blocked = False
     for stage in stages:
         status = str(stage.get("status", ""))
+        if status == "failed":
+            return "failed"
+        if status == "blocked":
+            blocked = True
+    return "blocked" if blocked else ""
+
+
+def _runtime_failed_or_blocked_status(runtime_observation: dict[str, Any]) -> str:
+    if _string_items(runtime_observation.get("failed_events")):
+        return "failed"
+    latest = _object(runtime_observation.get("latest"))
+    blocked = bool(_string_items(runtime_observation.get("blocked_events")))
+    for record in latest.values():
+        if not isinstance(record, dict):
+            continue
+        status = _token(record.get("status") or "")
         if status == "failed":
             return "failed"
         if status == "blocked":
