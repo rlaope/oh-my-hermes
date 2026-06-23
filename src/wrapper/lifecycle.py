@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..context_safety import build_coding_progress_reporting_policy
 from ..coding_delegation import build_coding_delegation_payload, coding_delegation_record_payload
 from ..paths import OmhPaths
 from ..runtime.artifacts import (
@@ -165,18 +166,23 @@ def record_codex_verification(
 def report_codex_delegation_lifecycle(paths: OmhPaths, run_id: str) -> dict[str, object]:
     status = summarize_delegated_coding_status(paths, run_id)
     next_action = str(status.get("next_action", "unknown"))
+    lifecycle_status = _lifecycle_status(next_action)
     completion_report_actions = {"report_completion_with_evidence"}
     terminal_report_actions = {"report_completion_with_evidence", "report_merge_ready", "report_merged"}
     report = dict(status)
     report.update(
         {
             "lifecycle_schema_version": LIFECYCLE_SCHEMA_VERSION,
-            "lifecycle_status": _lifecycle_status(next_action),
+            "lifecycle_status": lifecycle_status,
             "can_report_completion": next_action in completion_report_actions,
             "can_report_terminal_status": next_action in terminal_report_actions,
             "blocking_reason": "" if next_action in terminal_report_actions else _blocking_reason(next_action),
             "artifact_paths": _artifact_paths(paths, run_id),
             "runtime_validation": validate_runtime(paths, run_id),
+            "progress_reporting_policy": build_coding_progress_reporting_policy(
+                next_action=next_action,
+                lifecycle_status=lifecycle_status,
+            ),
         }
     )
     return report

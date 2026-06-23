@@ -7,6 +7,7 @@ from typing import Any
 
 CONTEXT_ARTIFACT_REF_SCHEMA_VERSION = "omh_context_artifact_ref/v1"
 PROGRESS_EVENT_SCHEMA_VERSION = "omh_progress_event/v1"
+CODING_PROGRESS_REPORTING_POLICY_SCHEMA_VERSION = "coding_progress_reporting_policy/v1"
 MAX_VISIBLE_MESSAGE_CHARS = 180
 MAX_SUMMARY_CHARS = 240
 MAX_PROGRESS_EVENT_SUMMARY_CHARS = 220
@@ -15,6 +16,21 @@ MAX_SOURCE_REF_CHARS = 240
 MAX_EVIDENCE_REFS = 8
 MAX_EVIDENCE_REF_CHARS = 160
 MAX_ARTIFACT_REFS = 4
+
+CODING_PROGRESS_REPORTABLE_EVENTS = (
+    "workflow_started",
+    "dispatch_to_executor",
+    "blocker_encountered",
+    "targeted_tests_failed",
+    "root_cause_identified",
+    "fix_strategy_selected",
+    "targeted_tests_passed",
+    "full_tests_started",
+    "full_tests_passed",
+    "commit_created",
+    "pr_updated",
+    "workflow_completed",
+)
 
 _PROGRESS_EVENT_TYPES = {
     "status_update",
@@ -32,6 +48,7 @@ _PROGRESS_EVENT_TYPES = {
     "commit_created",
     "pr_created",
     "pr_updated",
+    "dispatch_to_executor",
     "blocker_encountered",
     "workflow_started",
     "workflow_completed",
@@ -111,6 +128,97 @@ def build_progress_event(
             "merge-readiness, merge, or raw-log evidence unless separate observed evidence records say so."
         ),
     }
+
+
+def build_coding_progress_reporting_policy(
+    *,
+    next_action: str = "",
+    lifecycle_status: str = "",
+) -> dict[str, object]:
+    return {
+        "schema_version": CODING_PROGRESS_REPORTING_POLICY_SCHEMA_VERSION,
+        "mode": "event_triggered",
+        "metadata_only": True,
+        "raw_content_included": False,
+        "timed_polling_rejected": True,
+        "final_only_silence_rejected": True,
+        "raw_log_dumping_rejected": True,
+        "reportable_events": list(CODING_PROGRESS_REPORTABLE_EVENTS),
+        "state_guidance": {
+            "next_action": _normalize_token(next_action),
+            "lifecycle_status": _normalize_token(lifecycle_status),
+            "reportable_events": _coding_state_reportable_events(next_action),
+        },
+        "language_policy": {
+            "style": "concise",
+            "mirror_chat_language": True,
+            "korean_friendly": True,
+        },
+        "evidence_boundary": (
+            "Progress reports are concise lifecycle/status updates only. They are not execution, review, CI, "
+            "merge-readiness, or merge proof unless matching observed records exist."
+        ),
+        "forbidden_patterns": [
+            "final_only_silence_for_long_running_executor_work",
+            "raw_log_dumping",
+            "claiming_execution_review_ci_or_merge_without_observed_records",
+        ],
+    }
+
+
+def _coding_state_reportable_events(next_action: str) -> list[str]:
+    normalized = _normalize_token(next_action)
+    events_by_next_action = {
+        "dispatch_to_executor": [
+            "workflow_started",
+            "dispatch_to_executor",
+        ],
+        "wait_for_executor_evidence": [
+            "blocker_encountered",
+            "targeted_tests_failed",
+            "root_cause_identified",
+            "fix_strategy_selected",
+            "targeted_tests_passed",
+        ],
+        "surface_executor_blocker": [
+            "blocker_encountered",
+            "targeted_tests_failed",
+        ],
+        "record_verification_evidence": [
+            "targeted_tests_passed",
+            "full_tests_started",
+        ],
+        "record_review_evidence": [
+            "full_tests_passed",
+            "commit_created",
+            "pr_updated",
+        ],
+        "record_ci_evidence": [
+            "full_tests_passed",
+            "pr_updated",
+        ],
+        "record_merge_readiness": [
+            "full_tests_passed",
+            "commit_created",
+            "pr_updated",
+        ],
+        "report_completion_with_evidence": [
+            "full_tests_passed",
+            "commit_created",
+            "pr_updated",
+            "workflow_completed",
+        ],
+        "report_merge_ready": [
+            "full_tests_passed",
+            "commit_created",
+            "pr_updated",
+            "workflow_completed",
+        ],
+        "report_merged": [
+            "workflow_completed",
+        ],
+    }
+    return list(events_by_next_action.get(normalized, ["workflow_started"]))
 
 
 def compact_progress_events(
