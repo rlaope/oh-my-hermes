@@ -13,12 +13,16 @@ from omh.goal_loop import (
     LOOP_STATUS_CARD_SCHEMA,
     assess_loopability,
     block_loop_queue_item,
+    build_loop_cycle_narration,
     build_loop_queue_handoff,
     build_loop_start_card,
     build_loop_status_card,
     create_loop_cycle,
+    dispatch_loop_queue_item,
     inspect_loop_queue_item,
     list_loop_queue,
+    loop_executor_capability,
+    observe_codex_loop_queue_item,
     observe_loop_queue_item,
     record_loop_feedback,
     run_loop_once_result,
@@ -325,6 +329,76 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(len(second["runtime"]["queue"]), 1)
         self.assertEqual(card["next_action"], "observe_runtime_queue")
         self.assertEqual(card["failure_mode_summary"]["warnings"][0]["id"], "verification_gap")
+
+    def test_loop_executor_capability_selects_native_or_omh_managed_loop(self) -> None:
+        claude = loop_executor_capability("claude-code")
+        codex = loop_executor_capability("codex")
+        hermes = loop_executor_capability("hermes")
+        generic = loop_executor_capability("generic")
+
+        self.assertEqual(claude["schema_version"], "executor_loop_capability/v1")
+        self.assertEqual(claude["loop_mode"], "native")
+        self.assertEqual(claude["dispatch_owner"], "executor")
+        self.assertIn("native_loop_or_goal", claude["observability"])
+        self.assertEqual(codex["loop_mode"], "omh_managed")
+        self.assertEqual(codex["dispatch_owner"], "omh_wrapper")
+        self.assertIn("codex_progress_summary/v1", codex["observability"])
+        self.assertEqual(hermes["loop_mode"], "omh_managed")
+        self.assertEqual(generic["loop_mode"], "prompt_handoff")
+        self.assertIn("not dispatch", codex["claim_boundary"])
+
+    def test_loop_codex_dispatch_observation_and_narration_keep_boundaries(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Run a coding-agent loop through Codex while Hermes narrates progress",
+                goal_reframe="Prepare one Codex-backed loop step, observe progress, and report a human-readable status.",
+                success_criteria=["Codex session metadata is observed", "Hermes narration does not claim CI or merge"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"], workflow_pattern="single_step")
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+
+            dispatched = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                thread_ref="codex-thread-1",
+                evidence_refs=["wrapper:codex-dispatch:1"],
+                summary="Codex session opened for this loop tick.",
+            )
+            observed = observe_codex_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                codex_log_text='{"type":"tool_call","tool":"rg","args":"rg loop"}\n{"role":"assistant","content":"I defined the issue and started the implementation."}',
+                evidence_refs=["codex-jsonl:1"],
+                codex_log_ref="codex-session-log:1",
+                summary="Codex defined the issue and started implementation.",
+            )
+            narration = build_loop_cycle_narration(paths, cycle["loop_id"], queue_id)
+
+        dispatched_item = dispatched["runtime"]["queue"][0]
+        observed_item = observed["runtime"]["queue"][0]
+        self.assertEqual(dispatched_item["status"], "prepared_not_observed")
+        self.assertEqual(dispatched_item["executor_session"]["dispatch_status"], "dispatched")
+        self.assertEqual(dispatched_item["executor_session"]["session_ref"], "codex-session-1")
+        self.assertFalse(dispatched_item["observed"])
+        self.assertEqual(observed_item["status"], "observed")
+        self.assertTrue(observed_item["observed"])
+        self.assertEqual(observed_item["executor_session"]["dispatch_status"], "progress_observed")
+        self.assertEqual(observed_item["executor_session"]["progress_summary"]["schema_version"], "codex_progress_summary/v1")
+        self.assertIn("codex-jsonl:1", observed_item["observed_evidence_refs"])
+        self.assertEqual(narration["schema_version"], "loop_cycle_narration/v1")
+        self.assertIn("이번 사이클", narration["headline"])
+        self.assertIn("Codex", narration["executor_status"])
+        self.assertIn("implementation", narration["not_evidence_yet"])
+        self.assertIn("ci", narration["not_evidence_yet"])
+        self.assertEqual(validate_loop_cycle(observed), {"ok": True, "errors": []})
 
     def test_loop_queue_lifecycle_lists_handoffs_observes_and_blocks_items(self) -> None:
         with TemporaryDirectory() as tmp:

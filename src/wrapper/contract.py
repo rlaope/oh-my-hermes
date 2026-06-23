@@ -6,7 +6,7 @@ from typing import Any
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_route_payload, route_chat_message
-from ..coding_delegation import build_coding_delegation_payload
+from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
 from ..context import build_context_brief
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
@@ -17,6 +17,7 @@ from ..plugin_bundle.omh.awareness import workflow_context_card_for_workflow, wo
 from ..probe import probe_capabilities
 from ..quickstart import build_quickstart_card
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
+from ..setup_profiles import read_setup_profile
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
     hermes_coding_team_body,
@@ -576,6 +577,35 @@ def build_chat_interaction_payload(
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_command_preview"))
         return _finish_interaction(base, target_notice)
 
+    if resolved_mode == "delegate":
+        resolved_executor_target, executor_resolution = _resolve_delegate_executor_target(executor_target, paths)
+        delegation = build_coding_delegation_payload(
+            message,
+            source=source,
+            limit=limit,
+            include_message=include_message,
+            source_metadata=metadata,
+            executor_target=resolved_executor_target,
+        )
+        delegation["executor_resolution"] = executor_resolution
+        base["delegation"] = delegation
+        base["executor_resolution"] = executor_resolution
+        action = str(_nested(delegation, "delegation").get("action", "fallback"))
+        if action == "delegate" and delegation.get("executor_handoff"):
+            base["next_action"] = "send_to_executor"
+        elif action == "delegate" and delegation.get("runtime_handoff"):
+            base["next_action"] = "show_runtime_handoff"
+        elif action == "delegate" and delegation.get("prompt_handoff"):
+            base["next_action"] = "show_prompt_handoff"
+        elif action == "delegate" and _nested(delegation, "executor_selection").get("choice_required"):
+            base["next_action"] = "choose_executor"
+        elif action == "clarify":
+            base["next_action"] = "answer_clarification"
+        else:
+            base["next_action"] = "route_coding_request"
+        base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
+        return _finish_interaction(base, target_notice)
+
     if resolved_mode == "clarify" or route["action"] != "dispatch":
         base["chat_response"] = build_chat_response_from_route(
             route_payload,
@@ -599,32 +629,6 @@ def build_chat_interaction_payload(
             base["loop_start_card"] = loop_start_card
         return _finish_interaction(base, target_notice)
 
-    if resolved_mode == "delegate":
-        delegation = build_coding_delegation_payload(
-            message,
-            source=source,
-            limit=limit,
-            include_message=include_message,
-            source_metadata=metadata,
-            executor_target=executor_target,
-        )
-        base["delegation"] = delegation
-        action = str(_nested(delegation, "delegation").get("action", "fallback"))
-        if action == "delegate" and delegation.get("executor_handoff"):
-            base["next_action"] = "send_to_executor"
-        elif action == "delegate" and delegation.get("runtime_handoff"):
-            base["next_action"] = "show_runtime_handoff"
-        elif action == "delegate" and delegation.get("prompt_handoff"):
-            base["next_action"] = "show_prompt_handoff"
-        elif action == "delegate" and _nested(delegation, "executor_selection").get("choice_required"):
-            base["next_action"] = "choose_executor"
-        elif action == "clarify":
-            base["next_action"] = "answer_clarification"
-        else:
-            base["next_action"] = "route_coding_request"
-        base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
-        return _finish_interaction(base, target_notice)
-
     plan = build_hermes_plan_payload(message, source=source, limit=limit, source_metadata=metadata)
     base["plan"] = _public_plan_payload(plan, include_message=include_message)
     contract = _nested(plan, "wrapper_contract")
@@ -632,6 +636,42 @@ def build_chat_interaction_payload(
     base["next_action"] = "present_plan" if next_action == "prepare_coding_delegation_after_plan_acceptance" else next_action
     base["chat_response"] = build_chat_response_from_plan(plan, thread_key=str(base["thread_key"]))
     return _finish_interaction(base, target_notice)
+
+
+def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | None) -> tuple[str, dict[str, object]]:
+    requested = str(executor_target or "choose").strip() or "choose"
+    setup_default = "choose"
+    setup_available = False
+    if paths is not None:
+        try:
+            profile = read_setup_profile(paths)
+        except (OSError, ValueError):
+            profile = None
+        if isinstance(profile, dict):
+            candidate = str(profile.get("default_executor", "") or "").strip()
+            if candidate in CODING_EXECUTOR_TARGETS:
+                setup_default = candidate
+                setup_available = True
+
+    if requested != "choose":
+        resolved = requested
+        source = "explicit"
+    elif setup_available:
+        resolved = setup_default
+        source = "setup_profile"
+    else:
+        resolved = "choose"
+        source = "caller_default"
+
+    return resolved, {
+        "schema_version": "executor_resolution/v1",
+        "source": source,
+        "requested_executor_target": requested,
+        "default_executor": setup_default,
+        "resolved_executor_target": resolved,
+        "explicit_override": requested != "choose",
+        "claim_boundary": "Executor default resolution is routing preference only; it is not dispatch, execution, review, CI, or merge evidence.",
+    }
 
 
 def build_chat_status_interaction(
@@ -1264,6 +1304,7 @@ def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key
 
 def build_chat_response_from_delegation(delegation_payload: dict[str, object], *, thread_key: str = "") -> dict[str, object]:
     delegation = _nested(delegation_payload, "delegation")
+    executor_resolution = _nested(delegation_payload, "executor_resolution")
     action = str(delegation.get("action", "fallback"))
     if action == "delegate" and delegation_payload.get("executor_handoff"):
         handoff = _nested(delegation_payload, "executor_handoff")
@@ -1290,6 +1331,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "dispatch_policy": delegation_payload.get("dispatch_policy", "ask_before_dispatch"),
                 "executor_target": handoff.get("executor_target", "codex"),
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
+                "executor_resolution": executor_resolution,
             },
         )
     if action == "delegate" and delegation_payload.get("prompt_handoff"):
@@ -1317,6 +1359,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "dispatch_policy": "prepare_only",
                 "dispatchable": False,
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
+                "executor_resolution": executor_resolution,
             },
         )
     if action == "delegate" and delegation_payload.get("runtime_handoff"):
@@ -1371,6 +1414,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "dispatch_policy": "prepare_only",
                 "dispatchable": False,
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
+                "executor_resolution": executor_resolution,
             },
         )
     if action == "delegate" and _nested(delegation_payload, "executor_selection").get("choice_required"):
@@ -1391,6 +1435,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 "dispatchable": False,
                 "executor_options": _nested(delegation_payload, "executor_selection").get("options", []),
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
+                "executor_resolution": executor_resolution,
             },
         )
     if action == "clarify":

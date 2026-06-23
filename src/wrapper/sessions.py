@@ -107,6 +107,7 @@ def create_or_resume_wrapper_session(
         source_metadata=source_metadata,
         executor_target=executor_target,
         target_notice=target_notice,
+        paths=paths,
     )
     thread_key = str(interaction["thread_key"])
     session_id = session_id_for_thread_key(thread_key)
