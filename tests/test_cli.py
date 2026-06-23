@@ -1399,6 +1399,7 @@ class CliTests(unittest.TestCase):
                     "1",
                     "y",
                     "y",
+                    "n",
                 ]
             ) + "\n"
 
@@ -7179,6 +7180,27 @@ class CliTests(unittest.TestCase):
             self.assertEqual(setup["steps"]["profile"]["selected_categories"], ["prompt-only-coding"])
             self.assertEqual(setup["steps"]["profile"]["default_executor"], "claude-code")
             self.assertEqual(setup["steps"]["profile"]["dispatch_policy"], "prepare_only")
+
+    def test_setup_github_star_helper_uses_gh_best_effort(self) -> None:
+        completed = subprocess.CompletedProcess(["gh"], 0, stdout="", stderr="")
+        with patch("omh.commands.setup.subprocess.run", return_value=completed) as run:
+            result = setup_commands._try_star_github_repo()
+
+        self.assertTrue(result["ok"])
+        run.assert_called_once_with(
+            ["gh", "repo", "star", "rlaope/oh-my-hermes"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+        )
+
+    def test_setup_github_star_helper_reports_missing_gh_without_blocking(self) -> None:
+        with patch("omh.commands.setup.subprocess.run", side_effect=FileNotFoundError):
+            result = setup_commands._try_star_github_repo()
+
+        self.assertFalse(result["ok"])
+        self.assertIn("GitHub CLI", result["reason"])
 
     def test_setup_choice_menu_uses_cursor_not_checkbox(self) -> None:
         from omh.commands.setup import _choice_menu_lines

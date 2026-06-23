@@ -1,20 +1,9 @@
 # oh-my-hermes
 
 <p align="center">
-  <img src="assets/hermes-agent-hero.png" alt="Oh My Hermes" width="720">
-</p>
-
-<p align="center">
   <strong>Install once. Keep your Hermes workflow. Let OMH make the next step safe.</strong>
   <br>
   <em>Chat-first skills, workflow contracts, status cards, and handoffs that fit existing Hermes setups without breaking them.</em>
-</p>
-
-<p align="center">
-  <a href="https://github.com/rlaope/oh-my-hermes"><img alt="GitHub" src="https://img.shields.io/badge/github-rlaope%2Foh--my--hermes-181717?logo=github"></a>
-  <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Status" src="https://img.shields.io/badge/status-1.0.1%20stable-blue">
 </p>
 
 Most people skip the docs. **oh-my-hermes** is built for that reality: install
@@ -43,20 +32,8 @@ easier to start, easier to trust, and more natural to apply in real work.
 
 > [!NOTE]
 > **Friren Agent is hard at work improving OMH inside Art&Engine.**
->
-> Improve OMH System !!
->
-> <p align="center">
->   <a href="https://rlaope.github.io/artengine-lab/">
->     <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
->   </a>
-> </p>
->
-> <p align="center">
->   <a href="https://rlaope.github.io/artengine-lab/">
->     <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
->   </a>
-> </p>
+> Explore [Team Art & Engineering](https://rlaope.github.io/artengine-lab/)
+> for the studio context behind OMH.
 
 <br>
 
@@ -119,10 +96,6 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 
 ## Core Workflows
 
-<p align="center">
-  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
-</p>
-
 | Need | OMH helps Hermes do this | Example |
 | --- | --- | --- |
 | `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Shape fuzzy intent into an interview, plan, goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
@@ -135,22 +108,6 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 | `img-summary` | Turn notes, PRs, issues, research, or reports into image-card prompts for a connected image tool. | "Make a PR summary card for reviewers." |
 | `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
 | `agent-ops-review` | Show a manager view of AI-agent research, coding, review, blockers, next actions, and throughput levers. | "As a manager, show the quality and progress of agent work." |
-
-### Img Summary Skill
-
-`img-summary` helps Hermes turn source material into a shareable image-card
-prompt. It adapts the card to the source and topic instead of forcing every
-summary into one fixed template.
-
-OMH prepares the prompt and handoff. Image generation, visual QA, attachment,
-and delivery remain separate until a connected tool or user records them as
-observed.
-
-<p align="center">
-  <img src="assets/omh-img-summary-card.png" alt="OMH img-summary workflow card showing prompt preparation and observed image evidence boundaries" width="680">
-</p>
-
-<br>
 
 ## What You Get
 
@@ -168,20 +125,29 @@ observed.
 | Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
 | Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
 | Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts, including missed OMH routes: metadata-only trace, deterministic eval, human review queue, non-applying patch proposal, regression case, audit, and export bundle. |
-| Organization patterns | Solo, research, product ops, coding runtime, and CTO-style patterns stay available so Hermes can choose the right role flow per request. |
+| Request flow | Hermes chooses a lightweight role flow per request: direct answer, research, product ops, coding handoff, or review gate. |
 
 <br>
 
-## Organization Patterns
+## Request Flow
 
-Profiles describe how Hermes should organize work around a request. They are
-role-interaction patterns, not hidden workers. Setup does not need to lock one
-organization model; Hermes can choose the pattern per request, and visible role
-files remain an explicit advanced option.
+OMH keeps the flow simple and visible. Hermes chooses the smallest role path that
+fits the request instead of locking setup to one team model.
 
-<p align="center">
-  <img src="assets/omh-profile-interaction-map.svg" alt="OMH request-to-handoff interaction map" width="920">
-</p>
+```text
+plain request
+  -> choose workflow lane
+  -> prepare plan, source brief, or handoff
+  -> observe execution / review / CI only when evidence exists
+  -> report next action in Hermes chat
+```
+
+| Request shape | Typical flow |
+| --- | --- |
+| Quick answer or setup repair | Hermes explains, OMH checks local state, then suggests the next command. |
+| Research or product signal | Source finder / research / brief workflow before implementation. |
+| Coding task | Scoped handoff to Codex, Claude Code, Hermes, or another chosen runtime. |
+| Release or review question | Separate prepared claims from observed tests, review, CI, and merge evidence. |
 
 <br>
 
