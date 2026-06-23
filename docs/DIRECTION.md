@@ -68,6 +68,15 @@ language unless the user asks for JSON, schema output, debug data, or an API
 payload. JSON/code-block output is an internal or opt-in surface, not normal
 chat UX.
 
+Internal awareness rails such as `[OMH Awareness]`, native bridge status
+context, evidence-boundary reminders, process wrappers, and raw CI/watch
+transcripts are inputs to reporting, not user-facing status copy. Adapters
+should omit silent successful completions and summarize meaningful output into
+the channel's natural voice. For example, Discord/Korean progress can use a
+calm friendly voice while CI/DCO output becomes compact check status lines with
+names, pass/pending/fail state, durations, and links instead of raw watcher
+text.
+
 Markdown export is useful for a wiki, notes, release recap, or later review,
 but it is not a backend requirement for the first reporting slice. A
 deterministic markdown projection from the structured summary is enough until a

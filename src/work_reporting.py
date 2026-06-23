@@ -59,6 +59,52 @@ _VERIFICATION_SUCCESS_STATUSES = {"passed", "satisfied", "completed", "verified"
 _NON_PROGRESS_STATUSES = {"", "not_observed", "not_required", "pending"}
 _OBSERVATION_EVENT_STATUSES = ("observed", "blocked", "failed", "not_observed")
 _OBSERVATION_EVENT_EVIDENCE_STATUSES = {"observed", "blocked", "failed"}
+_INTERNAL_REPORT_MARKERS = (
+    "[OMH Awareness]",
+    "OMH Awareness Primer",
+    "[OMH] Native bridge status context",
+    "Native bridge status context",
+    "Evidence boundary: prepared handoffs are not execution, review, CI, merge-readiness, or merge evidence",
+)
+_CHECK_STATUS_ALIASES = {
+    "pass": "pass",
+    "passed": "pass",
+    "passing": "pass",
+    "completed": "pass",
+    "success": "pass",
+    "successful": "pass",
+    "succeeded": "pass",
+    "ok": "pass",
+    "neutral": "pass",
+    "skip": "skipped",
+    "skipped": "skipped",
+    "pending": "pending",
+    "queued": "pending",
+    "waiting": "pending",
+    "requested": "pending",
+    "expected": "pending",
+    "in_progress": "pending",
+    "in-progress": "pending",
+    "progress": "pending",
+    "running": "pending",
+    "fail": "fail",
+    "failed": "fail",
+    "failure": "fail",
+    "error": "fail",
+    "cancelled": "fail",
+    "canceled": "fail",
+    "timed_out": "fail",
+    "timed-out": "fail",
+    "action_required": "fail",
+    "startup_failure": "fail",
+}
+_CHECK_STATUS_ORDER = ("fail", "pending", "pass", "skipped", "unknown")
+_CHECK_WATCH_NOISE = (
+    "refreshing checks status",
+    "press ctrl+c to quit",
+    "watching checks",
+    "waiting for checks",
+)
 
 
 def build_work_observation_summary(
@@ -188,6 +234,10 @@ def build_work_observation_summary(
             "default_format": "plain_text",
             "json_default": False,
             "code_block_default": False,
+            "tone_policy": "adapter_selected_channel_voice",
+            "default_voice": "conservative",
+            "supported_tone_options": ["locale", "voice"],
+            "internal_rails_policy": "summarize_or_omit_prompt_only_context",
             "plain_text_renderers": ["progress", "completion", "blocker", "status"],
             "machine_readable_payload": "internal_or_opt_in",
         },
@@ -280,12 +330,14 @@ def build_work_observation_summary_from_status(
     )
 
 
-def render_progress_report(summary: dict[str, Any]) -> str:
+def render_progress_report(summary: dict[str, Any], *, locale: str = "", voice: str = "") -> str:
     validate = validate_work_observation_summary(summary)
     if validate:
         raise ValueError("; ".join(validate))
     title = str(summary["title"])
     status = _status_phrase(str(summary.get("status", "unknown")))
+    if _friendly_ko(locale=locale, voice=voice):
+        return _render_friendly_ko_progress_report(summary)
     lines = [f"Progress: {title} is {status}."]
     latest = _object(_object(summary.get("progress")).get("latest_event"))
     safe_summary = str(_object(summary.get("progress")).get("safe_summary", ""))
@@ -297,18 +349,20 @@ def render_progress_report(summary: dict[str, Any]) -> str:
     next_action = str(summary.get("next_action", "show_status"))
     if next_action:
         lines.append(f"Next: {next_action}.")
-    lines.append(_boundary_line(summary))
-    return _plain(lines)
+    lines.append(_boundary_line(summary, locale=locale, voice=voice))
+    return _plain(lines, locale=locale, voice=voice)
 
 
-def render_status_report(summary: dict[str, Any]) -> str:
-    return render_progress_report(summary)
+def render_status_report(summary: dict[str, Any], *, locale: str = "", voice: str = "") -> str:
+    return render_progress_report(summary, locale=locale, voice=voice)
 
 
-def render_completion_report(summary: dict[str, Any]) -> str:
+def render_completion_report(summary: dict[str, Any], *, locale: str = "", voice: str = "") -> str:
     validate = validate_work_observation_summary(summary)
     if validate:
         raise ValueError("; ".join(validate))
+    if _friendly_ko(locale=locale, voice=voice):
+        return _render_friendly_ko_completion_report(summary)
     title = str(summary["title"])
     if summary.get("status") == "completed":
         lines = [f"Completed: {title}."]
@@ -318,14 +372,16 @@ def render_completion_report(summary: dict[str, Any]) -> str:
     if observed:
         lines.append(f"Observed: {', '.join(observed[:5])}.")
     lines.extend(_evidence_lines(summary))
-    lines.append(_boundary_line(summary))
-    return _plain(lines)
+    lines.append(_boundary_line(summary, locale=locale, voice=voice))
+    return _plain(lines, locale=locale, voice=voice)
 
 
-def render_blocker_report(summary: dict[str, Any]) -> str:
+def render_blocker_report(summary: dict[str, Any], *, locale: str = "", voice: str = "") -> str:
     validate = validate_work_observation_summary(summary)
     if validate:
         raise ValueError("; ".join(validate))
+    if _friendly_ko(locale=locale, voice=voice):
+        return _render_friendly_ko_blocker_report(summary)
     title = str(summary["title"])
     blockers = _string_items(summary.get("blockers"))
     lines = [f"Blocked: {title}."]
@@ -337,8 +393,75 @@ def render_blocker_report(summary: dict[str, Any]) -> str:
     if next_action:
         lines.append(f"Next: {next_action}.")
     lines.extend(_evidence_lines(summary))
-    lines.append(_boundary_line(summary))
-    return _plain(lines)
+    lines.append(_boundary_line(summary, locale=locale, voice=voice))
+    return _plain(lines, locale=locale, voice=voice)
+
+
+def build_background_completion_report(
+    *,
+    process_ref: str = "",
+    exit_code: int | str | None = None,
+    output: str = "",
+    command: str = "",
+    locale: str = "",
+    voice: str = "",
+) -> str | None:
+    """Render background completion output as a user-safe status summary."""
+
+    parsed = _parse_background_completion(output)
+    resolved_process = process_ref or parsed["process_ref"]
+    resolved_exit_code = _int_exit_code(exit_code if exit_code is not None else parsed["exit_code"])
+    visible_output = _strip_check_watch_noise(parsed["output"] if parsed["matched"] else output)
+    visible_output = sanitize_user_report_text(visible_output, locale=locale, voice=voice)
+    if resolved_exit_code == 0 and not visible_output.strip():
+        return None
+    if visible_output.strip() or "gh pr checks" in command.casefold():
+        check_rollup = format_check_rollup(visible_output, locale=locale, voice=voice)
+        if check_rollup:
+            return check_rollup
+    status_line = _background_completion_status_line(
+        process_ref=resolved_process,
+        exit_code=resolved_exit_code,
+        locale=locale,
+        voice=voice,
+    )
+    if not visible_output.strip():
+        return status_line
+    lines = [status_line, *_meaningful_output_lines(visible_output)]
+    return _plain(lines, locale=locale, voice=voice)
+
+
+def format_check_rollup(checks: Any, *, locale: str = "", voice: str = "") -> str:
+    """Format check rows or gh-pr-checks text without dumping watcher transcripts."""
+
+    rows = _dedupe_check_rows(_check_rows(checks))
+    if not rows:
+        return ""
+    counts = {status: 0 for status in _CHECK_STATUS_ORDER}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    if _friendly_ko(locale=locale, voice=voice):
+        lines = [_ko_check_summary(counts)]
+        lines.extend(_ko_check_line(row) for row in rows[:12])
+        if len(rows) > 12:
+            lines.append(f"- 외 {len(rows) - 12}개 체크")
+        return _plain(lines, locale=locale, voice=voice)
+    lines = [_english_check_summary(counts)]
+    lines.extend(_english_check_line(row) for row in rows[:12])
+    if len(rows) > 12:
+        lines.append(f"- {len(rows) - 12} more checks.")
+    return _plain(lines, locale=locale, voice=voice)
+
+
+def sanitize_user_report_text(value: Any, *, locale: str = "", voice: str = "") -> str:
+    """Remove prompt-only OMH rails from user-facing report text."""
+
+    text = _strip_code_fences(value)
+    if not text.strip():
+        return ""
+    if _contains_internal_report_marker(text):
+        return _internal_context_user_summary(locale=locale, voice=voice)
+    return text
 
 
 def build_markdown_export(summary: dict[str, Any]) -> dict[str, Any]:
@@ -561,6 +684,333 @@ def _markdown_for_summary(summary: dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def _render_friendly_ko_progress_report(summary: dict[str, Any]) -> str:
+    title = str(summary["title"])
+    status = str(summary.get("status", "unknown"))
+    latest = _object(_object(summary.get("progress")).get("latest_event"))
+    safe_summary = str(_object(summary.get("progress")).get("safe_summary", ""))
+    detail = str(latest.get("summary") or safe_summary)
+    lines = [_ko_status_sentence(title, status)]
+    if detail:
+        lines.append(detail)
+    lines.extend(_ko_evidence_lines(summary))
+    next_action = str(summary.get("next_action", "show_status"))
+    if next_action and next_action != "show_status":
+        lines.append(f"다음은 {next_action} 쪽을 볼게.")
+    lines.append(_boundary_line(summary, locale="ko", voice="friendly"))
+    return _plain(lines, locale="ko", voice="friendly")
+
+
+def _render_friendly_ko_completion_report(summary: dict[str, Any]) -> str:
+    title = str(summary["title"])
+    status = str(summary.get("status", "unknown"))
+    lines = [f"{title} 작업은 끝났어." if status == "completed" else f"{title} 작업은 아직 완료로 확인되진 않았어."]
+    observed = _string_items(_object(summary.get("observations")).get("observed_events"))
+    if observed:
+        lines.append(f"확인된 항목은 {', '.join(observed[:5])}이야.")
+    lines.extend(_ko_evidence_lines(summary))
+    lines.append(_boundary_line(summary, locale="ko", voice="friendly"))
+    return _plain(lines, locale="ko", voice="friendly")
+
+
+def _render_friendly_ko_blocker_report(summary: dict[str, Any]) -> str:
+    title = str(summary["title"])
+    blockers = _string_items(summary.get("blockers"))
+    lines = [f"{title} 작업은 지금 막혀 있어."]
+    if blockers:
+        lines.append(f"이유는 {'; '.join(blockers[:3])}야.")
+    else:
+        lines.append("아직 필요한 확인 근거가 안 잡혔어.")
+    next_action = str(summary.get("next_action", "show_status"))
+    if next_action and next_action != "show_status":
+        lines.append(f"다음은 {next_action} 쪽을 볼게.")
+    lines.extend(_ko_evidence_lines(summary))
+    lines.append(_boundary_line(summary, locale="ko", voice="friendly"))
+    return _plain(lines, locale="ko", voice="friendly")
+
+
+def _ko_status_sentence(title: str, status: str) -> str:
+    if status == "completed":
+        return f"{title} 작업은 끝났어."
+    if status == "blocked":
+        return f"{title} 작업은 지금 막혀 있어."
+    if status == "failed":
+        return f"{title} 작업에서 실패가 확인됐어."
+    if status == "prepared_not_observed":
+        return f"{title} 작업은 준비됐고, 아직 실행 확인은 기다리는 중이야."
+    if status == "unknown":
+        return f"{title} 작업 상태는 아직 확실하지 않아."
+    return f"{title} 작업은 진행 중이야."
+
+
+def _ko_evidence_lines(summary: dict[str, Any]) -> list[str]:
+    refs = _string_items(_object(summary.get("observations")).get("evidence_refs"))
+    if not refs:
+        return []
+    return [f"확인한 근거: {', '.join(refs[:4])}."]
+
+
+def _friendly_ko(*, locale: str, voice: str) -> bool:
+    return _token(locale) in {"ko", "ko_kr", "kr", "korean"} and _token(voice) in {
+        "friendly",
+        "casual",
+        "discord",
+        "calm",
+    }
+
+
+def _parse_background_completion(output: str) -> dict[str, Any]:
+    text = str(output or "")
+    match = re.match(
+        r"\s*\[Background process\s+(?P<process>[^\s\]]+)\s+finished with exit code\s+"
+        r"(?P<exit_code>-?\d+)~?\s*(?:Here(?:'|’)s the final output:\s*)?\]?\s*",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return {"matched": False, "process_ref": "", "exit_code": None, "output": text}
+    return {
+        "matched": True,
+        "process_ref": str(match.group("process")),
+        "exit_code": str(match.group("exit_code")),
+        "output": text[match.end() :].strip(),
+    }
+
+
+def _int_exit_code(value: int | str | None) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _background_completion_status_line(
+    *,
+    process_ref: str,
+    exit_code: int | None,
+    locale: str,
+    voice: str,
+) -> str:
+    label = process_ref or "background process"
+    succeeded = exit_code == 0
+    if _friendly_ko(locale=locale, voice=voice):
+        if succeeded:
+            return "백그라운드 작업은 조용히 끝났어."
+        if exit_code is None:
+            return "백그라운드 작업이 끝났고, 출력만 요약할게."
+        return f"백그라운드 작업이 exit code {exit_code}로 끝났어."
+    if succeeded:
+        return f"Background process {label} completed successfully."
+    if exit_code is None:
+        return f"Background process {label} completed with output."
+    return f"Background process {label} finished with exit code {exit_code}."
+
+
+def _meaningful_output_lines(output: str) -> list[str]:
+    lines: list[str] = []
+    for line in output.splitlines():
+        cleaned = line.strip()
+        if not cleaned:
+            continue
+        if _is_check_watch_noise(cleaned):
+            continue
+        lines.append(cleaned)
+        if len(lines) >= 4:
+            break
+    return lines
+
+
+def _strip_check_watch_noise(output: str) -> str:
+    lines = [line for line in str(output or "").splitlines() if not _is_check_watch_noise(line)]
+    return "\n".join(lines).strip()
+
+
+def _is_check_watch_noise(line: str) -> bool:
+    lowered = _strip_ansi(line).casefold()
+    return any(noise in lowered for noise in _CHECK_WATCH_NOISE)
+
+
+def _check_rows(checks: Any) -> list[dict[str, str]]:
+    if isinstance(checks, dict):
+        if isinstance(checks.get("checks"), list):
+            return _check_rows(checks["checks"])
+        row = _check_row_from_dict(checks)
+        return [row] if row else []
+    if isinstance(checks, (list, tuple)):
+        rows: list[dict[str, str]] = []
+        for item in checks:
+            rows.extend(_check_rows(item))
+        return rows
+    if isinstance(checks, str):
+        return _check_rows_from_text(checks)
+    return []
+
+
+def _check_row_from_dict(value: dict[str, Any]) -> dict[str, str]:
+    name = str(value.get("name") or value.get("check") or value.get("workflow") or value.get("title") or "").strip()
+    raw_status = str(
+        value.get("conclusion")
+        or value.get("status")
+        or value.get("state")
+        or value.get("result")
+        or ""
+    )
+    status = _normalize_check_status(raw_status)
+    if not name or not status:
+        return {}
+    duration = str(value.get("duration") or value.get("elapsed") or value.get("time") or "").strip()
+    url = str(value.get("url") or value.get("link") or value.get("details_url") or value.get("target_url") or "").strip()
+    return {"name": name, "status": status, "duration": duration, "url": url}
+
+
+def _check_rows_from_text(output: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for raw_line in output.splitlines():
+        line = _strip_ansi(raw_line).strip()
+        if not line or _is_check_watch_noise(line) or _is_check_header(line):
+            continue
+        row = _check_row_from_line(line)
+        if row:
+            rows.append(row)
+    return rows
+
+
+def _check_row_from_line(line: str) -> dict[str, str]:
+    pieces = [piece.strip() for piece in re.split(r"\t+", line) if piece.strip()]
+    if len(pieces) < 2:
+        pieces = [piece.strip() for piece in re.split(r"\s{2,}", line) if piece.strip()]
+    if len(pieces) < 2:
+        return _check_row_from_loose_line(line)
+    url = _first_url(pieces)
+    status_index = -1
+    status = ""
+    for index, piece in enumerate(pieces):
+        normalized = _normalize_check_status(piece)
+        if normalized:
+            status_index = index
+            status = normalized
+            break
+    if status_index <= 0:
+        return _check_row_from_loose_line(line)
+    name = _clean_check_name(" ".join(pieces[:status_index]))
+    duration = _first_duration([piece for index, piece in enumerate(pieces[status_index + 1 :]) if piece != url])
+    if not name:
+        return {}
+    return {"name": name, "status": status, "duration": duration, "url": url}
+
+
+def _check_row_from_loose_line(line: str) -> dict[str, str]:
+    url = _first_url([line])
+    without_url = line.replace(url, "").strip() if url else line
+    match = re.search(
+        r"(?P<status>pass(?:ed)?|fail(?:ed)?|pending|queued|in[ _-]?progress|running|success(?:ful)?|skipped|cancelled|canceled|error)",
+        without_url,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return {}
+    status = _normalize_check_status(match.group("status"))
+    name = _clean_check_name(without_url[: match.start()].strip(" :-—–") or without_url[match.end() :].strip(" :-—–"))
+    duration = _first_duration([without_url])
+    if not name or not status:
+        return {}
+    return {"name": name, "status": status, "duration": duration, "url": url}
+
+
+def _dedupe_check_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    deduped: dict[tuple[str, str], dict[str, str]] = {}
+    order: list[tuple[str, str]] = []
+    for row in rows:
+        name = row.get("name", "").strip()
+        if not name:
+            continue
+        key = (name.casefold(), row.get("url", "").strip())
+        if key not in deduped:
+            order.append(key)
+        deduped[key] = row
+    return [deduped[key] for key in order]
+
+
+def _normalize_check_status(value: str) -> str:
+    normalized = _token(value)
+    if normalized in _CHECK_STATUS_ALIASES:
+        return _CHECK_STATUS_ALIASES[normalized]
+    lowered = value.strip().casefold()
+    return _CHECK_STATUS_ALIASES.get(lowered, "")
+
+
+def _english_check_summary(counts: dict[str, int]) -> str:
+    parts = [f"{counts[status]} {status}" for status in _CHECK_STATUS_ORDER if counts.get(status)]
+    return f"Checks: {', '.join(parts)}." if parts else "Checks: no check rows found."
+
+
+def _english_check_line(row: dict[str, str]) -> str:
+    suffix = _check_suffix(row)
+    return f"- {row['name']}: {row['status']}{suffix}"
+
+
+def _ko_check_summary(counts: dict[str, int]) -> str:
+    labels = {"pass": "통과", "pending": "대기 중", "fail": "실패", "skipped": "건너뜀", "unknown": "상태 미확인"}
+    parts = [f"{counts[status]}개 {labels[status]}" for status in _CHECK_STATUS_ORDER if counts.get(status)]
+    return f"체크는 {', '.join(parts)}이야." if parts else "확인할 체크 행은 없었어."
+
+
+def _ko_check_line(row: dict[str, str]) -> str:
+    labels = {"pass": "통과", "pending": "대기", "fail": "실패", "skipped": "건너뜀", "unknown": "미확인"}
+    suffix = _check_suffix(row)
+    return f"- {row['name']}: {labels.get(row['status'], row['status'])}{suffix}"
+
+
+def _check_suffix(row: dict[str, str]) -> str:
+    parts = []
+    if row.get("duration"):
+        parts.append(f"({row['duration']})")
+    if row.get("url"):
+        parts.append(row["url"])
+    return f" {' '.join(parts)}." if parts else "."
+
+
+def _is_check_header(line: str) -> bool:
+    lowered = line.casefold()
+    return "name" in lowered and "status" in lowered and ("url" in lowered or "elapsed" in lowered)
+
+
+def _clean_check_name(value: str) -> str:
+    return re.sub(r"^[✓✔✗✘x!•*\-\s]+", "", value).strip(" :-—–")
+
+
+def _first_url(values: list[str]) -> str:
+    for value in values:
+        match = re.search(r"https?://\S+", value)
+        if match:
+            return match.group(0).rstrip(".,)")
+    return ""
+
+
+def _first_duration(values: list[str]) -> str:
+    for value in values:
+        match = re.search(r"\b(?:\d+(?:\.\d+)?(?:ms|s|m|h|d)){1,4}\b|\b\d+:\d+(?::\d+)?\b", value)
+        if match:
+            return match.group(0)
+    return ""
+
+
+def _strip_ansi(value: str) -> str:
+    return re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", value)
+
+
+def _contains_internal_report_marker(text: str) -> bool:
+    return any(marker.casefold() in text.casefold() for marker in _INTERNAL_REPORT_MARKERS)
+
+
+def _internal_context_user_summary(*, locale: str, voice: str) -> str:
+    if _friendly_ko(locale=locale, voice=voice):
+        return "내부 OMH 상태는 확인했고, 사용자에게는 필요한 진행 상황만 짧게 전할게."
+    return "Internal OMH status context was observed; user-facing output should summarize only the relevant status."
+
+
 def _evidence_lines(summary: dict[str, Any]) -> list[str]:
     refs = _string_items(_object(summary.get("observations")).get("evidence_refs"))
     if not refs:
@@ -568,9 +1018,13 @@ def _evidence_lines(summary: dict[str, Any]) -> list[str]:
     return [f"Evidence: {', '.join(refs[:4])}."]
 
 
-def _boundary_line(summary: dict[str, Any]) -> str:
+def _boundary_line(summary: dict[str, Any], *, locale: str = "", voice: str = "") -> str:
     items = _string_items(_object(summary.get("evidence_boundary")).get("not_evidence_until_observed"))
-    return f"Not evidence until observed: {', '.join(items[:5])}."
+    if not items:
+        return ""
+    if _friendly_ko(locale=locale, voice=voice):
+        return f"아직 확인 근거가 필요한 부분: {', '.join(items[:5])}."
+    return f"Still waiting on observed proof for: {', '.join(items[:5])}."
 
 
 def _default_summary(summary: dict[str, Any]) -> str:
@@ -580,8 +1034,14 @@ def _default_summary(summary: dict[str, Any]) -> str:
     return f"{summary.get('report_kind', 'status')} report for {summary.get('work_id', 'unknown-work')}."
 
 
-def _plain(lines: list[str]) -> str:
-    cleaned = [compact_visible_text(_strip_code_fences(line), max_chars=320) for line in lines if str(line).strip()]
+def _plain(lines: list[str], *, locale: str = "", voice: str = "") -> str:
+    cleaned: list[str] = []
+    for line in lines:
+        if not str(line).strip():
+            continue
+        sanitized = sanitize_user_report_text(line, locale=locale, voice=voice)
+        if sanitized.strip():
+            cleaned.append(compact_visible_text(sanitized, max_chars=320))
     return "\n".join(cleaned).strip()
 
 

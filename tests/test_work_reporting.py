@@ -7,9 +7,11 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.work_reporting import (
+    build_background_completion_report,
     build_markdown_export,
     build_work_observation_summary,
     build_work_observation_summary_from_status,
+    format_check_rollup,
     render_status_report,
     render_blocker_report,
     render_completion_report,
@@ -431,6 +433,126 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("pytest-failed", rendered)
         self.assertNotIn("ci-placeholder", summary["observations"]["evidence_refs"])
         self.assertNotIn("ci-placeholder", rendered)
+
+    def test_empty_successful_background_completion_is_silent(self) -> None:
+        rendered = build_background_completion_report(
+            output="[Background process proc_b05484479563 finished with exit code 0~ Here's the final output:]",
+        )
+
+        self.assertIsNone(rendered)
+
+    def test_background_check_output_renders_compact_rollup_not_watch_transcript(self) -> None:
+        raw_watch_output = "\n".join(
+            [
+                "Refreshing checks status every 10 seconds. Press Ctrl+C to quit.",
+                "DCO\tpass\t4s\thttps://github.example/checks/dco",
+                "unit tests\tpass\t2m10s\thttps://github.example/checks/tests",
+                "Codex review\tpending\t\thttps://github.example/checks/review",
+                "Refreshing checks status every 10 seconds. Press Ctrl+C to quit.",
+                "DCO\tpass\t4s\thttps://github.example/checks/dco",
+                "unit tests\tpass\t2m10s\thttps://github.example/checks/tests",
+                "Codex review\tpending\t\thttps://github.example/checks/review",
+            ]
+        )
+
+        rendered = build_background_completion_report(
+            exit_code=0,
+            command="gh pr checks --watch",
+            output=raw_watch_output,
+        )
+
+        self.assertIsNotNone(rendered)
+        assert rendered is not None
+        self.assertIn("Checks: 1 pending, 2 pass.", rendered)
+        self.assertIn("- DCO: pass (4s) https://github.example/checks/dco.", rendered)
+        self.assertIn("- unit tests: pass (2m10s) https://github.example/checks/tests.", rendered)
+        self.assertIn("- Codex review: pending https://github.example/checks/review.", rendered)
+        self.assertNotIn("Refreshing checks status", rendered)
+        self.assertNotIn("Press Ctrl+C", rendered)
+        self.assertNotIn("Background process", rendered)
+        self.assertNotIn("Here's the final output", rendered)
+
+    def test_structured_check_rollup_keeps_status_duration_and_links(self) -> None:
+        rendered = format_check_rollup(
+            [
+                {
+                    "name": "DCO",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "duration": "3s",
+                    "url": "https://github.example/checks/dco",
+                },
+                {
+                    "name": "integration tests",
+                    "status": "in_progress",
+                    "duration": "1m",
+                    "url": "https://github.example/checks/integration",
+                },
+            ]
+        )
+
+        self.assertIn("Checks: 1 pending, 1 pass.", rendered)
+        self.assertIn("- DCO: pass (3s) https://github.example/checks/dco.", rendered)
+        self.assertIn("- integration tests: pending (1m) https://github.example/checks/integration.", rendered)
+
+    def test_friendly_korean_progress_report_uses_channel_voice(self) -> None:
+        summary = build_work_observation_summary(
+            work_id="run-ko-friendly",
+            title="PR #259",
+            report_kind="progress",
+            status="in_progress",
+            safe_summary="CI는 통과했고, 지금은 리뷰만 다시 확인 중이야.",
+            progress_events=[
+                {
+                    "event_type": "status_update",
+                    "status": "observed",
+                    "summary": "CI는 통과했고, 지금은 리뷰만 다시 확인 중이야.",
+                }
+            ],
+            evidence_refs=["https://github.example/checks/tests"],
+            next_action="record_review_evidence",
+        )
+
+        rendered = render_progress_report(summary, locale="ko", voice="friendly")
+
+        self.assertIn("PR #259 작업은 진행 중이야.", rendered)
+        self.assertIn("CI는 통과했고, 지금은 리뷰만 다시 확인 중이야.", rendered)
+        self.assertIn("확인한 근거: https://github.example/checks/tests.", rendered)
+        self.assertIn("다음은 record_review_evidence 쪽을 볼게.", rendered)
+        self.assertNotIn("Progress:", rendered)
+        self.assertNotIn("Next:", rendered)
+        self.assertNotIn("Evidence boundary", rendered)
+        self.assertNotIn("한다", rendered)
+
+    def test_user_report_scrubs_awareness_and_native_bridge_context(self) -> None:
+        internal_context = """
+        [OMH Awareness]
+        ## OMH Awareness Primer
+        [OMH] Native bridge status context.
+        Evidence boundary: prepared handoffs are not execution, review, CI, merge-readiness, or merge evidence.
+        Latest runtime run: run-raw.
+        """
+        summary = build_work_observation_summary(
+            work_id="run-internal-rails",
+            title="Native bridge context",
+            report_kind="progress",
+            status="in_progress",
+            safe_summary=internal_context,
+            progress_events=[
+                {
+                    "event_type": "status_update",
+                    "status": "observed",
+                    "summary": internal_context,
+                }
+            ],
+        )
+
+        rendered = render_progress_report(summary, locale="ko", voice="friendly")
+
+        self.assertIn("내부 OMH 상태는 확인했고", rendered)
+        self.assertNotIn("[OMH Awareness]", rendered)
+        self.assertNotIn("Native bridge status context", rendered)
+        self.assertNotIn("Evidence boundary: prepared handoffs", rendered)
 
 
 if __name__ == "__main__":
