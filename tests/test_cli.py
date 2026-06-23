@@ -4323,27 +4323,68 @@ class CliTests(unittest.TestCase):
                 + [
                     "loop",
                     "queue",
-                    "observe",
+                    "dispatch",
                     "--loop",
                     "loop-cli",
                     "--queue",
                     queue_id,
+                    "--executor",
+                    "codex",
+                    "--codex-session-ref",
+                    "codex-session-cli",
                     "--evidence-ref",
-                    "wrapper:queue:observed",
+                    "wrapper:codex-dispatch:cli",
                     "--summary",
-                    "Wrapper observed the queued step.",
+                    "Codex session opened for this loop tick.",
                 ]
             )
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
-            observed = json.loads(stdout)
+            dispatched = json.loads(stdout)
+            self.assertEqual(dispatched["loop"]["runtime"]["queue"][0]["status"], "prepared_not_observed")
+            self.assertEqual(dispatched["loop"]["runtime"]["queue"][0]["executor_session"]["dispatch_status"], "dispatched")
+            self.assertEqual(dispatched["loop"]["runtime"]["queue"][0]["executor_session"]["session_ref"], "codex-session-cli")
+
+            status, stdout, stderr = run_cli(home + ["loop", "queue", "narrate", "--loop", "loop-cli", "--queue", queue_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            narration = json.loads(stdout)["narration"]
+            self.assertEqual(narration["schema_version"], "loop_cycle_narration/v1")
+            self.assertIn("Codex", narration["executor_status"])
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "queue",
+                    "observe-codex",
+                    "--loop",
+                    "loop-cli",
+                    "--queue",
+                    queue_id,
+                    "--codex-log-text",
+                    '{"type":"tool_call","tool":"rg","args":"rg loop"}\n{"role":"assistant","content":"I defined the issue and started implementation."}',
+                    "--codex-log-ref",
+                    "codex-log:cli",
+                    "--evidence-ref",
+                    "codex-jsonl:cli",
+                    "--summary",
+                    "Codex defined the issue and started implementation.",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            codex_observed = json.loads(stdout)
+            self.assertEqual(codex_observed["loop"]["runtime"]["queue"][0]["status"], "observed")
+            self.assertEqual(codex_observed["loop"]["runtime"]["queue"][0]["executor_session"]["dispatch_status"], "progress_observed")
+            self.assertEqual(codex_observed["narration"]["schema_version"], "loop_cycle_narration/v1")
+
+            observed = codex_observed
             self.assertEqual(observed["loop"]["runtime"]["queue"][0]["status"], "observed")
             self.assertTrue(observed["loop"]["runtime"]["queue"][0]["observed"])
             self.assertFalse(observed["loop"]["runtime"]["queue"][0]["worktree_plan"]["created"])
             self.assertFalse(observed["loop"]["runtime"]["queue"][0]["subagent_plan"]["dispatched"])
             self.assertFalse(observed["loop"]["runtime"]["queue"][0]["connector_plan"]["dispatched"])
-            self.assertEqual(observed["status_card"]["runtime_summary"]["observed_queue_count"], 1)
-            self.assertEqual(observed["status_card"]["failure_mode_summary"]["warnings"][0]["id"], "verification_gap")
 
             status, stdout, stderr = run_cli(home + ["loop", "permit", "--loop", "loop-cli", "--allow-action", "merge"])
             self.assertEqual(stderr, "")

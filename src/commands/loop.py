@@ -9,13 +9,16 @@ from ..goal_loop import (
     PERMISSION_PROFILES,
     assess_loopability,
     block_loop_queue_item,
+    build_loop_cycle_narration,
     build_loop_queue_handoff,
     build_loop_start_card,
     build_loop_status_card,
     create_loop_cycle,
+    dispatch_loop_queue_item,
     inspect_loop_queue_item,
     list_loop_queue,
     list_loop_cycles,
+    observe_codex_loop_queue_item,
     observe_loop_queue_item,
     read_loop_cycle,
     record_loop_feedback,
@@ -222,6 +225,56 @@ def cmd_loop_queue_handoff(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_queue_dispatch(args: argparse.Namespace) -> int:
+    try:
+        cycle = dispatch_loop_queue_item(
+            _paths(args),
+            args.loop_id,
+            args.queue_id,
+            executor=args.executor,
+            session_ref=args.codex_session_ref or args.session_ref or "",
+            thread_ref=args.codex_thread_ref or args.thread_ref or "",
+            evidence_refs=args.evidence_ref or [],
+            summary=args.summary or "",
+        )
+        _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), args.loop_id)})
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_loop_queue_observe_codex(args: argparse.Namespace) -> int:
+    try:
+        log_text = ""
+        if args.codex_log_text:
+            log_text = args.codex_log_text
+        elif args.codex_log_jsonl:
+            from pathlib import Path
+
+            log_text = Path(args.codex_log_jsonl).read_text(encoding="utf-8")
+        cycle = observe_codex_loop_queue_item(
+            _paths(args),
+            args.loop_id,
+            args.queue_id,
+            codex_log_text=log_text,
+            evidence_refs=args.evidence_ref or [],
+            codex_log_ref=args.codex_log_ref or "",
+            summary=args.summary or "",
+        )
+        _print_json({"loop": cycle, "narration": build_loop_cycle_narration(_paths(args), args.loop_id, args.queue_id)})
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_loop_queue_narrate(args: argparse.Namespace) -> int:
+    try:
+        _print_json({"narration": build_loop_cycle_narration(_paths(args), args.loop_id, args.queue_id)})
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def cmd_loop_queue_observe(args: argparse.Namespace) -> int:
     try:
         cycle = observe_loop_queue_item(
@@ -350,6 +403,33 @@ def _add_loop_commands(sub) -> None:
     queue_handoff.add_argument("--loop", dest="loop_id", required=True)
     queue_handoff.add_argument("--queue", dest="queue_id", required=True)
     queue_handoff.set_defaults(func=cmd_loop_queue_handoff)
+
+    queue_dispatch = queue_sub.add_parser("dispatch")
+    queue_dispatch.add_argument("--loop", dest="loop_id", required=True)
+    queue_dispatch.add_argument("--queue", dest="queue_id", required=True)
+    queue_dispatch.add_argument("--executor", choices=LOOP_EXECUTOR_OPTION_IDS, required=True)
+    queue_dispatch.add_argument("--session-ref", default="")
+    queue_dispatch.add_argument("--thread-ref", default="")
+    queue_dispatch.add_argument("--codex-session-ref", default="")
+    queue_dispatch.add_argument("--codex-thread-ref", default="")
+    queue_dispatch.add_argument("--evidence-ref", action="append")
+    queue_dispatch.add_argument("--summary", default="")
+    queue_dispatch.set_defaults(func=cmd_loop_queue_dispatch)
+
+    queue_observe_codex = queue_sub.add_parser("observe-codex")
+    queue_observe_codex.add_argument("--loop", dest="loop_id", required=True)
+    queue_observe_codex.add_argument("--queue", dest="queue_id", required=True)
+    queue_observe_codex.add_argument("--codex-log-jsonl", default="")
+    queue_observe_codex.add_argument("--codex-log-text", default="")
+    queue_observe_codex.add_argument("--codex-log-ref", default="")
+    queue_observe_codex.add_argument("--evidence-ref", action="append", required=True)
+    queue_observe_codex.add_argument("--summary", default="")
+    queue_observe_codex.set_defaults(func=cmd_loop_queue_observe_codex)
+
+    queue_narrate = queue_sub.add_parser("narrate")
+    queue_narrate.add_argument("--loop", dest="loop_id", required=True)
+    queue_narrate.add_argument("--queue", dest="queue_id", default="")
+    queue_narrate.set_defaults(func=cmd_loop_queue_narrate)
 
     queue_observe = queue_sub.add_parser("observe")
     queue_observe.add_argument("--loop", dest="loop_id", required=True)

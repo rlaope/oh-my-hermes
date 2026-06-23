@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from .codex_progress import summarize_codex_jsonl_text
 from .goal_ledger import build_goal_completion_gate, read_goal_ledger
 from .hashutil import sha256_text
 from .local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
@@ -26,6 +27,8 @@ LOOP_VERIFICATION_PLAN_SCHEMA = "loop_verification_plan/v1"
 LOOP_FAILURE_MODE_SUMMARY_SCHEMA = "loop_failure_mode_summary/v1"
 LOOP_SMALL_LOOP_GUIDANCE_SCHEMA = "loop_small_loop_guidance/v1"
 LOOP_RUN_ONCE_RESULT_SCHEMA = "loop_run_once_result/v1"
+EXECUTOR_LOOP_CAPABILITY_SCHEMA = "executor_loop_capability/v1"
+LOOP_CYCLE_NARRATION_SCHEMA = "loop_cycle_narration/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -213,6 +216,52 @@ def create_loop_cycle(
     ensure_dir(_loop_dir(paths, loop_id), private=True)
     atomic_write_json(loop_cycle_path(paths, loop_id), cycle, private=True)
     return cycle
+
+
+def loop_executor_capability(executor: str) -> dict[str, Any]:
+    selected = _safe_summary(executor or "choose", limit=120) or "choose"
+    if selected == "claude-code":
+        loop_mode = "native"
+        dispatch_owner = "executor"
+        observability = ["native_loop_or_goal", "prompt_handoff", "wrapper_observation"]
+        next_action = "prepare_claude_code_native_loop_handoff"
+    elif selected == "codex":
+        loop_mode = "omh_managed"
+        dispatch_owner = "omh_wrapper"
+        observability = ["codex_session_ref", "codex_progress_summary/v1", "codex_review_summary/v1"]
+        next_action = "dispatch_or_resume_codex_session_then_observe"
+    elif selected == "hermes":
+        loop_mode = "omh_managed"
+        dispatch_owner = "omh_wrapper"
+        observability = ["loop_cycle/v1", "loop_queue_item/v1", "goal_ledger/v1"]
+        next_action = "continue_omh_managed_loop"
+    elif selected == "generic":
+        loop_mode = "prompt_handoff"
+        dispatch_owner = "human_operator"
+        observability = ["manual_evidence_ref"]
+        next_action = "prepare_prompt_handoff"
+    elif selected in {"choose", "omx-runtime"}:
+        loop_mode = "prompt_handoff"
+        dispatch_owner = "human_operator"
+        observability = ["runtime_handoff", "manual_evidence_ref"]
+        next_action = "choose_executor_or_runtime"
+    else:
+        loop_mode = "unsupported"
+        dispatch_owner = "human_operator"
+        observability = []
+        next_action = "choose_supported_executor"
+    return {
+        "schema_version": EXECUTOR_LOOP_CAPABILITY_SCHEMA,
+        "executor": selected,
+        "loop_mode": loop_mode,
+        "dispatch_owner": dispatch_owner,
+        "observability": observability,
+        "next_action": next_action,
+        "claim_boundary": (
+            "Executor loop capability is routing metadata only. It is not dispatch, implementation, "
+            "review, CI, merge, or goal completion evidence."
+        ),
+    }
 
 
 def _enforce_loopability_start(assessment: dict[str, Any], *, allow_unloopable: bool) -> None:
@@ -601,6 +650,127 @@ def build_loop_queue_handoff(paths: OmhPaths, loop_id: str, queue_id: str) -> di
         "connector_plan": item.get("connector_plan", _connector_plan("", "", str(item.get("planned_action", "")))),
         "next_action": "observe_or_block_loop_queue",
         "actions": ["observe_loop_queue", "block_loop_queue", "show_loop_status"],
+        "claim_boundary": _runtime_claim_boundary(),
+    }
+
+
+def dispatch_loop_queue_item(
+    paths: OmhPaths,
+    loop_id: str,
+    queue_id: str,
+    *,
+    executor: str,
+    session_ref: str = "",
+    thread_ref: str = "",
+    evidence_refs: Iterable[str] | None = None,
+    summary: str = "",
+) -> dict[str, Any]:
+    refs = _safe_list(evidence_refs or [], limit=320)
+    cycle = read_loop_cycle(paths, loop_id)
+    runtime, item = _queue_item_ref(cycle, queue_id)
+    if item.get("status") != "prepared_not_observed":
+        raise ValueError("only prepared_not_observed loop queue items can record executor dispatch")
+    capability = loop_executor_capability(executor)
+    item["executor_session"] = {
+        **_empty_executor_session(str(capability["executor"])),
+        "executor": capability["executor"],
+        "loop_mode": capability["loop_mode"],
+        "dispatch_owner": capability["dispatch_owner"],
+        "dispatch_status": "dispatched" if refs or session_ref.strip() or thread_ref.strip() else "prepared",
+        "session_ref": _safe_summary(session_ref, limit=220) if session_ref.strip() else "",
+        "thread_ref": _safe_summary(thread_ref, limit=220) if thread_ref.strip() else "",
+        "dispatch_evidence_refs": refs,
+        "summary": _safe_summary(summary, limit=320) if summary.strip() else "Executor dispatch metadata recorded for this loop queue item.",
+        "capability": capability,
+    }
+    runtime["last_queue_id"] = str(item["queue_id"])
+    runtime["last_queue_status"] = str(item["status"])
+    cycle["runtime"] = runtime
+    cycle["next_action"] = "observe_runtime_queue"
+    return _write_loop(paths, cycle)
+
+
+def observe_codex_loop_queue_item(
+    paths: OmhPaths,
+    loop_id: str,
+    queue_id: str,
+    *,
+    codex_log_text: str = "",
+    evidence_refs: Iterable[str] | None = None,
+    codex_log_ref: str = "",
+    summary: str = "",
+) -> dict[str, Any]:
+    refs = _safe_list(evidence_refs or [], limit=320)
+    log_ref = _safe_summary(codex_log_ref, limit=320) if codex_log_ref.strip() else ""
+    all_refs = _safe_list([*refs, *([log_ref] if log_ref else [])], limit=320)
+    if not all_refs:
+        raise ValueError("Codex loop queue observation requires at least one evidence ref")
+    cycle = read_loop_cycle(paths, loop_id)
+    runtime, item = _queue_item_ref(cycle, queue_id)
+    if item.get("status") != "prepared_not_observed":
+        raise ValueError("only prepared_not_observed loop queue items can observe Codex progress")
+    progress = summarize_codex_jsonl_text(
+        codex_log_text,
+        evidence_refs=all_refs,
+        source=log_ref or "codex-loop-observation",
+    )
+    existing = _dict_value(item, "executor_session")
+    executor_session = {
+        **_empty_executor_session("codex"),
+        **existing,
+        "executor": "codex",
+        "loop_mode": "omh_managed",
+        "dispatch_owner": "omh_wrapper",
+        "dispatch_status": "progress_observed",
+        "progress_summary": progress,
+        "summary": _safe_summary(summary, limit=320) if summary.strip() else str(progress.get("chat_summary", "")),
+        "progress_evidence_refs": all_refs,
+        "capability": loop_executor_capability("codex"),
+    }
+    item["executor_session"] = executor_session
+    item["status"] = "observed"
+    item["observed"] = True
+    item["observed_at"] = utc_now()
+    item["observed_evidence_refs"] = _safe_list([*_string_list(item.get("observed_evidence_refs", [])), *all_refs], limit=320)
+    item["observation_summary"] = executor_session["summary"] or "Codex progress observed for this loop queue item."
+    runtime["last_queue_id"] = str(item["queue_id"])
+    runtime["last_queue_status"] = "observed"
+    cycle["runtime"] = runtime
+    cycle["phase"] = "feedback"
+    cycle["wait_reason"] = "none"
+    cycle["next_action"] = "record_feedback"
+    return _write_loop(paths, cycle)
+
+
+def build_loop_cycle_narration(paths: OmhPaths, loop_id: str, queue_id: str = "") -> dict[str, Any]:
+    cycle = read_loop_cycle(paths, loop_id)
+    item: dict[str, Any] = {}
+    if queue_id:
+        item = _queue_item_ref(cycle, queue_id)[1]
+    else:
+        runtime = _runtime_state(cycle.get("runtime"))
+        queue = [entry for entry in runtime.get("queue", []) if isinstance(entry, dict)]
+        item = queue[-1] if queue else {}
+    goal = _dict_value(cycle, "goal")
+    executor_session = _dict_value(item, "executor_session")
+    executor = str(executor_session.get("executor") or _preferred_executor(_dict_value(cycle, "authority_envelope")) or "selected executor")
+    executor_label = "Codex" if executor == "codex" else ("Claude Code" if executor == "claude-code" else executor)
+    progress = _dict_value(executor_session, "progress_summary")
+    progress_text = str(progress.get("chat_summary") or executor_session.get("summary") or item.get("observation_summary") or "아직 관측된 실행 요약은 없어.")
+    status = str(item.get("status", "")) or str(cycle.get("phase", ""))
+    return {
+        "schema_version": LOOP_CYCLE_NARRATION_SCHEMA,
+        "loop_id": str(cycle.get("loop_id", loop_id)),
+        "queue_id": str(item.get("queue_id", queue_id)),
+        "headline": "이번 사이클을 시작합니다." if status == "prepared_not_observed" else "이번 사이클 진행 상황입니다.",
+        "cycle_state": status,
+        "problem_definition": str(goal.get("current_loop_goal") or goal.get("reframe") or goal.get("summary", "")),
+        "planned_approach": str(item.get("planned_action", cycle.get("next_action", "continue_loop"))),
+        "executor_status": f"{executor_label} 상태: {executor_session.get('dispatch_status', 'not_dispatched')}",
+        "progress_summary": progress_text,
+        "verification_status": str(_dict_value(item, "verification_plan").get("expected_signal", "verification not planned yet")),
+        "next_message": _narration_next_message(status, executor_session),
+        "not_evidence_yet": ["implementation", "review", "ci", "merge", "goal_completion"],
         "claim_boundary": _runtime_claim_boundary(),
     }
 
@@ -1401,6 +1571,7 @@ def _runtime_queue_item(
             if is_prepared
             else _connector_plan("", "", planned_action)
         ),
+        "executor_session": _empty_executor_session(_preferred_executor(envelope)),
         "verification_plan": _verification_plan(planned_action, pattern, is_prepared=is_prepared),
         "note": _safe_summary(note, limit=240) if note.strip() else "",
         "observed": False,
@@ -1500,6 +1671,47 @@ def _connector_plan(connector: str, connector_action: str, planned_action: str) 
         "evidence_refs": [],
         "boundary": "OMH records connector intent only; connector I/O requires a separate observed wrapper action.",
     }
+
+
+def _preferred_executor(envelope: dict[str, Any]) -> str:
+    executors = _string_list(envelope.get("allowed_executors", []))
+    if "codex" in executors:
+        return "codex"
+    if "claude-code" in executors:
+        return "claude-code"
+    return executors[0] if executors else "choose"
+
+
+def _empty_executor_session(executor: str = "choose") -> dict[str, Any]:
+    capability = loop_executor_capability(executor)
+    return {
+        "executor": capability["executor"],
+        "loop_mode": capability["loop_mode"],
+        "dispatch_owner": capability["dispatch_owner"],
+        "dispatch_status": "not_requested",
+        "session_ref": "",
+        "thread_ref": "",
+        "dispatch_evidence_refs": [],
+        "progress_evidence_refs": [],
+        "progress_summary": {},
+        "review_summary": {},
+        "summary": "",
+        "capability": capability,
+        "claim_boundary": capability["claim_boundary"],
+    }
+
+
+def _narration_next_message(status: str, executor_session: dict[str, Any]) -> str:
+    dispatch_status = str(executor_session.get("dispatch_status", ""))
+    if status == "prepared_not_observed" and dispatch_status in {"", "not_requested", "prepared"}:
+        return "아직 실행 증거는 없고, 다음 단계는 선택한 코딩 에이전트에 이 큐 항목을 넘기는 거야."
+    if dispatch_status == "dispatched":
+        return "코딩 에이전트 세션은 기록됐고, 다음 단계는 진행 로그나 결과 evidence를 관측하는 거야."
+    if dispatch_status == "progress_observed":
+        return "진행은 관측됐고, 다음 단계는 검증/리뷰 evidence를 기록한 뒤 다음 사이클을 결정하는 거야."
+    if status == "observed":
+        return "큐 항목은 관측됐고, 다음 단계는 feedback 또는 verification artifact를 기록하는 거야."
+    return "현재 루프 상태를 확인하고 다음 관측 가능한 행동을 정해야 해."
 
 
 def _verification_plan(planned_action: str, workflow_pattern: str, *, is_prepared: bool) -> dict[str, Any]:
