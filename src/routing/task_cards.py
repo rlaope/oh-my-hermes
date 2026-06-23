@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .localization import normalized_phrase, routing_tokens
+from .intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 
 
 TASK_CARD_SCHEMA_VERSION = "omh_task_card/v1"
@@ -99,8 +100,9 @@ def classify_task(message: str) -> dict[str, object] | None:
     compact = normalized.replace(" ", "")
     tokens = set(routing_tokens(message, stopwords=set()))
     tokens.update(normalized.split())
+    intent = classify_workflow_intent(message)
 
-    if _is_router_design_feedback(normalized, compact, tokens):
+    if _is_router_design_feedback(normalized, compact, tokens, intent):
         return _router_design_feedback_card()
     if _is_runtime_portability(normalized, compact, tokens):
         return _runtime_portability_card()
@@ -132,9 +134,40 @@ def _is_runtime_portability(normalized: str, compact: str, tokens: set[str]) -> 
     return _phrase_hit(("gateway", "bot", "responder", "게이트웨이", "봇", "응답자"), normalized, compact)
 
 
-def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str]) -> bool:
+def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], intent: object) -> bool:
     phrase_hit = _phrase_hit(_ROUTER_DESIGN_CONTEXT_PHRASES, normalized, compact)
     if phrase_hit:
+        return True
+    if "missed route" in normalized or "workflow-learning" in normalized:
+        return False
+    if (
+        getattr(intent, "intent_class", "") in META_OR_FEEDBACK_INTENTS
+        and not bool(getattr(intent, "explicit_execution", False))
+        and (
+            bool(getattr(intent, "mentioned_workflows", ()))
+            or bool(getattr(intent, "mentioned_runtime_terms", ()))
+            or bool(getattr(intent, "missing_requirements_cues", ()))
+            or _phrase_hit(
+                (
+                    "route",
+                    "routing",
+                    "router",
+                    "workflow",
+                    "workflow route",
+                    "coding handoff",
+                    "coding delegate",
+                    "codex",
+                    "라우팅",
+                    "라우터",
+                    "워크플로",
+                    "워크플로우",
+                    "코딩 핸드오프",
+                ),
+                normalized,
+                compact,
+            )
+        )
+    ):
         return True
     if (
         _phrase_hit(("피드백",), normalized, compact)

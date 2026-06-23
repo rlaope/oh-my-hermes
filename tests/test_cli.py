@@ -98,7 +98,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["source"], "discord")
         self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
         self.assertEqual(payload["route_hint"]["primary_next_action"], "prepare_visual_prompt_card")
-        self.assertIn("workflow=img-summary", payload["prompt_context"])
+        self.assertIn("selected=img-summary", payload["prompt_context"])
         self.assertIn("generic tool can render", payload["normal_response_contract"]["when_generic_tool_is_available"])
         self.assertFalse(payload["message"]["raw_prompt_echoed"])
         self.assertFalse(payload["message"]["raw_prompt_stored"])
@@ -3788,7 +3788,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["route_hint"]["primary_workflow"], "workflow-learning")
         self.assertIn("[OMH Route Hint]", payload["prompt_context"])
-        self.assertIn("workflow=workflow-learning", payload["prompt_context"])
+        self.assertIn("selected=workflow-learning", payload["prompt_context"])
         self.assertIn("Prompt context is for Hermes routing guidance only", payload["prompt_context_boundary"])
 
     def test_chat_route_file_lookup_does_not_emit_workflow_clarification(self) -> None:
@@ -5363,7 +5363,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
-            hostile = "refactor api; rm -rf / # nope"
+            hostile = "implement cleanup of duplicated routing code in src/routing/policy.py with secret-token-123"
 
             status, stdout, stderr = run_cli(
                 [
@@ -5405,6 +5405,133 @@ class CliTests(unittest.TestCase):
             self.assertEqual(shown["coding_delegation"]["executor_handoff"]["executor_target"], "codex")
             self.assertNotIn(hostile, json.dumps(shown["coding_delegation"]))
 
+    def test_coding_delegate_record_blocks_meta_vocabulary_without_runtime_mutation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            message = (
+                "OMH developer test: Codex coding handoff and ultraprocess one-cycle delivery "
+                "are vocabulary only; no requirements yet."
+            )
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    message,
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "coding_delegation/v1")
+            self.assertEqual(payload["status"], "blocked_requirements_missing")
+            self.assertFalse(payload["recorded"])
+            self.assertEqual(payload["runtime"]["recorded"], False)
+            self.assertEqual(payload["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertEqual(payload["runtime"]["run_created"], False)
+            self.assertEqual(payload["runtime"]["record_status"], "blocked_requirements_missing")
+            self.assertEqual(payload["runtime"]["next_action"], "ask_requirements_or_prepare_plan")
+            self.assertFalse((omh_home / "runtime" / "runs").exists())
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "hud", "--json"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            hud = json.loads(stdout)
+            self.assertNotIn("coding-agent:prepared(codex)", hud["display"]["line"])
+            self.assertEqual(hud["runtime"]["evidence_state"], "idle")
+
+            forced_home = root / ".omh-forced"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(forced_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--force-record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    message,
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            forced = json.loads(stdout)
+            self.assertEqual(forced["status"], "blocked_requirements_missing")
+            self.assertEqual(forced["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertFalse((forced_home / "runtime" / "runs").exists())
+
+            vague_home = root / ".omh-vague"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(vague_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    "risky refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            vague = json.loads(stdout)
+            self.assertEqual(vague["status"], "blocked_requirements_missing")
+            self.assertEqual(vague["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertFalse((vague_home / "runtime" / "runs").exists())
+
+            forced_vague_home = root / ".omh-vague-forced"
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(forced_vague_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--force-record",
+                    "--executor",
+                    "codex",
+                    "--source",
+                    "discord",
+                    "risky refactor",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            vague = json.loads(stdout)
+            self.assertEqual(vague["status"], "blocked_requirements_missing")
+            self.assertEqual(vague["runtime"]["reason"], "requirements_or_dispatch_intent_missing")
+            self.assertFalse((forced_vague_home / "runtime" / "runs").exists())
+
     def test_runtime_delegation_status_summarizes_prepared_codex_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -5422,8 +5549,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "risky",
-                    "refactor",
+                    "implement risky status migration in src/runtime/status.py",
                 ]
             )
 
@@ -5492,8 +5618,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "risky",
-                    "refactor",
+                    "implement risky status migration in src/runtime/status.py",
                 ]
             )
             self.assertEqual(status, 0)
@@ -5758,8 +5883,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "risky",
-                    "refactor",
+                    "implement status badge in src/runtime/status.py",
                 ]
             )
             self.assertEqual(stderr, "")

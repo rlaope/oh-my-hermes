@@ -247,10 +247,11 @@ make an image explaining the cron feature
 
 Hermes Agent
 [OMH Route Hint]
-- workflow=img-summary; lane=materials_and_visuals; next_action=prepare_visual_prompt_card
+intent=unknown; selected=img-summary; confidence=medium
+- selected=img-summary; lane=materials_and_visuals; next_action=prepare_visual_prompt_card
   first_response_shape=Separate copy/layout/package prep from generated file or image evidence, then offer revise/copy/generate/record actions.
   fallback_action=choose_image_generator_or_prompt_only_when_missing.
-- workflow=automation-blueprint; lane=automation_and_status; next_action=prepare_scheduled_ops_blueprint
+- selected=automation-blueprint; lane=automation_and_status; next_action=prepare_scheduled_ops_blueprint
   first_response_shape=Show the prepared status, schedule, or learning shape, name the missing evidence, and expose refresh, repair, or review actions.
   fallback_action=confirm_schedule_delivery_and_tools.
 ```

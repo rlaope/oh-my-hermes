@@ -127,7 +127,8 @@ def route_chat_message(
     full_recommendations = recommend_skills(message, limit=len(definitions))
     explicit_skill = explicit_skill_invocation(message, definitions)
     task_card = classify_task(message)
-    if task_card and not explicit_skill:
+    task_card_overrides_explicit = _task_card_overrides_explicit_invocation(task_card)
+    if task_card and (not explicit_skill or task_card_overrides_explicit):
         full_recommendations = _prioritize_recommendation(full_recommendations, task_card_recommendation(task_card))
     catalog_question = is_skill_catalog_question(message)
     specific_catalog_match = (
@@ -146,7 +147,7 @@ def route_chat_message(
     ambiguous = _is_ambiguous(full_recommendations)
     file_or_text_lookup = is_file_or_text_lookup_question(message)
 
-    if explicit_skill:
+    if explicit_skill and not task_card_overrides_explicit:
         selected_skill = explicit_skill
         action = "dispatch"
         reason = "Explicit workflow invocation wins over heuristic routing."
@@ -216,10 +217,10 @@ def route_chat_message(
         selected_harness=selected_harness,
         candidate_skill=candidate_skill,
         candidate_harness=candidate_harness,
-        confidence="high" if explicit_skill else candidate_confidence,
-        score=max(candidate_score, 1) if explicit_skill else candidate_score,
+        confidence="high" if explicit_skill and not task_card_overrides_explicit else candidate_confidence,
+        score=max(candidate_score, 1) if explicit_skill and not task_card_overrides_explicit else candidate_score,
         threshold=min_confidence,
-        explicit=bool(explicit_skill),
+        explicit=bool(explicit_skill and not task_card_overrides_explicit),
         ambiguous=ambiguous,
         reason=reason,
         clarification=clarification,
@@ -228,6 +229,12 @@ def route_chat_message(
         recommendations=recommendations,
     )
     return decision.to_dict()
+
+
+def _task_card_overrides_explicit_invocation(task_card: dict[str, object] | None) -> bool:
+    if not isinstance(task_card, dict):
+        return False
+    return task_card.get("task_type") == "router_design_feedback"
 
 
 def route_chat_event(

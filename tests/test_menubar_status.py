@@ -38,7 +38,7 @@ class MenubarStatusTests(unittest.TestCase):
                     "discord",
                     "--channel-ref",
                     "C123",
-                    "Safely add feature without overclaiming.",
+                    "implement safe status feature in src/runtime/status.py without overclaiming",
                 ]
             )
             self.assertEqual(stderr, "")
@@ -131,7 +131,7 @@ class MenubarStatusTests(unittest.TestCase):
                         "discord",
                         "--channel-ref",
                         "C123",
-                        "Safely add feature without overclaiming.",
+                        "implement safe status feature in src/runtime/status.py without overclaiming",
                     ]
                 )[0],
                 0,
@@ -312,7 +312,10 @@ class MenubarStatusTests(unittest.TestCase):
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
             self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup"])[0], 0)
-            for message in ("First coding task.", "Second coding task."):
+            for message in (
+                "implement first coding task in src/runtime/first.py",
+                "implement second coding task in src/runtime/second.py",
+            ):
                 self.assertEqual(
                     run_cli(
                         [

@@ -43,7 +43,7 @@ class HudCliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "Safely add feature without overclaiming.",
+                    "implement safe status feature in src/runtime/status.py without overclaiming",
                 ]
             )
             self.assertEqual(stderr, "")
