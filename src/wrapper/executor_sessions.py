@@ -5,6 +5,7 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+from ..context_safety import MAX_SUMMARY_CHARS, compact_context_refs, compact_visible_text
 from ..codex_progress import build_codex_session_observation
 from ..executors import CODING_EXECUTOR_TARGETS, executor_label
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, utc_now
@@ -637,6 +638,7 @@ def _build_executor_session_record(paths: OmhPaths, session: dict[str, Any], pat
         "claim_boundary": _claim_boundary(),
     }
     merged["evidence_refs"] = _compact_list(merged.get("evidence_refs", []))
+    merged["summary"] = compact_visible_text(merged.get("summary", ""), max_chars=MAX_SUMMARY_CHARS)
     errors = validate_executor_session_record(merged)
     if errors:
         raise ExecutorSessionError(errors[0])
@@ -1322,9 +1324,7 @@ def _claim_boundary() -> str:
 
 
 def _compact_list(values: Any) -> list[str]:
-    if not isinstance(values, (list, tuple)):
-        return []
-    return [str(value) for value in values if str(value)]
+    return compact_context_refs(values)[0]
 
 
 def _action(action_id: str, label: str, style: str, *, enabled: bool = True, payload: dict[str, object] | None = None) -> dict[str, object]:

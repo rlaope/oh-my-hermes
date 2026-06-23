@@ -6,6 +6,16 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .context_safety import (
+    MAX_EVIDENCE_REFS,
+    MAX_EVIDENCE_REF_CHARS,
+    MAX_VISIBLE_MESSAGE_CHARS,
+    compact_context_refs,
+    compact_visible_text,
+    context_budget_payload,
+    raw_output_artifact_ref,
+)
+
 
 CODEX_PROGRESS_SCHEMA_VERSION = "codex_progress_summary/v1"
 CODEX_SESSION_OBSERVATION_SCHEMA_VERSION = "codex_session_observation/v1"
@@ -33,7 +43,6 @@ _VISIBLE_MESSAGE_TYPES = {
 }
 _TERMINAL_FAILURE_RE = re.compile(r"\b(error|failed|failure|traceback)\b")
 _TERMINAL_SUCCESS_RE = re.compile(r"\b(completed|complete|success|succeeded|passed)\b")
-_MAX_VISIBLE_MESSAGE = 180
 _CODEX_REVIEW_STATUSES = ("not_observed", "pending", "passed", "failed", "blocked", "changes_requested", "commented")
 
 
@@ -98,6 +107,7 @@ def summarize_codex_jsonl_text(
             activity_counts["assistant_visible_decisions"] += 1
     activities = _observable_activity(activity_counts)
     status = terminal_status or ("activity_observed" if activities or visible_decisions else "no_observable_events")
+    compact_refs, omitted_refs = compact_context_refs(evidence_refs or [])
     return {
         "schema_version": CODEX_PROGRESS_SCHEMA_VERSION,
         "source": source,
@@ -109,11 +119,25 @@ def summarize_codex_jsonl_text(
         "assistant_visible_messages": visible_decisions[:3],
         "latest_assistant_visible_message": visible_decisions[-1] if visible_decisions else "",
         "chat_summary": _chat_summary(status, activities, visible_decisions),
-        "evidence_refs": _compact_list(evidence_refs or []),
+        "evidence_refs": compact_refs,
+        "raw_output_artifact": raw_output_artifact_ref(
+            text,
+            source=source,
+            evidence_refs=compact_refs,
+            omitted_evidence_ref_count=omitted_refs,
+        ),
+        "context_budget": context_budget_payload(),
+        "omitted": {
+            "assistant_visible_message_count": max(0, len(visible_decisions) - 3),
+            "evidence_ref_count": omitted_refs,
+            "max_visible_message_chars": MAX_VISIBLE_MESSAGE_CHARS,
+            "max_evidence_refs": MAX_EVIDENCE_REFS,
+            "max_evidence_ref_chars": MAX_EVIDENCE_REF_CHARS,
+        },
         "privacy": "summary_only",
         "claim_boundary": (
             "This is an observable Codex event summary. It is not raw JSONL, hidden reasoning, "
-            "review evidence, CI evidence, merge-readiness evidence, or merge evidence."
+            "review evidence, CI evidence, merge-readiness evidence, or merge evidence; raw output should stay in artifacts."
         ),
     }
 
@@ -461,12 +485,7 @@ def _terminal_success_observed(text: str) -> bool:
 
 
 def _compact_visible_message(value: str) -> str:
-    cleaned = re.sub(r"\s+", " ", value).strip()
-    if not cleaned:
-        return ""
-    if len(cleaned) <= _MAX_VISIBLE_MESSAGE:
-        return cleaned
-    return f"{cleaned[: _MAX_VISIBLE_MESSAGE - 1]}..."
+    return compact_visible_text(value, max_chars=MAX_VISIBLE_MESSAGE_CHARS)
 
 
 def _is_inspection_event(text: str) -> bool:
@@ -510,14 +529,7 @@ def _chat_summary(status: str, activities: list[str], visible_decisions: list[st
 
 
 def _compact_list(values: Any) -> list[str]:
-    if not isinstance(values, (list, tuple)):
-        return []
-    seen: list[str] = []
-    for value in values:
-        text = str(value).strip()
-        if text and text not in seen:
-            seen.append(text)
-    return seen
+    return compact_context_refs(values)[0]
 
 
 def _shell_quote(value: str) -> str:

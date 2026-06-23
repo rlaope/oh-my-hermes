@@ -192,6 +192,14 @@ reasoning, raw JSON events, or unobserved review/CI/merge claims. If an
 explicit JSONL path cannot be read, the adapter must surface that as missing
 evidence instead of treating it as an empty observed log.
 
+Large output belongs in the wrapper or operator artifact store, not in Hermes
+chat context. `codex_progress_summary/v1` includes
+`raw_output_artifact` (`omh_context_artifact_ref/v1`), `context_budget`, capped
+evidence refs, and a bounded human-readable summary so wrappers can reference
+the raw log without copying it into the prompt. The artifact reference is
+prepared context only; it is not execution, review, CI, merge-readiness, or
+merge evidence.
+
 When Codex performs a review, wrappers can expose a human-readable review
 context summary without raw logs:
 
