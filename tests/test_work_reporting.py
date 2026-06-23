@@ -417,6 +417,33 @@ class WorkReportingTests(unittest.TestCase):
         self.assertIn("runtime/runtime_observations.jsonl#runtime_start", rendered)
         self.assertNotIn("prepared but not observed", rendered)
 
+    def test_runtime_explicit_not_observed_events_remain_active_gaps(self) -> None:
+        status_payload = {
+            "schema_version": "delegated_coding_status/v1",
+            "run_id": "run-runtime-gap",
+            "prepared": {"status": "prepared_not_observed", "workflow": "team", "harness": "coding"},
+            "runtime_observation": {
+                "observed_events": [],
+                "blocked_events": [],
+                "failed_events": [],
+                "not_observed_events": ["runtime_start"],
+                "missing_events": ["worktree_creation"],
+                "next_action": "record_runtime_observation:runtime_start",
+                "latest": {"runtime_start": {"status": "not_observed", "summary": "runtime start not observed"}},
+            },
+            "next_action": "wait_for_executor_evidence",
+            "lifecycle_status": "running",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="status")
+        rendered = render_status_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertIn("runtime_start", summary["observations"]["not_observed_events"])
+        self.assertIn("worktree_creation", summary["observations"]["not_observed_events"])
+        self.assertIn("Still waiting on observed proof for", rendered)
+        self.assertIn("runtime_start", rendered)
+
     def test_legacy_completed_status_ignores_absent_runtime_missing_ladder(self) -> None:
         status_payload = {
             "schema_version": "delegated_coding_status/v1",

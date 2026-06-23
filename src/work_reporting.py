@@ -1396,11 +1396,14 @@ def _runtime_observation_events(runtime_observation: dict[str, Any]) -> list[dic
 
 
 def _runtime_observation_applicable(runtime_observation: dict[str, Any]) -> bool:
+    next_action = _token(runtime_observation.get("next_action") or "")
     return bool(
         _string_items(runtime_observation.get("observed_events"))
         or _string_items(runtime_observation.get("blocked_events"))
         or _string_items(runtime_observation.get("failed_events"))
-        or _token(runtime_observation.get("next_action") or "") in {"report_runtime_observed", "record_runtime_observation"}
+        or _string_items(runtime_observation.get("not_observed_events"))
+        or next_action in {"report_runtime_observed", "record_runtime_observation"}
+        or next_action.startswith("record_runtime_observation:")
         or _token(runtime_observation.get("status") or runtime_observation.get("lifecycle_status") or "")
         in {"running", "started", "completed", "reportable", "runtime_observed"}
     )
