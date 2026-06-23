@@ -1,9 +1,20 @@
 # oh-my-hermes
 
 <p align="center">
+  <img src="assets/hermes-agent-hero.png" alt="Oh My Hermes" width="720">
+</p>
+
+<p align="center">
   <strong>Install once. Keep your Hermes workflow. Let OMH make the next step safe.</strong>
   <br>
   <em>Chat-first skills, workflow contracts, status cards, and handoffs that fit existing Hermes setups without breaking them.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/rlaope/oh-my-hermes"><img alt="GitHub" src="https://img.shields.io/badge/github-rlaope%2Foh--my--hermes-181717?logo=github"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="Status" src="https://img.shields.io/badge/status-1.0.1%20stable-blue">
 </p>
 
 Most people skip the docs. **oh-my-hermes** is built for that reality: install
@@ -34,6 +45,14 @@ easier to start, easier to trust, and more natural to apply in real work.
 > **Friren Agent is hard at work improving OMH inside Art&Engine.**
 > Explore [Team Art & Engineering](https://rlaope.github.io/artengine-lab/)
 > for the studio context behind OMH.
+>
+> <p align="center">
+>   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
+> </p>
+>
+> <p align="center">
+>   <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
+> </p>
 
 <br>
 
@@ -95,6 +114,10 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 <br>
 
 ## Core Workflows
+
+<p align="center">
+  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
+</p>
 
 | Need | OMH helps Hermes do this | Example |
 | --- | --- | --- |
