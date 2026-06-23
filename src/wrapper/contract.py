@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from ..context_safety import compact_progress_events
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_route_payload, route_chat_message
@@ -1702,7 +1703,28 @@ def build_status_card_from_status(status_payload: dict[str, Any]) -> dict[str, o
     harness_progress = status_payload.get("harness_progress")
     if isinstance(harness_progress, dict) and harness_progress:
         card["harness_progress"] = harness_progress
+    progress_events, omitted_progress_events = _status_progress_events(status_payload)
+    if progress_events:
+        card["progress_reporting"] = {
+            "schema_version": "omh_progress_reporting/v1",
+            "mode": "event_triggered",
+            "timed_polling_required": False,
+            "human_update_policy": "one_or_two_sentence_summary_only",
+        }
+        card["progress_events"] = progress_events
+        card["latest_progress_event"] = progress_events[-1]
+        card["omitted_progress_event_count"] = omitted_progress_events
     return card
+
+
+def _status_progress_events(status_payload: dict[str, Any]) -> tuple[list[dict[str, object]], int]:
+    events = status_payload.get("progress_events")
+    if isinstance(events, list):
+        return compact_progress_events(events)
+    latest = status_payload.get("latest_progress_event")
+    if isinstance(latest, dict) and latest:
+        return compact_progress_events([latest])
+    return [], 0
 
 
 def _status_copy(status_payload: dict[str, Any], next_action: str) -> tuple[str, str, str, str]:

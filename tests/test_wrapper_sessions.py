@@ -805,6 +805,8 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(completed["status"]["result"], "completed")
             self.assertEqual(completed["status"]["codex_progress"]["event_count"], 2)
             self.assertIn("Codex is running tests.", completed["status"]["codex_progress"]["observable_activity"])
+            self.assertEqual(completed["status"]["latest_progress_event"]["event_type"], "targeted_tests_passed")
+            self.assertEqual(completed["status"]["latest_progress_event"]["severity"], "success")
             self.assertIn("summary_only", completed["executor_session"]["codex_progress"]["privacy"])
             self.assertEqual(completed["status"]["linked_lifecycle_status"]["next_action"], "record_verification_evidence")
             with self.assertRaisesRegex(ExecutorSessionError, "after executor result is recorded"):
@@ -815,6 +817,7 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(verify_request["status"]["verification"], "requested")
             status_after_verify_request = build_wrapper_session_status(paths, session_id)
             briefing = status_after_verify_request["coding_briefing"]
+            self.assertEqual(status_after_verify_request["status_card"]["latest_progress_event"]["event_type"], "targeted_tests_passed")
             states = {step["id"]: step["state"] for step in briefing["progress"]}
             self.assertEqual(states["executor_result"], "complete")
             self.assertEqual(states["verification"], "in_progress")

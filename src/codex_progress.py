@@ -9,7 +9,9 @@ from typing import Any
 from .context_safety import (
     MAX_EVIDENCE_REFS,
     MAX_EVIDENCE_REF_CHARS,
+    MAX_PROGRESS_EVENTS,
     MAX_VISIBLE_MESSAGE_CHARS,
+    build_progress_event,
     compact_context_refs,
     compact_visible_text,
     context_budget_payload,
@@ -108,6 +110,13 @@ def summarize_codex_jsonl_text(
     activities = _observable_activity(activity_counts)
     status = terminal_status or ("activity_observed" if activities or visible_decisions else "no_observable_events")
     compact_refs, omitted_refs = compact_context_refs(evidence_refs or [])
+    raw_artifact = raw_output_artifact_ref(
+        text,
+        source=source,
+        evidence_refs=compact_refs,
+        omitted_evidence_ref_count=omitted_refs,
+    )
+    progress_events, omitted_progress_events = _progress_events(parsed_events, raw_artifact)
     return {
         "schema_version": CODEX_PROGRESS_SCHEMA_VERSION,
         "source": source,
@@ -119,18 +128,18 @@ def summarize_codex_jsonl_text(
         "assistant_visible_messages": visible_decisions[:3],
         "latest_assistant_visible_message": visible_decisions[-1] if visible_decisions else "",
         "chat_summary": _chat_summary(status, activities, visible_decisions),
+        "progress_reporting": _progress_reporting_contract(),
+        "progress_events": progress_events,
+        "latest_progress_event": progress_events[-1] if progress_events else {},
         "evidence_refs": compact_refs,
-        "raw_output_artifact": raw_output_artifact_ref(
-            text,
-            source=source,
-            evidence_refs=compact_refs,
-            omitted_evidence_ref_count=omitted_refs,
-        ),
+        "raw_output_artifact": raw_artifact,
         "context_budget": context_budget_payload(),
         "omitted": {
             "assistant_visible_message_count": max(0, len(visible_decisions) - 3),
             "evidence_ref_count": omitted_refs,
+            "progress_event_count": omitted_progress_events,
             "max_visible_message_chars": MAX_VISIBLE_MESSAGE_CHARS,
+            "max_progress_events": MAX_PROGRESS_EVENTS,
             "max_evidence_refs": MAX_EVIDENCE_REFS,
             "max_evidence_ref_chars": MAX_EVIDENCE_REF_CHARS,
         },
@@ -168,6 +177,7 @@ def build_codex_session_observation(
         "event_count": int(progress.get("event_count", 0) or 0),
         "observable_activity": list(progress.get("observable_activity", [])) if isinstance(progress.get("observable_activity"), list) else [],
         "latest_assistant_visible_message": str(progress.get("latest_assistant_visible_message", "")),
+        "latest_progress_event": progress.get("latest_progress_event", {}) if isinstance(progress.get("latest_progress_event"), dict) else {},
         "evidence_refs": _compact_list([*(evidence_refs or []), *progress.get("evidence_refs", [])])
         if isinstance(progress.get("evidence_refs", []), list)
         else _compact_list(evidence_refs or []),
@@ -470,6 +480,7 @@ def _progress_context(progress: dict[str, object]) -> dict[str, object]:
         "event_count": int(progress.get("event_count", 0) or 0),
         "observable_activity": list(progress.get("observable_activity", [])) if isinstance(progress.get("observable_activity"), list) else [],
         "chat_summary": str(progress.get("chat_summary", "")),
+        "latest_progress_event": progress.get("latest_progress_event", {}) if isinstance(progress.get("latest_progress_event"), dict) else {},
         "evidence_refs": _compact_list(progress.get("evidence_refs", [])),
         "claim_boundary": str(progress.get("claim_boundary", "")),
     }
@@ -486,6 +497,134 @@ def _terminal_success_observed(text: str) -> bool:
 
 def _compact_visible_message(value: str) -> str:
     return compact_visible_text(value, max_chars=MAX_VISIBLE_MESSAGE_CHARS)
+
+
+def _progress_events(parsed_events: list[dict[str, Any]], raw_artifact: dict[str, object]) -> tuple[list[dict[str, object]], int]:
+    events: list[dict[str, object]] = []
+    for event in parsed_events:
+        searchable = _safe_search_text(event)
+        visible = _assistant_visible_message(event)
+        summary = visible or _tool_progress_summary(searchable)
+        if not summary:
+            continue
+        event_type = _progress_event_type(searchable)
+        if not event_type:
+            continue
+        status, severity = _progress_status_and_severity(event_type)
+        events.append(
+            build_progress_event(
+                event_type,
+                summary,
+                status=status,
+                severity=severity,
+                file_refs=_file_refs(searchable),
+                artifact_refs=[raw_artifact],
+            )
+        )
+    if len(events) <= MAX_PROGRESS_EVENTS:
+        return events, 0
+    return events[-MAX_PROGRESS_EVENTS:], len(events) - MAX_PROGRESS_EVENTS
+
+
+def _progress_reporting_contract() -> dict[str, object]:
+    return {
+        "schema_version": "omh_progress_reporting/v1",
+        "mode": "event_triggered",
+        "timed_polling_required": False,
+        "preferred_triggers": [
+            "bug_or_failure_discovered",
+            "root_cause_identified",
+            "fix_strategy_selected",
+            "files_or_area_chosen",
+            "targeted_tests_pass_or_fail",
+            "full_tests_start_pass_or_fail",
+            "commit_or_pr_created_or_updated",
+            "blocker_encountered",
+        ],
+        "human_update_policy": "one_or_two_sentence_summary_only",
+        "raw_output_policy": "store_raw_output_as_artifact_and_emit_refs_only",
+    }
+
+
+def _progress_event_type(text: str) -> str:
+    lowered = text.casefold()
+    if "root cause" in lowered:
+        return "root_cause_identified"
+    if "fix strategy" in lowered or "strategy selected" in lowered or "selected strategy" in lowered:
+        return "fix_strategy_selected"
+    if "bug discovered" in lowered:
+        return "bug_discovered"
+    if "blocker" in lowered or "blocked" in lowered:
+        return "blocker_encountered"
+    if "full tests" in lowered and "start" in lowered:
+        return "full_tests_started"
+    if "full tests" in lowered and _terminal_success_observed(lowered):
+        return "full_tests_passed"
+    if "full tests" in lowered and _TERMINAL_FAILURE_RE.search(lowered):
+        return "full_tests_failed"
+    if "targeted tests" in lowered and _terminal_success_observed(lowered):
+        return "targeted_tests_passed"
+    if "targeted tests" in lowered and _TERMINAL_FAILURE_RE.search(lowered):
+        return "targeted_tests_failed"
+    if "test" in lowered and _terminal_success_observed(lowered):
+        return "targeted_tests_passed"
+    if "test" in lowered and _TERMINAL_FAILURE_RE.search(lowered):
+        return "targeted_tests_failed"
+    if "commit" in lowered and any(token in lowered for token in ("created", "committed")):
+        return "commit_created"
+    if ("pull request" in lowered or " pr " in lowered) and "created" in lowered:
+        return "pr_created"
+    if ("pull request" in lowered or " pr " in lowered) and "updated" in lowered:
+        return "pr_updated"
+    if _file_refs(text) and any(token in lowered for token in ("file", "files", "area", "chosen", "selected", "editing", "touching")):
+        return "files_area_chosen"
+    if "failure" in lowered or "failed" in lowered or "error" in lowered:
+        return "failure_discovered"
+    return ""
+
+
+def _progress_status_and_severity(event_type: str) -> tuple[str, str]:
+    if event_type.endswith("_passed") or event_type in {"commit_created", "pr_created", "pr_updated", "workflow_completed"}:
+        return "passed", "success"
+    if event_type.endswith("_failed") or event_type in {"failure_discovered", "bug_discovered"}:
+        return "failed", "error"
+    if event_type == "blocker_encountered":
+        return "blocked", "blocked"
+    if event_type.endswith("_started"):
+        return "running", "info"
+    if event_type in {"root_cause_identified", "fix_strategy_selected", "files_area_chosen"}:
+        return "observed", "warning" if event_type == "root_cause_identified" else "info"
+    return "observed", "info"
+
+
+def _tool_progress_summary(text: str) -> str:
+    if not text:
+        return ""
+    event_type = _progress_event_type(text)
+    if event_type.endswith("_passed"):
+        return "Tests passed."
+    if event_type.endswith("_failed"):
+        return "Tests failed."
+    if event_type.endswith("_started"):
+        return "Tests started."
+    if event_type == "commit_created":
+        return "Commit created."
+    if event_type == "pr_created":
+        return "Pull request created."
+    if event_type == "pr_updated":
+        return "Pull request updated."
+    if event_type == "blocker_encountered":
+        return "Blocker encountered."
+    if event_type == "files_area_chosen":
+        refs = _file_refs(text)
+        return f"Work area chosen: {', '.join(refs[:3])}."
+    return ""
+
+
+def _file_refs(text: str) -> list[str]:
+    matches = re.findall(r"\b[\w./-]+\.(?:py|md|json|jsonl|toml|yaml|yml|ts|tsx|js|jsx|sh)\b", text)
+    compact, _omitted = compact_context_refs(matches)
+    return compact
 
 
 def _is_inspection_event(text: str) -> bool:

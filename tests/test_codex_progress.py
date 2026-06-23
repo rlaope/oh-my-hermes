@@ -78,6 +78,46 @@ class CodexProgressTests(unittest.TestCase):
         self.assertNotIn("B" * 1000, rendered)
         self.assertIn("raw output should stay in artifacts", summary["claim_boundary"])
 
+    def test_codex_progress_emits_event_triggered_updates_without_raw_logs(self) -> None:
+        raw_noise = "full tool log " + ("N" * 5000)
+        raw = "\n".join(
+            [
+                json.dumps({"role": "assistant", "content": f"Bug discovered: delegate mode ignored the setup default. {raw_noise}"}),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": "Root cause identified in src/wrapper/contract.py: default executor was not propagated.",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": "Fix strategy selected: carry setup_profile.default_executor into the delegate handoff.",
+                    }
+                ),
+                json.dumps({"role": "assistant", "content": "Targeted tests passed: tests/test_wrapper_contract.py."}),
+            ]
+        )
+
+        summary = summarize_codex_jsonl_text(raw, evidence_refs=["codex-jsonl"], source="codex-events.jsonl")
+
+        rendered = json.dumps(summary)
+        event_types = [event["event_type"] for event in summary["progress_events"]]
+        self.assertEqual(summary["progress_reporting"]["mode"], "event_triggered")
+        self.assertFalse(summary["progress_reporting"]["timed_polling_required"])
+        self.assertIn("bug_discovered", event_types)
+        self.assertIn("root_cause_identified", event_types)
+        self.assertIn("fix_strategy_selected", event_types)
+        self.assertIn("targeted_tests_passed", event_types)
+        self.assertLessEqual(len(summary["progress_events"]), summary["context_budget"]["max_progress_events"])
+        self.assertEqual(summary["latest_progress_event"]["event_type"], "targeted_tests_passed")
+        self.assertEqual(summary["latest_progress_event"]["severity"], "success")
+        self.assertIn("tests/test_wrapper_contract.py", summary["latest_progress_event"]["file_refs"])
+        self.assertEqual(summary["latest_progress_event"]["artifact_refs"][0]["schema_version"], "omh_context_artifact_ref/v1")
+        self.assertNotIn("N" * 1000, rendered)
+        self.assertNotIn("```", rendered)
+        self.assertIn("not execution", summary["latest_progress_event"]["claim_boundary"])
+
     def test_nested_reasoning_does_not_influence_observable_summary(self) -> None:
         raw = json.dumps(
             {

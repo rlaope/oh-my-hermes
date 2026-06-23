@@ -200,6 +200,17 @@ the raw log without copying it into the prompt. The artifact reference is
 prepared context only; it is not execution, review, CI, merge-readiness, or
 merge evidence.
 
+Long executor, goal, research, and workflow runs should report meaningful
+events instead of relying on 3-5 minute polling. Use `omh_progress_event/v1` for
+state changes such as failure discovered, root cause identified, fix strategy
+selected, files or area chosen, targeted tests pass/fail, full tests
+start/pass/fail, commit created, PR created/updated, or blocker encountered.
+Each event should be one or two human-readable sentences with optional file
+refs, compact artifact refs, severity/status, and the standard claim boundary.
+Raw logs, JSONL, command output, and transcripts stay in artifacts referenced by
+the event; the event itself is progress context, not execution/review/CI/merge
+evidence.
+
 When Codex performs a review, wrappers can expose a human-readable review
 context summary without raw logs:
 

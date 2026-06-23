@@ -385,6 +385,15 @@ refs, and bounded human-readable summaries. Raw output belongs in a wrapper or
 operator artifact store referenced by `raw_output_artifact`; a prepared artifact
 reference is not execution, review, CI, merge-readiness, or merge evidence.
 
+Prefer event-triggered progress over timed polling for long executor, goal,
+research, or workflow runs. Emit `omh_progress_event/v1` when a meaningful state
+changes: failure discovered, root cause identified, fix strategy selected, files
+or area chosen, targeted tests pass/fail, full tests start/pass/fail, commit
+created, PR created/updated, or blocker encountered. Keep each update to one or
+two human-readable sentences with optional compact file refs, artifact refs,
+severity, and status. Store raw logs, JSONL, command output, and transcripts as
+artifacts; pass only event summaries and refs into Hermes chat context.
+
 ## Memory And Planning
 
 Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `{MEMORY_REVIEW_SCHEMA}` and `{HANDOFF_CONTEXT_PACK_SCHEMA}` artifacts only; it does not read or mutate opaque Hermes internal memory.
