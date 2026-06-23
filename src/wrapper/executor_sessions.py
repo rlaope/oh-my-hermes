@@ -5,6 +5,7 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+from ..codex_progress import build_codex_session_observation
 from ..executors import CODING_EXECUTOR_TARGETS, executor_label
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, utc_now
 from ..paths import OmhPaths
@@ -71,6 +72,8 @@ def build_executor_session_status(
     attached = bool(record.get("attached", False))
     status_blocker = record_error or linked_status_error or ""
     isolation_status = _isolation_status(paths, session, linked_status, runtime_status)
+    codex_session = record.get("codex_session", {}) if isinstance(record.get("codex_session"), dict) else {}
+    codex_progress = record.get("codex_progress", {}) if isinstance(record.get("codex_progress"), dict) else {}
     status = {
         "schema_version": EXECUTOR_SESSION_STATUS_SCHEMA_VERSION,
         "session_id": session_id,
@@ -101,6 +104,7 @@ def build_executor_session_status(
             f"dispatch: {'observed' if dispatch_observed else 'not_observed'}",
             f"result: {result_status}",
             f"verification: {verification_status}",
+            *_codex_status_lines(codex_session, codex_progress),
         ],
         "display_status_lines": _display_status_lines(
             executor=executor,
@@ -112,12 +116,18 @@ def build_executor_session_status(
             verification_status=verification_status,
             status_blocker=status_blocker,
             isolation_status=isolation_status,
+            codex_session=codex_session,
+            codex_progress=codex_progress,
         ),
         "claim_boundary": (
             "Executor session status is wrapper/operator metadata. It does not prove execution, "
             "result, verification, review, CI, or merge unless the matching observed evidence is recorded."
         ),
     }
+    if codex_session:
+        status["codex_session"] = codex_session
+    if codex_progress:
+        status["codex_progress"] = codex_progress
     if record_found and record.get("schema_version") == EXECUTOR_SESSION_SCHEMA_VERSION:
         status["record"] = record
     if record_error:
@@ -295,6 +305,9 @@ def open_executor_session(
     external_session_ref: str = "",
     evidence_refs: list[str] | tuple[str, ...] | None = None,
     summary: str = "",
+    codex_session_ref: str = "",
+    codex_thread_ref: str = "",
+    codex_progress_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if external_session_ref.strip() and not observed:
         raise ExecutorSessionError("open-executor --external-session-ref requires --observed")
@@ -310,6 +323,16 @@ def open_executor_session(
         "evidence_refs": list(evidence_refs or []),
         "summary": summary or _open_summary(session, observed=observed),
     }
+    patch.update(
+        _codex_observation_patch(
+            session,
+            external_session_ref=external_session_ref,
+            codex_session_ref=codex_session_ref,
+            codex_thread_ref=codex_thread_ref,
+            evidence_refs=evidence_refs or [],
+            progress_summary=codex_progress_summary,
+        )
+    )
     record = _build_executor_session_record(paths, session, patch)
     if observed:
         _observe_dispatch(paths, session, record, summary=summary, evidence_refs=list(evidence_refs or []))
@@ -325,24 +348,38 @@ def attach_executor_session(
     external_session_ref: str,
     evidence_refs: list[str] | tuple[str, ...] | None = None,
     summary: str = "",
+    codex_session_ref: str = "",
+    codex_thread_ref: str = "",
+    codex_progress_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if not external_session_ref.strip():
         raise ExecutorSessionError("attach-executor requires --external-session-ref")
     session = _existing_session(paths, session_id)
     _require_prepared_handoff(session)
     _require_no_observed_result(paths, session)
+    patch = {
+        "status": "running",
+        "open_action": "observed",
+        "attached": True,
+        "external_session_ref": external_session_ref,
+        "dispatch_observed": True,
+        "evidence_refs": list(evidence_refs or []),
+        "summary": summary or "Wrapper attached an observed executor session reference.",
+    }
+    patch.update(
+        _codex_observation_patch(
+            session,
+            external_session_ref=external_session_ref,
+            codex_session_ref=codex_session_ref,
+            codex_thread_ref=codex_thread_ref,
+            evidence_refs=evidence_refs or [],
+            progress_summary=codex_progress_summary,
+        )
+    )
     record = _build_executor_session_record(
         paths,
         session,
-        {
-            "status": "running",
-            "open_action": "observed",
-            "attached": True,
-            "external_session_ref": external_session_ref,
-            "dispatch_observed": True,
-            "evidence_refs": list(evidence_refs or []),
-            "summary": summary or "Wrapper attached an observed executor session reference.",
-        },
+        patch,
     )
     _observe_dispatch(paths, session, record, summary=summary, evidence_refs=list(evidence_refs or []))
     record = _write_executor_session(paths, record)
@@ -357,6 +394,7 @@ def record_executor_session_result(
     result: str,
     evidence_refs: list[str] | tuple[str, ...] | None = None,
     summary: str = "",
+    codex_progress_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if result not in {"completed", "blocked", "failed"}:
         raise ExecutorSessionError("executor result must be completed, blocked, or failed")
@@ -371,16 +409,31 @@ def record_executor_session_result(
     refs = list(evidence_refs or [])
     if str(session.get("current_run_id", "")):
         _record_codex_result_if_needed(paths, session, result=result, evidence_refs=refs)
+    patch = {
+        "status": result,
+        "result": result,
+        "result_observed": True,
+        "evidence_refs": refs,
+        "summary": summary or f"Wrapper recorded executor result: {result}.",
+    }
+    if isinstance(codex_progress_summary, dict):
+        patch["codex_progress"] = codex_progress_summary
+        patch["codex_session"] = build_codex_session_observation(
+            selected_executor_profile=_selected_executor(session, current),
+            external_session_ref=str(current.get("external_session_ref", "")),
+            codex_session_ref=str(current.get("codex_session", {}).get("session_ref", ""))
+            if isinstance(current.get("codex_session"), dict)
+            else "",
+            codex_thread_ref=str(current.get("codex_session", {}).get("thread_ref", ""))
+            if isinstance(current.get("codex_session"), dict)
+            else "",
+            evidence_refs=refs,
+            progress_summary=codex_progress_summary,
+        )
     record = _merge_executor_session(
         paths,
         session,
-        {
-            "status": result,
-            "result": result,
-            "result_observed": True,
-            "evidence_refs": refs,
-            "summary": summary or f"Wrapper recorded executor result: {result}.",
-        },
+        patch,
     )
     _append_executor_event(paths, session_id, f"executor_session_{result}", record)
     return {"schema_version": "executor_session_result/v1", "executor_session": record, "status": build_executor_session_status(paths, session)}
@@ -421,7 +474,7 @@ def enhance_chat_response_with_executor_session(
 ) -> dict[str, object]:
     updated = dict(response)
     state = dict(updated.get("state", {})) if isinstance(updated.get("state"), dict) else {}
-    state["executor_session_status"] = {
+    session_status = {
         "schema_version": executor_status.get("schema_version", EXECUTOR_SESSION_STATUS_SCHEMA_VERSION),
         "coding_agent": executor_status.get("coding_agent", ""),
         "executor_session": executor_status.get("executor_session", ""),
@@ -430,6 +483,13 @@ def enhance_chat_response_with_executor_session(
         "result": executor_status.get("result", ""),
         "verification": executor_status.get("verification", ""),
     }
+    codex_session = executor_status.get("codex_session")
+    if isinstance(codex_session, dict) and codex_session:
+        session_status["codex_session"] = codex_session
+    codex_progress = executor_status.get("codex_progress")
+    if isinstance(codex_progress, dict) and codex_progress:
+        session_status["codex_progress"] = codex_progress
+    state["executor_session_status"] = session_status
     updated["state"] = state
     actions = [action for action in updated.get("actions", []) if isinstance(action, dict)]
     action_ids = {str(action.get("id", "")) for action in actions}
@@ -456,6 +516,12 @@ def enhance_status_card_with_executor_session(
     updated = dict(status_card)
     updated["executor_session_status"] = _executor_status_summary(executor_status)
     updated["workspace_isolation"] = executor_status.get("workspace_isolation", {})
+    for key in ("codex_session", "codex_progress"):
+        value = executor_status.get(key)
+        if isinstance(value, dict) and value:
+            updated[key] = value
+        else:
+            updated.pop(key, None)
     updated["executor_status_lines"] = list(executor_status.get("status_lines", [])) if isinstance(executor_status.get("status_lines"), list) else []
     updated["executor_display_status_lines"] = (
         list(executor_status.get("display_status_lines", [])) if isinstance(executor_status.get("display_status_lines"), list) else []
@@ -577,6 +643,33 @@ def _build_executor_session_record(paths: OmhPaths, session: dict[str, Any], pat
     return merged
 
 
+def _codex_observation_patch(
+    session: dict[str, Any],
+    *,
+    external_session_ref: str,
+    codex_session_ref: str,
+    codex_thread_ref: str,
+    evidence_refs: list[str] | tuple[str, ...],
+    progress_summary: dict[str, object] | None,
+) -> dict[str, object]:
+    executor = str(session.get("selected_executor_profile") or "choose")
+    progress = progress_summary if isinstance(progress_summary, dict) else {}
+    observation = build_codex_session_observation(
+        selected_executor_profile=executor,
+        external_session_ref=external_session_ref,
+        codex_session_ref=codex_session_ref,
+        codex_thread_ref=codex_thread_ref,
+        evidence_refs=evidence_refs,
+        progress_summary=progress,
+    )
+    if not observation:
+        return {}
+    patch: dict[str, object] = {"codex_session": observation}
+    if progress:
+        patch["codex_progress"] = progress
+    return patch
+
+
 def _write_executor_session(paths: OmhPaths, record: dict[str, Any]) -> dict[str, Any]:
     atomic_write_json(_executor_session_path(paths, str(record["session_id"])), record, private=True)
     return record
@@ -602,6 +695,8 @@ def validate_executor_session_record(record: dict[str, Any]) -> list[str]:
         "verification_requested",
         "evidence_refs",
         "summary",
+        "codex_session",
+        "codex_progress",
         "claim_boundary",
     }
     extra = sorted(set(record) - allowed)
@@ -645,6 +740,9 @@ def validate_executor_session_record(record: dict[str, Any]) -> list[str]:
         for index, value in enumerate(record["evidence_refs"]):
             if not isinstance(value, str):
                 errors.append(f"executor_session evidence_refs[{index}] must be a string")
+    for key in ("codex_session", "codex_progress"):
+        if key in record and not isinstance(record.get(key), dict):
+            errors.append(f"executor_session {key} must be an object")
     if record.get("result") != "not_observed" and record.get("result_observed") is not True:
         errors.append("executor_session observed result requires result_observed=true")
     if record.get("verification") == "requested" and record.get("verification_requested") is not True:
@@ -945,6 +1043,7 @@ def _executor_launch_contract(
         "workspace_hint": _workspace_hint(isolation_status),
         "command_templates": templates,
         "copy_blocks": _launch_copy_blocks(label, prompt_placeholder, templates),
+        "resume_capability": _resume_capability_template(executor),
         "after_launch_backend_action": "open-executor",
         "observed_transition": "dispatch/open observed",
         "claim_boundary": (
@@ -976,6 +1075,13 @@ def _launch_command_templates(
                 "argv_template": ["codex", "--cd", workspace_placeholder, prompt_placeholder],
                 "shell_command_template": f"codex --cd {workspace_shell_placeholder} {shell_placeholder}",
                 "when_to_use": "Use when the wrapper knows the repository path and wants Codex rooted there.",
+            },
+            {
+                "id": "codex_resume_session",
+                "label": "Resume an observed Codex session",
+                "argv_template": ["codex", "exec", "resume", "{codex_session_ref}"],
+                "shell_command_template": "codex exec resume {codex_session_ref_shell_quoted}",
+                "when_to_use": "Use only after recorded status shows an observed Codex session_ref for this handoff or follow-up.",
             },
         ]
     if executor == "claude-code":
@@ -1028,6 +1134,28 @@ def _launch_copy_blocks(
             }
         )
     return blocks
+
+
+def _resume_capability_template(executor: str) -> dict[str, object]:
+    if executor != "codex":
+        return {
+            "available": False,
+            "reason": "Resume command template is only defined for Codex executor sessions.",
+        }
+    return {
+        "schema_version": "codex_resume_contract/v1",
+        "available": True,
+        "requires_observed_session_ref": True,
+        "argv_template": ["codex", "exec", "resume", "{codex_session_ref}"],
+        "shell_command_template": "codex exec resume {codex_session_ref_shell_quoted}",
+        "execution_policy": "copyable_instruction_only",
+        "backend_action_owner": "wrapper",
+        "not_omh_backend_execution": True,
+        "claim_boundary": (
+            "This is a resume-capable launch contract for wrappers. The wrapper backend does not run Codex or claim "
+            "resumed work until observed session or result evidence is recorded."
+        ),
+    }
 
 
 def _isolation_action(
@@ -1094,6 +1222,8 @@ def _display_status_lines(
     verification_status: str,
     status_blocker: str,
     isolation_status: dict[str, object],
+    codex_session: dict[str, object],
+    codex_progress: dict[str, object],
 ) -> list[str]:
     coding_agent_line = (
         "Coding agent is not selected yet."
@@ -1109,6 +1239,12 @@ def _display_status_lines(
         _result_display_line(result_status),
         _verification_display_line(verification_status),
     ]
+    if codex_session:
+        lines.append(_codex_session_display_line(codex_session))
+    if codex_progress:
+        summary = str(codex_progress.get("chat_summary", "")).strip()
+        if summary:
+            lines.append(f"Codex observable activity summary: {summary}")
     if status_blocker:
         lines.append(f"Action is blocked until OMH can read valid evidence: {status_blocker}")
     return lines
@@ -1152,6 +1288,32 @@ def _verification_display_line(verification_status: str) -> str:
     return "Hermes verification has not been requested yet."
 
 
+def _codex_session_display_line(codex_session: dict[str, object]) -> str:
+    session_ref = str(codex_session.get("session_ref", "")).strip()
+    thread_ref = str(codex_session.get("thread_ref", "")).strip()
+    event_count = int(codex_session.get("event_count", 0) or 0)
+    refs = []
+    if session_ref:
+        refs.append(f"session {session_ref}")
+    if thread_ref and thread_ref != session_ref:
+        refs.append(f"thread {thread_ref}")
+    ref_text = ", ".join(refs) if refs else "reference not recorded"
+    return f"Observed Codex metadata: {ref_text}; event summaries={event_count}."
+
+
+def _codex_status_lines(codex_session: dict[str, object], codex_progress: dict[str, object]) -> list[str]:
+    if not codex_session and not codex_progress:
+        return []
+    lines = []
+    if codex_session:
+        session_ref = str(codex_session.get("session_ref", "")).strip()
+        thread_ref = str(codex_session.get("thread_ref", "")).strip()
+        lines.append(f"codex-session: {'observed' if codex_session.get('observed') else 'not_observed'}({session_ref or thread_ref})")
+    if codex_progress:
+        lines.append(f"codex-progress: {codex_progress.get('status', 'unknown')}; events={codex_progress.get('event_count', 0)}")
+    return lines
+
+
 def _claim_boundary() -> str:
     return (
         "Executor session records are metadata-only wrapper/operator observations. "
@@ -1172,7 +1334,7 @@ def _action(action_id: str, label: str, style: str, *, enabled: bool = True, pay
 
 
 def _executor_status_summary(executor_status: dict[str, object]) -> dict[str, object]:
-    return {
+    summary = {
         "schema_version": executor_status.get("schema_version", EXECUTOR_SESSION_STATUS_SCHEMA_VERSION),
         "coding_agent": executor_status.get("coding_agent", ""),
         "executor_session": executor_status.get("executor_session", ""),
@@ -1182,6 +1344,13 @@ def _executor_status_summary(executor_status: dict[str, object]) -> dict[str, ob
         "result": executor_status.get("result", ""),
         "verification": executor_status.get("verification", ""),
     }
+    codex_session = executor_status.get("codex_session")
+    if isinstance(codex_session, dict) and codex_session:
+        summary["codex_session"] = codex_session
+    codex_progress = executor_status.get("codex_progress")
+    if isinstance(codex_progress, dict) and codex_progress:
+        summary["codex_progress"] = codex_progress
+    return summary
 
 
 def _next_executor_action(executor_status: dict[str, object]) -> str:

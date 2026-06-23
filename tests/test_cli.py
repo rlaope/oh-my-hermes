@@ -5235,6 +5235,86 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(json.loads(stdout)["status"]["verification"], "requested")
 
+    def test_chat_codex_progress_sanitizes_logs_and_session_status_exposes_resume(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home_args = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            raw_log = "\n".join(
+                [
+                    json.dumps({"type": "tool_call", "tool": "rg", "args": "rg codex tests"}),
+                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/codex_progress.py"}),
+                    json.dumps({"type": "reasoning", "analysis": "do not expose hidden reasoning"}),
+                    json.dumps({"role": "assistant", "content": "I changed files and will run tests."}),
+                ]
+            )
+            log_path = root / "codex.jsonl"
+            log_path.write_text(raw_log, encoding="utf-8")
+
+            status, stdout, stderr = run_cli(home_args + ["chat", "codex-progress", "--stdin", "--evidence-ref", "codex-raw"], stdin_text=raw_log)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            progress = json.loads(stdout)
+            self.assertEqual(progress["schema_version"], "codex_progress_adapter/v1")
+            self.assertFalse(progress["adapter_contract"]["raw_events_exposed"])
+            self.assertFalse(progress["adapter_contract"]["hidden_reasoning_exposed"])
+            self.assertIn("Codex changed files.", progress["chat_summary"])
+            self.assertNotIn("do not expose hidden reasoning", json.dumps(progress))
+
+            message = "risky refactor"
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "start",
+                    "--source",
+                    "discord",
+                    "--source-event-id",
+                    "m1",
+                    "--channel-ref",
+                    "c1",
+                    message,
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            session_id = json.loads(stdout)["session"]["session_id"]
+            self.assertEqual(run_cli(home_args + ["chat", "session", "accept-plan", session_id])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "select-executor", session_id, "codex"])[0], 0)
+            self.assertEqual(run_cli(home_args + ["chat", "session", "prepare-handoff", session_id, message])[0], 0)
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "chat",
+                    "session",
+                    "open-executor",
+                    session_id,
+                    "--observed",
+                    "--external-session-ref",
+                    "codex-thread-1",
+                    "--codex-session-ref",
+                    "codex-session-1",
+                    "--codex-thread-ref",
+                    "codex-thread-1",
+                    "--codex-log-jsonl",
+                    str(log_path),
+                    "--codex-log-ref",
+                    "codex-jsonl",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            opened = json.loads(stdout)
+            codex_session = opened["status"]["codex_session"]
+            self.assertEqual(codex_session["session_ref"], "codex-session-1")
+            self.assertEqual(codex_session["thread_ref"], "codex-thread-1")
+            self.assertEqual(codex_session["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
+            self.assertEqual(opened["status"]["codex_progress"]["event_count"], 4)
+            self.assertIn("Codex changed files.", opened["status"]["codex_progress"]["observable_activity"])
+            self.assertEqual(opened["status"]["result"], "not_observed")
+            self.assertEqual(opened["status"]["verification"], "not_requested")
+
     def test_runtime_observe_rejects_plain_workflow_run_without_runtime_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

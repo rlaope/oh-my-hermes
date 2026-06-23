@@ -169,11 +169,32 @@ the wrapper starts or attaches the terminal/app session, then calls
 For a Codex handoff, the wrapper can record an observed open and later result:
 
 ```sh
-omh chat session open-executor "$SESSION_ID" --observed --external-session-ref "$CODEX_THREAD"
-omh chat session record-executor "$SESSION_ID" --result completed --evidence-ref codex-summary
+omh chat codex-progress --jsonl "$CODEX_JSONL" --evidence-ref codex-jsonl
+omh chat session open-executor "$SESSION_ID" --observed \
+  --external-session-ref "$CODEX_THREAD" \
+  --codex-session-ref "$CODEX_SESSION" \
+  --codex-thread-ref "$CODEX_THREAD" \
+  --codex-log-jsonl "$CODEX_JSONL" \
+  --codex-log-ref codex-jsonl
+omh chat session record-executor "$SESSION_ID" --result completed \
+  --evidence-ref codex-summary \
+  --codex-log-jsonl "$CODEX_JSONL" \
+  --codex-log-ref codex-final-jsonl
 omh chat session request-verification "$SESSION_ID"
 omh chat session status "$SESSION_ID"
 ```
+
+`omh chat codex-progress` is an adapter helper for the raw-output gap: hosted
+wrappers can pipe Codex JSONL or process output into it and render the compact
+`chat_summary` instead of dumping event streams into chat. The output is an
+observable event summary, not think-log access; it must not expose hidden
+reasoning, raw JSON events, or unobserved review/CI/merge claims.
+
+When `codex_session_ref` is observed, status includes a resume-capable launch
+contract such as `codex exec resume <session_id>`. That is still a wrapper or
+operator action. OMH records the reference and summary metadata only; it does
+not launch Codex, and it does not claim resumed work until the wrapper records
+observed session/result evidence.
 
 The resulting display status lines are intended for normal chat surfaces:
 
@@ -184,6 +205,8 @@ Handoff is ready.
 Dispatch/open has been observed.
 Executor result has not been observed yet.
 Hermes verification has not been requested yet.
+Observed Codex metadata: session codex-session-1, thread codex-thread-1; event summaries=4.
+Codex observable activity summary: Codex is inspecting files/tests. Codex changed files. Status: activity_observed.
 ```
 
 When the user asks “what is happening with that coding task?”, prefer the
