@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 
@@ -42,6 +43,80 @@ class CodexProgressTests(unittest.TestCase):
         self.assertNotIn("hidden private content", rendered)
         self.assertIn("not raw JSONL", summary["claim_boundary"])
         self.assertEqual(summary["privacy"], "summary_only")
+
+    def test_oversized_codex_progress_returns_artifact_ref_and_bounded_context(self) -> None:
+        huge_visible = "Codex tool output: " + ("A" * 5000) + " final decision"
+        huge_ref = "codex-jsonl:" + ("B" * 5000)
+        raw = "\n".join(
+            [
+                json.dumps({"role": "assistant", "content": huge_visible}),
+                json.dumps({"type": "tool_call", "tool": "rg", "args": "rg bounded context"}),
+            ]
+        )
+
+        summary = summarize_codex_jsonl_text(
+            raw,
+            evidence_refs=[huge_ref, *[f"ref-{index}" for index in range(20)]],
+            source="codex-session.jsonl",
+        )
+
+        rendered = json.dumps(summary)
+        self.assertEqual(summary["raw_output_artifact"]["schema_version"], "omh_context_artifact_ref/v1")
+        self.assertEqual(summary["raw_output_artifact"]["source"], "codex-session.jsonl")
+        self.assertEqual(summary["raw_output_artifact"]["sha256"], hashlib.sha256(raw.encode("utf-8")).hexdigest())
+        self.assertEqual(summary["raw_output_artifact"]["byte_count"], len(raw.encode("utf-8")))
+        self.assertFalse(summary["raw_output_artifact"]["raw_content_included"])
+        self.assertEqual(summary["raw_output_artifact"]["storage_policy"], "store_raw_output_as_artifact")
+        self.assertEqual(summary["raw_output_artifact"]["in_context_policy"], "refs_and_summary_only")
+        self.assertEqual(summary["context_budget"]["max_visible_message_chars"], 180)
+        self.assertEqual(summary["context_budget"]["max_evidence_refs"], 8)
+        self.assertLessEqual(len(summary["latest_assistant_visible_message"]), 180)
+        self.assertLessEqual(len(summary["evidence_refs"]), 8)
+        self.assertLessEqual(max(len(ref) for ref in summary["evidence_refs"]), 160)
+        self.assertGreater(summary["omitted"]["evidence_ref_count"], 0)
+        self.assertNotIn("A" * 1000, rendered)
+        self.assertNotIn("B" * 1000, rendered)
+        self.assertIn("raw output should stay in artifacts", summary["claim_boundary"])
+
+    def test_codex_progress_emits_event_triggered_updates_without_raw_logs(self) -> None:
+        raw_noise = "full tool log " + ("N" * 5000)
+        raw = "\n".join(
+            [
+                json.dumps({"role": "assistant", "content": f"Bug discovered: delegate mode ignored the setup default. {raw_noise}"}),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": "Root cause identified in src/wrapper/contract.py: default executor was not propagated.",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": "Fix strategy selected: carry setup_profile.default_executor into the delegate handoff.",
+                    }
+                ),
+                json.dumps({"role": "assistant", "content": "Targeted tests passed: tests/test_wrapper_contract.py."}),
+            ]
+        )
+
+        summary = summarize_codex_jsonl_text(raw, evidence_refs=["codex-jsonl"], source="codex-events.jsonl")
+
+        rendered = json.dumps(summary)
+        event_types = [event["event_type"] for event in summary["progress_events"]]
+        self.assertEqual(summary["progress_reporting"]["mode"], "event_triggered")
+        self.assertFalse(summary["progress_reporting"]["timed_polling_required"])
+        self.assertIn("bug_discovered", event_types)
+        self.assertIn("root_cause_identified", event_types)
+        self.assertIn("fix_strategy_selected", event_types)
+        self.assertIn("targeted_tests_passed", event_types)
+        self.assertLessEqual(len(summary["progress_events"]), summary["context_budget"]["max_progress_events"])
+        self.assertEqual(summary["latest_progress_event"]["event_type"], "targeted_tests_passed")
+        self.assertEqual(summary["latest_progress_event"]["severity"], "success")
+        self.assertIn("tests/test_wrapper_contract.py", summary["latest_progress_event"]["file_refs"])
+        self.assertEqual(summary["latest_progress_event"]["artifact_refs"][0]["schema_version"], "omh_context_artifact_ref/v1")
+        self.assertNotIn("N" * 1000, rendered)
+        self.assertNotIn("```", rendered)
+        self.assertIn("not execution", summary["latest_progress_event"]["claim_boundary"])
 
     def test_nested_reasoning_does_not_influence_observable_summary(self) -> None:
         raw = json.dumps(

@@ -8,6 +8,7 @@ import unittest
 from _local_package import load_local_package
 
 load_local_package()
+from omh.context_safety import CONTEXT_ARTIFACT_REF_SCHEMA_VERSION
 from omh.paths import OmhPaths, resolve_paths
 from omh.profiles.setup import write_setup_profile
 from omh.wrapper_contract import (
@@ -1572,6 +1573,48 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(steps["review"], "complete")
         self.assertEqual(steps["ci"], "pending")
         self.assertEqual(steps["merge_ready"], "pending")
+
+    def test_status_card_preserves_generic_event_progress_without_raw_payloads(self) -> None:
+        raw_log = "workflow transcript " + ("W" * 5000)
+        card = build_status_card_from_status(
+            {
+                "run_id": "research-goal-1",
+                "next_action": "show_status",
+                "safe_summary": "Research workflow is waiting on source evidence.",
+                "progress_events": [
+                    {
+                        "event_type": "blocker_encountered",
+                        "summary": "Blocker encountered: source evidence is missing.\n```log\n" + raw_log + "\n```",
+                        "status": "blocked",
+                        "severity": "blocked",
+                        "file_refs": ["docs/DIRECTION.md", "x" * 1000],
+                        "artifact_refs": [
+                            {
+                                "schema_version": CONTEXT_ARTIFACT_REF_SCHEMA_VERSION,
+                                "source": "workflow-transcript.log",
+                                "raw_content": raw_log,
+                                "raw_content_included": True,
+                                "byte_count": len(raw_log.encode("utf-8")),
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+        rendered = json.dumps(card)
+        event = card["latest_progress_event"]
+        self.assertEqual(event["schema_version"], "omh_progress_event/v1")
+        self.assertEqual(event["event_type"], "blocker_encountered")
+        self.assertEqual(event["status"], "blocked")
+        self.assertEqual(event["severity"], "blocked")
+        self.assertLessEqual(len(event["summary"]), 220)
+        self.assertLessEqual(max(len(ref) for ref in event["file_refs"]), 160)
+        self.assertEqual(event["artifact_refs"][0]["schema_version"], CONTEXT_ARTIFACT_REF_SCHEMA_VERSION)
+        self.assertFalse(event["artifact_refs"][0]["raw_content_included"])
+        self.assertNotIn("W" * 1000, rendered)
+        self.assertNotIn("```", rendered)
+        self.assertIn("not execution", event["claim_boundary"])
 
     def test_status_card_preserves_harness_ladder_progress(self) -> None:
         card = build_status_card_from_status(

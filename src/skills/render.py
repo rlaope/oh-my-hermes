@@ -375,6 +375,25 @@ Check `executor_readiness/v1` for Codex, Claude Code, Hermes, or oh-my runtime p
 
 With `--record`, Codex-selected real executor handoffs create `.omh/runtime/runs/<run-id>/` prepared runtime runs with `observation_status: prepared_not_observed`. Executor-choice, prompt-only, runtime-handoff, clarify, and fallback responses remain wrapper/session state.
 
+## Large Output And Context Safety
+
+Wrappers must keep raw Codex JSONL, tool output, process logs, and oversized
+executor notes out of Hermes chat context. Use `omh chat codex-progress` or the
+Codex progress fields on executor-session actions to pass only
+`codex_progress_summary/v1`, `omh_context_artifact_ref/v1`, compact evidence
+refs, and bounded human-readable summaries. Raw output belongs in a wrapper or
+operator artifact store referenced by `raw_output_artifact`; a prepared artifact
+reference is not execution, review, CI, merge-readiness, or merge evidence.
+
+Prefer event-triggered progress over timed polling for long executor, goal,
+research, or workflow runs. Emit `omh_progress_event/v1` when a meaningful state
+changes: failure discovered, root cause identified, fix strategy selected, files
+or area chosen, targeted tests pass/fail, full tests start/pass/fail, commit
+created, PR created/updated, or blocker encountered. Keep each update to one or
+two human-readable sentences with optional compact file refs, artifact refs,
+severity, and status. Store raw logs, JSONL, command output, and transcripts as
+artifacts; pass only event summaries and refs into Hermes chat context.
+
 ## Memory And Planning
 
 Wrappers can run `omh memory inspect`, `omh memory pack`, and `omh memory apply` to review OMH-local or wrapper-supplied context before preparing a handoff. This emits `{MEMORY_REVIEW_SCHEMA}` and `{HANDOFF_CONTEXT_PACK_SCHEMA}` artifacts only; it does not read or mutate opaque Hermes internal memory.

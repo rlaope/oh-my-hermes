@@ -5,6 +5,7 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+from ..context_safety import MAX_SUMMARY_CHARS, compact_context_refs, compact_progress_events, compact_visible_text
 from ..codex_progress import build_codex_session_observation
 from ..executors import CODING_EXECUTOR_TARGETS, executor_label
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, utc_now
@@ -128,6 +129,12 @@ def build_executor_session_status(
         status["codex_session"] = codex_session
     if codex_progress:
         status["codex_progress"] = codex_progress
+        progress_events, omitted_progress_events = _progress_events_from_codex_summary(codex_progress)
+        if progress_events:
+            status["progress_reporting"] = _progress_reporting_from_codex_summary(codex_progress)
+            status["progress_events"] = progress_events
+            status["latest_progress_event"] = progress_events[-1]
+            status["omitted_progress_event_count"] = omitted_progress_events
     if record_found and record.get("schema_version") == EXECUTOR_SESSION_SCHEMA_VERSION:
         status["record"] = record
     if record_error:
@@ -489,6 +496,10 @@ def enhance_chat_response_with_executor_session(
     codex_progress = executor_status.get("codex_progress")
     if isinstance(codex_progress, dict) and codex_progress:
         session_status["codex_progress"] = codex_progress
+    for key in ("progress_reporting", "progress_events", "latest_progress_event", "omitted_progress_event_count"):
+        value = executor_status.get(key)
+        if value:
+            session_status[key] = value
     state["executor_session_status"] = session_status
     updated["state"] = state
     actions = [action for action in updated.get("actions", []) if isinstance(action, dict)]
@@ -516,9 +527,11 @@ def enhance_status_card_with_executor_session(
     updated = dict(status_card)
     updated["executor_session_status"] = _executor_status_summary(executor_status)
     updated["workspace_isolation"] = executor_status.get("workspace_isolation", {})
-    for key in ("codex_session", "codex_progress"):
+    for key in ("codex_session", "codex_progress", "progress_reporting", "progress_events", "latest_progress_event", "omitted_progress_event_count"):
         value = executor_status.get(key)
-        if isinstance(value, dict) and value:
+        if isinstance(value, (dict, list)) and value:
+            updated[key] = value
+        elif isinstance(value, int) and value:
             updated[key] = value
         else:
             updated.pop(key, None)
@@ -637,6 +650,7 @@ def _build_executor_session_record(paths: OmhPaths, session: dict[str, Any], pat
         "claim_boundary": _claim_boundary(),
     }
     merged["evidence_refs"] = _compact_list(merged.get("evidence_refs", []))
+    merged["summary"] = compact_visible_text(merged.get("summary", ""), max_chars=MAX_SUMMARY_CHARS)
     errors = validate_executor_session_record(merged)
     if errors:
         raise ExecutorSessionError(errors[0])
@@ -1322,9 +1336,7 @@ def _claim_boundary() -> str:
 
 
 def _compact_list(values: Any) -> list[str]:
-    if not isinstance(values, (list, tuple)):
-        return []
-    return [str(value) for value in values if str(value)]
+    return compact_context_refs(values)[0]
 
 
 def _action(action_id: str, label: str, style: str, *, enabled: bool = True, payload: dict[str, object] | None = None) -> dict[str, object]:
@@ -1350,7 +1362,33 @@ def _executor_status_summary(executor_status: dict[str, object]) -> dict[str, ob
     codex_progress = executor_status.get("codex_progress")
     if isinstance(codex_progress, dict) and codex_progress:
         summary["codex_progress"] = codex_progress
+    for key in ("progress_reporting", "progress_events", "latest_progress_event", "omitted_progress_event_count"):
+        value = executor_status.get(key)
+        if value:
+            summary[key] = value
     return summary
+
+
+def _progress_events_from_codex_summary(codex_progress: dict[str, object]) -> tuple[list[dict[str, object]], int]:
+    events = codex_progress.get("progress_events")
+    if isinstance(events, list):
+        return compact_progress_events(events)
+    latest = codex_progress.get("latest_progress_event")
+    if isinstance(latest, dict) and latest:
+        return compact_progress_events([latest])
+    return [], 0
+
+
+def _progress_reporting_from_codex_summary(codex_progress: dict[str, object]) -> dict[str, object]:
+    progress_reporting = codex_progress.get("progress_reporting")
+    if isinstance(progress_reporting, dict) and progress_reporting:
+        return progress_reporting
+    return {
+        "schema_version": "omh_progress_reporting/v1",
+        "mode": "event_triggered",
+        "timed_polling_required": False,
+        "human_update_policy": "one_or_two_sentence_summary_only",
+    }
 
 
 def _next_executor_action(executor_status: dict[str, object]) -> str:

@@ -805,6 +805,8 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(completed["status"]["result"], "completed")
             self.assertEqual(completed["status"]["codex_progress"]["event_count"], 2)
             self.assertIn("Codex is running tests.", completed["status"]["codex_progress"]["observable_activity"])
+            self.assertEqual(completed["status"]["latest_progress_event"]["event_type"], "targeted_tests_passed")
+            self.assertEqual(completed["status"]["latest_progress_event"]["severity"], "success")
             self.assertIn("summary_only", completed["executor_session"]["codex_progress"]["privacy"])
             self.assertEqual(completed["status"]["linked_lifecycle_status"]["next_action"], "record_verification_evidence")
             with self.assertRaisesRegex(ExecutorSessionError, "after executor result is recorded"):
@@ -815,12 +817,57 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(verify_request["status"]["verification"], "requested")
             status_after_verify_request = build_wrapper_session_status(paths, session_id)
             briefing = status_after_verify_request["coding_briefing"]
+            self.assertEqual(status_after_verify_request["status_card"]["latest_progress_event"]["event_type"], "targeted_tests_passed")
             states = {step["id"]: step["state"] for step in briefing["progress"]}
             self.assertEqual(states["executor_result"], "complete")
             self.assertEqual(states["verification"], "in_progress")
             self.assertIn("verification", briefing["pending_gaps"])
             self.assertIn("verification evidence is still needed", briefing["headline"])
             self.assertEqual(validate_runtime(paths)["ok"], True)
+
+    def test_executor_session_status_bounds_oversized_wrapper_summaries(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            raw_tool_output = "raw codex output " + ("X" * 5000)
+            huge_ref = "codex-jsonl:" + ("Y" * 5000)
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepare_wrapper_session_handoff(paths, session_id, message)
+
+            opened = open_executor_session(
+                paths,
+                session_id,
+                observed=True,
+                external_session_ref="codex-thread-oversized",
+                evidence_refs=[huge_ref, *[f"ref-{index}" for index in range(20)]],
+                summary=raw_tool_output,
+                codex_session_ref="codex-session-oversized",
+                codex_progress_summary=summarize_codex_jsonl_text(
+                    json.dumps({"role": "assistant", "content": raw_tool_output}),
+                    evidence_refs=[huge_ref],
+                    source="codex-oversized.jsonl",
+                ),
+            )
+
+            status = build_wrapper_session_status(paths, session_id)
+            rendered = json.dumps(status)
+            session_record = opened["executor_session"]
+            status_record = status["executor_session_status"]["record"]
+
+            self.assertLessEqual(len(session_record["summary"]), 240)
+            self.assertLessEqual(len(status_record["summary"]), 240)
+            self.assertLessEqual(len(session_record["evidence_refs"]), 8)
+            self.assertLessEqual(max(len(ref) for ref in session_record["evidence_refs"]), 160)
+            self.assertEqual(
+                status["executor_session_status"]["codex_progress"]["raw_output_artifact"]["storage_policy"],
+                "store_raw_output_as_artifact",
+            )
+            self.assertNotIn("X" * 1000, rendered)
+            self.assertNotIn("Y" * 1000, rendered)
+            self.assertIn("raw output should stay in artifacts", status["executor_session_status"]["codex_progress"]["claim_boundary"])
 
     def test_required_worktree_isolation_disables_open_button_until_observed(self) -> None:
         with TemporaryDirectory() as tmp:
