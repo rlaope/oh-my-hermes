@@ -8,7 +8,8 @@ import unittest
 from _local_package import load_local_package
 
 load_local_package()
-from omh.paths import OmhPaths
+from omh.paths import OmhPaths, resolve_paths
+from omh.profiles.setup import write_setup_profile
 from omh.wrapper_contract import (
     build_chat_interaction_payload,
     build_chat_response_from_status,
@@ -213,6 +214,46 @@ class WrapperContractTests(unittest.TestCase):
         rendering = payload["chat_response"]["messenger_rendering"]
         self.assertIn("multiple Hermes agent targets", rendering["body_preview"])
         self.assertIn("Target topology is setup evidence only", rendering["claim_boundary"])
+
+    def test_delegate_mode_uses_setup_default_codex_executor_when_available(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, default_executor="codex")
+
+            payload = build_chat_interaction_payload(
+                "implement a focused parser fix in src/parser.py and update tests",
+                source="discord",
+                mode="delegate",
+                paths=paths,
+            )
+
+        self.assertEqual(payload["next_action"], "send_to_executor")
+        self.assertEqual(payload["executor_resolution"]["source"], "setup_profile")
+        self.assertEqual(payload["executor_resolution"]["default_executor"], "codex")
+        self.assertEqual(payload["delegation"]["selected_executor_profile"], "codex")
+        self.assertIn("executor_handoff", payload["delegation"])
+        self.assertEqual(payload["chat_response"]["state"]["executor_target"], "codex")
+
+    def test_delegate_mode_preserves_explicit_executor_override_over_setup_default(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, default_executor="codex")
+
+            payload = build_chat_interaction_payload(
+                "implement a focused parser fix in src/parser.py and update tests",
+                source="discord",
+                mode="delegate",
+                executor_target="claude-code",
+                paths=paths,
+            )
+
+        self.assertEqual(payload["next_action"], "show_prompt_handoff")
+        self.assertEqual(payload["executor_resolution"]["source"], "explicit")
+        self.assertEqual(payload["executor_resolution"]["default_executor"], "codex")
+        self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "claude-code")
+        self.assertEqual(payload["delegation"]["selected_executor_profile"], "claude-code")
+        self.assertNotIn("executor_handoff", payload["delegation"])
+        self.assertIn("prompt_handoff", payload["delegation"])
 
     def test_clarify_mode_has_no_handoff_actions(self) -> None:
         payload = build_chat_interaction_payload("fix maybe", mode="delegate")

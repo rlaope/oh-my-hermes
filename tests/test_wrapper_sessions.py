@@ -13,6 +13,7 @@ load_local_package()
 from omh.coding_lifecycle import record_codex_dispatch, record_codex_result, record_codex_verification, start_codex_delegation_lifecycle
 from omh.codex_progress import summarize_codex_jsonl_text
 from omh.paths import resolve_paths
+from omh.profiles.setup import write_setup_profile
 from omh.runtime_artifacts import (
     create_run,
     export_runtime,
@@ -46,6 +47,25 @@ from omh.wrapper_sessions import (
 
 
 class WrapperSessionTests(unittest.TestCase):
+    def test_session_delegate_mode_uses_setup_default_codex_executor_when_available(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, default_executor="codex")
+
+            started = create_or_resume_wrapper_session(
+                paths,
+                "implement a focused parser fix in src/parser.py and update tests",
+                source="hermes",
+                mode="delegate",
+                source_metadata={"source_event_id": "m1", "channel_ref": "c1"},
+            )
+
+        interaction = started["interaction"]
+        self.assertEqual(interaction["next_action"], "send_to_executor")
+        self.assertEqual(interaction["executor_resolution"]["source"], "setup_profile")
+        self.assertEqual(interaction["delegation"]["selected_executor_profile"], "codex")
+        self.assertIn("executor_handoff", interaction["delegation"])
+
     def test_session_start_is_metadata_only_and_resumable(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
