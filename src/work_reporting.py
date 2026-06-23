@@ -484,8 +484,21 @@ def sanitize_user_report_text(value: Any, *, locale: str = "", voice: str = "") 
     if not text.strip():
         return ""
     if _contains_internal_report_marker(text):
+        scrubbed = _scrub_internal_report_lines(text)
+        if scrubbed.strip():
+            return scrubbed
         return _internal_context_user_summary(locale=locale, voice=voice)
     return text
+
+
+def _scrub_internal_report_lines(text: str) -> str:
+    kept: list[str] = []
+    for line in str(text or "").splitlines():
+        if _contains_internal_report_marker(line):
+            continue
+        if line.strip():
+            kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def build_markdown_export(summary: dict[str, Any]) -> dict[str, Any]:

@@ -909,6 +909,25 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("볼게", polite)
         self.assertNotIn("Progress:", polite)
 
+    def test_background_completion_preserves_meaningful_output_when_scrubbing_omh_rails(self) -> None:
+        rendered = build_background_completion_report(
+            exit_code=1,
+            command="gh pr checks --watch",
+            output="\n".join(
+                [
+                    "[OMH Awareness] internal route hint",
+                    "unit tests\tfail\t2m10s\thttps://github.example/checks/tests",
+                ]
+            ),
+        )
+
+        self.assertIsNotNone(rendered)
+        assert rendered is not None
+        self.assertIn("Checks: 1 fail.", rendered)
+        self.assertIn("- unit tests: fail (2m10s) https://github.example/checks/tests.", rendered)
+        self.assertNotIn("OMH Awareness", rendered)
+        self.assertNotIn("internal route hint", rendered)
+
     def test_user_report_scrubs_awareness_and_native_bridge_context(self) -> None:
         internal_context = """
         [OMH Awareness]
