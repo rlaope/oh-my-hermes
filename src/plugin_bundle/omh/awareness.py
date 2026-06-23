@@ -50,6 +50,31 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 *(f"handoff:{cue}" for cue in self.handoff_cues),
             )
 
+    def _fallback_contains_non_ascii(value: str) -> bool:
+        return any(ord(char) > 127 for char in value)
+
+    def _fallback_contains_bounded_english_cue(text: str, cue: str) -> bool:
+        parts = re.findall(r"[a-z0-9]+", cue)
+        if not parts:
+            return False
+        separator = r"[\s_-]+"
+        pattern = r"(?<![a-z0-9])" + separator.join(re.escape(part) for part in parts) + r"(?![a-z0-9])"
+        return re.search(pattern, text) is not None
+
+    def _fallback_matched_omh_quality_cues(cues: tuple[str, ...], text: str, compact: str) -> tuple[str, ...]:
+        matches = []
+        for cue in cues:
+            normalized_cue = unicodedata.normalize("NFKC", cue).casefold()
+            if not normalized_cue:
+                continue
+            if _fallback_contains_non_ascii(normalized_cue):
+                if normalized_cue in text or normalized_cue.replace(" ", "") in compact:
+                    matches.append(cue)
+                continue
+            if _fallback_contains_bounded_english_cue(text, normalized_cue):
+                matches.append(cue)
+        return tuple(matches)
+
     def classify_omh_quality_intent(message: str) -> _FallbackOmhQualityIntent:
         text = unicodedata.normalize("NFKC", message).casefold()
         compact = text.replace(" ", "")
@@ -57,9 +82,8 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
         if re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", text):
             system_target_cues.append("omh")
         system_target_cues.extend(cue for cue in ("oh-my-hermes", "oh my hermes") if cue in text and cue not in system_target_cues)
-        quality_domain_cues = tuple(
-            cue
-            for cue in (
+        quality_domain_cues = _fallback_matched_omh_quality_cues(
+            (
                 "route quality",
                 "router",
                 "routing",
@@ -79,22 +103,58 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 "진행상태",
                 "진행 상태",
                 "코딩 handoff",
-            )
-            if cue in text or cue.replace(" ", "") in compact
+            ),
+            text,
+            compact,
         )
-        improvement_cues = tuple(
-            cue
-            for cue in ("improve", "improvement", "fix", "harden", "audit", "find and fix", "개선", "고쳐", "찾아", "점검")
-            if cue in text or cue.replace(" ", "") in compact
+        improvement_cues = _fallback_matched_omh_quality_cues(
+            (
+                "improve",
+                "improvement",
+                "fix",
+                "fixed",
+                "fixes",
+                "fixing",
+                "harden",
+                "audit",
+                "find and fix",
+                "개선",
+                "고쳐",
+                "찾아",
+                "점검",
+            ),
+            text,
+            compact,
         )
-        quality_cues = tuple(
-            cue
-            for cue in ("bug", "bugs", "failure", "loss", "regression", "reliability", "quality", "버그", "유사버그", "손실", "신뢰성", "품질")
-            if cue in text or cue.replace(" ", "") in compact
+        quality_cues = _fallback_matched_omh_quality_cues(
+            (
+                "bug",
+                "bugs",
+                "failure",
+                "loss",
+                "regression",
+                "reliability",
+                "quality",
+                "버그",
+                "유사버그",
+                "손실",
+                "신뢰성",
+                "품질",
+            ),
+            text,
+            compact,
         )
-        loop_cues = tuple(cue for cue in ("loop", "continuous", "keep", "루프", "계속") if cue in text)
-        handoff_cues = tuple(cue for cue in ("coding handoff", "handoff", "코딩") if cue in text)
-        customer_feedback_cues = tuple(cue for cue in ("customer", "payment", "고객", "결제", "피드백", "제보") if cue in text)
+        loop_cues = _fallback_matched_omh_quality_cues(
+            ("loop", "continuous", "keep", "keeps", "keeping", "루프", "계속"),
+            text,
+            compact,
+        )
+        handoff_cues = _fallback_matched_omh_quality_cues(("coding handoff", "handoff", "코딩"), text, compact)
+        customer_feedback_cues = _fallback_matched_omh_quality_cues(
+            ("customer", "payment", "고객", "결제", "피드백", "제보"),
+            text,
+            compact,
+        )
         applies = bool(system_target_cues and (quality_domain_cues or handoff_cues) and (improvement_cues or loop_cues or quality_cues))
         if customer_feedback_cues and not system_target_cues:
             applies = False

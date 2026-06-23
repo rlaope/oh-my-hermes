@@ -311,6 +311,9 @@ _OMH_IMPROVEMENT_CUES = (
     "improve",
     "improvement",
     "fix",
+    "fixed",
+    "fixes",
+    "fixing",
     "harden",
     "strengthen",
     "audit",
@@ -349,6 +352,8 @@ _OMH_LOOP_CUES = (
     "continuous",
     "continue",
     "keep",
+    "keeps",
+    "keeping",
     "recurring",
     "루프",
     "계속",
@@ -391,12 +396,12 @@ def classify_omh_quality_intent(message: str) -> OmhQualityIntent:
     compact = normalized.replace(" ", "")
 
     system_target_cues = _matched_omh_system_target_cues(normalized)
-    quality_domain_cues = _matched_cues(_OMH_QUALITY_DOMAIN_CUES, normalized, compact)
-    improvement_cues = _matched_cues(_OMH_IMPROVEMENT_CUES, normalized, compact)
-    quality_cues = _matched_cues(_OMH_QUALITY_PROBLEM_CUES, normalized, compact)
-    loop_cues = _matched_cues(_OMH_LOOP_CUES, normalized, compact)
-    handoff_cues = _matched_cues(_OMH_HANDOFF_CUES, normalized, compact)
-    customer_feedback_cues = _matched_cues(_CUSTOMER_FEEDBACK_CUES, normalized, compact)
+    quality_domain_cues = _matched_omh_quality_cues(_OMH_QUALITY_DOMAIN_CUES, normalized, compact)
+    improvement_cues = _matched_omh_quality_cues(_OMH_IMPROVEMENT_CUES, normalized, compact)
+    quality_cues = _matched_omh_quality_cues(_OMH_QUALITY_PROBLEM_CUES, normalized, compact)
+    loop_cues = _matched_omh_quality_cues(_OMH_LOOP_CUES, normalized, compact)
+    handoff_cues = _matched_omh_quality_cues(_OMH_HANDOFF_CUES, normalized, compact)
+    customer_feedback_cues = _matched_omh_quality_cues(_CUSTOMER_FEEDBACK_CUES, normalized, compact)
 
     target_cues = _compact_tuple((*system_target_cues, *quality_domain_cues))
     has_omh_subject = bool(system_target_cues)
@@ -430,6 +435,34 @@ def _matched_omh_system_target_cues(normalized: str) -> tuple[str, ...]:
         if cue in normalized and cue not in cues:
             cues.append(cue)
     return tuple(cues)
+
+
+def _matched_omh_quality_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple[str, ...]:
+    matches: list[str] = []
+    for cue in cues:
+        normalized_cue = normalized_phrase(cue)
+        if not normalized_cue:
+            continue
+        if _contains_non_ascii(normalized_cue):
+            if normalized_cue in normalized or normalized_cue.replace(" ", "") in compact:
+                matches.append(cue)
+            continue
+        if _contains_bounded_english_cue(normalized, normalized_cue):
+            matches.append(cue)
+    return tuple(matches)
+
+
+def _contains_non_ascii(value: str) -> bool:
+    return any(ord(char) > 127 for char in value)
+
+
+def _contains_bounded_english_cue(normalized: str, normalized_cue: str) -> bool:
+    parts = re.findall(r"[a-z0-9]+", normalized_cue)
+    if not parts:
+        return False
+    separator = r"[\s_-]+"
+    pattern = r"(?<![a-z0-9])" + separator.join(re.escape(part) for part in parts) + r"(?![a-z0-9])"
+    return re.search(pattern, normalized) is not None
 
 
 def is_workflow_meta_or_feedback(message: str) -> bool:

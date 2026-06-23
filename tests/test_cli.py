@@ -17,6 +17,7 @@ from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
+from omh.routing.intent import classify_omh_quality_intent
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 class CliTests(unittest.TestCase):
     def test_no_arg_cli_shows_welcome_instead_of_error(self) -> None:
@@ -172,6 +173,30 @@ class CliTests(unittest.TestCase):
                 self.assertIn("not workflow execution", route_hint["claim_boundary"])
                 self.assertFalse(payload["message"]["raw_prompt_echoed"])
                 self.assertFalse(payload["message"]["raw_prompt_stored"])
+
+    def test_omh_router_prefix_reference_does_not_trigger_quality_loop(self) -> None:
+        message = "What is the OMH router prefix syntax?"
+
+        intent = classify_omh_quality_intent(message)
+
+        self.assertFalse(intent.applies)
+        self.assertNotIn("improve:fix", intent.matched_cues)
+
+    def test_recommend_omh_router_prefix_reference_does_not_select_quality_loop(self) -> None:
+        message = "What is the OMH router prefix syntax?"
+        status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertNotEqual(recommendations[0]["skill"], "ultraprocess")
+        guarded_process_routes = [
+            recommendation
+            for recommendation in recommendations
+            if recommendation["skill"] == "ultraprocess"
+            and "guard:omh_quality_improvement_loop" in recommendation["matched"]
+        ]
+        self.assertEqual(guarded_process_routes, [])
 
     def test_context_brief_keeps_customer_bug_reports_on_feedback_triage(self) -> None:
         cases = (
