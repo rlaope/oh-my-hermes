@@ -522,6 +522,42 @@ class WorkReportingTests(unittest.TestCase):
         self.assertNotIn("ci-placeholder", summary["observations"]["evidence_refs"])
         self.assertNotIn("ci-placeholder", rendered)
 
+    def test_pending_observation_status_does_not_promote_placeholder_evidence(self) -> None:
+        summary = build_work_observation_summary(
+            work_id="run-pending-ci",
+            title="Pending CI",
+            observed_events=[{"event_type": "ci", "status": "pending", "evidence_refs": ["ci-placeholder"]}],
+        )
+        rendered = render_status_report(summary)
+        ci_event = next(event for event in summary["observations"]["events"] if event["event_type"] == "ci")
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(ci_event["status"], "not_observed")
+        self.assertEqual(ci_event["evidence_refs"], [])
+        self.assertIn("ci", summary["observations"]["not_observed_events"])
+        self.assertNotIn("ci-placeholder", summary["observations"]["evidence_refs"])
+        self.assertNotIn("ci-placeholder", rendered)
+
+    def test_minimal_completed_status_payload_does_not_report_absent_optional_gates_as_gaps(self) -> None:
+        status_payload = {
+            "run_id": "run-minimal-complete",
+            "prepared": {"status": "prepared_not_observed", "workflow": "plan", "harness": "coding"},
+            "execution": {"observed": True, "status": "completed", "evidence_refs": ["exec"]},
+            "verification": {"observed": True, "status": "passed", "satisfied": True, "evidence_refs": ["pytest"]},
+            "next_action": "report_completion_with_evidence",
+            "lifecycle_status": "reportable",
+        }
+
+        summary = build_work_observation_summary_from_status(status_payload, report_kind="completion")
+        rendered = render_completion_report(summary)
+
+        self.assertEqual(validate_work_observation_summary(summary), [])
+        self.assertEqual(summary["status"], "completed")
+        self.assertNotIn("review", summary["observations"]["not_observed_events"])
+        self.assertNotIn("ci", summary["observations"]["not_observed_events"])
+        self.assertNotIn("merge", summary["observations"]["not_observed_events"])
+        self.assertNotIn("Still waiting on observed proof for", rendered)
+
     def test_empty_successful_background_completion_is_silent(self) -> None:
         rendered = build_background_completion_report(
             output="[Background process proc_b05484479563 finished with exit code 0~ Here's the final output:]",

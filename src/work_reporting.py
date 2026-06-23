@@ -658,7 +658,10 @@ def _event_evidence_refs(events: list[dict[str, Any]] | tuple[dict[str, Any], ..
 
 
 def _observation_event_status(event: dict[str, Any]) -> str:
-    return _choice(str(event.get("status") or "observed"), _OBSERVATION_EVENT_STATUSES, "observed")
+    raw_status = event.get("status")
+    if raw_status is None or str(raw_status).strip() == "":
+        return "observed"
+    return _choice(str(raw_status), _OBSERVATION_EVENT_STATUSES, "not_observed")
 
 
 def _compact_strings(values: list[str] | tuple[str, ...], *, max_items: int, max_chars: int) -> tuple[list[str], int]:
@@ -1272,14 +1275,27 @@ def _status_payload_active_gaps(
     return [
         item
         for item in (
-            "execution" if execution.get("observed") is not True else "",
-            "verification" if verification.get("observed") is not True else "",
-            "review" if str(review.get("status", "not_observed")) in {"not_observed", "pending"} else "",
-            "ci" if str(ci.get("status", "not_observed")) in {"not_observed", "pending"} else "",
-            "merge" if str(merge.get("status", "not_observed")) in {"not_observed", "pending", "not_ready"} else "",
+            "execution" if _stage_is_active_gap(execution, observed_field=True) else "",
+            "verification" if _stage_is_active_gap(verification, observed_field=True) else "",
+            "review" if _stage_is_active_gap(review) else "",
+            "ci" if _stage_is_active_gap(ci) else "",
+            "merge" if _stage_is_active_gap(merge) else "",
         )
         if item
     ]
+
+
+def _stage_is_active_gap(stage: dict[str, Any], *, observed_field: bool = False) -> bool:
+    if not stage:
+        return False
+    required = stage.get("required") is True
+    present_status = "status" in stage
+    if not required and not present_status:
+        return False
+    status = str(stage.get("status", ""))
+    if observed_field and stage.get("observed") is not True:
+        return True
+    return status in {"not_observed", "pending", "not_ready"}
 
 
 def _terminal_evidence_satisfied(
