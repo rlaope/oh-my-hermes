@@ -123,6 +123,72 @@ class ExecutorProgressProjectionTests(unittest.TestCase):
             self.assertEqual(closed["active_executors"], [])
             self.assertEqual(closed["stale_executors"], [])
 
+    def test_binding_without_progress_event_does_not_project_as_active_executor(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id=run["run_id"],
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-1",
+                    now="2026-06-24T00:00:00Z",
+                ),
+            )
+
+            cli_projection = project_active_executor_status(paths, now="2026-06-24T00:01:00Z")
+            plugin_status = read_omh_status(paths.omh_home)
+
+            self.assertEqual(cli_projection["active_executors"], [])
+            self.assertEqual(cli_projection["stale_executors"], [])
+            self.assertEqual(cli_projection["latest_progress_events"], [])
+            self.assertEqual(plugin_status["active_executors"], [])
+            self.assertEqual(plugin_status["stale_executors"], [])
+            self.assertEqual(plugin_status["latest_progress_events"], [])
+
+    def test_plugin_reader_drops_invalid_progress_event_payloads(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id=run["run_id"],
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-1",
+                ),
+            )
+            progress_dir = paths.runtime_runs_dir / run["run_id"] / "executor_progress"
+            (progress_dir / "events.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_progress_event/v1",
+                        "binding_id": binding["binding_id"],
+                        "executor_profile": "codex",
+                        "event_type": "diff_started",
+                        "status": "running",
+                        "summary": "unsafe progress summary",
+                        "observed_at": "2026-06-24T00:01:00Z",
+                        "transition_fingerprint": "abc",
+                        "raw_log": "secret raw executor output",
+                        "claim_boundary": "Executor progress is not result evidence.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            status = read_omh_status(paths.omh_home)
+            rendered = json.dumps(status)
+
+            self.assertEqual(status["active_executors"], [])
+            self.assertEqual(status["latest_progress_events"], [])
+            self.assertNotIn("secret raw executor output", rendered)
+            self.assertNotIn("unsafe progress summary", rendered)
+
     def test_cross_surface_projection_agrees_for_active_and_terminal_run_progress(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

@@ -29,6 +29,35 @@ JOURNAL_EVENT_ALIASES = {
     "merge_readiness": "merge_gate_observed",
     "merge": "merge_observed",
 }
+EXECUTOR_PROGRESS_EVENT_TYPES = {
+    "executor_dispatched",
+    "repo_exploration",
+    "running_no_diff_observed",
+    "diff_started",
+    "tests_started",
+    "tests_failed",
+    "tests_passed",
+    "executor_completed",
+    "executor_blocked",
+    "executor_failed",
+    "progress_observed",
+}
+EXECUTOR_PROGRESS_PROFILES = {"codex", "claude_code", "hermes_local"}
+RAW_OR_HIDDEN_KEYS = {
+    "analysis",
+    "chain_of_thought",
+    "cot",
+    "hidden",
+    "hidden_reasoning",
+    "raw",
+    "raw_log",
+    "raw_logs",
+    "raw_output",
+    "reasoning",
+    "think",
+    "thinking",
+    "transcript",
+}
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -709,6 +738,8 @@ def _executor_progress_projection(runtime_dir: Path, *, limit: int) -> dict[str,
         primary = _choose_progress_primary(group)
         event = _latest_progress_payload(group, "event")
         report = _latest_progress_payload(group, "report")
+        if not event and not report:
+            continue
         if event:
             latest_events.append(_compact_progress_event(event, primary["binding"]))
         row = _progress_row(primary, group, event, report)
@@ -745,8 +776,8 @@ def _progress_bindings(runtime_dir: Path, *, limit: int) -> list[dict[str, Any]]
             events = _read_jsonl(progress_dir / "events.jsonl")
             reports = _read_jsonl(progress_dir / "reports.jsonl")
             binding_id = str(binding.get("binding_id", ""))
-            matching_events = [event for event in events if str(event.get("binding_id", "")) == binding_id]
-            matching_reports = [report for report in reports if str(report.get("binding_id", "")) == binding_id]
+            matching_events = [event for event in events if _valid_progress_event(event, binding_id)]
+            matching_reports = [report for report in reports if _valid_progress_report(report, binding_id)]
             items.append(
                 {
                     "binding": binding,
@@ -861,6 +892,55 @@ def _compact_progress_report(report: dict[str, Any]) -> dict[str, Any]:
         "reported_at": report.get("reported_at", ""),
         "claim_boundary": report.get("claim_boundary", ""),
     }
+
+
+def _valid_progress_event(event: dict[str, Any], binding_id: str) -> bool:
+    if not isinstance(event, dict) or _has_raw_or_hidden_content(event):
+        return False
+    if event.get("schema_version") != "omh_progress_event/v1":
+        return False
+    if str(event.get("binding_id", "")) != binding_id:
+        return False
+    if str(event.get("event_type", "")) not in EXECUTOR_PROGRESS_EVENT_TYPES:
+        return False
+    if str(event.get("executor_profile", "")) not in EXECUTOR_PROGRESS_PROFILES:
+        return False
+    summary = str(event.get("summary", "")).strip()
+    if not summary or len(summary) > 360:
+        return False
+    if not str(event.get("transition_fingerprint", "")).strip():
+        return False
+    return "not result" in str(event.get("claim_boundary", ""))
+
+
+def _valid_progress_report(report: dict[str, Any], binding_id: str) -> bool:
+    if not isinstance(report, dict) or _has_raw_or_hidden_content(report):
+        return False
+    if report.get("schema_version") != "omh_progress_report/v1":
+        return False
+    if str(report.get("binding_id", "")) != binding_id:
+        return False
+    if str(report.get("executor_profile", "")) not in EXECUTOR_PROGRESS_PROFILES:
+        return False
+    summary = str(report.get("summary", "")).strip()
+    if not summary or len(summary) > 360:
+        return False
+    return "not result" in str(report.get("claim_boundary", ""))
+
+
+def _has_raw_or_hidden_content(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if str(key).casefold() in RAW_OR_HIDDEN_KEYS:
+                return True
+            if _has_raw_or_hidden_content(item):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_has_raw_or_hidden_content(item) for item in value)
+    if isinstance(value, str):
+        return len(value) > 2000
+    return False
 
 
 def _seconds_since(value: str) -> float | None:

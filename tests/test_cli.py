@@ -8234,6 +8234,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(json.loads(stdout)["binding"]["binding_id"], f"run:{run['run_id']}:claude_code")
 
             status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "progress-status"]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            bound_status = json.loads(stdout)
+            self.assertEqual(bound_status["active_executors"], [])
+            self.assertEqual(bound_status["latest_progress_events"], [])
+
+            status, stdout, stderr = run_cli(
                 [
                     "--omh-home",
                     str(omh_home),

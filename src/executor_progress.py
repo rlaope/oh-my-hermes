@@ -591,6 +591,8 @@ def project_active_executor_status(paths: OmhPaths, *, limit: int | None = 50, n
         primary = _choose_primary_binding(group)
         event = _latest_group_payload(paths, group, kind="event")
         report = _latest_group_payload(paths, group, kind="report")
+        if not event and not report:
+            continue
         if event:
             latest_events.append(_compact_event_projection(event, primary))
         row = _project_binding_row(primary, group, event=event, report=report)

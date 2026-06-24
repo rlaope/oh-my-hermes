@@ -6,6 +6,7 @@ from typing import Any
 from ..context_safety import build_coding_progress_reporting_policy
 from ..coding_delegation import build_coding_delegation_payload, coding_delegation_record_payload
 from ..executor_progress import (
+    ExecutorProgressError,
     build_progress_binding,
     build_safe_progress_signal,
     observe_executor_progress,
@@ -14,6 +15,7 @@ from ..executor_progress import (
 )
 from ..paths import OmhPaths
 from ..runtime.artifacts import (
+    append_event,
     create_prepared_coding_delegation_run,
     summarize_delegated_coding_status,
     validate_runtime,
@@ -217,26 +219,32 @@ def _record_run_progress(
     summary: str,
     evidence_refs: list[str] | tuple[str, ...] | None = None,
 ) -> None:
-    binding = read_progress_binding(paths, "run", run_id)
-    if binding is None:
-        binding = build_progress_binding(
-            target_type="run",
-            target_id=run_id,
+    try:
+        binding = read_progress_binding(paths, "run", run_id)
+        if binding is None:
+            binding = build_progress_binding(
+                target_type="run",
+                target_id=run_id,
+                executor_profile="codex",
+                source="coding_lifecycle",
+                evidence_refs=list(evidence_refs or []),
+            )
+        signal = build_safe_progress_signal(
             executor_profile="codex",
-            source="coding_lifecycle",
+            explicit_event_type=event_type,
+            explicit_summary=summary,
             evidence_refs=list(evidence_refs or []),
         )
-    signal = build_safe_progress_signal(
-        executor_profile="codex",
-        explicit_event_type=event_type,
-        explicit_summary=summary,
-        evidence_refs=list(evidence_refs or []),
-    )
-    observe_executor_progress(paths, binding, signal)
+        observe_executor_progress(paths, binding, signal)
+    except (ExecutorProgressError, OSError, ValueError) as exc:
+        _append_run_progress_warning(paths, run_id, exc)
 
 
 def _run_progress_status(paths: OmhPaths, run_id: str) -> dict[str, object]:
-    binding = read_progress_binding(paths, "run", run_id)
+    try:
+        binding = read_progress_binding(paths, "run", run_id)
+    except (ExecutorProgressError, OSError, ValueError) as exc:
+        return _progress_error_status(exc)
     if not binding:
         return {}
     refreshed = refresh_binding_freshness(binding)
@@ -249,6 +257,49 @@ def _run_progress_status(paths: OmhPaths, run_id: str) -> dict[str, object]:
         "last_reported_at": refreshed.get("last_reported_at", ""),
         "claim_boundary": refreshed.get("claim_boundary", ""),
     }
+
+
+def _append_run_progress_warning(paths: OmhPaths, run_id: str, exc: Exception) -> None:
+    try:
+        append_event(
+            paths.runtime_runs_dir / run_id,
+            {
+                "event": "executor_progress_error",
+                "level": "warning",
+                "message": "Executor progress metadata could not be recorded; lifecycle evidence was preserved.",
+                "data": {
+                    "diagnostic_only": True,
+                    "progress_error": _progress_error_summary(exc),
+                    "claim_boundary": "Progress diagnostics are not result, verification, review, CI, merge-readiness, or merge evidence.",
+                },
+            },
+        )
+    except (OSError, ValueError):
+        pass
+
+
+def _progress_error_status(exc: Exception) -> dict[str, object]:
+    return {
+        "state": "diagnostic_error",
+        "diagnostic_only": True,
+        "progress_error": _progress_error_summary(exc),
+        "claim_boundary": "Progress diagnostics are not result, verification, review, CI, merge-readiness, or merge evidence.",
+    }
+
+
+def _progress_error_summary(exc: Exception) -> str:
+    text = str(exc)
+    if "unsupported executor profile" in text:
+        return "unsupported executor profile for progress"
+    if "invalid progress binding" in text:
+        return "invalid progress binding"
+    if "invalid progress event" in text:
+        return "invalid progress event"
+    if "invalid progress report" in text:
+        return "invalid progress report"
+    if isinstance(exc, OSError):
+        return "progress artifact I/O error"
+    return "executor progress recording failed"
 
 
 def _progress_event_for_result(result: str) -> str:

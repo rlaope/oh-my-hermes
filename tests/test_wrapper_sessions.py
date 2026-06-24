@@ -1094,6 +1094,38 @@ class WrapperSessionTests(unittest.TestCase):
             with self.assertRaisesRegex(ExecutorSessionError, "after executor result is recorded"):
                 open_executor_session(paths, session_id, observed=True, external_session_ref="codex-thread-2")
 
+    def test_codex_lifecycle_progress_error_does_not_block_dispatch_or_result(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            handoff = prepare_wrapper_session_handoff(paths, session_id, message)
+            run_id = str(handoff["session"]["current_run_id"])
+            run_dir = paths.runtime_runs_dir / run_id
+            progress_dir = run_dir / "executor_progress"
+            progress_dir.mkdir(parents=True)
+            (progress_dir / "binding.json").write_text(
+                json.dumps({"schema_version": "broken", "binding_id": "not-valid"}),
+                encoding="utf-8",
+            )
+
+            dispatched = record_codex_dispatch(paths, run_id)
+            completed = record_codex_result(paths, run_id, result="completed", evidence_refs=["codex-summary"])
+            events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+            progress_errors = [event for event in events if event.get("event") == "executor_progress_error"]
+
+            self.assertEqual(dispatched["status"]["execution"]["status"], "not_observed")
+            self.assertEqual(completed["status"]["execution"]["status"], "completed")
+            self.assertEqual(completed["status"]["executor_progress"]["state"], "diagnostic_error")
+            self.assertEqual(completed["status"]["executor_progress"]["progress_error"], "invalid progress binding")
+            self.assertGreaterEqual(len(progress_errors), 2)
+            self.assertEqual(progress_errors[-1]["level"], "warning")
+            self.assertTrue(progress_errors[-1]["data"]["diagnostic_only"])
+            self.assertIn("not result", progress_errors[-1]["data"]["claim_boundary"])
+
     def test_invalid_executor_session_record_is_ignored_for_status_claims(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
