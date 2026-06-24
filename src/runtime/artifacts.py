@@ -544,6 +544,7 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     merge_record = _object_or_empty(shown.get("merge"))
     runtime_observations = runtime_observations_for_target(_list_or_empty(shown.get("runtime_observations")), "run", run_id)
     lifecycle = _object_or_empty(shown.get("lifecycle"))
+    legacy_runtime_observation = summarize_runtime_observation_status(runtime_observations)
     handoff = _object_or_empty(coding.get("executor_handoff"))
     review = _object_or_empty(handoff.get("review"))
 
@@ -552,7 +553,10 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     handoff_available = bool(handoff)
     executor_target = str(handoff.get("executor_target") or coding.get("executor_profile") or "generic")
     execution_observed = bool(delegation.get("observed", False)) or bool(lifecycle.get("execution_observed", False))
-    execution_status = str(delegation.get("result") or ("not_observed" if prepared else "unknown"))
+    execution_status = str(
+        delegation.get("result")
+        or ("completed" if lifecycle.get("execution_observed") else "not_observed" if prepared else "unknown")
+    )
     prompt_dispatched = bool(wrapper.get("prompt_dispatched", False)) or bool(lifecycle.get("prompt_dispatched", False))
     response_observed = bool(wrapper.get("hermes_response_observed", False))
     verification_observed = bool(wrapper.get("verification_observed", False)) or bool(lifecycle.get("verification_observed", False))
@@ -565,10 +569,13 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     review_required = bool(review.get("required", coding.get("review_required", False)))
     review_workflow = review.get("workflow") if review else coding.get("review_workflow")
     review_status = _review_status_summary(review_required, review_workflow, review, review_record)
+    review_status = _apply_lifecycle_review_status(review_status, lifecycle)
     ci_required = bool(ci_record) or review_status["status"] == "passed"
     ci_status = _ci_status_summary(ci_required, ci_record)
+    ci_status = _apply_lifecycle_ci_status(ci_status, lifecycle, review_status)
     merge_required = bool(merge_record) or ci_status["status"] == "passed"
     merge_status = _merge_status_summary(merge_required, merge_record)
+    merge_status = _apply_lifecycle_merge_status(merge_status, lifecycle)
     harness_quality = _object_or_empty(coding.get("harness_quality") or handoff.get("harness_quality"))
     harness_progress = _delegated_harness_progress(
         harness_quality,
@@ -592,6 +599,11 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
         review_status=review_status,
         ci_status=ci_status,
         merge_status=merge_status,
+    )
+    runtime_observation_status = _delegated_runtime_observation_status(
+        legacy_runtime_observation,
+        lifecycle,
+        next_action=next_action,
     )
     integrity_warnings = _delegated_status_integrity_warnings(
         run=run,
@@ -652,7 +664,7 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
             "summary": merge_status["summary"],
         },
         "merge": merge_status,
-        "runtime_observation": summarize_runtime_observation_status(runtime_observations),
+        "runtime_observation": runtime_observation_status,
         "lifecycle": lifecycle,
         "next_action": next_action,
         "progress_reporting_policy": build_coding_progress_reporting_policy(next_action=next_action),
@@ -1107,6 +1119,146 @@ def _merge_status_summary(required: bool, record: dict[str, Any]) -> dict[str, A
     }
 
 
+def _apply_lifecycle_review_status(status: dict[str, Any], lifecycle: dict[str, Any]) -> dict[str, Any]:
+    if not lifecycle.get("review_observed") or status.get("observed"):
+        return status
+    return {
+        **status,
+        "observed": True,
+        "status": "passed",
+        "satisfied": True,
+        "summary": str(_object_or_empty(lifecycle.get("latest_event")).get("summary") or status.get("summary", "")),
+    }
+
+
+def _apply_lifecycle_ci_status(
+    status: dict[str, Any],
+    lifecycle: dict[str, Any],
+    review_status: dict[str, Any],
+) -> dict[str, Any]:
+    if not lifecycle.get("ci_observed") or status.get("observed"):
+        return status
+    return {
+        **status,
+        "required": bool(status.get("required")) or review_status.get("status") == "passed",
+        "observed": True,
+        "status": "passed",
+        "satisfied": True,
+        "summary": str(_object_or_empty(lifecycle.get("latest_event")).get("summary") or status.get("summary", "")),
+    }
+
+
+def _apply_lifecycle_merge_status(status: dict[str, Any], lifecycle: dict[str, Any]) -> dict[str, Any]:
+    if status.get("observed"):
+        return status
+    latest = _object_or_empty(lifecycle.get("latest_event"))
+    if lifecycle.get("merge_observed"):
+        return {
+            **status,
+            "required": True,
+            "observed": True,
+            "ready": True,
+            "merged": True,
+            "status": "merged",
+            "satisfied": True,
+            "summary": str(latest.get("summary") or status.get("summary", "")),
+        }
+    if lifecycle.get("merge_gate_observed"):
+        return {
+            **status,
+            "required": True,
+            "observed": True,
+            "ready": True,
+            "merged": False,
+            "status": "ready",
+            "satisfied": True,
+            "summary": str(latest.get("summary") or status.get("summary", "")),
+        }
+    return status
+
+
+def _delegated_runtime_observation_status(
+    legacy_status: dict[str, Any],
+    lifecycle: dict[str, Any],
+    *,
+    next_action: str,
+) -> dict[str, Any]:
+    if int(lifecycle.get("journal_event_count", 0) or 0) <= 0:
+        return legacy_status
+    observed_events = _runtime_events_from_lifecycle(lifecycle)
+    latest = _object_or_empty(lifecycle.get("latest_event"))
+    blocked_events = []
+    failed_events = []
+    latest_event = _runtime_event_from_journal_event(str(latest.get("event", "")))
+    latest_status = str(latest.get("status", ""))
+    if latest_event and latest_status == "blocked":
+        blocked_events.append(latest_event)
+    elif latest_event and latest_status == "failed":
+        failed_events.append(latest_event)
+    missing_events = _runtime_missing_events_for_next_action(next_action)
+    return {
+        "schema_version": "runtime_observation_status/v1",
+        "record_schema": RUNTIME_OBSERVATION_SCHEMA_VERSION,
+        "applicable": True,
+        "source": "lifecycle_projection",
+        "observed_events": observed_events,
+        "blocked_events": blocked_events,
+        "failed_events": failed_events,
+        "not_observed_events": [],
+        "missing_events": missing_events,
+        "unsatisfied_events": missing_events,
+        "latest": {"event": latest_event, **latest} if latest_event else latest,
+        "next_action": next_action,
+        "claim_boundary": (
+            "Runtime observation status is projected from the merged lifecycle journal for prepared Codex runs. "
+            "It remains metadata-only evidence."
+        ),
+    }
+
+
+def _runtime_events_from_lifecycle(lifecycle: dict[str, Any]) -> list[str]:
+    events: list[str] = []
+    for lifecycle_key, event_type in (
+        ("runtime_start_observed", "runtime_start"),
+        ("worktree_observed", "worktree_creation"),
+        ("prompt_dispatched", "worker_dispatch"),
+        ("execution_observed", "worker_result"),
+        ("verification_observed", "verification"),
+        ("review_observed", "review"),
+        ("ci_observed", "ci"),
+        ("merge_gate_observed", "merge_readiness"),
+        ("merge_observed", "merge"),
+    ):
+        if lifecycle.get(lifecycle_key):
+            events.append(event_type)
+    return events
+
+
+def _runtime_missing_events_for_next_action(next_action: str) -> list[str]:
+    return {
+        "dispatch_to_executor": ["worker_dispatch"],
+        "wait_for_executor_evidence": ["worker_result"],
+        "record_verification_evidence": ["verification"],
+        "record_review_evidence": ["review"],
+        "record_ci_evidence": ["ci"],
+        "record_merge_readiness": ["merge_readiness"],
+    }.get(next_action, [])
+
+
+def _runtime_event_from_journal_event(event_name: str) -> str:
+    return {
+        "runtime_start_observed": "runtime_start",
+        "worktree_creation_observed": "worktree_creation",
+        "executor_dispatch_observed": "worker_dispatch",
+        "executor_result_observed": "worker_result",
+        "verification_result_observed": "verification",
+        "review_result_observed": "review",
+        "ci_result_observed": "ci",
+        "merge_gate_observed": "merge_readiness",
+        "merge_observed": "merge",
+    }.get(event_name, "")
+
+
 def _delegated_status_next_action(
     *,
     prepared: bool,
@@ -1481,7 +1633,10 @@ def export_runtime(
 ) -> dict[str, Any]:
     runs = [read_json_object(paths.runtime_runs_dir / run_id / "run.json")] if run_id else list_runs(paths, limit=limit)
     runs = [run for run in runs if isinstance(run, dict)]
-    wrapper_sessions = list_wrapper_session_records(paths, limit=limit)
+    if run_id:
+        wrapper_sessions = _wrapper_session_records_for_run(paths, run_id, limit=limit)
+    else:
+        wrapper_sessions = list_wrapper_session_records(paths, limit=limit)
     journal_events, journal_errors = read_observation_events_result(paths)
     if run_id:
         journal_events = [event for event in journal_events if str(event.get("run_id", "")) == run_id]
@@ -1513,6 +1668,15 @@ def export_runtime(
     else:
         payload["redacted"] = False
     return payload
+
+
+def _wrapper_session_records_for_run(paths: OmhPaths, run_id: str, *, limit: int | None = None) -> list[dict[str, Any]]:
+    sessions: list[dict[str, Any]] = []
+    for session_dir in _wrapper_session_dirs_for_run(paths, run_id):
+        session = read_json_object(session_dir / "session.json")
+        if isinstance(session, dict):
+            sessions.append(session)
+    return _apply_limit(sessions, limit)
 
 
 def _read_jsonl_events(path: Path) -> list[dict[str, Any]]:

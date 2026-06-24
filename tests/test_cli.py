@@ -5405,6 +5405,93 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             run_id = json.loads(stdout)["runtime"]["run"]["run_id"]
 
+            status, _, stderr = run_cli(
+                home_args
+                + [
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
+                    "verification",
+                    "--summary",
+                    "local verification passed",
+                    "--evidence-ref",
+                    "tests/test_runtime_artifacts.py",
+                ]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("verification_result_observed requires executor_dispatch_observed and executor_result_observed", stderr)
+
+            status, _, stderr = run_cli(
+                home_args
+                + [
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
+                    "merge",
+                    "--summary",
+                    "merged without prerequisites",
+                ]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("merge_observed requires executor_dispatch_observed", stderr)
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
+                    "worker_dispatch",
+                    "--summary",
+                    "executor dispatch observed",
+                    "--evidence-ref",
+                    "executor-session.json",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            observed = json.loads(stdout)
+            self.assertEqual(observed["observation"], {})
+            self.assertEqual(observed["journal_event"]["event"], "executor_dispatch_observed")
+            self.assertTrue(observed["status"]["lifecycle"]["prompt_dispatched"])
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
+                    "worker_result",
+                    "--summary",
+                    "executor reported completion",
+                    "--evidence-ref",
+                    "executor-result.json",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            observed = json.loads(stdout)
+            self.assertEqual(observed["observation"], {})
+            self.assertEqual(observed["journal_event"]["event"], "executor_result_observed")
+            self.assertTrue(observed["status"]["execution"]["observed"])
+            self.assertEqual(observed["status"]["next_action"], "record_verification_evidence")
+
             status, stdout, stderr = run_cli(
                 home_args
                 + [
@@ -5436,7 +5523,7 @@ class CliTests(unittest.TestCase):
             shown = json.loads(stdout)
             self.assertEqual(shown["lifecycle"]["latest_event"]["event"], "verification_result_observed")
             self.assertTrue(shown["lifecycle"]["verification_observed"])
-            self.assertEqual(shown["lifecycle"]["journal_event_count"], 2)
+            self.assertEqual(shown["lifecycle"]["journal_event_count"], 4)
 
             status, stdout, stderr = run_cli(home_args + ["runtime", "validate"])
             self.assertEqual(stderr, "")
@@ -6686,6 +6773,30 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertIn("requires an accepted plan", stderr)
 
+            status, _, stderr = run_cli(
+                base + ["coding", "delegate", "--from-plan", str(plan_path), "--record", "--force-record"]
+            )
+            self.assertEqual(status, 2)
+            self.assertIn("requires an accepted plan", stderr)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "coding",
+                    "delegate",
+                    "--from-plan",
+                    str(plan_path),
+                    "--record",
+                    "--allow-draft-plan",
+                    "--include-message",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            draft_payload = json.loads(stdout)
+            self.assertEqual(draft_payload["plan_artifact"]["status"], "draft")
+            self.assertEqual(draft_payload["runtime"]["coding_delegation"]["plan_artifact"]["status"], "draft")
+
             invalid_plan = root / "not-a-plan.md"
             invalid_plan.write_text("---\nschema_version: other/v1\nstatus: accepted\n---\n# Not a Hermes plan\n", encoding="utf-8")
             status, _, stderr = run_cli(base + ["hermes", "plan", "accept", str(invalid_plan)])
@@ -6722,6 +6833,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["executor_handoff"]["execution_brief"]["task_source"], "accepted_plan_artifact")
             self.assertIn("plan_artifact_context_required", payload["executor_handoff"]["dispatch_contract"])
             self.assertEqual(payload["executor_handoff"]["context_pack"]["included_context"][0]["key"], "plan_artifact")
+            self.assertEqual(payload["executor_handoff"]["context_pack"]["metadata"]["plan_artifact_path"], str(plan_path.resolve()))
+            self.assertEqual(
+                payload["executor_handoff"]["context_pack"]["included_context"][0]["artifact_ref"],
+                str(plan_path.resolve()),
+            )
             self.assertEqual(payload["plan_artifact"]["path"], str(plan_path.resolve()))
             self.assertEqual(payload["plan_artifact"]["status"], "accepted")
             self.assertEqual(payload["source_metadata"]["plan_artifact_path"], str(plan_path.resolve()))

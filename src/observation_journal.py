@@ -11,7 +11,7 @@ try:  # pragma: no cover - non-POSIX fallback is exercised only on platforms wit
 except ImportError:  # pragma: no cover
     fcntl = None  # type: ignore[assignment]
 
-from .local_store import ensure_dir, ensure_file, read_jsonl_objects, utc_now
+from .local_store import ensure_dir, ensure_file, read_json_object, read_jsonl_objects, utc_now
 from .paths import OmhPaths
 
 
@@ -107,6 +107,9 @@ def build_observation_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def append_observation_event(paths: OmhPaths, event: dict[str, Any]) -> dict[str, Any]:
     record = build_observation_event(event)
+    sequence_errors = _validate_observation_event_prerequisites(paths, record, _prior_events_for_record(paths, record))
+    if sequence_errors:
+        raise ValueError(sequence_errors[0])
     ensure_dir(paths.runtime_journal_dir, private=True)
     ensure_file(paths.runtime_journal_events_path, private=True)
     with paths.runtime_journal_events_path.open("a", encoding="utf-8") as handle:
@@ -171,15 +174,16 @@ def validate_observation_event(event: dict[str, Any]) -> list[str]:
 
 def validate_observation_journal(paths: OmhPaths, *, run_id: str | None = None) -> dict[str, Any]:
     events, errors = read_observation_events_result(paths)
-    filtered: list[dict[str, Any]] = []
+    filtered: list[tuple[int, dict[str, Any]]] = []
     for index, event in enumerate(events, start=1):
         if run_id and str(event.get("run_id", "")) != run_id:
             continue
-        filtered.append(event)
+        filtered.append((index, event))
         errors.extend(
             f"{paths.runtime_journal_events_path}:{index}: {error}"
             for error in validate_observation_event(event)
         )
+    errors.extend(_validate_observation_event_sequence(paths, filtered))
     return {
         "schema_version": "omh_observation_journal_validation/v1",
         "path": str(paths.runtime_journal_events_path),
@@ -187,6 +191,148 @@ def validate_observation_journal(paths: OmhPaths, *, run_id: str | None = None) 
         "event_count": len(filtered),
         "errors": errors,
     }
+
+
+def _prior_events_for_record(paths: OmhPaths, record: dict[str, Any]) -> list[dict[str, Any]]:
+    run_id = str(record.get("run_id", ""))
+    if not run_id:
+        return []
+    events, _ = read_observation_events_result(paths)
+    return [event for event in events if isinstance(event, dict) and str(event.get("run_id", "")) == run_id]
+
+
+def _validate_observation_event_sequence(paths: OmhPaths, indexed_events: list[tuple[int, dict[str, Any]]]) -> list[str]:
+    errors: list[str] = []
+    prior_by_run: dict[str, list[dict[str, Any]]] = {}
+    for index, event in indexed_events:
+        run_id = str(event.get("run_id", ""))
+        prior = prior_by_run.setdefault(run_id, [])
+        for error in _validate_observation_event_prerequisites(paths, event, prior):
+            errors.append(f"{paths.runtime_journal_events_path}:{index}: {error}")
+        prior.append(event)
+    return errors
+
+
+def _validate_observation_event_prerequisites(
+    paths: OmhPaths,
+    event: dict[str, Any],
+    prior_events: list[dict[str, Any]],
+) -> list[str]:
+    run_id = str(event.get("run_id", ""))
+    if not run_id or str(event.get("target_type", "")) != "run":
+        return []
+    event_name = canonical_observation_event(str(event.get("event", "")))
+    if event_name not in _ORDERED_LIFECYCLE_EVENTS or str(event.get("status", "observed")) == "not_observed":
+        return []
+    state = _lifecycle_prerequisite_state(prior_events)
+    review_required = _journal_review_required(paths, run_id)
+    errors: list[str] = []
+    if event_name == "executor_result_observed":
+        _require_prerequisites(event_name, state, ["executor_dispatch_observed"], errors)
+    elif event_name == "verification_result_observed":
+        _require_prerequisites(
+            event_name,
+            state,
+            ["executor_dispatch_observed", "executor_result_observed"],
+            errors,
+        )
+    elif event_name == "review_result_observed":
+        _require_prerequisites(event_name, state, ["verification_result_observed"], errors)
+    elif event_name == "ci_result_observed":
+        required = ["verification_result_observed"]
+        if review_required or state["review_seen"]:
+            required.append("review_result_observed")
+        _require_prerequisites(event_name, state, required, errors)
+    elif event_name == "merge_gate_observed":
+        required = [
+            "executor_dispatch_observed",
+            "executor_result_observed",
+            "verification_result_observed",
+        ]
+        if review_required or state["review_seen"]:
+            required.append("review_result_observed")
+        if state["review_result_observed"] or state["ci_seen"]:
+            required.append("ci_result_observed")
+        _require_prerequisites(event_name, state, required, errors)
+    elif event_name == "merge_observed":
+        required = [
+            "executor_dispatch_observed",
+            "executor_result_observed",
+            "verification_result_observed",
+        ]
+        if review_required or state["review_seen"]:
+            required.append("review_result_observed")
+        if state["review_result_observed"] or state["ci_seen"]:
+            required.append("ci_result_observed")
+        required.append("merge_gate_observed")
+        _require_prerequisites(event_name, state, required, errors)
+    return errors
+
+
+_ORDERED_LIFECYCLE_EVENTS = {
+    "executor_result_observed",
+    "verification_result_observed",
+    "review_result_observed",
+    "ci_result_observed",
+    "merge_gate_observed",
+    "merge_observed",
+}
+
+
+def _lifecycle_prerequisite_state(events: list[dict[str, Any]]) -> dict[str, bool]:
+    state = {
+        "executor_dispatch_observed": False,
+        "executor_result_observed": False,
+        "verification_result_observed": False,
+        "review_result_observed": False,
+        "ci_result_observed": False,
+        "merge_gate_observed": False,
+        "review_seen": False,
+        "ci_seen": False,
+    }
+    for event in events:
+        event_name = canonical_observation_event(str(event.get("event", "")))
+        status = str(event.get("status", "observed"))
+        if event_name == "review_result_observed":
+            state["review_seen"] = True
+        elif event_name == "ci_result_observed":
+            state["ci_seen"] = True
+        if status != "observed":
+            continue
+        if event_name in state:
+            state[event_name] = True
+    return state
+
+
+def _require_prerequisites(
+    event_name: str,
+    state: dict[str, bool],
+    required_events: list[str],
+    errors: list[str],
+) -> None:
+    missing = [required for required in required_events if not state.get(required, False)]
+    if missing:
+        errors.append(f"{event_name} requires {_join_required_events(missing)}")
+
+
+def _join_required_events(events: list[str]) -> str:
+    if len(events) <= 1:
+        return events[0] if events else ""
+    if len(events) == 2:
+        return f"{events[0]} and {events[1]}"
+    return f"{', '.join(events[:-1])}, and {events[-1]}"
+
+
+def _journal_review_required(paths: OmhPaths, run_id: str) -> bool:
+    try:
+        coding = read_json_object(paths.runtime_runs_dir / run_id / "coding_delegation.json")
+    except (OSError, json.JSONDecodeError, ValueError):
+        return False
+    if not isinstance(coding, dict):
+        return False
+    handoff = coding.get("executor_handoff")
+    review = handoff.get("review") if isinstance(handoff, dict) and isinstance(handoff.get("review"), dict) else {}
+    return bool(review.get("required", coding.get("review_required", False)))
 
 
 def project_run_lifecycle(

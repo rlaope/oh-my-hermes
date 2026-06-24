@@ -270,11 +270,19 @@ def build_plan_handoff_message(artifact: dict[str, object]) -> str:
 
 
 def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "codex") -> dict[str, object]:
+    plan_artifact_path = str(artifact.get("path", ""))
     pack = {
         "schema_version": "handoff_context_pack/v1",
         "executor_target": executor_target,
         "session_id": "",
         "scope": {"kind": "project", "ref": "default"},
+        "metadata": {
+            "plan_artifact_path": plan_artifact_path,
+            "plan_artifact_ref": plan_artifact_path,
+            "plan_artifact_status": str(artifact.get("status", "")),
+            "plan_artifact_schema_version": str(artifact.get("schema_version", "")),
+            "plan_artifact_sha256": str(artifact.get("sha256", "")),
+        },
         "source_refs": [
             {
                 "source": "hermes_plan",
@@ -291,6 +299,7 @@ def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_tar
                     f"Accepted Hermes plan artifact status={artifact.get('status', '')}; "
                     f"sha256={artifact.get('sha256', '')}."
                 ),
+                "artifact_ref": plan_artifact_path,
                 "source": "hermes_plan",
                 "truth_level": "approved_context",
                 "scope": {"kind": "project", "ref": "default"},

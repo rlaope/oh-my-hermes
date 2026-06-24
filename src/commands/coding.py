@@ -43,7 +43,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             if artifact.get("schema_version") != "hermes_plan/v1":
                 raise ValueError("coding delegate --from-plan requires a hermes_plan/v1 artifact")
             plan_status = str(artifact.get("status", ""))
-            if plan_status != "accepted" and not (args.allow_draft_plan or args.force_record):
+            if plan_status != "accepted" and not args.allow_draft_plan:
                 raise ValueError("coding delegate --from-plan requires an accepted plan; use hermes plan-accept or --allow-draft-plan")
             message = build_plan_handoff_message(artifact)
             source_metadata.update(_plan_source_metadata(artifact))

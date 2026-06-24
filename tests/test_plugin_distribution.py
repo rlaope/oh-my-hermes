@@ -344,6 +344,28 @@ class PluginDistributionTests(unittest.TestCase):
                     "--runtime-profile",
                     "hermes",
                     "--event",
+                    "worker_dispatch",
+                    "--summary",
+                    "executor session opened for the prepared handoff",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["journal_event"]["event"], "executor_dispatch_observed")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
                     "worker_result",
                     "--summary",
                     "executor completed the prepared handoff",
