@@ -189,6 +189,42 @@ class ExecutorProgressProjectionTests(unittest.TestCase):
             self.assertNotIn("secret raw executor output", rendered)
             self.assertNotIn("unsafe progress summary", rendered)
 
+    def test_plugin_reader_drops_invalid_progress_binding_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id=run["run_id"],
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-1",
+                ),
+            )
+            observe_executor_progress(
+                paths,
+                binding,
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    explicit_event_type="diff_started",
+                    explicit_summary="Codex changed files.",
+                ),
+            )
+            binding_path = paths.runtime_runs_dir / run["run_id"] / "executor_progress" / "binding.json"
+            corrupted = dict(binding)
+            corrupted["correlation_root"] = "secret correlation root"
+            corrupted["raw_log"] = "secret raw binding output"
+            binding_path.write_text(json.dumps(corrupted), encoding="utf-8")
+
+            status = read_omh_status(paths.omh_home)
+            rendered = json.dumps(status)
+
+            self.assertEqual(status["active_executors"], [])
+            self.assertEqual(status["latest_progress_events"], [])
+            self.assertNotIn("secret raw binding output", rendered)
+            self.assertNotIn("secret correlation root", rendered)
+
     def test_cross_surface_projection_agrees_for_active_and_terminal_run_progress(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

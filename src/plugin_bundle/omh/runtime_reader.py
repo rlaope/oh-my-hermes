@@ -43,6 +43,7 @@ EXECUTOR_PROGRESS_EVENT_TYPES = {
     "progress_observed",
 }
 EXECUTOR_PROGRESS_PROFILES = {"codex", "claude_code", "hermes_local"}
+EXECUTOR_PROGRESS_BINDING_STATES = {"active", "stale", "expired", "closed"}
 RAW_OR_HIDDEN_KEYS = {
     "analysis",
     "chain_of_thought",
@@ -768,9 +769,7 @@ def _progress_bindings(runtime_dir: Path, *, limit: int) -> list[dict[str, Any]]
             continue
         for binding_path in sorted(root.glob("*/executor_progress/binding.json"), reverse=True):
             binding = _read_json(binding_path)
-            if not binding or binding.get("schema_version") != "omh_executor_progress_binding/v1":
-                continue
-            if str(binding.get("target_type") or binding.get("target", {}).get("type", "")) != target_type:
+            if not _valid_progress_binding(binding, target_type):
                 continue
             progress_dir = binding_path.parent
             events = _read_jsonl(progress_dir / "events.jsonl")
@@ -892,6 +891,30 @@ def _compact_progress_report(report: dict[str, Any]) -> dict[str, Any]:
         "reported_at": report.get("reported_at", ""),
         "claim_boundary": report.get("claim_boundary", ""),
     }
+
+
+def _valid_progress_binding(binding: dict[str, Any], expected_target_type: str) -> bool:
+    if not isinstance(binding, dict) or _has_raw_or_hidden_content(binding):
+        return False
+    if binding.get("schema_version") != "omh_executor_progress_binding/v1":
+        return False
+    target = binding.get("target") if isinstance(binding.get("target"), dict) else {}
+    target_type = str(binding.get("target_type") or target.get("type") or "")
+    target_id = str(binding.get("target_id") or target.get("id") or "")
+    profile = str(binding.get("executor_profile") or binding.get("executor") or "")
+    if target_type != expected_target_type or target_type not in {"run", "wrapper_session"}:
+        return False
+    if not target_id:
+        return False
+    if profile not in EXECUTOR_PROGRESS_PROFILES:
+        return False
+    if str(binding.get("binding_id", "")) != f"{target_type}:{target_id}:{profile}":
+        return False
+    if not str(binding.get("correlation_root", "")).strip():
+        return False
+    if str(binding.get("state", "")) not in EXECUTOR_PROGRESS_BINDING_STATES:
+        return False
+    return "not result" in str(binding.get("claim_boundary", ""))
 
 
 def _valid_progress_event(event: dict[str, Any], binding_id: str) -> bool:

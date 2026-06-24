@@ -1039,6 +1039,67 @@ class RuntimeArtifactTests(unittest.TestCase):
                 self.assertNotIn(leaked, rendered)
             self.assertIn("[redacted]", rendered)
 
+    def test_show_run_and_export_drop_invalid_executor_progress_payloads(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id=run["run_id"],
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-1",
+                ),
+            )
+            progress_dir = paths.runtime_runs_dir / run["run_id"] / "executor_progress"
+            (progress_dir / "events.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_progress_event/v1",
+                        "binding_id": binding["binding_id"],
+                        "executor_profile": "codex",
+                        "event_type": "diff_started",
+                        "status": "running",
+                        "summary": "unsafe progress summary",
+                        "observed_at": "2026-06-24T00:01:00Z",
+                        "transition_fingerprint": "abc",
+                        "raw_log": "secret raw executor output",
+                        "claim_boundary": "Executor progress is not result evidence.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (progress_dir / "reports.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_progress_report/v1",
+                        "binding_id": binding["binding_id"],
+                        "executor_profile": "codex",
+                        "event_type": "diff_started",
+                        "status": "running",
+                        "summary": "unsafe report summary",
+                        "reported_at": "2026-06-24T00:01:00Z",
+                        "hidden_reasoning": "secret hidden executor reasoning",
+                        "claim_boundary": "Executor progress is not result evidence.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            shown = show_run(paths, run["run_id"])
+            exported = export_runtime(paths, redacted=True)
+            rendered = json.dumps({"shown": shown, "exported": exported})
+
+            self.assertEqual(shown["executor_progress"]["latest_event"], {})
+            self.assertEqual(shown["executor_progress"]["latest_report"], {})
+            self.assertNotIn("secret raw executor output", rendered)
+            self.assertNotIn("secret hidden executor reasoning", rendered)
+            self.assertNotIn("unsafe progress summary", rendered)
+            self.assertNotIn("unsafe report summary", rendered)
+
     def test_status_artifact_validators_reject_contradictory_success_claims(self) -> None:
         self.assertIn(
             "review observed=false requires pending or not_observed",

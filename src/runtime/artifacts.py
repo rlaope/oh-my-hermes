@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..context_safety import build_coding_progress_reporting_policy
+from ..executor_progress import validate_progress_binding, validate_progress_event, validate_progress_report
 from ..harness_quality import build_harness_progress
 from ..local_store import (
     atomic_write_json,
@@ -537,29 +538,55 @@ def show_wrapper_session_record(paths: OmhPaths, session_id: str) -> dict[str, A
 
 def _show_executor_progress(target_dir: Path) -> dict[str, Any]:
     progress_dir = target_dir / "executor_progress"
-    binding = read_json_object(progress_dir / "binding.json") if (progress_dir / "binding.json").exists() else None
+    raw_binding = read_json_object(progress_dir / "binding.json") if (progress_dir / "binding.json").exists() else None
+    binding_errors = validate_progress_binding(raw_binding) if isinstance(raw_binding, dict) else []
+    binding = raw_binding if isinstance(raw_binding, dict) and not binding_errors else {}
     events, event_errors = read_jsonl_objects(progress_dir / "events.jsonl")
     reports, report_errors = read_jsonl_objects(progress_dir / "reports.jsonl")
-    binding_id = str(binding.get("binding_id", "")) if isinstance(binding, dict) else ""
-    matching_events = [event for event in events if str(event.get("binding_id", "")) == binding_id]
-    matching_reports = [report for report in reports if str(report.get("binding_id", "")) == binding_id]
+    binding_id = str(binding.get("binding_id", ""))
+    matching_events = [event for event in events if str(event.get("binding_id", "")) == binding_id and not validate_progress_event(event)]
+    matching_reports = [report for report in reports if str(report.get("binding_id", "")) == binding_id and not validate_progress_report(report)]
     result = {
         "schema_version": "omh_executor_progress_show/v1",
         "diagnostic_only": True,
-        "state": _executor_progress_show_state(target_dir, binding if isinstance(binding, dict) else {}),
+        "state": _executor_progress_show_state(target_dir, binding),
         "binding": binding,
-        "latest_event": matching_events[-1] if matching_events else {},
-        "latest_report": matching_reports[-1] if matching_reports else {},
+        "latest_event": _compact_executor_progress_event(matching_events[-1]) if matching_events else {},
+        "latest_report": _compact_executor_progress_report(matching_reports[-1]) if matching_reports else {},
         "claim_boundary": (
             "Runtime show exposes diagnostic progress metadata. It is not result, verification, review, CI, "
             "merge-readiness, or merge evidence."
         ),
     }
+    if binding_errors:
+        result["binding_errors"] = binding_errors
     if event_errors:
         result["event_errors"] = event_errors
     if report_errors:
         result["report_errors"] = report_errors
     return result
+
+
+def _compact_executor_progress_event(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "binding_id": event.get("binding_id", ""),
+        "executor_profile": event.get("executor_profile", ""),
+        "event_type": event.get("event_type", ""),
+        "status": event.get("status", ""),
+        "summary": event.get("summary", ""),
+        "observed_at": event.get("observed_at", ""),
+        "claim_boundary": event.get("claim_boundary", ""),
+    }
+
+
+def _compact_executor_progress_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "event_type": report.get("event_type", ""),
+        "status": report.get("status", ""),
+        "summary": report.get("summary", ""),
+        "reported_at": report.get("reported_at", ""),
+        "claim_boundary": report.get("claim_boundary", ""),
+    }
 
 
 def _executor_progress_show_state(target_dir: Path, binding: dict[str, Any]) -> str:
