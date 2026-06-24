@@ -1441,12 +1441,17 @@ class CliTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
 
-            status, stdout, stderr = run_cli(base + ["setup", "--interactive"], output_json=False)
+            with patch(
+                "omh.commands.setup._try_star_github_repo",
+                return_value={"ok": True, "reason": "starred_or_already_starred"},
+            ) as star:
+                status, stdout, stderr = run_cli(base + ["setup", "--interactive"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup", stdout)
             self.assertIn("OMH setup complete.", stdout)
+            star.assert_called_once_with()
             profile = json.loads((omh_home / "setup-profile.json").read_text(encoding="utf-8"))
             self.assertEqual(profile["selected_categories"], ["codex-lifecycle"])
             self.assertEqual(profile["default_executor"], "codex")
@@ -7215,9 +7220,28 @@ class CliTests(unittest.TestCase):
             setup_commands._offer_github_star_before_setup(language="ko", use_color=False)
 
         ask.assert_called_once()
-        self.assertEqual(ask.call_args.kwargs["note"], "선택 사항입니다. 어떤 답을 골라도 setup은 계속 진행됩니다.")
+        self.assertTrue(ask.call_args.kwargs["default"])
+        self.assertEqual(
+            ask.call_args.kwargs["note"],
+            "Yes를 누르면 인증된 GitHub 계정으로 star를 시도합니다. setup은 어떤 답을 골라도 계속 진행됩니다.",
+        )
         self.assertIn("GitHub에서 oh-my-hermes에 star를 눌러줄까요?", ask.call_args.args[0])
         self.assertIn("🥲 괜찮아요", output.getvalue())
+
+    def test_setup_github_star_prompt_yes_records_star(self) -> None:
+        output = io.StringIO()
+        with (
+            patch("omh.commands.setup._ask_yes_no", return_value=True),
+            patch(
+                "omh.commands.setup._try_star_github_repo",
+                return_value={"ok": True, "reason": "starred_or_already_starred"},
+            ) as star,
+            patch("sys.stdout", output),
+        ):
+            setup_commands._offer_github_star_before_setup(language="en", use_color=False)
+
+        star.assert_called_once_with()
+        self.assertIn("Thanks!", output.getvalue())
 
     def test_setup_github_star_prompt_dry_run_does_not_call_github(self) -> None:
         output = io.StringIO()

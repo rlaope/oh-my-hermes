@@ -1198,7 +1198,7 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
 def _offer_github_star_before_setup(*, language: str, use_color: bool, dry_run: bool = False) -> None:
     wants_star = _ask_yes_no(
         tr(language, "github_star_question"),
-        default=False,
+        default=True,
         use_color=use_color,
         note=tr(language, "github_star_note"),
         language=language,
