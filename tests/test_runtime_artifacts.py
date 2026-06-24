@@ -1100,6 +1100,24 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertNotIn("unsafe progress summary", rendered)
             self.assertNotIn("unsafe report summary", rendered)
 
+    def test_show_run_and_export_report_malformed_executor_progress_binding(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            progress_dir = paths.runtime_runs_dir / run["run_id"] / "executor_progress"
+            progress_dir.mkdir(parents=True)
+            (progress_dir / "binding.json").write_text("{not json", encoding="utf-8")
+
+            shown = show_run(paths, run["run_id"])
+            exported = export_runtime(paths, redacted=True, run_id=run["run_id"])
+            rendered = json.dumps({"shown": shown, "exported": exported})
+
+            self.assertEqual(shown["executor_progress"]["state"], "diagnostic_error")
+            self.assertEqual(shown["executor_progress"]["binding"], {})
+            self.assertIn("binding_errors", shown["executor_progress"])
+            self.assertIn("binding_errors", rendered)
+            self.assertNotIn("{not json", rendered)
+
     def test_status_artifact_validators_reject_contradictory_success_claims(self) -> None:
         self.assertIn(
             "review observed=false requires pending or not_observed",

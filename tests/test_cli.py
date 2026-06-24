@@ -17,6 +17,7 @@ from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.config_adapter import external_dirs
+from omh.paths import resolve_paths
 from omh.routing.intent import classify_omh_quality_intent
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 class CliTests(unittest.TestCase):
@@ -8310,6 +8311,51 @@ class CliTests(unittest.TestCase):
             exported = json.loads(stdout)
             self.assertTrue(exported["redacted"])
             self.assertEqual(exported["runs"][0]["wrapper"]["completion_status"], "completed")
+
+    def test_runtime_progress_observe_reports_malformed_binding_without_traceback(self) -> None:
+        with TemporaryDirectory() as tmp:
+            omh_home = Path(tmp) / ".omh"
+            hermes_home = Path(tmp) / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                    "--status",
+                    "started",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run = json.loads(stdout)["run"]
+            paths = resolve_paths(omh_home, hermes_home)
+            progress_dir = paths.runtime_runs_dir / run["run_id"] / "executor_progress"
+            progress_dir.mkdir(parents=True)
+            (progress_dir / "binding.json").write_text("{not json", encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "runtime",
+                    "progress-observe",
+                    "--run",
+                    run["run_id"],
+                    "--event",
+                    "diff_started",
+                    "--summary",
+                    "Codex started editing files.",
+                ]
+            )
+
+            self.assertNotEqual(status, 0)
+            self.assertEqual(stdout, "")
+            self.assertIn("executor progress binding could not be read", stderr)
+            self.assertNotIn("Traceback", stderr)
 
     def test_docs_workflows_command_prints_writes_and_checks_generated_reference(self) -> None:
         status, stdout, stderr = run_cli(["docs", "workflows"])

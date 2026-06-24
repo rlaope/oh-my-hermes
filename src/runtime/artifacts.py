@@ -538,8 +538,8 @@ def show_wrapper_session_record(paths: OmhPaths, session_id: str) -> dict[str, A
 
 def _show_executor_progress(target_dir: Path) -> dict[str, Any]:
     progress_dir = target_dir / "executor_progress"
-    raw_binding = read_json_object(progress_dir / "binding.json") if (progress_dir / "binding.json").exists() else None
-    binding_errors = validate_progress_binding(raw_binding) if isinstance(raw_binding, dict) else []
+    raw_binding, binding_read_error = read_json_object_result(progress_dir / "binding.json")
+    binding_errors = [binding_read_error] if binding_read_error else validate_progress_binding(raw_binding) if isinstance(raw_binding, dict) else []
     binding = raw_binding if isinstance(raw_binding, dict) and not binding_errors else {}
     events, event_errors = read_jsonl_objects(progress_dir / "events.jsonl")
     reports, report_errors = read_jsonl_objects(progress_dir / "reports.jsonl")
@@ -549,7 +549,7 @@ def _show_executor_progress(target_dir: Path) -> dict[str, Any]:
     result = {
         "schema_version": "omh_executor_progress_show/v1",
         "diagnostic_only": True,
-        "state": _executor_progress_show_state(target_dir, binding),
+        "state": "diagnostic_error" if binding_errors else _executor_progress_show_state(target_dir, binding),
         "binding": binding,
         "latest_event": _compact_executor_progress_event(matching_events[-1]) if matching_events else {},
         "latest_report": _compact_executor_progress_report(matching_reports[-1]) if matching_reports else {},

@@ -948,7 +948,7 @@ def _record_session_progress(
             evidence_refs=list(evidence_refs or []),
         )
         observe_executor_progress(paths, binding, signal)
-    except ExecutorProgressError as exc:
+    except (ExecutorProgressError, OSError, ValueError) as exc:
         _append_executor_event(
             paths,
             str(session.get("session_id", "")),

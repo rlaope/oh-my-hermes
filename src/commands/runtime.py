@@ -378,7 +378,10 @@ def cmd_runtime_progress_bind(args: argparse.Namespace) -> int:
 def cmd_runtime_progress_observe(args: argparse.Namespace) -> int:
     paths = _paths(args)
     target_type, target_id = _progress_target(args)
-    binding = read_progress_binding(paths, target_type, target_id)
+    try:
+        binding = read_progress_binding(paths, target_type, target_id)
+    except (OSError, ValueError, ExecutorProgressError) as exc:
+        raise OmhError(f"executor progress binding could not be read: {exc}") from exc
     if not binding:
         raise OmhError(f"executor progress binding not found for {target_type}: {target_id}")
     try:
@@ -402,7 +405,7 @@ def cmd_runtime_progress_observe(args: argparse.Namespace) -> int:
             signal,
             source_language=args.source_language or "",
         )
-    except (OSError, ExecutorProgressError) as exc:
+    except (OSError, ValueError, ExecutorProgressError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json(payload)
     return 0
