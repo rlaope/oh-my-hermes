@@ -823,7 +823,8 @@ def _compact_report_projection(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def _binding_target(binding: dict[str, Any]) -> dict[str, str]:
-    target = binding.get("target") if isinstance(binding.get("target"), dict) else {}
+    target_value = binding.get("target")
+    target = target_value if isinstance(target_value, dict) else {}
     return {
         "type": str(binding.get("target_type") or target.get("type") or ""),
         "id": str(binding.get("target_id") or target.get("id") or ""),

@@ -905,7 +905,8 @@ def _valid_progress_binding(binding: dict[str, Any], expected_target_type: str) 
         return False
     if binding.get("schema_version") != "omh_executor_progress_binding/v1":
         return False
-    target = binding.get("target") if isinstance(binding.get("target"), dict) else {}
+    target_value = binding.get("target")
+    target = target_value if isinstance(target_value, dict) else {}
     target_type = str(binding.get("target_type") or target.get("type") or "")
     target_id = str(binding.get("target_id") or target.get("id") or "")
     profile = str(binding.get("executor_profile") or binding.get("executor") or "")
