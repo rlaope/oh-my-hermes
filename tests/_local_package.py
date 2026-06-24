@@ -9,7 +9,7 @@ def load_local_package() -> None:
     if "omh" in sys.modules:
         return
 
-    package_dir = Path(__file__).resolve().parents[1] / "src" / "omh"
+    package_dir = Path(__file__).resolve().parents[1] / "src"
     spec = importlib.util.spec_from_file_location(
         "omh",
         package_dir / "__init__.py",

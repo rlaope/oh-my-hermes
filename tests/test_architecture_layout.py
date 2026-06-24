@@ -38,17 +38,34 @@ from omh.wrapper import sessions as wrapper_sessions_module
 
 
 class ArchitectureLayoutTests(unittest.TestCase):
-    def test_src_root_contains_only_package_directory(self) -> None:
+    def test_src_root_uses_direct_domain_packages(self) -> None:
         src_root = Path(__file__).resolve().parents[1] / "src"
 
         ignored_generated = {"__pycache__"}
-        entries = sorted(
+        entries = {
             path.name
             for path in src_root.iterdir()
             if path.name not in ignored_generated and not path.name.endswith(".egg-info")
-        )
-        self.assertEqual(entries, ["omh"])
-        self.assertTrue((src_root / "omh" / "__init__.py").is_file())
+        }
+        self.assertNotIn("omh", entries)
+        self.assertTrue((src_root / "__init__.py").is_file())
+        for package_name in (
+            "capabilities",
+            "catalogs",
+            "coding",
+            "commands",
+            "core",
+            "install",
+            "plugin_bundle",
+            "profiles",
+            "routing",
+            "runtime",
+            "skills",
+            "workflows",
+            "wrapper",
+        ):
+            with self.subTest(package_name=package_name):
+                self.assertTrue((src_root / package_name / "__init__.py").is_file())
 
     def test_compatibility_adapters_point_to_deep_modules(self) -> None:
         self.assertIs(cli.main, command_main.main)
@@ -68,17 +85,52 @@ class ArchitectureLayoutTests(unittest.TestCase):
     def test_root_compatibility_facades_stay_thin(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         facades = {
-            "src/omh/chat_router.py": "from .routing.chat import *  # noqa: F401,F403",
-            "src/omh/recommend.py": "from .routing.recommend import *  # noqa: F401,F403",
-            "src/omh/runtime_artifacts.py": "from .runtime.artifacts import *  # noqa: F401,F403",
-            "src/omh/runtime_records.py": "from .runtime.records import *  # noqa: F401,F403",
-            "src/omh/wrapper_contract.py": "from .wrapper.contract import *  # noqa: F401,F403",
-            "src/omh/wrapper_sessions.py": "from .wrapper.sessions import *  # noqa: F401,F403",
-            "src/omh/coding_lifecycle.py": "from .wrapper.lifecycle import *  # noqa: F401,F403",
-            "src/omh/playbooks.py": "from .catalogs.playbooks import *  # noqa: F401,F403",
-            "src/omh/roles.py": "from .catalogs.roles import *  # noqa: F401,F403",
-            "src/omh/setup_profiles.py": "from .profiles.setup import *  # noqa: F401,F403",
-            "src/omh/team_profiles.py": "from .profiles.team import *  # noqa: F401,F403",
+            "src/chat_router.py": "from .routing.chat import *  # noqa: F401,F403",
+            "src/recommend.py": "from .routing.recommend import *  # noqa: F401,F403",
+            "src/runtime_artifacts.py": "from .runtime.artifacts import *  # noqa: F401,F403",
+            "src/runtime_records.py": "from .runtime.records import *  # noqa: F401,F403",
+            "src/wrapper_contract.py": "from .wrapper.contract import *  # noqa: F401,F403",
+            "src/wrapper_sessions.py": "from .wrapper.sessions import *  # noqa: F401,F403",
+            "src/coding_lifecycle.py": "from .wrapper.lifecycle import *  # noqa: F401,F403",
+            "src/playbooks.py": "from .catalogs.playbooks import *  # noqa: F401,F403",
+            "src/roles.py": "from .catalogs.roles import *  # noqa: F401,F403",
+            "src/setup_profiles.py": "from .profiles.setup import *  # noqa: F401,F403",
+            "src/team_profiles.py": "from .profiles.team import *  # noqa: F401,F403",
+            "src/materials.py": "from .workflows.materials import *  # noqa: F401,F403",
+            "src/operations.py": "from .workflows.operations import *  # noqa: F401,F403",
+            "src/paper_learning.py": "from .workflows.paper_learning import *  # noqa: F401,F403",
+            "src/source_finder.py": "from .workflows.source_finder import *  # noqa: F401,F403",
+            "src/visual_summary.py": "from .workflows.visual_summary import *  # noqa: F401,F403",
+            "src/research_department.py": "from .workflows.research_department import *  # noqa: F401,F403",
+            "src/hermes_ops.py": "from .workflows.hermes_ops import *  # noqa: F401,F403",
+            "src/goal_loop.py": "from .workflows.goal_loop import *  # noqa: F401,F403",
+            "src/goal_ledger.py": "from .workflows.goal_ledger import *  # noqa: F401,F403",
+            "src/loopability.py": "from .workflows.loopability import *  # noqa: F401,F403",
+            "src/memory.py": "from .workflows.memory import *  # noqa: F401,F403",
+            "src/workflow_learning.py": "from .workflows.workflow_learning import *  # noqa: F401,F403",
+            "src/operator_productivity.py": "from .workflows.operator_productivity import *  # noqa: F401,F403",
+            "src/use_cases.py": "from .workflows.use_cases import *  # noqa: F401,F403",
+            "src/observation_journal.py": "from .workflows.observation_journal import *  # noqa: F401,F403",
+            "src/hermes_planning.py": "from .workflows.hermes_planning import *  # noqa: F401,F403",
+            "src/coding_contracts.py": "from .coding.coding_contracts import *  # noqa: F401,F403",
+            "src/coding_delegation.py": "from .coding.coding_delegation import *  # noqa: F401,F403",
+            "src/codex_progress.py": "from .coding.codex_progress import *  # noqa: F401,F403",
+            "src/context_safety.py": "from .coding.context_safety import *  # noqa: F401,F403",
+            "src/executor_progress.py": "from .coding.executor_progress import *  # noqa: F401,F403",
+            "src/executor_readiness.py": "from .coding.executor_readiness import *  # noqa: F401,F403",
+            "src/executors.py": "from .coding.executors import *  # noqa: F401,F403",
+            "src/isolation.py": "from .coding.isolation import *  # noqa: F401,F403",
+            "src/team_readiness.py": "from .coding.team_readiness import *  # noqa: F401,F403",
+            "src/work_reporting.py": "from .coding.work_reporting import *  # noqa: F401,F403",
+            "src/worktree_creator.py": "from .coding.worktree_creator import *  # noqa: F401,F403",
+            "src/installer.py": "from .install.installer import *  # noqa: F401,F403",
+            "src/manifest.py": "from .install.manifest import *  # noqa: F401,F403",
+            "src/plugin_pack.py": "from .install.plugin_pack import *  # noqa: F401,F403",
+            "src/plugin_observations.py": "from .install.plugin_observations import *  # noqa: F401,F403",
+            "src/config_adapter.py": "from .install.config_adapter import *  # noqa: F401,F403",
+            "src/command_path.py": "from .install.command_path import *  # noqa: F401,F403",
+            "src/release_install_smoke.py": "from .install.release_install_smoke import *  # noqa: F401,F403",
+            "src/release_smoke_core.py": "from .install.release_smoke_core import *  # noqa: F401,F403",
         }
         for relative_path, import_line in facades.items():
             with self.subTest(relative_path=relative_path):

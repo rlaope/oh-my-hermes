@@ -34,8 +34,10 @@ packages = [
   "omh",
   "omh.capabilities",
   "omh.catalogs",
+  "omh.coding",
   "omh.commands",
   "omh.core",
+  "omh.install",
   "omh.plugin_bundle",
   "omh.plugin_bundle.omh",
   "omh.plugin_bundle.omh.hooks",
@@ -45,11 +47,29 @@ packages = [
   "omh.routing",
   "omh.runtime",
   "omh.skills",
+  "omh.workflows",
   "omh.wrapper",
 ]
 
 [tool.setuptools.package-dir]
-"" = "src"
+omh = "src"
+"omh.capabilities" = "src/capabilities"
+"omh.catalogs" = "src/catalogs"
+"omh.coding" = "src/coding"
+"omh.commands" = "src/commands"
+"omh.core" = "src/core"
+"omh.install" = "src/install"
+"omh.plugin_bundle" = "src/plugin_bundle"
+"omh.plugin_bundle.omh" = "src/plugin_bundle/omh"
+"omh.plugin_bundle.omh.hooks" = "src/plugin_bundle/omh/hooks"
+"omh.plugin_bundle.omh.references" = "src/plugin_bundle/omh/references"
+"omh.plugin_bundle.omh.tools" = "src/plugin_bundle/omh/tools"
+"omh.profiles" = "src/profiles"
+"omh.routing" = "src/routing"
+"omh.runtime" = "src/runtime"
+"omh.skills" = "src/skills"
+"omh.workflows" = "src/workflows"
+"omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]

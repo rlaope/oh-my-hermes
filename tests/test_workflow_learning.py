@@ -153,7 +153,7 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(ready_proposal["regression_gate"]["replay_status"], "passed")
             self.assertNotEqual(ready_proposal["proposal_id"], no_regression_proposal["proposal_id"])
             self.assertEqual(ready_proposal["regression_gate"]["snapshot"][0]["status"], "passed")
-            self.assertIn("src/omh/workflow_learning.py", ready_proposal["target"]["source_files"])
+            self.assertIn("src/workflows/workflow_learning.py", ready_proposal["target"]["source_files"])
             validate_improvement_patch_proposal(ready_proposal, candidate=approved_without_regression)
             raw_proposal = json.loads(json.dumps(ready_proposal))
             raw_proposal["debug"] = {"event_json": "RAW PATCH EVENT SHOULD FAIL"}

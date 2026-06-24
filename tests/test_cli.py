@@ -147,7 +147,7 @@ class CliTests(unittest.TestCase):
                 "--source",
                 "discord",
                 "--json",
-                "what does OMH do in src/omh/routing/catalog_questions.py?",
+                "what does OMH do in src/routing/catalog_questions.py?",
             ],
             output_json=False,
         )
@@ -4196,7 +4196,7 @@ class CliTests(unittest.TestCase):
             "what command should I run to verify installation?",
             "what can OMH do to install itself?",
             "what skills are needed to debug this Python error?",
-            "what does OMH do in src/omh/routing/catalog_questions.py?",
+            "what does OMH do in src/routing/catalog_questions.py?",
             "explain what OMH does in this README section",
             "search docs/WORKFLOWS.md for loop",
             "show img-summary in README.md",
@@ -5444,7 +5444,7 @@ class CliTests(unittest.TestCase):
                     "--force-record",
                     "--executor",
                     "codex",
-                    "implement safe runtime feature in src/omh/runtime/artifacts.py without overclaiming",
+                    "implement safe runtime feature in src/runtime/artifacts.py without overclaiming",
                 ]
             )
             self.assertEqual(stderr, "")
@@ -5688,7 +5688,7 @@ class CliTests(unittest.TestCase):
             raw_log = "\n".join(
                 [
                     json.dumps({"type": "tool_call", "tool": "rg", "args": "rg codex tests"}),
-                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/codex_progress.py"}),
+                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/coding/codex_progress.py"}),
                     json.dumps({"type": "reasoning", "analysis": "do not expose hidden reasoning"}),
                     json.dumps({"role": "assistant", "content": "I changed files and will run tests."}),
                 ]
@@ -5972,7 +5972,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
-            hostile = "implement cleanup of duplicated routing code in src/omh/routing/policy.py with secret-token-123"
+            hostile = "implement cleanup of duplicated routing code in src/routing/policy.py with secret-token-123"
 
             status, stdout, stderr = run_cli(
                 [
@@ -6161,7 +6161,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement risky status migration in src/omh/runtime/status.py",
+                    "implement risky status migration in src/runtime/status.py",
                 ]
             )
 
@@ -6230,7 +6230,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement risky status migration in src/omh/runtime/status.py",
+                    "implement risky status migration in src/runtime/status.py",
                 ]
             )
             self.assertEqual(status, 0)
@@ -6495,7 +6495,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement status badge in src/omh/runtime/status.py",
+                    "implement status badge in src/runtime/status.py",
                 ]
             )
             self.assertEqual(stderr, "")

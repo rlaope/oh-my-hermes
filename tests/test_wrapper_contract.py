@@ -222,7 +222,7 @@ class WrapperContractTests(unittest.TestCase):
             write_setup_profile(paths, default_executor="codex")
 
             payload = build_chat_interaction_payload(
-                "implement a focused parser fix in src/omh/parser.py and update tests",
+                "implement a focused parser fix in src/parser.py and update tests",
                 source="discord",
                 mode="delegate",
                 paths=paths,
@@ -241,7 +241,7 @@ class WrapperContractTests(unittest.TestCase):
             write_setup_profile(paths, default_executor="codex")
 
             payload = build_chat_interaction_payload(
-                "implement a focused parser fix in src/omh/parser.py and update tests",
+                "implement a focused parser fix in src/parser.py and update tests",
                 source="discord",
                 mode="delegate",
                 executor_target="claude-code",
@@ -991,7 +991,7 @@ class WrapperContractTests(unittest.TestCase):
             "what command should I run to verify installation?",
             "what can OMH do to install itself?",
             "what skills are needed to debug this Python error?",
-            "what does OMH do in src/omh/routing/catalog_questions.py?",
+            "what does OMH do in src/routing/catalog_questions.py?",
             "explain what OMH does in this README section",
             "search docs/WORKFLOWS.md for loop",
             "show img-summary in README.md",

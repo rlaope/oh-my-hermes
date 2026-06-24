@@ -67,9 +67,12 @@ Chat user
 ## Package Layout
 
 ```text
-src/omh/
+src/
+  __init__.py
+  cli.py                      # compatibility adapter to commands/main.py
   chat_router.py              # compatibility adapter to routing/chat.py
-  cli.py                     # compatibility adapter to commands/main.py
+  recommend.py                # compatibility adapter to routing/recommend.py
+
   commands/
     main.py                  # parser assembly and top-level error handling
     chat.py
@@ -82,27 +85,58 @@ src/omh/
     runtime.py
     setup.py
     state.py
-  coding_delegation.py
-  coding_lifecycle.py        # compatibility adapter to wrapper/lifecycle.py
-  config_adapter.py
+
+  routing/
+    chat.py
+    intent.py
+    localization.py
+    policy.py
+    recommend.py
+    task_cards.py
+
+  workflows/
+    materials.py
+    operations.py
+    paper_learning.py
+    source_finder.py
+    visual_summary.py
+    research_department.py
+    hermes_ops.py
+    goal_loop.py
+    memory.py
+    workflow_learning.py
+    use_cases.py
+
+  coding/
+    coding_contracts.py
+    coding_delegation.py
+    codex_progress.py
+    executor_progress.py
+    executor_readiness.py
+    executors.py
+    isolation.py
+    team_readiness.py
+    worktree_creator.py
+
+  install/
+    command_path.py
+    config_adapter.py
+    installer.py
+    manifest.py
+    plugin_pack.py
+    plugin_observations.py
+    release_install_smoke.py
+    release_smoke_core.py
+
   converter.py
   doctor.py
-  hermes_planning.py
-  installer.py
-  manifest.py
   paths.py
   playbooks.py               # compatibility adapter to catalogs/playbooks.py
   catalogs/
     playbooks.py
     roles.py
   ingress.py
-  recommend.py                # compatibility adapter to routing/recommend.py
   roles.py                   # compatibility adapter to catalogs/roles.py
-  routing/
-    chat.py
-    localization.py
-    policy.py
-    recommend.py
   runtime_artifacts.py        # compatibility adapter to runtime/artifacts.py
   runtime_records.py          # compatibility adapter to runtime/records.py
   runtime/
@@ -118,8 +152,13 @@ src/omh/
   wrapper_sessions.py         # compatibility adapter to wrapper/sessions.py
   wrapper/
     contract.py
+    executor_sessions.py
+    hermes_runtime.py
     lifecycle.py
+    native_commands.py
+    route_hints.py
     sessions.py
+    worktree_binding.py
   skill_pack.py
   core/
   skills/
@@ -560,8 +599,8 @@ specialist lane result, the recorded result stays `not_observed` or
 
 When a harness is added, removed, or renamed, update these surfaces together:
 
-- `src/omh/skills/catalog.py`
-- `src/omh/skills/render.py`
+- `src/skills/catalog.py`
+- `src/skills/render.py`
 - `docs/APPLICATION_CASES.md`
 - `tests/test_router_content.py`
 

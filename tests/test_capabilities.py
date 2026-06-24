@@ -249,12 +249,20 @@ class CapabilityManifestTests(unittest.TestCase):
     def test_package_metadata_includes_capabilities_package(self) -> None:
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
         packages = set(pyproject["tool"]["setuptools"]["packages"])
+        package_dir = pyproject["tool"]["setuptools"]["package-dir"]
 
         self.assertIn("omh.capabilities", packages)
-        self.assertEqual(pyproject["tool"]["setuptools"]["package-dir"], {"": "src"})
+        self.assertIn("omh.coding", packages)
+        self.assertIn("omh.install", packages)
+        self.assertIn("omh.workflows", packages)
+        self.assertEqual(package_dir["omh"], "src")
+        self.assertEqual(package_dir["omh.capabilities"], "src/capabilities")
+        self.assertEqual(package_dir["omh.coding"], "src/coding")
+        self.assertEqual(package_dir["omh.install"], "src/install")
+        self.assertEqual(package_dir["omh.workflows"], "src/workflows")
 
     def test_runtime_topology_is_deferred_from_first_pr(self) -> None:
-        self.assertFalse(Path("src/omh/capabilities/runtime_topology.py").exists())
+        self.assertFalse(Path("src/capabilities/runtime_topology.py").exists())
         payload = capability_snapshot()
         exported = json.dumps(payload, sort_keys=True)
 

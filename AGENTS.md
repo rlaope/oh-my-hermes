@@ -70,7 +70,7 @@ PR without the chat history.
   runs own handoff, dispatch, execution, verification, review, CI, and merge
   evidence.
 - Generated skills come from catalog data. Prefer updating
-  `src/omh/skills/catalog.py` and regenerating docs over hand-editing generated
+  `src/skills/catalog.py` and regenerating docs over hand-editing generated
   output.
 
 ## Coding Style
