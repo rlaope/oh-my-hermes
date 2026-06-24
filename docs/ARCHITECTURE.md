@@ -68,10 +68,9 @@ Chat user
 
 ```text
 src/
-  __init__.py
-  cli.py                      # compatibility adapter to commands/main.py
-  chat_router.py              # compatibility adapter to routing/chat.py
-  recommend.py                # compatibility adapter to routing/recommend.py
+  cli/                       # compatibility package to commands/main.py
+  chat_router/               # compatibility package to routing/chat.py
+  recommend/                 # compatibility package to routing/recommend.py
 
   commands/
     main.py                  # parser assembly and top-level error handling
@@ -128,28 +127,53 @@ src/
     release_install_smoke.py
     release_smoke_core.py
 
-  converter.py
-  doctor.py
-  paths.py
-  playbooks.py               # compatibility adapter to catalogs/playbooks.py
+  maintenance/
+    doctor.py
+    probe.py
+    release.py
+
+  mcp/
+    bridge.py
+
+  quality/
+    capability_roadmap.py
+    grounded_score.py
+    harness_quality.py
+    parity.py
+
+  surfaces/
+    context.py
+    demo.py
+    hud.py
+    menubar_app.py
+    menubar_status.py
+    quickstart.py
+
+  system/
+    hashutil.py
+    ingress.py
+    local_store.py
+    paths.py
+    targets.py
+    workflow_state.py
+
+  playbooks/                 # compatibility package to catalogs/playbooks.py
   catalogs/
     playbooks.py
     roles.py
-  ingress.py
-  roles.py                   # compatibility adapter to catalogs/roles.py
-  runtime_artifacts.py        # compatibility adapter to runtime/artifacts.py
-  runtime_records.py          # compatibility adapter to runtime/records.py
+  roles/                     # compatibility package to catalogs/roles.py
+  runtime_artifacts/         # compatibility package to runtime/artifacts.py
+  runtime_records/           # compatibility package to runtime/records.py
   runtime/
     artifacts.py
     records.py
-  snippet.py
-  setup_profiles.py          # compatibility adapter to profiles/setup.py
-  team_profiles.py           # compatibility adapter to profiles/team.py
+  setup_profiles/            # compatibility package to profiles/setup.py
+  team_profiles/             # compatibility package to profiles/team.py
   profiles/
     setup.py
     team.py
-  wrapper_contract.py         # compatibility adapter to wrapper/contract.py
-  wrapper_sessions.py         # compatibility adapter to wrapper/sessions.py
+  wrapper_contract/          # compatibility package to wrapper/contract.py
+  wrapper_sessions/          # compatibility package to wrapper/sessions.py
   wrapper/
     contract.py
     executor_sessions.py
@@ -159,7 +183,6 @@ src/
     route_hints.py
     sessions.py
     worktree_binding.py
-  skill_pack.py
   core/
   skills/
     catalog.py

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from .. import __version__
+from ..version import __version__
 from ..installer import OmhError
 from ..release import (
     DEFAULT_HERMES_SKILL,

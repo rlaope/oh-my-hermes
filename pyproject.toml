@@ -33,43 +33,195 @@ Repository = "https://github.com/rlaope/oh-my-hermes"
 packages = [
   "omh",
   "omh.capabilities",
+  "omh.capability_roadmap",
   "omh.catalogs",
+  "omh.chat_router",
+  "omh.cli",
+  "omh.codex_progress",
   "omh.coding",
+  "omh.coding_contracts",
+  "omh.coding_delegation",
+  "omh.coding_lifecycle",
+  "omh.command_path",
   "omh.commands",
+  "omh.config_adapter",
+  "omh.context",
+  "omh.context_safety",
+  "omh.converter",
   "omh.core",
+  "omh.demo",
+  "omh.doctor",
+  "omh.executor_progress",
+  "omh.executor_readiness",
+  "omh.executors",
+  "omh.goal_ledger",
+  "omh.goal_loop",
+  "omh.grounded_score",
+  "omh.harness_quality",
+  "omh.hashutil",
+  "omh.hermes_ops",
+  "omh.hermes_planning",
+  "omh.hud",
+  "omh.ingress",
   "omh.install",
+  "omh.installer",
+  "omh.isolation",
+  "omh.local_store",
+  "omh.loopability",
+  "omh.maintenance",
+  "omh.manifest",
+  "omh.materials",
+  "omh.mcp",
+  "omh.mcp_bridge",
+  "omh.memory",
+  "omh.menubar_app",
+  "omh.menubar_status",
+  "omh.observation_journal",
+  "omh.operations",
+  "omh.operator_productivity",
+  "omh.paper_learning",
+  "omh.parity",
+  "omh.paths",
+  "omh.playbooks",
   "omh.plugin_bundle",
   "omh.plugin_bundle.omh",
   "omh.plugin_bundle.omh.hooks",
   "omh.plugin_bundle.omh.references",
   "omh.plugin_bundle.omh.tools",
+  "omh.plugin_observations",
+  "omh.plugin_pack",
+  "omh.probe",
   "omh.profiles",
+  "omh.quality",
+  "omh.quickstart",
+  "omh.recommend",
+  "omh.release",
+  "omh.release_install_smoke",
+  "omh.release_smoke_core",
+  "omh.research_department",
+  "omh.roles",
   "omh.routing",
   "omh.runtime",
+  "omh.runtime_artifacts",
+  "omh.runtime_records",
+  "omh.setup_profiles",
+  "omh.skill_pack",
   "omh.skills",
+  "omh.snippet",
+  "omh.source_finder",
+  "omh.surfaces",
+  "omh.system",
+  "omh.targets",
+  "omh.team_profiles",
+  "omh.team_readiness",
+  "omh.use_cases",
+  "omh.version",
+  "omh.visual_summary",
+  "omh.work_reporting",
+  "omh.workflow_learning",
+  "omh.workflow_state",
   "omh.workflows",
+  "omh.worktree_creator",
   "omh.wrapper",
+  "omh.wrapper_contract",
+  "omh.wrapper_sessions",
 ]
 
 [tool.setuptools.package-dir]
 omh = "src"
 "omh.capabilities" = "src/capabilities"
+"omh.capability_roadmap" = "src/capability_roadmap"
 "omh.catalogs" = "src/catalogs"
+"omh.chat_router" = "src/chat_router"
+"omh.cli" = "src/cli"
+"omh.codex_progress" = "src/codex_progress"
 "omh.coding" = "src/coding"
+"omh.coding_contracts" = "src/coding_contracts"
+"omh.coding_delegation" = "src/coding_delegation"
+"omh.coding_lifecycle" = "src/coding_lifecycle"
+"omh.command_path" = "src/command_path"
 "omh.commands" = "src/commands"
+"omh.config_adapter" = "src/config_adapter"
+"omh.context" = "src/context"
+"omh.context_safety" = "src/context_safety"
+"omh.converter" = "src/converter"
 "omh.core" = "src/core"
+"omh.demo" = "src/demo"
+"omh.doctor" = "src/doctor"
+"omh.executor_progress" = "src/executor_progress"
+"omh.executor_readiness" = "src/executor_readiness"
+"omh.executors" = "src/executors"
+"omh.goal_ledger" = "src/goal_ledger"
+"omh.goal_loop" = "src/goal_loop"
+"omh.grounded_score" = "src/grounded_score"
+"omh.harness_quality" = "src/harness_quality"
+"omh.hashutil" = "src/hashutil"
+"omh.hermes_ops" = "src/hermes_ops"
+"omh.hermes_planning" = "src/hermes_planning"
+"omh.hud" = "src/hud"
+"omh.ingress" = "src/ingress"
 "omh.install" = "src/install"
+"omh.installer" = "src/installer"
+"omh.isolation" = "src/isolation"
+"omh.local_store" = "src/local_store"
+"omh.loopability" = "src/loopability"
+"omh.maintenance" = "src/maintenance"
+"omh.manifest" = "src/manifest"
+"omh.materials" = "src/materials"
+"omh.mcp" = "src/mcp"
+"omh.mcp_bridge" = "src/mcp_bridge"
+"omh.memory" = "src/memory"
+"omh.menubar_app" = "src/menubar_app"
+"omh.menubar_status" = "src/menubar_status"
+"omh.observation_journal" = "src/observation_journal"
+"omh.operations" = "src/operations"
+"omh.operator_productivity" = "src/operator_productivity"
+"omh.paper_learning" = "src/paper_learning"
+"omh.parity" = "src/parity"
+"omh.paths" = "src/paths"
+"omh.playbooks" = "src/playbooks"
 "omh.plugin_bundle" = "src/plugin_bundle"
 "omh.plugin_bundle.omh" = "src/plugin_bundle/omh"
 "omh.plugin_bundle.omh.hooks" = "src/plugin_bundle/omh/hooks"
 "omh.plugin_bundle.omh.references" = "src/plugin_bundle/omh/references"
 "omh.plugin_bundle.omh.tools" = "src/plugin_bundle/omh/tools"
+"omh.plugin_observations" = "src/plugin_observations"
+"omh.plugin_pack" = "src/plugin_pack"
+"omh.probe" = "src/probe"
 "omh.profiles" = "src/profiles"
+"omh.quality" = "src/quality"
+"omh.quickstart" = "src/quickstart"
+"omh.recommend" = "src/recommend"
+"omh.release" = "src/release"
+"omh.release_install_smoke" = "src/release_install_smoke"
+"omh.release_smoke_core" = "src/release_smoke_core"
+"omh.research_department" = "src/research_department"
+"omh.roles" = "src/roles"
 "omh.routing" = "src/routing"
 "omh.runtime" = "src/runtime"
+"omh.runtime_artifacts" = "src/runtime_artifacts"
+"omh.runtime_records" = "src/runtime_records"
+"omh.setup_profiles" = "src/setup_profiles"
+"omh.skill_pack" = "src/skill_pack"
 "omh.skills" = "src/skills"
+"omh.snippet" = "src/snippet"
+"omh.source_finder" = "src/source_finder"
+"omh.surfaces" = "src/surfaces"
+"omh.system" = "src/system"
+"omh.targets" = "src/targets"
+"omh.team_profiles" = "src/team_profiles"
+"omh.team_readiness" = "src/team_readiness"
+"omh.use_cases" = "src/use_cases"
+"omh.version" = "src/version"
+"omh.visual_summary" = "src/visual_summary"
+"omh.work_reporting" = "src/work_reporting"
+"omh.workflow_learning" = "src/workflow_learning"
+"omh.workflow_state" = "src/workflow_state"
 "omh.workflows" = "src/workflows"
+"omh.worktree_creator" = "src/worktree_creator"
 "omh.wrapper" = "src/wrapper"
+"omh.wrapper_contract" = "src/wrapper_contract"
+"omh.wrapper_sessions" = "src/wrapper_sessions"
 
 [tool.setuptools.package-data]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]

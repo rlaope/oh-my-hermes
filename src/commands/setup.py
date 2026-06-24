@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - Windows compatibility guard.
     termios = None
     tty = None
 
-from .. import __version__
+from ..version import __version__
 from ..command_path import COMMAND_PATH_MISSING_NEXT_ACTION, inspect_omh_command_path
 from ..capabilities.registry import capability_summary
 from ..capabilities.skills import skill_capabilities

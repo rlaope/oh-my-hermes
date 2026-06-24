@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import importlib.util
+from importlib.machinery import ModuleSpec
 import sys
+from types import ModuleType
 from pathlib import Path
 
 
@@ -10,14 +11,13 @@ def load_local_package() -> None:
         return
 
     package_dir = Path(__file__).resolve().parents[1] / "src"
-    spec = importlib.util.spec_from_file_location(
-        "omh",
-        package_dir / "__init__.py",
-        submodule_search_locations=[str(package_dir)],
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError("failed to load local package")
-
-    module = importlib.util.module_from_spec(spec)
+    module = ModuleType("omh")
+    module.__file__ = str(package_dir)
+    module.__package__ = "omh"
+    module.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
+    module.__spec__ = ModuleSpec("omh", loader=None, is_package=True)
     sys.modules["omh"] = module
-    spec.loader.exec_module(module)
+
+    from omh.version import __version__
+
+    module.__version__ = __version__

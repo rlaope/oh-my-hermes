@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .. import __version__
+from ..version import __version__
 from ..hashutil import sha256_file
 from ..local_store import atomic_write_json, read_json_object, utc_now
 
