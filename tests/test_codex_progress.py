@@ -13,6 +13,7 @@ from omh.codex_progress import (
     build_codex_session_observation,
     summarize_codex_jsonl_text,
 )
+from omh.executor_progress import build_safe_progress_signal, infer_progress_event_type
 
 
 class CodexProgressTests(unittest.TestCase):
@@ -117,6 +118,26 @@ class CodexProgressTests(unittest.TestCase):
         self.assertNotIn("N" * 1000, rendered)
         self.assertNotIn("```", rendered)
         self.assertIn("not execution", summary["latest_progress_event"]["claim_boundary"])
+
+    def test_codex_progress_summary_can_drive_executor_progress_signal(self) -> None:
+        summary = summarize_codex_jsonl_text(
+            "\n".join(
+                [
+                    json.dumps({"type": "tool_call", "tool": "rg", "args": "rg progress"}),
+                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/executor_progress.py"}),
+                    json.dumps({"type": "reasoning", "analysis": "hidden private reasoning"}),
+                ]
+            ),
+            evidence_refs=["codex-jsonl"],
+        )
+
+        signal = build_safe_progress_signal(executor_profile="codex", codex_progress_summary=summary)
+
+        self.assertEqual(signal["executor_profile"], "codex")
+        self.assertEqual(infer_progress_event_type(signal), "diff_started")
+        rendered = json.dumps(signal)
+        self.assertNotIn("hidden private reasoning", rendered)
+        self.assertNotIn("raw", rendered)
 
     def test_nested_reasoning_does_not_influence_observable_summary(self) -> None:
         raw = json.dumps(

@@ -7,6 +7,16 @@ from typing import Any
 
 from ..context_safety import MAX_SUMMARY_CHARS, compact_context_refs, compact_progress_events, compact_visible_text
 from ..codex_progress import build_codex_session_observation
+from ..executor_progress import (
+    ExecutorProgressError,
+    build_progress_binding,
+    build_safe_progress_signal,
+    latest_progress_event,
+    latest_progress_report,
+    observe_executor_progress,
+    read_progress_binding,
+    refresh_binding_freshness,
+)
 from ..executors import CODING_EXECUTOR_TARGETS, executor_label
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, utc_now
 from ..paths import OmhPaths
@@ -135,6 +145,14 @@ def build_executor_session_status(
             status["progress_events"] = progress_events
             status["latest_progress_event"] = progress_events[-1]
             status["omitted_progress_event_count"] = omitted_progress_events
+    executor_progress = _executor_progress_status(paths, session_id)
+    if executor_progress:
+        status["executor_progress"] = executor_progress
+        latest_report = executor_progress.get("latest_report", {}) if isinstance(executor_progress.get("latest_report"), dict) else {}
+        latest_summary = str(latest_report.get("summary", "")).strip()
+        if latest_summary:
+            status["status_lines"].append(f"executor-progress: {latest_summary}")
+            status["display_status_lines"].append(latest_summary)
     if record_found and record.get("schema_version") == EXECUTOR_SESSION_SCHEMA_VERSION:
         status["record"] = record
     if record_error:
@@ -344,6 +362,18 @@ def open_executor_session(
     if observed:
         _observe_dispatch(paths, session, record, summary=summary, evidence_refs=list(evidence_refs or []))
     record = _write_executor_session(paths, record)
+    if observed:
+        _record_session_progress(
+            paths,
+            session,
+            record,
+            event_type="executor_dispatched",
+            summary=summary or "Wrapper observed opening the selected coding executor.",
+            evidence_refs=list(evidence_refs or []),
+            codex_progress_summary=codex_progress_summary,
+            codex_session_ref=codex_session_ref,
+            codex_thread_ref=codex_thread_ref,
+        )
     _append_executor_event(paths, session_id, "executor_session_opened", record)
     return {"schema_version": "executor_session_result/v1", "executor_session": record, "status": build_executor_session_status(paths, session)}
 
@@ -390,6 +420,17 @@ def attach_executor_session(
     )
     _observe_dispatch(paths, session, record, summary=summary, evidence_refs=list(evidence_refs or []))
     record = _write_executor_session(paths, record)
+    _record_session_progress(
+        paths,
+        session,
+        record,
+        event_type="executor_dispatched",
+        summary=summary or "Wrapper attached an observed executor session reference.",
+        evidence_refs=list(evidence_refs or []),
+        codex_progress_summary=codex_progress_summary,
+        codex_session_ref=codex_session_ref,
+        codex_thread_ref=codex_thread_ref,
+    )
     _append_executor_event(paths, session_id, "executor_session_attached", record)
     return {"schema_version": "executor_session_result/v1", "executor_session": record, "status": build_executor_session_status(paths, session)}
 
@@ -441,6 +482,15 @@ def record_executor_session_result(
         paths,
         session,
         patch,
+    )
+    _record_session_progress(
+        paths,
+        session,
+        record,
+        event_type=_progress_event_for_result(result),
+        summary=summary or f"Wrapper recorded executor result: {result}.",
+        evidence_refs=refs,
+        codex_progress_summary=codex_progress_summary,
     )
     _append_executor_event(paths, session_id, f"executor_session_{result}", record)
     return {"schema_version": "executor_session_result/v1", "executor_session": record, "status": build_executor_session_status(paths, session)}
@@ -496,6 +546,9 @@ def enhance_chat_response_with_executor_session(
     codex_progress = executor_status.get("codex_progress")
     if isinstance(codex_progress, dict) and codex_progress:
         session_status["codex_progress"] = codex_progress
+    executor_progress = executor_status.get("executor_progress")
+    if isinstance(executor_progress, dict) and executor_progress:
+        session_status["executor_progress"] = executor_progress
     for key in ("progress_reporting", "progress_events", "latest_progress_event", "omitted_progress_event_count"):
         value = executor_status.get(key)
         if value:
@@ -527,7 +580,15 @@ def enhance_status_card_with_executor_session(
     updated = dict(status_card)
     updated["executor_session_status"] = _executor_status_summary(executor_status)
     updated["workspace_isolation"] = executor_status.get("workspace_isolation", {})
-    for key in ("codex_session", "codex_progress", "progress_reporting", "progress_events", "latest_progress_event", "omitted_progress_event_count"):
+    for key in (
+        "codex_session",
+        "codex_progress",
+        "executor_progress",
+        "progress_reporting",
+        "progress_events",
+        "latest_progress_event",
+        "omitted_progress_event_count",
+    ):
         value = executor_status.get(key)
         if isinstance(value, (dict, list)) and value:
             updated[key] = value
@@ -843,6 +904,111 @@ def _record_codex_result_if_needed(
         record_codex_result(paths, run_id, result=result, participants=["codex"], evidence_refs=evidence_refs)
     except CodingLifecycleError as exc:
         raise ExecutorSessionError(str(exc)) from exc
+
+
+def _record_session_progress(
+    paths: OmhPaths,
+    session: dict[str, Any],
+    record: dict[str, Any],
+    *,
+    event_type: str,
+    summary: str,
+    evidence_refs: list[str] | tuple[str, ...] | None = None,
+    codex_progress_summary: dict[str, object] | None = None,
+    codex_session_ref: str = "",
+    codex_thread_ref: str = "",
+) -> None:
+    executor = _selected_executor(session, record)
+    if executor == "hermes":
+        return
+    try:
+        binding = read_progress_binding(paths, "wrapper_session", str(session.get("session_id", "")))
+        if binding is None:
+            binding = build_progress_binding(
+                target_type="wrapper_session",
+                target_id=str(session.get("session_id", "")),
+                executor_profile=executor,
+                source="wrapper_session",
+                channel_ref=str(session.get("channel_ref", "")),
+                thread_ref=str(session.get("thread_ref", "")),
+                delivery_target=str(session.get("source", "")),
+                evidence_refs=list(evidence_refs or []),
+                codex_session_ref=codex_session_ref
+                or _nested_string(record, "codex_session", "session_ref")
+                or (str(record.get("external_session_ref", "")) if executor == "codex" else ""),
+                codex_thread_ref=codex_thread_ref or _nested_string(record, "codex_session", "thread_ref"),
+                claude_session_ref=str(record.get("external_session_ref", "")) if executor == "claude-code" else "",
+            )
+        use_observed_codex_signal = executor == "codex" and event_type == "executor_dispatched" and isinstance(codex_progress_summary, dict)
+        signal = build_safe_progress_signal(
+            executor_profile=str(binding.get("executor_profile", executor)),
+            codex_progress_summary=codex_progress_summary if executor == "codex" else None,
+            explicit_event_type="" if use_observed_codex_signal else event_type,
+            explicit_summary="" if use_observed_codex_signal else summary,
+            evidence_refs=list(evidence_refs or []),
+        )
+        observe_executor_progress(paths, binding, signal)
+    except (ExecutorProgressError, OSError, ValueError) as exc:
+        _append_executor_event(
+            paths,
+            str(session.get("session_id", "")),
+            "executor_progress_error",
+            record,
+            level="warning",
+            message="executor progress metadata could not be recorded",
+            extra_data={"progress_error": _progress_error_summary(str(exc))},
+        )
+        return
+
+
+def _executor_progress_status(paths: OmhPaths, session_id: str) -> dict[str, object]:
+    try:
+        binding = read_progress_binding(paths, "wrapper_session", session_id)
+    except (ExecutorProgressError, OSError, ValueError) as exc:
+        return _executor_progress_error_status(exc)
+    if not binding:
+        return {}
+    refreshed = refresh_binding_freshness(binding)
+    event = latest_progress_event(paths, refreshed)
+    report = latest_progress_report(paths, refreshed)
+    return {
+        "binding_id": refreshed.get("binding_id", ""),
+        "instance_id": refreshed.get("instance_id", ""),
+        "executor_profile": refreshed.get("executor_profile", ""),
+        "state": refreshed.get("state", ""),
+        "correlation_root": refreshed.get("correlation_root", ""),
+        "latest_event": event,
+        "latest_report": report,
+        "last_observed_at": refreshed.get("last_observed_at", ""),
+        "last_reported_at": refreshed.get("last_reported_at", ""),
+        "claim_boundary": refreshed.get("claim_boundary", ""),
+    }
+
+
+def _executor_progress_error_status(exc: Exception) -> dict[str, object]:
+    return {
+        "state": "diagnostic_error",
+        "diagnostic_only": True,
+        "progress_error": "progress artifact I/O error" if isinstance(exc, OSError) else _progress_error_summary(str(exc)),
+        "claim_boundary": "Progress diagnostics are not result, verification, review, CI, merge-readiness, or merge evidence.",
+    }
+
+
+def _nested_string(record: dict[str, Any], *keys: str) -> str:
+    value: object = record
+    for key in keys:
+        if not isinstance(value, dict):
+            return ""
+        value = value.get(key)
+    return str(value or "")
+
+
+def _progress_event_for_result(result: str) -> str:
+    return {
+        "completed": "executor_completed",
+        "blocked": "executor_blocked",
+        "failed": "executor_failed",
+    }.get(result, "progress_observed")
 
 
 def _linked_status_result(paths: OmhPaths, session: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
@@ -1448,21 +1614,52 @@ def _verification_step_state(verification: str) -> str:
     return "pending"
 
 
-def _append_executor_event(paths: OmhPaths, session_id: str, event: str, record: dict[str, Any]) -> None:
+def _progress_error_summary(message: str) -> str:
+    lowered = message.casefold()
+    if "unsupported executor profile" in lowered:
+        return "unsupported executor profile for progress"
+    if "invalid progress binding" in lowered:
+        return "invalid progress binding"
+    if "invalid progress event" in lowered:
+        return "invalid progress event"
+    if "invalid progress report" in lowered:
+        return "invalid progress report"
+    if "hermes orchestration" in lowered:
+        return "hermes orchestration is not an active executor"
+    if "hermes_local requires" in lowered:
+        return "hermes_local requires observed local execution evidence"
+    if "raw" in lowered or "hidden" in lowered or "reasoning" in lowered:
+        return "progress metadata failed privacy validation"
+    return "progress artifact validation failed"
+
+
+def _append_executor_event(
+    paths: OmhPaths,
+    session_id: str,
+    event: str,
+    record: dict[str, Any],
+    *,
+    level: str = "info",
+    message: str = "",
+    extra_data: dict[str, Any] | None = None,
+) -> None:
     session_dir = _session_dir(paths, session_id)
     events_path = session_dir / "events.jsonl"
     ensure_dir(session_dir, private=True)
     ensure_file(events_path, private=True)
+    data = {
+        "selected_executor_profile": record.get("selected_executor_profile", ""),
+        "dispatch_observed": record.get("dispatch_observed", False),
+        "result": record.get("result", "not_observed"),
+    }
+    if extra_data:
+        data.update(extra_data)
     item = build_event_record(
         {
             "event": event,
-            "level": "info",
-            "message": f"executor session {record.get('status', 'unknown')}",
-            "data": {
-                "selected_executor_profile": record.get("selected_executor_profile", ""),
-                "dispatch_observed": record.get("dispatch_observed", False),
-                "result": record.get("result", "not_observed"),
-            },
+            "level": level,
+            "message": message or f"executor session {record.get('status', 'unknown')}",
+            "data": data,
         }
     )
     with events_path.open("a", encoding="utf-8") as handle:

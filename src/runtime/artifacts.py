@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..context_safety import build_coding_progress_reporting_policy
+from ..executor_progress import validate_progress_binding, validate_progress_event, validate_progress_report
 from ..harness_quality import build_harness_progress
 from ..local_store import (
     atomic_write_json,
@@ -483,6 +484,7 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
         "events": events,
         "runtime_observations": observations,
         "journal_events": journal_events,
+        "executor_progress": _show_executor_progress(run_dir),
         "routing": read_json_object(run_dir / "routing.json"),
         "coding_delegation": read_json_object(run_dir / "coding_delegation.json"),
         "delegation": read_json_object(run_dir / "delegation.json"),
@@ -525,12 +527,92 @@ def show_wrapper_session_record(paths: OmhPaths, session_id: str) -> dict[str, A
         "events": events,
         "runtime_observations": observations,
         "executor_session": read_json_object(session_dir / "executor_session.json"),
+        "executor_progress": _show_executor_progress(session_dir),
     }
     if event_errors:
         result["event_errors"] = event_errors
     if observation_errors:
         result["runtime_observation_errors"] = observation_errors
     return result
+
+
+def _show_executor_progress(target_dir: Path) -> dict[str, Any]:
+    progress_dir = target_dir / "executor_progress"
+    raw_binding, binding_read_error = read_json_object_result(progress_dir / "binding.json")
+    binding_errors = [binding_read_error] if binding_read_error else validate_progress_binding(raw_binding) if isinstance(raw_binding, dict) else []
+    binding = raw_binding if isinstance(raw_binding, dict) and not binding_errors else {}
+    events, event_errors = read_jsonl_objects(progress_dir / "events.jsonl")
+    reports, report_errors = read_jsonl_objects(progress_dir / "reports.jsonl")
+    binding_id = str(binding.get("binding_id", ""))
+    instance_id = str(binding.get("instance_id", ""))
+    matching_events = [
+        event
+        for event in events
+        if str(event.get("binding_id", "")) == binding_id
+        and str(event.get("instance_id", "")) == instance_id
+        and not validate_progress_event(event)
+    ]
+    matching_reports = [
+        report
+        for report in reports
+        if str(report.get("binding_id", "")) == binding_id
+        and str(report.get("instance_id", "")) == instance_id
+        and not validate_progress_report(report)
+    ]
+    result = {
+        "schema_version": "omh_executor_progress_show/v1",
+        "diagnostic_only": True,
+        "state": "diagnostic_error" if binding_errors else _executor_progress_show_state(target_dir, binding),
+        "binding": binding,
+        "latest_event": _compact_executor_progress_event(matching_events[-1]) if matching_events else {},
+        "latest_report": _compact_executor_progress_report(matching_reports[-1]) if matching_reports else {},
+        "claim_boundary": (
+            "Runtime show exposes diagnostic progress metadata. It is not result, verification, review, CI, "
+            "merge-readiness, or merge evidence."
+        ),
+    }
+    if binding_errors:
+        result["binding_errors"] = binding_errors
+    if event_errors:
+        result["event_errors"] = event_errors
+    if report_errors:
+        result["report_errors"] = report_errors
+    return result
+
+
+def _compact_executor_progress_event(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "binding_id": event.get("binding_id", ""),
+        "instance_id": event.get("instance_id", ""),
+        "executor_profile": event.get("executor_profile", ""),
+        "event_type": event.get("event_type", ""),
+        "status": event.get("status", ""),
+        "summary": event.get("summary", ""),
+        "observed_at": event.get("observed_at", ""),
+        "claim_boundary": event.get("claim_boundary", ""),
+    }
+
+
+def _compact_executor_progress_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "binding_id": report.get("binding_id", ""),
+        "instance_id": report.get("instance_id", ""),
+        "event_type": report.get("event_type", ""),
+        "status": report.get("status", ""),
+        "summary": report.get("summary", ""),
+        "reported_at": report.get("reported_at", ""),
+        "claim_boundary": report.get("claim_boundary", ""),
+    }
+
+
+def _executor_progress_show_state(target_dir: Path, binding: dict[str, Any]) -> str:
+    delegation = read_json_object(target_dir / "delegation.json") or {}
+    if bool(delegation.get("observed")) and str(delegation.get("result", "")) in {"completed", "blocked", "failed"}:
+        return "closed"
+    executor_session = read_json_object(target_dir / "executor_session.json") or {}
+    if bool(executor_session.get("result_observed")) and str(executor_session.get("result", "")) in {"completed", "blocked", "failed"}:
+        return "closed"
+    return str(binding.get("state", ""))
 
 
 def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str, Any]:
@@ -1586,9 +1668,26 @@ def _add_duplicate_wrapper_run_link_errors(session_results: list[dict[str, Any]]
 
 
 SENSITIVE_KEY_PARTS = ("secret", "token", "api_key", "apikey", "password")
-SENSITIVE_TEXT_KEY_PARTS = ("prompt", "response")
-SENSITIVE_TEXT_KEYS = ("message", "raw_message", "task_statement", "external_session_ref", "summary")
-SENSITIVE_LIST_KEYS = ("evidence_refs", "observed_evidence_refs")
+SENSITIVE_TEXT_KEY_PARTS = ("prompt", "response", "summary")
+SENSITIVE_TEXT_KEYS = (
+    "message",
+    "raw_message",
+    "task_statement",
+    "external_session_ref",
+    "summary",
+    "correlation_root",
+    "process",
+    "delivery",
+    "process_session_id",
+    "pid",
+    "worktree",
+    "branch",
+    "source",
+    "channel_ref",
+    "thread_ref",
+    "delivery_target",
+)
+SENSITIVE_LIST_KEYS = ("evidence_refs", "observed_evidence_refs", "correlation_aliases")
 EVIDENCE_KEYS_TO_PRESERVE = ("prompt_dispatched", "hermes_response_observed", "verification_observed")
 
 

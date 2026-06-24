@@ -812,6 +812,9 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(opened_status["codex_session"]["resume"]["argv_template"], ["codex", "exec", "resume", "codex-session-1"])
             self.assertEqual(opened_status["codex_progress"]["event_count"], 2)
             self.assertIn("Codex is inspecting files/tests.", opened_status["codex_progress"]["observable_activity"])
+            self.assertEqual(opened_status["executor_progress"]["binding_id"], f"wrapper_session:{session_id}:codex")
+            self.assertEqual(opened_status["executor_progress"]["latest_event"]["event_type"], "tests_started")
+            self.assertIn("not result", opened_status["executor_progress"]["claim_boundary"])
             self.assertIn("codex-session: observed(codex-session-1)", opened_status["status_lines"])
             self.assertIn("Observed Codex metadata: session codex-session-1, thread codex-thread-1", "\n".join(opened_status["display_status_lines"]))
             self.assertEqual(opened_status["linked_lifecycle_status"]["next_action"], "wait_for_executor_evidence")
@@ -842,6 +845,8 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(completed["status"]["result"], "completed")
             self.assertEqual(completed["status"]["codex_progress"]["event_count"], 2)
             self.assertIn("Codex is running tests.", completed["status"]["codex_progress"]["observable_activity"])
+            self.assertEqual(completed["status"]["executor_progress"]["state"], "closed")
+            self.assertEqual(completed["status"]["executor_progress"]["latest_event"]["event_type"], "executor_completed")
             self.assertEqual(completed["status"]["latest_progress_event"]["event_type"], "targeted_tests_passed")
             self.assertEqual(completed["status"]["latest_progress_event"]["severity"], "success")
             self.assertIn("summary_only", completed["executor_session"]["codex_progress"]["privacy"])
@@ -872,7 +877,8 @@ class WrapperSessionTests(unittest.TestCase):
             session_id = str(started["session"]["session_id"])
             record_plan_decision(paths, session_id, "accept")
             select_wrapper_session_executor(paths, session_id, "codex")
-            prepare_wrapper_session_handoff(paths, session_id, message)
+            handoff = prepare_wrapper_session_handoff(paths, session_id, message)
+            run_id = str(handoff["session"]["current_run_id"])
 
             opened = open_executor_session(
                 paths,
@@ -1089,6 +1095,103 @@ class WrapperSessionTests(unittest.TestCase):
             with self.assertRaisesRegex(ExecutorSessionError, "after executor result is recorded"):
                 open_executor_session(paths, session_id, observed=True, external_session_ref="codex-thread-2")
 
+    def test_codex_lifecycle_progress_error_does_not_block_dispatch_or_result(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            handoff = prepare_wrapper_session_handoff(paths, session_id, message)
+            run_id = str(handoff["session"]["current_run_id"])
+            run_dir = paths.runtime_runs_dir / run_id
+            progress_dir = run_dir / "executor_progress"
+            progress_dir.mkdir(parents=True)
+            (progress_dir / "binding.json").write_text(
+                json.dumps({"schema_version": "broken", "binding_id": "not-valid"}),
+                encoding="utf-8",
+            )
+
+            dispatched = record_codex_dispatch(paths, run_id)
+            completed = record_codex_result(paths, run_id, result="completed", evidence_refs=["codex-summary"])
+            events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+            progress_errors = [event for event in events if event.get("event") == "executor_progress_error"]
+
+            self.assertEqual(dispatched["status"]["execution"]["status"], "not_observed")
+            self.assertEqual(completed["status"]["execution"]["status"], "completed")
+            self.assertEqual(completed["status"]["executor_progress"]["state"], "diagnostic_error")
+            self.assertEqual(completed["status"]["executor_progress"]["progress_error"], "invalid progress binding")
+            self.assertGreaterEqual(len(progress_errors), 2)
+            self.assertEqual(progress_errors[-1]["level"], "warning")
+            self.assertTrue(progress_errors[-1]["data"]["diagnostic_only"])
+            self.assertIn("not result", progress_errors[-1]["data"]["claim_boundary"])
+
+    def test_wrapper_session_progress_error_does_not_block_status_rendering(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepare_wrapper_session_handoff(paths, session_id, message)
+            open_executor_session(
+                paths,
+                session_id,
+                observed=True,
+                external_session_ref="codex-thread-1",
+                evidence_refs=["discord-button"],
+            )
+            progress_dir = paths.runtime_wrapper_sessions_dir / session_id / "executor_progress"
+            (progress_dir / "binding.json").write_text(
+                json.dumps({"schema_version": "broken", "binding_id": "not-valid"}),
+                encoding="utf-8",
+            )
+
+            status = build_wrapper_session_status(paths, session_id)
+            progress_status = status["executor_session_status"]["executor_progress"]
+
+            self.assertEqual(progress_status["state"], "diagnostic_error")
+            self.assertTrue(progress_status["diagnostic_only"])
+            self.assertEqual(progress_status["progress_error"], "invalid progress binding")
+            self.assertIn("not result", progress_status["claim_boundary"])
+
+    def test_wrapper_session_malformed_progress_binding_does_not_block_actions(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepare_wrapper_session_handoff(paths, session_id, message)
+            progress_dir = paths.runtime_wrapper_sessions_dir / session_id / "executor_progress"
+            progress_dir.mkdir(parents=True)
+            (progress_dir / "binding.json").write_text("{not json", encoding="utf-8")
+
+            opened = open_executor_session(
+                paths,
+                session_id,
+                observed=True,
+                external_session_ref="codex-thread-1",
+                evidence_refs=["discord-button"],
+            )
+            completed = record_executor_session_result(paths, session_id, result="completed", evidence_refs=["codex-summary"])
+            events = [
+                json.loads(line)
+                for line in (paths.runtime_wrapper_sessions_dir / session_id / "events.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            progress_errors = [event for event in events if event.get("event") == "executor_progress_error"]
+
+            self.assertEqual(opened["status"]["executor_progress"]["state"], "diagnostic_error")
+            self.assertEqual(completed["status"]["result"], "completed")
+            self.assertEqual(completed["status"]["executor_progress"]["state"], "diagnostic_error")
+            self.assertTrue(completed["status"]["executor_progress"]["diagnostic_only"])
+            self.assertIn("not result", completed["status"]["executor_progress"]["claim_boundary"])
+            self.assertGreaterEqual(len(progress_errors), 2)
+            self.assertEqual(progress_errors[-1]["level"], "warning")
+
     def test_invalid_executor_session_record_is_ignored_for_status_claims(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -1201,8 +1304,12 @@ class WrapperSessionTests(unittest.TestCase):
             )
 
             self.assertEqual(opened["status"]["coding_agent"], "running(claude-code)")
+            self.assertEqual(opened["status"]["executor_progress"]["binding_id"], f"wrapper_session:{session_id}:claude_code")
+            self.assertEqual(opened["status"]["executor_progress"]["latest_event"]["event_type"], "executor_dispatched")
             self.assertEqual(completed["status"]["coding_agent"], "completed(claude-code)")
             self.assertEqual(completed["status"]["result"], "completed")
+            self.assertEqual(completed["status"]["executor_progress"]["state"], "closed")
+            self.assertEqual(completed["status"]["executor_progress"]["latest_event"]["event_type"], "executor_completed")
             exported = export_runtime(paths, redacted=True)
             self.assertEqual(exported["wrapper_sessions"][0]["executor_session"]["schema_version"], "executor_session/v1")
             self.assertEqual(exported["wrapper_sessions"][0]["executor_session"]["external_session_ref"], "[redacted]")
