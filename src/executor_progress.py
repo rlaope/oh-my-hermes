@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -95,9 +96,8 @@ def binding_id_for(target_type: str, target_id: str, executor_profile: str) -> s
     return f"{target_type}:{target_id}:{executor_profile}"
 
 
-def progress_instance_id_for(binding_id: str, created_at: str) -> str:
-    digest = hashlib.sha256(f"{binding_id}:{created_at}".encode("utf-8")).hexdigest()[:16]
-    return f"{binding_id}:{digest}"
+def progress_instance_id_for(binding_id: str) -> str:
+    return f"{binding_id}:{uuid.uuid4().hex[:16]}"
 
 
 def build_progress_binding(
@@ -134,7 +134,7 @@ def build_progress_binding(
     profile = normalize_executor_profile(executor_profile, observed_hermes_execution=observed_hermes_execution)
     timestamp = now or utc_now()
     binding_id = binding_id_for(target_type, target_id, profile)
-    instance_id = progress_instance_id_for(binding_id, timestamp)
+    instance_id = progress_instance_id_for(binding_id)
     aliases = _correlation_aliases(
         codex_session_ref=codex_session_ref,
         codex_thread_ref=codex_thread_ref,

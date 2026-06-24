@@ -230,7 +230,7 @@ class ExecutorProgressBindingTests(unittest.TestCase):
                     target_id="run-1",
                     executor_profile="codex",
                     codex_session_ref="codex-session-2",
-                    now="2026-06-24T00:02:00Z",
+                    now="2026-06-24T00:00:00Z",
                 ),
             )
 
@@ -238,6 +238,9 @@ class ExecutorProgressBindingTests(unittest.TestCase):
             self.assertNotEqual(rebound["instance_id"], first["instance_id"])
             self.assertEqual(latest_progress_event(paths, rebound), {})
             self.assertEqual(latest_progress_report(paths, rebound), {})
+            projection_after_rebind = project_active_executor_status(paths, now="2026-06-24T00:02:00Z")
+            self.assertEqual(projection_after_rebind["active_executors"], [])
+            self.assertEqual(projection_after_rebind["latest_progress_events"], [])
 
             observe_executor_progress(
                 paths,
