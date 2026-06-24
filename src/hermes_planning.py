@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import re
 import secrets
@@ -9,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from .ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
-from .local_store import atomic_write_text
+from .local_store import atomic_write_json, atomic_write_text, utc_now
+from .memory import validate_handoff_context_pack
+from .observation_journal import append_observation_event
 from .paths import OmhPaths
 from .routing.recommend import recommend_skills
 from .skills.catalog import harness_quality_contract
@@ -17,6 +20,7 @@ from .skills.catalog import harness_quality_contract
 
 SCHEMA_VERSION = "hermes_plan/v1"
 WRAPPER_CONTRACT_VERSION = "hermes_plan_wrapper/v1"
+PLAN_STATUSES = ("draft", "accepted", "revised", "cancelled", "superseded", "blocked")
 _REVIEW_TERMS = (
     "architecture",
     "architect",
@@ -147,6 +151,22 @@ def write_hermes_plan(paths: OmhPaths, payload: dict[str, object]) -> dict[str, 
         context_path = _unique_artifact_path(paths.hermes_home / "context", f"{slug}-context", ".md")
         atomic_write_text(context_path, render_context_markdown(payload, context_path.name), private=True)
         artifact["context_path"] = str(context_path)
+    try:
+        artifact["journal_event"] = append_observation_event(
+            paths,
+            {
+                "target_type": "plan",
+                "target_id": str(path),
+                "event": "plan_artifact_created",
+                "status": "observed",
+                "source": "hermes_plan",
+                "plan_artifact": str(path),
+                "plan_status": str(artifact["status"]),
+                "summary": "Hermes file-backed plan artifact was created.",
+            },
+        )
+    except (OSError, ValueError) as exc:
+        artifact["journal_error"] = str(exc)
     return artifact
 
 
@@ -164,6 +184,139 @@ def attach_plan_artifact_to_wrapper_contract(payload: dict[str, object], artifac
     if artifact.get("context_path"):
         plan_artifact["context_path"] = artifact["context_path"]
     contract["plan_artifact"] = plan_artifact
+
+
+def read_hermes_plan_artifact(path: str | Path) -> dict[str, object]:
+    plan_path = Path(path).expanduser().resolve()
+    text = plan_path.read_text(encoding="utf-8")
+    frontmatter, body = _split_frontmatter(text)
+    status = str(frontmatter.get("status", "draft"))
+    task_statement = _section_text(body, "Task Statement") or _heading_title(body)
+    return {
+        "path": str(plan_path),
+        "name": plan_path.name,
+        "schema_version": str(frontmatter.get("schema_version", "")),
+        "status": status,
+        "source": str(frontmatter.get("source", "")),
+        "task_statement": task_statement,
+        "task_statement_sha256": hashlib.sha256(task_statement.encode("utf-8")).hexdigest() if task_statement else "",
+        "task_statement_length": len(task_statement),
+        "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "body": body,
+        "text": text,
+        "frontmatter": frontmatter,
+    }
+
+
+def update_hermes_plan_status(
+    paths: OmhPaths,
+    path: str | Path,
+    *,
+    status: str,
+    summary: str = "",
+) -> dict[str, object]:
+    if status not in PLAN_STATUSES:
+        raise ValueError(f"unsupported plan status: {status}")
+    plan_path = Path(path).expanduser().resolve()
+    current = read_hermes_plan_artifact(plan_path)
+    if current.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(f"expected {SCHEMA_VERSION} artifact")
+    original = plan_path.read_text(encoding="utf-8")
+    updated = _replace_frontmatter_status(original, status=status, summary=summary)
+    atomic_write_text(plan_path, updated, private=True)
+    artifact = read_hermes_plan_artifact(plan_path)
+    event_name = {
+        "accepted": "plan_accepted",
+        "revised": "plan_revised",
+        "cancelled": "plan_cancelled",
+    }.get(status, "plan_artifact_created")
+    result: dict[str, object] = {"artifact": _plan_artifact_summary(artifact)}
+    try:
+        result["journal_event"] = append_observation_event(
+            paths,
+            {
+                "target_type": "plan",
+                "target_id": str(plan_path),
+                "event": event_name,
+                "status": "observed",
+                "source": "hermes_plan",
+                "plan_artifact": str(plan_path),
+                "plan_status": status,
+                "summary": summary or f"Hermes plan marked {status}.",
+            },
+        )
+    except (OSError, ValueError) as exc:
+        result["journal_error"] = str(exc)
+    return result
+
+
+def build_plan_handoff_message(artifact: dict[str, object]) -> str:
+    return "\n".join(
+        [
+            "Implement the accepted Hermes plan artifact below.",
+            "",
+            f"Plan artifact: {artifact.get('path', '')}",
+            f"Plan status: {artifact.get('status', '')}",
+            f"Plan sha256: {artifact.get('sha256', '')}",
+            "",
+            "Use this file-backed plan as the executor context. The Discord or chat summary is not the executor plan.",
+            "Preserve prepared-vs-observed boundaries: prepared handoff is not execution, review, CI, merge-readiness, or merge evidence.",
+            "",
+            "----- BEGIN ACCEPTED HERMES PLAN -----",
+            str(artifact.get("text", "")).strip(),
+            "----- END ACCEPTED HERMES PLAN -----",
+        ]
+    )
+
+
+def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "codex") -> dict[str, object]:
+    pack = {
+        "schema_version": "handoff_context_pack/v1",
+        "executor_target": executor_target,
+        "session_id": "",
+        "scope": {"kind": "project", "ref": "default"},
+        "source_refs": [
+            {
+                "source": "hermes_plan",
+                "truth_level": "approved_context",
+                "precedence": 95,
+                "item_count": 1,
+            }
+        ],
+        "included_context": [
+            {
+                "item_id": "accepted-hermes-plan",
+                "key": "plan_artifact",
+                "summary": (
+                    f"Accepted Hermes plan artifact status={artifact.get('status', '')}; "
+                    f"sha256={artifact.get('sha256', '')}."
+                ),
+                "source": "hermes_plan",
+                "truth_level": "approved_context",
+                "scope": {"kind": "project", "ref": "default"},
+            }
+        ],
+        "excluded_context": [],
+        "blocked_by_conflicts": [],
+        "redaction_policy": "metadata_only",
+        "claim_boundary": "Plan context pack points to a file-backed Hermes plan; it is not execution evidence.",
+    }
+    errors = validate_handoff_context_pack(pack, require_conflict_free=True, label="plan context pack")
+    if errors:
+        raise ValueError("; ".join(errors))
+    return pack
+
+
+def write_plan_handoff_context_pack(
+    paths: OmhPaths,
+    artifact: dict[str, object],
+    *,
+    executor_target: str = "codex",
+) -> dict[str, object]:
+    pack = build_plan_handoff_context_pack(artifact, executor_target=executor_target)
+    path = paths.runtime_plan_context_dir / f"{Path(str(artifact.get('path', 'plan'))).stem}-context-pack.json"
+    atomic_write_json(path, pack, private=True)
+    return {"path": str(path), "context_pack": pack}
 
 
 def render_plan_markdown(payload: dict[str, object], artifact_name: str = "plan.md") -> str:
@@ -318,6 +471,132 @@ def render_context_markdown(payload: dict[str, object], artifact_name: str = "co
     )
 
 
+def _split_frontmatter(text: str) -> tuple[dict[str, object], str]:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+    end_index = None
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end_index = index
+            break
+    if end_index is None:
+        return {}, text
+    frontmatter: dict[str, object] = {}
+    current_parent = ""
+    for raw in lines[1:end_index]:
+        if not raw.strip():
+            continue
+        if raw.startswith((" ", "\t")) and current_parent:
+            key, _, value = raw.strip().partition(":")
+            parent = frontmatter.setdefault(current_parent, {})
+            if isinstance(parent, dict) and key:
+                parent[key] = _unquote_scalar(value.strip())
+            continue
+        key, _, value = raw.partition(":")
+        if not key:
+            continue
+        current_parent = key.strip()
+        frontmatter[current_parent] = _unquote_scalar(value.strip()) if value.strip() else {}
+    return frontmatter, "\n".join(lines[end_index + 1 :]).lstrip("\n")
+
+
+def _replace_frontmatter_status(text: str, *, status: str, summary: str) -> str:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return "\n".join(
+            [
+                "---",
+                f"schema_version: {SCHEMA_VERSION}",
+                f"status: {status}",
+                f"{status}_at: {utc_now()}",
+                *_status_note_lines(summary),
+                "---",
+                "",
+                text,
+            ]
+        )
+    end_index = None
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end_index = index
+            break
+    if end_index is None:
+        return text
+    status_written = False
+    timestamp_key = f"{status}_at"
+    timestamp_written = False
+    note_written = False
+    frontmatter: list[str] = []
+    for line in lines[1:end_index]:
+        stripped = line.strip()
+        if stripped.startswith("status:"):
+            frontmatter.append(f"status: {status}")
+            status_written = True
+        elif stripped.startswith(f"{timestamp_key}:"):
+            frontmatter.append(f"{timestamp_key}: {utc_now()}")
+            timestamp_written = True
+        elif stripped.startswith("status_note:") and summary:
+            frontmatter.append(f"status_note: {_yaml_string(summary)}")
+            note_written = True
+        else:
+            frontmatter.append(line)
+    if not status_written:
+        frontmatter.insert(1 if frontmatter else 0, f"status: {status}")
+    if not timestamp_written:
+        frontmatter.append(f"{timestamp_key}: {utc_now()}")
+    if summary and not note_written:
+        frontmatter.extend(_status_note_lines(summary))
+    return "\n".join(["---", *frontmatter, "---", *lines[end_index + 1 :]]) + "\n"
+
+
+def _status_note_lines(summary: str) -> list[str]:
+    return [f"status_note: {_yaml_string(summary)}"] if summary else []
+
+
+def _section_text(body: str, heading: str) -> str:
+    lines = body.splitlines()
+    marker = f"## {heading}"
+    start = None
+    for index, line in enumerate(lines):
+        if line.strip() == marker:
+            start = index + 1
+            break
+    if start is None:
+        return ""
+    collected: list[str] = []
+    for line in lines[start:]:
+        if line.startswith("## "):
+            break
+        collected.append(line)
+    return "\n".join(collected).strip()
+
+
+def _heading_title(body: str) -> str:
+    for line in body.splitlines():
+        if line.startswith("# "):
+            return line[2:].replace("Hermes Plan:", "", 1).strip()
+    return ""
+
+
+def _plan_artifact_summary(artifact: dict[str, object]) -> dict[str, object]:
+    return {
+        "path": artifact.get("path", ""),
+        "kind": "hermes_plan",
+        "schema_version": artifact.get("schema_version", SCHEMA_VERSION),
+        "status": artifact.get("status", "draft"),
+        "sha256": artifact.get("sha256", ""),
+        "task_statement_sha256": artifact.get("task_statement_sha256", ""),
+        "task_statement_length": artifact.get("task_statement_length", 0),
+    }
+
+
+def _unquote_scalar(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
 def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
     lowered = task.lower()
     score = _int_value(top.get("score", 0))
@@ -362,7 +641,7 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
     workflow = "ralplan" if review_shaped else "plan"
     harness = "planning"
     handoff = (
-        "Use `omh coding delegate --executor codex --record` after this plan is accepted for a run-backed Codex handoff."
+        "Use `omh coding delegate --executor codex --record --from-plan <accepted-plan.md>` after this plan is accepted for a run-backed Codex handoff."
         if coding_shaped
         else "Use the selected Hermes workflow only after the plan is accepted."
     )
@@ -516,6 +795,11 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
         "current_step": "ask_clarification" if plan.status == "blocked" else "present_plan",
         "next_action": _wrapper_next_action(plan, coding_available),
         "message_field": "plan.task_statement",
+        "plan_artifact_field": "wrapper_contract.plan_artifact.path",
+        "handoff_context_policy": (
+            "After plan acceptance, read the accepted plan artifact or generated handoff context pack "
+            "and pass that to the coding executor. Discord/channel text is only a summary."
+        ),
         "plan_artifact": {
             "recorded": False,
             "kind": "hermes_plan",
@@ -526,7 +810,7 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
             "condition": "plan.status is draft and the wrapper or a human accepts the plan",
             "do_not_delegate_when": [
                 "plan.status is blocked",
-                "the wrapper cannot preserve the original task message",
+                "the wrapper cannot provide an accepted plan artifact or generated context pack",
                 "the wrapper would claim review or execution without evidence",
             ],
         },
@@ -538,7 +822,10 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
             "requires_plan_acceptance": coding_available,
             "stdout_schema_version": "coding_delegation/v1",
             "recording_contract": "prepared_not_observed",
-            "input_policy": "Pass the original task message directly; do not parse the Markdown plan body.",
+            "input_policy": (
+                "Use accepted plan artifact content or generated context pack; do not use Discord summary "
+                "as the executor plan."
+            ),
         },
     }
     coding_delegate = contract["coding_delegate"]
@@ -555,9 +842,11 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
                         "--source",
                         source,
                         "--record",
+                        "--from-plan",
+                        "{plan_artifact}",
                         *metadata_args,
-                        "{message}",
                     ],
+                    "plan_artifact_arg": "--from-plan",
                     "prompt_template_field": "delegation.delegation_prompt_template",
                     "include_message_flag": "--include-message",
                     "recorded_run_field": "runtime.run.run_id",

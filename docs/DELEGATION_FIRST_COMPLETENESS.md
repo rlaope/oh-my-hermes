@@ -31,13 +31,13 @@ evidence exists.
 | `omh chat session` | Persists metadata-only chat session decisions, executor/runtime selection, plan acceptance/revision/cancel state, prompt-only handoffs, runtime handoffs, and accepted Codex lifecycle links. | `src/wrapper/sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat session open-executor`, `attach-executor`, `record-executor`, `request-verification` | Backend actions for wrapper-rendered buttons such as Start Codex session, Start Claude Code session, Attach coding session, Refresh status, Record completed, Record blocked, and Ask Hermes to verify. They write `executor_session/v1` metadata after Hermes or the wrapper observes a coding-session event; OMH itself does not launch hidden executors. | `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py`, `tests/test_cli.py` |
 | `omh chat route` | Deterministically routes plain chat into a workflow decision before wrapper dispatch. | `src/routing/chat.py`, `tests/test_cli.py` |
-| `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
-| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, and runtime contracts without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
+| `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`, with accept/revise/cancel lifecycle events. | `src/hermes_planning.py`, `docs/ARCHITECTURE.md` |
+| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, runtime contracts, and accepted-plan `--from-plan` Codex handoffs without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. | `src/coding_delegation.py`, `src/runtime/artifacts.py` |
 | `worktree_session_isolation/v1` | Adds deterministic workspace-isolation guidance to coding handoffs and executor-session status: same workspace ok, worktree recommended, or worktree required. | `src/isolation.py`, `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py` |
 | `omh coding lifecycle` | Tracks Codex-selected handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
 | `omh memory inspect/pack/apply` | Reviews OMH-local and wrapper-supplied context, creates `memory_review_card/v1`, and attaches only conflict-free `handoff_context_pack/v1` summaries to executor handoffs. | `src/memory.py`, `tests/test_memory.py` |
 | `omh runtime wrapper` | Lets wrappers record what they actually observed after dispatch. | `src/runtime/artifacts.py`, `README.md` |
-| `omh runtime observe` | Records metadata-only `runtime_observation/v1` events for Hermes/OMX/OMO/OMC runtime handoffs: runtime start, worktree creation, worker dispatch/result, verification, review, CI, merge-readiness, and merge. | `src/runtime/artifacts.py`, `src/runtime/records.py`, `tests/test_cli.py`, `tests/test_runtime_artifacts.py` |
+| `omh runtime observe` | Records metadata-only observation journal events for prepared-to-observed lifecycle status, and preserves `runtime_observation/v1` compatibility for Hermes/OMX/OMO/OMC runtime handoffs: runtime start, worktree creation, worker dispatch/result, verification, review, CI, merge-readiness, and merge. | `src/runtime/artifacts.py`, `src/runtime/records.py`, `tests/test_cli.py`, `tests/test_runtime_artifacts.py` |
 | `omh runtime review`, `omh runtime ci`, `omh runtime merge` | Records observed review, CI, merge-readiness, and merge evidence under the run ledger. | `src/runtime/artifacts.py`, `src/runtime/records.py`, `tests/test_cli.py` |
 | `omh runtime validate/export` | Validates and exports local evidence without storing prompt bodies by default. | `src/runtime/artifacts.py`, `tests/test_runtime_artifacts.py` |
 | `examples/wrapper-golden/` | Provides platform-neutral golden chat responses for wrapper button/thread/status UX, including plugin-native `omh_interact` examples. | `examples/wrapper-golden/status-ladder.json`, `examples/wrapper-golden/plugin-interact.json`, `tests/test_wrapper_golden_examples.py` |
@@ -121,8 +121,11 @@ Expected behavior:
   Hermes retained coding-skill prompts, plus an observation contract explaining
   how to record what actually happened later.
 - `omh runtime observe --run <id>` or `omh runtime observe --session <id>`
-  appends one observed, blocked, failed, or not-observed runtime ladder event
-  without upgrading missing events into evidence.
+  appends one observed, blocked, failed, or not-observed lifecycle event without
+  upgrading missing events into evidence.
+- `omh hermes plan-accept <plan.md>` and `omh coding delegate --from-plan
+  <plan.md>` keep executor context file-backed. Discord/channel text is a
+  summary, not the executor plan.
 - `omh chat session open-executor`, `attach-executor`, `record-executor`, and
   `request-verification` are wrapper backend actions. They are meant to sit
   behind chat buttons, write `executor_session/v1`, and update status cards

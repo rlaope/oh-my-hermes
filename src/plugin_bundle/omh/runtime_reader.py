@@ -12,6 +12,22 @@ HUD_SCHEMA_VERSION = "omh_hud/v1"
 HUD_PRESETS = {"minimal", "focused", "full"}
 HUD_REQUIRED_TOOLS = PROVIDED_TOOLS
 HUD_REQUIRED_HOOKS = PROVIDED_HOOKS
+OBSERVATION_EVENT_SCHEMA_VERSION = "omh_observation_event/v1"
+JOURNAL_EVENT_ALIASES = {
+    "coding_handoff_prepared": "prepared_handoff_created",
+    "handoff_prepared": "prepared_handoff_created",
+    "runtime_start": "runtime_start_observed",
+    "worktree_creation": "worktree_creation_observed",
+    "worker_dispatch": "executor_dispatch_observed",
+    "executor_dispatch": "executor_dispatch_observed",
+    "worker_result": "executor_result_observed",
+    "executor_result": "executor_result_observed",
+    "verification": "verification_result_observed",
+    "review": "review_result_observed",
+    "ci": "ci_result_observed",
+    "merge_readiness": "merge_gate_observed",
+    "merge": "merge_observed",
+}
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -34,6 +50,24 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    records: list[dict[str, Any]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            records.append(data)
+    return records
+
+
 def _bool_from_record(record: dict[str, Any], key: str = "observed") -> bool:
     return bool(record.get(key, False)) if record else False
 
@@ -46,7 +80,7 @@ def _summarize_run(run_dir: Path) -> dict[str, Any]:
     review = _read_json(run_dir / "review.json")
     ci = _read_json(run_dir / "ci.json")
     merge = _read_json(run_dir / "merge.json")
-    return {
+    legacy = {
         "run_id": str(run.get("run_id", run_dir.name)),
         "workflow": str(coding.get("recommended_workflow") or run.get("skill", "unknown")),
         "harness": str(coding.get("recommended_harness") or run.get("harness", "unknown")),
@@ -65,6 +99,12 @@ def _summarize_run(run_dir: Path) -> dict[str, Any]:
         "merge_observed": _bool_from_record(merge),
         "merge_status": str(merge.get("status", "not_observed" if merge else "unknown")),
     }
+    lifecycle = _journal_projection_for_run(run_dir, legacy)
+    _apply_lifecycle_to_run_summary(legacy, lifecycle)
+    legacy["lifecycle"] = lifecycle
+    legacy["journal_event_count"] = lifecycle["journal_event_count"]
+    legacy["latest_event"] = lifecycle["latest_event"]
+    return legacy
 
 
 def _executor_target_from_coding(coding: dict[str, Any]) -> str:
@@ -82,6 +122,130 @@ def _executor_target_from_coding(coding: dict[str, Any]) -> str:
             return value
     value = str(coding.get("selected_executor_profile") or coding.get("executor_profile") or "").strip()
     return value
+
+
+def _journal_projection_for_run(run_dir: Path, legacy: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(legacy.get("run_id", run_dir.name))
+    runtime_dir = run_dir.parents[1]
+    events = [
+        event
+        for event in _read_jsonl(runtime_dir / "journal" / "events.jsonl")
+        if event.get("schema_version") == OBSERVATION_EVENT_SCHEMA_VERSION
+        and str(event.get("run_id", "")) == run_id
+    ]
+    projection: dict[str, Any] = {
+        "schema_version": "omh_lifecycle_projection/v1",
+        "run_id": run_id,
+        "workflow": str(legacy.get("workflow", "")),
+        "harness": str(legacy.get("harness", "")),
+        "phase": str(legacy.get("phase", "")),
+        "prepared_handoff": bool(legacy.get("prepared_handoff", False)),
+        "plan_artifact": "",
+        "plan_status": "",
+        "prompt_dispatched": bool(legacy.get("prompt_dispatched", False)),
+        "runtime_start_observed": False,
+        "worktree_observed": False,
+        "execution_observed": bool(legacy.get("execution_observed", False)),
+        "verification_observed": bool(legacy.get("verification_observed", False)),
+        "review_observed": bool(legacy.get("review_observed", False)),
+        "ci_observed": bool(legacy.get("ci_observed", False)),
+        "merge_gate_observed": False,
+        "merge_observed": bool(legacy.get("merge_observed", False)),
+        "observation_status": str(legacy.get("observation_status", "unknown")),
+        "journal_event_count": len(events),
+        "latest_event_id": "",
+        "latest_event": {},
+    }
+    for event in events:
+        name = JOURNAL_EVENT_ALIASES.get(str(event.get("event", "")), str(event.get("event", "")))
+        status = str(event.get("status", "observed"))
+        projection["latest_event_id"] = str(event.get("event_id", ""))
+        projection["latest_event"] = {
+            "event": name,
+            "status": status,
+            "summary": str(event.get("summary", "")),
+            "observed_at": str(event.get("observed_at", "")),
+        }
+        if event.get("plan_artifact"):
+            projection["plan_artifact"] = str(event.get("plan_artifact", ""))
+        if event.get("plan_status"):
+            projection["plan_status"] = str(event.get("plan_status", ""))
+        if status != "observed":
+            if status in {"blocked", "failed"}:
+                projection["observation_status"] = status
+            continue
+        if name == "prepared_handoff_created":
+            projection["prepared_handoff"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "prepared_not_observed")
+        elif name == "runtime_start_observed":
+            projection["runtime_start_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "runtime_start_observed")
+        elif name == "worktree_creation_observed":
+            projection["worktree_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "worktree_creation_observed")
+        elif name == "executor_dispatch_observed":
+            projection["prompt_dispatched"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "dispatch_observed")
+        elif name == "executor_result_observed":
+            projection["execution_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "execution_observed")
+        elif name == "verification_result_observed":
+            projection["verification_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "verification_observed")
+        elif name == "review_result_observed":
+            projection["review_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "review_observed")
+        elif name == "ci_result_observed":
+            projection["ci_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "ci_observed")
+        elif name == "merge_gate_observed":
+            projection["merge_gate_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "merge_gate_observed")
+        elif name == "merge_observed":
+            projection["merge_observed"] = True
+            projection["observation_status"] = _later_status(projection["observation_status"], "merge_observed")
+    return projection
+
+
+def _apply_lifecycle_to_run_summary(summary: dict[str, Any], lifecycle: dict[str, Any]) -> None:
+    for key in (
+        "prepared_handoff",
+        "prompt_dispatched",
+        "execution_observed",
+        "verification_observed",
+        "review_observed",
+        "ci_observed",
+        "merge_observed",
+    ):
+        summary[key] = bool(summary.get(key, False)) or bool(lifecycle.get(key, False))
+    if lifecycle.get("observation_status") and lifecycle.get("observation_status") != "unknown":
+        summary["observation_status"] = str(lifecycle["observation_status"])
+    if lifecycle.get("plan_artifact"):
+        summary["plan_artifact"] = lifecycle["plan_artifact"]
+    if lifecycle.get("plan_status"):
+        summary["plan_status"] = lifecycle["plan_status"]
+
+
+def _later_status(current: str, candidate: str) -> str:
+    order = [
+        "unknown",
+        "prepared_not_observed",
+        "runtime_start_observed",
+        "worktree_creation_observed",
+        "dispatch_observed",
+        "execution_observed",
+        "verification_observed",
+        "review_observed",
+        "ci_observed",
+        "merge_gate_observed",
+        "merge_observed",
+    ]
+    if current in {"blocked", "failed", "cancelled"}:
+        return current
+    try:
+        return candidate if order.index(candidate) >= order.index(current) else current
+    except ValueError:
+        return candidate
 
 
 def read_omh_hud(
@@ -505,6 +669,7 @@ def read_omh_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[
         "schema_version": STATUS_SCHEMA_VERSION,
         "omh_home": str(home),
         "runtime_dir": str(runtime_dir),
+        "journal_path": str(runtime_dir / "journal" / "events.jsonl"),
         "runtime_state_present": bool(state),
         "latest_run_id": str(state.get("last_run_id", "")) if state else "",
         "plugin_session_end": _read_json(runtime_dir / "plugin-session-end.json"),

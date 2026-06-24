@@ -331,12 +331,38 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(probe_payload["capability_gap_roadmap"]["schema_version"], "omh_capability_gap_roadmap/v1")
             self.assertIn("plugin_runtime_observed", {item["name"] for item in probe_payload["capabilities"]})
 
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
+                    "worker_result",
+                    "--summary",
+                    "executor completed the prepared handoff",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["journal_event"]["event"], "executor_result_observed")
+
             handler = ctx.tools["omh_status"]["args"][2]
             payload = json.loads(handler({"omh_home": str(omh_home), "limit": 1}))
             self.assertEqual(payload["schema_version"], "omh_status/v1")
             self.assertEqual(payload["runs"][0]["run_id"], run_id)
             self.assertTrue(payload["runs"][0]["prepared_handoff"])
-            self.assertFalse(payload["runs"][0]["execution_observed"])
+            self.assertTrue(payload["runs"][0]["execution_observed"])
+            self.assertEqual(payload["runs"][0]["observation_status"], "execution_observed")
+            self.assertEqual(payload["runs"][0]["latest_event"]["event"], "executor_result_observed")
+            self.assertTrue(payload["runs"][0]["lifecycle"]["execution_observed"])
+            self.assertGreaterEqual(payload["runs"][0]["journal_event_count"], 2)
             self.assertIn("not execution evidence", payload["evidence_boundary"]["prepared_handoff"])
 
             recommend_handler = ctx.tools["omh_recommend"]["args"][2]

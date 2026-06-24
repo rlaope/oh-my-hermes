@@ -5383,6 +5383,66 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertTrue(json.loads(stdout)["ok"])
 
+    def test_runtime_observe_records_journal_events_for_prepared_codex_runs(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            home_args = ["--omh-home", str(omh_home), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "coding",
+                    "delegate",
+                    "--record",
+                    "--force-record",
+                    "--executor",
+                    "codex",
+                    "implement safe runtime feature in src/runtime/artifacts.py without overclaiming",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run_id = json.loads(stdout)["runtime"]["run"]["run_id"]
+
+            status, stdout, stderr = run_cli(
+                home_args
+                + [
+                    "runtime",
+                    "observe",
+                    "--run",
+                    run_id,
+                    "--runtime-profile",
+                    "hermes",
+                    "--event",
+                    "verification",
+                    "--summary",
+                    "local verification passed",
+                    "--evidence-ref",
+                    "tests/test_runtime_artifacts.py",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            observed = json.loads(stdout)
+            self.assertEqual(observed["observation"], {})
+            self.assertEqual(observed["journal_event"]["event"], "verification_result_observed")
+            self.assertTrue(observed["status"]["lifecycle"]["verification_observed"])
+            self.assertFalse((omh_home / "runtime" / "runs" / run_id / "runtime_observations.jsonl").exists())
+
+            status, stdout, stderr = run_cli(home_args + ["runtime", "show", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["lifecycle"]["latest_event"]["event"], "verification_result_observed")
+            self.assertTrue(shown["lifecycle"]["verification_observed"])
+            self.assertEqual(shown["lifecycle"]["journal_event_count"], 2)
+
+            status, stdout, stderr = run_cli(home_args + ["runtime", "validate"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["ok"])
+
     def test_chat_session_executor_actions_track_codex_without_user_cli_commands(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -6497,14 +6557,18 @@ class CliTests(unittest.TestCase):
         self.assertEqual(plan["deep_interview"]["after_answer_next_action"], "accept_or_revise_plan")
         self.assertTrue(plan["acceptance_criteria"])
         self.assertTrue(plan["verification_plan"])
-        self.assertIn("omh coding delegate --executor codex --record", plan["execution_handoff"])
+        self.assertIn("omh coding delegate --executor codex --record --from-plan <accepted-plan.md>", plan["execution_handoff"])
         contract = payload["wrapper_contract"]
         self.assertEqual(contract["schema_version"], "hermes_plan_wrapper/v1")
         self.assertEqual(contract["current_step"], "present_plan")
         self.assertEqual(contract["next_action"], "prepare_coding_delegation_after_plan_acceptance")
         self.assertEqual(contract["message_field"], "plan.task_statement")
+        self.assertEqual(contract["plan_artifact_field"], "wrapper_contract.plan_artifact.path")
+        self.assertIn("accepted plan artifact", contract["handoff_context_policy"])
+        self.assertIn("Discord/channel text is only a summary", contract["handoff_context_policy"])
         self.assertFalse(contract["plan_artifact"]["recorded"])
         self.assertTrue(contract["decision_gate"]["required"])
+        self.assertIn("accepted plan artifact", contract["decision_gate"]["do_not_delegate_when"][1])
         self.assertEqual(contract["quality_gate"]["readiness"], "ready_for_acceptance")
         self.assertEqual(contract["harness_quality"]["schema_version"], "harness_quality/v1")
         self.assertEqual(contract["harness_quality"]["harness"], "planning")
@@ -6515,9 +6579,13 @@ class CliTests(unittest.TestCase):
         self.assertTrue(coding_delegate["requires_plan_acceptance"])
         self.assertEqual(coding_delegate["stdout_schema_version"], "coding_delegation/v1")
         self.assertEqual(coding_delegate["recording_contract"], "prepared_not_observed")
-        self.assertIn("{message}", coding_delegate["argv_template"])
+        self.assertIn("accepted plan artifact", coding_delegate["input_policy"])
+        self.assertIn("--from-plan", coding_delegate["argv_template"])
+        self.assertIn("{plan_artifact}", coding_delegate["argv_template"])
+        self.assertNotIn("{message}", coding_delegate["argv_template"])
         self.assertIn("--executor", coding_delegate["argv_template"])
         self.assertIn("codex", coding_delegate["argv_template"])
+        self.assertEqual(coding_delegate["plan_artifact_arg"], "--from-plan")
         self.assertEqual(coding_delegate["recorded_run_field"], "runtime.run.run_id")
         self.assertNotIn("command_template", coding_delegate)
 
@@ -6532,7 +6600,7 @@ class CliTests(unittest.TestCase):
         coding_delegate = payload["wrapper_contract"]["coding_delegate"]
         self.assertTrue(coding_delegate["available"])
         self.assertNotIn("command_template", coding_delegate)
-        self.assertEqual(coding_delegate["argv_template"][-1], "{message}")
+        self.assertEqual(coding_delegate["argv_template"][-1], "{plan_artifact}")
         self.assertIn("--executor", coding_delegate["argv_template"])
         self.assertIn("codex", coding_delegate["argv_template"])
         self.assertNotIn(hostile, json.dumps(coding_delegate))
@@ -6588,6 +6656,90 @@ class CliTests(unittest.TestCase):
             self.assertIn("review_gate:", text)
             self.assertIn("## Acceptance Criteria", text)
             self.assertIn("## Verification Plan", text)
+
+    def test_accepted_plan_artifact_is_coding_delegate_context(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "hermes",
+                    "plan",
+                    "--record",
+                    "implement",
+                    "durable",
+                    "observation",
+                    "journal",
+                    "with",
+                    "tests",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            plan_path = Path(json.loads(stdout)["artifact"]["path"])
+
+            status, _, stderr = run_cli(base + ["coding", "delegate", "--from-plan", str(plan_path), "--record"])
+            self.assertEqual(status, 2)
+            self.assertIn("requires an accepted plan", stderr)
+
+            invalid_plan = root / "not-a-plan.md"
+            invalid_plan.write_text("---\nschema_version: other/v1\nstatus: accepted\n---\n# Not a Hermes plan\n", encoding="utf-8")
+            status, _, stderr = run_cli(base + ["hermes", "plan", "accept", str(invalid_plan)])
+            self.assertEqual(status, 2)
+            self.assertIn("expected hermes_plan/v1 artifact", stderr)
+            status, _, stderr = run_cli(base + ["coding", "delegate", "--from-plan", str(invalid_plan), "--record"])
+            self.assertEqual(status, 2)
+            self.assertIn("requires a hermes_plan/v1 artifact", stderr)
+
+            status, stdout, stderr = run_cli(base + ["hermes", "plan", "accept", str(plan_path)])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            accepted = json.loads(stdout)
+            self.assertEqual(accepted["artifact"]["status"], "accepted")
+            self.assertEqual(accepted["journal_event"]["event"], "plan_accepted")
+            self.assertEqual(accepted["journal_event"]["target_type"], "plan")
+            self.assertIn("status: accepted", plan_path.read_text(encoding="utf-8").split("---", 2)[1])
+
+            status, stdout, stderr = run_cli(base + ["hermes", "plan-accept", str(plan_path), "--write-context-pack"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            context_pack_path = Path(json.loads(stdout)["context_pack"]["path"])
+            self.assertTrue(context_pack_path.exists())
+
+            status, stdout, stderr = run_cli(
+                base + ["coding", "delegate", "--from-plan", str(plan_path), "--record", "--include-message"]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertIn("BEGIN ACCEPTED HERMES PLAN", payload["message"])
+            self.assertIn("Discord or chat summary is not the executor plan", payload["message"])
+            self.assertEqual(payload["selected_executor_profile"], "codex")
+            self.assertEqual(payload["executor_handoff"]["execution_brief"]["task_source"], "accepted_plan_artifact")
+            self.assertIn("plan_artifact_context_required", payload["executor_handoff"]["dispatch_contract"])
+            self.assertEqual(payload["executor_handoff"]["context_pack"]["included_context"][0]["key"], "plan_artifact")
+            self.assertEqual(payload["plan_artifact"]["path"], str(plan_path.resolve()))
+            self.assertEqual(payload["plan_artifact"]["status"], "accepted")
+            self.assertEqual(payload["source_metadata"]["plan_artifact_path"], str(plan_path.resolve()))
+
+            run_id = payload["runtime"]["run"]["run_id"]
+            record = payload["runtime"]["coding_delegation"]
+            self.assertEqual(record["plan_artifact"]["path"], str(plan_path.resolve()))
+            self.assertEqual(record["plan_artifact"]["status"], "accepted")
+            self.assertEqual(record["source_metadata"]["plan_artifact_status"], "accepted")
+            self.assertEqual(record["executor_handoff"]["execution_brief"]["task_source"], "accepted_plan_artifact")
+
+            status, stdout, stderr = run_cli(base + ["runtime", "show", run_id])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["lifecycle"]["plan_status"], "accepted")
+            self.assertTrue(shown["lifecycle"]["prepared_handoff"])
+            self.assertEqual(shown["lifecycle"]["observation_status"], "prepared_not_observed")
 
     def test_hermes_plan_records_context_for_weak_request(self) -> None:
         with TemporaryDirectory() as tmp:
