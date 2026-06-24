@@ -1126,6 +1126,36 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertTrue(progress_errors[-1]["data"]["diagnostic_only"])
             self.assertIn("not result", progress_errors[-1]["data"]["claim_boundary"])
 
+    def test_wrapper_session_progress_error_does_not_block_status_rendering(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepare_wrapper_session_handoff(paths, session_id, message)
+            open_executor_session(
+                paths,
+                session_id,
+                observed=True,
+                external_session_ref="codex-thread-1",
+                evidence_refs=["discord-button"],
+            )
+            progress_dir = paths.runtime_wrapper_sessions_dir / session_id / "executor_progress"
+            (progress_dir / "binding.json").write_text(
+                json.dumps({"schema_version": "broken", "binding_id": "not-valid"}),
+                encoding="utf-8",
+            )
+
+            status = build_wrapper_session_status(paths, session_id)
+            progress_status = status["executor_session_status"]["executor_progress"]
+
+            self.assertEqual(progress_status["state"], "diagnostic_error")
+            self.assertTrue(progress_status["diagnostic_only"])
+            self.assertEqual(progress_status["progress_error"], "invalid progress binding")
+            self.assertIn("not result", progress_status["claim_boundary"])
+
     def test_invalid_executor_session_record_is_ignored_for_status_claims(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

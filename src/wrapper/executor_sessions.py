@@ -962,7 +962,10 @@ def _record_session_progress(
 
 
 def _executor_progress_status(paths: OmhPaths, session_id: str) -> dict[str, object]:
-    binding = read_progress_binding(paths, "wrapper_session", session_id)
+    try:
+        binding = read_progress_binding(paths, "wrapper_session", session_id)
+    except (ExecutorProgressError, OSError, ValueError) as exc:
+        return _executor_progress_error_status(exc)
     if not binding:
         return {}
     refreshed = refresh_binding_freshness(binding)
@@ -978,6 +981,15 @@ def _executor_progress_status(paths: OmhPaths, session_id: str) -> dict[str, obj
         "last_observed_at": refreshed.get("last_observed_at", ""),
         "last_reported_at": refreshed.get("last_reported_at", ""),
         "claim_boundary": refreshed.get("claim_boundary", ""),
+    }
+
+
+def _executor_progress_error_status(exc: Exception) -> dict[str, object]:
+    return {
+        "state": "diagnostic_error",
+        "diagnostic_only": True,
+        "progress_error": "progress artifact I/O error" if isinstance(exc, OSError) else _progress_error_summary(str(exc)),
+        "claim_boundary": "Progress diagnostics are not result, verification, review, CI, merge-readiness, or merge evidence.",
     }
 
 
@@ -1605,6 +1617,12 @@ def _progress_error_summary(message: str) -> str:
     lowered = message.casefold()
     if "unsupported executor profile" in lowered:
         return "unsupported executor profile for progress"
+    if "invalid progress binding" in lowered:
+        return "invalid progress binding"
+    if "invalid progress event" in lowered:
+        return "invalid progress event"
+    if "invalid progress report" in lowered:
+        return "invalid progress report"
     if "hermes orchestration" in lowered:
         return "hermes orchestration is not an active executor"
     if "hermes_local requires" in lowered:
