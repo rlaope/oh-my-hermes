@@ -41,7 +41,12 @@ class ArchitectureLayoutTests(unittest.TestCase):
     def test_src_root_contains_only_package_directory(self) -> None:
         src_root = Path(__file__).resolve().parents[1] / "src"
 
-        entries = sorted(path.name for path in src_root.iterdir() if path.name != "__pycache__")
+        ignored_generated = {"__pycache__"}
+        entries = sorted(
+            path.name
+            for path in src_root.iterdir()
+            if path.name not in ignored_generated and not path.name.endswith(".egg-info")
+        )
         self.assertEqual(entries, ["omh"])
         self.assertTrue((src_root / "omh" / "__init__.py").is_file())
 
