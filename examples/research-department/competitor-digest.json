@@ -16,11 +16,11 @@
       "Hermes-facing research workflow patterns"
     ],
     "source_refs": [
-      "src/research_department.py",
-      "src/skills/catalog.py",
-      "src/routing/recommend.py",
-      "src/capabilities/orchestration.py",
-      "src/hermes_ops.py"
+      "src/omh/research_department.py",
+      "src/omh/skills/catalog.py",
+      "src/omh/routing/recommend.py",
+      "src/omh/capabilities/orchestration.py",
+      "src/omh/hermes_ops.py"
     ]
   },
   "source": "example fixture",

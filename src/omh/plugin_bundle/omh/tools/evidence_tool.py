@@ -70,8 +70,8 @@ _DEFAULT_ALLOWLIST = (
     "python3 -m compileall",
     "uv run python -m unittest",
     "uv run python -m compileall",
-    "uv run python -m src.cli docs workflows --check",
-    "uv run python -m src.cli harness validate",
+    "uv run python -m omh.cli docs workflows --check",
+    "uv run python -m omh.cli harness validate",
     "git diff --check",
 )
 

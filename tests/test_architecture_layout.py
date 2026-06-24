@@ -38,6 +38,13 @@ from omh.wrapper import sessions as wrapper_sessions_module
 
 
 class ArchitectureLayoutTests(unittest.TestCase):
+    def test_src_root_contains_only_package_directory(self) -> None:
+        src_root = Path(__file__).resolve().parents[1] / "src"
+
+        entries = sorted(path.name for path in src_root.iterdir() if path.name != "__pycache__")
+        self.assertEqual(entries, ["omh"])
+        self.assertTrue((src_root / "omh" / "__init__.py").is_file())
+
     def test_compatibility_adapters_point_to_deep_modules(self) -> None:
         self.assertIs(cli.main, command_main.main)
         self.assertIs(chat_router.route_chat_message, routing_chat.route_chat_message)
@@ -56,17 +63,17 @@ class ArchitectureLayoutTests(unittest.TestCase):
     def test_root_compatibility_facades_stay_thin(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         facades = {
-            "src/chat_router.py": "from .routing.chat import *  # noqa: F401,F403",
-            "src/recommend.py": "from .routing.recommend import *  # noqa: F401,F403",
-            "src/runtime_artifacts.py": "from .runtime.artifacts import *  # noqa: F401,F403",
-            "src/runtime_records.py": "from .runtime.records import *  # noqa: F401,F403",
-            "src/wrapper_contract.py": "from .wrapper.contract import *  # noqa: F401,F403",
-            "src/wrapper_sessions.py": "from .wrapper.sessions import *  # noqa: F401,F403",
-            "src/coding_lifecycle.py": "from .wrapper.lifecycle import *  # noqa: F401,F403",
-            "src/playbooks.py": "from .catalogs.playbooks import *  # noqa: F401,F403",
-            "src/roles.py": "from .catalogs.roles import *  # noqa: F401,F403",
-            "src/setup_profiles.py": "from .profiles.setup import *  # noqa: F401,F403",
-            "src/team_profiles.py": "from .profiles.team import *  # noqa: F401,F403",
+            "src/omh/chat_router.py": "from .routing.chat import *  # noqa: F401,F403",
+            "src/omh/recommend.py": "from .routing.recommend import *  # noqa: F401,F403",
+            "src/omh/runtime_artifacts.py": "from .runtime.artifacts import *  # noqa: F401,F403",
+            "src/omh/runtime_records.py": "from .runtime.records import *  # noqa: F401,F403",
+            "src/omh/wrapper_contract.py": "from .wrapper.contract import *  # noqa: F401,F403",
+            "src/omh/wrapper_sessions.py": "from .wrapper.sessions import *  # noqa: F401,F403",
+            "src/omh/coding_lifecycle.py": "from .wrapper.lifecycle import *  # noqa: F401,F403",
+            "src/omh/playbooks.py": "from .catalogs.playbooks import *  # noqa: F401,F403",
+            "src/omh/roles.py": "from .catalogs.roles import *  # noqa: F401,F403",
+            "src/omh/setup_profiles.py": "from .profiles.setup import *  # noqa: F401,F403",
+            "src/omh/team_profiles.py": "from .profiles.team import *  # noqa: F401,F403",
         }
         for relative_path, import_line in facades.items():
             with self.subTest(relative_path=relative_path):

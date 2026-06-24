@@ -27,7 +27,7 @@ def keyword_detector_manifest() -> dict[str, object]:
             for definition in definitions
         ],
         "locale_policy": {
-            "derived_from": "src/routing/localization.py",
+            "derived_from": "src/omh/routing/localization.py",
             "supported_alias_locales": sorted({alias.locale for alias in aliases}),
             "alias_labels": sorted({alias.label for alias in aliases}),
             "fallback": "Unsupported-language or weak multilingual matches should clarify instead of forcing direct dispatch.",
@@ -58,7 +58,7 @@ def keyword_detector_manifest() -> dict[str, object]:
             for rule in ROUTING_GUARD_RULES
         ],
         "prepared_is_not": PREPARED_NOT_OBSERVED,
-        "source_refs": ["src/routing/chat.py", "src/routing/recommend.py", "src/routing/localization.py", "src/skills/catalog.py"],
+        "source_refs": ["src/omh/routing/chat.py", "src/omh/routing/recommend.py", "src/omh/routing/localization.py", "src/omh/skills/catalog.py"],
     }
 
 

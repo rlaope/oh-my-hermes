@@ -19,11 +19,11 @@ uv run python examples/discord-adapter-shim.py --plugin-interact examples/wrappe
 uv run python examples/slack-adapter-shim.py --plugin-interact examples/wrapper-events/slack-risky-refactor.json
 uv run python examples/discord-adapter-shim.py --route-hint examples/wrapper-events/discord-route-hint-visual.json
 uv run python examples/slack-adapter-shim.py --route-hint examples/wrapper-events/slack-route-hint-missed-route.json
-uv run python -m src.cli chat route-hint --source discord "make an image explaining the cron feature"
-uv run python -m src.cli chat native-command --source discord
-uv run python -m src.cli chat native-command --source slack
-uv run python -m src.cli chat native-command --source telegram
-uv run python -m src.cli demo orchestration
+uv run python -m omh.cli chat route-hint --source discord "make an image explaining the cron feature"
+uv run python -m omh.cli chat native-command --source discord
+uv run python -m omh.cli chat native-command --source slack
+uv run python -m omh.cli chat native-command --source telegram
+uv run python -m omh.cli demo orchestration
 ```
 
 The first command renders the fixture event in

@@ -12,15 +12,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.ingress import extract_message_text, extract_source_metadata  # noqa: E402
-from src.wrapper.contract import (  # noqa: E402
+from omh.ingress import extract_message_text, extract_source_metadata  # noqa: E402
+from omh.wrapper.contract import (  # noqa: E402
     INTERACTION_MODES,
     build_chat_interaction_payload,
     build_chat_status_interaction,
     usage_trace_payload,
 )
-from src.wrapper.native_commands import build_native_command_surface, render_native_command_response  # noqa: E402
-from src.wrapper.route_hints import build_chat_route_hint_payload  # noqa: E402
+from omh.wrapper.native_commands import build_native_command_surface, render_native_command_response  # noqa: E402
+from omh.wrapper.route_hints import build_chat_route_hint_payload  # noqa: E402
 from omh.plugin_bundle.omh.tools.chat_tool import omh_interact_handler  # noqa: E402
 
 

@@ -120,7 +120,7 @@ separate profile pack is explicitly selected.
   record optional routing and narration defaults only.
 - Coding-heavy requests should be described as delegated work unless there is
   observed evidence that a coding executor actually ran.
-- Generated workflow docs should come from `src/skills/catalog.py`; update the
+- Generated workflow docs should come from `src/omh/skills/catalog.py`; update the
   catalog before refreshing generated references.
 - Harness quality gates should stay machine-readable through
   `harness_quality/v1` instead of being prose-only wrapper behavior.
@@ -200,7 +200,7 @@ Run the focused documentation checks before calling the change complete:
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest tests/test_router_content.py -v
-uv run python -m src.cli harness validate
-uv run python -m src.cli docs workflows --check
+uv run python -m omh.cli harness validate
+uv run python -m omh.cli docs workflows --check
 git diff --check
 ```

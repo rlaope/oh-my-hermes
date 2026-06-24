@@ -328,7 +328,7 @@ _WORKFLOW_REVIEW_INTENT_MARKERS = (
     "통과",
 )
 _PATH_REFERENCE_MARKERS = (
-    "src/",
+    "src/omh/",
     "tests/",
     "docs/",
     "site/",

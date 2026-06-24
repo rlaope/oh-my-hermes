@@ -62,7 +62,7 @@ class CatalogQuestionTests(unittest.TestCase):
         cases = (
             "what skills are needed to debug this Python error?",
             "which workflow should I use for this bug?",
-            "what does OMH do in src/routing/catalog_questions.py?",
+            "what does OMH do in src/omh/routing/catalog_questions.py?",
             "explain what OMH does in this README section",
             "search docs/WORKFLOWS.md for loop",
             "show img-summary in README.md",

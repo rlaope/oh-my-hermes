@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
+import re
 from typing import Any
 
 from .coding_contracts import (
@@ -63,6 +64,42 @@ _LOCAL_CAPABILITY_STAGE_GUIDANCE = {
     "parallelization": "Use local subagents, workers, or worktrees only when lanes are independent and ownership is explicit.",
     "qa_review": "Use local QA, code-review, or adversarial review capability when it improves verification quality.",
 }
+_CODE_REFERENCE_PREFIXES = ("src/", "src\\", "tests/", "tests\\")
+_CODE_REFERENCE_EXTENSIONS = (
+    "py",
+    "js",
+    "ts",
+    "tsx",
+    "jsx",
+    "go",
+    "rs",
+    "java",
+    "kt",
+    "swift",
+    "rb",
+    "php",
+    "cs",
+    "cpp",
+    "c",
+    "h",
+)
+_CODE_REFERENCE_FILE_RE = re.compile(
+    rf"(?<![\w@.-])(?:[\w.-]+[\\/])*[\w.-]+\.({'|'.join(_CODE_REFERENCE_EXTENSIONS)})(?![\w.-])",
+    re.IGNORECASE,
+)
+_CODE_REFERENCE_CONTEXT_RE = re.compile(
+    "|".join(
+        (
+            r"\b(?:debug|edit|fix|implement|modify|patch|refactor)\b",
+            r"\b(?:change|update)\s+(?:the\s+)?(?:code|file|module|tests?)\b",
+            r"\b(?:unit|integration|regression)\s+tests?\b",
+            r"\btests?\s+for\b",
+            r"\b(?:repo|repository|source)\s+file\b",
+            r"\b(?:class|code|function|module)\b",
+        )
+    ),
+    re.IGNORECASE,
+)
 _LOCAL_CAPABILITY_EXAMPLES = {
     "codex": [
         "Codex-native skills",
@@ -141,6 +178,7 @@ def build_coding_delegation_payload(
     executor_target: str = "generic",
     context_pack: dict[str, object] | None = None,
     plan_artifact: dict[str, object] | None = None,
+    prefer_direct_coding_handoff: bool = True,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -158,6 +196,14 @@ def build_coding_delegation_payload(
     workflow = str(top["skill"])
     score = int(top["score"])
     intent = _intent_for(message, workflow, score)
+    if (
+        prefer_direct_coding_handoff
+        and score >= 4
+        and workflow in _RETAINED_HERMES_WORKFLOWS
+        and intent == "coding"
+        and (plan_artifact is not None or _has_code_reference(message))
+    ):
+        workflow = "plan"
     action = _action_for(intent, score, workflow)
     if action == "fallback":
         workflow = "oh-my-hermes"
@@ -343,9 +389,11 @@ def coding_delegation_record_payload(
 def _intent_for(message: str, workflow: str, score: int) -> str:
     if score == 0:
         return "unknown"
-    if workflow in _CATALOG_INTENT_RETAINED_WORKFLOWS:
-        return coding_intent_for_skill(workflow)
     lowered = message.lower()
+    if workflow in _CATALOG_INTENT_RETAINED_WORKFLOWS:
+        if _has_any(lowered, coding_terms_for_intent("coding")):
+            return "coding"
+        return coding_intent_for_skill(workflow)
     for intent in CODING_INTENT_PRIORITY:
         if workflow in coding_skills_for_intent(intent) or _has_any(lowered, coding_terms_for_intent(intent)):
             return intent
@@ -360,6 +408,34 @@ def _action_for(intent: str, score: int, workflow: str) -> str:
     if score < 4:
         return "clarify"
     return "delegate"
+
+
+def _has_code_reference(message: str) -> bool:
+    has_code_context = _CODE_REFERENCE_CONTEXT_RE.search(message) is not None
+    for raw_fragment in message.split():
+        fragment = raw_fragment.strip("`'\"“”‘’.,;:!?()[]{}<>")
+        lowered = fragment.lower()
+        if not lowered or _is_external_location_fragment(lowered):
+            continue
+        if any(prefix in lowered for prefix in _CODE_REFERENCE_PREFIXES):
+            return True
+        if _CODE_REFERENCE_FILE_RE.search(fragment) and (_is_path_fragment(fragment) or has_code_context):
+            return True
+    return False
+
+
+def _is_path_fragment(fragment: str) -> bool:
+    return "/" in fragment or "\\" in fragment
+
+
+def _is_external_location_fragment(fragment: str) -> bool:
+    if "://" in fragment or fragment.startswith("www."):
+        return True
+    normalized = fragment.replace("\\", "/")
+    if "/" not in normalized:
+        return False
+    first_path_component = normalized.split("/", 1)[0]
+    return "." in first_path_component and not any(normalized.startswith(prefix) for prefix in _CODE_REFERENCE_PREFIXES)
 
 
 def _review_required(message: str, intent: str, workflow: str) -> bool:

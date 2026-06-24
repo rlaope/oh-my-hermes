@@ -49,16 +49,7 @@ packages = [
 ]
 
 [tool.setuptools.package-dir]
-omh = "src"
-"omh.catalogs" = "src/catalogs"
-"omh.commands" = "src/commands"
-"omh.capabilities" = "src/capabilities"
-"omh.core" = "src/core"
-"omh.profiles" = "src/profiles"
-"omh.routing" = "src/routing"
-"omh.runtime" = "src/runtime"
-"omh.skills" = "src/skills"
-"omh.wrapper" = "src/wrapper"
+"" = "src"
 
 [tool.setuptools.package-data]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]

@@ -9,13 +9,13 @@ still not evidence?
 The manifests are not a new source of truth. They are deterministic projections
 over existing OMH catalogs and contracts:
 
-- skill metadata from `src/skills/catalog.py`
-- situation playbooks from `src/catalogs/playbooks.py`
-- role descriptors from `src/catalogs/roles.py`
-- routing and locale policy from `src/routing/*`
-- wrapper action ids from `src/wrapper/contract.py`
-- runtime observation events from `src/runtime/records.py`
-- plugin hook/tool metadata from `src/plugin_bundle/omh/*`
+- skill metadata from `src/omh/skills/catalog.py`
+- situation playbooks from `src/omh/catalogs/playbooks.py`
+- role descriptors from `src/omh/catalogs/roles.py`
+- routing and locale policy from `src/omh/routing/*`
+- wrapper action ids from `src/omh/wrapper/contract.py`
+- runtime observation events from `src/omh/runtime/records.py`
+- plugin hook/tool metadata from `src/omh/plugin_bundle/omh/*`
 - optional MCP bridge metadata from `omh mcp manifest` and host recipes from
   `omh mcp config-recipe`
 

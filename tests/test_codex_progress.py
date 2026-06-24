@@ -21,7 +21,7 @@ class CodexProgressTests(unittest.TestCase):
         raw = "\n".join(
             [
                 json.dumps({"type": "tool_call", "tool": "rg", "args": "rg risky tests"}),
-                json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/wrapper/executor_sessions.py"}),
+                json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/wrapper/executor_sessions.py"}),
                 json.dumps({"type": "tool_call", "command": "python -m unittest tests/test_cli.py"}),
                 json.dumps({"type": "reasoning", "analysis": "hidden private reasoning should never render"}),
                 json.dumps({"type": "reasoning", "content": "hidden private content should never influence summaries"}),
@@ -87,7 +87,7 @@ class CodexProgressTests(unittest.TestCase):
                 json.dumps(
                     {
                         "role": "assistant",
-                        "content": "Root cause identified in src/wrapper/contract.py: default executor was not propagated.",
+                        "content": "Root cause identified in src/omh/wrapper/contract.py: default executor was not propagated.",
                     }
                 ),
                 json.dumps(
@@ -124,7 +124,7 @@ class CodexProgressTests(unittest.TestCase):
             "\n".join(
                 [
                     json.dumps({"type": "tool_call", "tool": "rg", "args": "rg progress"}),
-                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/executor_progress.py"}),
+                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/executor_progress.py"}),
                     json.dumps({"type": "reasoning", "analysis": "hidden private reasoning"}),
                 ]
             ),
