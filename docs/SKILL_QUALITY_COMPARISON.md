@@ -10,7 +10,7 @@ Oh My Codex (OMX) skill set.
 Evidence used:
 
 - OMH repository: `67aa040` plus this skill-rubric working tree
-- OMH skill source: `skills/*/SKILL.md`, `src/omh/skills/catalog.py`,
+- OMH skill source: `skills/*/SKILL.md`, `src/skills/catalog.py`,
   `docs/HARNESS_QUALITY.md`, `docs/WORKFLOWS.md`
 - OMX upstream repository at `0332e47`
   (`ci: configure npm auth for manual publish (#2766)`)

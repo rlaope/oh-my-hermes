@@ -59,7 +59,7 @@ class ContextSafetyTests(unittest.TestCase):
             "Root cause identified: setup default executor propagation was missing.\n```json\n" + raw_log + "\n```",
             status="observed",
             severity="warning",
-            file_refs=["src/omh/wrapper/contract.py", "src/omh/coding_delegation.py", "x" * 1000],
+            file_refs=["src/wrapper/contract.py", "src/coding/coding_delegation.py", "x" * 1000],
             artifact_refs=[artifact],
             evidence_refs=[f"ref-{index}" for index in range(20)],
         )

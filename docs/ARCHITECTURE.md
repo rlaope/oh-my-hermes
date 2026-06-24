@@ -67,9 +67,11 @@ Chat user
 ## Package Layout
 
 ```text
-src/omh/
-  chat_router.py              # compatibility adapter to routing/chat.py
-  cli.py                     # compatibility adapter to commands/main.py
+src/
+  cli/                       # compatibility package to commands/main.py
+  chat_router/               # compatibility package to routing/chat.py
+  recommend/                 # compatibility package to routing/recommend.py
+
   commands/
     main.py                  # parser assembly and top-level error handling
     chat.py
@@ -82,45 +84,105 @@ src/omh/
     runtime.py
     setup.py
     state.py
-  coding_delegation.py
-  coding_lifecycle.py        # compatibility adapter to wrapper/lifecycle.py
-  config_adapter.py
-  converter.py
-  doctor.py
-  hermes_planning.py
-  installer.py
-  manifest.py
-  paths.py
-  playbooks.py               # compatibility adapter to catalogs/playbooks.py
-  catalogs/
-    playbooks.py
-    roles.py
-  ingress.py
-  recommend.py                # compatibility adapter to routing/recommend.py
-  roles.py                   # compatibility adapter to catalogs/roles.py
+
   routing/
     chat.py
+    intent.py
     localization.py
     policy.py
     recommend.py
-  runtime_artifacts.py        # compatibility adapter to runtime/artifacts.py
-  runtime_records.py          # compatibility adapter to runtime/records.py
+    task_cards.py
+
+  workflows/
+    materials.py
+    operations.py
+    paper_learning.py
+    source_finder.py
+    visual_summary.py
+    research_department.py
+    hermes_ops.py
+    goal_loop.py
+    memory.py
+    workflow_learning.py
+    use_cases.py
+
+  coding/
+    coding_contracts.py
+    coding_delegation.py
+    codex_progress.py
+    executor_progress.py
+    executor_readiness.py
+    executors.py
+    isolation.py
+    team_readiness.py
+    worktree_creator.py
+
+  install/
+    command_path.py
+    config_adapter.py
+    installer.py
+    manifest.py
+    plugin_pack.py
+    plugin_observations.py
+    release_install_smoke.py
+    release_smoke_core.py
+
+  maintenance/
+    doctor.py
+    probe.py
+    release.py
+
+  mcp/
+    bridge.py
+
+  quality/
+    capability_roadmap.py
+    grounded_score.py
+    harness_quality.py
+    parity.py
+
+  surfaces/
+    context.py
+    demo.py
+    hud.py
+    menubar_app.py
+    menubar_status.py
+    quickstart.py
+
+  system/
+    hashutil.py
+    ingress.py
+    local_store.py
+    paths.py
+    targets.py
+    workflow_state.py
+
+  playbooks/                 # compatibility package to catalogs/playbooks.py
+  catalogs/
+    playbooks.py
+    roles.py
+  roles/                     # compatibility package to catalogs/roles.py
+  runtime_artifacts/         # compatibility package to runtime/artifacts.py
+  runtime_records/           # compatibility package to runtime/records.py
   runtime/
     artifacts.py
     records.py
-  snippet.py
-  setup_profiles.py          # compatibility adapter to profiles/setup.py
-  team_profiles.py           # compatibility adapter to profiles/team.py
+  setup_profiles/            # compatibility package to profiles/setup.py
+  team_profiles/             # compatibility package to profiles/team.py
   profiles/
     setup.py
     team.py
-  wrapper_contract.py         # compatibility adapter to wrapper/contract.py
-  wrapper_sessions.py         # compatibility adapter to wrapper/sessions.py
+  wrapper_contract/          # compatibility package to wrapper/contract.py
+  wrapper_sessions/          # compatibility package to wrapper/sessions.py
   wrapper/
     contract.py
+    executor_sessions.py
+    hermes_runtime.py
     lifecycle.py
+    native_commands.py
+    route_hints.py
     sessions.py
-  skill_pack.py
+    worktree_binding.py
   core/
   skills/
     catalog.py
@@ -560,8 +622,8 @@ specialist lane result, the recorded result stays `not_observed` or
 
 When a harness is added, removed, or renamed, update these surfaces together:
 
-- `src/omh/skills/catalog.py`
-- `src/omh/skills/render.py`
+- `src/skills/catalog.py`
+- `src/skills/render.py`
 - `docs/APPLICATION_CASES.md`
 - `tests/test_router_content.py`
 

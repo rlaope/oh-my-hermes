@@ -55,7 +55,7 @@ class WrapperSessionTests(unittest.TestCase):
 
             started = create_or_resume_wrapper_session(
                 paths,
-                "implement a focused parser fix in src/omh/parser.py and update tests",
+                "implement a focused parser fix in src/parser.py and update tests",
                 source="hermes",
                 mode="delegate",
                 source_metadata={"source_event_id": "m1", "channel_ref": "c1"},
@@ -1514,7 +1514,7 @@ class WrapperSessionTests(unittest.TestCase):
 
             first = create_or_resume_wrapper_session(
                 paths,
-                "risky refactor first scoped runtime fix in src/omh/runtime/artifacts.py",
+                "risky refactor first scoped runtime fix in src/runtime/artifacts.py",
                 source="discord",
                 source_metadata={"channel_ref": "c1", "source_event_id": "thread-one"},
             )
@@ -1524,13 +1524,13 @@ class WrapperSessionTests(unittest.TestCase):
             first_handoff = prepare_wrapper_session_handoff(
                 paths,
                 first_id,
-                "risky refactor first scoped runtime fix in src/omh/runtime/artifacts.py",
+                "risky refactor first scoped runtime fix in src/runtime/artifacts.py",
             )
             first_run_id = str(first_handoff["session"]["current_run_id"])
 
             second = create_or_resume_wrapper_session(
                 paths,
-                "risky refactor second unrelated runtime fix in src/omh/runtime/artifacts.py",
+                "risky refactor second unrelated runtime fix in src/runtime/artifacts.py",
                 source="discord",
                 source_metadata={"channel_ref": "c2", "source_event_id": "thread-two"},
             )
@@ -1540,7 +1540,7 @@ class WrapperSessionTests(unittest.TestCase):
             second_handoff = prepare_wrapper_session_handoff(
                 paths,
                 second_id,
-                "risky refactor second unrelated runtime fix in src/omh/runtime/artifacts.py",
+                "risky refactor second unrelated runtime fix in src/runtime/artifacts.py",
             )
             second_run_id = str(second_handoff["session"]["current_run_id"])
 
