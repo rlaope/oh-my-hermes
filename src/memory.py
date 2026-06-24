@@ -63,12 +63,13 @@ _HANDOFF_CONTEXT_PACK_KEYS = {
     "included_context",
     "excluded_context",
     "blocked_by_conflicts",
+    "metadata",
     "redaction_policy",
     "claim_boundary",
 }
 _HANDOFF_CONTEXT_SCOPE_KEYS = {"kind", "ref"}
 _HANDOFF_CONTEXT_SOURCE_REF_KEYS = {"source", "truth_level", "precedence", "item_count"}
-_HANDOFF_CONTEXT_INCLUDED_KEYS = {"item_id", "key", "summary", "source", "truth_level", "scope"}
+_HANDOFF_CONTEXT_INCLUDED_KEYS = {"item_id", "key", "summary", "source", "truth_level", "scope", "artifact_ref"}
 _HANDOFF_CONTEXT_EXCLUDED_KEYS = {"item_id", "source", "reason"}
 _HANDOFF_CONTEXT_CONFLICT_KEYS = {
     "item_id",

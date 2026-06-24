@@ -16,6 +16,7 @@ from omh.paths import resolve_paths
 from omh.chat_router import route_chat_message, routing_record_payload
 from omh.coding_delegation import build_coding_delegation_payload, coding_delegation_record_payload
 from omh.runtime_artifacts import (
+    append_journal_observation,
     create_prepared_coding_delegation_run,
     create_run,
     export_runtime,
@@ -87,6 +88,10 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertEqual(run["phase"], "prepared")
             self.assertEqual(run["observation_status"], "prepared_not_observed")
             self.assertEqual(validate_run_record(run), [])
+            shown = show_run(paths, run["run_id"])
+            self.assertTrue(shown["lifecycle"]["prepared_handoff"])
+            self.assertEqual(shown["lifecycle"]["observation_status"], "prepared_not_observed")
+            self.assertEqual(shown["lifecycle"]["latest_event"]["event"], "prepared_handoff_created")
 
     def test_create_run_does_not_collide_for_rapid_same_harness_records(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -504,6 +509,234 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertEqual(not_observed_summary["observed_events"], [])
             self.assertEqual(not_observed_summary["next_action"], "record_runtime_observation:runtime_start")
             self.assertIn("runtime_start", not_observed_summary["unsatisfied_events"])
+
+    def test_journal_events_project_run_lifecycle_without_legacy_observation_file(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            payload = build_coding_delegation_payload(
+                message,
+                source="discord",
+                executor_target="codex",
+            )
+            write_coding_delegation(
+                run_dir,
+                coding_delegation_record_payload(payload, message),
+            )
+
+            append_journal_observation(
+                paths,
+                {
+                    "target_type": "run",
+                    "target_id": run["run_id"],
+                    "run_id": run["run_id"],
+                    "event": "executor_dispatch",
+                    "status": "observed",
+                    "summary": "wrapper dispatched the accepted handoff",
+                    "evidence_refs": ["executor-session.json"],
+                },
+            )
+            append_journal_observation(
+                paths,
+                {
+                    "target_type": "run",
+                    "target_id": run["run_id"],
+                    "run_id": run["run_id"],
+                    "event": "executor_result",
+                    "status": "observed",
+                    "summary": "executor reported completion",
+                    "evidence_refs": ["executor-result.json"],
+                },
+            )
+
+            shown = show_run(paths, run["run_id"])
+            status = summarize_delegated_coding_status(paths, run["run_id"])
+            exported = export_runtime(paths, redacted=False, run_id=run["run_id"])
+
+            self.assertFalse((run_dir / "runtime_observations.jsonl").exists())
+            self.assertEqual(shown["lifecycle"]["journal_event_count"], 3)
+            self.assertTrue(shown["lifecycle"]["prompt_dispatched"])
+            self.assertTrue(shown["lifecycle"]["execution_observed"])
+            self.assertEqual(shown["lifecycle"]["observation_status"], "execution_observed")
+            self.assertEqual(shown["lifecycle"]["latest_event"]["event"], "executor_result_observed")
+            self.assertTrue(status["execution"]["observed"])
+            self.assertTrue(status["wrapper"]["prompt_dispatched"])
+            self.assertEqual(exported["export"]["journal_event_count"], 3)
+            self.assertEqual({event["run_id"] for event in exported["journal"]["events"]}, {run["run_id"]})
+            self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
+
+    def test_delegated_status_uses_journal_lifecycle_for_runtime_observation_projection(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {
+                    "skill": "coding",
+                    "harness": "delegate",
+                    "trigger": "test",
+                    "privacy": "metadata_only",
+                    "inputs_summary": "prepared handoff",
+                    "outputs_summary": "prepared",
+                    "verification_summary": "prepared_not_observed",
+                },
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            payload = build_coding_delegation_payload(message, source="discord", executor_target="codex")
+            write_coding_delegation(run_dir, coding_delegation_record_payload(payload, message))
+
+            for event, summary in (
+                ("executor_dispatch", "wrapper dispatched the handoff"),
+                ("executor_result", "executor reported completion"),
+                ("verification", "verification passed"),
+            ):
+                append_journal_observation(
+                    paths,
+                    {
+                        "target_type": "run",
+                        "target_id": run["run_id"],
+                        "run_id": run["run_id"],
+                        "event": event,
+                        "status": "observed",
+                        "summary": summary,
+                    },
+                )
+
+            status = summarize_delegated_coding_status(paths, run["run_id"])
+
+            self.assertEqual(status["next_action"], "record_review_evidence")
+            self.assertEqual(status["runtime_observation"]["source"], "lifecycle_projection")
+            self.assertEqual(status["runtime_observation"]["next_action"], "record_review_evidence")
+            self.assertEqual(
+                status["runtime_observation"]["observed_events"],
+                ["worker_dispatch", "worker_result", "verification"],
+            )
+            self.assertNotIn("runtime_start", status["runtime_observation"]["missing_events"])
+
+    def test_validate_runtime_rejects_out_of_order_journal_lifecycle_events(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {
+                    "skill": "coding",
+                    "harness": "delegate",
+                    "trigger": "test",
+                    "privacy": "metadata_only",
+                    "inputs_summary": "prepared handoff",
+                    "outputs_summary": "prepared",
+                    "verification_summary": "prepared_not_observed",
+                },
+            )
+            run_dir = paths.runtime_runs_dir / run["run_id"]
+            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            payload = build_coding_delegation_payload(message, source="discord", executor_target="codex")
+            write_coding_delegation(run_dir, coding_delegation_record_payload(payload, message))
+
+            append_journal_observation(
+                paths,
+                {
+                    "target_type": "run",
+                    "target_id": run["run_id"],
+                    "run_id": run["run_id"],
+                    "event": "executor_dispatch",
+                    "status": "observed",
+                    "summary": "dispatch observed",
+                },
+            )
+            append_journal_observation(
+                paths,
+                {
+                    "target_type": "run",
+                    "target_id": run["run_id"],
+                    "run_id": run["run_id"],
+                    "event": "executor_result",
+                    "status": "observed",
+                    "summary": "executor result observed",
+                },
+            )
+            with paths.runtime_journal_events_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "schema_version": "omh_observation_event/v1",
+                            "event_id": "bad-merge",
+                            "target_type": "run",
+                            "target_id": run["run_id"],
+                            "run_id": run["run_id"],
+                            "workflow": "coding",
+                            "harness": "delegate",
+                            "phase": "prepared",
+                            "event": "merge_observed",
+                            "status": "observed",
+                            "observed_at": "2026-06-24T00:00:00Z",
+                            "source": "test",
+                            "actor": "",
+                            "runtime_profile": "hermes",
+                            "evidence_refs": [],
+                            "summary": "merge without verification",
+                            "privacy": "metadata_only",
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertFalse(result["ok"])
+            self.assertFalse(result["journal"]["ok"])
+            errors = "\n".join(result["journal"]["errors"])
+            self.assertIn("merge_observed requires verification_result_observed", errors)
+
+    def test_validate_runtime_rejects_malformed_journal_records(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_prepared_coding_delegation_run(
+                paths,
+                {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
+            )
+            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            payload = build_coding_delegation_payload(
+                message,
+                source="discord",
+                executor_target="codex",
+            )
+            write_coding_delegation(
+                paths.runtime_runs_dir / run["run_id"],
+                coding_delegation_record_payload(payload, message),
+            )
+            with paths.runtime_journal_events_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "schema_version": "omh_observation_event/v1",
+                            "event_id": "bad-event",
+                            "target_type": "run",
+                            "target_id": run["run_id"],
+                            "run_id": run["run_id"],
+                            "event": "not-supported",
+                            "status": "observed",
+                            "observed_at": "2026-06-24T00:00:00Z",
+                            "privacy": "metadata_only",
+                            "evidence_refs": [],
+                            "summary": "invalid event",
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+
+            result = validate_runtime(paths, run["run_id"])
+
+            self.assertFalse(result["ok"])
+            self.assertFalse(result["journal"]["ok"])
+            self.assertIn("observation_event event is unsupported", "\n".join(result["journal"]["errors"]))
 
     def test_validate_runtime_requires_coding_delegation_for_prepared_runs(self) -> None:
         with TemporaryDirectory() as tmp:

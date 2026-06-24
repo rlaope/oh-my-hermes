@@ -4,6 +4,7 @@ import argparse
 
 from ..installer import OmhError
 from ..runtime.artifacts import (
+    append_journal_observation,
     CI_STATUSES,
     DELEGATION_RESULTS,
     MERGE_STATUSES,
@@ -15,8 +16,8 @@ from ..runtime.artifacts import (
     create_run,
     export_runtime,
     list_runs,
-    read_state_result,
     show_run,
+    read_state_result,
     summarize_delegated_coding_status,
     validate_runtime,
     write_ci_record,
@@ -51,6 +52,7 @@ def _validate_runtime_names(skill: str, harness: str) -> None:
 def cmd_runtime_status(args: argparse.Namespace) -> int:
     paths = _paths(args)
     state, state_error = read_state_result(paths)
+    journal_events, journal_errors = paths.runtime_journal_events_path, []
     _print_json(
         {
             "schema_version": 1,
@@ -58,6 +60,8 @@ def cmd_runtime_status(args: argparse.Namespace) -> int:
             "state_path": str(paths.runtime_state_path),
             "runs_dir": str(paths.runtime_runs_dir),
             "wrapper_sessions_dir": str(paths.runtime_wrapper_sessions_dir),
+            "journal_path": str(journal_events),
+            "journal_errors": journal_errors,
             "state": state,
             "state_error": state_error,
         }
@@ -66,7 +70,12 @@ def cmd_runtime_status(args: argparse.Namespace) -> int:
 
 
 def cmd_runtime_runs(args: argparse.Namespace) -> int:
-    _print_json({"runs": list_runs(_paths(args), limit=_bounded_limit(args))})
+    paths = _paths(args)
+    runs = [
+        {"run_id": run["run_id"], **run, "lifecycle": show_run(paths, run["run_id"]).get("lifecycle", {})}
+        for run in list_runs(paths, limit=_bounded_limit(args))
+    ]
+    _print_json({"runs": runs})
     return 0
 
 
@@ -279,43 +288,72 @@ def cmd_runtime_observe(args: argparse.Namespace) -> int:
     required_file = target_dir / ("run.json" if target_type == "run" else "session.json")
     if not required_file.exists():
         raise OmhError(f"runtime {target_type} not found: {target_id}")
-    _validate_runtime_observation_target(target_dir, target_type, args.runtime_profile)
+    write_legacy_observation = _validate_runtime_observation_target(target_dir, target_type, args.runtime_profile)
     participants = [item.strip() for item in (args.participants or "").split(",") if item.strip()]
     try:
-        observation = write_runtime_observation(
-            target_dir,
-            {
-                "target_type": target_type,
-                "target_id": target_id,
-                "runtime_profile": args.runtime_profile,
-                "event_type": args.event,
-                "status": args.status,
-                "participants": participants,
-                "worktree_ref": args.worktree_ref or "",
-                "worker_ref": args.worker_ref or "",
-                "evidence_refs": args.evidence_ref or [],
-                "summary": args.summary or "",
-            },
-        )
+        observation_payload = {
+            "target_type": target_type,
+            "target_id": target_id,
+            "runtime_profile": args.runtime_profile,
+            "event_type": args.event,
+            "status": args.status,
+            "participants": participants,
+            "worktree_ref": args.worktree_ref or "",
+            "worker_ref": args.worker_ref or "",
+            "evidence_refs": args.evidence_ref or [],
+            "summary": args.summary or "",
+        }
+        if write_legacy_observation:
+            observation = write_runtime_observation(target_dir, observation_payload)
+            journal_event = None
+        else:
+            observation = {}
+            journal_event = append_journal_observation(
+                paths,
+                {
+                    "target_type": target_type,
+                    "target_id": target_id,
+                    "run_id": target_id if target_type == "run" else "",
+                    "runtime_profile": args.runtime_profile,
+                    "event": args.event,
+                    "status": args.status,
+                    "evidence_refs": args.evidence_ref or [],
+                    "summary": args.summary or "",
+                    "source": "runtime_observe",
+                    "worktree_ref": args.worktree_ref or "",
+                    "worker_ref": args.worker_ref or "",
+                },
+            )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     payload: dict[str, object] = {"observation": observation}
+    if journal_event:
+        payload["journal_event"] = journal_event
     if target_type == "run":
         payload["status"] = summarize_delegated_coding_status(paths, target_id)
     _print_json(payload)
     return 0
 
 
-def _validate_runtime_observation_target(target_dir, target_type: str, runtime_profile: str) -> None:
+def _validate_runtime_observation_target(target_dir, target_type: str, runtime_profile: str) -> bool:
     expected_profile = _expected_runtime_profile_for_target(target_dir, target_type)
     if expected_profile is None:
-        return
+        return True
     if not expected_profile:
         if target_type == "wrapper_session":
             raise OmhError("runtime observe requires a runtime_handoff_prepared wrapper session")
+        run = read_json_object(target_dir / "run.json")
+        coding = read_json_object(target_dir / "coding_delegation.json")
+        if (
+            isinstance(run, dict)
+            and run.get("artifact_kind") == "prepared_coding_delegation"
+            and isinstance(coding, dict)
+        ):
+            return False
         raise OmhError("runtime observe cannot record runtime events for this non-runtime handoff run")
     if runtime_profile != expected_profile:
         raise OmhError(f"runtime observation profile mismatch: expected {expected_profile}, got {runtime_profile}")
+    return True
 
 
 def _expected_runtime_profile_for_target(target_dir, target_type: str) -> str | None:
@@ -350,7 +388,15 @@ def cmd_runtime_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_runtime_export(args: argparse.Namespace) -> int:
-    _print_json(export_runtime(_paths(args), redacted=args.redacted, limit=_bounded_limit(args), full=not args.summary))
+    _print_json(
+        export_runtime(
+            _paths(args),
+            redacted=args.redacted,
+            limit=_bounded_limit(args),
+            full=not args.summary,
+            run_id=args.run_id,
+        )
+    )
     return 0
 
 
@@ -477,6 +523,7 @@ def _add_runtime_commands(sub) -> None:
     runtime_export.add_argument("--no-redact", dest="redacted", action="store_false")
     runtime_export.add_argument("--limit", type=int, default=50, help="Maximum recent runs and wrapper sessions to include. Use --all to export all.")
     runtime_export.add_argument("--all", action="store_true", help="Export all runs and wrapper sessions.")
+    runtime_export.add_argument("--run", dest="run_id", default=None, help="Export one runtime run and its journal events.")
     runtime_export.add_argument("--summary", action="store_true", help="Export run/session records without full event payloads.")
     runtime_export.set_defaults(func=cmd_runtime_export)
 

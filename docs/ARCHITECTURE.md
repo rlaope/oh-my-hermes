@@ -360,9 +360,10 @@ Routing, planning, and delegation have these local surfaces:
    implementation-shaped messages into a deterministic `coding_delegation/v1`
    handoff payload for an executor lane.
 10. Runtime observation recording. `omh runtime observe` lets wrappers or
-   operators append `runtime_observation/v1` evidence for selected runtime
-   handoffs without implying unrecorded worktree, worker, verification, review,
-   CI, or merge steps.
+   operators append observed lifecycle events into
+   `.omh/runtime/journal/events.jsonl` and, for runtime handoffs, maintain
+   `runtime_observation/v1` compatibility without implying unrecorded worktree,
+   worker, verification, review, CI, or merge steps.
 11. Hermes-facing planning artifacts. `omh hermes plan` lets wrappers or
    operators create deterministic `hermes_plan/v1` planning scaffolds under
    `.hermes/plans/` without claiming that execution or review already happened.
@@ -421,12 +422,13 @@ and `coding_delegation.json` as a required pair. The run envelope is
 implementation bookkeeping, not proof that Hermes executed the handoff.
 
 The wrapper contract and lower-level surfaces are local contracts; execution
-evidence still comes from Hermes Agent and the selected executor/runtime. For
-Hermes/OMX/OMO/OMC runtime handoffs, the separate runtime observation ledger is
-the bridge between "prepared" and "observed". A wrapper can record
-`runtime_start` while `worktree_creation`, `worker_dispatch`,
-`worker_result`, `verification`, `review`, `ci`, `merge_readiness`, and
-`merge` remain explicitly missing.
+evidence still comes from Hermes Agent and the selected executor/runtime. The
+append-only observation journal is the bridge between "prepared" and "observed"
+lifecycle status. For Hermes/OMX/OMO/OMC runtime handoffs, the
+legacy-compatible runtime observation ledger is mirrored into that journal. A
+wrapper can record `runtime_start` while `worktree_creation`, `worker_dispatch`,
+`worker_result`, `verification`, `review`, `ci`, `merge_readiness`, and `merge`
+remain explicitly missing.
 
 Hermes planning writes Markdown plans under the configured Hermes home rather
 than runtime JSON under `.omh/runtime/`. The artifact is user-facing: it includes
@@ -436,16 +438,18 @@ default to `not_observed` unless wrapper metadata proves a separate review ran.
 Weak requests create a companion `.hermes/context/` artifact and keep the plan
 `blocked` until Hermes asks the smallest blocking clarification.
 
-The machine-readable planning bridge is stdout JSON, not the Markdown file. Each
-`hermes_plan/v1` payload includes `wrapper_contract` with the current wrapper
-step, decision gate, optional recorded plan artifact path, and coding-delegation
-handoff template. For implementation-shaped draft plans,
-`wrapper_contract.coding_delegate.argv_template` is the adapter contract for
-calling `omh coding delegate --executor codex --record` after plan acceptance
-when the wrapper wants a run-backed Codex handoff and a future
-`runtime.run.run_id`. Blocked or non-coding plans keep
-`coding_delegate.available` false so wrappers do not infer execution from
-presentation text.
+The machine-readable planning bridge is stdout JSON plus the accepted plan
+artifact, not a Discord/channel summary. Each `hermes_plan/v1` payload includes
+`wrapper_contract` with the current wrapper step, decision gate, optional
+recorded plan artifact path, and coding-delegation handoff template. For
+implementation-shaped draft plans, `wrapper_contract.coding_delegate.argv_template`
+is the adapter contract for calling
+`omh coding delegate --executor codex --record --from-plan <accepted-plan.md>`
+after plan acceptance. `omh coding delegate --from-plan` rejects draft plans by
+default and uses the accepted artifact or generated context pack as executor
+context when the wrapper wants a run-backed Codex handoff and a future
+`runtime.run.run_id`. Blocked or non-coding plans keep `coding_delegate.available`
+false so wrappers do not infer execution from presentation text.
 
 `omh chat session` is the recovery layer for adapters that need button/thread
 state to survive restarts. The session id is derived from `thread_key`. Session

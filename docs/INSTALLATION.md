@@ -738,7 +738,8 @@ Lower-level debug surfaces remain available when an adapter needs them:
 ```sh
 omh chat route --source discord --record "risky refactor"
 omh hermes plan --source discord --record "risky refactor with review"
-omh coding delegate --executor codex --source discord --record "risky refactor"
+omh hermes plan-accept .hermes/plans/<accepted-plan.md>
+omh coding delegate --executor codex --source discord --record --from-plan .hermes/plans/<accepted-plan.md>
 omh coding delegate --executor claude-code --source discord --record "risky refactor"
 omh runtime delegation-status --run <run-id>
 ```
@@ -753,7 +754,9 @@ The stdout JSON also includes `wrapper_contract`. Wrappers should use that JSON,
 not the Markdown body, to decide the next local action. If
 `wrapper_contract.coding_delegate.available` is `true`, the listed
 `argv_template` is an adapter contract for preparing a lower-level delegation
-after plan acceptance. If it is `false`, follow `next_action` and do not dispatch
+after plan acceptance. Use the accepted plan artifact or generated context pack
+as the executor context; Discord/channel text is only a summary. If
+`coding_delegate.available` is `false`, follow `next_action` and do not dispatch
 coding work.
 
 For hosted bots, run these commands inside the same container, virtual
@@ -789,6 +792,7 @@ delegation flags, and wrapper completion status.
 - setup/install/apply/doctor summaries in `~/.omh/runtime/state.json`
 - workflow run envelopes in `~/.omh/runtime/runs/<run-id>/run.json`
 - append-only run events in `events.jsonl`
+- append-only lifecycle observations in `~/.omh/runtime/journal/events.jsonl`
 - wrapper chat sessions in `~/.omh/runtime/wrapper_sessions/<session-id>/`
 - delegation observation in `delegation.json`
 - prepared coding handoffs in `coding_delegation.json`
@@ -831,6 +835,9 @@ Before calling the bot integration ready, verify these points:
   returns a `coding_delegation/v1` payload and writes `coding_delegation.json`
   with status `prepared_not_observed` when the payload contains a real Codex
   `executor_handoff`.
+- `omh coding delegate --executor codex --record --from-plan <accepted-plan.md>`
+  uses the accepted `hermes_plan/v1` artifact as executor context. Draft plans
+  are rejected unless an operator explicitly passes the override flag.
 - `omh coding lifecycle start --executor codex --record "<message>"` creates a
   prepared Codex handoff lifecycle without storing the raw prompt body by
   default.
@@ -877,8 +884,9 @@ Before calling the bot integration ready, verify these points:
   presentation.
 - For implementation-shaped draft plans, the stdout
   `wrapper_contract.coding_delegate.argv_template` is the handoff bridge to
-  `omh coding delegate --executor codex --record`; run it only after plan
-  acceptance and with the original message preserved when the wrapper wants a
+  `omh coding delegate --executor codex --record --from-plan <accepted-plan.md>`;
+  run it only after plan acceptance and pass the accepted artifact or context
+  pack, not the original Discord/channel summary, when the wrapper wants a
   run-backed Codex handoff.
 - A chat message that strongly names a workflow reaches Hermes with installed
   skill descriptions available after the wrapper dispatches to Hermes.

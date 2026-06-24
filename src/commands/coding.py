@@ -8,12 +8,17 @@ from pathlib import Path
 
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload, coding_delegation_record_payload
 from ..executor_readiness import EXECUTOR_READINESS_PROFILES, probe_executor_readiness
+from ..hermes_planning import (
+    build_plan_handoff_context_pack,
+    build_plan_handoff_message,
+    read_hermes_plan_artifact,
+)
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..memory import read_handoff_context_pack_file
 from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
-from ..runtime.artifacts import create_prepared_coding_delegation_run, write_coding_delegation
+from ..runtime.artifacts import append_journal_observation, create_prepared_coding_delegation_run, write_coding_delegation
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
     record_codex_dispatch,
@@ -28,7 +33,24 @@ from .common import _chat_input_and_metadata, _explicit_source_metadata, _paths,
 def cmd_coding_delegate(args: argparse.Namespace) -> int:
     try:
         source_metadata: dict[str, str] = {}
-        if args.event_json:
+        plan_artifact: dict[str, object] | None = None
+        context_pack = _context_pack(args)
+        executor_target = _resolved_executor_for_delegate(args)
+        if args.from_plan:
+            if args.event_json or args.stdin or args.message:
+                raise ValueError("coding delegate --from-plan cannot be combined with --stdin, --event-json, or message arguments")
+            artifact = read_hermes_plan_artifact(args.from_plan)
+            if artifact.get("schema_version") != "hermes_plan/v1":
+                raise ValueError("coding delegate --from-plan requires a hermes_plan/v1 artifact")
+            plan_status = str(artifact.get("status", ""))
+            if plan_status != "accepted" and not args.allow_draft_plan:
+                raise ValueError("coding delegate --from-plan requires an accepted plan; use hermes plan-accept or --allow-draft-plan")
+            message = build_plan_handoff_message(artifact)
+            source_metadata.update(_plan_source_metadata(artifact))
+            plan_artifact = _coding_plan_artifact(artifact)
+            if context_pack is None:
+                context_pack = build_plan_handoff_context_pack(artifact, executor_target=executor_target)
+        elif args.event_json:
             raw = (
                 sys.stdin.read()
                 if args.event_json == "-"
@@ -48,21 +70,24 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             limit=args.limit,
             include_message=args.include_message,
             source_metadata=source_metadata,
-            executor_target=_resolved_executor(args, default="generic"),
-            context_pack=_context_pack(args),
+            executor_target=executor_target,
+            context_pack=context_pack,
+            plan_artifact=plan_artifact,
         )
+        if plan_artifact:
+            _apply_plan_handoff_source(payload)
         runtime_skip_reason = ""
         if args.record:
             runtime_skip_reason = _coding_delegate_record_readiness_skip_reason(
                 message,
-                force_record=bool(args.force_record),
+                force_record=bool(args.force_record or args.from_plan),
             )
             if not runtime_skip_reason:
                 runtime_skip_reason = _coding_delegate_runtime_skip_reason(payload)
             if not runtime_skip_reason:
                 runtime_skip_reason = _coding_delegate_record_readiness_skip_reason(
                     message,
-                    force_record=bool(args.force_record),
+                    force_record=bool(args.force_record or args.from_plan),
                     require_dispatchable_requirements=True,
                 )
         if runtime_skip_reason:
@@ -89,7 +114,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
                     "harness": str(delegation["recommended_harness"]),
                     "trigger": f"coding:{args.source}:{delegation['action']}",
                     "privacy": "metadata_only",
-                    "inputs_summary": f"{args.source} coding delegation request; message_length={len(message)}",
+                    "inputs_summary": _inputs_summary(args.source, message, plan_artifact=plan_artifact),
                     "outputs_summary": f"prepared {delegation['action']} for {delegation['recommended_workflow']}",
                     "verification_summary": "prepared_not_observed; executor work is not observed by omh",
                 },
@@ -98,6 +123,24 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
                 paths.runtime_runs_dir / run["run_id"],
                 coding_delegation_record_payload(payload, message, source_metadata=source_metadata),
             )
+            if plan_artifact:
+                append_journal_observation(
+                    paths,
+                    {
+                        "target_type": "run",
+                        "target_id": run["run_id"],
+                        "run_id": run["run_id"],
+                        "workflow": str(delegation["recommended_workflow"]),
+                        "harness": str(delegation["recommended_harness"]),
+                        "phase": "prepared",
+                        "event": "prepared_handoff_created",
+                        "status": "observed",
+                        "source": "coding_delegate_from_plan",
+                        "plan_artifact": plan_artifact.get("path", ""),
+                        "plan_status": plan_artifact.get("status", ""),
+                        "summary": "Prepared coding handoff from accepted Hermes plan artifact.",
+                    },
+                )
             payload["runtime"] = {"run": run, "coding_delegation": record}
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
@@ -118,6 +161,62 @@ def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
     if payload.get("selected_executor_profile") != "codex" or not isinstance(payload.get("executor_handoff"), dict):
         return "codex_executor_handoff_required_for_runtime_record"
     return ""
+
+
+def _resolved_executor_for_delegate(args: argparse.Namespace) -> str:
+    if getattr(args, "executor", None):
+        return str(args.executor)
+    if getattr(args, "from_plan", None):
+        return "codex"
+    return _resolved_executor(args, default="generic")
+
+
+def _plan_source_metadata(artifact: dict[str, object]) -> dict[str, str]:
+    return {
+        "plan_artifact_path": str(artifact.get("path", "")),
+        "plan_artifact_sha256": str(artifact.get("sha256", "")),
+        "plan_artifact_status": str(artifact.get("status", "")),
+        "plan_task_sha256": str(artifact.get("task_statement_sha256", "")),
+        "plan_task_length": str(artifact.get("task_statement_length", 0)),
+    }
+
+
+def _coding_plan_artifact(artifact: dict[str, object]) -> dict[str, object]:
+    return {
+        "path": str(artifact.get("path", "")),
+        "kind": "hermes_plan",
+        "schema_version": str(artifact.get("schema_version", "hermes_plan/v1")),
+        "status": str(artifact.get("status", "")),
+        "sha256": str(artifact.get("sha256", "")),
+        "task_statement_sha256": str(artifact.get("task_statement_sha256", "")),
+        "task_statement_length": int(artifact.get("task_statement_length", 0) or 0),
+    }
+
+
+def _apply_plan_handoff_source(payload: dict[str, object]) -> None:
+    for key, brief_key in (
+        ("executor_handoff", "execution_brief"),
+        ("runtime_handoff", "runtime_brief"),
+        ("prompt_handoff", ""),
+    ):
+        handoff = payload.get(key)
+        if not isinstance(handoff, dict):
+            continue
+        if brief_key and isinstance(handoff.get(brief_key), dict):
+            handoff[brief_key]["task_source"] = "accepted_plan_artifact"
+        scope = handoff.get("scope")
+        if isinstance(scope, list):
+            scope.insert(0, "Use the accepted Hermes plan artifact as the executor request.")
+        handoff["dispatch_contract"] = str(handoff.get("dispatch_contract", "")) + "; plan_artifact_context_required"
+
+
+def _inputs_summary(source: str, message: str, *, plan_artifact: dict[str, object] | None) -> str:
+    if plan_artifact:
+        return (
+            f"{source} coding delegation from accepted plan artifact; "
+            f"plan_sha256={plan_artifact.get('sha256', '')}; message_length={len(message)}"
+        )
+    return f"{source} coding delegation request; message_length={len(message)}"
 
 
 def _coding_delegate_record_readiness_skip_reason(
@@ -370,6 +469,16 @@ def _add_coding_commands(sub) -> None:
         "--context-pack",
         default=None,
         help="Optional handoff_context_pack/v1 JSON to attach to the prepared executor prompt when conflict-free.",
+    )
+    delegate.add_argument(
+        "--from-plan",
+        default=None,
+        help="Read an accepted hermes_plan/v1 Markdown artifact and use it as executor context.",
+    )
+    delegate.add_argument(
+        "--allow-draft-plan",
+        action="store_true",
+        help="Allow --from-plan to use a draft plan. Intended only for explicit operator overrides.",
     )
     delegate.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     delegate.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")

@@ -96,6 +96,11 @@ CODING_SOURCE_METADATA_KEYS = (
     "user_ref",
     "timestamp",
     "render_profile",
+    "plan_artifact_path",
+    "plan_artifact_sha256",
+    "plan_artifact_status",
+    "plan_task_sha256",
+    "plan_task_length",
     *TARGET_SOURCE_METADATA_KEYS,
 )
 CODING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched")
@@ -135,7 +140,17 @@ CODING_DELEGATION_RECORD_KEYS = (
     "isolation_plan",
     "acceptance_criteria",
     "verification",
+    "plan_artifact",
     "status",
+)
+CODING_PLAN_ARTIFACT_KEYS = (
+    "path",
+    "kind",
+    "schema_version",
+    "status",
+    "sha256",
+    "task_statement_sha256",
+    "task_statement_length",
 )
 ISOLATION_STRATEGIES = ("same_workspace_ok", "worktree_recommended", "worktree_required")
 ISOLATION_STATUSES = ("prepared_not_observed",)
@@ -668,6 +683,9 @@ def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]
     isolation_plan = _compact_isolation_plan(delegation.get("isolation_plan"))
     if isolation_plan:
         record["isolation_plan"] = isolation_plan
+    plan_artifact = _compact_plan_artifact(delegation.get("plan_artifact"))
+    if plan_artifact:
+        record["plan_artifact"] = plan_artifact
     if not record["message_sha256"] and message_text:
         record["message_sha256"] = hashlib.sha256(message_text.encode("utf-8")).hexdigest()
     errors = validate_coding_delegation_record(record)
@@ -1316,6 +1334,20 @@ def _compact_context_pack_blocked(value: Any) -> dict[str, Any]:
     }
 
 
+def _compact_plan_artifact(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "path": str(value.get("path", "")),
+        "kind": str(value.get("kind", "hermes_plan")),
+        "schema_version": str(value.get("schema_version", "")),
+        "status": str(value.get("status", "")),
+        "sha256": str(value.get("sha256", "")),
+        "task_statement_sha256": str(value.get("task_statement_sha256", "")),
+        "task_statement_length": int(value.get("task_statement_length", 0) or 0),
+    }
+
+
 def _compact_context_scope(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
@@ -1724,7 +1756,39 @@ def validate_coding_delegation_record(delegation: dict[str, Any]) -> list[str]:
         errors.extend(validate_isolation_plan(delegation["isolation_plan"], "coding_delegation isolation_plan"))
     if "harness_quality" in delegation:
         errors.extend(validate_harness_quality(delegation["harness_quality"], "coding_delegation harness_quality"))
+    if "plan_artifact" in delegation:
+        errors.extend(validate_coding_plan_artifact(delegation["plan_artifact"]))
     errors.extend(validate_coding_handoff_combination(delegation, "coding_delegation"))
+    return errors
+
+
+def validate_coding_plan_artifact(value: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(value, dict):
+        return ["coding_delegation plan_artifact must be an object"]
+    extra_keys = sorted(set(value) - set(CODING_PLAN_ARTIFACT_KEYS))
+    _require(not extra_keys, errors, f"coding_delegation plan_artifact has unsupported keys: {extra_keys}")
+    for key in ("path", "kind", "schema_version", "status", "sha256", "task_statement_sha256"):
+        _require(isinstance(value.get(key), str), errors, f"coding_delegation plan_artifact.{key} must be a string")
+    _require(value.get("kind") == "hermes_plan", errors, "coding_delegation plan_artifact.kind must be hermes_plan")
+    _require(
+        value.get("schema_version") == "hermes_plan/v1",
+        errors,
+        "coding_delegation plan_artifact.schema_version must be hermes_plan/v1",
+    )
+    if value.get("sha256"):
+        _require(_is_sha256(str(value.get("sha256", ""))), errors, "coding_delegation plan_artifact.sha256 must be a sha256 hex digest")
+    if value.get("task_statement_sha256"):
+        _require(
+            _is_sha256(str(value.get("task_statement_sha256", ""))),
+            errors,
+            "coding_delegation plan_artifact.task_statement_sha256 must be a sha256 hex digest",
+        )
+    _require(
+        isinstance(value.get("task_statement_length"), int),
+        errors,
+        "coding_delegation plan_artifact.task_statement_length must be an integer",
+    )
     return errors
 
 

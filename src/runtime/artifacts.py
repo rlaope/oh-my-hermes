@@ -19,6 +19,13 @@ from ..local_store import (
     read_jsonl_objects,
     utc_now,
 )
+from ..observation_journal import (
+    append_observation_event,
+    merge_lifecycle_projection,
+    project_run_lifecycle,
+    read_observation_events_result,
+    validate_observation_journal,
+)
 from ..paths import OmhPaths
 from .records import (
     DELEGATION_RESULTS,
@@ -135,7 +142,23 @@ def create_prepared_coding_delegation_run(paths: OmhPaths, metadata: dict[str, A
         "phase": "prepared",
         "observation_status": "prepared_not_observed",
     }
-    return create_run(paths, prepared_metadata)
+    run = create_run(paths, prepared_metadata)
+    append_observation_event(
+        paths,
+        {
+            "target_type": "run",
+            "target_id": run["run_id"],
+            "run_id": run["run_id"],
+            "workflow": run.get("skill", ""),
+            "harness": run.get("harness", ""),
+            "phase": "prepared",
+            "event": "prepared_handoff_created",
+            "status": "observed",
+            "source": "omh-runtime",
+            "summary": "Prepared coding handoff recorded; execution is not observed.",
+        },
+    )
+    return run
 
 
 def append_event(run_dir: Path, event: dict[str, Any]) -> dict[str, Any]:
@@ -297,7 +320,109 @@ def write_runtime_observation(target_dir: Path, observation: dict[str, Any]) -> 
             },
         },
     )
+    _append_runtime_observation_to_journal(target_dir, record)
     return record
+
+
+def append_journal_observation(paths: OmhPaths, observation: dict[str, Any]) -> dict[str, Any]:
+    return append_observation_event(paths, observation)
+
+
+def _append_runtime_observation_to_journal(target_dir: Path, record: dict[str, Any]) -> None:
+    try:
+        runtime_dir = target_dir.parents[1]
+        paths = OmhPaths(omh_home=runtime_dir.parent, hermes_home=Path("~/.hermes").expanduser())
+        append_observation_event(
+            paths,
+            {
+                "target_type": record.get("target_type", ""),
+                "target_id": record.get("target_id", ""),
+                "run_id": record.get("target_id", "") if record.get("target_type") == "run" else "",
+                "event": record.get("event_type", ""),
+                "status": record.get("status", "observed"),
+                "observed_at": record.get("updated_at", ""),
+                "runtime_profile": record.get("runtime_profile", ""),
+                "evidence_refs": record.get("evidence_refs", []),
+                "summary": record.get("summary", ""),
+                "source": "runtime_observation",
+                "worktree_ref": record.get("worktree_ref", ""),
+                "worker_ref": record.get("worker_ref", ""),
+            },
+        )
+    except (IndexError, OSError, ValueError):
+        return
+
+
+def _journal_events_for_run_result(paths: OmhPaths, run_id: str) -> tuple[list[dict[str, Any]], list[str]]:
+    events, errors = read_observation_events_result(paths)
+    return [event for event in events if str(event.get("run_id", "")) == run_id], errors
+
+
+def _lifecycle_projection_from_shown(shown: dict[str, Any]) -> dict[str, Any]:
+    run = _object_or_empty(shown.get("run"))
+    run_id = str(run.get("run_id", ""))
+    legacy = _legacy_lifecycle_projection(shown)
+    journal = project_run_lifecycle(
+        _list_or_empty(shown.get("journal_events")),
+        run_id=run_id,
+        workflow=str(run.get("skill", "")),
+        harness=str(run.get("harness", "")),
+        phase=str(run.get("phase", "")),
+    )
+    return merge_lifecycle_projection(legacy, journal)
+
+
+def _legacy_lifecycle_projection(shown: dict[str, Any]) -> dict[str, Any]:
+    run = _object_or_empty(shown.get("run"))
+    coding = _object_or_empty(shown.get("coding_delegation"))
+    delegation = _object_or_empty(shown.get("delegation"))
+    wrapper = _object_or_empty(shown.get("wrapper"))
+    review = _object_or_empty(shown.get("review"))
+    ci = _object_or_empty(shown.get("ci"))
+    merge = _object_or_empty(shown.get("merge"))
+    plan_artifact = _object_or_empty(coding.get("plan_artifact"))
+    prepared = run.get("artifact_kind") == "prepared_coding_delegation" and bool(coding)
+    observation_status = str(run.get("observation_status", "unknown"))
+    if merge.get("observed"):
+        observation_status = "merge_observed"
+    elif ci.get("observed"):
+        observation_status = "ci_observed"
+    elif review.get("observed"):
+        observation_status = "review_observed"
+    elif wrapper.get("verification_observed"):
+        observation_status = "verification_observed"
+    elif delegation.get("observed"):
+        observation_status = "execution_observed"
+    elif wrapper.get("prompt_dispatched"):
+        observation_status = "dispatch_observed"
+    elif prepared:
+        observation_status = "prepared_not_observed"
+    return {
+        "schema_version": "omh_lifecycle_projection/v1",
+        "run_id": str(run.get("run_id", "")),
+        "workflow": str(coding.get("recommended_workflow") or run.get("skill", "")),
+        "harness": str(coding.get("recommended_harness") or run.get("harness", "")),
+        "phase": str(run.get("phase", "")),
+        "prepared_handoff": prepared,
+        "plan_artifact": str(plan_artifact.get("path", "")),
+        "plan_status": str(plan_artifact.get("status", "")),
+        "prompt_dispatched": bool(wrapper.get("prompt_dispatched", False)),
+        "runtime_start_observed": False,
+        "worktree_observed": False,
+        "execution_observed": bool(delegation.get("observed", False)),
+        "verification_observed": bool(wrapper.get("verification_observed", False)),
+        "review_observed": bool(review.get("observed", False)),
+        "ci_observed": bool(ci.get("observed", False)),
+        "merge_gate_observed": bool(merge.get("ready", False)),
+        "merge_observed": bool(merge.get("merged", False)),
+        "blocked": delegation.get("result") == "blocked" or wrapper.get("completion_status") == "blocked",
+        "failed": delegation.get("result") == "failed" or wrapper.get("completion_status") == "failed",
+        "cancelled": False,
+        "observation_status": observation_status,
+        "journal_event_count": 0,
+        "latest_event_id": "",
+        "latest_event": {},
+    }
 
 
 def _apply_limit(records: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
@@ -352,10 +477,12 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
     evidence_dir = run_dir / "evidence"
     events, event_errors = read_events_result(run_dir)
     observations, observation_errors = read_runtime_observations_result(run_dir)
+    journal_events, journal_errors = _journal_events_for_run_result(paths, run_id)
     result = {
         "run": run,
         "events": events,
         "runtime_observations": observations,
+        "journal_events": journal_events,
         "routing": read_json_object(run_dir / "routing.json"),
         "coding_delegation": read_json_object(run_dir / "coding_delegation.json"),
         "delegation": read_json_object(run_dir / "delegation.json"),
@@ -369,6 +496,9 @@ def show_run(paths: OmhPaths, run_id: str) -> dict[str, Any]:
         result["event_errors"] = event_errors
     if observation_errors:
         result["runtime_observation_errors"] = observation_errors
+    if journal_errors:
+        result["journal_errors"] = journal_errors
+    result["lifecycle"] = _lifecycle_projection_from_shown(result)
     return result
 
 
@@ -413,6 +543,8 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     ci_record = _object_or_empty(shown.get("ci"))
     merge_record = _object_or_empty(shown.get("merge"))
     runtime_observations = runtime_observations_for_target(_list_or_empty(shown.get("runtime_observations")), "run", run_id)
+    lifecycle = _object_or_empty(shown.get("lifecycle"))
+    legacy_runtime_observation = summarize_runtime_observation_status(runtime_observations)
     handoff = _object_or_empty(coding.get("executor_handoff"))
     review = _object_or_empty(handoff.get("review"))
 
@@ -420,11 +552,14 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     action = str(coding.get("action", "unknown"))
     handoff_available = bool(handoff)
     executor_target = str(handoff.get("executor_target") or coding.get("executor_profile") or "generic")
-    execution_observed = bool(delegation.get("observed", False))
-    execution_status = str(delegation.get("result") or ("not_observed" if prepared else "unknown"))
-    prompt_dispatched = bool(wrapper.get("prompt_dispatched", False))
+    execution_observed = bool(delegation.get("observed", False)) or bool(lifecycle.get("execution_observed", False))
+    execution_status = str(
+        delegation.get("result")
+        or ("completed" if lifecycle.get("execution_observed") else "not_observed" if prepared else "unknown")
+    )
+    prompt_dispatched = bool(wrapper.get("prompt_dispatched", False)) or bool(lifecycle.get("prompt_dispatched", False))
     response_observed = bool(wrapper.get("hermes_response_observed", False))
-    verification_observed = bool(wrapper.get("verification_observed", False))
+    verification_observed = bool(wrapper.get("verification_observed", False)) or bool(lifecycle.get("verification_observed", False))
     completion_status = str(wrapper.get("completion_status") or "unknown")
     verification_status = _verification_status_summary(
         observed=verification_observed,
@@ -434,10 +569,13 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
     review_required = bool(review.get("required", coding.get("review_required", False)))
     review_workflow = review.get("workflow") if review else coding.get("review_workflow")
     review_status = _review_status_summary(review_required, review_workflow, review, review_record)
+    review_status = _apply_lifecycle_review_status(review_status, lifecycle)
     ci_required = bool(ci_record) or review_status["status"] == "passed"
     ci_status = _ci_status_summary(ci_required, ci_record)
+    ci_status = _apply_lifecycle_ci_status(ci_status, lifecycle, review_status)
     merge_required = bool(merge_record) or ci_status["status"] == "passed"
     merge_status = _merge_status_summary(merge_required, merge_record)
+    merge_status = _apply_lifecycle_merge_status(merge_status, lifecycle)
     harness_quality = _object_or_empty(coding.get("harness_quality") or handoff.get("harness_quality"))
     harness_progress = _delegated_harness_progress(
         harness_quality,
@@ -461,6 +599,11 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
         review_status=review_status,
         ci_status=ci_status,
         merge_status=merge_status,
+    )
+    runtime_observation_status = _delegated_runtime_observation_status(
+        legacy_runtime_observation,
+        lifecycle,
+        next_action=next_action,
     )
     integrity_warnings = _delegated_status_integrity_warnings(
         run=run,
@@ -521,7 +664,8 @@ def summarize_delegated_coding_status(paths: OmhPaths, run_id: str) -> dict[str,
             "summary": merge_status["summary"],
         },
         "merge": merge_status,
-        "runtime_observation": summarize_runtime_observation_status(runtime_observations),
+        "runtime_observation": runtime_observation_status,
+        "lifecycle": lifecycle,
         "next_action": next_action,
         "progress_reporting_policy": build_coding_progress_reporting_policy(next_action=next_action),
         "safe_summary": _delegated_status_summary(
@@ -975,6 +1119,146 @@ def _merge_status_summary(required: bool, record: dict[str, Any]) -> dict[str, A
     }
 
 
+def _apply_lifecycle_review_status(status: dict[str, Any], lifecycle: dict[str, Any]) -> dict[str, Any]:
+    if not lifecycle.get("review_observed") or status.get("observed"):
+        return status
+    return {
+        **status,
+        "observed": True,
+        "status": "passed",
+        "satisfied": True,
+        "summary": str(_object_or_empty(lifecycle.get("latest_event")).get("summary") or status.get("summary", "")),
+    }
+
+
+def _apply_lifecycle_ci_status(
+    status: dict[str, Any],
+    lifecycle: dict[str, Any],
+    review_status: dict[str, Any],
+) -> dict[str, Any]:
+    if not lifecycle.get("ci_observed") or status.get("observed"):
+        return status
+    return {
+        **status,
+        "required": bool(status.get("required")) or review_status.get("status") == "passed",
+        "observed": True,
+        "status": "passed",
+        "satisfied": True,
+        "summary": str(_object_or_empty(lifecycle.get("latest_event")).get("summary") or status.get("summary", "")),
+    }
+
+
+def _apply_lifecycle_merge_status(status: dict[str, Any], lifecycle: dict[str, Any]) -> dict[str, Any]:
+    if status.get("observed"):
+        return status
+    latest = _object_or_empty(lifecycle.get("latest_event"))
+    if lifecycle.get("merge_observed"):
+        return {
+            **status,
+            "required": True,
+            "observed": True,
+            "ready": True,
+            "merged": True,
+            "status": "merged",
+            "satisfied": True,
+            "summary": str(latest.get("summary") or status.get("summary", "")),
+        }
+    if lifecycle.get("merge_gate_observed"):
+        return {
+            **status,
+            "required": True,
+            "observed": True,
+            "ready": True,
+            "merged": False,
+            "status": "ready",
+            "satisfied": True,
+            "summary": str(latest.get("summary") or status.get("summary", "")),
+        }
+    return status
+
+
+def _delegated_runtime_observation_status(
+    legacy_status: dict[str, Any],
+    lifecycle: dict[str, Any],
+    *,
+    next_action: str,
+) -> dict[str, Any]:
+    if int(lifecycle.get("journal_event_count", 0) or 0) <= 0:
+        return legacy_status
+    observed_events = _runtime_events_from_lifecycle(lifecycle)
+    latest = _object_or_empty(lifecycle.get("latest_event"))
+    blocked_events = []
+    failed_events = []
+    latest_event = _runtime_event_from_journal_event(str(latest.get("event", "")))
+    latest_status = str(latest.get("status", ""))
+    if latest_event and latest_status == "blocked":
+        blocked_events.append(latest_event)
+    elif latest_event and latest_status == "failed":
+        failed_events.append(latest_event)
+    missing_events = _runtime_missing_events_for_next_action(next_action)
+    return {
+        "schema_version": "runtime_observation_status/v1",
+        "record_schema": RUNTIME_OBSERVATION_SCHEMA_VERSION,
+        "applicable": True,
+        "source": "lifecycle_projection",
+        "observed_events": observed_events,
+        "blocked_events": blocked_events,
+        "failed_events": failed_events,
+        "not_observed_events": [],
+        "missing_events": missing_events,
+        "unsatisfied_events": missing_events,
+        "latest": {"event": latest_event, **latest} if latest_event else latest,
+        "next_action": next_action,
+        "claim_boundary": (
+            "Runtime observation status is projected from the merged lifecycle journal for prepared Codex runs. "
+            "It remains metadata-only evidence."
+        ),
+    }
+
+
+def _runtime_events_from_lifecycle(lifecycle: dict[str, Any]) -> list[str]:
+    events: list[str] = []
+    for lifecycle_key, event_type in (
+        ("runtime_start_observed", "runtime_start"),
+        ("worktree_observed", "worktree_creation"),
+        ("prompt_dispatched", "worker_dispatch"),
+        ("execution_observed", "worker_result"),
+        ("verification_observed", "verification"),
+        ("review_observed", "review"),
+        ("ci_observed", "ci"),
+        ("merge_gate_observed", "merge_readiness"),
+        ("merge_observed", "merge"),
+    ):
+        if lifecycle.get(lifecycle_key):
+            events.append(event_type)
+    return events
+
+
+def _runtime_missing_events_for_next_action(next_action: str) -> list[str]:
+    return {
+        "dispatch_to_executor": ["worker_dispatch"],
+        "wait_for_executor_evidence": ["worker_result"],
+        "record_verification_evidence": ["verification"],
+        "record_review_evidence": ["review"],
+        "record_ci_evidence": ["ci"],
+        "record_merge_readiness": ["merge_readiness"],
+    }.get(next_action, [])
+
+
+def _runtime_event_from_journal_event(event_name: str) -> str:
+    return {
+        "runtime_start_observed": "runtime_start",
+        "worktree_creation_observed": "worktree_creation",
+        "executor_dispatch_observed": "worker_dispatch",
+        "executor_result_observed": "worker_result",
+        "verification_result_observed": "verification",
+        "review_result_observed": "review",
+        "ci_result_observed": "ci",
+        "merge_gate_observed": "merge_readiness",
+        "merge_observed": "merge",
+    }.get(event_name, "")
+
+
 def _delegated_status_next_action(
     *,
     prepared: bool,
@@ -1247,11 +1531,15 @@ def validate_runtime(paths: OmhPaths, run_id: str | None = None) -> dict[str, An
         )
     results = [validate_run_dir(run_dir) for run_dir in run_dirs]
     session_results = [validate_wrapper_session_dir(session_dir) for session_dir in session_dirs]
+    journal_result = validate_observation_journal(paths, run_id=run_id)
     _add_duplicate_wrapper_run_link_errors(session_results, session_dirs)
     return {
-        "ok": all(result["ok"] for result in results) and all(result["ok"] for result in session_results),
+        "ok": all(result["ok"] for result in results)
+        and all(result["ok"] for result in session_results)
+        and bool(journal_result["ok"]),
         "runs": results,
         "wrapper_sessions": session_results,
+        "journal": journal_result,
     }
 
 
@@ -1335,9 +1623,23 @@ def _redact(value: Any) -> Any:
     return value
 
 
-def export_runtime(paths: OmhPaths, redacted: bool = True, *, limit: int | None = None, full: bool = True) -> dict[str, Any]:
-    runs = list_runs(paths, limit=limit)
-    wrapper_sessions = list_wrapper_session_records(paths, limit=limit)
+def export_runtime(
+    paths: OmhPaths,
+    redacted: bool = True,
+    *,
+    limit: int | None = None,
+    full: bool = True,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    runs = [read_json_object(paths.runtime_runs_dir / run_id / "run.json")] if run_id else list_runs(paths, limit=limit)
+    runs = [run for run in runs if isinstance(run, dict)]
+    if run_id:
+        wrapper_sessions = _wrapper_session_records_for_run(paths, run_id, limit=limit)
+    else:
+        wrapper_sessions = list_wrapper_session_records(paths, limit=limit)
+    journal_events, journal_errors = read_observation_events_result(paths)
+    if run_id:
+        journal_events = [event for event in journal_events if str(event.get("run_id", "")) == run_id]
     payload = {
         "schema_version": SCHEMA_VERSION,
         "runtime_dir": str(paths.runtime_dir),
@@ -1345,13 +1647,20 @@ def export_runtime(paths: OmhPaths, redacted: bool = True, *, limit: int | None 
         "export": {
             "full": full,
             "limit": limit,
+            "run_id": run_id or "",
             "run_count": len(runs),
             "wrapper_session_count": len(wrapper_sessions),
+            "journal_event_count": len(journal_events),
         },
         "runs": [show_run(paths, run["run_id"]) for run in runs] if full else runs,
         "wrapper_sessions": (
             [show_wrapper_session_record(paths, session["session_id"]) for session in wrapper_sessions] if full else wrapper_sessions
         ),
+        "journal": {
+            "path": str(paths.runtime_journal_events_path),
+            "events": journal_events if full else [],
+            "errors": journal_errors,
+        },
     }
     if redacted:
         payload = _redact(payload)
@@ -1359,6 +1668,15 @@ def export_runtime(paths: OmhPaths, redacted: bool = True, *, limit: int | None 
     else:
         payload["redacted"] = False
     return payload
+
+
+def _wrapper_session_records_for_run(paths: OmhPaths, run_id: str, *, limit: int | None = None) -> list[dict[str, Any]]:
+    sessions: list[dict[str, Any]] = []
+    for session_dir in _wrapper_session_dirs_for_run(paths, run_id):
+        session = read_json_object(session_dir / "session.json")
+        if isinstance(session, dict):
+            sessions.append(session)
+    return _apply_limit(sessions, limit)
 
 
 def _read_jsonl_events(path: Path) -> list[dict[str, Any]]:

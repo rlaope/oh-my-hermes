@@ -1401,6 +1401,50 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(len(exported["wrapper_sessions"]), 1)
             self.assertNotIn(message, json.dumps(exported))
 
+    def test_export_runtime_run_scope_includes_only_linked_wrapper_sessions(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            first = create_or_resume_wrapper_session(
+                paths,
+                "risky refactor first scoped runtime fix in src/runtime/artifacts.py",
+                source="discord",
+                source_metadata={"channel_ref": "c1", "source_event_id": "thread-one"},
+            )
+            first_id = str(first["session"]["session_id"])
+            record_plan_decision(paths, first_id, "accept")
+            select_wrapper_session_executor(paths, first_id, "codex")
+            first_handoff = prepare_wrapper_session_handoff(
+                paths,
+                first_id,
+                "risky refactor first scoped runtime fix in src/runtime/artifacts.py",
+            )
+            first_run_id = str(first_handoff["session"]["current_run_id"])
+
+            second = create_or_resume_wrapper_session(
+                paths,
+                "risky refactor second unrelated runtime fix in src/runtime/artifacts.py",
+                source="discord",
+                source_metadata={"channel_ref": "c2", "source_event_id": "thread-two"},
+            )
+            second_id = str(second["session"]["session_id"])
+            record_plan_decision(paths, second_id, "accept")
+            select_wrapper_session_executor(paths, second_id, "codex")
+            second_handoff = prepare_wrapper_session_handoff(
+                paths,
+                second_id,
+                "risky refactor second unrelated runtime fix in src/runtime/artifacts.py",
+            )
+            second_run_id = str(second_handoff["session"]["current_run_id"])
+
+            exported = export_runtime(paths, redacted=False, run_id=first_run_id)
+
+            self.assertNotEqual(first_run_id, second_run_id)
+            self.assertEqual(exported["export"]["run_id"], first_run_id)
+            self.assertEqual(exported["export"]["wrapper_session_count"], 1)
+            self.assertEqual(exported["wrapper_sessions"][0]["session"]["session_id"], first_id)
+            self.assertNotIn(second_id, json.dumps(exported))
+
     def test_runtime_validation_rejects_wrong_linked_run_type(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

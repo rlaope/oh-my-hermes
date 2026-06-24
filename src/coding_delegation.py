@@ -140,6 +140,7 @@ def build_coding_delegation_payload(
     source_metadata: dict[str, str] | None = None,
     executor_target: str = "generic",
     context_pack: dict[str, object] | None = None,
+    plan_artifact: dict[str, object] | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -235,6 +236,8 @@ def build_coding_delegation_payload(
     metadata = {key: value for key, value in (source_metadata or {}).items() if value}
     if metadata:
         payload["source_metadata"] = metadata
+    if plan_artifact:
+        payload["plan_artifact"] = plan_artifact
     if include_message:
         payload["message"] = message
         payload["delegation_prompt"] = str(delegation.delegation_prompt_template).replace("{message}", message)
@@ -332,6 +335,8 @@ def coding_delegation_record_payload(
             record[key] = payload[key]
     if isinstance(payload.get("isolation_plan"), dict):
         record["isolation_plan"] = payload["isolation_plan"]
+    if isinstance(payload.get("plan_artifact"), dict):
+        record["plan_artifact"] = payload["plan_artifact"]
     return record
 
 
