@@ -973,6 +973,7 @@ def _executor_progress_status(paths: OmhPaths, session_id: str) -> dict[str, obj
     report = latest_progress_report(paths, refreshed)
     return {
         "binding_id": refreshed.get("binding_id", ""),
+        "instance_id": refreshed.get("instance_id", ""),
         "executor_profile": refreshed.get("executor_profile", ""),
         "state": refreshed.get("state", ""),
         "correlation_root": refreshed.get("correlation_root", ""),

@@ -148,6 +148,47 @@ class ExecutorProgressProjectionTests(unittest.TestCase):
             self.assertEqual(plugin_status["stale_executors"], [])
             self.assertEqual(plugin_status["latest_progress_events"], [])
 
+    def test_worktree_branch_only_bindings_project_as_separate_instances(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run_one = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            run_two = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            shared = {"worktree": "/tmp/omh-worktree", "branch": "feature/live-progress"}
+            for index, run in enumerate((run_one, run_two), start=1):
+                binding = write_progress_binding(
+                    paths,
+                    build_progress_binding(
+                        target_type="run",
+                        target_id=run["run_id"],
+                        executor_profile="codex",
+                        now=f"2026-06-24T00:0{index}:00Z",
+                        freshness_seconds=86400,
+                        **shared,
+                    ),
+                )
+                observe_executor_progress(
+                    paths,
+                    binding,
+                    build_safe_progress_signal(
+                        executor_profile="codex",
+                        explicit_event_type="diff_started",
+                        explicit_summary=f"Codex changed files for run {index}.",
+                    ),
+                    observed_at=f"2026-06-24T00:0{index}:30Z",
+                )
+
+            projection = project_active_executor_status(paths, now="2026-06-24T00:03:00Z")
+            plugin_status = read_omh_status(paths.omh_home)
+
+            self.assertEqual(len(projection["active_executors"]), 2)
+            self.assertEqual(len(plugin_status["active_executors"]), 2)
+            for row in projection["active_executors"]:
+                self.assertTrue(row["correlation_root"].startswith("binding_instance:"))
+                self.assertEqual(row["linked_bindings"], [])
+            for row in plugin_status["active_executors"]:
+                self.assertTrue(row["correlation_root"].startswith("binding_instance:"))
+                self.assertEqual(row["linked_bindings"], [])
+
     def test_plugin_reader_drops_invalid_progress_event_payloads(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

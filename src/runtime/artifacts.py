@@ -544,8 +544,21 @@ def _show_executor_progress(target_dir: Path) -> dict[str, Any]:
     events, event_errors = read_jsonl_objects(progress_dir / "events.jsonl")
     reports, report_errors = read_jsonl_objects(progress_dir / "reports.jsonl")
     binding_id = str(binding.get("binding_id", ""))
-    matching_events = [event for event in events if str(event.get("binding_id", "")) == binding_id and not validate_progress_event(event)]
-    matching_reports = [report for report in reports if str(report.get("binding_id", "")) == binding_id and not validate_progress_report(report)]
+    instance_id = str(binding.get("instance_id", ""))
+    matching_events = [
+        event
+        for event in events
+        if str(event.get("binding_id", "")) == binding_id
+        and str(event.get("instance_id", "")) == instance_id
+        and not validate_progress_event(event)
+    ]
+    matching_reports = [
+        report
+        for report in reports
+        if str(report.get("binding_id", "")) == binding_id
+        and str(report.get("instance_id", "")) == instance_id
+        and not validate_progress_report(report)
+    ]
     result = {
         "schema_version": "omh_executor_progress_show/v1",
         "diagnostic_only": True,
@@ -570,6 +583,7 @@ def _show_executor_progress(target_dir: Path) -> dict[str, Any]:
 def _compact_executor_progress_event(event: dict[str, Any]) -> dict[str, Any]:
     return {
         "binding_id": event.get("binding_id", ""),
+        "instance_id": event.get("instance_id", ""),
         "executor_profile": event.get("executor_profile", ""),
         "event_type": event.get("event_type", ""),
         "status": event.get("status", ""),
@@ -581,6 +595,8 @@ def _compact_executor_progress_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def _compact_executor_progress_report(report: dict[str, Any]) -> dict[str, Any]:
     return {
+        "binding_id": report.get("binding_id", ""),
+        "instance_id": report.get("instance_id", ""),
         "event_type": report.get("event_type", ""),
         "status": report.get("status", ""),
         "summary": report.get("summary", ""),

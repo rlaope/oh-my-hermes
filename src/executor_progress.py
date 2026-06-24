@@ -95,6 +95,11 @@ def binding_id_for(target_type: str, target_id: str, executor_profile: str) -> s
     return f"{target_type}:{target_id}:{executor_profile}"
 
 
+def progress_instance_id_for(binding_id: str, created_at: str) -> str:
+    digest = hashlib.sha256(f"{binding_id}:{created_at}".encode("utf-8")).hexdigest()[:16]
+    return f"{binding_id}:{digest}"
+
+
 def build_progress_binding(
     *,
     target_type: str,
@@ -129,6 +134,7 @@ def build_progress_binding(
     profile = normalize_executor_profile(executor_profile, observed_hermes_execution=observed_hermes_execution)
     timestamp = now or utc_now()
     binding_id = binding_id_for(target_type, target_id, profile)
+    instance_id = progress_instance_id_for(binding_id, timestamp)
     aliases = _correlation_aliases(
         codex_session_ref=codex_session_ref,
         codex_thread_ref=codex_thread_ref,
@@ -140,6 +146,7 @@ def build_progress_binding(
     binding = {
         "schema_version": EXECUTOR_PROGRESS_BINDING_SCHEMA_VERSION,
         "binding_id": binding_id,
+        "instance_id": instance_id,
         "target": {"type": target_type, "id": target_id},
         "target_type": target_type,
         "target_id": target_id,
@@ -148,6 +155,7 @@ def build_progress_binding(
         "correlation_root": existing_correlation_root
         or correlation_root_for(
             binding_id=binding_id,
+            instance_id=instance_id,
             codex_session_ref=codex_session_ref,
             codex_thread_ref=codex_thread_ref,
             claude_session_ref=claude_session_ref,
@@ -197,6 +205,7 @@ def build_progress_binding(
 def correlation_root_for(
     *,
     binding_id: str,
+    instance_id: str = "",
     existing_correlation_root: str = "",
     codex_session_ref: str = "",
     codex_thread_ref: str = "",
@@ -215,9 +224,8 @@ def correlation_root_for(
         return f"codex_thread:{codex_thread_ref.strip()}"
     if process_session_id.strip():
         return f"process_session:{process_session_id.strip()}"
-    if worktree.strip() and branch.strip():
-        digest = hashlib.sha256(worktree.strip().encode("utf-8")).hexdigest()
-        return f"worktree_branch:{digest}:{branch.strip()}"
+    if instance_id.strip():
+        return f"binding_instance:{instance_id.strip()}"
     return f"binding:{binding_id}"
 
 
@@ -281,6 +289,7 @@ def build_progress_event(
     event = {
         "schema_version": EXECUTOR_PROGRESS_EVENT_SCHEMA_VERSION,
         "binding_id": str(binding["binding_id"]),
+        "instance_id": str(binding["instance_id"]),
         "target": dict(binding["target"]),
         "target_type": binding["target_type"],
         "target_id": binding["target_id"],
@@ -439,8 +448,7 @@ def append_progress_event(paths: OmhPaths, binding: dict[str, Any], event: dict[
 def latest_progress_event(paths: OmhPaths, binding: dict[str, Any]) -> dict[str, Any]:
     target = _binding_target(binding)
     events, _errors = read_jsonl_objects(progress_dir_for_target(paths, target["type"], target["id"]) / "events.jsonl")
-    binding_id = str(binding.get("binding_id", ""))
-    valid = [event for event in events if not validate_progress_event(event) and str(event.get("binding_id", "")) == binding_id]
+    valid = [event for event in events if not validate_progress_event(event) and _payload_matches_binding_instance(event, binding)]
     return valid[-1] if valid else {}
 
 
@@ -457,6 +465,7 @@ def build_progress_report(
     report = {
         "schema_version": EXECUTOR_PROGRESS_REPORT_SCHEMA_VERSION,
         "binding_id": binding["binding_id"],
+        "instance_id": str(binding["instance_id"]),
         "target": dict(binding["target"]),
         "target_type": binding["target_type"],
         "target_id": binding["target_id"],
@@ -495,8 +504,7 @@ def append_progress_report(paths: OmhPaths, binding: dict[str, Any], report: dic
 def latest_progress_report(paths: OmhPaths, binding: dict[str, Any]) -> dict[str, Any]:
     target = _binding_target(binding)
     reports, _errors = read_jsonl_objects(progress_dir_for_target(paths, target["type"], target["id"]) / "reports.jsonl")
-    binding_id = str(binding.get("binding_id", ""))
-    valid = [report for report in reports if not validate_progress_report(report) and str(report.get("binding_id", "")) == binding_id]
+    valid = [report for report in reports if not validate_progress_report(report) and _payload_matches_binding_instance(report, binding)]
     return valid[-1] if valid else {}
 
 
@@ -631,6 +639,8 @@ def validate_progress_binding(record: dict[str, Any]) -> list[str]:
         errors.append("executor_profile must be codex, claude_code, or hermes_local")
     if str(record.get("binding_id", "")) != binding_id_for(target_type, target_id, profile):
         errors.append("binding_id must be target_type:target_id:executor_profile")
+    if not str(record.get("instance_id", "")).strip():
+        errors.append("instance_id is required")
     if not str(record.get("correlation_root", "")):
         errors.append("correlation_root is required")
     if str(record.get("state", "")) not in BINDING_STATES:
@@ -652,6 +662,8 @@ def validate_progress_event(record: dict[str, Any]) -> list[str]:
         errors.append("executor_profile must be codex, claude_code, or hermes_local")
     if not str(record.get("binding_id", "")):
         errors.append("binding_id is required")
+    if not str(record.get("instance_id", "")).strip():
+        errors.append("instance_id is required")
     if not str(record.get("summary", "")).strip():
         errors.append("summary is required")
     if not str(record.get("transition_fingerprint", "")):
@@ -669,6 +681,8 @@ def validate_progress_report(record: dict[str, Any]) -> list[str]:
         errors.append("executor_profile must be codex, claude_code, or hermes_local")
     if not str(record.get("binding_id", "")):
         errors.append("binding_id is required")
+    if not str(record.get("instance_id", "")).strip():
+        errors.append("instance_id is required")
     if not str(record.get("summary", "")).strip():
         errors.append("summary is required")
     if len(str(record.get("summary", ""))) > 360:
@@ -755,6 +769,7 @@ def _project_binding_row(
     linked = [
         {
             "binding_id": binding.get("binding_id", ""),
+            "instance_id": binding.get("instance_id", ""),
             "target_type": binding.get("target_type", ""),
             "target_id": binding.get("target_id", ""),
             "correlation_root": binding.get("correlation_root", ""),
@@ -765,7 +780,9 @@ def _project_binding_row(
     ]
     return {
         "primary_binding_id": primary.get("binding_id", ""),
+        "primary_instance_id": primary.get("instance_id", ""),
         "binding_id": primary.get("binding_id", ""),
+        "instance_id": primary.get("instance_id", ""),
         "target_type": primary.get("target_type", ""),
         "target_id": primary.get("target_id", ""),
         "executor": primary.get("executor_profile", ""),
@@ -783,6 +800,7 @@ def _project_binding_row(
 def _compact_event_projection(event: dict[str, Any], binding: dict[str, Any]) -> dict[str, Any]:
     return {
         "binding_id": event.get("binding_id") or binding.get("binding_id", ""),
+        "instance_id": event.get("instance_id") or binding.get("instance_id", ""),
         "executor_profile": event.get("executor_profile") or binding.get("executor_profile", ""),
         "event_type": event.get("event_type", ""),
         "status": event.get("status", ""),
@@ -794,6 +812,8 @@ def _compact_event_projection(event: dict[str, Any], binding: dict[str, Any]) ->
 
 def _compact_report_projection(report: dict[str, Any]) -> dict[str, Any]:
     return {
+        "binding_id": report.get("binding_id", ""),
+        "instance_id": report.get("instance_id", ""),
         "event_type": report.get("event_type", ""),
         "status": report.get("status", ""),
         "summary": report.get("summary", ""),
@@ -808,6 +828,12 @@ def _binding_target(binding: dict[str, Any]) -> dict[str, str]:
         "type": str(binding.get("target_type") or target.get("type") or ""),
         "id": str(binding.get("target_id") or target.get("id") or ""),
     }
+
+
+def _payload_matches_binding_instance(payload: dict[str, Any], binding: dict[str, Any]) -> bool:
+    return str(payload.get("binding_id", "")) == str(binding.get("binding_id", "")) and str(
+        payload.get("instance_id", "")
+    ) == str(binding.get("instance_id", ""))
 
 
 def _correlation_aliases(

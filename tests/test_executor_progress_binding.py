@@ -58,6 +58,7 @@ class ExecutorProgressBindingTests(unittest.TestCase):
             loaded = read_progress_binding(paths, "run", "run-1")
             self.assertIsNotNone(loaded)
             self.assertEqual(loaded["binding_id"], "run:run-1:claude_code")
+            self.assertTrue(loaded["instance_id"].startswith("run:run-1:claude_code:"))
             self.assertEqual(loaded["executor_profile"], "claude_code")
             self.assertEqual(loaded["correlation_root"], "claude_session:claude-session-1")
             self.assertIn({"kind": "claude_session_ref", "value": "claude-session-1"}, loaded["correlation_aliases"])
@@ -100,6 +101,8 @@ class ExecutorProgressBindingTests(unittest.TestCase):
             self.assertEqual(second["suppressed_reason"], "duplicate_transition")
             self.assertEqual(second["binding"]["report_count"], 1)
             self.assertEqual(second["binding"]["suppressed_duplicate_count"], 1)
+            self.assertEqual(first["event"]["instance_id"], first["binding"]["instance_id"])
+            self.assertEqual(first["report"]["instance_id"], first["binding"]["instance_id"])
             self.assertEqual(latest_progress_event(paths, first["binding"])["event_type"], "diff_started")
             self.assertEqual(latest_progress_report(paths, first["binding"])["event_type"], "diff_started")
             self.assertEqual(validate_progress_event(first["event"]), [])
@@ -196,3 +199,57 @@ class ExecutorProgressBindingTests(unittest.TestCase):
                 observed_at="2026-06-24T00:03:00Z",
             )
             self.assertEqual(latest_progress_event(paths, claude)["binding_id"], "run:run-1:claude_code")
+
+    def test_rebinding_same_target_profile_filters_old_events_by_instance_id(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            first = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id="run-1",
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-1",
+                    now="2026-06-24T00:00:00Z",
+                ),
+            )
+            observe_executor_progress(
+                paths,
+                first,
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    explicit_event_type="diff_started",
+                    explicit_summary="First Codex executor changed files.",
+                ),
+                observed_at="2026-06-24T00:01:00Z",
+            )
+            rebound = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id="run-1",
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-2",
+                    now="2026-06-24T00:02:00Z",
+                ),
+            )
+
+            self.assertEqual(rebound["binding_id"], first["binding_id"])
+            self.assertNotEqual(rebound["instance_id"], first["instance_id"])
+            self.assertEqual(latest_progress_event(paths, rebound), {})
+            self.assertEqual(latest_progress_report(paths, rebound), {})
+
+            observe_executor_progress(
+                paths,
+                rebound,
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    explicit_event_type="repo_exploration",
+                    explicit_summary="Second Codex executor inspected files.",
+                ),
+                observed_at="2026-06-24T00:03:00Z",
+            )
+
+            latest = latest_progress_event(paths, rebound)
+            self.assertEqual(latest["event_type"], "repo_exploration")
+            self.assertEqual(latest["instance_id"], rebound["instance_id"])

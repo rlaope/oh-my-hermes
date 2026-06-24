@@ -250,6 +250,7 @@ def _run_progress_status(paths: OmhPaths, run_id: str) -> dict[str, object]:
     refreshed = refresh_binding_freshness(binding)
     return {
         "binding_id": refreshed.get("binding_id", ""),
+        "instance_id": refreshed.get("instance_id", ""),
         "executor_profile": refreshed.get("executor_profile", ""),
         "state": refreshed.get("state", ""),
         "correlation_root": refreshed.get("correlation_root", ""),

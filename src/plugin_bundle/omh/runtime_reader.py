@@ -775,8 +775,9 @@ def _progress_bindings(runtime_dir: Path, *, limit: int) -> list[dict[str, Any]]
             events = _read_jsonl(progress_dir / "events.jsonl")
             reports = _read_jsonl(progress_dir / "reports.jsonl")
             binding_id = str(binding.get("binding_id", ""))
-            matching_events = [event for event in events if _valid_progress_event(event, binding_id)]
-            matching_reports = [report for report in reports if _valid_progress_report(report, binding_id)]
+            instance_id = str(binding.get("instance_id", ""))
+            matching_events = [event for event in events if _valid_progress_event(event, binding_id, instance_id)]
+            matching_reports = [report for report in reports if _valid_progress_report(report, binding_id, instance_id)]
             items.append(
                 {
                     "binding": binding,
@@ -846,6 +847,7 @@ def _progress_row(primary: dict[str, Any], group: list[dict[str, Any]], event: d
     linked = [
         {
             "binding_id": item["binding"].get("binding_id", ""),
+            "instance_id": item["binding"].get("instance_id", ""),
             "target_type": item["binding"].get("target_type", ""),
             "target_id": item["binding"].get("target_id", ""),
             "correlation_root": item["binding"].get("correlation_root", ""),
@@ -856,7 +858,9 @@ def _progress_row(primary: dict[str, Any], group: list[dict[str, Any]], event: d
     ]
     return {
         "primary_binding_id": binding.get("binding_id", ""),
+        "primary_instance_id": binding.get("instance_id", ""),
         "binding_id": binding.get("binding_id", ""),
+        "instance_id": binding.get("instance_id", ""),
         "target_type": binding.get("target_type", ""),
         "target_id": binding.get("target_id", ""),
         "executor": binding.get("executor_profile", ""),
@@ -874,6 +878,7 @@ def _progress_row(primary: dict[str, Any], group: list[dict[str, Any]], event: d
 def _compact_progress_event(event: dict[str, Any], binding: dict[str, Any]) -> dict[str, Any]:
     return {
         "binding_id": event.get("binding_id") or binding.get("binding_id", ""),
+        "instance_id": event.get("instance_id") or binding.get("instance_id", ""),
         "executor_profile": event.get("executor_profile") or binding.get("executor_profile", ""),
         "event_type": event.get("event_type", ""),
         "status": event.get("status", ""),
@@ -885,6 +890,8 @@ def _compact_progress_event(event: dict[str, Any], binding: dict[str, Any]) -> d
 
 def _compact_progress_report(report: dict[str, Any]) -> dict[str, Any]:
     return {
+        "binding_id": report.get("binding_id", ""),
+        "instance_id": report.get("instance_id", ""),
         "event_type": report.get("event_type", ""),
         "status": report.get("status", ""),
         "summary": report.get("summary", ""),
@@ -910,6 +917,8 @@ def _valid_progress_binding(binding: dict[str, Any], expected_target_type: str) 
         return False
     if str(binding.get("binding_id", "")) != f"{target_type}:{target_id}:{profile}":
         return False
+    if not str(binding.get("instance_id", "")).strip():
+        return False
     if not str(binding.get("correlation_root", "")).strip():
         return False
     if str(binding.get("state", "")) not in EXECUTOR_PROGRESS_BINDING_STATES:
@@ -917,12 +926,14 @@ def _valid_progress_binding(binding: dict[str, Any], expected_target_type: str) 
     return "not result" in str(binding.get("claim_boundary", ""))
 
 
-def _valid_progress_event(event: dict[str, Any], binding_id: str) -> bool:
+def _valid_progress_event(event: dict[str, Any], binding_id: str, instance_id: str) -> bool:
     if not isinstance(event, dict) or _has_raw_or_hidden_content(event):
         return False
     if event.get("schema_version") != "omh_progress_event/v1":
         return False
     if str(event.get("binding_id", "")) != binding_id:
+        return False
+    if str(event.get("instance_id", "")) != instance_id:
         return False
     if str(event.get("event_type", "")) not in EXECUTOR_PROGRESS_EVENT_TYPES:
         return False
@@ -936,12 +947,14 @@ def _valid_progress_event(event: dict[str, Any], binding_id: str) -> bool:
     return "not result" in str(event.get("claim_boundary", ""))
 
 
-def _valid_progress_report(report: dict[str, Any], binding_id: str) -> bool:
+def _valid_progress_report(report: dict[str, Any], binding_id: str, instance_id: str) -> bool:
     if not isinstance(report, dict) or _has_raw_or_hidden_content(report):
         return False
     if report.get("schema_version") != "omh_progress_report/v1":
         return False
     if str(report.get("binding_id", "")) != binding_id:
+        return False
+    if str(report.get("instance_id", "")) != instance_id:
         return False
     if str(report.get("executor_profile", "")) not in EXECUTOR_PROGRESS_PROFILES:
         return False
