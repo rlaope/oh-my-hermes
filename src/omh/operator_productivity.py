@@ -20,11 +20,11 @@ OBSERVATION_STATUSES = ("prepared", "not_observed")
 FOCUS_AREAS = ("auto", "mixed", "research", "coding", "review", "status")
 SUMMARY_LIMIT = 240
 PROJECTION_SOURCE_REFS = (
-    "src/operator_productivity.py",
-    "src/skills/catalog.py",
-    "src/routing/recommend.py",
-    "src/wrapper/contract.py",
-    "src/runtime/artifacts.py",
+    "src/omh/operator_productivity.py",
+    "src/omh/skills/catalog.py",
+    "src/omh/routing/recommend.py",
+    "src/omh/wrapper/contract.py",
+    "src/omh/runtime/artifacts.py",
 )
 PREPARED_IS_NOT_OBSERVED = (
     "An agent ops review is projection metadata only. It is not source retrieval, executor dispatch, "

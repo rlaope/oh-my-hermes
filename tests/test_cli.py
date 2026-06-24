@@ -147,7 +147,7 @@ class CliTests(unittest.TestCase):
                 "--source",
                 "discord",
                 "--json",
-                "what does OMH do in src/routing/catalog_questions.py?",
+                "what does OMH do in src/omh/routing/catalog_questions.py?",
             ],
             output_json=False,
         )
@@ -206,6 +206,25 @@ class CliTests(unittest.TestCase):
             and "guard:omh_quality_improvement_loop" in recommendation["matched"]
         ]
         self.assertEqual(guarded_process_routes, [])
+
+    def test_recommend_path_like_fragments_do_not_score_as_command_triggers(self) -> None:
+        for message in (
+            "investigate https://example.com/omh/status for market context",
+            r"inspect C:\work\omh\routing\policy.py before the weekly review",
+        ):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                trigger_matches = [
+                    matched
+                    for recommendation in recommendations
+                    for matched in recommendation["matched"]
+                    if matched in {"trigger:/", "trigger:./", "trigger:/omh", "trigger:./omh"}
+                ]
+                self.assertEqual(trigger_matches, [])
 
     def test_context_brief_keeps_customer_bug_reports_on_feedback_triage(self) -> None:
         cases = (
@@ -4177,7 +4196,7 @@ class CliTests(unittest.TestCase):
             "what command should I run to verify installation?",
             "what can OMH do to install itself?",
             "what skills are needed to debug this Python error?",
-            "what does OMH do in src/routing/catalog_questions.py?",
+            "what does OMH do in src/omh/routing/catalog_questions.py?",
             "explain what OMH does in this README section",
             "search docs/WORKFLOWS.md for loop",
             "show img-summary in README.md",
@@ -4688,6 +4707,10 @@ class CliTests(unittest.TestCase):
         cases = (
             ("prepare a meeting agenda and record template for leadership sync", "meeting-brief"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review"),
+            ("monitor competitor.com and package a weekly market research digest", "research-department"),
+            ("monitor competitor.rs and package a weekly market research digest", "research-department"),
+            ("monitor competitor.py and package a weekly market research digest", "research-department"),
+            ("monitor competitor.py and test market positioning", "research-department"),
             ("회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘", "operating-rhythm"),
             ("create a PPT report package for a monthly leadership status deck", "report-package"),
             ("run an incident postmortem SLO error budget service reliability review", "reliability-review"),
@@ -5116,6 +5139,23 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["harness_quality"]["wrapper_actions"], ["show_status"])
                 self.assertNotIn("send_to_codex", payload["harness_quality"]["wrapper_actions"])
 
+    def test_coding_delegate_codex_executor_keeps_business_urls_retained_by_hermes(self) -> None:
+        for message in (
+            "monitor competitor.com and package a weekly market research digest",
+            "monitor competitor.rs and package a weekly market research digest",
+            "monitor competitor.py and package a weekly market research digest",
+            "monitor competitor.py and test market positioning",
+        ):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["coding", "delegate", "--executor", "codex", "--source", "discord", message])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["delegation"]["action"], "clarify")
+                self.assertEqual(payload["delegation"]["recommended_workflow"], "research-department")
+                self.assertNotIn("executor_handoff", payload)
+
     def test_coding_delegate_weak_query_falls_back(self) -> None:
         status, stdout, stderr = run_cli(["coding", "delegate", "zzzzunknownphrase"])
 
@@ -5404,7 +5444,7 @@ class CliTests(unittest.TestCase):
                     "--force-record",
                     "--executor",
                     "codex",
-                    "implement safe runtime feature in src/runtime/artifacts.py without overclaiming",
+                    "implement safe runtime feature in src/omh/runtime/artifacts.py without overclaiming",
                 ]
             )
             self.assertEqual(stderr, "")
@@ -5648,7 +5688,7 @@ class CliTests(unittest.TestCase):
             raw_log = "\n".join(
                 [
                     json.dumps({"type": "tool_call", "tool": "rg", "args": "rg codex tests"}),
-                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/codex_progress.py"}),
+                    json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/codex_progress.py"}),
                     json.dumps({"type": "reasoning", "analysis": "do not expose hidden reasoning"}),
                     json.dumps({"role": "assistant", "content": "I changed files and will run tests."}),
                 ]
@@ -5932,7 +5972,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
-            hostile = "implement cleanup of duplicated routing code in src/routing/policy.py with secret-token-123"
+            hostile = "implement cleanup of duplicated routing code in src/omh/routing/policy.py with secret-token-123"
 
             status, stdout, stderr = run_cli(
                 [
@@ -6121,7 +6161,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement risky status migration in src/runtime/status.py",
+                    "implement risky status migration in src/omh/runtime/status.py",
                 ]
             )
 
@@ -6190,7 +6230,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement risky status migration in src/runtime/status.py",
+                    "implement risky status migration in src/omh/runtime/status.py",
                 ]
             )
             self.assertEqual(status, 0)
@@ -6455,7 +6495,7 @@ class CliTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement status badge in src/runtime/status.py",
+                    "implement status badge in src/omh/runtime/status.py",
                 ]
             )
             self.assertEqual(stderr, "")

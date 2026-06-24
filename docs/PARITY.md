@@ -51,7 +51,7 @@ implementation or claim runtime behavior it did not observe.
 
 ## Implemented Slices
 
-- A deterministic parity catalog in `src/parity.py`.
+- A deterministic parity catalog in `src/omh/parity.py`.
 - `omh probe --parity` so operators and wrappers can inspect the matrix beside
   the current local capability probe.
 - `omh probe --roadmap`, and the roadmap section inside `omh probe --parity`,

@@ -67,7 +67,7 @@ Chat user
 ## Package Layout
 
 ```text
-src/
+src/omh/
   chat_router.py              # compatibility adapter to routing/chat.py
   cli.py                     # compatibility adapter to commands/main.py
   commands/
@@ -560,8 +560,8 @@ specialist lane result, the recorded result stays `not_observed` or
 
 When a harness is added, removed, or renamed, update these surfaces together:
 
-- `src/skills/catalog.py`
-- `src/skills/render.py`
+- `src/omh/skills/catalog.py`
+- `src/omh/skills/render.py`
 - `docs/APPLICATION_CASES.md`
 - `tests/test_router_content.py`
 

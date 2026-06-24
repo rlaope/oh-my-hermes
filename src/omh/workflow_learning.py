@@ -622,8 +622,8 @@ def build_improvement_patch_proposal(
         "verification_commands": [
             "PYTHONPATH=tests uv run python -m unittest tests/test_workflow_learning.py tests/test_cli.py tests/test_wrapper_contract.py -v",
             "uv run python -m compileall -q src tests",
-            "uv run python -m src.cli docs workflows --check",
-            "uv run python -m src.cli harness validate",
+            "uv run python -m omh.cli docs workflows --check",
+            "uv run python -m omh.cli harness validate",
             "git diff --check",
         ],
         "steps": _patch_proposal_steps(status),
@@ -2041,16 +2041,16 @@ def _patch_target_files(target_type: str, target_ref: str) -> list[str]:
     target = str(target_ref or "")
     if normalized in {"skill", "workflow_skill"}:
         workflow = target.split(":", 1)[1] if ":" in target else target
-        return ["src/skills/catalog.py", "src/skills/render.py", f"skills/{workflow}/SKILL.md", "docs/WORKFLOWS.md"]
+        return ["src/omh/skills/catalog.py", "src/omh/skills/render.py", f"skills/{workflow}/SKILL.md", "docs/WORKFLOWS.md"]
     if normalized in {"routing", "router", "route"}:
-        return ["src/routing/recommend.py", "src/chat_router.py", "tests/test_chat_router.py", "tests/test_cli.py"]
+        return ["src/omh/routing/recommend.py", "src/omh/chat_router.py", "tests/test_chat_router.py", "tests/test_cli.py"]
     if normalized in {"rubric", "workflow_rubric", "eval", "validator"}:
-        return ["src/workflow_learning.py", "tests/test_workflow_learning.py", "tests/test_cli.py"]
+        return ["src/omh/workflow_learning.py", "tests/test_workflow_learning.py", "tests/test_cli.py"]
     if normalized == "docs":
         return ["README.md", "docs/WORKFLOWS.md", "docs/HARNESS_QUALITY.md"]
     if normalized == "playbook":
-        return ["src/catalogs/playbooks.py", "docs/PLAYBOOKS.md", "tests/test_cli.py"]
-    return ["src/skills/catalog.py", "docs/WORKFLOWS.md", "tests/test_cli.py"]
+        return ["src/omh/catalogs/playbooks.py", "docs/PLAYBOOKS.md", "tests/test_cli.py"]
+    return ["src/omh/skills/catalog.py", "docs/WORKFLOWS.md", "tests/test_cli.py"]
 
 
 def _patch_required_gates(status: str) -> list[dict[str, Any]]:

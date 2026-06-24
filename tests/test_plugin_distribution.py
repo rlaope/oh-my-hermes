@@ -287,7 +287,7 @@ class PluginDistributionTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement safe status feature in src/runtime/status.py without overclaiming",
+                    "implement safe status feature in src/omh/runtime/status.py without overclaiming",
                 ]
             )
             self.assertEqual(status, 0)

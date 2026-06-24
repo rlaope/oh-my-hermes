@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
+import re
 
 from ..skills.catalog import SkillDefinition, routable_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
@@ -55,6 +56,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         "omh_quality_improvement_loop_before_feedback_triage",
     }
 )
+_COMMAND_TRIGGER_PHRASES = frozenset(("/", "./", "/o", "./o", "/om", "./om", "/omh", "./omh", "/skills", "./skills"))
 
 
 @dataclass(frozen=True)
@@ -480,7 +482,7 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     if limit < 1:
         raise ValueError("recommend --limit must be at least 1")
 
-    routing_text = prepare_routing_text(query)
+    routing_text = prepare_routing_text(_strip_path_like_fragments(query))
     normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
     prepared_definitions = _prepared_routable_definitions()
@@ -544,7 +546,7 @@ def _score_definition(
     matched: set[str] = set()
 
     for trigger_phrase in prepared.trigger_phrases:
-        if _phrase_match(normalized_query, trigger_phrase):
+        if _trigger_phrase_match(normalized_query, trigger_phrase):
             score += 6
             matched.add(f"trigger:{trigger_phrase}")
 
@@ -698,6 +700,24 @@ def _apply_guard_rules_to_recommendation(
 
 def _tokens(value: str) -> set[str]:
     return routing_tokens(value, stopwords=_STOPWORDS)
+
+
+def _strip_path_like_fragments(value: str) -> str:
+    neutralized: list[str] = []
+    for raw_fragment in value.split():
+        fragment = raw_fragment.strip("`'\"“”‘’.,;:!?()[]{}")
+        if ("/" in fragment or "\\" in fragment) and normalized_phrase(fragment) not in _COMMAND_TRIGGER_PHRASES:
+            neutralized.append(" ")
+        else:
+            neutralized.append(raw_fragment)
+    return " ".join(neutralized)
+
+
+def _trigger_phrase_match(query: str, value: str) -> bool:
+    if value in _COMMAND_TRIGGER_PHRASES:
+        escaped = re.escape(value)
+        return bool(re.search(rf"(?<![\w./-]){escaped}(?![\w./-])", query))
+    return _phrase_match(query, value)
 
 
 def _phrase_match(query: str, value: str) -> bool:

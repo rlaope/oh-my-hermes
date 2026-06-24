@@ -134,7 +134,7 @@ def _standalone_catalog_question(message: str) -> bool:
     text = message.strip().lower()
     if not text:
         return False
-    if any(marker in text for marker in ("src/", "tests/", "docs/", ".py", ".md", "readme", "section")):
+    if any(marker in text for marker in ("src/omh/", "tests/", "docs/", ".py", ".md", "readme", "section")):
         return False
     explicit = (
         "what commands are available",

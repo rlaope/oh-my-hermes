@@ -70,11 +70,11 @@ OBSERVED_EVIDENCE_REQUIRED = (
     "Human or verifier review record before claiming conflicts or source quality are verified.",
 )
 PROJECTION_SOURCE_REFS = (
-    "src/research_department.py",
-    "src/skills/catalog.py",
-    "src/routing/recommend.py",
-    "src/capabilities/orchestration.py",
-    "src/hermes_ops.py",
+    "src/omh/research_department.py",
+    "src/omh/skills/catalog.py",
+    "src/omh/routing/recommend.py",
+    "src/omh/capabilities/orchestration.py",
+    "src/omh/hermes_ops.py",
 )
 
 _PLAN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")

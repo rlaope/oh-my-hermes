@@ -251,10 +251,10 @@ class CapabilityManifestTests(unittest.TestCase):
         packages = set(pyproject["tool"]["setuptools"]["packages"])
 
         self.assertIn("omh.capabilities", packages)
-        self.assertEqual(pyproject["tool"]["setuptools"]["package-dir"]["omh.capabilities"], "src/capabilities")
+        self.assertEqual(pyproject["tool"]["setuptools"]["package-dir"], {"": "src"})
 
     def test_runtime_topology_is_deferred_from_first_pr(self) -> None:
-        self.assertFalse(Path("src/capabilities/runtime_topology.py").exists())
+        self.assertFalse(Path("src/omh/capabilities/runtime_topology.py").exists())
         payload = capability_snapshot()
         exported = json.dumps(payload, sort_keys=True)
 

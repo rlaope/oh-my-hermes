@@ -300,6 +300,6 @@ Before depending on the wrapper contract in a release candidate, run:
 ```sh
 PYTHONPATH=tests uv run python -m unittest tests/test_wrapper_contract.py -v
 PYTHONPATH=tests uv run python -m unittest tests/test_wrapper_golden_examples.py -v
-uv run python -m src.cli harness validate
+uv run python -m omh.cli harness validate
 git diff --check
 ```

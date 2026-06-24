@@ -1043,9 +1043,9 @@ def awareness_primer_payload() -> dict[str, object]:
             "no Hermes core patching",
         ],
         "source_refs": [
-            "src/plugin_bundle/omh/awareness.py",
-            "src/skills/render.py",
-            "src/capabilities/registry.py",
+            "src/omh/plugin_bundle/omh/awareness.py",
+            "src/omh/skills/render.py",
+            "src/omh/capabilities/registry.py",
         ],
     }
 

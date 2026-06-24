@@ -62,11 +62,11 @@ OBSERVED_EVIDENCE_REQUIRED = (
     "No-agent script/file/run evidence if a no-agent lane is later implemented.",
 )
 PROJECTION_SOURCE_REFS = (
-    "src/skills/catalog.py",
-    "src/catalogs/playbooks.py",
-    "src/routing/recommend.py",
-    "src/capabilities/orchestration.py",
-    "src/operations.py",
+    "src/omh/skills/catalog.py",
+    "src/omh/catalogs/playbooks.py",
+    "src/omh/routing/recommend.py",
+    "src/omh/capabilities/orchestration.py",
+    "src/omh/operations.py",
 )
 
 _BLUEPRINT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,159}$")

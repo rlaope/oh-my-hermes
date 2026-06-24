@@ -64,7 +64,7 @@ def _playbook_capability(
         "fallback_rule": fallback_rule,
         "evidence_boundary": evidence_boundary,
         "prepared_is_not": PREPARED_NOT_OBSERVED,
-        "source_refs": ["src/catalogs/playbooks.py"],
+        "source_refs": ["src/omh/catalogs/playbooks.py"],
     }
 
 

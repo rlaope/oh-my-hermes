@@ -9,11 +9,11 @@ def load_local_package() -> None:
     if "omh" in sys.modules:
         return
 
-    src_dir = Path(__file__).resolve().parents[1] / "src"
+    package_dir = Path(__file__).resolve().parents[1] / "src" / "omh"
     spec = importlib.util.spec_from_file_location(
         "omh",
-        src_dir / "__init__.py",
-        submodule_search_locations=[str(src_dir)],
+        package_dir / "__init__.py",
+        submodule_search_locations=[str(package_dir)],
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("failed to load local package")

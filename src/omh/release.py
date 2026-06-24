@@ -175,7 +175,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "docs_workflows_check",
             "Check generated workflow docs",
-            "uv run python -m src.cli docs workflows --check",
+            "uv run python -m omh.cli docs workflows --check",
             "contract-quality",
             True,
             False,
@@ -185,7 +185,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "harness_validate",
             "Validate harness catalog contracts",
-            "uv run python -m src.cli harness validate",
+            "uv run python -m omh.cli harness validate",
             "contract-quality",
             True,
             False,
@@ -195,7 +195,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "use_case_demo_cards",
             "Check G1-G10 use-case demo cards",
-            "uv run python -m src.cli cases demo --all --json",
+            "uv run python -m omh.cli cases demo --all --json",
             "contract-quality",
             True,
             False,
@@ -205,7 +205,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "use_case_artifact_bundle",
             "Check G1-G10 use-case artifact bundle",
-            "uv run python -m src.cli cases artifact --all --json",
+            "uv run python -m omh.cli cases artifact --all --json",
             "contract-quality",
             True,
             False,
@@ -215,7 +215,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "use_case_replay",
             "Replay G1-G10 natural-language use-case fixtures",
-            "uv run python -m src.cli cases replay --json",
+            "uv run python -m omh.cli cases replay --json",
             "contract-quality",
             True,
             False,
@@ -225,7 +225,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "use_case_readiness",
             "Check G1-G10 use-case readiness rollup",
-            "uv run python -m src.cli cases readiness --json",
+            "uv run python -m omh.cli cases readiness --json",
             "contract-quality",
             True,
             False,
@@ -256,7 +256,7 @@ def release_readiness_checklist(
             "stable_install_dry_run",
             "Dry-run stable install metadata",
             (
-                "uv run python -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
+                "uv run python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
                 f"install --dry-run --channel stable --version {release_version}"
             ),
             "install-plan",
@@ -269,7 +269,7 @@ def release_readiness_checklist(
             "stable_setup_dry_run",
             "Dry-run stable setup metadata",
             (
-                "uv run python -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
+                "uv run python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke "
                 f"setup --dry-run --channel stable --version {release_version}"
             ),
             "install-plan",
@@ -281,7 +281,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "probe_smoke",
             "Run local capability probe",
-            "uv run python -m src.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe",
+            "uv run python -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe",
             "local-quality",
             True,
             False,
@@ -291,7 +291,7 @@ def release_readiness_checklist(
         ReleaseChecklistItem(
             "release_smoke_plan",
             "Render Hermes release smoke plan",
-            "uv run python -m src.cli release hermes-smoke",
+            "uv run python -m omh.cli release hermes-smoke",
             "release-smoke",
             True,
             False,

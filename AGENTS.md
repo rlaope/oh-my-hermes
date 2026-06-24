@@ -70,7 +70,7 @@ PR without the chat history.
   runs own handoff, dispatch, execution, verification, review, CI, and merge
   evidence.
 - Generated skills come from catalog data. Prefer updating
-  `src/skills/catalog.py` and regenerating docs over hand-editing generated
+  `src/omh/skills/catalog.py` and regenerating docs over hand-editing generated
   output.
 
 ## Coding Style
@@ -95,7 +95,7 @@ PYTHONPATH=tests uv run python -m unittest tests/test_cli.py -v
 PYTHONPATH=tests uv run python -m unittest tests/test_router_content.py -v
 PYTHONPATH=tests uv run python -m unittest discover -s tests -v
 uv run python -m compileall -q src tests
-uv run python -m src.cli docs workflows --check
+uv run python -m omh.cli docs workflows --check
 git diff --check
 ```
 

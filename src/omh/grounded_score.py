@@ -375,7 +375,12 @@ def build_grounded_score_demo(*, source: str = "discord") -> dict[str, object]:
 def _evaluate_grounded_scenario(scenario: GroundedScenario, *, source: str) -> dict[str, object]:
     route = route_chat_message(scenario.message, source=source)
     interaction = build_chat_interaction_payload(scenario.message, source=source)
-    delegation = build_coding_delegation_payload(scenario.message, source=source, executor_target="codex")
+    delegation = build_coding_delegation_payload(
+        scenario.message,
+        source=source,
+        executor_target="codex",
+        prefer_direct_coding_handoff=False,
+    )
     response = _nested(interaction, "chat_response")
     delegation_body = _nested(delegation, "delegation")
     checks = [
