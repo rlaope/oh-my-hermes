@@ -8218,6 +8218,63 @@ class CliTests(unittest.TestCase):
                     "--hermes-home",
                     str(hermes_home),
                     "runtime",
+                    "progress-bind",
+                    "--run",
+                    run["run_id"],
+                    "--executor-profile",
+                    "claude-code",
+                    "--claude-session-ref",
+                    "claude-session-1",
+                    "--evidence-ref",
+                    "handoff-card",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["binding"]["binding_id"], f"run:{run['run_id']}:claude_code")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
+                    "progress-observe",
+                    "--run",
+                    run["run_id"],
+                    "--event",
+                    "diff_started",
+                    "--summary",
+                    "Claude Code started editing files.",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(json.loads(stdout)["reported"])
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "progress-status"]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            progress_status = json.loads(stdout)
+            self.assertEqual(progress_status["active_executors"][0]["executor_profile"], "claude_code")
+            self.assertEqual(progress_status["latest_progress_events"][0]["event_type"], "diff_started")
+
+            status, stdout, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "runtime", "show", run["run_id"]])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            shown = json.loads(stdout)
+            self.assertEqual(shown["executor_progress"]["binding"]["executor_profile"], "claude_code")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "runtime",
                     "wrapper",
                     "--run",
                     run["run_id"],

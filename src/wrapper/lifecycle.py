@@ -5,6 +5,13 @@ from typing import Any
 
 from ..context_safety import build_coding_progress_reporting_policy
 from ..coding_delegation import build_coding_delegation_payload, coding_delegation_record_payload
+from ..executor_progress import (
+    build_progress_binding,
+    build_safe_progress_signal,
+    observe_executor_progress,
+    read_progress_binding,
+    refresh_binding_freshness,
+)
 from ..paths import OmhPaths
 from ..runtime.artifacts import (
     create_prepared_coding_delegation_run,
@@ -92,6 +99,12 @@ def record_codex_dispatch(paths: OmhPaths, run_id: str) -> dict[str, object]:
             "completion_status": "started",
         },
     )
+    _record_run_progress(
+        paths,
+        run_id,
+        event_type="executor_dispatched",
+        summary="Codex dispatch was observed; no executor result is recorded yet.",
+    )
     return {
         "schema_version": LIFECYCLE_SCHEMA_VERSION,
         "wrapper": wrapper,
@@ -122,6 +135,13 @@ def record_codex_result(
             "result": result,
             "evidence_refs": list(evidence_refs or []),
         },
+    )
+    _record_run_progress(
+        paths,
+        run_id,
+        event_type=_progress_event_for_result(result),
+        summary=f"Codex result was recorded as {result}.",
+        evidence_refs=list(evidence_refs or []),
     )
     return {
         "schema_version": LIFECYCLE_SCHEMA_VERSION,
@@ -179,6 +199,7 @@ def report_codex_delegation_lifecycle(paths: OmhPaths, run_id: str) -> dict[str,
             "blocking_reason": "" if next_action in terminal_report_actions else _blocking_reason(next_action),
             "artifact_paths": _artifact_paths(paths, run_id),
             "runtime_validation": validate_runtime(paths, run_id),
+            "executor_progress": _run_progress_status(paths, run_id),
             "progress_reporting_policy": build_coding_progress_reporting_policy(
                 next_action=next_action,
                 lifecycle_status=lifecycle_status,
@@ -186,6 +207,56 @@ def report_codex_delegation_lifecycle(paths: OmhPaths, run_id: str) -> dict[str,
         }
     )
     return report
+
+
+def _record_run_progress(
+    paths: OmhPaths,
+    run_id: str,
+    *,
+    event_type: str,
+    summary: str,
+    evidence_refs: list[str] | tuple[str, ...] | None = None,
+) -> None:
+    binding = read_progress_binding(paths, "run", run_id)
+    if binding is None:
+        binding = build_progress_binding(
+            target_type="run",
+            target_id=run_id,
+            executor_profile="codex",
+            source="coding_lifecycle",
+            evidence_refs=list(evidence_refs or []),
+        )
+    signal = build_safe_progress_signal(
+        executor_profile="codex",
+        explicit_event_type=event_type,
+        explicit_summary=summary,
+        evidence_refs=list(evidence_refs or []),
+    )
+    observe_executor_progress(paths, binding, signal)
+
+
+def _run_progress_status(paths: OmhPaths, run_id: str) -> dict[str, object]:
+    binding = read_progress_binding(paths, "run", run_id)
+    if not binding:
+        return {}
+    refreshed = refresh_binding_freshness(binding)
+    return {
+        "binding_id": refreshed.get("binding_id", ""),
+        "executor_profile": refreshed.get("executor_profile", ""),
+        "state": refreshed.get("state", ""),
+        "correlation_root": refreshed.get("correlation_root", ""),
+        "last_observed_at": refreshed.get("last_observed_at", ""),
+        "last_reported_at": refreshed.get("last_reported_at", ""),
+        "claim_boundary": refreshed.get("claim_boundary", ""),
+    }
+
+
+def _progress_event_for_result(result: str) -> str:
+    return {
+        "completed": "executor_completed",
+        "blocked": "executor_blocked",
+        "failed": "executor_failed",
+    }.get(result, "progress_observed")
 
 
 def _existing_run_dir(paths: OmhPaths, run_id: str) -> Path:

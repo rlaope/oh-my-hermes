@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -665,6 +666,7 @@ def read_omh_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[
     if runs_dir.exists():
         for run_json in sorted(runs_dir.glob("*/run.json"), reverse=True)[:safe_limit]:
             runs.append(_summarize_run(run_json.parent))
+    progress = _executor_progress_projection(runtime_dir, limit=max(safe_limit * 10, safe_limit))
     return {
         "schema_version": STATUS_SCHEMA_VERSION,
         "omh_home": str(home),
@@ -674,6 +676,9 @@ def read_omh_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[
         "latest_run_id": str(state.get("last_run_id", "")) if state else "",
         "plugin_session_end": _read_json(runtime_dir / "plugin-session-end.json"),
         "runs": runs,
+        "active_executors": progress["active_executors"],
+        "stale_executors": progress["stale_executors"],
+        "latest_progress_events": progress["latest_progress_events"],
         "evidence_boundary": {
             "prepared_handoff": "not execution evidence",
             "execution": "requires observed delegation result",
@@ -684,3 +689,189 @@ def read_omh_status(omh_home: str | Path | None = None, limit: int = 5) -> dict[
         },
         "privacy": "metadata_only",
     }
+
+
+def _executor_progress_projection(runtime_dir: Path, *, limit: int) -> dict[str, Any]:
+    bindings = _progress_bindings(runtime_dir, limit=limit)
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for item in bindings:
+        binding = item["binding"]
+        binding = dict(binding)
+        binding["state"] = _projected_binding_state(runtime_dir, binding)
+        if binding["state"] == "expired":
+            continue
+        item["binding"] = binding
+        groups.setdefault(str(binding.get("correlation_root", "")), []).append(item)
+    active: list[dict[str, Any]] = []
+    stale: list[dict[str, Any]] = []
+    latest_events: list[dict[str, Any]] = []
+    for group in groups.values():
+        primary = _choose_progress_primary(group)
+        event = _latest_progress_payload(group, "event")
+        report = _latest_progress_payload(group, "report")
+        if event:
+            latest_events.append(_compact_progress_event(event, primary["binding"]))
+        row = _progress_row(primary, group, event, report)
+        if primary["binding"].get("state") == "active":
+            active.append(row)
+        elif primary["binding"].get("state") == "stale":
+            stale.append(row)
+    active.sort(key=lambda item: str(item.get("latest_observed_at", "")), reverse=True)
+    stale.sort(key=lambda item: str(item.get("latest_observed_at", "")), reverse=True)
+    latest_events.sort(key=lambda item: str(item.get("observed_at", "")), reverse=True)
+    return {
+        "active_executors": active[:limit],
+        "stale_executors": stale[:limit],
+        "latest_progress_events": latest_events[:limit],
+    }
+
+
+def _progress_bindings(runtime_dir: Path, *, limit: int) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    roots = (
+        (runtime_dir / "runs", "run"),
+        (runtime_dir / "wrapper_sessions", "wrapper_session"),
+    )
+    for root, target_type in roots:
+        if not root.exists():
+            continue
+        for binding_path in sorted(root.glob("*/executor_progress/binding.json"), reverse=True):
+            binding = _read_json(binding_path)
+            if not binding or binding.get("schema_version") != "omh_executor_progress_binding/v1":
+                continue
+            if str(binding.get("target_type") or binding.get("target", {}).get("type", "")) != target_type:
+                continue
+            progress_dir = binding_path.parent
+            events = _read_jsonl(progress_dir / "events.jsonl")
+            reports = _read_jsonl(progress_dir / "reports.jsonl")
+            binding_id = str(binding.get("binding_id", ""))
+            matching_events = [event for event in events if str(event.get("binding_id", "")) == binding_id]
+            matching_reports = [report for report in reports if str(report.get("binding_id", "")) == binding_id]
+            items.append(
+                {
+                    "binding": binding,
+                    "latest_event": matching_events[-1] if matching_events else {},
+                    "latest_report": matching_reports[-1] if matching_reports else {},
+                }
+            )
+    items.sort(key=lambda item: str(item["binding"].get("updated_at", "")), reverse=True)
+    return items[:limit]
+
+
+def _projected_binding_state(runtime_dir: Path, binding: dict[str, Any]) -> str:
+    target_type = str(binding.get("target_type", ""))
+    target_id = str(binding.get("target_id", ""))
+    if _target_has_terminal_result(runtime_dir, target_type, target_id):
+        return "closed"
+    if str(binding.get("state", "")) == "closed":
+        return "closed"
+    age = _seconds_since(str(binding.get("last_observed_at") or binding.get("updated_at") or ""))
+    if age is None:
+        return "stale"
+    expiry = _safe_int(binding.get("expiry_seconds"), 86400)
+    freshness = _safe_int(binding.get("freshness_seconds"), 900)
+    if age > expiry:
+        return "expired"
+    if age > freshness:
+        return "stale"
+    return "active"
+
+
+def _target_has_terminal_result(runtime_dir: Path, target_type: str, target_id: str) -> bool:
+    if target_type == "run":
+        delegation = _read_json(runtime_dir / "runs" / target_id / "delegation.json")
+        return bool(delegation.get("observed")) and str(delegation.get("result", "")) in {"completed", "blocked", "failed"}
+    if target_type == "wrapper_session":
+        record = _read_json(runtime_dir / "wrapper_sessions" / target_id / "executor_session.json")
+        return bool(record.get("result_observed")) and str(record.get("result", "")) in {"completed", "blocked", "failed"}
+    return False
+
+
+def _choose_progress_primary(group: list[dict[str, Any]]) -> dict[str, Any]:
+    def sort_key(item: dict[str, Any]) -> tuple[int, str]:
+        binding = item["binding"]
+        target_type = str(binding.get("target_type", ""))
+        state = str(binding.get("state", ""))
+        precedence = {
+            ("wrapper_session", "active"): 5,
+            ("run", "active"): 4,
+            ("wrapper_session", "stale"): 3,
+            ("run", "stale"): 2,
+        }.get((target_type, state), 1)
+        return precedence, str(binding.get("updated_at", ""))
+
+    return sorted(group, key=sort_key, reverse=True)[0]
+
+
+def _latest_progress_payload(group: list[dict[str, Any]], key: str) -> dict[str, Any]:
+    payload_key = f"latest_{key}"
+    timestamp_key = "observed_at" if key == "event" else "reported_at"
+    payloads = [item[payload_key] for item in group if isinstance(item.get(payload_key), dict) and item[payload_key]]
+    payloads.sort(key=lambda item: str(item.get(timestamp_key, "")), reverse=True)
+    return payloads[0] if payloads else {}
+
+
+def _progress_row(primary: dict[str, Any], group: list[dict[str, Any]], event: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
+    binding = primary["binding"]
+    linked = [
+        {
+            "binding_id": item["binding"].get("binding_id", ""),
+            "target_type": item["binding"].get("target_type", ""),
+            "target_id": item["binding"].get("target_id", ""),
+            "correlation_root": item["binding"].get("correlation_root", ""),
+            "state": item["binding"].get("state", ""),
+        }
+        for item in group
+        if item["binding"].get("binding_id") != binding.get("binding_id")
+    ]
+    return {
+        "primary_binding_id": binding.get("binding_id", ""),
+        "binding_id": binding.get("binding_id", ""),
+        "target_type": binding.get("target_type", ""),
+        "target_id": binding.get("target_id", ""),
+        "executor": binding.get("executor_profile", ""),
+        "executor_profile": binding.get("executor_profile", ""),
+        "correlation_root": binding.get("correlation_root", ""),
+        "state": binding.get("state", ""),
+        "latest_event": _compact_progress_event(event, binding) if event else {},
+        "latest_report": _compact_progress_report(report) if report else {},
+        "latest_observed_at": str(event.get("observed_at") or binding.get("last_observed_at") or binding.get("updated_at") or ""),
+        "linked_bindings": linked,
+        "claim_boundary": binding.get("claim_boundary", ""),
+    }
+
+
+def _compact_progress_event(event: dict[str, Any], binding: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "binding_id": event.get("binding_id") or binding.get("binding_id", ""),
+        "executor_profile": event.get("executor_profile") or binding.get("executor_profile", ""),
+        "event_type": event.get("event_type", ""),
+        "status": event.get("status", ""),
+        "summary": event.get("summary", ""),
+        "observed_at": event.get("observed_at", ""),
+        "claim_boundary": event.get("claim_boundary", binding.get("claim_boundary", "")),
+    }
+
+
+def _compact_progress_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "event_type": report.get("event_type", ""),
+        "status": report.get("status", ""),
+        "summary": report.get("summary", ""),
+        "reported_at": report.get("reported_at", ""),
+        "claim_boundary": report.get("claim_boundary", ""),
+    }
+
+
+def _seconds_since(value: str) -> float | None:
+    try:
+        cleaned = value.strip()
+        if cleaned.endswith("Z"):
+            cleaned = cleaned[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(cleaned)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        return (now - parsed.astimezone(timezone.utc)).total_seconds()
+    except (TypeError, ValueError):
+        return None

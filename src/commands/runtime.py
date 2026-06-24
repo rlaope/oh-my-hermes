@@ -2,6 +2,16 @@ from __future__ import annotations
 
 import argparse
 
+from ..codex_progress import summarize_codex_jsonl_file
+from ..executor_progress import (
+    ExecutorProgressError,
+    build_progress_binding,
+    build_safe_progress_signal,
+    observe_executor_progress,
+    project_active_executor_status,
+    read_progress_binding,
+    write_progress_binding,
+)
 from ..installer import OmhError
 from ..runtime.artifacts import (
     append_journal_observation,
@@ -335,6 +345,74 @@ def cmd_runtime_observe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_runtime_progress_bind(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    target_type, target_id = _progress_target(args)
+    _require_progress_target(paths, target_type, target_id)
+    try:
+        binding = build_progress_binding(
+            target_type=target_type,
+            target_id=target_id,
+            executor_profile=args.executor_profile,
+            observed_hermes_execution=bool(args.observed_hermes_execution),
+            codex_session_ref=args.codex_session_ref or "",
+            codex_thread_ref=args.codex_thread_ref or "",
+            claude_session_ref=args.claude_session_ref or "",
+            process_session_id=args.process_session_id or "",
+            worktree=args.worktree or "",
+            branch=args.branch or "",
+            pid=args.pid,
+            source=args.source or "",
+            channel_ref=args.channel_ref or "",
+            thread_ref=args.thread_ref or "",
+            delivery_target=args.delivery_target or "",
+            evidence_refs=args.evidence_ref or [],
+        )
+        write_progress_binding(paths, binding)
+    except ExecutorProgressError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"binding": binding})
+    return 0
+
+
+def cmd_runtime_progress_observe(args: argparse.Namespace) -> int:
+    paths = _paths(args)
+    target_type, target_id = _progress_target(args)
+    binding = read_progress_binding(paths, target_type, target_id)
+    if not binding:
+        raise OmhError(f"executor progress binding not found for {target_type}: {target_id}")
+    try:
+        codex_summary = summarize_codex_jsonl_file(args.codex_log_jsonl, evidence_refs=args.evidence_ref or []) if args.codex_log_jsonl else None
+        profile_summary = _profile_progress_summary(args)
+        signal = build_safe_progress_signal(
+            executor_profile=str(binding.get("executor_profile", "")),
+            process_status=args.process_status or "",
+            codex_progress_summary=codex_summary,
+            profile_progress_summary=profile_summary,
+            git_status_short=args.git_status_short or "",
+            git_diff_stat=args.git_diff_stat or "",
+            explicit_event_type=args.event or "",
+            explicit_summary=args.summary or "",
+            evidence_refs=args.evidence_ref or [],
+            observed_hermes_execution=str(binding.get("executor_profile", "")) == "hermes_local",
+        )
+        payload = observe_executor_progress(
+            paths,
+            binding,
+            signal,
+            source_language=args.source_language or "",
+        )
+    except (OSError, ExecutorProgressError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_runtime_progress_status(args: argparse.Namespace) -> int:
+    _print_json(project_active_executor_status(_paths(args), limit=_bounded_limit(args)))
+    return 0
+
+
 def _validate_runtime_observation_target(target_dir, target_type: str, runtime_profile: str) -> bool:
     expected_profile = _expected_runtime_profile_for_target(target_dir, target_type)
     if expected_profile is None:
@@ -379,6 +457,38 @@ def _runtime_profile_from_handoff(handoff: object) -> str:
     if isinstance(runtime_profile, dict):
         return str(runtime_profile.get("profile") or selected)
     return selected
+
+
+def _progress_target(args: argparse.Namespace) -> tuple[str, str]:
+    if getattr(args, "run_id", None):
+        return "run", str(args.run_id)
+    if getattr(args, "session_id", None):
+        return "wrapper_session", str(args.session_id)
+    raise OmhError("progress command requires --run or --session")
+
+
+def _require_progress_target(paths, target_type: str, target_id: str) -> None:
+    if target_type == "run":
+        if not (paths.runtime_runs_dir / target_id / "run.json").exists():
+            raise OmhError(f"runtime run not found: {target_id}")
+        return
+    if target_type == "wrapper_session":
+        if not (paths.runtime_wrapper_sessions_dir / target_id / "session.json").exists():
+            raise OmhError(f"runtime wrapper_session not found: {target_id}")
+        return
+    raise OmhError(f"unsupported progress target type: {target_type}")
+
+
+def _profile_progress_summary(args: argparse.Namespace) -> dict[str, object] | None:
+    if not (args.profile_status or args.profile_event_count is not None or args.profile_latest_event or args.profile_summary):
+        return None
+    return {
+        "status": args.profile_status or "activity_observed",
+        "event_count": args.profile_event_count or 0,
+        "latest_progress_event": {"event_type": args.profile_latest_event or ""},
+        "observable_activity": [],
+        "summary": args.profile_summary or "",
+    }
 
 
 def cmd_runtime_validate(args: argparse.Namespace) -> int:
@@ -513,6 +623,70 @@ def _add_runtime_commands(sub) -> None:
     runtime_observe.add_argument("--evidence-ref", action="append")
     runtime_observe.add_argument("--summary", default="")
     runtime_observe.set_defaults(func=cmd_runtime_observe)
+
+    progress_bind = runtime_sub.add_parser(
+        "progress-bind",
+        help="Create a metadata-only executor progress binding for a run or wrapper session.",
+    )
+    target = progress_bind.add_mutually_exclusive_group(required=True)
+    target.add_argument("--run", dest="run_id", default=None)
+    target.add_argument("--session", dest="session_id", default=None)
+    progress_bind.add_argument("--executor-profile", required=True, help="codex, claude-code/claude_code, or hermes_local with observed execution.")
+    progress_bind.add_argument("--observed-hermes-execution", action="store_true")
+    progress_bind.add_argument("--codex-session-ref", default="")
+    progress_bind.add_argument("--codex-thread-ref", default="")
+    progress_bind.add_argument("--claude-session-ref", default="")
+    progress_bind.add_argument("--process-session-id", default="")
+    progress_bind.add_argument("--pid", default=None)
+    progress_bind.add_argument("--worktree", default="")
+    progress_bind.add_argument("--branch", default="")
+    progress_bind.add_argument("--source", default="")
+    progress_bind.add_argument("--channel-ref", default="")
+    progress_bind.add_argument("--thread-ref", default="")
+    progress_bind.add_argument("--delivery-target", default="")
+    progress_bind.add_argument("--evidence-ref", action="append")
+    progress_bind.set_defaults(func=cmd_runtime_progress_bind)
+
+    progress_observe = runtime_sub.add_parser(
+        "progress-observe",
+        help="Record one safe executor progress observation and compact report.",
+    )
+    target = progress_observe.add_mutually_exclusive_group(required=True)
+    target.add_argument("--run", dest="run_id", default=None)
+    target.add_argument("--session", dest="session_id", default=None)
+    progress_observe.add_argument("--process-status", default="")
+    progress_observe.add_argument("--git-status-short", default="")
+    progress_observe.add_argument("--git-diff-stat", default="")
+    progress_observe.add_argument("--event", choices=(
+        "executor_dispatched",
+        "repo_exploration",
+        "running_no_diff_observed",
+        "diff_started",
+        "tests_started",
+        "tests_failed",
+        "tests_passed",
+        "executor_completed",
+        "executor_blocked",
+        "executor_failed",
+        "progress_observed",
+    ), default="")
+    progress_observe.add_argument("--summary", default="")
+    progress_observe.add_argument("--codex-log-jsonl", default=None)
+    progress_observe.add_argument("--profile-status", default="")
+    progress_observe.add_argument("--profile-event-count", type=int, default=None)
+    progress_observe.add_argument("--profile-latest-event", default="")
+    progress_observe.add_argument("--profile-summary", default="")
+    progress_observe.add_argument("--source-language", default="")
+    progress_observe.add_argument("--evidence-ref", action="append")
+    progress_observe.set_defaults(func=cmd_runtime_progress_observe)
+
+    progress_status = runtime_sub.add_parser(
+        "progress-status",
+        help="Project active/stale executor progress from persisted artifacts only.",
+    )
+    progress_status.add_argument("--limit", type=int, default=50)
+    progress_status.add_argument("--all", action="store_true")
+    progress_status.set_defaults(func=cmd_runtime_progress_status)
 
     runtime_validate = runtime_sub.add_parser("validate")
     runtime_validate.add_argument("--run", dest="run_id", default=None)

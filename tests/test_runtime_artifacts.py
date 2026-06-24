@@ -15,6 +15,7 @@ load_local_package()
 from omh.paths import resolve_paths
 from omh.chat_router import route_chat_message, routing_record_payload
 from omh.coding_delegation import build_coding_delegation_payload, coding_delegation_record_payload
+from omh.executor_progress import build_progress_binding, build_safe_progress_signal, observe_executor_progress, write_progress_binding
 from omh.runtime_artifacts import (
     append_journal_observation,
     create_prepared_coding_delegation_run,
@@ -955,6 +956,88 @@ class RuntimeArtifactTests(unittest.TestCase):
             self.assertIn("review_recorded", {event["event"] for event in shown["events"]})
             self.assertIn("ci_recorded", {event["event"] for event in shown["events"]})
             self.assertIn("merge_recorded", {event["event"] for event in shown["events"]})
+
+    def test_show_run_includes_executor_progress_without_gate_evidence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id=run["run_id"],
+                    executor_profile="codex",
+                    codex_session_ref="codex-session-1",
+                    now="2026-06-24T00:00:00Z",
+                ),
+            )
+            signal = build_safe_progress_signal(
+                executor_profile="codex",
+                explicit_event_type="diff_started",
+                explicit_summary="Codex started editing files.",
+            )
+            observe_executor_progress(paths, binding, signal, observed_at="2026-06-24T00:01:00Z")
+
+            shown = show_run(paths, run["run_id"])
+
+            self.assertEqual(shown["executor_progress"]["binding"]["binding_id"], f"run:{run['run_id']}:codex")
+            self.assertEqual(shown["executor_progress"]["latest_event"]["event_type"], "diff_started")
+            self.assertEqual(shown["executor_progress"]["latest_report"]["event_type"], "diff_started")
+            self.assertNotIn("verification", shown["executor_progress"]["binding"])
+            self.assertIn("not result", shown["executor_progress"]["latest_event"]["claim_boundary"])
+
+    def test_redacted_export_removes_executor_progress_refs_and_summaries(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            run = create_run(paths, {"skill": "oh-my-hermes", "harness": "coding-handling", "status": "started"})
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id=run["run_id"],
+                    executor_profile="codex",
+                    codex_session_ref="codex-secret-session",
+                    codex_thread_ref="codex-secret-thread",
+                    process_session_id="process-secret",
+                    pid=4242,
+                    worktree="/tmp/secret-worktree",
+                    branch="secret-branch",
+                    source="discord-secret-source",
+                    channel_ref="secret-channel",
+                    thread_ref="secret-thread",
+                    delivery_target="secret-delivery",
+                    evidence_refs=["secret-evidence"],
+                ),
+            )
+            observe_executor_progress(
+                paths,
+                binding,
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    explicit_event_type="diff_started",
+                    explicit_summary="secret progress summary",
+                    evidence_refs=["secret-evidence"],
+                ),
+            )
+
+            exported = export_runtime(paths, redacted=True)
+            rendered = json.dumps(exported)
+
+            for leaked in (
+                "codex-secret-session",
+                "codex-secret-thread",
+                "process-secret",
+                "secret-worktree",
+                "secret-branch",
+                "discord-secret-source",
+                "secret-channel",
+                "secret-thread",
+                "secret-delivery",
+                "secret-evidence",
+                "secret progress summary",
+            ):
+                self.assertNotIn(leaked, rendered)
+            self.assertIn("[redacted]", rendered)
 
     def test_status_artifact_validators_reject_contradictory_success_claims(self) -> None:
         self.assertIn(
