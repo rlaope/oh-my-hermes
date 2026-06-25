@@ -212,98 +212,89 @@
               >
             </figure>
           </a>
-          <figure class="poster-frame poster-frame--docs">
-            <img
-              src="../assets/omh-flagship-workflows-poster.png"
-              alt="OMH flagship command sets poster summarizing intent to plan, product ops brief, and executor handoff lanes"
-            >
-          </figure>
-          <div class="docs-feature-grid" aria-label="Flagship OMH workflow families">
-            <a class="flagship-item flagship-item--docs" href="#routing">
-              <span>Task abstraction</span>
-              <h3><code>omh_task_card/v1</code> / workflow rails</h3>
-              <p>
-                Classify work such as runtime portability, environment
-                reproduction, or router-design feedback before selecting the
-                workflow rail that should carry the next safe action.
-              </p>
+          <div class="mode-note mode-note--docs" aria-label="Representative OMH workflow modes">
+            <span>Mode-first, not catalog-first</span>
+            <p>
+              These 10 modes are the public starting point. The full reference
+              remains below for every generated workflow, wrapper contract, and
+              local artifact shape.
+            </p>
+            <p>
+              Compact intent-to-plan discovery still includes
+              <code>deep-interview</code> / <code>ralplan</code> /
+              <code>ultragoal</code> / <code>loop</code> / <code>ultraprocess</code>.
+            </p>
+          </div>
+          <div class="mode-grid mode-grid--docs" aria-label="Representative OMH workflow modes">
+            <a class="mode-card mode-card--docs mode-card--featured" href="intent-to-plan/">
+              <span class="mode-card__label">Intent clarity</span>
+              <h3>Deep Interview</h3>
+              <p>One focused clarification path before planning.</p>
+              <strong>Use for vague product, research, or coding requests where the real goal is not clear yet.</strong>
+              <code>deep-interview</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="intent-to-plan/">
-              <span>Intent to plan</span>
-              <h3><code>deep-interview</code> / <code>ralplan</code> / <code>ultragoal</code> / <code>loop</code> / <code>ultraprocess</code></h3>
-              <p>
-                Convert "Make onboarding feel smoother" into a concrete goal,
-                plan, execution-ready path, loopability-gated project cycle, or
-                one-cycle delivery path.
-              </p>
+            <a class="mode-card mode-card--docs mode-card--featured" href="intent-to-plan/">
+              <span class="mode-card__label">Reviewed plan</span>
+              <h3>Ralplan</h3>
+              <p>Planning with evidence, alternatives, risks, and verification commands.</p>
+              <strong>Use for risky changes, architecture decisions, and source-backed implementation plans.</strong>
+              <code>ralplan</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="product-ops/">
-              <span>Company and product ops</span>
-              <h3><code>feedback-triage</code> / <code>research-brief</code> / <code>strategy-brief</code></h3>
-              <p>
-                Triage customer signals, brief research, set meeting topics, and
-                frame strategic options without defaulting to coding.
-              </p>
+            <a class="mode-card mode-card--docs" href="intent-to-plan/">
+              <span class="mode-card__label">Durable goal</span>
+              <h3>Ultragoal</h3>
+              <p>Goal execution with checkpoints and completion gates.</p>
+              <strong>Use for ambitious goals that need tracked progress instead of a one-shot answer.</strong>
+              <code>ultragoal</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="product-ops/">
-              <span>Research department</span>
-              <h3><code>source-finder</code> / <code>research-department</code> / <code>web-research</code> / <code>report-package</code></h3>
-              <p>
-                Prepare typed source candidates, Scout, Analyst, and Briefer
-                lanes with source inbox, briefing status, knowledge-store
-                readiness, and synthesis-tool readiness.
-              </p>
+            <a class="mode-card mode-card--docs mode-card--featured" href="intent-to-plan/">
+              <span class="mode-card__label">One-cycle delivery</span>
+              <h3>Ultra Process</h3>
+              <p>Research -> plan -> implementation path -> review -> sync.</p>
+              <strong>Use for PR-ready work where the user should not have to remember every step.</strong>
+              <code>ultraprocess</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="product-ops/">
-              <span>Paper learning</span>
-              <h3><code>paper-learning</code></h3>
-              <p>
-                Explain a supplied paper by level while preserving a coverage
-                ledger and keeping PDF extraction, OCR, citation checks, math
-                validation, and reproduction observed-only.
-              </p>
+            <a class="mode-card mode-card--docs" href="loop/">
+              <span class="mode-card__label">Loop engineering</span>
+              <h3>Loop</h3>
+              <p>Loopability-gated research, plan, handoff, feedback, and repeat cycles.</p>
+              <strong>Use for open-ended goals whose next correct implementation must be discovered.</strong>
+              <code>loop</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="#playbooks">
-              <span>Scheduled ops</span>
-              <h3><code>automation-blueprint</code> / <code>web-research</code> / <code>report-package</code></h3>
-              <p>
-                Prepare recurring checks, delivery targets, silence rules, and
-                status-card boundaries while runtime proof stays observed-only.
-              </p>
+            <a class="mode-card mode-card--docs" href="web-research/">
+              <span class="mode-card__label">Live evidence</span>
+              <h3>Web Research</h3>
+              <p>Source-backed current research with clear evidence boundaries.</p>
+              <strong>Use for market, docs, competitor, implementation, or best-practice questions.</strong>
+              <code>web-research</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="product-ops/">
-              <span>Materials processing</span>
-              <h3><code>materials-package</code> / <code>report-package</code></h3>
-              <p>
-                Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and
-                upload packages while binary export and render QA stay evidence-gated.
-              </p>
+            <a class="mode-card mode-card--docs" href="paper-learning/">
+              <span class="mode-card__label">Paper study</span>
+              <h3>Paper Learning</h3>
+              <p>Paper/PDF explanation at very easy, moderate, or expert level.</p>
+              <strong>Use for readable paper study without dropping section coverage.</strong>
+              <code>paper-learning</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="image-gen/">
-              <span>Image gen</span>
-              <h3><code>img-summary</code></h3>
-              <p>
-                Prepare source-specific meeting, report, PR, issue, research,
-                and release cards while generation, QA, and delivery remain
-                observed-only.
-              </p>
+            <a class="mode-card mode-card--docs" href="#playbooks">
+              <span class="mode-card__label">Source intake</span>
+              <h3>Source Finder</h3>
+              <p>Typed acquisition plan for papers, datasets, repos, docs, and public decks.</p>
+              <strong>Use for finding the right material before research or synthesis starts.</strong>
+              <code>source-finder</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="#quality">
-              <span>Workflow learning</span>
-              <h3><code>workflow-learning</code></h3>
-              <p>
-                Record metadata-only traces, evals, human-review candidates,
-                regression cases, and patch handoff proposals without automatic
-                model training or hidden skill mutation.
-              </p>
+            <a class="mode-card mode-card--docs" href="executor-handoff/">
+              <span class="mode-card__label">Coding handoff</span>
+              <h3>Idea To Deploy</h3>
+              <p>Executor-ready handoff with scope, non-goals, and verification.</p>
+              <strong>Use for turning an issue or feature idea into work for Codex, Claude Code, Hermes, or another runtime.</strong>
+              <code>idea-to-deploy</code>
             </a>
-            <a class="flagship-item flagship-item--docs" href="executor-handoff/">
-              <span>Executor-ready handoff</span>
-              <h3><code>idea-to-deploy</code> / coding handoff / executor selection</h3>
-              <p>
-                Prepare work for Codex, Claude Code, an oh-my runtime, or Hermes coding skills
-                while keeping evidence boundaries explicit.
-              </p>
+            <a class="mode-card mode-card--docs" href="#quality">
+              <span class="mode-card__label">Improve the workflow</span>
+              <h3>Workflow Learning</h3>
+              <p>Trace, eval, review queue, regression case, and patch proposal.</p>
+              <strong>Use for improving routing and skill behavior after a missed or weak workflow.</strong>
+              <code>workflow-learning</code>
             </a>
           </div>
         </section>

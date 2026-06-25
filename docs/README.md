@@ -77,21 +77,68 @@ Operating models are optional advanced Hermes collaboration postures. They
 should not be described as installed agents or first-run setup choices unless a
 separate profile pack is explicitly selected.
 
-## Flagship Command Set Families
+## Representative Workflow Modes
 
 ![OMH flagship command sets poster](../assets/omh-flagship-workflows-poster.png)
 
-| Family | What Hermes owns | Plain request |
-| --- | --- | --- |
-| `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Turn vague intent into a concrete goal, accepted plan, execution-ready path, loopability-gated project cycle, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
-| `feedback-triage` / `research-brief` / `strategy-brief` | Run non-coding company and product operating workflows for customer signals, evidence, meetings, and strategy. | "Payment failures keep coming up." |
-| `source-finder` / `research-department` / `web-research` / `research-brief` / `report-package` | Prepare typed source candidates, Scout -> Analyst -> Briefer research operations, source-backed evidence, source inbox, briefing status, knowledge-store readiness, and synthesis-tool readiness. | "Find papers, datasets, and repos for this topic." |
-| `paper-learning` | Explain supplied papers at very easy, moderate, or expert level with source-state evidence and a coverage ledger. | "Explain this paper PDF in very easy language without dropping sections." |
-| `operating-rhythm` / `report-package` / `reliability-review` | Keep operating cadence, report packages, and service reliability review in independent artifact-backed lanes. | "Prepare meeting history, the monthly report, and the incident review." |
-| `automation-blueprint` / `web-research` / `report-package` | Prepare recurring scheduled ops with cadence, delivery target, silence policy, skill chain, and observed-evidence requirements. | "Every morning, check competitor news and send a Slack digest only if something changed." |
-| `materials-package` / `report-package` | Prepare decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready materials while keeping binary export, render QA, formula checks, approval, and delivery observed-only. | "Turn the revenue spreadsheet into an Excel and PDF package with render QA." |
-| `img-summary` | Prepare provider-neutral visual prompt cards for meeting notes, PR summaries, issue triage, research briefings, and release announcements, with source-specific formats, premium domain-aware scene direction, poster_archetype/v1 design grammar, image-tool setup fallback, and observed-only generation, QA, and delivery. | "Make a PR summary card for reviewers." |
-| `idea-to-deploy` / coding handoff / executor selection | Prepare scoped handoffs for Codex, Claude Code, another runtime, or Hermes coding skills while preserving observed-evidence boundaries. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+The full skill catalog is intentionally larger than the public story. Start
+with these 10 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
+[CAPABILITIES.md](CAPABILITIES.md) for the complete reference.
+
+The intent-to-plan lane includes `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`.
+This section expands that lane into individual representative modes instead of
+a dense command family table.
+
+**Deep Interview**
+
+`deep-interview` asks the smallest useful clarification before planning. Use it
+when a product, research, or coding request is still too vague to execute well.
+
+**Ralplan**
+
+`ralplan` turns repo facts, source evidence, alternatives, risks, acceptance
+criteria, and verification commands into a reviewed plan.
+
+**Ultragoal**
+
+`ultragoal` gives ambitious goals durable checkpoints and completion gates so
+Hermes can report progress without pretending a one-shot answer is enough.
+
+**Ultra Process**
+
+`ultraprocess` is the one-cycle delivery lane: research -> ralplan ->
+implementation path -> code review -> docs/status sync.
+
+**Loop**
+
+`loop` handles loopable projects where the correct next implementation has to
+be discovered through bounded research, plan, handoff, feedback, and repeat
+cycles.
+
+**Web Research**
+
+`web-research` keeps current market, docs, competitor, implementation, and
+best-practice research source-backed.
+
+**Paper Learning**
+
+`paper-learning` explains a supplied paper or paper PDF at very easy,
+moderate, or expert level while preserving section coverage.
+
+**Source Finder**
+
+`source-finder` prepares typed source candidates such as papers, datasets,
+repos, docs, and public decks before research or synthesis starts.
+
+**Idea To Deploy**
+
+`idea-to-deploy` prepares scoped coding work for Codex, Claude Code, Hermes, or
+another runtime without claiming unobserved execution.
+
+**Workflow Learning**
+
+`workflow-learning` turns missed routes or weak workflow attempts into traces,
+evals, review queues, regression cases, and patch proposals.
 
 ## Documentation Contracts
 
