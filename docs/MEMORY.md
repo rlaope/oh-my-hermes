@@ -118,9 +118,10 @@ adds `memory_recall_pack/v1` to prepared coding handoffs. This applies to:
 Persisted lifecycle records keep only a compact recall summary. They do not
 persist raw recalled summaries in status cards.
 
-Recall packs are prepared context. They can help Codex or another executor
-start with known project facts, decisions, lessons, or procedures, but they do
-not prove that any executor ran or that review/CI/merge happened.
+Recall packs are prepared context. They can help the selected coding owner —
+Codex, Claude Code, Hermes runtime/handoff paths, or a generic executor — start
+with known project facts, decisions, lessons, or procedures, but they do not
+prove that any executor ran or that review/CI/merge happened.
 
 ## Future Backends
 
