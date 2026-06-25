@@ -530,7 +530,7 @@ class RuntimeArtifactTests(unittest.TestCase):
                 {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
             )
             run_dir = paths.runtime_runs_dir / run["run_id"]
-            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            message = "implement safe runtime feature in src/omh/runtime/artifacts.py without overclaiming"
             payload = build_coding_delegation_payload(
                 message,
                 source="discord",
@@ -598,7 +598,7 @@ class RuntimeArtifactTests(unittest.TestCase):
                 },
             )
             run_dir = paths.runtime_runs_dir / run["run_id"]
-            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            message = "implement safe runtime feature in src/omh/runtime/artifacts.py without overclaiming"
             payload = build_coding_delegation_payload(message, source="discord", executor_target="codex")
             write_coding_delegation(run_dir, coding_delegation_record_payload(payload, message))
 
@@ -646,7 +646,7 @@ class RuntimeArtifactTests(unittest.TestCase):
                 },
             )
             run_dir = paths.runtime_runs_dir / run["run_id"]
-            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            message = "implement safe runtime feature in src/omh/runtime/artifacts.py without overclaiming"
             payload = build_coding_delegation_payload(message, source="discord", executor_target="codex")
             write_coding_delegation(run_dir, coding_delegation_record_payload(payload, message))
 
@@ -713,7 +713,7 @@ class RuntimeArtifactTests(unittest.TestCase):
                 paths,
                 {"skill": "ai-slop-cleaner", "harness": "coding-handling"},
             )
-            message = "implement safe runtime feature in src/runtime/artifacts.py without overclaiming"
+            message = "implement safe runtime feature in src/omh/runtime/artifacts.py without overclaiming"
             payload = build_coding_delegation_payload(
                 message,
                 source="discord",

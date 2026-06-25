@@ -39,7 +39,7 @@ class ExecutorProgressProjectionTests(unittest.TestCase):
                 "\n".join(
                     [
                         json.dumps({"type": "tool_call", "tool": "rg", "args": "rg live progress"}),
-                        json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/coding/executor_progress.py"}),
+                        json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/coding/executor_progress.py"}),
                         json.dumps({"type": "tool_call", "command": "python -m unittest tests/test_executor_progress_binding.py"}),
                         json.dumps({"type": "reasoning", "analysis": "private reasoning should not leak"}),
                     ]

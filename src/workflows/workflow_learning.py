@@ -2043,7 +2043,7 @@ def _patch_target_files(target_type: str, target_ref: str) -> list[str]:
         workflow = target.split(":", 1)[1] if ":" in target else target
         return ["src/skills/catalog.py", "src/skills/render.py", f"skills/{workflow}/SKILL.md", "docs/WORKFLOWS.md"]
     if normalized in {"routing", "router", "route"}:
-        return ["src/routing/recommend.py", "src/chat_router/__init__.py", "tests/test_chat_router.py", "tests/test_cli.py"]
+        return ["src/routing/recommend.py", "src/routing/chat.py", "tests/test_chat_router.py", "tests/test_cli.py"]
     if normalized in {"rubric", "workflow_rubric", "eval", "validator"}:
         return ["src/workflows/workflow_learning.py", "tests/test_workflow_learning.py", "tests/test_cli.py"]
     if normalized == "docs":

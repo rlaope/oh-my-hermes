@@ -248,36 +248,37 @@ class CapabilityManifestTests(unittest.TestCase):
 
     def test_package_metadata_includes_capabilities_package(self) -> None:
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-        packages = set(pyproject["tool"]["setuptools"]["packages"])
+        packages = pyproject["tool"]["setuptools"]["packages"]
         package_dir = pyproject["tool"]["setuptools"]["package-dir"]
+        source_root = Path("src")
 
+        self.assertIn("omh", packages)
         self.assertIn("omh.capabilities", packages)
-        self.assertIn("omh.cli", packages)
-        self.assertIn("omh.coding", packages)
-        self.assertIn("omh.coding_delegation", packages)
-        self.assertIn("omh.install", packages)
-        self.assertIn("omh.maintenance", packages)
-        self.assertIn("omh.materials", packages)
-        self.assertIn("omh.mcp", packages)
-        self.assertIn("omh.quality", packages)
-        self.assertIn("omh.surfaces", packages)
-        self.assertIn("omh.system", packages)
-        self.assertIn("omh.version", packages)
-        self.assertIn("omh.workflows", packages)
-        self.assertEqual(package_dir["omh"], "src")
+        self.assertIn("omh.routing", packages)
+        self.assertEqual(package_dir["omh"], "src/omh")
         self.assertEqual(package_dir["omh.capabilities"], "src/capabilities")
-        self.assertEqual(package_dir["omh.cli"], "src/cli")
-        self.assertEqual(package_dir["omh.coding"], "src/coding")
-        self.assertEqual(package_dir["omh.coding_delegation"], "src/coding_delegation")
-        self.assertEqual(package_dir["omh.install"], "src/install")
-        self.assertEqual(package_dir["omh.maintenance"], "src/maintenance")
-        self.assertEqual(package_dir["omh.materials"], "src/materials")
-        self.assertEqual(package_dir["omh.mcp"], "src/mcp")
-        self.assertEqual(package_dir["omh.quality"], "src/quality")
-        self.assertEqual(package_dir["omh.surfaces"], "src/surfaces")
-        self.assertEqual(package_dir["omh.system"], "src/system")
-        self.assertEqual(package_dir["omh.version"], "src/version")
-        self.assertEqual(package_dir["omh.workflows"], "src/workflows")
+        self.assertEqual(package_dir["omh.routing"], "src/routing")
+        for package_path in (
+            "capabilities",
+            "coding",
+            "install",
+            "maintenance",
+            "mcp",
+            "quality",
+            "surfaces",
+            "system",
+            "workflows",
+        ):
+            with self.subTest(package_path=package_path):
+                self.assertTrue((source_root / package_path / "__init__.py").is_file())
+        self.assertTrue((source_root / "omh" / "cli" / "__init__.py").is_file())
+        for compatibility_module in (
+            "coding_delegation.py",
+            "materials.py",
+            "version.py",
+        ):
+            with self.subTest(compatibility_module=compatibility_module):
+                self.assertTrue((source_root / "omh" / compatibility_module).is_file())
 
     def test_runtime_topology_is_deferred_from_first_pr(self) -> None:
         self.assertFalse(Path("src/capabilities/runtime_topology.py").exists())
