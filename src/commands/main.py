@@ -33,6 +33,7 @@ from .coding import (
     cmd_coding_lifecycle_start,
     cmd_coding_lifecycle_verify,
 )
+from .codegraph import _add_codegraph_commands, cmd_codegraph_build, cmd_codegraph_handoff, cmd_codegraph_summary
 from .context import _add_context_commands, cmd_context_brief
 from .demo import _add_demo_commands, cmd_demo_orchestration
 from .docs import (
@@ -222,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_capabilities_commands(sub)
     _add_context_commands(sub)
     _add_coding_commands(sub)
+    _add_codegraph_commands(sub)
     _add_hermes_commands(sub)
     _add_hud_commands(sub)
     _add_learning_commands(sub)

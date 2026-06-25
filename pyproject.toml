@@ -35,6 +35,7 @@ packages = [
   "omh.capabilities",
   "omh.catalogs",
   "omh.cli",
+  "omh.codegraph",
   "omh.coding",
   "omh.commands",
   "omh.core",
@@ -61,6 +62,7 @@ packages = [
 "omh" = "src/omh"
 "omh.capabilities" = "src/capabilities"
 "omh.catalogs" = "src/catalogs"
+"omh.codegraph" = "src/codegraph"
 "omh.coding" = "src/coding"
 "omh.commands" = "src/commands"
 "omh.core" = "src/core"
