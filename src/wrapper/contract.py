@@ -8,6 +8,7 @@ from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_tex
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_route_payload, route_chat_message
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
+from ..capabilities.families import capability_family_cards
 from ..context import build_context_brief
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
@@ -2470,6 +2471,7 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
                     "selection_mode": "single_select",
                     "options": picker["options"],
                     "featured_options": picker["featured_options"],
+                    "capability_families": picker["capability_families"],
                     "groups": picker["groups"],
                 },
             ),
@@ -2482,6 +2484,8 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
 
 
 def _skill_picker_body(*, catalog_question: bool) -> str:
+    family_heading = "Capability families:" if catalog_question else "Families:"
+    family_lines = _skill_picker_family_body_lines()
     if catalog_question:
         return "\n".join(
             [
@@ -2489,14 +2493,11 @@ def _skill_picker_body(*, catalog_question: bool) -> str:
                 "",
                 "Start here:",
                 "- Route for me: let Hermes choose the safest workflow from your message.",
-                "- Choose workflow: pick from the grouped OMH workflow lanes.",
+                "- Choose workflow: pick from the OMH capability families.",
                 "- Search workflows: find the exact skill when you already know the job.",
                 "",
-                "Common lanes:",
-                "- Intent to plan: deep-interview, ralplan, ultragoal, loop, ultraprocess.",
-                "- Company/product ops: feedback-triage, research-brief, strategy-brief, research-department, paper-learning.",
-                "- Deliverables/visuals: materials-package, report-package, img-summary.",
-                "- Coding/runtime: request-to-handoff, idea-to-deploy, code-review, executor selection.",
+                family_heading,
+                *family_lines,
             ]
         )
     return "\n".join(
@@ -2506,13 +2507,22 @@ def _skill_picker_body(*, catalog_question: bool) -> str:
             "Best default:",
             "- Route for me: paste the request and let Hermes choose the workflow.",
             "",
-            "Manual lanes:",
-            "- Plan or loop: deep-interview, ralplan, ultragoal, loop, ultraprocess.",
-            "- Ops or research: feedback-triage, research-brief, paper-learning, strategy-brief.",
-            "- Deliverables or visuals: materials-package, report-package, img-summary.",
-            "- Coding: request-to-handoff, idea-to-deploy, code-review, executor selection.",
+            family_heading,
+            *family_lines,
         ]
     )
+
+
+def _skill_picker_family_body_lines() -> list[str]:
+    lines = []
+    for family in capability_family_cards():
+        workflows = _as_string_list(family.get("primary_workflows", []))[:4]
+        workflow_text = ", ".join(workflows)
+        executor_choices = _as_string_list(family.get("executor_choices", []))[:3]
+        if executor_choices:
+            workflow_text = f"{workflow_text}; executors: {', '.join(executor_choices)}"
+        lines.append(f"- {family.get('label', '')}: {workflow_text}.")
+    return lines
 
 
 def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
@@ -2543,6 +2553,7 @@ def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
         if option["id"] == _ROUTER_SKILL
     ]
     groups = _skill_picker_groups(options)
+    family_cards = _skill_picker_family_cards(options)
     return {
         "schema_version": SKILL_PICKER_SCHEMA_VERSION,
         "trigger": _first_token(message),
@@ -2550,15 +2561,49 @@ def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
         "selection_mode": "single_select",
         "options": options,
         "featured_options": featured_options,
+        "capability_families": family_cards,
         "groups": groups,
         "rendering_hints": {
             "discord": "Render Route for me first, then grouped sections; keep the full options list only as a compatibility fallback.",
             "slack": "Render Route for me first, then grouped sections or a grouped static select in the current thread.",
             "hermes_tui": "Render grouped sections with short direct invocations; keep real skill names unchanged.",
         },
-        "recommended_rendering": "Show the featured Route for me option first, then the groups. Use search_skills for the full installed catalog.",
+        "recommended_rendering": "Show the featured Route for me option first, then capability families. Use groups/options as compatibility fallback.",
         "claim_boundary": "This picker records routing intent only; selected workflows still need their own plan, handoff, or observed evidence.",
     }
+
+
+def _skill_picker_family_cards(options: list[dict[str, object]]) -> list[dict[str, object]]:
+    option_ids = {str(option["id"]) for option in options}
+    cards = []
+    for family in capability_family_cards(option_ids):
+        workflows = [
+            workflow
+            for workflow in _as_string_list(family.get("primary_workflows", []))
+            if workflow in option_ids or workflow in {"request-to-handoff", "executor selection", "coding runtime handoff"}
+        ]
+        if not workflows:
+            continue
+        card = _compact_family_card(family)
+        card["primary_workflows"] = workflows
+        cards.append(card)
+    return cards
+
+
+def _compact_family_cards(families: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [_compact_family_card(family) for family in families]
+
+
+def _compact_family_card(family: dict[str, object]) -> dict[str, object]:
+    card = {
+        "id": str(family.get("id", "")),
+        "label": str(family.get("label", "")),
+        "primary_workflows": _as_string_list(family.get("primary_workflows", []))[:8],
+    }
+    executor_choices = _as_string_list(family.get("executor_choices", []))
+    if executor_choices:
+        card["executor_choices"] = executor_choices
+    return card
 
 
 def _skill_picker_groups(options: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -2617,6 +2662,7 @@ def _context_primer_state() -> dict[str, object]:
             "OMH is a Hermes workflow layer. It helps Hermes route natural-language work into skills, plans, "
             "deliverables, coding handoffs, loops, and status updates without treating prepared guidance as observed work."
         ),
+        "capability_families": _compact_family_cards(capability_family_cards(installed)),
         "workflow_groups": groups,
         "workflow_context_cards": workflow_context_cards(),
         "routing_rule": "Use Route for me when the user did not choose a workflow; use explicit workflow names when the user did.",
@@ -2654,6 +2700,7 @@ def _catalog_capability_summary() -> dict[str, object]:
     return {
         "schema_version": summary.get("schema_version", "omh_capability_summary/v1"),
         "purpose": summary.get("purpose", ""),
+        "capability_families": _compact_family_cards(_as_dict_list(summary.get("capability_families", []))),
         "lanes": compact_lanes,
         "workflow_context_cards": _as_dict_list(summary.get("workflow_context_cards", [])),
         "direct_response_guidance": _as_string_list(summary.get("direct_response_guidance", [])),

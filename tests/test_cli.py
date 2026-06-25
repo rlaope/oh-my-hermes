@@ -114,6 +114,13 @@ class CliTests(unittest.TestCase):
         self.assertFalse(payload["message"]["raw_prompt_stored"])
         self.assertNotIn("secret-token-123", stdout)
 
+    def test_context_brief_does_not_mask_capability_family_projection_errors(self) -> None:
+        from omh.plugin_bundle.omh.context_brief import build_context_brief
+
+        with patch("omh.capabilities.families.capability_family_cards", side_effect=RuntimeError("projection boom")):
+            with self.assertRaisesRegex(RuntimeError, "projection boom"):
+                build_context_brief("what can OMH do?")
+
         status, stdout, stderr = run_cli(
             [
                 "context",
@@ -841,6 +848,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["schema_version"], "omh_quickstart_card/v1")
             self.assertEqual(payload["status"], "ready")
             self.assertEqual(payload["source"], "discord")
+            family_cards = {family["id"]: family for family in payload["first_use_family_cards"]}
+            self.assertIn("paper-learning", family_cards["learn_and_gather"]["primary_workflows"])
+            self.assertIn("img-summary", family_cards["create_materials_and_visuals"]["primary_workflows"])
+            self.assertIn("Claude Code", family_cards["delegate_coding_and_ship"]["executor_choices"])
             self.assertEqual(payload["local_status"]["plugin_bridge"]["status"], "ready_locally")
             self.assertFalse(payload["local_status"]["plugin_runtime_observed"])
             self.assertFalse(payload["local_status"]["plugin_runtime_active"])
@@ -4106,7 +4117,7 @@ class CliTests(unittest.TestCase):
                 picker = payload["chat_response"]["state"]["skill_picker"]
                 self.assertEqual(picker["schema_version"], "omh_skill_picker/v1")
                 self.assertIn("Best default:", payload["chat_response"]["body"])
-                self.assertIn("Manual lanes:", payload["chat_response"]["body"])
+                self.assertIn("Families:", payload["chat_response"]["body"])
                 self.assertIn("Route for me:", payload["chat_response"]["body"])
                 rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
                 self.assertGreaterEqual(
@@ -4116,12 +4127,17 @@ class CliTests(unittest.TestCase):
                 option_ids = {option["id"] for option in picker["options"]}
                 self.assertTrue({"oh-my-hermes", "deep-interview", "ralplan", "loop", "ultraprocess"} <= option_ids)
                 self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+                families = {family["id"]: family for family in picker["capability_families"]}
+                self.assertIn("paper-learning", families["learn_and_gather"]["primary_workflows"])
+                self.assertIn("img-summary", families["create_materials_and_visuals"]["primary_workflows"])
+                self.assertIn("Claude Code", families["delegate_coding_and_ship"]["executor_choices"])
                 groups = {group["id"]: group for group in picker["groups"]}
                 self.assertIn("loop", groups["intent_to_plan"]["option_ids"])
                 self.assertIn("img-summary", groups["deliverables_and_visuals"]["option_ids"])
                 self.assertIn("code-review", groups["coding_and_runtime"]["option_ids"])
                 action_payload = next(action for action in payload["chat_response"]["actions"] if action["id"] == "choose_skill")["payload"]
                 self.assertEqual(action_payload["featured_options"][0]["id"], "oh-my-hermes")
+                self.assertIn("capability_families", action_payload)
                 self.assertIn("groups", action_payload)
                 self.assertIn("choose_skill", {action["id"] for action in payload["chat_response"]["actions"]})
 
@@ -4164,7 +4180,7 @@ class CliTests(unittest.TestCase):
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
                 self.assertIn("shell command", payload["chat_response"]["body"])
                 self.assertIn("Start here:", payload["chat_response"]["body"])
-                self.assertIn("Common lanes:", payload["chat_response"]["body"])
+                self.assertIn("Capability families:", payload["chat_response"]["body"])
                 self.assertIn("Route for me:", payload["chat_response"]["body"])
                 rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
                 self.assertGreaterEqual(
@@ -4173,15 +4189,21 @@ class CliTests(unittest.TestCase):
                 )
                 picker = payload["chat_response"]["state"]["skill_picker"]
                 self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+                picker_families = {family["id"]: family for family in picker["capability_families"]}
+                self.assertIn("paper-learning", picker_families["learn_and_gather"]["primary_workflows"])
+                self.assertIn("img-summary", picker_families["create_materials_and_visuals"]["primary_workflows"])
                 picker_groups = {group["id"]: group for group in picker["groups"]}
                 self.assertIn("feedback-triage", picker_groups["company_product_ops"]["option_ids"])
                 self.assertIn("img-summary", picker_groups["deliverables_and_visuals"]["option_ids"])
                 capability_summary = payload["chat_response"]["state"]["capability_summary"]
                 self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
+                summary_families = {family["id"]: family for family in capability_summary["capability_families"]}
                 lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
                 self.assertIn("intent_to_plan", lanes)
                 self.assertIn("materials_and_visuals", lanes)
                 self.assertIn("coding_handoff", lanes)
+                self.assertIn("paper-learning", summary_families["learn_and_gather"]["primary_workflows"])
+                self.assertIn("Claude Code", summary_families["delegate_coding_and_ship"]["executor_choices"])
                 self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
                 self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))

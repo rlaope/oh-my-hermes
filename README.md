@@ -96,18 +96,17 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ## Why OMH
 
 - **Hermes stays the surface** - users ask in plain language, and Hermes can
-  answer with the right workflow, role, next action, or handoff.
-- **Skills install into the workflow you already use** - OMH adds
-  Hermes-visible skills and setup repair without asking teams to adopt another
-  dashboard.
-- **Research and planning feel first-class** - source finding, paper learning,
-  web research, briefs, interviews, plans, and strategy work have dedicated
-  Hermes-facing paths.
+  answer with a family, workflow, role, next action, or handoff.
+- **Discovery starts with outcomes** - planning, learning, material creation,
+  coding delegation, and operations appear as capability families before users
+  need to know skill names.
+- **Research and planning are first-class** - source finding, paper learning,
+  web research, briefs, interviews, plans, and strategy work stay in
+  Hermes-facing paths instead of defaulting to coding.
 - **Coding is delegated deliberately** - Codex, Claude Code, Hermes, or another
-  selected executor can receive a scoped handoff with non-goals, acceptance
-  criteria, and verification expectations.
-- **Prepared is not observed** - OMH keeps planned handoffs, generated prompts,
-  status cards, execution, review, CI, and merge evidence separate.
+  selected executor receives a scoped handoff only after the request is clear.
+- **Prepared is not observed** - plans, generated prompts, status cards,
+  dispatch, execution, review, CI, and merge evidence stay separate.
 - **Local and inspectable** - skills, manifests, plans, sessions, and status
   records stay in user-owned local directories.
 
@@ -121,16 +120,11 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 
 | Need | OMH helps Hermes do this | Example |
 | --- | --- | --- |
-| `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess` | Shape fuzzy intent into an interview, plan, goal loop, or one PR-ready delivery cycle. | "Make onboarding feel smoother." |
-| `feedback-triage` / `research-brief` / `strategy-brief` | Keep product signals, source-backed research, and decisions in non-coding workflows. | "Payment failures keep coming up." |
-| `source-finder` / `research-department` / `web-research` / `research-brief` / `report-package` | Prepare typed source candidates, Scout -> Analyst -> Briefer research operations, source-backed evidence, and briefing status boundaries. | "Find papers, datasets, and repos for this topic." |
-| `paper-learning` | Explain a supplied paper or paper PDF at very easy, moderate, or expert level while preserving a coverage ledger. | "Explain this arXiv paper without dropping details." |
-| `operating-rhythm` / `report-package` / `reliability-review` | Record cadence, reports, and reliability reviews as local artifacts with evidence boundaries. | "Turn the sprint retro and incident review into durable records." |
-| `automation-blueprint` / `web-research` / `report-package` | Prepare recurring research or ops blueprints with schedule, delivery, and silence policy. | "Every morning, check competitor news and send a digest only if something changed." |
-| `materials-package` / `report-package` | Shape decks, PDFs, spreadsheets, documents, HWP, Markdown, and upload-ready packages. | "Turn the revenue spreadsheet into an Excel and PDF package." |
-| `img-summary` | Turn notes, PRs, issues, research, or reports into image-card prompts for a connected image tool. | "Make a PR summary card for reviewers." |
-| `idea-to-deploy` / coding runtime handoff / executor selection | Prepare work for Codex, Claude Code, Hermes, or another runtime without hiding execution. | "Turn this issue into a PR-ready plan and hand it to implementation." |
-| `agent-ops-review` | Show a manager view of AI-agent research, coding, review, blockers, next actions, and throughput levers. | "As a manager, show the quality and progress of agent work." |
+| Plan and decide | Clarify fuzzy goals, produce reviewed plans, choose loopable work, and keep decisions explicit. | "Make onboarding feel smoother." |
+| Learn and gather | Find sources, explain papers, triage signals, and prepare source-backed briefs before synthesis or handoff. | "Find papers, datasets, and repos for this topic." |
+| Create materials and visuals | Shape decks, PDFs, spreadsheets, reports, deliverable packages, and image-card prompts before generation is claimed. | "Make a PR summary card for reviewers." |
+| Delegate coding and ship | Prepare scoped handoffs for Codex, Claude Code, Hermes, or another runtime, then track dispatch, review, CI, and merge evidence separately. | "Turn this issue into a PR-ready plan and hand it to implementation." |
+| Operate and observe | Show setup health, recurring ops plans, workflow learning, memory review, agent ops status, and repair next steps. | "Why did this route to plan? Make it a regression." |
 
 ## What You Get
 

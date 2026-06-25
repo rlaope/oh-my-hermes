@@ -43,6 +43,19 @@ def cmd_capabilities_summary(args: argparse.Namespace) -> int:
         return 0
     print("OMH capability summary")
     print("Use this when Hermes needs to explain what OMH can do without shell catalog approval.")
+    families = payload.get("capability_families", [])
+    if isinstance(families, list) and families:
+        print("Capability families")
+        print("Families are the user-facing front door; legacy lanes remain compatibility context.")
+        for family in families:
+            if not isinstance(family, dict):
+                continue
+            workflows = family.get("primary_workflows", [])
+            workflow_text = ", ".join(str(item) for item in workflows[:5]) if isinstance(workflows, list) else ""
+            print(f"- {family.get('label', '')} ({family.get('owner_role', '')})")
+            print(f"  Use for: {family.get('use_for', '')}")
+            print(f"  Workflows: {workflow_text}")
+        print("Legacy lanes")
     for lane in payload["lanes"]:
         skills = lane["primary_skills"]
         playbooks = lane["representative_playbooks"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from .agents import agent_role_capabilities
+from .families import capability_family_projection
 from .hooks import hook_manifest
 from .keywords import keyword_detector_manifest
 from .orchestration import orchestration_patterns
@@ -73,6 +74,7 @@ def capability_snapshot() -> dict[str, object]:
     playbooks = playbook_capabilities()
     tools = tool_requirements_manifest()
     awareness = awareness_primer_payload()
+    families = capability_family_projection()
     snapshot = {
         "schema_version": CAPABILITY_MANIFEST_SCHEMA_VERSION,
         "manifest_id": "omh_capabilities",
@@ -87,7 +89,9 @@ def capability_snapshot() -> dict[str, object]:
             "orchestration_patterns": len(patterns),
             "playbooks": len(playbooks),
             "tool_requirements": len(tools["items"]),
+            "capability_families": len(families["families"]),
         },
+        "capability_families": families,
         "omh_awareness": awareness,
         "agent_roles": agent_roles,
         "skills": skills,
@@ -115,6 +119,7 @@ def capability_summary() -> dict[str, object]:
     skills = {str(item.get("id")): item for item in snapshot["skills"] if isinstance(item, dict)}
     playbooks = {str(item.get("id")): item for item in snapshot["playbooks"] if isinstance(item, dict)}
     lanes = awareness.get("lanes", []) if isinstance(awareness, dict) else []
+    families = snapshot.get("capability_families", {})
     return {
         "schema_version": "omh_capability_summary/v1",
         "manifest_id": snapshot["manifest_id"],
@@ -125,6 +130,8 @@ def capability_summary() -> dict[str, object]:
         ),
         "chat_rule": awareness.get("chat_rule", "") if isinstance(awareness, dict) else "",
         "totals": snapshot["summary"],
+        "capability_families": families.get("families", []) if isinstance(families, dict) else [],
+        "workflow_to_family": families.get("workflow_to_family", {}) if isinstance(families, dict) else {},
         "lanes": [
             _summary_lane(lane, skills, playbooks)
             for lane in lanes
@@ -132,9 +139,9 @@ def capability_summary() -> dict[str, object]:
         ],
         "workflow_context_cards": awareness.get("workflow_context_cards", []) if isinstance(awareness, dict) else [],
         "direct_response_guidance": [
-            "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
-            "When a request matches a lane, name the likely workflow and the first safe next action.",
-            "When a request crosses lanes, name the adjacent workflow before preparing handoff or status.",
+            "When a user asks what OMH can do, summarize capability families and offer the workflow picker.",
+            "When a request matches a family, name the likely workflow and the first safe next action.",
+            "When a request crosses families, name the adjacent workflow before preparing handoff or status.",
             "Use friendly section aliases for input, but keep canonical names in machine-readable output.",
         ],
         "section_aliases": dict(sorted(CAPABILITY_SECTION_ALIASES.items())),

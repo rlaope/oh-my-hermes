@@ -48,6 +48,111 @@ LANE_OWNER_ROLES = {
     "automation_and_status": "tracker",
     "coding_handoff": "handoff-guide",
 }
+STANDALONE_CAPABILITY_FAMILIES = (
+    {
+        "id": "plan_and_decide",
+        "label": "Plan and decide",
+        "owner_role": "planner",
+        "source_lanes": ("intent_to_plan",),
+        "use_for": "Ambiguous goals, planning, decisions, and loopable work before execution.",
+        "primary_workflows": (
+            "deep-interview",
+            "ralplan",
+            "ultragoal",
+            "loop",
+            "strategy-brief",
+            "oh-my-hermes",
+            "plan",
+            "ralph",
+            "performance-goal",
+        ),
+        "next_action": "clarify_or_prepare_plan",
+        "example_prompt": "Make onboarding feel smoother.",
+        "route_summary": "Clarify the goal, choose the planning depth, and show the next concrete action.",
+        "not_evidence_until_observed": ("plan acceptance", "executor dispatch", "verification"),
+    },
+    {
+        "id": "learn_and_gather",
+        "label": "Learn and gather",
+        "owner_role": "researcher",
+        "source_lanes": ("research_and_ops",),
+        "use_for": "Source finding, web research, papers, customer signals, and briefings.",
+        "primary_workflows": (
+            "source-finder",
+            "web-research",
+            "paper-learning",
+            "research-department",
+            "feedback-triage",
+            "best-practice-research",
+            "autoresearch-goal",
+            "research-brief",
+            "meeting-brief",
+        ),
+        "next_action": "gather_source_backed_evidence",
+        "example_prompt": "Find papers, datasets, and repos for this topic.",
+        "route_summary": "Name the source/synthesis split before summarizing or planning from the material.",
+        "not_evidence_until_observed": ("source retrieval", "source verification", "decision approval"),
+    },
+    {
+        "id": "create_materials_and_visuals",
+        "label": "Create materials and visuals",
+        "owner_role": "operator",
+        "source_lanes": ("materials_and_visuals",),
+        "use_for": "Decks, PDFs, spreadsheets, reports, image cards, and shareable packages.",
+        "primary_workflows": ("materials-package", "report-package", "deliverable-package", "img-summary", "wiki"),
+        "next_action": "prepare_material_or_visual_card",
+        "example_prompt": "Make a PR summary card for reviewers.",
+        "route_summary": "Prepare the copy, prompt, package, or QA contract before claiming generated output.",
+        "not_evidence_until_observed": ("file export", "image generation", "visual QA", "delivery"),
+    },
+    {
+        "id": "delegate_coding_and_ship",
+        "label": "Delegate coding and ship",
+        "owner_role": "handoff-guide",
+        "source_lanes": ("coding_handoff",),
+        "use_for": "Scoped coding handoffs, executor choice, review, QA, CI, and merge readiness.",
+        "primary_workflows": (
+            "idea-to-deploy",
+            "ultraprocess",
+            "code-review",
+            "team",
+            "ultrawork",
+            "ultraqa",
+            "cto-loop",
+            "deploy-and-monitor",
+            "ai-slop-cleaner",
+            "request-to-handoff",
+            "executor selection",
+            "coding runtime handoff",
+        ),
+        "executor_choices": ("Codex", "Claude Code", "Hermes", "generic runtime"),
+        "next_action": "prepare_scoped_coding_handoff",
+        "example_prompt": "Turn this issue into a PR-ready plan and hand it to implementation.",
+        "route_summary": "Choose the coding owner only after scope is concrete, then track observed evidence separately.",
+        "not_evidence_until_observed": ("executor dispatch", "implementation", "review", "CI", "merge"),
+    },
+    {
+        "id": "operate_and_observe",
+        "label": "Operate and observe",
+        "owner_role": "tracker",
+        "source_lanes": ("automation_and_status",),
+        "use_for": "Setup repair, status, automation, workflow learning, memory review, and ops cards.",
+        "primary_workflows": (
+            "doctor",
+            "automation-blueprint",
+            "agent-ops-review",
+            "workflow-learning",
+            "memory-curation-review",
+            "skill",
+            "ask",
+            "cancel",
+        ),
+        "next_action": "show_status_or_prepare_operating_card",
+        "example_prompt": "Why did this route to plan? Make it a regression.",
+        "route_summary": "Show status, repair, schedule, or learning shape without claiming runtime actions happened.",
+        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load", "skill patch approval"),
+    },
+)
 STANDALONE_LANE_PLAYBOOK_IDS = {
     "intent_to_plan": ("request-to-handoff", "safe-feature-change"),
     "research_and_ops": ("source-finder", "research-department", "source-backed-research", "feedback-triage"),
@@ -171,12 +276,16 @@ def _standalone_capability_summary() -> dict[str, object]:
             "skills": len(skills),
             "playbooks": len(playbooks),
             "agent_roles": len(_standalone_items(sections["agent_roles"])),
+            "capability_families": len(STANDALONE_CAPABILITY_FAMILIES),
         },
+        "capability_families": _standalone_capability_families(),
+        "workflow_to_family": _standalone_workflow_to_family(),
         "lanes": lanes,
         "workflow_context_cards": awareness.get("workflow_context_cards", []),
         "direct_response_guidance": [
-            "When a user asks what OMH can do, summarize these lanes and offer the workflow picker.",
-            "When a request matches a lane, name the likely workflow and the first safe next action.",
+            "When a user asks what OMH can do, summarize capability families and offer the workflow picker.",
+            "When a request matches a family, name the likely workflow and the first safe next action.",
+            "When a request crosses families, name the adjacent workflow before preparing handoff or status.",
             "Use friendly section aliases for input, but keep canonical names in machine-readable output.",
         ],
         "section_aliases": dict(sorted(STANDALONE_CAPABILITY_SECTION_ALIASES.items())),
@@ -214,6 +323,61 @@ def _standalone_summary_lane(
         )[:8],
         "examples": awareness_lane_examples(lane_id),
     }
+
+
+def standalone_capability_family_cards() -> list[dict[str, object]]:
+    return _standalone_capability_families()
+
+
+def _standalone_capability_families() -> list[dict[str, object]]:
+    families: list[dict[str, object]] = []
+    for family in STANDALONE_CAPABILITY_FAMILIES:
+        source_lanes = [str(lane) for lane in family.get("source_lanes", ()) if str(lane)]
+        payload = {
+            **family,
+            "source_lanes": source_lanes,
+            "primary_workflows": list(family.get("primary_workflows", ())),
+            "not_evidence_until_observed": list(family.get("not_evidence_until_observed", ())),
+            "source_examples": [
+                example
+                for lane_id in source_lanes
+                for example in awareness_lane_examples(lane_id)
+            ][:4],
+        }
+        if family.get("executor_choices"):
+            payload["executor_choices"] = list(family.get("executor_choices", ()))
+        families.append(payload)
+    return families
+
+
+def _standalone_workflow_to_family() -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for family in STANDALONE_CAPABILITY_FAMILIES:
+        family_id = str(family.get("id", ""))
+        for workflow in family.get("primary_workflows", ()):
+            text = str(workflow)
+            if text and family_id:
+                mapping[text] = family_id
+                mapping[text.casefold()] = family_id
+    for lane in awareness_primer_payload().get("lanes", []):
+        if not isinstance(lane, dict):
+            continue
+        family_id = _standalone_default_family_for_source_lane(str(lane.get("id", "")))
+        if not family_id:
+            continue
+        for workflow in lane.get("skills", []):
+            text = str(workflow)
+            if text:
+                mapping.setdefault(text, family_id)
+                mapping.setdefault(text.casefold(), family_id)
+    return dict(sorted(mapping.items()))
+
+
+def _standalone_default_family_for_source_lane(lane_id: str) -> str:
+    for family in STANDALONE_CAPABILITY_FAMILIES:
+        if lane_id in family.get("source_lanes", ()):
+            return str(family.get("id", ""))
+    return ""
 
 
 def _standalone_compact_playbook(playbook: dict[str, object]) -> dict[str, object]:

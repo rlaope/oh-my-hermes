@@ -10,6 +10,7 @@ from _local_package import load_local_package
 
 load_local_package()
 
+from omh.capabilities.families import capability_family_projection, family_for_workflow
 from omh.capabilities.registry import capability_snapshot, capability_summary, inspect_capability, list_capabilities
 from omh.capabilities.schema import normalize_capability_section
 from omh.skills.catalog import builtin_definitions, installable_skill_names
@@ -60,6 +61,44 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertFalse(generated_skills - lane_skills)
         self.assertLessEqual(lane_skills - catalog_surfaces, conceptual_surfaces)
 
+    def test_capability_families_are_user_facing_front_door_projection(self) -> None:
+        projection = capability_family_projection()
+        families = {family["id"]: family for family in projection["families"]}
+
+        self.assertEqual(projection["schema_version"], "omh_capability_families/v1")
+        self.assertEqual(
+            [family["label"] for family in projection["families"]],
+            [
+                "Plan and decide",
+                "Learn and gather",
+                "Create materials and visuals",
+                "Delegate coding and ship",
+                "Operate and observe",
+            ],
+        )
+        self.assertIn("deep-interview", families["plan_and_decide"]["primary_workflows"])
+        self.assertIn("paper-learning", families["learn_and_gather"]["primary_workflows"])
+        self.assertIn("img-summary", families["create_materials_and_visuals"]["primary_workflows"])
+        self.assertIn("ultraprocess", families["delegate_coding_and_ship"]["primary_workflows"])
+        self.assertIn("doctor", families["operate_and_observe"]["primary_workflows"])
+        self.assertEqual(projection["workflow_to_family"]["img-summary"], "create_materials_and_visuals")
+        self.assertEqual(projection["workflow_to_family"]["paper-learning"], "learn_and_gather")
+        self.assertEqual(projection["workflow_to_family"]["ultraprocess"], "delegate_coding_and_ship")
+        self.assertEqual(family_for_workflow("code-review")["id"], "delegate_coding_and_ship")
+        self.assertEqual(family_for_workflow("workflow-learning")["id"], "operate_and_observe")
+        self.assertIn("Codex", families["delegate_coding_and_ship"]["executor_choices"])
+        self.assertIn("Claude Code", families["delegate_coding_and_ship"]["executor_choices"])
+        self.assertIn("Hermes", families["delegate_coding_and_ship"]["executor_choices"])
+        self.assertIn("executor dispatch", families["delegate_coding_and_ship"]["not_evidence_until_observed"])
+        self.assertIn("not observed execution", projection["claim_boundary"])
+        seen_workflows: dict[str, str] = {}
+        for family in projection["families"]:
+            family_id = family["id"]
+            for workflow in family["primary_workflows"]:
+                self.assertNotIn(workflow, seen_workflows, f"{workflow} appears in multiple families")
+                seen_workflows[workflow] = family_id
+                self.assertEqual(projection["workflow_to_family"][workflow], family_id)
+
     def test_capability_sections_have_expected_ids(self) -> None:
         listing = list_capabilities()
         sections = {section["section"]: section["ids"] for section in listing["sections"]}
@@ -79,16 +118,22 @@ class CapabilityManifestTests(unittest.TestCase):
 
     def test_capability_summary_is_human_facing_catalog_context(self) -> None:
         summary = capability_summary()
+        families = {family["id"]: family for family in summary["capability_families"]}
         lanes = {lane["id"]: lane for lane in summary["lanes"]}
         context_cards = {card["id"]: card for card in summary["workflow_context_cards"]}
 
         self.assertEqual(summary["schema_version"], "omh_capability_summary/v1")
         self.assertIn("without requiring shell catalog approval", summary["purpose"])
         self.assertIn("Normal users talk to Hermes", summary["chat_rule"])
-        self.assertIn("workflow picker", " ".join(summary["direct_response_guidance"]))
+        self.assertIn("capability families", " ".join(summary["direct_response_guidance"]))
         self.assertEqual(summary["section_aliases"]["roles"], "agent_roles")
         self.assertEqual(summary["section_aliases"]["tools"], "tool_requirements")
         self.assertIn("Prepared OMH capability", summary["evidence_boundary"])
+        self.assertEqual(families["plan_and_decide"]["label"], "Plan and decide")
+        self.assertIn("paper-learning", families["learn_and_gather"]["primary_workflows"])
+        self.assertIn("img-summary", families["create_materials_and_visuals"]["primary_workflows"])
+        self.assertIn("Claude Code", families["delegate_coding_and_ship"]["executor_choices"])
+        self.assertEqual(summary["workflow_to_family"]["code-review"], "delegate_coding_and_ship")
         self.assertEqual(lanes["intent_to_plan"]["owner_role"], "planner")
         self.assertIn("loop", lanes["intent_to_plan"]["primary_skills"])
         self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
@@ -180,6 +225,7 @@ class CapabilityManifestTests(unittest.TestCase):
 
         self.assertEqual(status, 0, stderr)
         self.assertIn("OMH capability summary", stdout)
+        self.assertIn("Families are the user-facing front door", stdout)
         self.assertIn("Materials and visual summaries", stdout)
 
         status, stdout, stderr = run_cli(["capabilities", "summary", "--json"], output_json=False)
