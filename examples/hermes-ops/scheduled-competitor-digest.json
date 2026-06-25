@@ -17,11 +17,11 @@
       "operations artifact boundaries"
     ],
     "source_refs": [
-      "src/omh/skills/catalog.py",
-      "src/omh/catalogs/playbooks.py",
-      "src/omh/routing/recommend.py",
-      "src/omh/capabilities/orchestration.py",
-      "src/omh/workflows/operations.py"
+      "src/skills/catalog.py",
+      "src/catalogs/playbooks.py",
+      "src/routing/recommend.py",
+      "src/capabilities/orchestration.py",
+      "src/workflows/operations.py"
     ]
   },
   "source": "example fixture",

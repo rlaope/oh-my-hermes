@@ -64,7 +64,7 @@ _LOCAL_CAPABILITY_STAGE_GUIDANCE = {
     "parallelization": "Use local subagents, workers, or worktrees only when lanes are independent and ownership is explicit.",
     "qa_review": "Use local QA, code-review, or adversarial review capability when it improves verification quality.",
 }
-_CODE_REFERENCE_PREFIXES = ("src/omh/", "src\\", "tests/", "tests\\")
+_CODE_REFERENCE_PREFIXES = ("src/", "src\\", "tests/", "tests\\")
 _CODE_REFERENCE_EXTENSIONS = (
     "py",
     "js",

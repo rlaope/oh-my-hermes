@@ -62,7 +62,7 @@ def _role_capability(role: RoleDefinition) -> dict[str, object]:
         "evidence_boundary": role.evidence_boundary,
         "prepared_is_not": PREPARED_NOT_OBSERVED,
         "install_surface": ["generated_role_reference", "plugin_tool", "wrapper_descriptor"],
-        "source_refs": ["src/omh/catalogs/roles.py"],
+        "source_refs": ["src/catalogs/roles.py"],
     }
 
 

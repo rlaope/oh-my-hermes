@@ -72,7 +72,7 @@ def _skill_capability(
         },
         "evidence_boundary": _skill_evidence_boundary(definition),
         "prepared_is_not": PREPARED_NOT_OBSERVED,
-        "source_refs": ["src/omh/skills/catalog.py"],
+        "source_refs": ["src/skills/catalog.py"],
     }
 
 

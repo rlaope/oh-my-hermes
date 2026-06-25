@@ -58,11 +58,12 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertTrue(root.joinpath("config.yaml").is_file())
         self.assertTrue(root.joinpath("references", "role-planner.md").is_file())
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-        package_find = pyproject["tool"]["setuptools"]["packages"]["find"]
-        self.assertEqual(package_find["where"], ["src"])
-        self.assertEqual(package_find["include"], ["omh*"])
-        self.assertTrue((Path("src") / "omh" / "plugin_bundle" / "omh" / "__init__.py").is_file())
-        self.assertTrue((Path("src") / "omh" / "plugin_bundle" / "omh" / "references" / "__init__.py").is_file())
+        packages = pyproject["tool"]["setuptools"]["packages"]
+        package_dir = pyproject["tool"]["setuptools"]["package-dir"]
+        self.assertIn("omh.plugin_bundle.omh", packages)
+        self.assertEqual(package_dir["omh.plugin_bundle"], "src/plugin_bundle")
+        self.assertTrue((Path("src") / "plugin_bundle" / "omh" / "__init__.py").is_file())
+        self.assertTrue((Path("src") / "plugin_bundle" / "omh" / "references" / "__init__.py").is_file())
         self.assertIn("omh.plugin_bundle.omh", pyproject["tool"]["setuptools"]["package-data"])
         self.assertIn(
             "*.md",

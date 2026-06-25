@@ -174,7 +174,7 @@ def _pattern(
         "observed_evidence_required": list(observed_evidence_required),
         "status_card_copy": _status_copy(pattern_id),
         "prepared_is_not": PREPARED_NOT_OBSERVED,
-        "source_refs": ["src/omh/wrapper/contract.py", "src/omh/skills/catalog.py", "src/omh/runtime/records.py"],
+        "source_refs": ["src/wrapper/contract.py", "src/skills/catalog.py", "src/runtime/records.py"],
     }
 
 

@@ -48,15 +48,9 @@ class ArchitectureLayoutTests(unittest.TestCase):
             if path.name not in ignored_generated and not path.name.endswith(".egg-info")
         )
         package_root = src_root / "omh"
-
-        self.assertEqual(entries, ["omh"])
-        self.assertFalse((src_root / "__init__.py").exists())
-        self.assertTrue((package_root / "__init__.py").is_file())
-
-        for package_name in (
+        domain_packages = (
             "capabilities",
             "catalogs",
-            "cli",
             "coding",
             "commands",
             "core",
@@ -73,9 +67,18 @@ class ArchitectureLayoutTests(unittest.TestCase):
             "system",
             "workflows",
             "wrapper",
-        ):
+        )
+
+        self.assertEqual(entries, sorted([*domain_packages, "omh"]))
+        self.assertFalse((src_root / "__init__.py").exists())
+        self.assertTrue((package_root / "__init__.py").is_file())
+        self.assertTrue((package_root / "cli" / "__init__.py").is_file())
+        self.assertFalse((package_root / "routing").exists())
+        self.assertFalse((package_root / "coding").exists())
+
+        for package_name in domain_packages:
             with self.subTest(package_name=package_name):
-                self.assertTrue((package_root / package_name / "__init__.py").is_file())
+                self.assertTrue((src_root / package_name / "__init__.py").is_file())
         for grouped_module in (
             "maintenance/doctor.py",
             "mcp/bridge.py",
@@ -84,15 +87,26 @@ class ArchitectureLayoutTests(unittest.TestCase):
             "system/paths.py",
         ):
             with self.subTest(grouped_module=grouped_module):
-                self.assertTrue((package_root / grouped_module).is_file())
+                self.assertTrue((src_root / grouped_module).is_file())
 
         init_only_dirs = sorted(
             path.name
-            for path in package_root.iterdir()
+            for path in src_root.iterdir()
             if path.is_dir()
             and sorted(child.name for child in path.iterdir()) == ["__init__.py"]
         )
         self.assertEqual(init_only_dirs, [])
+
+        representative_groups = {
+            "coding": {"coding_delegation.py", "executors.py", "worktree_creator.py"},
+            "routing": {"chat.py", "recommend.py", "route_plan.py"},
+            "runtime": {"artifacts.py", "records.py"},
+            "wrapper": {"contract.py", "sessions.py", "lifecycle.py"},
+        }
+        for package_name, expected_modules in representative_groups.items():
+            with self.subTest(package_name=package_name):
+                files = {path.name for path in (src_root / package_name).glob("*.py")}
+                self.assertLessEqual(expected_modules, files)
 
     def test_compatibility_adapters_point_to_deep_modules(self) -> None:
         self.assertIs(cli.main, command_main.main)

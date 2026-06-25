@@ -248,16 +248,18 @@ class CapabilityManifestTests(unittest.TestCase):
 
     def test_package_metadata_includes_capabilities_package(self) -> None:
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-        package_find = pyproject["tool"]["setuptools"]["packages"]["find"]
+        packages = pyproject["tool"]["setuptools"]["packages"]
         package_dir = pyproject["tool"]["setuptools"]["package-dir"]
-        source_root = Path("src") / "omh"
+        source_root = Path("src")
 
-        self.assertEqual(package_find["where"], ["src"])
-        self.assertEqual(package_find["include"], ["omh*"])
-        self.assertEqual(package_dir[""], "src")
+        self.assertIn("omh", packages)
+        self.assertIn("omh.capabilities", packages)
+        self.assertIn("omh.routing", packages)
+        self.assertEqual(package_dir["omh"], "src/omh")
+        self.assertEqual(package_dir["omh.capabilities"], "src/capabilities")
+        self.assertEqual(package_dir["omh.routing"], "src/routing")
         for package_path in (
             "capabilities",
-            "cli",
             "coding",
             "install",
             "maintenance",
@@ -269,16 +271,17 @@ class CapabilityManifestTests(unittest.TestCase):
         ):
             with self.subTest(package_path=package_path):
                 self.assertTrue((source_root / package_path / "__init__.py").is_file())
+        self.assertTrue((source_root / "omh" / "cli" / "__init__.py").is_file())
         for compatibility_module in (
             "coding_delegation.py",
             "materials.py",
             "version.py",
         ):
             with self.subTest(compatibility_module=compatibility_module):
-                self.assertTrue((source_root / compatibility_module).is_file())
+                self.assertTrue((source_root / "omh" / compatibility_module).is_file())
 
     def test_runtime_topology_is_deferred_from_first_pr(self) -> None:
-        self.assertFalse(Path("src/omh/capabilities/runtime_topology.py").exists())
+        self.assertFalse(Path("src/capabilities/runtime_topology.py").exists())
         payload = capability_snapshot()
         exported = json.dumps(payload, sort_keys=True)
 

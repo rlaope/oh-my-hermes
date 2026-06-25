@@ -650,7 +650,7 @@ def _workflow_reference_markdown_cached() -> str:
     lines = [
         "# Workflow Reference",
         "",
-        "This file is generated from `src/omh/skills/catalog.py`. Update the catalog first, then refresh this document.",
+        "This file is generated from `src/skills/catalog.py`. Update the catalog first, then refresh this document.",
         "",
         "The reference describes prompt-level Hermes workflow guidance and local evidence expectations. It does not claim hidden Hermes runtime behavior.",
         "",

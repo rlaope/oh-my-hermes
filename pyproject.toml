@@ -30,13 +30,53 @@ Issues = "https://github.com/rlaope/oh-my-hermes/issues"
 Repository = "https://github.com/rlaope/oh-my-hermes"
 
 [tool.setuptools]
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["omh*"]
+packages = [
+  "omh",
+  "omh.capabilities",
+  "omh.catalogs",
+  "omh.cli",
+  "omh.coding",
+  "omh.commands",
+  "omh.core",
+  "omh.install",
+  "omh.maintenance",
+  "omh.mcp",
+  "omh.plugin_bundle",
+  "omh.plugin_bundle.omh",
+  "omh.plugin_bundle.omh.hooks",
+  "omh.plugin_bundle.omh.references",
+  "omh.plugin_bundle.omh.tools",
+  "omh.profiles",
+  "omh.quality",
+  "omh.routing",
+  "omh.runtime",
+  "omh.skills",
+  "omh.surfaces",
+  "omh.system",
+  "omh.workflows",
+  "omh.wrapper",
+]
 
 [tool.setuptools.package-dir]
-"" = "src"
+"omh" = "src/omh"
+"omh.capabilities" = "src/capabilities"
+"omh.catalogs" = "src/catalogs"
+"omh.coding" = "src/coding"
+"omh.commands" = "src/commands"
+"omh.core" = "src/core"
+"omh.install" = "src/install"
+"omh.maintenance" = "src/maintenance"
+"omh.mcp" = "src/mcp"
+"omh.plugin_bundle" = "src/plugin_bundle"
+"omh.profiles" = "src/profiles"
+"omh.quality" = "src/quality"
+"omh.routing" = "src/routing"
+"omh.runtime" = "src/runtime"
+"omh.skills" = "src/skills"
+"omh.surfaces" = "src/surfaces"
+"omh.system" = "src/system"
+"omh.workflows" = "src/workflows"
+"omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]

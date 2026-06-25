@@ -52,12 +52,12 @@ def hook_manifest() -> dict[str, object]:
         ],
         "prepared_is_not": PREPARED_NOT_OBSERVED,
         "source_refs": [
-            "src/omh/plugin_bundle/omh/metadata.py",
-            "src/omh/plugin_bundle/omh/awareness.py",
-            "src/omh/plugin_bundle/omh/plugin.yaml",
-            "src/omh/plugin_bundle/omh/__init__.py",
-            "src/omh/wrapper/contract.py",
-            "src/omh/wrapper/native_commands.py",
+            "src/plugin_bundle/omh/metadata.py",
+            "src/plugin_bundle/omh/awareness.py",
+            "src/plugin_bundle/omh/plugin.yaml",
+            "src/plugin_bundle/omh/__init__.py",
+            "src/wrapper/contract.py",
+            "src/wrapper/native_commands.py",
         ],
     }
 

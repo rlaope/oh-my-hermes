@@ -746,7 +746,7 @@ def _standalone_tool_requirements() -> dict[str, object]:
                 "required_tools": [],
                 "required_mcps": [],
                 "fallback": "Standalone plugin fallback cannot inspect the installed skill catalog; use Hermes-native guidance or selected executor handoff.",
-                "source_refs": ["src/omh/plugin_bundle/omh/tools/capability_tool.py"],
+                "source_refs": ["src/plugin_bundle/omh/tools/capability_tool.py"],
             }
             for item in _standalone_skill_capabilities()
         ],

@@ -69,7 +69,7 @@ Chat user
 ```text
 src/
   omh/
-    __init__.py
+    __init__.py              # public package shim; maps source folders below into omh.*
     cli/                     # module entry point package for omh.cli and python -m omh.cli
     chat_router.py           # compatibility facade to routing/chat.py
     recommend.py             # compatibility facade to routing/recommend.py
@@ -77,105 +77,105 @@ src/
     runtime_artifacts.py     # compatibility facade to runtime/artifacts.py
     wrapper_contract.py      # compatibility facade to wrapper/contract.py
 
-    commands/
-      main.py                # parser assembly and top-level error handling
-      chat.py
-      coding.py
-      runtime.py
-      setup.py
+  commands/
+    main.py                  # parser assembly and top-level error handling
+    chat.py
+    coding.py
+    runtime.py
+    setup.py
 
-    routing/
-      chat.py
-      intent.py
-      localization.py
-      policy.py
-      recommend.py
-      route_plan.py
-      task_cards.py
+  routing/
+    chat.py
+    intent.py
+    localization.py
+    policy.py
+    recommend.py
+    route_plan.py
+    task_cards.py
 
-    workflows/
-      materials.py
-      operations.py
-      paper_learning.py
-      research_department.py
-      source_finder.py
-      visual_summary.py
-      workflow_learning.py
+  workflows/
+    materials.py
+    operations.py
+    paper_learning.py
+    research_department.py
+    source_finder.py
+    visual_summary.py
+    workflow_learning.py
 
-    coding/
-      coding_contracts.py
-      coding_delegation.py
-      codex_progress.py
-      executor_progress.py
-      executor_readiness.py
-      executors.py
-      isolation.py
-      team_readiness.py
-      worktree_creator.py
+  coding/
+    coding_contracts.py
+    coding_delegation.py
+    codex_progress.py
+    executor_progress.py
+    executor_readiness.py
+    executors.py
+    isolation.py
+    team_readiness.py
+    worktree_creator.py
 
-    install/
-      command_path.py
-      config_adapter.py
-      installer.py
-      manifest.py
-      plugin_pack.py
-      plugin_observations.py
+  install/
+    command_path.py
+    config_adapter.py
+    installer.py
+    manifest.py
+    plugin_pack.py
+    plugin_observations.py
 
-    maintenance/
-      doctor.py
-      probe.py
-      release.py
+  maintenance/
+    doctor.py
+    probe.py
+    release.py
 
-    mcp/
-      bridge.py
+  mcp/
+    bridge.py
 
-    quality/
-      capability_roadmap.py
-      grounded_score.py
-      harness_quality.py
-      parity.py
+  quality/
+    capability_roadmap.py
+    grounded_score.py
+    harness_quality.py
+    parity.py
 
-    surfaces/
-      context.py
-      demo.py
-      hud.py
-      menubar_app.py
-      menubar_status.py
-      quickstart.py
+  surfaces/
+    context.py
+    demo.py
+    hud.py
+    menubar_app.py
+    menubar_status.py
+    quickstart.py
 
-    system/
-      hashutil.py
-      ingress.py
-      local_store.py
-      paths.py
-      targets.py
-      workflow_state.py
+  system/
+    hashutil.py
+    ingress.py
+    local_store.py
+    paths.py
+    targets.py
+    workflow_state.py
 
-    catalogs/
-      playbooks.py
-      roles.py
-    profiles/
-      setup.py
-      team.py
-    runtime/
-      artifacts.py
-      records.py
-    wrapper/
-      contract.py
-      executor_sessions.py
-      lifecycle.py
-      sessions.py
-    core/
-    skills/
-      catalog.py
-      packaging.py
-      render.py
-    plugin_bundle/
-      omh/
-        plugin.yaml
-        config.yaml
-        hooks/
-        tools/
+  catalogs/
+    playbooks.py
+    roles.py
+  profiles/
+    setup.py
+    team.py
+  runtime/
+    artifacts.py
+    records.py
+  wrapper/
+    contract.py
+    executor_sessions.py
+    lifecycle.py
+    sessions.py
+  core/
+  skills/
+    catalog.py
+    packaging.py
+    render.py
+  plugin_bundle/
+    omh/
+      plugin.yaml
+      config.yaml
+      hooks/
+      tools/
 skills/
   <skill-name>/SKILL.md       # tap-compatible Hermes skill pack generated from the same catalog
 ```
@@ -603,8 +603,8 @@ specialist lane result, the recorded result stays `not_observed` or
 
 When a harness is added, removed, or renamed, update these surfaces together:
 
-- `src/omh/skills/catalog.py`
-- `src/omh/skills/render.py`
+- `src/skills/catalog.py`
+- `src/skills/render.py`
 - `docs/APPLICATION_CASES.md`
 - `tests/test_router_content.py`
 

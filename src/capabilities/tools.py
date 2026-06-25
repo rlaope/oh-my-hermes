@@ -20,7 +20,7 @@ def tool_requirements_manifest() -> dict[str, object]:
                 "required_tools": [],
                 "required_mcps": [],
                 "fallback": "Use Hermes-native guidance or selected executor handoff; no concrete tool/MCP requirement is declared by the current catalog.",
-                "source_refs": ["src/omh/skills/catalog.py"],
+                "source_refs": ["src/skills/catalog.py"],
             }
         )
     return {
