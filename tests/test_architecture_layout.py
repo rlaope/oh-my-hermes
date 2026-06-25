@@ -51,6 +51,7 @@ class ArchitectureLayoutTests(unittest.TestCase):
         domain_packages = (
             "capabilities",
             "catalogs",
+            "codegraph",
             "coding",
             "commands",
             "core",

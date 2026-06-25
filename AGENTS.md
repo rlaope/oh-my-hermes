@@ -83,6 +83,32 @@ PR without the chat history.
 - Avoid adding dependencies unless the user explicitly approves the dependency
   and its packaging story.
 
+## CodeGraph
+
+This repository is initialized for external CodeGraph (`@colbymchenry/codegraph`).
+See `docs/CODEGRAPH.md` for setup, rebuild, query, and agent-usage details. The
+local index lives under `.codegraph/`; commit only `.codegraph/.gitignore`, not
+the machine-local SQLite database or daemon files.
+
+Use CodeGraph as a project navigation aid before broad code exploration:
+
+```sh
+npx @colbymchenry/codegraph status .
+npx @colbymchenry/codegraph query <symbol-or-text>
+npx @colbymchenry/codegraph explore <area-or-task>
+npx @colbymchenry/codegraph impact <symbol>
+```
+
+If the index is missing or stale, refresh it with:
+
+```sh
+npx @colbymchenry/codegraph init .
+npx @colbymchenry/codegraph sync .
+```
+
+CodeGraph output is prepared local code-intelligence context only. It is not
+execution, review, CI, merge-readiness, or merge evidence.
+
 ## Verification
 
 Use the smallest check that proves the claim, then broaden when the touched
