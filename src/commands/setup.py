@@ -33,6 +33,7 @@ from ..plugin_pack import PluginPackError, install_plugin_bundle
 from ..probe import probe_capabilities
 from ..release import RELEASE_CHANNELS, package_url_for
 from ..routing.recommend import recommend_skills
+from ..routing.route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from ..runtime.artifacts import read_state_result, update_state
 from ..setup_profiles import (
     build_setup_profile,
@@ -1965,6 +1966,14 @@ def _print_recommend_summary(payload: dict[str, object]) -> None:
         why = _short_summary(str(recommendation.get("why", "")), limit=120)
         if why:
             print(f"   Why: {why}")
+    workflow_route_plan = payload.get("workflow_route_plan")
+    if isinstance(workflow_route_plan, dict):
+        steps = workflow_route_plan.get("steps", [])
+        if isinstance(steps, list) and steps:
+            path = " -> ".join(str(step.get("skill", "")) for step in steps if isinstance(step, dict))
+            if path:
+                print(_color("Workflow path", "1;35", use_color))
+                print(f"  {path}")
     print(_color("Boundary", "1;32", use_color))
     print("  A recommendation is routing guidance, not execution or verification evidence.")
     print(f"  {tr('en', 'machine_readable')}")
@@ -2457,7 +2466,20 @@ def cmd_recommend(args: argparse.Namespace) -> int:
     query = " ".join(args.task).strip()
     if not query:
         raise OmhError("recommend requires a task description")
-    payload = {"query": query, "recommendations": recommend_skills(query, limit=args.limit)}
+    full_recommendations = recommend_skills(query, limit=max(args.limit, 8))
+    payload = {"query": query, "recommendations": full_recommendations[: args.limit]}
+    selected_skill = str(full_recommendations[0].get("skill", "oh-my-hermes")) if full_recommendations else "oh-my-hermes"
+    top_score = int(full_recommendations[0].get("score", 0)) if full_recommendations else 0
+    workflow_route_plan = compact_workflow_route_plan(
+        build_workflow_route_plan(
+            query,
+            full_recommendations,
+            selected_skill=selected_skill,
+            action="dispatch" if top_score > 0 else "fallback",
+        )
+    )
+    if workflow_route_plan:
+        payload["workflow_route_plan"] = workflow_route_plan
     if _wants_json(args):
         _print_json(payload)
     else:

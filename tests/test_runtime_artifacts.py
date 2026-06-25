@@ -207,7 +207,7 @@ class RuntimeArtifactTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             run = create_run(paths, {"skill": "ai-slop-cleaner", "harness": "coding-handling", "status": "started"})
-            message = "risky refactor"
+            message = "Research current install friction, make a reviewed plan, implement with Codex, and run code review."
             decision = route_chat_message(message, source="discord")
 
             routing = write_routing_decision(
@@ -215,8 +215,19 @@ class RuntimeArtifactTests(unittest.TestCase):
                 routing_record_payload(decision, message, source_event_id="m1"),
             )
 
-            self.assertEqual(routing["selected_skill"], "ralplan")
+            self.assertEqual(routing["selected_skill"], "ultraprocess")
             self.assertEqual(routing["source_event_id"], "m1")
+            self.assertEqual(routing["workflow_route_plan"]["schema_version"], "workflow_route_plan/v1")
+            self.assertEqual(
+                [(step["stage"], step["skill"]) for step in routing["workflow_route_plan"]["steps"]],
+                [
+                    ("research", "web-research"),
+                    ("plan", "ralplan"),
+                    ("deliver", "ultraprocess"),
+                    ("review", "code-review"),
+                ],
+            )
+            self.assertNotIn(message, json.dumps(routing["workflow_route_plan"]))
             self.assertTrue(validate_runtime(paths, run["run_id"])["ok"])
             shown = show_run(paths, run["run_id"])
             self.assertEqual(shown["routing"]["action"], "dispatch")
