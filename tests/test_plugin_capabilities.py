@@ -14,6 +14,8 @@ from _local_package import load_local_package
 
 load_local_package()
 
+from omh.capabilities.families import capability_family_projection
+from omh.capabilities.registry import capability_summary
 from omh.capabilities.schema import CAPABILITY_SECTIONS
 from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 from test_plugin_distribution import FakeHermesContext, load_installed_plugin
@@ -49,9 +51,16 @@ class PluginCapabilitiesTests(unittest.TestCase):
 
             summary = json.loads(handler({"action": "summary"}))
             summary_lanes = {lane["id"]: lane for lane in summary["lanes"]}
+            summary_families = {family["id"]: family for family in summary["capability_families"]}
             self.assertEqual(summary["schema_version"], "omh_capability_summary/v1")
             self.assertFalse(summary.get("degraded", False))
             self.assertIn("without requiring shell catalog approval", summary["purpose"])
+            self.assertEqual(summary_families["plan_and_decide"]["label"], "Plan and decide")
+            self.assertIn("paper-learning", summary_families["learn_and_gather"]["primary_workflows"])
+            self.assertIn("img-summary", summary_families["create_materials_and_visuals"]["primary_workflows"])
+            self.assertIn("Claude Code", summary_families["delegate_coding_and_ship"]["executor_choices"])
+            self.assertEqual(summary["workflow_to_family"]["paper-learning"], "learn_and_gather")
+            self.assertEqual(summary["workflow_to_family"]["code-review"], "delegate_coding_and_ship")
             self.assertIn("img-summary", summary_lanes["materials_and_visuals"]["primary_skills"])
             self.assertIn("roles", summary["section_aliases"])
             summary_cards = {card["id"]: card for card in summary["workflow_context_cards"]}
@@ -398,6 +407,14 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "sensitive_probe_serialized": json.dumps(sensitive_probe, sort_keys=True),
                     "sensitive_probe_public": sensitive_probe.get("plugin_host_observation"),
                     "summary_lanes": [lane["id"] for lane in summary["lanes"]],
+                    "summary_families": summary["capability_families"],
+                    "summary_guidance": summary["direct_response_guidance"],
+                    "summary_family_workflows": [
+                        workflow
+                        for family in summary["capability_families"]
+                        for workflow in family["primary_workflows"]
+                    ],
+                    "summary_workflow_to_family": summary["workflow_to_family"],
                     "summary_visual_skills": [
                         lane["primary_skills"]
                         for lane in summary["lanes"]
@@ -475,6 +492,28 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertEqual(payload["source"], "standalone_plugin_bundle_fallback")
             self.assertEqual(payload["summary_schema"], "omh_capability_summary/v1")
             self.assertEqual(payload["summary_source"], "standalone_plugin_bundle_fallback")
+            self.assertEqual(
+                len(payload["summary_family_workflows"]),
+                len(set(payload["summary_family_workflows"])),
+            )
+            canonical_families = {
+                family["id"]: family
+                for family in capability_family_projection()["families"]
+            }
+            standalone_families = {
+                family["id"]: family
+                for family in payload["summary_families"]
+            }
+            self.assertEqual(standalone_families.keys(), canonical_families.keys())
+            for family_id, canonical_family in canonical_families.items():
+                with self.subTest(family_id=family_id):
+                    standalone_family = standalone_families[family_id]
+                    self.assertEqual(standalone_family, canonical_family)
+            self.assertEqual(payload["summary_guidance"], capability_summary()["direct_response_guidance"])
+            self.assertEqual(payload["summary_workflow_to_family"]["paper-learning"], "learn_and_gather")
+            self.assertEqual(payload["summary_workflow_to_family"]["code-review"], "delegate_coding_and_ship")
+            self.assertEqual(payload["summary_workflow_to_family"]["request-to-handoff"], "delegate_coding_and_ship")
+            self.assertEqual(payload["summary_workflow_to_family"]["ask"], "operate_and_observe")
             self.assertEqual(payload["recommend_schema"], "omh_recommend_result/v1")
             self.assertEqual(payload["recommend_source"], "standalone_plugin_bundle_fallback")
             self.assertEqual(payload["recommend_status"], "recommended")

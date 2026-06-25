@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..version import __version__
+from ..capabilities.families import capability_family_cards
 from ..doctor import doctor_ok, recommended_next_action, run_doctor
 from ..paths import OmhPaths
 from ..probe import probe_capabilities
@@ -40,9 +41,10 @@ def build_quickstart_card(paths: OmhPaths, *, source: str = "hermes") -> dict[st
         },
         "first_five_minutes": [
             "Restart or reload Hermes Agent after setup.",
-            "Ask Hermes: Use OMH request-to-handoff for: I want to safely add a feature to this repo.",
-            "If you want to choose manually, type ./omh or ask Hermes what OMH workflows are available.",
+            "Ask Hermes what OMH can do, or paste a plain request and let Hermes route it.",
+            "For coding work, ask for request-to-handoff after the scope is clear.",
         ],
+        "first_use_family_cards": capability_family_cards(),
         "chat_prompts": [
             {
                 "label": "safe feature work",

@@ -47,6 +47,22 @@ Friendly section aliases such as `roles`, `agents`, `patterns`, `tools`, and
 `evidence` are accepted as input; JSON responses keep the canonical section
 names shown below.
 
+The summary also includes `capability_families`, the user-facing front door for
+normal chat surfaces:
+
+| Family | What Hermes should show first |
+| --- | --- |
+| Plan and decide | Clarify goals, prepare plans, and make loop or decision paths explicit. |
+| Learn and gather | Find sources, explain papers, triage signals, and prepare source-backed briefs. |
+| Create materials and visuals | Shape files, reports, packages, and image-card prompts before generation is claimed. |
+| Delegate coding and ship | Prepare scoped handoffs for Codex, Claude Code, Hermes, or another runtime after scope is clear. |
+| Operate and observe | Show setup health, automation, workflow learning, memory review, status, and repair next steps. |
+
+Capability families are the public, user-facing front door. The older lanes and
+groups remain in the manifest as compatibility context for wrappers, tests, and
+existing plugin surfaces; they should not be introduced to normal users before
+the family layer.
+
 ## Sections
 
 | Section | Purpose |

@@ -824,7 +824,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["route"]["selected_skill"], "oh-my-hermes")
         self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
         self.assertIn("Best default:", payload["chat_response"]["body"])
-        self.assertIn("Manual lanes:", payload["chat_response"]["body"])
+        self.assertIn("Families:", payload["chat_response"]["body"])
         self.assertIn("Route for me:", payload["chat_response"]["body"])
         rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
         self.assertGreaterEqual(
@@ -839,6 +839,17 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("source-finder", option_ids)
         self.assertIn("paper-learning", option_ids)
         self.assertEqual(picker["featured_options"][0]["id"], "oh-my-hermes")
+        picker_families = {family["id"]: family for family in picker["capability_families"]}
+        self.assertEqual(picker_families["plan_and_decide"]["label"], "Plan and decide")
+        self.assertIn("paper-learning", picker_families["learn_and_gather"]["primary_workflows"])
+        self.assertIn("img-summary", picker_families["create_materials_and_visuals"]["primary_workflows"])
+        self.assertIn("Claude Code", picker_families["delegate_coding_and_ship"]["executor_choices"])
+        picker_family_workflows = [
+            workflow
+            for family in picker["capability_families"]
+            for workflow in family["primary_workflows"]
+        ]
+        self.assertEqual(len(picker_family_workflows), len(set(picker_family_workflows)))
         picker_groups = {group["id"]: group for group in picker["groups"]}
         self.assertTrue({"intent_to_plan", "company_product_ops", "deliverables_and_visuals", "coding_and_runtime"} <= picker_groups.keys())
         self.assertIn("loop", picker_groups["intent_to_plan"]["option_ids"])
@@ -851,6 +862,8 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("search_skills", actions)
         self.assertEqual(actions["choose_skill"]["payload"]["schema_version"], "omh_skill_picker/v1")
         self.assertEqual(actions["choose_skill"]["payload"]["featured_options"][0]["id"], "oh-my-hermes")
+        action_families = {family["id"]: family for family in actions["choose_skill"]["payload"]["capability_families"]}
+        self.assertIn("code-review", action_families["delegate_coding_and_ship"]["primary_workflows"])
         action_groups = {group["id"]: group for group in actions["choose_skill"]["payload"]["groups"]}
         self.assertIn("feedback-triage", action_groups["company_product_ops"]["option_ids"])
         self.assertIn("source-finder", action_groups["company_product_ops"]["option_ids"])
@@ -894,7 +907,7 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("shell command", payload["chat_response"]["body"])
                 self.assertIn("planning, ops, deliverables, coding handoffs, loops, and status", payload["chat_response"]["body"])
                 self.assertIn("Start here:", payload["chat_response"]["body"])
-                self.assertIn("Common lanes:", payload["chat_response"]["body"])
+                self.assertIn("Capability families:", payload["chat_response"]["body"])
                 self.assertIn("Route for me:", payload["chat_response"]["body"])
                 rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
                 self.assertGreaterEqual(
@@ -913,6 +926,10 @@ class WrapperContractTests(unittest.TestCase):
                 primer = payload["chat_response"]["state"]["context_primer"]
                 self.assertEqual(primer["schema_version"], "omh_context_primer/v1")
                 self.assertIn("Hermes workflow layer", primer["summary"])
+                primer_families = {family["id"]: family for family in primer["capability_families"]}
+                self.assertIn("ralplan", primer_families["plan_and_decide"]["primary_workflows"])
+                self.assertIn("img-summary", primer_families["create_materials_and_visuals"]["primary_workflows"])
+                self.assertIn("Codex", primer_families["delegate_coding_and_ship"]["executor_choices"])
                 groups = {group["id"]: group for group in primer["workflow_groups"]}
                 self.assertTrue({"intent_to_plan", "company_product_ops", "deliverables_and_visuals", "coding_and_runtime"} <= groups.keys())
                 self.assertIn("img-summary", groups["deliverables_and_visuals"]["workflows"])
@@ -929,9 +946,12 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("Prepared plans", primer["evidence_rule"])
                 capability_summary = payload["chat_response"]["state"]["capability_summary"]
                 self.assertEqual(capability_summary["schema_version"], "omh_capability_summary/v1")
+                summary_families = {family["id"]: family for family in capability_summary["capability_families"]}
                 lanes = {lane["id"]: lane for lane in capability_summary["lanes"]}
                 summary_cards = {card["id"]: card for card in capability_summary["workflow_context_cards"]}
                 self.assertTrue({"intent_to_plan", "materials_and_visuals", "coding_handoff"} <= lanes.keys())
+                self.assertIn("paper-learning", summary_families["learn_and_gather"]["primary_workflows"])
+                self.assertIn("Claude Code", summary_families["delegate_coding_and_ship"]["executor_choices"])
                 self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
                 self.assertIn("ultraprocess", lanes["intent_to_plan"]["primary_skills"])
                 self.assertIn("feedback-triage", summary_cards["research_and_ops"]["representative_workflows"])

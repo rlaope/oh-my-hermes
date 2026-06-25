@@ -1120,9 +1120,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`web-research`, `doctor`", readme)
         self.assertIn("`idea-to-deploy`, `ultragoal`, `loop`, and `ultraprocess`", readme)
         self.assertIn("`ultraprocess`", readme)
-        self.assertIn("`deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`", readme)
-        self.assertIn("`source-finder` / `research-department` / `web-research` / `research-brief` / `report-package`", readme)
-        self.assertIn("`automation-blueprint` / `web-research` / `report-package`", readme)
+        self.assertIn("Plan and decide", readme)
+        self.assertIn("Learn and gather", readme)
+        self.assertIn("Create materials and visuals", readme)
+        self.assertIn("Delegate coding and ship", readme)
+        self.assertIn("Operate and observe", readme)
         self.assertIn("## Request Flow", readme)
         self.assertIn("plain request", readme)
         self.assertIn("choose workflow lane", readme)
@@ -1176,6 +1178,17 @@ class RouterContentTests(unittest.TestCase):
         self.assertNotIn("## What Gets Recorded", readme)
         self.assertNotIn("omh docs workflows --json", readme)
         self.assertNotIn("Useful local and wrapper-debug commands", readme)
+        core_workflows = readme.split("## Core Workflows", 1)[1].split("## What You Get", 1)[0]
+        for label in (
+            "Plan and decide",
+            "Learn and gather",
+            "Create materials and visuals",
+            "Delegate coding and ship",
+            "Operate and observe",
+        ):
+            self.assertIn(label, core_workflows)
+        self.assertNotIn("| `deep-interview` / `ralplan`", core_workflows)
+        self.assertIn("Codex, Claude Code, Hermes", core_workflows)
         self.assertIn("Install Path A: Hermes-Native Skill Tap", installation)
         self.assertIn("Agent Install Protocol", installation)
         self.assertIn("hermes_native_setup/v1", installation)

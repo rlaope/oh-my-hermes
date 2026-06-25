@@ -40,6 +40,7 @@ def build_context_brief(
         "chat_rule": primer["chat_rule"],
         "first_turn_rule": primer["first_turn_rule"],
         "all_skill_context_rule": primer["all_skill_context_rule"],
+        "capability_families": _capability_family_cards(),
         "lanes": primer["lanes"],
         "workflow_context_cards": primer["workflow_context_cards"],
         "workflow_cues": primer["workflow_cues"],
@@ -84,6 +85,16 @@ def build_context_brief(
     if catalog_hint:
         payload["catalog_question"] = catalog_hint
     return payload
+
+
+def _capability_family_cards() -> list[dict[str, object]]:
+    try:
+        from omh.capabilities.families import capability_family_cards
+    except ImportError:
+        from .tools.capability_tool import standalone_capability_family_cards
+
+        return standalone_capability_family_cards()
+    return capability_family_cards()
 
 
 def bounded_context_hint_limit(value: object, *, default: int) -> int:
