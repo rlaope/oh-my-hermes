@@ -2928,6 +2928,27 @@ class CliTests(unittest.TestCase):
         self.assertTrue({"plan", "ralplan"} & top_names)
         self.assertTrue(any(recommendation["hermes_role"] == "planner" for recommendation in recommendations))
 
+    def test_recommend_json_includes_multi_workflow_route_plan(self) -> None:
+        message = "Research current install friction, make a reviewed plan, implement with Codex, and run code review."
+        status, stdout, stderr = run_cli(["recommend", message, "--limit", "2", "--json"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(len(payload["recommendations"]), 2)
+        route_plan = payload["workflow_route_plan"]
+        self.assertEqual(route_plan["schema_version"], "workflow_route_plan/v1")
+        self.assertEqual(
+            [(step["stage"], step["skill"]) for step in route_plan["steps"]],
+            [
+                ("research", "web-research"),
+                ("plan", "ralplan"),
+                ("deliver", "ultraprocess"),
+                ("review", "code-review"),
+            ],
+        )
+        self.assertIn("routing guidance only", route_plan["claim_boundary"])
+
     def test_recommend_safe_feature_routes_to_plan_with_wrapper_copy(self) -> None:
         message = "I want to safely add a feature to this repo"
         status, stdout, stderr = run_cli(["recommend", message, "--limit", "2"])

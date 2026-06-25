@@ -14,6 +14,7 @@ from .policy import (
     meets_confidence_threshold,
 )
 from .recommend import recommend_skills
+from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
@@ -98,6 +99,7 @@ class ChatRouteDecision:
     clarification: str
     routing_prompt: str
     task_card: dict[str, object] | None
+    workflow_route_plan: dict[str, object] | None
     recommendations: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -208,6 +210,12 @@ def route_chat_message(
         reason = f"Best match confidence {candidate_confidence} is below {min_confidence}; clarify before dispatch."
 
     selected_harness = primary_harness_for_skill(selected_skill)
+    workflow_route_plan = build_workflow_route_plan(
+        message,
+        full_recommendations,
+        selected_skill=selected_skill,
+        action=action,
+    )
     clarification = _clarification(action, candidate_skill, candidate_confidence, min_confidence, reason)
     decision = ChatRouteDecision(
         schema_version=1,
@@ -226,6 +234,7 @@ def route_chat_message(
         clarification=clarification,
         routing_prompt=_routing_prompt(action, selected_skill, candidate_skill, reason, message),
         task_card=task_card,
+        workflow_route_plan=workflow_route_plan,
         recommendations=recommendations,
     )
     return decision.to_dict()
@@ -266,6 +275,11 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
         route.pop("routing_prompt", None)
     if not route.get("task_card"):
         route.pop("task_card", None)
+    workflow_route_plan = compact_workflow_route_plan(route.get("workflow_route_plan"))
+    if workflow_route_plan:
+        route["workflow_route_plan"] = workflow_route_plan
+    else:
+        route.pop("workflow_route_plan", None)
     return route
 
 
@@ -302,6 +316,9 @@ def routing_record_payload(
         "user_ref": user_ref,
         "recommendations": _compact_recommendations(decision.get("recommendations", [])),
     }
+    workflow_route_plan = compact_workflow_route_plan(decision.get("workflow_route_plan"))
+    if workflow_route_plan:
+        payload["workflow_route_plan"] = workflow_route_plan
     task_card = decision.get("task_card")
     if isinstance(task_card, dict) and task_card:
         payload["task_card"] = task_card

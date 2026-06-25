@@ -555,6 +555,76 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "goal-execution")
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_multi_workflow_route_plan_exposes_research_plan_delivery_review_order(self) -> None:
+        decision = route_chat_message(
+            "Research current install friction, make a reviewed plan, implement with Codex, "
+            "run code review, and sync docs for a PR.",
+            source="discord",
+            limit=8,
+        )
+        public_payload = public_route_payload(decision)
+        route_plan = public_payload["workflow_route_plan"]
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "ultraprocess")
+        self.assertEqual(route_plan["schema_version"], "workflow_route_plan/v1")
+        self.assertEqual(route_plan["mode"], "multi_workflow")
+        self.assertEqual(
+            [(step["stage"], step["skill"]) for step in route_plan["steps"]],
+            [
+                ("research", "web-research"),
+                ("plan", "ralplan"),
+                ("deliver", "ultraprocess"),
+                ("review", "code-review"),
+            ],
+        )
+        self.assertIn("routing guidance only", route_plan["claim_boundary"])
+        self.assertTrue(all(step["status"] == "prepared_not_observed" for step in route_plan["steps"]))
+
+    def test_product_bug_route_plan_triages_before_coding_and_review(self) -> None:
+        decision = route_chat_message(
+            "결제 실패 이슈가 자주 나와. 재현 계획 세우고 codex로 고쳐서 리뷰까지 추적해줘",
+            source="discord",
+            limit=8,
+        )
+        route_plan = public_route_payload(decision)["workflow_route_plan"]
+
+        self.assertEqual(decision["selected_skill"], "feedback-triage")
+        self.assertEqual(
+            [(step["stage"], step["skill"]) for step in route_plan["steps"]],
+            [
+                ("triage", "feedback-triage"),
+                ("plan", "plan"),
+                ("deliver", "ultraprocess"),
+                ("review", "code-review"),
+            ],
+        )
+        self.assertIn("not a roadmap decision", route_plan["steps"][0]["evidence_boundary"])
+        self.assertIn("not dispatch", route_plan["steps"][2]["evidence_boundary"])
+
+    def test_risky_refactor_route_plan_keeps_ralplan_before_delivery(self) -> None:
+        decision = route_chat_message(
+            "위험한 리팩터링 같아. 코드베이스 조사하고 계획 세운 뒤 구현 리뷰 문서 PR까지",
+            source="discord",
+            limit=8,
+        )
+        route_plan = public_route_payload(decision)["workflow_route_plan"]
+
+        self.assertEqual(decision["selected_skill"], "ralplan")
+        self.assertEqual(
+            [(step["stage"], step["skill"]) for step in route_plan["steps"]],
+            [
+                ("research", "web-research"),
+                ("plan", "ralplan"),
+                ("deliver", "ultraprocess"),
+                ("review", "code-review"),
+            ],
+        )
+        self.assertLess(
+            [step["skill"] for step in route_plan["steps"]].index("ralplan"),
+            [step["skill"] for step in route_plan["steps"]].index("ultraprocess"),
+        )
+
     def test_memory_context_chat_dispatches_to_curation_review(self) -> None:
         decision = route_chat_message("Hermes가 기억하는 맥락을 점검하고 정리해줘", source="discord")
 

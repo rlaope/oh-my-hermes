@@ -162,7 +162,8 @@ class ExecutorProgressProjectionTests(unittest.TestCase):
                         target_id=run["run_id"],
                         executor_profile="codex",
                         now=f"2026-06-24T00:0{index}:00Z",
-                        freshness_seconds=86400,
+                        freshness_seconds=315360000,
+                        expiry_seconds=315360000,
                         **shared,
                     ),
                 )

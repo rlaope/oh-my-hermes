@@ -1717,46 +1717,58 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Compatibility alias: `false`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep consensus planning and review in Hermes; produce explicit selected executor/runtime handoff guidance only after the plan is accepted.
-- Why this exists: `ralplan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
-- Use when: Use when requirements are clear enough for planning but architecture, risks, or tests need review.
+- Why this exists: `ralplan` exists to make planning reviewable before execution: Hermes should gather codebase/source facts, compare options, expose risks, define acceptance criteria, and prepare a handoff without pretending implementation already happened.
+- Use when: Use when requirements are clear enough for planning but architecture, evidence, alternatives, risks, or tests need a reviewed plan before execution.
 - Do not use when:
-  - The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-  - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
-- Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `risky planning`, `dangerous`, `dangerous planning`, `unsafe`, `refactor safety`, `PR로 만들`, `PR로 만들 수 있게`, `위험한 리팩터링`, `리팩터링 위험`, `리스크 있는 리팩터링`, `검증 command`, `리뷰 가능한 단위`
+  - The request is still too ambiguous to name requirements, non-goals, or acceptance criteria; use `deep-interview` first.
+  - The user asks for one full research-plan-implementation-review-PR cycle; use `ultraprocess` and keep ralplan as the planning stage.
+  - The user wants a pure source lookup, citation check, or paper explanation with no implementation plan.
+- Strong routing signals: `ralplan`, `$ralplan`, `consensus plan`, `reviewed plan`, `issue to PR`, `acceptance criteria`, `verification command`, `reviewable PR`, `risky planning`, `dangerous`, `dangerous planning`, `unsafe`, `refactor safety`, `PR로 만들`, `PR로 만들 수 있게`, `위험한 리팩터링`, `리팩터링 위험`, `리스크 있는 리팩터링`, `검증 command`, `리뷰 가능한 단위`, `코드베이스 조사`, `웹리서치 계획`, `대안 비교`, `리스크 검토`
 - Good example:
-  - Prompt: ralplan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `ralplan` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: $ralplan turn this risky refactor into a reviewable plan with acceptance criteria and verification commands.
+  - Expected behavior: Produce repo/source facts, alternatives, risk review, acceptance criteria, exact verification commands, and handoff readiness without editing code.
+  - Why: The request is clear enough to plan but risky enough to require consensus-style review before execution.
 - Bad example:
-  - Prompt: ralplan: treat casual chat or unaccepted work as if this workflow already produced verified results.
-  - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ralplan`.
-  - Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+  - Prompt: $ralplan implement the refactor now and open the PR.
+  - Expected behavior: Stop at the reviewed plan or route the full delivery cycle to `ultraprocess` after plan acceptance.
+  - Why: Ralplan is a planning gate, not implementation, review, CI, or PR evidence.
 - Quality bar:
-  - Include a planner view, risk review, and testability check before handoff.
-  - Record unresolved tradeoffs and rejected options instead of flattening uncertainty.
+  - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
+  - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
+  - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
+  - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.
+  - End with a selected executor/runtime handoff shape only after the plan is accepted.
   - Do not implement directly from consensus planning.
 - Completion checklist:
-  - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
-  - Draft recommendations, accepted decisions, and executor handoffs are separate states.
-  - Rejected options or unresolved tradeoffs are recorded before handoff.
+  - Observed repo facts and source/web evidence gaps are named.
+  - At least two options or one chosen option plus rejected alternatives are recorded.
+  - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
+  - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
 - Recovery notes:
-  - If acceptance criteria or verification are missing, route back to clarification before handoff.
-  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+  - If requirements are still fuzzy, route back to deep-interview before planning.
+  - If current-source evidence is missing, route a web-research step before accepting the plan.
+  - If the user asks for implementation, hand off through ultraprocess, ultragoal, or the selected executor path after the plan is accepted.
 - Required inputs:
   - requirements
+  - codebase facts
+  - source or web evidence when needed
   - options
   - tradeoffs
   - test shape
 - Expected outputs:
-  - approved plan
-  - risk review
+  - reviewed plan
+  - acceptance criteria
+  - risk register
+  - verification commands
   - handoff guidance
 - Artifact expectations:
   - plan and review artifacts when a wrapper supports file-backed planning
 - Safety rules:
   - Do not implement directly from the planning lane.
+  - Do not invent codebase or web evidence; label missing evidence and source gaps.
   - Make acceptance criteria testable.
   - Record unresolved tradeoffs explicitly.
+  - Keep rejected options and handoff readiness separate from accepted execution evidence.
 
 ### code-review
 
@@ -1778,7 +1790,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user asks to implement the fix rather than review existing code or claims.
   - There is no diff, file set, claim, artifact, or expected behavior to review.
   - The request is broad product critique, strategy, or planning rather than code or evidence review.
-- Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`
+- Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`
 - Good example:
   - Prompt: $code-review check this PR for install/update UX regressions and missing tests.
   - Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.

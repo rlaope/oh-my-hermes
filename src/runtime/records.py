@@ -22,6 +22,7 @@ from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSI
 from ..isolation import ISOLATION_SCHEMA_VERSION
 from ..local_store import utc_now
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack
+from ..routing.route_plan import compact_workflow_route_plan
 
 
 SCHEMA_VERSION = 1
@@ -611,7 +612,7 @@ def build_routing_record(routing: dict[str, Any]) -> dict[str, Any]:
     threshold = routing.get("threshold", "high")
     if threshold not in ROUTE_CONFIDENCES:
         raise ValueError(f"unsupported routing threshold: {threshold}")
-    return {
+    record = {
         "schema_version": SCHEMA_VERSION,
         "updated_at": utc_now(),
         "source": str(routing.get("source", "generic")),
@@ -633,6 +634,10 @@ def build_routing_record(routing: dict[str, Any]) -> dict[str, Any]:
         "user_ref": str(routing.get("user_ref", "")),
         "recommendations": _compact_routing_recommendations(routing.get("recommendations", [])),
     }
+    workflow_route_plan = compact_workflow_route_plan(routing.get("workflow_route_plan"))
+    if workflow_route_plan:
+        record["workflow_route_plan"] = workflow_route_plan
+    return record
 
 
 def build_coding_delegation_record(delegation: dict[str, Any]) -> dict[str, Any]:
