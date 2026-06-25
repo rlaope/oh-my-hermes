@@ -24,6 +24,10 @@ dist/
 
 # Local Hermes artifacts
 .hermes/
+.omc/
+
+# Local resolver artifacts
+uv.lock
 
 # Editor and OS files
 .DS_Store

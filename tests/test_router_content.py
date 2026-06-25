@@ -1342,14 +1342,22 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("<h2>Prompt Builder</h2>", site_architecture_post)
         self.assertIn("<h2>Agent Loop</h2>", site_architecture_post)
         self.assertIn("<h2>Memory Discipline</h2>", site_architecture_post)
-        self.assertIn("<h2>Cron And Gateway</h2>", site_architecture_post)
+        self.assertIn("06 / Extension Ports", site_architecture_post)
+        self.assertIn("<h2>Tool And Plugin Ports</h2>", site_architecture_post)
+        self.assertIn("<h2>Hermes Gateway</h2>", site_architecture_post)
+        self.assertIn("<h2>Cron And Scheduled Work</h2>", site_architecture_post)
+        self.assertIn("delivery constraints", site_architecture_post)
         self.assertIn("Hermes Agent is best understood as a layered work runtime", site_architecture_post)
         self.assertIn("<h2>Evidence Boundary</h2>", site_architecture_post)
         self.assertIn("01 / 라우팅", site_architecture_post)
         self.assertIn("<h2>프롬프트 빌더</h2>", site_architecture_post)
         self.assertIn("<h2>에이전트 루프</h2>", site_architecture_post)
         self.assertIn("<h2>메모리 규칙</h2>", site_architecture_post)
-        self.assertIn("<h2>크론과 게이트웨이</h2>", site_architecture_post)
+        self.assertIn("06 / 도구와 확장 포트", site_architecture_post)
+        self.assertIn("<h2>도구와 플러그인 포트</h2>", site_architecture_post)
+        self.assertIn("07 / 게이트웨이 표면", site_architecture_post)
+        self.assertIn("<h2>크론과 예약 실행</h2>", site_architecture_post)
+        self.assertIn("gateway intent card", site_architecture_post)
         self.assertIn("<h2>증거 경계</h2>", site_architecture_post)
         self.assertIn("TUI, CLI, gateway, platform adapters", site_architecture_post)
         self.assertIn("Prompt compiler", site_architecture_post)
@@ -1360,21 +1368,48 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Discord", site_architecture_post)
         self.assertIn("WhatsApp", site_architecture_post)
         self.assertIn("Signal", site_architecture_post)
-        self.assertIn("run_agent.py", site_architecture_post)
-        self.assertIn("agent/prompt_builder.py", site_architecture_post)
-        self.assertIn("agent/memory_manager.py", site_architecture_post)
-        self.assertIn("agent/conversation_loop.py", site_architecture_post)
-        self.assertIn("agent/tool_executor.py", site_architecture_post)
-        self.assertIn("agent/transports/base.py", site_architecture_post)
-        self.assertIn("agent/curator.py", site_architecture_post)
-        self.assertIn("model_tools.py", site_architecture_post)
-        self.assertIn("tools/mcp_tool.py", site_architecture_post)
-        self.assertIn("gateway/session.py", site_architecture_post)
-        self.assertIn("gateway/delivery.py", site_architecture_post)
-        self.assertIn("gateway/platform_registry.py", site_architecture_post)
-        self.assertIn("cron/scheduler.py", site_architecture_post)
-        self.assertIn("cron/scheduler_provider.py", site_architecture_post)
-        self.assertIn("skills/autonomous-ai-agents/hermes-agent/SKILL.md", site_architecture_post)
+        expected_source_paths = (
+            "README.md",
+            "docs/DIRECTION.md",
+            "docs/MEMORY_CONTEXT.md",
+            "src/routing/recommend.py",
+            "src/routing/chat.py",
+            "src/wrapper/contract.py",
+            "src/wrapper/sessions.py",
+            "src/coding_delegation.py",
+            "src/runtime/artifacts.py",
+            "src/runtime/records.py",
+            "src/mcp_bridge.py",
+            "src/plugin_bundle/omh/tools/chat_tool.py",
+            "src/plugin_bundle/omh/tools/recommend_tool.py",
+            "src/hermes_ops.py",
+            "src/commands/ops.py",
+            "src/skills/catalog.py",
+            "src/skills/render.py",
+            "skills/oh-my-hermes/SKILL.md",
+        )
+        for source_path in expected_source_paths:
+            self.assertIn(source_path, site_architecture_post)
+
+        stale_source_paths = (
+            "run_agent.py",
+            "agent/prompt_builder.py",
+            "agent/memory_manager.py",
+            "agent/conversation_loop.py",
+            "agent/tool_executor.py",
+            "agent/transports/base.py",
+            "agent/curator.py",
+            "model_tools.py",
+            "tools/mcp_tool.py",
+            "gateway/session.py",
+            "gateway/delivery.py",
+            "gateway/platform_registry.py",
+            "cron/scheduler.py",
+            "cron/scheduler_provider.py",
+            "skills/autonomous-ai-agents/hermes-agent/SKILL.md",
+        )
+        for source_path in stale_source_paths:
+            self.assertNotIn(source_path, site_architecture_post)
         self.assertIn("runtime fact", site_architecture_post)
         self.assertIn("GEPA-style", site_architecture_post)
         self.assertIn("context compilation", site_architecture_post)
