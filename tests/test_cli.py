@@ -5065,15 +5065,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "orchestration_demo/v1")
+        self.assertEqual(payload["executor_target"], "choose")
         self.assertEqual([step["id"] for step in payload["steps"]], ["recommend", "chat", "plan", "handoff", "status_card"])
         self.assertEqual(payload["steps"][0]["payload"]["recommendations"][0]["skill"], "plan")
+        handoff_payload = payload["steps"][3]["payload"]
+        self.assertEqual(handoff_payload["chat_response"]["state"]["next_action"], "choose_executor")
+        self.assertEqual(handoff_payload["executor_handoff"], {})
+        status_card = payload["steps"][4]["payload"]["status_card"]
+        self.assertEqual(status_card["schema_version"], "status_card/v1")
+        self.assertEqual(status_card["next_action"], "choose_executor")
+        self.assertIn("executor_result", payload["not_observed"])
+        self.assertNotIn(message, json.dumps(payload))
+
+        status, stdout, stderr = run_cli(["demo", "orchestration", "--executor", "codex"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["executor_target"], "codex")
         handoff = payload["steps"][3]["payload"]["executor_handoff"]
         self.assertEqual(handoff["status"], "prepared_not_observed")
         status_card = payload["steps"][4]["payload"]["status_card"]
-        self.assertEqual(status_card["schema_version"], "status_card/v1")
         self.assertEqual(status_card["next_action"], "dispatch_to_executor")
-        self.assertIn("executor_result", payload["not_observed"])
-        self.assertNotIn(message, json.dumps(payload))
 
     def test_demo_grounded_score_keeps_representative_cases_at_10(self) -> None:
         status, stdout, stderr = run_cli(["demo", "grounded-score"])

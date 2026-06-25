@@ -280,11 +280,29 @@ _STATUS_COPY = {
         "I will ask for the missing outcome before sending anything to an executor.",
         "No execution has started.",
     ),
+    "choose_executor": (
+        "handoff",
+        "Choose who should own the coding work.",
+        "A coding handoff path is not selected yet; no executor/runtime dispatch is observed.",
+        "Executor choice is not dispatch or implementation evidence.",
+    ),
     "dispatch_to_executor": (
         "handoff",
         "An executor handoff is ready.",
         "I have prepared the handoff, but executor/runtime dispatch is not observed yet.",
         "Preparation is not execution evidence.",
+    ),
+    "show_prompt_handoff": (
+        "handoff",
+        "A prompt handoff is ready.",
+        "The selected prompt handoff is prepared, but OMH has not dispatched it to an executor.",
+        "Prompt handoff is prepared only; OMH has not dispatched it to an executor.",
+    ),
+    "show_runtime_handoff": (
+        "handoff",
+        "A runtime handoff is ready.",
+        "The selected runtime handoff is prepared, but runtime start is not observed yet.",
+        "Runtime handoff is prepared only; runtime start requires observed runtime evidence.",
     ),
     "wait_for_executor_evidence": (
         "status",
@@ -1494,10 +1512,43 @@ def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_ke
     next_action = str(status_payload.get("next_action", "show_status"))
     kind, headline, body, claim_boundary = _status_copy(status_payload, next_action)
     actions = [_action("show_status", "Show status", "secondary")]
+    if next_action == "choose_executor":
+        actions.insert(0, _action("choose_executor", "Choose executor", "primary"))
     if next_action == "dispatch_to_executor":
         actions.insert(0, _action("send_to_executor", "Send to executor", "primary"))
         if str(_nested(status_payload, "prepared").get("executor_target", "")) == "codex":
             actions.insert(1, _action("send_to_codex", "Send to Codex", "secondary", payload={"compatibility_alias": True}))
+    if next_action == "show_prompt_handoff":
+        selected = str(_nested(status_payload, "prepared").get("selected_executor_profile", "") or "")
+        actions.insert(
+            0,
+            _action(
+                "show_prompt_handoff",
+                "Show prompt",
+                "primary",
+                payload={"selected_executor_profile": selected},
+            ),
+        )
+        actions.insert(
+            1,
+            _action(
+                "copy_prompt_handoff",
+                "Copy prompt",
+                "secondary",
+                payload={"selected_executor_profile": selected},
+            ),
+        )
+    if next_action == "show_runtime_handoff":
+        selected = str(_nested(status_payload, "prepared").get("selected_executor_profile", "") or "")
+        actions.insert(
+            0,
+            _action(
+                "show_runtime_handoff",
+                "Show runtime",
+                "primary",
+                payload={"selected_executor_profile": selected},
+            ),
+        )
     return _chat_response(
         kind=kind,
         headline=headline,
@@ -1762,6 +1813,10 @@ def _status_copy(status_payload: dict[str, Any], next_action: str) -> tuple[str,
             "I have prepared the coding handoff, but executor/runtime dispatch is not observed yet.",
             claim_boundary,
         )
+    if next_action in {"show_prompt_handoff", "show_runtime_handoff"}:
+        label = _status_executor_label(status_payload)
+        suffix = f" ({label})" if label else ""
+        return kind, f"{headline}{suffix}", body, claim_boundary
     return kind, headline, body, claim_boundary
 
 
@@ -3352,7 +3407,10 @@ def _action_from_spec(spec: dict[str, object]) -> dict[str, object]:
 def _phase_for_next_action(next_action: str) -> str:
     return {
         "prepare_coding_delegation": "preparing",
+        "choose_executor": "executor_choice_required",
         "dispatch_to_executor": "handoff_prepared",
+        "show_prompt_handoff": "prompt_handoff_prepared",
+        "show_runtime_handoff": "runtime_handoff_prepared",
         "wait_for_executor_evidence": "dispatched",
         "surface_executor_blocker": "blocked",
         "surface_review_blocker": "blocked",
