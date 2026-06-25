@@ -30,7 +30,7 @@ from ..executor_readiness import (
 from ..harness_quality import with_wrapper_actions
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..isolation import build_isolation_plan
-from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack
+from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
 from ..routing.recommend import recommend_skills
 from ..skills.catalog import (
     CODING_INTENT_PRIORITY,
@@ -177,6 +177,7 @@ def build_coding_delegation_payload(
     source_metadata: dict[str, str] | None = None,
     executor_target: str = "generic",
     context_pack: dict[str, object] | None = None,
+    memory_recall_pack: dict[str, object] | None = None,
     plan_artifact: dict[str, object] | None = None,
     prefer_direct_coding_handoff: bool = True,
 ) -> dict[str, object]:
@@ -263,12 +264,15 @@ def build_coding_delegation_payload(
     if selection.selected_executor_profile == "codex" and delegation.action == "delegate":
         payload["executor_handoff"] = _executor_handoff(executor_target, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["executor_handoff"], context_pack)
+        _attach_memory_recall_pack(payload["executor_handoff"], memory_recall_pack)
     elif selection.work_owner_mode == "runtime_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
         payload["runtime_handoff"] = _runtime_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["runtime_handoff"], context_pack)
+        _attach_memory_recall_pack(payload["runtime_handoff"], memory_recall_pack)
     elif selection.work_owner_mode == "prompt_only_handoff" and selection.selected_executor_profile and delegation.action == "delegate":
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
+        _attach_memory_recall_pack(payload["prompt_handoff"], memory_recall_pack)
     payload["harness_quality"] = _public_harness_quality(
         harness,
         action=delegation.action,
@@ -336,6 +340,17 @@ def _attach_context_pack(handoff: object, context_pack: dict[str, object] | None
     if errors:
         raise ValueError("; ".join(errors))
     handoff["context_pack"] = context_pack
+
+
+def _attach_memory_recall_pack(handoff: object, memory_recall_pack: dict[str, object] | None) -> None:
+    if not isinstance(handoff, dict) or not memory_recall_pack:
+        return
+    if not memory_recall_pack.get("included_records"):
+        return
+    errors = validate_project_memory_recall_pack(memory_recall_pack, label="memory_recall_pack")
+    if errors:
+        raise ValueError("; ".join(errors))
+    handoff["memory_recall_pack"] = memory_recall_pack
 
 
 def coding_delegation_record_payload(

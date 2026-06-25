@@ -6,6 +6,11 @@ and wrapper-supplied context candidates.
 
 It does not read, scrape, or mutate opaque Hermes internal memory.
 
+For the first-class reviewed long-term project-memory store, see
+[Project Memory](MEMORY.md). That layer captures candidates, approves or
+rejects typed records, and recalls compact reviewed memory into coding
+handoffs. This document covers conflict review and handoff context packs.
+
 ## What It Gives Users
 
 When a user says "check what Hermes remembers about this work", a wrapper can

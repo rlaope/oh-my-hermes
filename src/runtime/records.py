@@ -21,7 +21,7 @@ from ..executors import (
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
 from ..isolation import ISOLATION_SCHEMA_VERSION
 from ..local_store import utc_now
-from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack
+from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
 from ..routing.route_plan import compact_workflow_route_plan
 
 
@@ -205,6 +205,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "harness_quality",
     "context_pack",
     "context_pack_blocked",
+    "memory_recall_pack",
 )
 CODING_PROMPT_HANDOFF_KEYS = (
     "schema_version",
@@ -228,6 +229,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "harness_quality",
     "context_pack",
     "context_pack_blocked",
+    "memory_recall_pack",
 )
 CODING_RUNTIME_HANDOFF_KEYS = (
     "schema_version",
@@ -258,6 +260,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "hermes_coding_team_path",
     "context_pack",
     "context_pack_blocked",
+    "memory_recall_pack",
 )
 CODING_PROMPT_HANDOFF_INVOCATION_KEYS = (
     "mode",
@@ -934,6 +937,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
     if context_pack_blocked:
         compact["context_pack_blocked"] = context_pack_blocked
+    memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
+    if memory_recall_pack:
+        compact["memory_recall_pack"] = memory_recall_pack
     return compact
 
 
@@ -979,6 +985,9 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
     if context_pack_blocked:
         compact["context_pack_blocked"] = context_pack_blocked
+    memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
+    if memory_recall_pack:
+        compact["memory_recall_pack"] = memory_recall_pack
     return compact
 
 
@@ -1030,6 +1039,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     context_pack_blocked = _compact_context_pack_blocked(value.get("context_pack_blocked"))
     if context_pack_blocked:
         compact["context_pack_blocked"] = context_pack_blocked
+    memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
+    if memory_recall_pack:
+        compact["memory_recall_pack"] = memory_recall_pack
     team_path = _compact_hermes_coding_team_path(value.get("hermes_coding_team_path"))
     if team_path:
         compact["hermes_coding_team_path"] = team_path
@@ -1335,6 +1347,34 @@ def _compact_context_pack_blocked(value: Any) -> dict[str, Any]:
     return {
         "schema_version": str(value.get("schema_version", "")),
         "blocked_by_conflicts": _compact_context_dict_list(value.get("blocked_by_conflicts", [])),
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+
+
+def _compact_memory_recall_pack(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    policy = value.get("policy", {}) if isinstance(value.get("policy"), dict) else {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "enabled": bool(value.get("enabled", False)),
+        "executor_target": str(value.get("executor_target", "")),
+        "session_id": str(value.get("session_id", "")),
+        "task_ref": {
+            "sha256": str(value.get("task_ref", {}).get("sha256", "")) if isinstance(value.get("task_ref"), dict) else "",
+            "length": int(value.get("task_ref", {}).get("length", 0) or 0) if isinstance(value.get("task_ref"), dict) else 0,
+            "query_supplied": bool(value.get("task_ref", {}).get("query_supplied", False)) if isinstance(value.get("task_ref"), dict) else False,
+        },
+        "policy": {
+            "schema_version": str(policy.get("schema_version", "")),
+            "mode": str(policy.get("mode", "")),
+            "recall_enabled": bool(policy.get("recall_enabled", False)),
+        },
+        "scope": _compact_context_scope(value.get("scope", {})),
+        "included_records": [],
+        "excluded_records": [],
+        "record_count": len(value.get("included_records", [])) if isinstance(value.get("included_records"), list) else 0,
+        "redaction_policy": str(value.get("redaction_policy", "")),
         "claim_boundary": str(value.get("claim_boundary", "")),
     }
 
@@ -2620,6 +2660,8 @@ def validate_handoff_context_pack_fields(handoff: dict[str, Any], label: str) ->
         errors.extend(validate_handoff_context_pack(handoff.get("context_pack"), require_conflict_free=True, label=f"{label} context_pack"))
     if has_blocked:
         errors.extend(validate_handoff_context_blocked(handoff.get("context_pack_blocked"), label=f"{label} context_pack_blocked"))
+    if "memory_recall_pack" in handoff:
+        errors.extend(validate_project_memory_recall_pack(handoff.get("memory_recall_pack"), label=f"{label} memory_recall_pack"))
     return errors
 
 

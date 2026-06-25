@@ -1,7 +1,8 @@
 # OMH Agent Contract
 
-This file is the repo-local operating contract for Codex agents working on
-oh-my-hermes.
+This file is the repo-local operating contract for coding agents working on
+oh-my-hermes, including Codex, Claude Code, Hermes runtime/handoff paths, and
+generic executor profiles.
 
 ## Product Direction
 
@@ -10,8 +11,19 @@ wrapper contracts, generated skill guidance, or coding delegation semantics.
 
 OMH is a Hermes-native wrapper orchestration layer. Keep Hermes responsible for
 chat intake, clarification, source-backed research, planning, and status
-narration. Keep main coding work delegated to Codex-like executors through
-explicit prepared handoffs and observed evidence.
+narration. Keep main coding work delegated to the selected coding owner through
+explicit prepared handoffs and observed evidence. Do not make Codex the implicit
+default in product language, docs, schemas, prompts, or reports when Claude
+Code, Hermes runtime/handoff paths, or generic executor profiles are also valid
+owners.
+
+When developing OMH itself, treat Codex, Claude Code, and Hermes
+runtime/handoff paths as first-class product surfaces. User-facing runtime
+selection may choose one coding owner for a task, but OMH feature design,
+contracts, docs, setup, memory recall, and status/reporting changes should
+consider all three surfaces unless a change is explicitly scoped to one
+executor. If support differs, document the difference as a capability boundary
+instead of silently optimizing for Codex.
 
 Do not turn OMH into a hidden Hermes runtime patch, transport bot, network
 service, LLM router, or secret coding executor.
@@ -36,8 +48,8 @@ verification, wait for required checks, then merge if authority is clear.
 ## Pull Request Reports
 
 PR descriptions must read like a useful feature report, not a terse changelog.
-When Codex opens a PR for this project, use the repository PR template and fill
-every relevant section with concrete, reviewable detail.
+When a coding agent opens a PR for this project, use the repository PR template
+and fill every relevant section with concrete, reviewable detail.
 
 Every PR body should explain:
 
@@ -69,6 +81,14 @@ PR without the chat history.
 - Wrapper sessions own chat continuity and plan decisions only. Linked runtime
   runs own handoff, dispatch, execution, verification, review, CI, and merge
   evidence.
+- Coding delegation and memory recall should be executor-neutral by default:
+  name the selected owner (`codex`, `claude-code`, `hermes`, runtime profile, or
+  generic executor) and only use Codex-specific wording for Codex-only lifecycle
+  features.
+- Project memory lives under `.omh/memory/` as reviewed OMH-local prepared
+  context. Keep candidates separate from approved records, preserve
+  review-first defaults, and never present recall packs as execution, review,
+  CI, merge, or Hermes internal-memory evidence.
 - Generated skills come from catalog data. Prefer updating
   `src/skills/catalog.py` and regenerating docs over hand-editing generated
   output.
@@ -130,11 +150,13 @@ artifact changes, add or update tests that lock the public contract.
 
 ## Git And Commits
 
-Use `codex/` branch names unless the user requests another prefix.
+Use executor-appropriate branch names. `codex/` is fine for Codex-authored work,
+but use neutral or matching prefixes such as `agent/`, `claude/`, or `hermes/`
+when Claude Code, Hermes, or a generic executor owns the coding work.
 Before editing files for a coding task, create or switch to a dedicated
-`codex/` task branch unless the current branch is already clearly dedicated to
-that exact user goal. Do this before the first implementation edit so the work
-does not mix with unrelated branch history or user changes.
+task branch unless the current branch is already clearly dedicated to that exact
+user goal. Do this before the first implementation edit so the work does not mix
+with unrelated branch history or user changes.
 
 Every commit must include DCO signoff and the local Lore-style trailers used by
 this repository:

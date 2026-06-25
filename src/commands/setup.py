@@ -36,6 +36,7 @@ from ..routing.recommend import recommend_skills
 from ..routing.route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from ..runtime.artifacts import read_state_result, update_state
 from ..setup_profiles import (
+    PROJECT_MEMORY_MODES,
     build_setup_profile,
     setup_profile_categories_for_executor,
     write_setup_profile,
@@ -493,6 +494,8 @@ def _setup_operator_summary(
     mcp_mode = str(mcp.get("mode", "none")) if isinstance(mcp, dict) else "none"
     profile = steps.get("profile", {})
     operating_model_id = str(profile.get("operating_model_id", "")) if isinstance(profile, dict) else ""
+    memory_policy = profile.get("memory_policy", {}) if isinstance(profile, dict) else {}
+    memory_mode = str(memory_policy.get("mode", profile.get("memory_mode", "review-first"))) if isinstance(memory_policy, dict) else "review-first"
     summary = {
         "schema_version": SETUP_OPERATOR_SUMMARY_SCHEMA_VERSION,
         "scope": _setup_scope(args),
@@ -502,6 +505,8 @@ def _setup_operator_summary(
         "menubar_mode": menubar_status,
         "team_mode": team_status,
         "operating_model_id": operating_model_id,
+        "memory_mode": memory_mode,
+        "memory_policy": memory_policy if isinstance(memory_policy, dict) else {},
         "status": status,
         "requires_hermes_reload": bool(hermes_native.get("requires_hermes_reload", False)),
         "paths": {
@@ -958,6 +963,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
             "setup_profiles": list(args.profile),
             "default_executor": str(getattr(args, "default_executor", "") or ""),
             "operating_model": str(getattr(args, "operating_model", "") or ""),
+            "memory_mode": str(getattr(args, "memory_mode", "") or "review-first"),
         },
     )
     target_topology = steps["targets"].get("topology", {}) if isinstance(steps["targets"], dict) else {}
@@ -1062,6 +1068,7 @@ def _setup_should_interact(args: argparse.Namespace) -> bool:
         or getattr(args, "default_executor", None)
         or args.profile_pack
         or args.with_mcp
+        or getattr(args, "memory_mode", None)
         or getattr(args, "with_menubar", False)
         or getattr(args, "no_menubar", False)
         or args.skip_apply
@@ -2416,10 +2423,11 @@ def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
 def _setup_profile_result(args: argparse.Namespace, paths) -> dict[str, object]:
     default_executor = str(getattr(args, "default_executor", "") or "") or None
     operating_model = str(getattr(args, "operating_model", "") or "") or None
+    memory_mode = str(getattr(args, "memory_mode", "") or "") or None
     if args.dry_run:
-        profile = build_setup_profile(args.profile, default_executor=default_executor, operating_model=operating_model)
+        profile = build_setup_profile(args.profile, default_executor=default_executor, operating_model=operating_model, memory_mode=memory_mode)
         return {**profile, "dry_run": True, "written": False, "path": str(paths.setup_profile_path)}
-    profile = write_setup_profile(paths, args.profile, default_executor=default_executor, operating_model=operating_model)
+    profile = write_setup_profile(paths, args.profile, default_executor=default_executor, operating_model=operating_model, memory_mode=memory_mode)
     return {**profile, "dry_run": False, "written": True, "path": str(paths.setup_profile_path)}
 
 
@@ -2559,6 +2567,12 @@ def _add_top_level_commands(sub) -> None:
         choices=operating_model_ids(),
         default=None,
         help="Advanced: record a Hermes-facing operating model for this profile; normal setup lets Hermes choose per request.",
+    )
+    setup.add_argument(
+        "--memory-mode",
+        choices=PROJECT_MEMORY_MODES,
+        default=None,
+        help="Configure OMH project memory: off, review-first, or auto-safe. Defaults to review-first.",
     )
     setup.add_argument(
         "--with-plugin",

@@ -5,6 +5,7 @@ import argparse
 from ..codex_progress import summarize_codex_jsonl_file
 from ..executor_progress import (
     ExecutorProgressError,
+    PROGRESS_EVENT_TYPES,
     build_progress_binding,
     build_safe_progress_signal,
     observe_executor_progress,
@@ -494,6 +495,58 @@ def _profile_progress_summary(args: argparse.Namespace) -> dict[str, object] | N
     }
 
 
+def _add_progress_target_args(parser: argparse.ArgumentParser) -> None:
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--run", dest="run_id", default=None)
+    target.add_argument("--session", dest="session_id", default=None)
+
+
+def _add_progress_bind_args(parser: argparse.ArgumentParser) -> None:
+    _add_progress_target_args(parser)
+    parser.add_argument(
+        "--executor-profile",
+        required=True,
+        help="codex, claude-code/claude_code, or hermes_local with observed execution.",
+    )
+    parser.add_argument("--observed-hermes-execution", action="store_true")
+    parser.add_argument("--codex-session-ref", default="")
+    parser.add_argument("--codex-thread-ref", default="")
+    parser.add_argument("--claude-session-ref", default="")
+    parser.add_argument("--process-session-id", default="")
+    parser.add_argument("--pid", default=None)
+    parser.add_argument("--worktree", default="")
+    parser.add_argument("--branch", default="")
+    parser.add_argument("--source", default="")
+    parser.add_argument("--channel-ref", default="")
+    parser.add_argument("--thread-ref", default="")
+    parser.add_argument("--delivery-target", default="")
+    parser.add_argument("--evidence-ref", action="append")
+    parser.set_defaults(func=cmd_runtime_progress_bind)
+
+
+def _add_progress_observe_args(parser: argparse.ArgumentParser) -> None:
+    _add_progress_target_args(parser)
+    parser.add_argument("--process-status", default="")
+    parser.add_argument("--git-status-short", default="")
+    parser.add_argument("--git-diff-stat", default="")
+    parser.add_argument("--event", choices=PROGRESS_EVENT_TYPES, default="")
+    parser.add_argument("--summary", default="")
+    parser.add_argument("--codex-log-jsonl", default=None)
+    parser.add_argument("--profile-status", default="")
+    parser.add_argument("--profile-event-count", type=int, default=None)
+    parser.add_argument("--profile-latest-event", default="")
+    parser.add_argument("--profile-summary", default="")
+    parser.add_argument("--source-language", default="")
+    parser.add_argument("--evidence-ref", action="append")
+    parser.set_defaults(func=cmd_runtime_progress_observe)
+
+
+def _add_progress_status_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--all", action="store_true")
+    parser.set_defaults(func=cmd_runtime_progress_status)
+
+
 def cmd_runtime_validate(args: argparse.Namespace) -> int:
     result = validate_runtime(_paths(args), args.run_id)
     _print_json(result)
@@ -631,65 +684,40 @@ def _add_runtime_commands(sub) -> None:
         "progress-bind",
         help="Create a metadata-only executor progress binding for a run or wrapper session.",
     )
-    target = progress_bind.add_mutually_exclusive_group(required=True)
-    target.add_argument("--run", dest="run_id", default=None)
-    target.add_argument("--session", dest="session_id", default=None)
-    progress_bind.add_argument("--executor-profile", required=True, help="codex, claude-code/claude_code, or hermes_local with observed execution.")
-    progress_bind.add_argument("--observed-hermes-execution", action="store_true")
-    progress_bind.add_argument("--codex-session-ref", default="")
-    progress_bind.add_argument("--codex-thread-ref", default="")
-    progress_bind.add_argument("--claude-session-ref", default="")
-    progress_bind.add_argument("--process-session-id", default="")
-    progress_bind.add_argument("--pid", default=None)
-    progress_bind.add_argument("--worktree", default="")
-    progress_bind.add_argument("--branch", default="")
-    progress_bind.add_argument("--source", default="")
-    progress_bind.add_argument("--channel-ref", default="")
-    progress_bind.add_argument("--thread-ref", default="")
-    progress_bind.add_argument("--delivery-target", default="")
-    progress_bind.add_argument("--evidence-ref", action="append")
-    progress_bind.set_defaults(func=cmd_runtime_progress_bind)
+    _add_progress_bind_args(progress_bind)
 
     progress_observe = runtime_sub.add_parser(
         "progress-observe",
         help="Record one safe executor progress observation and compact report.",
     )
-    target = progress_observe.add_mutually_exclusive_group(required=True)
-    target.add_argument("--run", dest="run_id", default=None)
-    target.add_argument("--session", dest="session_id", default=None)
-    progress_observe.add_argument("--process-status", default="")
-    progress_observe.add_argument("--git-status-short", default="")
-    progress_observe.add_argument("--git-diff-stat", default="")
-    progress_observe.add_argument("--event", choices=(
-        "executor_dispatched",
-        "repo_exploration",
-        "running_no_diff_observed",
-        "diff_started",
-        "tests_started",
-        "tests_failed",
-        "tests_passed",
-        "executor_completed",
-        "executor_blocked",
-        "executor_failed",
-        "progress_observed",
-    ), default="")
-    progress_observe.add_argument("--summary", default="")
-    progress_observe.add_argument("--codex-log-jsonl", default=None)
-    progress_observe.add_argument("--profile-status", default="")
-    progress_observe.add_argument("--profile-event-count", type=int, default=None)
-    progress_observe.add_argument("--profile-latest-event", default="")
-    progress_observe.add_argument("--profile-summary", default="")
-    progress_observe.add_argument("--source-language", default="")
-    progress_observe.add_argument("--evidence-ref", action="append")
-    progress_observe.set_defaults(func=cmd_runtime_progress_observe)
+    _add_progress_observe_args(progress_observe)
 
     progress_status = runtime_sub.add_parser(
         "progress-status",
         help="Project active/stale executor progress from persisted artifacts only.",
     )
-    progress_status.add_argument("--limit", type=int, default=50)
-    progress_status.add_argument("--all", action="store_true")
-    progress_status.set_defaults(func=cmd_runtime_progress_status)
+    _add_progress_status_args(progress_status)
+
+    progress = runtime_sub.add_parser(
+        "progress",
+        help="Create, observe, and project live executor progress reports.",
+    )
+    progress_sub = progress.add_subparsers(dest="runtime_progress_command", required=True)
+    progress_bind_nested = progress_sub.add_parser(
+        "bind",
+        help="Create a metadata-only executor progress binding for a run or wrapper session.",
+    )
+    _add_progress_bind_args(progress_bind_nested)
+    progress_observe_nested = progress_sub.add_parser(
+        "observe",
+        help="Record one safe executor progress observation and compact report.",
+    )
+    _add_progress_observe_args(progress_observe_nested)
+    progress_status_nested = progress_sub.add_parser(
+        "status",
+        help="Project active/stale executor progress from persisted artifacts only.",
+    )
+    _add_progress_status_args(progress_status_nested)
 
     runtime_validate = runtime_sub.add_parser("validate")
     runtime_validate.add_argument("--run", dest="run_id", default=None)

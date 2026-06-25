@@ -185,12 +185,16 @@ def build_progress_binding(
         "updated_at": timestamp,
         "last_observed_at": timestamp,
         "last_reported_at": "",
+        "last_observed_signal_hash": "",
+        "last_observed_event_count": 0,
+        "last_observed_artifact_sha256": "",
         "freshness_seconds": int(freshness_seconds),
         "expiry_seconds": int(expiry_seconds),
         "last_transition_fingerprint": "",
         "last_reported_event_type": "",
         "last_reported_state": "",
         "last_reported_summary_hash": "",
+        "last_reported_artifact_sha256": "",
         "report_count": 0,
         "suppressed_duplicate_count": 0,
         "minimum_repeat_interval_seconds": int(minimum_repeat_interval_seconds),
@@ -342,6 +346,10 @@ def build_safe_progress_signal(
         "latest_progress_event_type": progress.get("latest_progress_event_type", ""),
         "observable_activity": progress.get("observable_activity", []),
         "assistant_visible_summary": progress.get("assistant_visible_summary", ""),
+        "progress_snapshot_hash": progress.get("summary_hash", ""),
+        "codex_artifact_sha256": progress.get("artifact_sha256", "") if profile == "codex" else "",
+        "codex_artifact_byte_count": progress.get("artifact_byte_count", 0) if profile == "codex" else 0,
+        "codex_malformed_event_count": progress.get("malformed_event_count", 0) if profile == "codex" else 0,
         "explicit_event_type": explicit,
         "explicit_summary": _compact_text(explicit_summary, 280),
         "evidence_ref_count": len(evidence_refs or []),
@@ -357,21 +365,31 @@ def infer_progress_event_type(signal: dict[str, Any]) -> str:
     latest = str(signal.get("latest_progress_event_type", ""))
     activity = set(signal.get("observable_activity", []) if isinstance(signal.get("observable_activity"), list) else [])
     process_status = str(signal.get("process_status", "")).casefold()
-    if progress_status == "failed_or_error_observed" or latest in {"targeted_tests_failed", "tests_failed"}:
-        return "tests_failed"
+    test_activity = bool(activity.intersection({"Codex ran tests.", "Codex is running tests."}))
+    inspect_activity = bool(activity.intersection({"Codex inspected the repo.", "Codex is inspecting files/tests."}))
+    if latest == "blocker_encountered" or progress_status == "blocked" or process_status in {"blocked", "blocker"}:
+        return "executor_blocked"
+    if progress_status == "failed_or_error_observed" or latest in {"targeted_tests_failed", "full_tests_failed", "tests_failed"}:
+        return "tests_failed" if test_activity or latest in {"targeted_tests_failed", "full_tests_failed", "tests_failed"} else "executor_failed"
+    if latest == "failure_discovered" or process_status in {"failed", "failure", "error", "errored", "exited_nonzero"}:
+        return "executor_failed"
     if progress_status == "completed_or_passed_observed":
-        return "tests_passed" if ("Codex ran tests." in activity or latest in {"targeted_tests_passed", "tests_passed"}) else "executor_completed"
-    if latest in {"targeted_tests_passed", "tests_passed"}:
+        return "tests_passed" if (test_activity or latest in {"targeted_tests_passed", "full_tests_passed", "tests_passed"}) else "executor_completed"
+    if latest in {"targeted_tests_passed", "full_tests_passed", "tests_passed"}:
         return "tests_passed"
-    if latest in {"targeted_tests_started", "tests_started"} or activity.intersection({"Codex ran tests.", "Codex is running tests."}):
+    if latest in {"targeted_tests_started", "full_tests_started", "tests_started"} or test_activity:
         return "tests_started"
     if latest in {"diff_started", "file_changed"} or signal.get("git_diff_stat_hash") or signal.get("git_status_hash"):
         return "diff_started"
     if "Codex changed files." in activity:
         return "diff_started"
-    if "Codex inspected the repo." in activity:
+    if inspect_activity:
         return "repo_exploration"
-    if process_status in {"running", "active", "started"}:
+    if process_status in {"completed", "complete", "done", "success", "succeeded", "exited_zero"}:
+        return "executor_completed"
+    if process_status in {"dispatched", "launched", "started", "spawned"}:
+        return "executor_dispatched"
+    if process_status in {"running", "active", "in_progress", "working"}:
         return "running_no_diff_observed"
     return "progress_observed"
 
@@ -381,7 +399,16 @@ def summary_for_signal(signal: dict[str, Any], event_type: str) -> str:
     if explicit:
         return explicit
     visible = str(signal.get("assistant_visible_summary", "")).strip()
-    if visible and event_type in {"repo_exploration", "diff_started", "tests_started", "tests_failed", "tests_passed"}:
+    if visible and event_type in {
+        "repo_exploration",
+        "diff_started",
+        "tests_started",
+        "tests_failed",
+        "tests_passed",
+        "executor_completed",
+        "executor_blocked",
+        "executor_failed",
+    }:
         return _compact_text(visible, 240)
     return _summary_for_event_type(event_type)
 
@@ -414,6 +441,8 @@ def observe_executor_progress(
             "report": {},
             "reported": False,
             "suppressed_reason": reason,
+            "reporting_action": "suppress",
+            "chat_report": "",
             "claim_boundary": CLAIM_BOUNDARY,
         }
     append_progress_event(paths, binding, event)
@@ -428,6 +457,8 @@ def observe_executor_progress(
         "report": report,
         "reported": True,
         "suppressed_reason": "",
+        "reporting_action": "send_report",
+        "chat_report": report["summary"],
         "claim_boundary": CLAIM_BOUNDARY,
     }
 
@@ -538,8 +569,12 @@ def update_binding_reporter_state(
     _require_valid("event", validate_progress_event(event))
     updated = dict(binding)
     now = reported_at or utc_now()
+    signal = event.get("signal", {}) if isinstance(event.get("signal"), dict) else {}
     updated["updated_at"] = now
     updated["last_observed_at"] = str(event.get("observed_at", now))
+    updated["last_observed_signal_hash"] = _signal_fingerprint(signal)
+    updated["last_observed_event_count"] = _safe_int(signal.get("progress_event_count"), 0)
+    updated["last_observed_artifact_sha256"] = str(signal.get("codex_artifact_sha256", ""))
     if str(event.get("event_type", "")) in {"executor_completed", "executor_blocked", "executor_failed"}:
         updated["state"] = "closed"
     else:
@@ -550,6 +585,7 @@ def update_binding_reporter_state(
         updated["last_reported_event_type"] = str(event.get("event_type", ""))
         updated["last_reported_state"] = str(event.get("status", ""))
         updated["last_reported_summary_hash"] = hashlib.sha256(str(event.get("summary", "")).encode("utf-8")).hexdigest()
+        updated["last_reported_artifact_sha256"] = str(signal.get("codex_artifact_sha256", ""))
         updated["report_count"] = int(updated.get("report_count", 0) or 0) + 1
     else:
         updated["suppressed_duplicate_count"] = int(updated.get("suppressed_duplicate_count", 0) or 0) + 1
@@ -707,6 +743,8 @@ def transition_fingerprint(event: dict[str, Any]) -> str:
                 "progress_status",
                 "progress_event_count",
                 "latest_progress_event_type",
+                "progress_snapshot_hash",
+                "codex_artifact_sha256",
             )
             if signal.get(key) not in (None, "")
         },
@@ -871,6 +909,10 @@ def _safe_signal(signal: dict[str, Any]) -> dict[str, Any]:
         "latest_progress_event_type",
         "observable_activity",
         "assistant_visible_summary",
+        "progress_snapshot_hash",
+        "codex_artifact_sha256",
+        "codex_artifact_byte_count",
+        "codex_malformed_event_count",
         "evidence_ref_count",
         "explicit_event_type",
         "explicit_summary",
@@ -953,19 +995,33 @@ def _safe_progress_summary(summary: dict[str, Any] | None, *, codex_profile: boo
     if codex_profile and summary.get("schema_version") != "codex_progress_summary/v1":
         raise ExecutorProgressError("Codex progress signals must use codex_progress_summary/v1")
     latest = summary.get("latest_progress_event", {}) if isinstance(summary.get("latest_progress_event"), dict) else {}
+    raw_artifact = summary.get("raw_output_artifact", {}) if isinstance(summary.get("raw_output_artifact"), dict) else {}
+    status = _compact_text(str(summary.get("status", "")), 80)
+    event_count = _safe_int(summary.get("event_count"), 0)
+    observable_activity = [
+        _compact_text(str(item), 120)
+        for item in summary.get("observable_activity", [])
+        if isinstance(summary.get("observable_activity", []), list)
+    ][:8]
+    assistant_visible_summary = _compact_text(
+        str(summary.get("latest_assistant_visible_message") or summary.get("chat_summary") or summary.get("summary") or ""),
+        240,
+    )
+    latest_event_type = _compact_text(str(latest.get("event_type", "")), 80)
+    artifact_sha256 = _compact_text(str(raw_artifact.get("sha256", "")), 80)
+    normalized = {
+        "status": status,
+        "event_count": event_count,
+        "malformed_event_count": _safe_int(summary.get("malformed_event_count"), 0),
+        "latest_progress_event_type": latest_event_type,
+        "observable_activity": observable_activity,
+        "assistant_visible_summary": assistant_visible_summary,
+        "artifact_sha256": artifact_sha256,
+        "artifact_byte_count": _safe_int(raw_artifact.get("byte_count"), 0),
+    }
+    normalized["summary_hash"] = hashlib.sha256(json.dumps(normalized, sort_keys=True).encode("utf-8")).hexdigest()
     return {
-        "status": _compact_text(str(summary.get("status", "")), 80),
-        "event_count": _safe_int(summary.get("event_count"), 0),
-        "latest_progress_event_type": _compact_text(str(latest.get("event_type", "")), 80),
-        "observable_activity": [
-            _compact_text(str(item), 120)
-            for item in summary.get("observable_activity", [])
-            if isinstance(summary.get("observable_activity", []), list)
-        ][:8],
-        "assistant_visible_summary": _compact_text(
-            str(summary.get("latest_assistant_visible_message") or summary.get("chat_summary") or summary.get("summary") or ""),
-            240,
-        ),
+        **normalized,
     }
 
 
@@ -980,6 +1036,13 @@ def _hash_if_present(value: str) -> str:
     if not value.strip():
         return ""
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _signal_fingerprint(signal: dict[str, Any]) -> str:
+    if not signal:
+        return ""
+    safe = _safe_signal(signal)
+    return hashlib.sha256(json.dumps(safe, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _summary_for_event_type(event_type: str) -> str:

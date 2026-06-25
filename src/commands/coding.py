@@ -15,7 +15,7 @@ from ..hermes_planning import (
 )
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
-from ..memory import read_handoff_context_pack_file
+from ..memory import memory_recall_pack_for_handoff, read_handoff_context_pack_file
 from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
 from ..runtime.artifacts import append_journal_observation, create_prepared_coding_delegation_run, write_coding_delegation
@@ -32,6 +32,7 @@ from .common import _chat_input_and_metadata, _explicit_source_metadata, _paths,
 
 def cmd_coding_delegate(args: argparse.Namespace) -> int:
     try:
+        paths = _paths(args)
         source_metadata: dict[str, str] = {}
         plan_artifact: dict[str, object] | None = None
         context_pack = _context_pack(args)
@@ -64,6 +65,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
         else:
             message = " ".join(args.message).strip()
         source_metadata.update(_explicit_source_metadata(args))
+        memory_recall_pack = memory_recall_pack_for_handoff(paths, message, executor_target=executor_target)
         payload = build_coding_delegation_payload(
             message,
             source=args.source,
@@ -72,6 +74,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             source_metadata=source_metadata,
             executor_target=executor_target,
             context_pack=context_pack,
+            memory_recall_pack=memory_recall_pack,
             plan_artifact=plan_artifact,
         )
         if plan_artifact:
@@ -106,7 +109,6 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             delegation = payload["delegation"]
             if not isinstance(delegation, dict):
                 raise OmhError("coding delegation payload is missing delegation")
-            paths = _paths(args)
             run = create_prepared_coding_delegation_run(
                 paths,
                 {

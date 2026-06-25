@@ -9,12 +9,20 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.coding_delegation import build_coding_delegation_payload
+from omh.coding_lifecycle import start_codex_delegation_lifecycle
 from omh.memory import (
     apply_memory_update_batch,
+    approve_project_memory_candidate,
     build_handoff_context_pack,
     build_memory_inspection,
     build_memory_review_card,
+    build_project_memory_recall_pack,
+    build_project_memory_review,
+    build_project_memory_status,
+    capture_project_memory_candidate,
+    memory_recall_pack_for_handoff,
     read_handoff_context_pack_file,
+    reject_project_memory_candidate,
 )
 from omh.paths import resolve_paths
 from omh.profiles.setup import write_setup_profile
@@ -22,6 +30,112 @@ from omh.targets import record_target_observation
 
 
 class MemoryContractTests(unittest.TestCase):
+    def test_project_memory_capture_review_approve_and_recall_are_local_and_typed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            captured = capture_project_memory_candidate(
+                paths,
+                "Use unittest discovery before release checklist changes",
+                record_type="procedure",
+                tags=["tests", "release"],
+                stale_after_days=120,
+            )
+
+            candidate = captured["candidate"]
+            candidate_id = candidate["candidate_id"]
+            self.assertEqual(candidate["schema_version"], "project_memory_candidate/v1")
+            self.assertEqual(candidate["status"], "pending_review")
+            self.assertTrue((paths.memory_dir / "candidates" / f"{candidate_id}.json").exists())
+            self.assertFalse((paths.memory_dir / "records").exists())
+
+            review = build_project_memory_review(paths)
+            self.assertEqual(review["schema_version"], "project_memory_review_queue/v1")
+            self.assertEqual(review["cards"][0]["schema_version"], "project_memory_review_card/v1")
+            self.assertIn("not execution", review["claim_boundary"])
+
+            approved = approve_project_memory_candidate(paths, candidate_id, approved_by="user")
+            record = approved["record"]
+            self.assertEqual(record["schema_version"], "project_memory_record/v1")
+            self.assertEqual(record["review_status"], "approved")
+            self.assertTrue((paths.memory_dir / "records" / f"{record['record_id']}.json").exists())
+
+            recall = build_project_memory_recall_pack(paths, "release tests", executor_target="codex")
+            self.assertEqual(recall["schema_version"], "project_memory_recall_pack/v1")
+            self.assertEqual(recall["record_count"], 1)
+            self.assertEqual(recall["included_records"][0]["record_id"], record["record_id"])
+            self.assertIn("prepared context", recall["claim_boundary"])
+
+            status = build_project_memory_status(paths)
+            self.assertEqual(status["counts"]["approved_records"], 1)
+            self.assertEqual(status["counts"]["pending_review"], 0)
+
+    def test_project_memory_safety_blocks_secrets_and_review_marks_short_lived_artifacts(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            blocked = capture_project_memory_candidate(
+                paths,
+                "Private token is abc-secret-token",
+                content="Traceback (most recent call last):\npassword=secret",
+            )
+            blocked_candidate = blocked["candidate"]
+
+            self.assertEqual(blocked_candidate["status"], "blocked_review_required")
+            self.assertEqual(blocked_candidate["safety"]["status"], "blocked")
+            self.assertNotIn("abc-secret-token", json.dumps(blocked_candidate))
+            with self.assertRaises(ValueError):
+                approve_project_memory_candidate(paths, blocked_candidate["candidate_id"])
+
+            rejected = reject_project_memory_candidate(paths, blocked_candidate["candidate_id"], reason="contains password=secret")
+            self.assertEqual(rejected["decision"], "rejected")
+            self.assertIn("not execution", rejected["claim_boundary"])
+            self.assertNotIn("password=secret", json.dumps(rejected))
+
+            needs_review = capture_project_memory_candidate(paths, "PR #123 fixed this temporarily", record_type="lesson")
+            self.assertEqual(needs_review["candidate"]["safety"]["status"], "needs_review")
+            self.assertIn("short_lived_pr_reference", needs_review["candidate"]["safety"]["review_reasons"])
+
+    def test_project_memory_auto_safe_policy_auto_approves_safe_candidates(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+
+            captured = capture_project_memory_candidate(paths, "Prefer docs workflow checks for generated workflow docs", record_type="procedure")
+
+            self.assertTrue(captured["auto_approved"])
+            self.assertEqual(captured["record"]["schema_version"], "project_memory_record/v1")
+            self.assertEqual(build_project_memory_status(paths)["counts"]["approved_records"], 1)
+
+    def test_project_memory_recall_pack_feeds_coding_handoff_when_enabled(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            captured = capture_project_memory_candidate(
+                paths,
+                "Run setup diagnostics before changing installation health checks",
+                record_type="procedure",
+                tags=["setup", "diagnose"],
+            )
+            approve_project_memory_candidate(paths, captured["candidate"]["candidate_id"])
+
+            message = "diagnose installation health in src/commands/setup.py"
+            recall = memory_recall_pack_for_handoff(paths, message, executor_target="codex")
+            payload = build_coding_delegation_payload(
+                message,
+                source="discord",
+                executor_target="codex",
+                memory_recall_pack=recall,
+            )
+            lifecycle = start_codex_delegation_lifecycle(paths, message, source="discord")
+
+            self.assertIn("memory_recall_pack", payload["executor_handoff"])
+            self.assertEqual(payload["executor_handoff"]["memory_recall_pack"]["record_count"], 1)
+            record_handoff = lifecycle["coding_delegation"]["executor_handoff"]
+            self.assertIn("memory_recall_pack", record_handoff)
+            self.assertEqual(record_handoff["memory_recall_pack"]["record_count"], 1)
+            self.assertEqual(record_handoff["memory_recall_pack"]["included_records"], [])
+            self.assertIn("not execution", record_handoff["memory_recall_pack"]["claim_boundary"])
+
     def test_inspection_separates_sources_and_detects_stale_conflicts(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

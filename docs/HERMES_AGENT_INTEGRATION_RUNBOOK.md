@@ -184,6 +184,38 @@ omh chat session request-verification "$SESSION_ID"
 omh chat session status "$SESSION_ID"
 ```
 
+For live Codex progress while the process is still running, bind the runtime run
+or wrapper session once, then call the stateful observer every time the wrapper
+has a new JSONL/process-output snapshot:
+
+```sh
+omh runtime progress bind --run "$RUN_ID" \
+  --executor-profile codex \
+  --process-session-id "$CODEX_PROCESS_SESSION" \
+  --codex-session-ref "$CODEX_SESSION" \
+  --evidence-ref codex-jsonl
+
+omh runtime progress observe --run "$RUN_ID" \
+  --codex-log-jsonl "$CODEX_JSONL" \
+  --process-status running \
+  --evidence-ref codex-jsonl
+
+omh runtime progress status
+```
+
+`runtime progress observe` returns `reported=true`, `reporting_action=send_report`,
+and `chat_report` only when a meaningful transition is observed, such as
+`executor_dispatched`, `repo_exploration`, `diff_started`, `tests_started`,
+`tests_failed`, `tests_passed`, `executor_completed`, `executor_failed`, or
+`executor_blocked`. Repeating the same snapshot returns `reported=false`,
+`reporting_action=suppress`, and a `suppressed_reason` such as
+`duplicate_transition` or `repeat_interval`; wrappers should not send a chat
+message for those no-op results. The persisted binding stores compact state,
+safe counters, and artifact hashes so repeated observe calls do not spam the
+thread. It does not store raw logs or hidden reasoning. The older
+`runtime progress-bind`, `runtime progress-observe`, and `runtime progress-status`
+forms remain compatibility aliases.
+
 `omh chat codex-progress` is an adapter helper for the raw-output gap: hosted
 wrappers can pipe Codex JSONL or process output into it and render the compact
 `chat_summary` instead of dumping event streams into chat. The output is an

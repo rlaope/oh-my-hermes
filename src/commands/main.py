@@ -80,7 +80,18 @@ from .materials import (
     cmd_materials_validate,
 )
 from .menubar import _add_menubar_commands, cmd_menubar_status
-from .memory import _add_memory_commands, cmd_memory_apply, cmd_memory_inspect, cmd_memory_pack
+from .memory import (
+    _add_memory_commands,
+    cmd_memory_apply,
+    cmd_memory_approve,
+    cmd_memory_capture,
+    cmd_memory_inspect,
+    cmd_memory_pack,
+    cmd_memory_recall,
+    cmd_memory_reject,
+    cmd_memory_review,
+    cmd_memory_status,
+)
 from .mcp import (
     _add_mcp_commands,
     cmd_mcp_config_recipe,

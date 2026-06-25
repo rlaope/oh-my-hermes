@@ -86,6 +86,22 @@ prints a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
 
+Setup also records OMH project-memory policy in `.omh/setup-profile.json`.
+The default is safe `review-first` memory: OMH can capture local candidates,
+but reviewed records are required before recall enters coding handoffs. Operators
+can choose:
+
+```sh
+omh setup --memory-mode off
+omh setup --memory-mode review-first
+omh setup --memory-mode auto-safe
+```
+
+`auto-safe` approves only locally safe summaries and leaves credentials, raw
+logs, full transcripts, short-lived PR/commit IDs, and temporary task progress
+for review or rejection. This is OMH project memory under `.omh/memory/`; setup
+does not mutate Hermes global or internal memory.
+
 The default user scope writes `~/.omh` and `~/.hermes`. Use project scope when
 one repository needs isolated local OMH skills and Hermes config:
 

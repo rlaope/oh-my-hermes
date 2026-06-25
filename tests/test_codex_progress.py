@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from _local_package import load_local_package
 
@@ -13,7 +15,14 @@ from omh.codex_progress import (
     build_codex_session_observation,
     summarize_codex_jsonl_text,
 )
-from omh.executor_progress import build_safe_progress_signal, infer_progress_event_type
+from omh.executor_progress import (
+    build_progress_binding,
+    build_safe_progress_signal,
+    infer_progress_event_type,
+    observe_executor_progress,
+    write_progress_binding,
+)
+from omh.paths import resolve_paths
 
 
 class CodexProgressTests(unittest.TestCase):
@@ -139,6 +148,104 @@ class CodexProgressTests(unittest.TestCase):
         self.assertNotIn("hidden private reasoning", rendered)
         self.assertNotIn("raw", rendered)
 
+    def test_codex_live_progress_snapshots_emit_stateful_intermediate_reports(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id="run-live-1",
+                    executor_profile="codex",
+                    process_session_id="codex-proc-1",
+                    evidence_refs=["codex-live-jsonl"],
+                    now="2026-06-25T00:00:00Z",
+                ),
+            )
+
+            inspect_summary = summarize_codex_jsonl_text(
+                "\n".join(
+                    [
+                        json.dumps({"type": "tool_call", "tool": "rg", "args": "rg runtime progress src tests"}),
+                        json.dumps({"type": "reasoning", "analysis": "hidden private reasoning must not leak"}),
+                    ]
+                ),
+                evidence_refs=["codex-live-jsonl"],
+                source="codex-live.jsonl",
+            )
+            inspect_signal = build_safe_progress_signal(
+                executor_profile="codex",
+                process_status="running",
+                codex_progress_summary=inspect_summary,
+                evidence_refs=["codex-live-jsonl"],
+            )
+
+            first = observe_executor_progress(paths, binding, inspect_signal, observed_at="2026-06-25T00:00:10Z")
+            repeated = observe_executor_progress(paths, first["binding"], inspect_signal, observed_at="2026-06-25T00:00:20Z")
+
+            self.assertTrue(first["reported"])
+            self.assertEqual(first["reporting_action"], "send_report")
+            self.assertEqual(first["event"]["event_type"], "repo_exploration")
+            self.assertIn("inspecting", first["chat_report"])
+            self.assertFalse(repeated["reported"])
+            self.assertEqual(repeated["reporting_action"], "suppress")
+            self.assertEqual(repeated["suppressed_reason"], "duplicate_transition")
+
+            diff_summary = summarize_codex_jsonl_text(
+                "\n".join(
+                    [
+                        json.dumps({"type": "tool_call", "tool": "rg", "args": "rg runtime progress src tests"}),
+                        json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/coding/executor_progress.py"}),
+                    ]
+                ),
+                evidence_refs=["codex-live-jsonl"],
+                source="codex-live.jsonl",
+            )
+            diff = observe_executor_progress(
+                paths,
+                repeated["binding"],
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    process_status="running",
+                    codex_progress_summary=diff_summary,
+                    evidence_refs=["codex-live-jsonl"],
+                ),
+                observed_at="2026-06-25T00:00:30Z",
+            )
+
+            self.assertTrue(diff["reported"])
+            self.assertEqual(diff["event"]["event_type"], "diff_started")
+
+            test_summary = summarize_codex_jsonl_text(
+                "\n".join(
+                    [
+                        json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified tests/test_codex_progress.py"}),
+                        json.dumps({"type": "tool_call", "command": "PYTHONPATH=tests uv run python -m unittest tests/test_codex_progress.py -v"}),
+                        json.dumps({"role": "assistant", "content": "Tests passed: tests/test_codex_progress.py."}),
+                    ]
+                ),
+                evidence_refs=["codex-live-jsonl"],
+                source="codex-live.jsonl",
+            )
+            tests = observe_executor_progress(
+                paths,
+                diff["binding"],
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    process_status="running",
+                    codex_progress_summary=test_summary,
+                    evidence_refs=["codex-live-jsonl"],
+                ),
+                observed_at="2026-06-25T00:00:40Z",
+            )
+
+            self.assertTrue(tests["reported"])
+            self.assertIn(tests["event"]["event_type"], {"tests_started", "tests_passed"})
+            rendered = json.dumps(tests)
+            self.assertNotIn("hidden private reasoning", rendered)
+            self.assertNotIn("analysis", rendered)
+            self.assertNotIn("raw_log", rendered)
+
     def test_nested_reasoning_does_not_influence_observable_summary(self) -> None:
         raw = json.dumps(
             {
@@ -164,9 +271,19 @@ class CodexProgressTests(unittest.TestCase):
         negated = summarize_codex_jsonl_text(
             json.dumps({"role": "assistant", "content": "Tests are not completed; this is an incomplete run."})
         )
+        future = summarize_codex_jsonl_text(
+            "\n".join(
+                [
+                    json.dumps({"role": "assistant", "content": "I will complete the implementation after tests run."}),
+                    json.dumps({"role": "assistant", "content": "I am going to mark this success after CI."}),
+                    json.dumps({"role": "assistant", "content": "I will run tests, then report success."}),
+                ]
+            )
+        )
         passed = summarize_codex_jsonl_text(json.dumps({"role": "assistant", "content": "Tests passed."}))
 
         self.assertNotEqual(negated["status"], "completed_or_passed_observed")
+        self.assertNotEqual(future["status"], "completed_or_passed_observed")
         self.assertEqual(passed["status"], "completed_or_passed_observed")
 
     def test_codex_session_observation_exposes_resume_contract_without_execution_claim(self) -> None:

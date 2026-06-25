@@ -14,6 +14,7 @@ from ..executor_progress import (
     refresh_binding_freshness,
 )
 from ..paths import OmhPaths
+from ..memory import memory_recall_pack_for_handoff
 from ..runtime.artifacts import (
     append_event,
     create_prepared_coding_delegation_run,
@@ -42,7 +43,10 @@ def start_codex_delegation_lifecycle(
     limit: int = 3,
     include_message: bool = False,
     context_pack: dict[str, object] | None = None,
+    memory_recall_pack: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    if memory_recall_pack is None:
+        memory_recall_pack = memory_recall_pack_for_handoff(paths, message, executor_target="codex")
     payload = build_coding_delegation_payload(
         message,
         source=source,
@@ -51,6 +55,7 @@ def start_codex_delegation_lifecycle(
         source_metadata=source_metadata,
         executor_target="codex",
         context_pack=context_pack,
+        memory_recall_pack=memory_recall_pack,
     )
     delegation = payload.get("delegation")
     if not isinstance(delegation, dict):
