@@ -9,6 +9,8 @@ from .team import inspect_operating_model, operating_model_ids
 
 
 SETUP_PROFILE_SCHEMA_VERSION = "setup_profile/v1"
+PROJECT_MEMORY_POLICY_SCHEMA_VERSION = "project_memory_policy/v1"
+PROJECT_MEMORY_MODES = ("off", "review-first", "auto-safe")
 
 SETUP_PROFILE_CATEGORIES = (
     {
@@ -71,6 +73,7 @@ def build_setup_profile(
     *,
     default_executor: str | None = None,
     operating_model: str | None = None,
+    memory_mode: str | None = None,
 ) -> dict[str, Any]:
     model_id = _normalize_operating_model(operating_model)
     model = inspect_operating_model(model_id)["model"]
@@ -78,6 +81,7 @@ def build_setup_profile(
     executor_hint = default_executor or model_default_executor
     selected = _selected_categories(values, default_executor=executor_hint)
     resolved_executor = _default_executor_for_categories(selected, default_executor=executor_hint)
+    memory_policy = build_project_memory_policy(memory_mode)
     return {
         "schema_version": SETUP_PROFILE_SCHEMA_VERSION,
         "updated_at": utc_now(),
@@ -86,6 +90,8 @@ def build_setup_profile(
         "operating_model_id": model_id,
         "default_executor": resolved_executor,
         "dispatch_policy": "ask_before_dispatch" if resolved_executor in {"codex", "choose"} else "prepare_only",
+        "memory_mode": memory_policy["mode"],
+        "memory_policy": memory_policy,
         "normal_user_surface": "Hermes Agent chat and installed Hermes skills",
         "local_only": True,
         "network_calls": False,
@@ -101,8 +107,9 @@ def write_setup_profile(
     *,
     default_executor: str | None = None,
     operating_model: str | None = None,
+    memory_mode: str | None = None,
 ) -> dict[str, Any]:
-    profile = build_setup_profile(values, default_executor=default_executor, operating_model=operating_model)
+    profile = build_setup_profile(values, default_executor=default_executor, operating_model=operating_model, memory_mode=memory_mode)
     atomic_write_json(paths.setup_profile_path, profile, private=True)
     return profile
 
@@ -114,6 +121,23 @@ def read_setup_profile(paths: OmhPaths) -> dict[str, Any] | None:
 def setup_profile_categories_for_executor(executor: str) -> list[str]:
     executor_value = _normalize_executor(executor)
     return [_CATEGORY_ID_BY_EXECUTOR[executor_value]]
+
+
+def build_project_memory_policy(mode: str | None = None) -> dict[str, object]:
+    normalized = _normalize_memory_mode(mode)
+    return {
+        "schema_version": PROJECT_MEMORY_POLICY_SCHEMA_VERSION,
+        "mode": normalized,
+        "capture_enabled": normalized != "off",
+        "recall_enabled": normalized != "off",
+        "review_required": normalized == "review-first",
+        "auto_approve_safe": normalized == "auto-safe",
+        "store_scope": "project_local",
+        "redaction_policy": "metadata_only",
+        "backend": "local_json",
+        "optional_backend_extension": True,
+        "claim_boundary": "Project memory configures OMH-local prepared context only; it does not mutate Hermes global or internal memory.",
+    }
 
 
 def _selected_categories(
@@ -169,3 +193,10 @@ def _normalize_operating_model(value: str | None) -> str:
     if model not in valid:
         raise ValueError(f"unsupported operating model: {model}; expected one of {', '.join(valid)}")
     return model
+
+
+def _normalize_memory_mode(value: str | None) -> str:
+    mode = str(value or "review-first").strip()
+    if mode not in PROJECT_MEMORY_MODES:
+        raise ValueError(f"unsupported memory mode: {mode}; expected one of {', '.join(PROJECT_MEMORY_MODES)}")
+    return mode

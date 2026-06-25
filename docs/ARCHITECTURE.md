@@ -17,6 +17,7 @@ The architecture favors:
 - reversible local bootstrap installation
 - generated skill text from testable catalog data
 - explicit compatibility contracts
+- reviewed project-local memory as prepared context, not execution evidence
 - conservative routing behavior
 - delegation-first coding, where Hermes plans and narrates while the selected
   coding executor performs main implementation work
@@ -37,6 +38,7 @@ flowchart LR
   omh["OMH local contract layer\nplaybooks, routing, plan, handoff, status"]
   hermes["Hermes Agent\nclarify, research, plan, narrate"]
   executor["Selected coding executor\nimplementation, verification"]
+  memory["Project memory\nreviewed .omh/memory summaries"]
   runtime["Local runtime artifacts\nprepared and observed evidence"]
   site["Docs and status UI\ncards, examples, reports"]
 
@@ -48,6 +50,8 @@ flowchart LR
   omh -->|"answer, clarify, plan, or status"| wrapper
   wrapper --> hermes
   hermes -->|"accepted plan"| omh
+  omh -->|"review, recall, prepared context only"| memory
+  memory -->|"memory_recall_pack/v1"| omh
   omh -->|"prepared handoff, not execution proof"| executor
   executor -->|"dispatch, result, verification"| runtime
   runtime -->|"status_card/v1"| omh
@@ -235,6 +239,14 @@ Status` row shape.
 `current_external_coding_executor` names the selected row explicitly, preferring
 `runtime/state.json` `last_run_id` when it matches the recent executor list, so
 settings and compact summaries do not rely on an unnamed list-order convention.
+
+`workflows/memory.py` owns OMH project memory. It stores candidates, reviewed
+records, review decisions, and recall packs under `.omh/memory/` using local
+JSON files. Setup records `project_memory_policy/v1` with `off`,
+`review-first`, or `auto-safe` mode. Coding handoffs can receive
+`memory_recall_pack/v1` when reviewed records are relevant. These packs are
+prepared context only; they are not execution, review, CI, merge, or Hermes
+internal-memory evidence.
 
 The menu bar status contract reports configured Hermes targets and prepared
 handoffs without inventing process state. PID, `running`, and `restarting`

@@ -1050,6 +1050,9 @@ def _handoff_contract_summary(handoff: dict[str, Any]) -> dict[str, Any]:
     context_pack_blocked = _object_or_empty(handoff.get("context_pack_blocked"))
     if context_pack_blocked:
         summary["context_pack_blocked"] = _context_pack_blocked_summary(context_pack_blocked)
+    memory_recall_pack = _object_or_empty(handoff.get("memory_recall_pack"))
+    if memory_recall_pack:
+        summary["memory_recall_pack"] = _memory_recall_pack_summary(memory_recall_pack)
     return summary
 
 
@@ -1091,6 +1094,18 @@ def _context_pack_blocked_summary(context_pack_blocked: dict[str, Any]) -> dict[
         "schema_version": context_pack_blocked.get("schema_version", ""),
         "blocked_by_conflicts_count": len(_list_or_empty(context_pack_blocked.get("blocked_by_conflicts"))),
         "claim_boundary": context_pack_blocked.get("claim_boundary", ""),
+    }
+
+
+def _memory_recall_pack_summary(memory_recall_pack: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": memory_recall_pack.get("schema_version", ""),
+        "executor_target": memory_recall_pack.get("executor_target", ""),
+        "session_id": memory_recall_pack.get("session_id", ""),
+        "record_count": len(_list_or_empty(memory_recall_pack.get("included_records"))),
+        "excluded_count": len(_list_or_empty(memory_recall_pack.get("excluded_records"))),
+        "redaction_policy": memory_recall_pack.get("redaction_policy", ""),
+        "claim_boundary": memory_recall_pack.get("claim_boundary", ""),
     }
 
 

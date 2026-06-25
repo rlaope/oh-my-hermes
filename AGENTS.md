@@ -69,6 +69,10 @@ PR without the chat history.
 - Wrapper sessions own chat continuity and plan decisions only. Linked runtime
   runs own handoff, dispatch, execution, verification, review, CI, and merge
   evidence.
+- Project memory lives under `.omh/memory/` as reviewed OMH-local prepared
+  context. Keep candidates separate from approved records, preserve
+  review-first defaults, and never present recall packs as execution, review,
+  CI, merge, or Hermes internal-memory evidence.
 - Generated skills come from catalog data. Prefer updating
   `src/skills/catalog.py` and regenerating docs over hand-editing generated
   output.

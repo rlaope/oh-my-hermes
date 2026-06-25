@@ -12,6 +12,7 @@ from ..context import build_context_brief
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload
+from ..memory import memory_recall_pack_for_handoff
 from ..operator_productivity import build_agent_operator_productivity_card
 from ..paths import OmhPaths, resolve_paths
 from ..plugin_bundle.omh.awareness import workflow_context_card_for_workflow, workflow_context_cards
@@ -587,6 +588,13 @@ def build_chat_interaction_payload(
             include_message=include_message,
             source_metadata=metadata,
             executor_target=resolved_executor_target,
+            memory_recall_pack=memory_recall_pack_for_handoff(
+                paths,
+                message,
+                executor_target=resolved_executor_target,
+            )
+            if paths
+            else None,
         )
         delegation["executor_resolution"] = executor_resolution
         base["delegation"] = delegation

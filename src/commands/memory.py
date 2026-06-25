@@ -8,11 +8,110 @@ from pathlib import Path
 from ..installer import OmhError
 from ..memory import (
     apply_memory_update_batch,
+    approve_project_memory_candidate,
     build_handoff_context_pack,
     build_memory_inspection,
+    build_project_memory_recall_pack,
+    build_project_memory_review,
+    build_project_memory_status,
+    capture_project_memory_candidate,
     read_memory_snapshot_file,
+    reject_project_memory_candidate,
 )
 from .common import _paths, _print_json
+
+
+def cmd_memory_status(args: argparse.Namespace) -> int:
+    try:
+        payload = build_project_memory_status(_paths(args))
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_memory_capture(args: argparse.Namespace) -> int:
+    try:
+        summary = " ".join(args.summary).strip()
+        content = sys.stdin.read() if args.stdin else str(args.content or "")
+        if not summary:
+            raise ValueError("memory capture requires a summary")
+        payload = capture_project_memory_candidate(
+            _paths(args),
+            summary,
+            content=content,
+            record_type=args.type,
+            scope_kind=args.scope_kind,
+            scope_ref=args.scope_ref,
+            source=args.source,
+            source_ref=args.source_ref,
+            tags=args.tag or [],
+            ttl_days=args.ttl_days,
+            stale_after_days=args.stale_after_days,
+        )
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_memory_review(args: argparse.Namespace) -> int:
+    try:
+        payload = build_project_memory_review(
+            _paths(args),
+            candidate_id=args.candidate,
+            limit=_optional_positive_int(args.limit, "--limit") or 20,
+        )
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_memory_approve(args: argparse.Namespace) -> int:
+    try:
+        payload = approve_project_memory_candidate(_paths(args), args.candidate_id, approved_by=args.approved_by)
+    except FileNotFoundError as exc:
+        raise OmhError(f"memory candidate not found: {args.candidate_id}") from exc
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_memory_reject(args: argparse.Namespace) -> int:
+    try:
+        payload = reject_project_memory_candidate(
+            _paths(args),
+            args.candidate_id,
+            rejected_by=args.rejected_by,
+            reason=args.reason,
+        )
+    except FileNotFoundError as exc:
+        raise OmhError(f"memory candidate not found: {args.candidate_id}") from exc
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
+def cmd_memory_recall(args: argparse.Namespace) -> int:
+    try:
+        query = " ".join(args.query).strip()
+        payload = build_project_memory_recall_pack(
+            _paths(args),
+            query,
+            executor_target=args.executor,
+            session_id=args.session_id,
+            scope_kind=args.scope_kind,
+            scope_ref=args.scope_ref,
+            limit=_optional_positive_int(args.limit, "--limit") or 6,
+            include_stale=args.include_stale,
+        )
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
 
 
 def cmd_memory_inspect(args: argparse.Namespace) -> int:
@@ -95,8 +194,51 @@ def _optional_positive_int(value: int | None, flag: str) -> int | None:
 
 
 def _add_memory_commands(sub) -> None:
-    memory = sub.add_parser("memory", help="Inspect, pack, or apply OMH memory/context review artifacts.")
+    memory = sub.add_parser("memory", help="Capture, review, recall, inspect, or pack OMH project memory/context artifacts.")
     memory_sub = memory.add_subparsers(dest="memory_command", required=True)
+
+    status = memory_sub.add_parser("status", help="Show OMH project-memory policy, store paths, and review counts.")
+    status.set_defaults(func=cmd_memory_status)
+
+    capture = memory_sub.add_parser("capture", help="Capture an OMH project-memory candidate for review.")
+    capture.add_argument("summary", nargs="*", help="Short reviewed-memory summary to capture.")
+    capture.add_argument("--type", choices=("fact", "decision", "lesson", "procedure", "episode"), default="fact", help="Typed memory record category.")
+    capture.add_argument("--content", default="", help="Optional raw source text. It is hashed/length-counted, not persisted raw.")
+    capture.add_argument("--stdin", action="store_true", help="Read optional raw source text from stdin without persisting it raw.")
+    capture.add_argument("--scope-kind", choices=("project", "target", "thread", "run"), default="project")
+    capture.add_argument("--scope-ref", default="default")
+    capture.add_argument("--source", default="cli")
+    capture.add_argument("--source-ref", default="")
+    capture.add_argument("--tag", action="append", default=[])
+    capture.add_argument("--ttl-days", type=int, default=None)
+    capture.add_argument("--stale-after-days", type=int, default=None)
+    capture.set_defaults(func=cmd_memory_capture)
+
+    review = memory_sub.add_parser("review", help="Return review cards for pending OMH project-memory candidates.")
+    review.add_argument("--candidate", default=None, help="Limit review output to one candidate id.")
+    review.add_argument("--limit", type=int, default=20)
+    review.set_defaults(func=cmd_memory_review)
+
+    approve = memory_sub.add_parser("approve", help="Approve a reviewed project-memory candidate.")
+    approve.add_argument("candidate_id")
+    approve.add_argument("--approved-by", default="operator")
+    approve.set_defaults(func=cmd_memory_approve)
+
+    reject = memory_sub.add_parser("reject", help="Reject a project-memory candidate.")
+    reject.add_argument("candidate_id")
+    reject.add_argument("--rejected-by", default="operator")
+    reject.add_argument("--reason", default="")
+    reject.set_defaults(func=cmd_memory_reject)
+
+    recall = memory_sub.add_parser("recall", help="Recall reviewed OMH project memory for a task as prepared context.")
+    recall.add_argument("query", nargs="*", help="Task/query text used for deterministic keyword recall.")
+    recall.add_argument("--executor", default="generic", help="Executor target label to record in the recall pack.")
+    recall.add_argument("--session-id", default="", help="Optional wrapper session id to bind to the recall pack.")
+    recall.add_argument("--scope-kind", choices=("project", "target", "thread", "run"), default=None)
+    recall.add_argument("--scope-ref", default=None)
+    recall.add_argument("--limit", type=int, default=6)
+    recall.add_argument("--include-stale", action="store_true")
+    recall.set_defaults(func=cmd_memory_recall)
 
     inspect = memory_sub.add_parser("inspect")
     inspect.add_argument(

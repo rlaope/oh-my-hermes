@@ -222,6 +222,7 @@ def _work_summary(session: dict[str, Any], runtime_status: dict[str, Any]) -> di
             "coding_team_path": _coding_team_path_summary(_object(handoff.get("hermes_coding_team_path"))),
             "context_pack": _context_pack_summary(_object(handoff.get("context_pack"))),
             "context_pack_blocked": _context_pack_blocked_summary(_object(handoff.get("context_pack_blocked"))),
+            "memory_recall_pack": _memory_recall_pack_summary(_object(handoff.get("memory_recall_pack"))),
         },
         "review": {
             "required": bool(review.get("required", False)),
@@ -487,6 +488,30 @@ def _context_pack_summary(context_pack: dict[str, Any]) -> dict[str, Any]:
         "blocked_by_conflicts_count": len(_list_value(context_pack.get("blocked_by_conflicts"))),
         "redaction_policy": str(context_pack.get("redaction_policy", "")),
         "claim_boundary": str(context_pack.get("claim_boundary", "")),
+    }
+
+
+def _memory_recall_pack_summary(memory_recall_pack: dict[str, Any]) -> dict[str, Any]:
+    if not memory_recall_pack:
+        return {}
+    if "record_count" in memory_recall_pack and "included_records" not in memory_recall_pack:
+        return {
+            "schema_version": str(memory_recall_pack.get("schema_version", "")),
+            "executor_target": str(memory_recall_pack.get("executor_target", "")),
+            "session_id": str(memory_recall_pack.get("session_id", "")),
+            "record_count": int(memory_recall_pack.get("record_count", 0) or 0),
+            "excluded_count": int(memory_recall_pack.get("excluded_count", 0) or 0),
+            "redaction_policy": str(memory_recall_pack.get("redaction_policy", "")),
+            "claim_boundary": str(memory_recall_pack.get("claim_boundary", "")),
+        }
+    return {
+        "schema_version": str(memory_recall_pack.get("schema_version", "")),
+        "executor_target": str(memory_recall_pack.get("executor_target", "")),
+        "session_id": str(memory_recall_pack.get("session_id", "")),
+        "record_count": len(_list_value(memory_recall_pack.get("included_records"))),
+        "excluded_count": len(_list_value(memory_recall_pack.get("excluded_records"))),
+        "redaction_policy": str(memory_recall_pack.get("redaction_policy", "")),
+        "claim_boundary": str(memory_recall_pack.get("claim_boundary", "")),
     }
 
 

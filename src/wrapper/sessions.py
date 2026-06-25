@@ -11,6 +11,7 @@ from ..routing.chat import CONFIDENCE_LEVELS
 from ..executors import CODING_EXECUTOR_TARGETS, executor_selection_for_target
 from .lifecycle import report_codex_delegation_lifecycle, start_codex_delegation_lifecycle
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, read_jsonl_objects, utc_now
+from ..memory import memory_recall_pack_for_handoff
 from ..paths import OmhPaths
 from ..runtime.records import (
     build_event_record,
@@ -349,6 +350,12 @@ def _prepare_prompt_only_session_handoff(
         source_metadata=metadata,
         executor_target=executor_target,
         context_pack=context_pack,
+        memory_recall_pack=memory_recall_pack_for_handoff(
+            paths,
+            message,
+            executor_target=executor_target,
+            session_id=str(session["session_id"]),
+        ),
     )
     prompt_handoff = payload.get("prompt_handoff")
     if not isinstance(prompt_handoff, dict):
@@ -420,6 +427,12 @@ def _prepare_runtime_session_handoff(
         source_metadata=metadata,
         executor_target=executor_target,
         context_pack=context_pack,
+        memory_recall_pack=memory_recall_pack_for_handoff(
+            paths,
+            message,
+            executor_target=executor_target,
+            session_id=str(session["session_id"]),
+        ),
     )
     runtime_handoff = payload.get("runtime_handoff")
     if not isinstance(runtime_handoff, dict):
