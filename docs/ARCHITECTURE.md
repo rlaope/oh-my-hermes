@@ -703,6 +703,16 @@ a `delegated_coding_status/v1` summary. The summary exposes `safe_summary`,
 `overclaim_guard` so chat adapters can report progress without implying Hermes
 implemented the code.
 
+`omh runtime progress bind|observe|status` is the live executor progress
+surface for long Codex or external-coding runs. A wrapper binds a run or wrapper
+session to an executor/process identity, then repeatedly calls `observe` with
+incremental Codex JSONL or process-output snapshots. OMH summarizes the snapshot
+into metadata-only signals, emits a compact `chat_report` only when the stage
+changes, and suppresses duplicate/no-op snapshots through persisted binding
+state. The latest event/report is projected by `progress status`, including
+stale active bindings. These progress artifacts are not result, verification,
+review, CI, merge-readiness, or merge evidence.
+
 Wrappers that want one higher-level lifecycle surface can call
 `omh coding lifecycle start|dispatch|result|verify|report`. These commands are
 thin wrappers over the same runtime files: `coding_delegation.json`,

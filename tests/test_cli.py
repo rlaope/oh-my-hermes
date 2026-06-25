@@ -8466,6 +8466,136 @@ class CliTests(unittest.TestCase):
             self.assertTrue(exported["redacted"])
             self.assertEqual(exported["runs"][0]["wrapper"]["completion_status"], "completed")
 
+    def test_runtime_progress_observe_codex_jsonl_reports_live_transitions_without_duplicates(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "runtime",
+                    "record",
+                    "--skill",
+                    "oh-my-hermes",
+                    "--harness",
+                    "coding-handling",
+                    "--status",
+                    "started",
+                    "--trigger",
+                    "codex live progress",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            run = json.loads(stdout)["run"]
+            codex_log = root / "codex-live.jsonl"
+            codex_log.write_text(
+                "\n".join(
+                    [
+                        json.dumps({"type": "tool_call", "tool": "rg", "args": "rg runtime progress src tests"}),
+                        json.dumps({"type": "reasoning", "analysis": "hidden private reasoning should stay out"}),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "runtime",
+                    "progress",
+                    "bind",
+                    "--run",
+                    run["run_id"],
+                    "--executor-profile",
+                    "codex",
+                    "--process-session-id",
+                    "codex-proc-1",
+                    "--evidence-ref",
+                    "codex-live-jsonl",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["binding"]["executor_profile"], "codex")
+
+            observe_args = [
+                *base,
+                "runtime",
+                "progress",
+                "observe",
+                "--run",
+                run["run_id"],
+                "--codex-log-jsonl",
+                str(codex_log),
+                "--process-status",
+                "running",
+                "--evidence-ref",
+                "codex-live-jsonl",
+            ]
+            status, stdout, stderr = run_cli(observe_args)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            first = json.loads(stdout)
+            self.assertTrue(first["reported"])
+            self.assertEqual(first["reporting_action"], "send_report")
+            self.assertEqual(first["event"]["event_type"], "repo_exploration")
+            self.assertIn("inspecting", first["chat_report"])
+
+            status, stdout, stderr = run_cli(observe_args)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            repeated = json.loads(stdout)
+            self.assertFalse(repeated["reported"])
+            self.assertEqual(repeated["reporting_action"], "suppress")
+            self.assertEqual(repeated["suppressed_reason"], "duplicate_transition")
+
+            codex_log.write_text(
+                "\n".join(
+                    [
+                        json.dumps({"type": "tool_call", "tool": "rg", "args": "rg runtime progress src tests"}),
+                        json.dumps({"type": "tool_call", "tool": "apply_patch", "message": "modified src/omh/coding/executor_progress.py"}),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            status, stdout, stderr = run_cli(observe_args)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            diff = json.loads(stdout)
+            self.assertTrue(diff["reported"])
+            self.assertEqual(diff["event"]["event_type"], "diff_started")
+
+            codex_log.write_text(
+                "\n".join(
+                    [
+                        json.dumps({"type": "tool_call", "command": "PYTHONPATH=tests uv run python -m unittest tests/test_codex_progress.py -v"}),
+                        json.dumps({"role": "assistant", "content": "Tests passed: tests/test_codex_progress.py."}),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            status, stdout, stderr = run_cli(observe_args)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            tests = json.loads(stdout)
+            self.assertTrue(tests["reported"])
+            self.assertIn(tests["event"]["event_type"], {"tests_started", "tests_passed"})
+
+            status, stdout, stderr = run_cli(base + ["runtime", "progress", "status"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            progress_status = json.loads(stdout)
+            latest = progress_status["latest_progress_events"][0]
+            self.assertEqual(latest["event_type"], tests["event"]["event_type"])
+            self.assertIn("latest_report", progress_status["active_executors"][0])
+            rendered = json.dumps(progress_status) + json.dumps(tests)
+            self.assertNotIn("hidden private reasoning", rendered)
+            self.assertNotIn("analysis", rendered)
+
     def test_runtime_progress_observe_reports_malformed_binding_without_traceback(self) -> None:
         with TemporaryDirectory() as tmp:
             omh_home = Path(tmp) / ".omh"

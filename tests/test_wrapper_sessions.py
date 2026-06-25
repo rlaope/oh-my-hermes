@@ -813,7 +813,7 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(opened_status["codex_progress"]["event_count"], 2)
             self.assertIn("Codex is inspecting files/tests.", opened_status["codex_progress"]["observable_activity"])
             self.assertEqual(opened_status["executor_progress"]["binding_id"], f"wrapper_session:{session_id}:codex")
-            self.assertEqual(opened_status["executor_progress"]["latest_event"]["event_type"], "tests_started")
+            self.assertEqual(opened_status["executor_progress"]["latest_event"]["event_type"], "repo_exploration")
             self.assertIn("not result", opened_status["executor_progress"]["claim_boundary"])
             self.assertIn("codex-session: observed(codex-session-1)", opened_status["status_lines"])
             self.assertIn("Observed Codex metadata: session codex-session-1, thread codex-thread-1", "\n".join(opened_status["display_status_lines"]))

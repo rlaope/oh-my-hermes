@@ -488,8 +488,10 @@ def _progress_context(progress: dict[str, object]) -> dict[str, object]:
 
 def _terminal_success_observed(text: str) -> bool:
     for match in _TERMINAL_SUCCESS_RE.finditer(text):
-        prefix = text[max(0, match.start() - 24) : match.start()]
+        prefix = text[max(0, match.start() - 80) : match.start()]
         if re.search(r"\b(no|not|never|without|pending|awaiting)\b", prefix):
+            continue
+        if re.search(r"\b(will|would|should|could|may|might|planning to|going to|about to)\b", prefix):
             continue
         return True
     return False
@@ -632,11 +634,20 @@ def _is_inspection_event(text: str) -> bool:
 
 
 def _is_edit_event(text: str) -> bool:
+    if re.search(r"\bbefore\s+(?:editing|edit|writing|changing|patching)\b", text):
+        return False
+    if re.search(r"\b(?:will|going to|planning to|about to)\s+(?:edit|write|change|patch|modify)\b", text):
+        return False
     return any(token in text for token in ("apply_patch", "patch", "write", "edit", "modified", "changed file", "diff"))
 
 
 def _is_test_event(text: str) -> bool:
-    return any(token in text for token in ("test", "pytest", "unittest", "compileall", "npm test", "cargo test", "go test", "uv run"))
+    if any(token in text for token in ("pytest", "unittest", "compileall", "npm test", "cargo test", "go test", "uv run")):
+        return True
+    return bool(
+        re.search(r"\btests?\s+(?:started|running|passed|failed|pass|fail)\b", text)
+        or re.search(r"\b(?:run|running|ran)\s+tests?\b", text)
+    )
 
 
 def _is_waiting_review_event(text: str) -> bool:
