@@ -3057,8 +3057,8 @@ h1 {
 
 .architecture-blog-section h2,
 .architecture-article-section h2 {
-  margin: 0 0 14px;
-  font-size: clamp(28px, 4vw, 46px);
+  margin: 0 0 24px;
+  font-size: clamp(26px, 3.3vw, 42px);
   line-height: 1;
   letter-spacing: 0;
 }
@@ -3067,7 +3067,7 @@ h1 {
 .architecture-article-section p {
   margin: 0 0 16px;
   color: var(--muted);
-  font-size: clamp(17px, 1.55vw, 20px);
+  font-size: clamp(15.5px, 1.34vw, 18.5px);
   line-height: 1.74;
 }
 
@@ -3077,9 +3077,9 @@ h1 {
 }
 
 .architecture-longform h2 {
-  margin: 0 0 16px;
+  margin: 0 0 30px;
   color: var(--ink);
-  font-size: clamp(30px, 4vw, 48px);
+  font-size: clamp(27px, 3.35vw, 42px);
   line-height: 1.05;
   letter-spacing: 0;
 }
@@ -3089,7 +3089,7 @@ h1 {
 }
 
 .article-section-label {
-  margin: 58px 0 10px;
+  margin: 72px 0 12px;
   color: var(--accent-strong);
   font-size: 13px;
   font-weight: 900;
@@ -3101,8 +3101,8 @@ h1 {
 .architecture-longform p {
   margin: 0 0 22px;
   color: rgba(36, 51, 66, 0.86);
-  font-size: clamp(18px, 1.65vw, 21px);
-  line-height: 1.82;
+  font-size: clamp(16px, 1.38vw, 19px);
+  line-height: 1.78;
 }
 
 .architecture-longform code {
