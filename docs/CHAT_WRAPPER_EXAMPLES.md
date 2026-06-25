@@ -24,6 +24,7 @@ uv run python -m omh.cli chat native-command --source discord
 uv run python -m omh.cli chat native-command --source slack
 uv run python -m omh.cli chat native-command --source telegram
 uv run python -m omh.cli demo orchestration
+uv run python -m omh.cli demo orchestration --executor hermes
 ```
 
 The first command renders the fixture event in
@@ -33,6 +34,13 @@ the full deterministic path:
 ```text
 recommend -> chat response -> Hermes plan -> selected executor/runtime handoff -> status card
 ```
+
+By default `omh demo orchestration` leaves the coding owner unselected and shows
+the `choose_executor` state. Add `--executor codex`, `--executor claude-code`,
+or `--executor hermes` when the demo should show the selected Codex lifecycle,
+Claude Code prompt handoff, or Hermes runtime handoff path. In every case the
+status card remains prepared-only until separate dispatch or runtime evidence
+is observed.
 
 ## Messenger-Native OMH Entry
 

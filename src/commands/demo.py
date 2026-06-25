@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..demo import DEFAULT_ORCHESTRATION_MESSAGE, build_orchestration_demo
 from ..grounded_score import build_grounded_score_demo
 from ..ingress import CHAT_SOURCES
@@ -12,7 +13,14 @@ from .common import _print_json
 def cmd_demo_orchestration(args: argparse.Namespace) -> int:
     message = " ".join(args.message).strip() or DEFAULT_ORCHESTRATION_MESSAGE
     try:
-        _print_json(build_orchestration_demo(message, source=args.source, limit=args.limit))
+        _print_json(
+            build_orchestration_demo(
+                message,
+                source=args.source,
+                limit=args.limit,
+                executor_target=args.executor,
+            )
+        )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     return 0
@@ -38,6 +46,12 @@ def _add_demo_commands(sub) -> None:
     )
     orchestration.add_argument("--source", choices=CHAT_SOURCES, default="discord")
     orchestration.add_argument("--limit", type=int, default=3)
+    orchestration.add_argument(
+        "--executor",
+        choices=CODING_EXECUTOR_TARGETS,
+        default="choose",
+        help="Executor/runtime profile to demonstrate. Defaults to an explicit choice-required handoff.",
+    )
     orchestration.set_defaults(func=cmd_demo_orchestration)
 
     grounded_score = demo_sub.add_parser("grounded-score")

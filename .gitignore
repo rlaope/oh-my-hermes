@@ -22,10 +22,11 @@ dist/
 *.egg-info/
 *.whl
 
-# Local Hermes artifacts
+# Local agent/runtime artifacts
 .hermes/
 .omh/
 .omc/
+.loop/
 
 # Local resolver artifacts
 uv.lock

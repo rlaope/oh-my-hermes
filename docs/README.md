@@ -28,7 +28,7 @@ repo-local contract for Codex agents working here.
 | See task cards and Discord-style wrapper responses | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
 | Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
 | Install Hermes-native skills or bootstrap managed skills | [Installation](INSTALLATION.md) |
-| Run deterministic backend demos | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md#commands-used) and [fixture shims](../examples) |
+| Run deterministic backend demos, including executor-choice and selected runtime handoff status | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md#commands-used) and [fixture shims](../examples) |
 | See the G1-G10 implemented feature surfaces and demo cards | [Application Cases](APPLICATION_CASES.md) |
 | Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
 | Prepare or verify a release | [Release](RELEASE.md) |

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from ..coding_delegation import CODING_EXECUTOR_TARGETS
+from ..executors import executor_label
 from ..harness_quality import build_harness_progress
 from ..hermes_planning import build_hermes_plan_payload
 from ..ingress import CHAT_SOURCES
@@ -19,6 +21,7 @@ def build_orchestration_demo(
     *,
     source: str = "discord",
     limit: int = 3,
+    executor_target: str = "choose",
 ) -> dict[str, object]:
     task = message.strip()
     if not task:
@@ -27,11 +30,13 @@ def build_orchestration_demo(
         raise ValueError(f"unsupported demo source: {source}")
     if limit < 1:
         raise ValueError("demo orchestration --limit must be at least 1")
+    if executor_target not in CODING_EXECUTOR_TARGETS:
+        raise ValueError(f"unsupported demo orchestration executor: {executor_target}")
 
     recommendations = recommend_skills(task, limit=limit)
     chat = build_chat_interaction_payload(task, source=source, limit=limit)
     plan = build_hermes_plan_payload(task, source=source, limit=limit)
-    handoff = build_chat_interaction_payload(task, source=source, mode="delegate", limit=limit, executor_target="codex")
+    handoff = build_chat_interaction_payload(task, source=source, mode="delegate", limit=limit, executor_target=executor_target)
     status_payload = _prepared_status_from_handoff(handoff, source=source)
     status = build_chat_status_interaction(status_payload, source=source)
 
@@ -39,10 +44,11 @@ def build_orchestration_demo(
         "schema_version": ORCHESTRATION_DEMO_SCHEMA_VERSION,
         "scenario": "recommend_chat_plan_handoff_status",
         "source": source,
+        "executor_target": executor_target,
         "message_sha256": hashlib.sha256(task.encode("utf-8")).hexdigest(),
         "message_length": len(task),
         "redaction_policy": "metadata_only",
-        "summary": "Deterministic local Hermes chat orchestration demo with routing, planning, handoff, and status contracts.",
+        "summary": _demo_summary(executor_target),
         "steps": [
             {
                 "id": "recommend",
@@ -112,22 +118,42 @@ def _prepared_status_from_handoff(handoff: dict[str, object], *, source: str) ->
     delegation_payload = _nested(handoff, "delegation")
     delegation = _nested(delegation_payload, "delegation")
     executor_handoff = _nested(delegation_payload, "executor_handoff")
+    runtime_handoff = _nested(delegation_payload, "runtime_handoff")
+    prompt_handoff = _nested(delegation_payload, "prompt_handoff")
+    selected_handoff = executor_handoff or runtime_handoff or prompt_handoff
+    selected_executor = str(
+        selected_handoff.get("selected_executor_profile")
+        or selected_handoff.get("executor_target")
+        or delegation_payload.get("selected_executor_profile")
+        or _nested(handoff, "executor_resolution").get("resolved_executor_target")
+        or "choose"
+    )
+    choice_required = bool(_nested(delegation_payload, "executor_selection").get("choice_required", False))
     harness_quality = _nested(delegation_payload, "harness_quality")
     ladder = [str(step) for step in harness_quality.get("evidence_ladder", []) if isinstance(step, str)]
     progress = build_harness_progress(harness_quality, {ladder[0]: "complete"} if ladder else {})
     review_required = bool(delegation.get("review_required", False))
     review_status = "not_observed" if review_required else "not_required"
+    next_action = _status_next_action_from_handoff(
+        handoff,
+        selected_handoff=bool(selected_handoff),
+        choice_required=choice_required,
+    )
     return {
         "schema_version": "delegated_coding_status/v1",
-        "run_id": "demo-prepared-codex-handoff",
+        "run_id": _demo_run_id(selected_executor),
         "source": source,
         "source_metadata": {},
         "prepared": {
-            "available": bool(executor_handoff),
-            "handoff_available": bool(executor_handoff),
-            "executor_target": executor_handoff.get("executor_target", "codex") if executor_handoff else "codex",
-            "handoff_schema_version": executor_handoff.get("schema_version", "") if executor_handoff else "",
-            "status": executor_handoff.get("status", "prepared_not_observed") if executor_handoff else "not_available",
+            "available": bool(selected_handoff),
+            "handoff_available": bool(selected_handoff),
+            "choice_required": choice_required,
+            "executor_target": selected_executor,
+            "selected_executor_profile": selected_handoff.get("selected_executor_profile", selected_executor)
+            if selected_handoff
+            else "",
+            "handoff_schema_version": selected_handoff.get("schema_version", "") if selected_handoff else "",
+            "status": selected_handoff.get("status", "prepared_not_observed") if selected_handoff else "not_available",
             "action": delegation.get("action", "fallback"),
             "workflow": delegation.get("recommended_workflow", "oh-my-hermes"),
             "harness": delegation.get("recommended_harness", "coding-handling"),
@@ -154,14 +180,62 @@ def _prepared_status_from_handoff(handoff: dict[str, object], *, source: str) ->
         "harness_quality": harness_quality,
         "harness_progress": progress,
         "integrity": {"ok": True, "warnings": []},
-        "next_action": "dispatch_to_executor" if executor_handoff else "route_coding_request",
-        "safe_summary": "A selected executor/runtime handoff is prepared, but wrapper dispatch is not observed yet.",
+        "next_action": next_action,
+        "safe_summary": _safe_status_summary(
+            selected_executor,
+            selected_handoff=bool(selected_handoff),
+            choice_required=choice_required,
+        ),
         "overclaim_guard": [
             "Prepared coding delegation is not execution evidence.",
             "Hermes should not claim it implemented code from this demo artifact.",
             "Review, verification, CI, and merge status require separate observed evidence.",
         ],
     }
+
+
+def _demo_summary(executor_target: str) -> str:
+    if executor_target == "choose":
+        return (
+            "Deterministic local Hermes chat orchestration demo with routing, planning, executor choice, "
+            "handoff, and status contracts."
+        )
+    return (
+        "Deterministic local Hermes chat orchestration demo with routing, planning, selected executor/runtime "
+        f"handoff for {executor_label(executor_target)}, and status contracts."
+    )
+
+
+def _demo_run_id(executor_target: str) -> str:
+    normalized = executor_target.strip() or "choose"
+    if normalized == "choose":
+        return "demo-prepared-executor-choice"
+    return f"demo-prepared-{normalized}-handoff"
+
+
+def _status_next_action_from_handoff(
+    handoff: dict[str, object],
+    *,
+    selected_handoff: bool,
+    choice_required: bool,
+) -> str:
+    if choice_required:
+        return "choose_executor"
+    chat_next_action = str(handoff.get("next_action", ""))
+    if chat_next_action == "send_to_executor":
+        return "dispatch_to_executor"
+    if chat_next_action in {"show_prompt_handoff", "show_runtime_handoff"}:
+        return chat_next_action
+    return "dispatch_to_executor" if selected_handoff else "route_coding_request"
+
+
+def _safe_status_summary(executor_target: str, *, selected_handoff: bool, choice_required: bool) -> str:
+    if choice_required:
+        return "A coding handoff path is not selected yet; no executor/runtime dispatch is observed."
+    if selected_handoff:
+        label = executor_label(executor_target)
+        return f"A {label} handoff is prepared, but wrapper dispatch or runtime start is not observed yet."
+    return "No coding executor/runtime handoff is prepared or observed yet."
 
 
 def _public_recommendation(item: dict[str, object]) -> dict[str, object]:
