@@ -17,6 +17,14 @@ default in product language, docs, schemas, prompts, or reports when Claude
 Code, Hermes runtime/handoff paths, or generic executor profiles are also valid
 owners.
 
+When developing OMH itself, treat Codex, Claude Code, and Hermes
+runtime/handoff paths as first-class product surfaces. User-facing runtime
+selection may choose one coding owner for a task, but OMH feature design,
+contracts, docs, setup, memory recall, and status/reporting changes should
+consider all three surfaces unless a change is explicitly scoped to one
+executor. If support differs, document the difference as a capability boundary
+instead of silently optimizing for Codex.
+
 Do not turn OMH into a hidden Hermes runtime patch, transport bot, network
 service, LLM router, or secret coding executor.
 
