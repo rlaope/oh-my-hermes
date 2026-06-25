@@ -120,7 +120,7 @@ separate profile pack is explicitly selected.
   record optional routing and narration defaults only.
 - Coding-heavy requests should be described as delegated work unless there is
   observed evidence that a coding executor actually ran.
-- Generated workflow docs should come from `src/skills/catalog.py`; update the
+- Generated workflow docs should come from `src/omh/skills/catalog.py`; update the
   catalog before refreshing generated references.
 - Harness quality gates should stay machine-readable through
   `harness_quality/v1` instead of being prose-only wrapper behavior.

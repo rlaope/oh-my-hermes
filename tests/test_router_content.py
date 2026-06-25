@@ -956,7 +956,7 @@ class RouterContentTests(unittest.TestCase):
         reference = Path("docs/WORKFLOWS.md").read_text(encoding="utf-8")
 
         self.assertEqual(reference, workflow_reference_markdown())
-        self.assertIn("This file is generated from `src/skills/catalog.py`", reference)
+        self.assertIn("This file is generated from `src/omh/skills/catalog.py`", reference)
         self.assertIn("omh_target_topology/v1", reference)
         self.assertIn("Exposure is the install contract", reference)
         self.assertIn("router-only, harness-only, and agent-context surfaces stay routable references", reference)

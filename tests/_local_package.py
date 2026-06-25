@@ -10,7 +10,7 @@ def load_local_package() -> None:
     if "omh" in sys.modules:
         return
 
-    package_dir = Path(__file__).resolve().parents[1] / "src"
+    package_dir = Path(__file__).resolve().parents[1] / "src" / "omh"
     module = ModuleType("omh")
     module.__file__ = str(package_dir)
     module.__package__ = "omh"

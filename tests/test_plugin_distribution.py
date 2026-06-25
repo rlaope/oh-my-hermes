@@ -58,9 +58,11 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertTrue(root.joinpath("config.yaml").is_file())
         self.assertTrue(root.joinpath("references", "role-planner.md").is_file())
         pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-        packages = set(pyproject["tool"]["setuptools"]["packages"])
-        self.assertIn("omh.plugin_bundle.omh", packages)
-        self.assertIn("omh.plugin_bundle.omh.references", packages)
+        package_find = pyproject["tool"]["setuptools"]["packages"]["find"]
+        self.assertEqual(package_find["where"], ["src"])
+        self.assertEqual(package_find["include"], ["omh*"])
+        self.assertTrue((Path("src") / "omh" / "plugin_bundle" / "omh" / "__init__.py").is_file())
+        self.assertTrue((Path("src") / "omh" / "plugin_bundle" / "omh" / "references" / "__init__.py").is_file())
         self.assertIn("omh.plugin_bundle.omh", pyproject["tool"]["setuptools"]["package-data"])
         self.assertIn(
             "*.md",
@@ -287,7 +289,7 @@ class PluginDistributionTests(unittest.TestCase):
                     "--record",
                     "--executor",
                     "codex",
-                    "implement safe status feature in src/runtime/status.py without overclaiming",
+                    "implement safe status feature in src/omh/runtime/status.py without overclaiming",
                 ]
             )
             self.assertEqual(status, 0)

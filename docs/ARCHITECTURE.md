@@ -68,133 +68,114 @@ Chat user
 
 ```text
 src/
-  cli/                       # compatibility package to commands/main.py
-  chat_router/               # compatibility package to routing/chat.py
-  recommend/                 # compatibility package to routing/recommend.py
+  omh/
+    __init__.py
+    cli/                     # module entry point package for omh.cli and python -m omh.cli
+    chat_router.py           # compatibility facade to routing/chat.py
+    recommend.py             # compatibility facade to routing/recommend.py
+    coding_delegation.py     # compatibility facade to coding/coding_delegation.py
+    runtime_artifacts.py     # compatibility facade to runtime/artifacts.py
+    wrapper_contract.py      # compatibility facade to wrapper/contract.py
 
-  commands/
-    main.py                  # parser assembly and top-level error handling
-    chat.py
-    coding.py
-    common.py
-    demo.py
-    docs.py
-    hermes.py
-    playbook.py
-    runtime.py
-    setup.py
-    state.py
+    commands/
+      main.py                # parser assembly and top-level error handling
+      chat.py
+      coding.py
+      runtime.py
+      setup.py
 
-  routing/
-    chat.py
-    intent.py
-    localization.py
-    policy.py
-    recommend.py
-    task_cards.py
+    routing/
+      chat.py
+      intent.py
+      localization.py
+      policy.py
+      recommend.py
+      route_plan.py
+      task_cards.py
 
-  workflows/
-    materials.py
-    operations.py
-    paper_learning.py
-    source_finder.py
-    visual_summary.py
-    research_department.py
-    hermes_ops.py
-    goal_loop.py
-    memory.py
-    workflow_learning.py
-    use_cases.py
+    workflows/
+      materials.py
+      operations.py
+      paper_learning.py
+      research_department.py
+      source_finder.py
+      visual_summary.py
+      workflow_learning.py
 
-  coding/
-    coding_contracts.py
-    coding_delegation.py
-    codex_progress.py
-    executor_progress.py
-    executor_readiness.py
-    executors.py
-    isolation.py
-    team_readiness.py
-    worktree_creator.py
+    coding/
+      coding_contracts.py
+      coding_delegation.py
+      codex_progress.py
+      executor_progress.py
+      executor_readiness.py
+      executors.py
+      isolation.py
+      team_readiness.py
+      worktree_creator.py
 
-  install/
-    command_path.py
-    config_adapter.py
-    installer.py
-    manifest.py
-    plugin_pack.py
-    plugin_observations.py
-    release_install_smoke.py
-    release_smoke_core.py
+    install/
+      command_path.py
+      config_adapter.py
+      installer.py
+      manifest.py
+      plugin_pack.py
+      plugin_observations.py
 
-  maintenance/
-    doctor.py
-    probe.py
-    release.py
+    maintenance/
+      doctor.py
+      probe.py
+      release.py
 
-  mcp/
-    bridge.py
+    mcp/
+      bridge.py
 
-  quality/
-    capability_roadmap.py
-    grounded_score.py
-    harness_quality.py
-    parity.py
+    quality/
+      capability_roadmap.py
+      grounded_score.py
+      harness_quality.py
+      parity.py
 
-  surfaces/
-    context.py
-    demo.py
-    hud.py
-    menubar_app.py
-    menubar_status.py
-    quickstart.py
+    surfaces/
+      context.py
+      demo.py
+      hud.py
+      menubar_app.py
+      menubar_status.py
+      quickstart.py
 
-  system/
-    hashutil.py
-    ingress.py
-    local_store.py
-    paths.py
-    targets.py
-    workflow_state.py
+    system/
+      hashutil.py
+      ingress.py
+      local_store.py
+      paths.py
+      targets.py
+      workflow_state.py
 
-  playbooks/                 # compatibility package to catalogs/playbooks.py
-  catalogs/
-    playbooks.py
-    roles.py
-  roles/                     # compatibility package to catalogs/roles.py
-  runtime_artifacts/         # compatibility package to runtime/artifacts.py
-  runtime_records/           # compatibility package to runtime/records.py
-  runtime/
-    artifacts.py
-    records.py
-  setup_profiles/            # compatibility package to profiles/setup.py
-  team_profiles/             # compatibility package to profiles/team.py
-  profiles/
-    setup.py
-    team.py
-  wrapper_contract/          # compatibility package to wrapper/contract.py
-  wrapper_sessions/          # compatibility package to wrapper/sessions.py
-  wrapper/
-    contract.py
-    executor_sessions.py
-    hermes_runtime.py
-    lifecycle.py
-    native_commands.py
-    route_hints.py
-    sessions.py
-    worktree_binding.py
-  core/
-  skills/
-    catalog.py
-    packaging.py
-    render.py
-  plugin_bundle/
-    omh/
-      plugin.yaml
-      config.yaml
-      __init__.py
-      hooks/
-      tools/
+    catalogs/
+      playbooks.py
+      roles.py
+    profiles/
+      setup.py
+      team.py
+    runtime/
+      artifacts.py
+      records.py
+    wrapper/
+      contract.py
+      executor_sessions.py
+      lifecycle.py
+      sessions.py
+    core/
+    skills/
+      catalog.py
+      packaging.py
+      render.py
+    plugin_bundle/
+      omh/
+        plugin.yaml
+        config.yaml
+        hooks/
+        tools/
 skills/
   <skill-name>/SKILL.md       # tap-compatible Hermes skill pack generated from the same catalog
 ```
@@ -622,8 +603,8 @@ specialist lane result, the recorded result stays `not_observed` or
 
 When a harness is added, removed, or renamed, update these surfaces together:
 
-- `src/skills/catalog.py`
-- `src/skills/render.py`
+- `src/omh/skills/catalog.py`
+- `src/omh/skills/render.py`
 - `docs/APPLICATION_CASES.md`
 - `tests/test_router_content.py`
 
