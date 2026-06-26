@@ -89,21 +89,30 @@ with these 10 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
 
 - **Deep Interview** (`deep-interview`) - clarify the one missing decision
   before planning.
+
 - **Ralplan** (`ralplan`) - turn facts, sources, risks, acceptance criteria,
   and verification commands into a reviewed plan.
+
 - **Ultragoal** (`ultragoal`) - give ambitious work durable checkpoints and
   completion gates.
+
 - **Ultra Process** (`ultraprocess`) - run one delivery cycle from research to
   plan, implementation path, review, and docs/status sync.
-- **Loop Engineering** (`loop`) - iterate when the correct next implementation
+
+- **Loop** (`loop`) - iterate when the correct next implementation
   must be discovered through bounded cycles.
+
 - **Web Research** (`web-research`) - keep current research source-backed.
+
 - **Paper Learning** (`paper-learning`) - explain a supplied paper or paper PDF
   by level while preserving section coverage.
+
 - **Source Finder** (`source-finder`) - prepare typed source candidates before
   research or synthesis starts.
+
 - **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for the
   selected runtime without claiming unobserved execution.
+
 - **Workflow Learning** (`workflow-learning`) - turn weak workflow attempts into
   traces, evals, review queues, regression cases, and patch proposals.
 
