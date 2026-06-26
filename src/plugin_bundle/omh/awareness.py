@@ -4,6 +4,50 @@ import hashlib
 import re
 import unicodedata
 
+_DIAGNOSTIC_STATUS_MARKERS = (
+    "[omh awareness]",
+    "[omh route hint]",
+    "[omh]",
+    "evidence boundary",
+    "not_executed=",
+    "latest_runtime_run",
+    "latest runtime run",
+    "execution_observed",
+    "review_observed",
+    "ci_observed",
+    "merge_observed",
+    "prepared_not_observed",
+)
+_OMH_DIAGNOSTIC_EVALUATION_CUES = (
+    "usage evaluation",
+    "usability evaluation",
+    "usage analysis",
+    "analyze the run",
+    "analyze this run",
+    "router improvement",
+    "router hardening",
+    "route improvement",
+    "evaluate omh",
+    "why omh",
+    "사용성 평가",
+    "사용성평가",
+    "관여",
+    "부족",
+    "안쓴이유",
+    "안 쓴 이유",
+    "덜 썼",
+    "덜썼",
+    "작업한거 분석",
+    "작업한 거 분석",
+    "분석",
+    "평가",
+    "라우터 강화",
+    "라우터강화",
+    "라우터 개선",
+    "플랜으로 잡",
+    "반복해서 강화",
+)
+
 try:  # Keep installed plugin bundles usable even when the full package is absent.
     from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_omh_quality_intent, classify_workflow_intent
 except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
@@ -75,6 +119,23 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 matches.append(cue)
         return tuple(matches)
 
+    def _fallback_diagnostic_status_context(text: str) -> bool:
+        return any(marker in text for marker in _DIAGNOSTIC_STATUS_MARKERS)
+
+    def _fallback_diagnostic_omh_evaluation_context(text: str, compact: str) -> bool:
+        if not _fallback_diagnostic_status_context(text):
+            return False
+        has_omh_subject = bool(re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", text)) or "[omh" in text
+        if not has_omh_subject:
+            return False
+        return bool(
+            _fallback_matched_omh_quality_cues(
+                _OMH_DIAGNOSTIC_EVALUATION_CUES,
+                text,
+                compact,
+            )
+        )
+
     def classify_omh_quality_intent(message: str) -> _FallbackOmhQualityIntent:
         text = unicodedata.normalize("NFKC", message).casefold()
         compact = text.replace(" ", "")
@@ -116,12 +177,15 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 "fixes",
                 "fixing",
                 "harden",
+                "strengthen",
                 "audit",
                 "find and fix",
                 "개선",
+                "개선해",
                 "고쳐",
                 "찾아",
                 "점검",
+                "강화",
             ),
             text,
             compact,
@@ -132,12 +196,15 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 "bugs",
                 "failure",
                 "loss",
+                "missing",
                 "regression",
                 "reliability",
                 "quality",
                 "버그",
                 "유사버그",
+                "실패",
                 "손실",
+                "누락",
                 "신뢰성",
                 "품질",
             ),
@@ -145,7 +212,7 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             compact,
         )
         loop_cues = _fallback_matched_omh_quality_cues(
-            ("loop", "continuous", "keep", "keeps", "keeping", "루프", "계속"),
+            ("loop", "continuous", "keep", "keeps", "keeping", "루프", "계속", "반복"),
             text,
             compact,
         )
@@ -170,6 +237,8 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
 
     def classify_workflow_intent(message: str) -> _FallbackWorkflowIntent:
         text = unicodedata.normalize("NFKC", message).casefold()
+        compact = text.replace(" ", "")
+        diagnostic_evaluation = _fallback_diagnostic_omh_evaluation_context(text, compact)
         delivery_workflows = {
             "ultraprocess",
             "ralplan",
@@ -196,10 +265,45 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 runtime_terms.append(label)
         meta_cues = tuple(
             cue
-            for cue in ("test", "developer", "operator", "vocabulary", "route hint", "hud", "log", "trigger", "테스트", "개발자", "용어", "로그", "트리거", "오해")
+            for cue in (
+                "test",
+                "developer",
+                "operator",
+                "vocabulary",
+                "route hint",
+                "hud",
+                "log",
+                "trigger",
+                "테스트",
+                "개발자",
+                "용어",
+                "로그",
+                "트리거",
+                "오해",
+                "분석",
+                "평가",
+                "라우터",
+            )
             if cue in text
         )
-        feedback_cues = tuple(cue for cue in ("why", "wrong route", "missed route", "왜", "잘못", "오해", "누락") if cue in text)
+        feedback_cues = tuple(
+            cue
+            for cue in (
+                "why",
+                "wrong route",
+                "missed route",
+                "왜",
+                "잘못",
+                "오해",
+                "누락",
+                "관여",
+                "부족",
+                "사용성 평가",
+                "안쓴이유",
+                "안 쓴 이유",
+            )
+            if cue in text
+        )
         missing = tuple(cue for cue in ("no requirements", "missing requirements", "요구사항은 없어", "요구사항 없음") if cue in text)
         negated_execution = tuple(
             cue
@@ -219,7 +323,7 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
         workflow_or_specific_runtime = bool(mentioned_workflows or specific_runtime_reference)
         if execution:
             intent_class = "delivery_intent"
-        elif missing or (feedback_cues and (routing_context or workflow_or_specific_runtime)):
+        elif diagnostic_evaluation or missing or (feedback_cues and (routing_context or workflow_or_specific_runtime)):
             intent_class = "feedback_signal"
         elif meta_cues and (routing_context or workflow_or_specific_runtime):
             intent_class = "meta_discussion"
@@ -747,11 +851,15 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
     hint_limit = max(max_hints, 0)
     intent = classify_workflow_intent(message)
     omh_quality_intent = classify_omh_quality_intent(message)
+    diagnostic_learning_first = _prefers_diagnostic_workflow_learning_hint(message, intent)
     hints: list[dict[str, object]] = []
     if normalized.strip() and hint_limit:
-        if omh_quality_intent.applies:
+        if omh_quality_intent.applies and not diagnostic_learning_first:
             hints.append(_omh_quality_improvement_hint(omh_quality_intent))
-        if len(hints) < hint_limit and _prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies:
+        if len(hints) < hint_limit and (
+            diagnostic_learning_first
+            or (_prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies)
+        ):
             hints.append(_workflow_vocabulary_reference_hint(intent))
         for rule in _ROUTE_HINT_RULES:
             if len(hints) >= hint_limit:
@@ -1216,6 +1324,47 @@ def _prefers_workflow_learning_hint(intent: object) -> bool:
             or bool(getattr(intent, "routing_context", False))
         )
     )
+
+
+def _prefers_diagnostic_workflow_learning_hint(message: str, intent: object) -> bool:
+    if bool(getattr(intent, "explicit_execution", False)):
+        return False
+    text = unicodedata.normalize("NFKC", message).casefold()
+    compact = text.replace(" ", "")
+    if not _diagnostic_status_context(text):
+        return False
+    if not (re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", text) or "[omh" in text):
+        return False
+    return bool(
+        _matched_text_cues(
+            _OMH_DIAGNOSTIC_EVALUATION_CUES,
+            text,
+            compact,
+        )
+    )
+
+
+def _diagnostic_status_context(text: str) -> bool:
+    return any(marker in text for marker in _DIAGNOSTIC_STATUS_MARKERS)
+
+
+def _matched_text_cues(cues: tuple[str, ...], text: str, compact: str) -> tuple[str, ...]:
+    matches: list[str] = []
+    for cue in cues:
+        normalized_cue = unicodedata.normalize("NFKC", cue).casefold()
+        if not normalized_cue:
+            continue
+        if any(ord(char) > 127 for char in normalized_cue):
+            if normalized_cue in text or normalized_cue.replace(" ", "") in compact:
+                matches.append(cue)
+            continue
+        parts = re.findall(r"[a-z0-9]+", normalized_cue)
+        if not parts:
+            continue
+        pattern = r"(?<![a-z0-9])" + r"[\s_-]+".join(re.escape(part) for part in parts) + r"(?![a-z0-9])"
+        if re.search(pattern, text):
+            matches.append(cue)
+    return tuple(matches)
 
 
 def _omh_quality_improvement_hint(intent: object) -> dict[str, object]:

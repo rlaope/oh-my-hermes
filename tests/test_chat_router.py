@@ -17,6 +17,26 @@ from omh.routing.intent import classify_workflow_intent
 from omh.skills.catalog import primary_harness_for_skill
 
 
+def sionic_omh_usage_evaluation_prompt() -> str:
+    return """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
+
+[OMH Awareness]
+status=prepared_not_observed; Evidence boundary: pasted status is diagnostic evidence.
+[OMH Route Hint]
+intent=delivery_intent; selected=ultraprocess; confidence=medium.
+mentioned_workflows=ultraprocess.
+not_executed=Codex.
+[omh]
+selected_workflow=ultraprocess
+latest_runtime_run=not_executed=Codex
+execution_observed=false
+review_observed=false
+ci_observed=false
+merge_observed=false
+"""
+
+
 class ChatRouterTests(unittest.TestCase):
     def test_high_confidence_chat_dispatches_to_workflow(self) -> None:
         decision = route_chat_message("risky refactor", source="discord")
@@ -433,6 +453,32 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(task_card["task_type"], "router_design_feedback")
                 self.assertFalse(decision["explicit"])
                 self.assertNotEqual(decision["selected_skill"], "ultraprocess")
+
+    def test_pasted_omh_awareness_evaluation_routes_learning_before_delivery(self) -> None:
+        message = sionic_omh_usage_evaluation_prompt()
+
+        decision = route_chat_message(message, source="discord", limit=8)
+        task_card = decision["task_card"]
+        intent = classify_workflow_intent(message)
+        route_plan = public_route_payload(decision)["workflow_route_plan"]
+        stages = [step["stage"] for step in route_plan["steps"]]
+        skills = [step["skill"] for step in route_plan["steps"]]
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "workflow-learning")
+        self.assertEqual(decision["selected_harness"], "workflow-learning")
+        self.assertEqual(task_card["task_type"], "router_design_feedback")
+        self.assertIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+        self.assertIn(intent.intent_class, {"feedback_signal", "meta_discussion"})
+        self.assertFalse(intent.explicit_execution)
+        self.assertIn("diagnostic_status_context", intent.structural_cues)
+        self.assertIn("ultraprocess", intent.not_executed)
+        self.assertIn("Codex", intent.not_executed)
+        self.assertIn("learn", stages)
+        self.assertIn("deliver", stages)
+        self.assertLess(stages.index("learn"), stages.index("deliver"))
+        self.assertLess(skills.index("workflow-learning"), skills.index("ultraprocess"))
+        self.assertTrue(all(step["status"] == "prepared_not_observed" for step in route_plan["steps"]))
 
     def test_workflow_intent_prefers_structural_cues_over_language_tables(self) -> None:
         intent = classify_workflow_intent("OMH route: `$ultraprocess` ≠ ejecutar; Codex handoff token only.")

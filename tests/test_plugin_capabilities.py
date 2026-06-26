@@ -225,6 +225,23 @@ class PluginCapabilitiesTests(unittest.TestCase):
             status, _, stderr = run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-plugin"])
             self.assertEqual(status, 0, stderr)
             plugin_dir = hermes_home / "plugins" / "omh"
+            sionic_prompt_fixture = """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
+
+[OMH Awareness]
+status=prepared_not_observed; Evidence boundary: pasted status is diagnostic evidence.
+[OMH Route Hint]
+intent=delivery_intent; selected=ultraprocess; confidence=medium.
+mentioned_workflows=ultraprocess.
+not_executed=Codex.
+[omh]
+selected_workflow=ultraprocess
+latest_runtime_run=not_executed=Codex
+execution_observed=false
+review_observed=false
+ci_observed=false
+merge_observed=false
+"""
             script = textwrap.dedent(
                 f"""
                 import importlib.util
@@ -283,6 +300,15 @@ class PluginCapabilitiesTests(unittest.TestCase):
                         "message": "왜 ultraprocess 로그가 떠? Codex handoff 테스트 용어일 뿐이야.",
                         "source": "discord",
                         "limit": 2,
+                        "include_prompt_context": True,
+                    }})
+                )
+                sionic_prompt = {sionic_prompt_fixture!r}
+                context_sionic = json.loads(
+                    context_handler({{
+                        "message": sionic_prompt,
+                        "source": "discord",
+                        "limit": 3,
                         "include_prompt_context": True,
                     }})
                 )
@@ -381,6 +407,13 @@ class PluginCapabilitiesTests(unittest.TestCase):
                     "context_meta_mentioned_workflows": context_meta["route_hint"]["mentioned_workflows"],
                     "context_meta_runtime_terms": context_meta["route_hint"]["mentioned_runtime_terms"],
                     "context_meta_prompt_context": context_meta["prompt_context"],
+                    "context_sionic_primary_workflow": context_sionic["route_hint"]["primary_workflow"],
+                    "context_sionic_intent_class": context_sionic["route_hint"]["intent_class"],
+                    "context_sionic_mentioned_workflows": context_sionic["route_hint"]["mentioned_workflows"],
+                    "context_sionic_runtime_terms": context_sionic["route_hint"]["mentioned_runtime_terms"],
+                    "context_sionic_not_executed": context_sionic["route_hint"]["not_executed"],
+                    "context_sionic_first_hint": context_sionic["route_hint"]["hints"][0]["workflow"],
+                    "context_sionic_prompt_context": context_sionic["prompt_context"],
                     "interaction_schema": interaction["schema_version"],
                     "interaction_degraded": interaction["degraded"],
                     "interaction_source": interaction["source_backend"],
@@ -537,6 +570,15 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("Codex", payload["context_meta_runtime_terms"])
             self.assertIn("selected=workflow-learning", payload["context_meta_prompt_context"])
             self.assertNotIn("selected=ultraprocess", payload["context_meta_prompt_context"])
+            self.assertEqual(payload["context_sionic_primary_workflow"], "workflow-learning")
+            self.assertIn(payload["context_sionic_intent_class"], {"feedback_signal", "meta_discussion"})
+            self.assertIn("ultraprocess", payload["context_sionic_mentioned_workflows"])
+            self.assertIn("Codex", payload["context_sionic_runtime_terms"])
+            self.assertIn("ultraprocess", payload["context_sionic_not_executed"])
+            self.assertIn("Codex", payload["context_sionic_not_executed"])
+            self.assertEqual(payload["context_sionic_first_hint"], "workflow-learning")
+            self.assertIn("selected=workflow-learning", payload["context_sionic_prompt_context"])
+            self.assertNotIn("selected=ultraprocess", payload["context_sionic_prompt_context"])
             self.assertEqual(payload["interaction_schema"], "chat_interaction/v1")
             self.assertTrue(payload["interaction_degraded"])
             self.assertEqual(payload["interaction_source"], "standalone_plugin_bundle_fallback")
