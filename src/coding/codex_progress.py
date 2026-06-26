@@ -15,7 +15,9 @@ from ..context_safety import (
     compact_context_refs,
     compact_visible_text,
     context_budget_payload,
+    is_user_facing_progress_noise,
     raw_output_artifact_ref,
+    sanitize_user_facing_progress_text,
 )
 
 
@@ -38,10 +40,22 @@ _HIDDEN_KEYS = {
 _VISIBLE_MESSAGE_TYPES = {
     "assistant",
     "assistant_message",
+    "agent_message",
     "final",
     "message",
     "response",
     "response_item",
+}
+_TOKEN_USAGE_KEYS = {
+    "cached_input_tokens",
+    "input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+    "total_tokens",
+    "usage",
+}
+_RAW_RUNTIME_EVENT_TYPES = {
+    "turn.completed",
 }
 _TERMINAL_FAILURE_RE = re.compile(r"\b(error|failed|failure|traceback)\b")
 _TERMINAL_SUCCESS_RE = re.compile(r"\b(completed|complete|success|succeeded|passed)\b")
@@ -368,7 +382,7 @@ def _prompt_recommendation(*, session_ref: str, same_session_scope: bool) -> dic
 
 
 def _safe_search_text(event: dict[str, Any]) -> str:
-    if _hidden_event(event):
+    if _hidden_event(event) or _raw_runtime_event(event):
         return ""
     parts: list[str] = []
     _collect_safe_strings(event, parts)
@@ -390,12 +404,14 @@ def _hidden_marker(value: Any) -> bool:
 
 
 def _collect_safe_strings(value: Any, parts: list[str], *, parent_key: str = "") -> None:
-    if parent_key.casefold() in _HIDDEN_KEYS:
+    if parent_key.casefold() in _HIDDEN_KEYS | _TOKEN_USAGE_KEYS:
         return
-    if _hidden_marker(value):
+    if _hidden_marker(value) or _raw_runtime_event(value):
         return
     if isinstance(value, str):
-        parts.append(value[:500])
+        cleaned = sanitize_user_facing_progress_text(value, max_chars=500)
+        if cleaned:
+            parts.append(cleaned)
         return
     if isinstance(value, (int, float, bool)):
         parts.append(str(value))
@@ -406,22 +422,24 @@ def _collect_safe_strings(value: Any, parts: list[str], *, parent_key: str = "")
         return
     if isinstance(value, dict):
         for key, item in value.items():
-            if str(key).casefold() in _HIDDEN_KEYS:
+            if str(key).casefold() in _HIDDEN_KEYS | _TOKEN_USAGE_KEYS:
                 continue
-            if _hidden_marker(item):
+            if _hidden_marker(item) or _raw_runtime_event(item):
                 continue
             parts.append(str(key))
             _collect_safe_strings(item, parts, parent_key=str(key))
 
 
 def _assistant_visible_message(event: dict[str, Any]) -> str:
-    if _hidden_event(event):
+    if _hidden_event(event) or _raw_runtime_event(event):
         return ""
     for key in ("data", "item", "payload"):
         payload = event.get(key)
         if _hidden_marker(payload):
             return ""
     event_type = str(event.get("type") or event.get("event") or event.get("role") or "").casefold()
+    if event_type == "item.completed" and isinstance(event.get("item"), dict):
+        return _assistant_visible_message(event["item"])
     if event_type not in _VISIBLE_MESSAGE_TYPES and str(event.get("role", "")).casefold() != "assistant":
         return ""
     if any(hidden in event_type for hidden in _HIDDEN_KEYS):
@@ -435,6 +453,22 @@ def _assistant_visible_message(event: dict[str, Any]) -> str:
             if key in payload and isinstance(payload[key], str):
                 return _compact_visible_message(payload[key])
     return ""
+
+
+def _raw_runtime_event(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    event_type = str(value.get("type") or value.get("event") or "").casefold()
+    if event_type in _RAW_RUNTIME_EVENT_TYPES:
+        return True
+    visible_content_keys = {"message", "content", "text", "summary"}
+    if visible_content_keys & {str(key).casefold() for key in value}:
+        return False
+    for nested_key in ("data", "item", "payload"):
+        nested = value.get(nested_key)
+        if isinstance(nested, dict) and not _raw_runtime_event(nested):
+            return False
+    return any(str(key).casefold() in _TOKEN_USAGE_KEYS for key in value)
 
 
 def _normalize_review_status(status: str, *, summary: str = "") -> str:
@@ -498,7 +532,12 @@ def _terminal_success_observed(text: str) -> bool:
 
 
 def _compact_visible_message(value: str) -> str:
-    return compact_visible_text(value, max_chars=MAX_VISIBLE_MESSAGE_CHARS)
+    if is_user_facing_progress_noise(value):
+        return ""
+    return compact_visible_text(
+        sanitize_user_facing_progress_text(value) or value,
+        max_chars=MAX_VISIBLE_MESSAGE_CHARS,
+    )
 
 
 def _progress_events(parsed_events: list[dict[str, Any]], raw_artifact: dict[str, object]) -> tuple[list[dict[str, object]], int]:

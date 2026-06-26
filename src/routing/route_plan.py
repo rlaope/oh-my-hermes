@@ -242,7 +242,7 @@ def build_workflow_route_plan(
             by_skill.get(selected_skill, {"skill": selected_skill, "score": 0, "confidence": "low", "matched": []}),
         )
 
-    stages = [stage for stage in _STAGE_ORDER if stage in steps_by_stage]
+    stages = _ordered_stages(steps_by_stage, selected_skill=selected_skill)
     if len(stages) < 2:
         return None
     steps = [steps_by_stage[stage].to_dict(index + 1) for index, stage in enumerate(stages)]
@@ -255,6 +255,13 @@ def build_workflow_route_plan(
         "next_action": f"start_with_{steps[0]['skill']}",
         "claim_boundary": CLAIM_BOUNDARY,
     }
+
+
+def _ordered_stages(steps_by_stage: dict[str, _RouteStep], *, selected_skill: str) -> list[str]:
+    stages = [stage for stage in _STAGE_ORDER if stage in steps_by_stage]
+    if selected_skill == "workflow-learning" and "learn" in stages:
+        return ["learn", *(stage for stage in stages if stage != "learn")]
+    return stages
 
 
 def compact_workflow_route_plan(value: object) -> dict[str, object] | None:

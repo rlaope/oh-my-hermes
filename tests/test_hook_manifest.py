@@ -13,6 +13,30 @@ from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
 from omh.plugin_bundle.omh.hooks.tool_hooks import pre_tool_call
 
 
+def sionic_omh_usage_evaluation_prompt() -> str:
+    return """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
+Sionic은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
+결과창에는 Background process proc_d5eb61ddcf80 finished with exit code 0~
+Here's the final output: 같은 raw output, turn.completed usage, Self-improvement review 줄이 보였고
+이걸 프리티하게 OMH wrapper report로 정리해야 했어.
+
+[OMH Awareness]
+status=prepared_not_observed; Evidence boundary: pasted status is diagnostic evidence.
+[OMH Route Hint]
+intent=delivery_intent; selected=ultraprocess; confidence=medium.
+mentioned_workflows=ultraprocess.
+not_executed=Codex.
+[omh]
+selected_workflow=ultraprocess
+latest_runtime_run=not_executed=Codex
+execution_observed=false
+review_observed=false
+ci_observed=false
+merge_observed=false
+"""
+
+
 class HookManifestTests(unittest.TestCase):
     def test_hook_manifest_projects_plugin_yaml_and_wrapper_events(self) -> None:
         manifest = hook_manifest()
@@ -117,6 +141,27 @@ class HookManifestTests(unittest.TestCase):
         self.assertIn("Codex", payload["not_executed"])
         self.assertIn("selected=workflow-learning", context)
         self.assertIn("mentioned_workflows=ultraprocess", context)
+        self.assertIn("not_executed=ultraprocess, Codex", context)
+        self.assertNotIn("selected=ultraprocess", context)
+        self.assertNotIn(message, context)
+
+    def test_awareness_route_hint_treats_pasted_omh_status_as_diagnostic(self) -> None:
+        message = sionic_omh_usage_evaluation_prompt()
+
+        payload = awareness_route_hint(message, max_hints=3)
+        context_result = pre_llm_call(user_message=message, is_first_turn=False)
+        context = context_result["context"] if context_result else ""
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "workflow-learning")
+        self.assertEqual(payload["selected_workflow"], "workflow-learning")
+        self.assertIn(payload["intent_class"], {"meta_discussion", "feedback_signal"})
+        self.assertIn("ultraprocess", payload["mentioned_workflows"])
+        self.assertIn("Codex", payload["mentioned_runtime_terms"])
+        self.assertIn("ultraprocess", payload["not_executed"])
+        self.assertIn("Codex", payload["not_executed"])
+        self.assertEqual(payload["hints"][0]["workflow"], "workflow-learning")
+        self.assertIn("selected=workflow-learning", context)
         self.assertIn("not_executed=ultraprocess, Codex", context)
         self.assertNotIn("selected=ultraprocess", context)
         self.assertNotIn(message, context)

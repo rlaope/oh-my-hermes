@@ -17,6 +17,30 @@ from omh.routing.intent import classify_workflow_intent
 from omh.skills.catalog import primary_harness_for_skill
 
 
+def sionic_omh_usage_evaluation_prompt() -> str:
+    return """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
+왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
+Sionic은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
+결과창에는 Background process proc_d5eb61ddcf80 finished with exit code 0~
+Here's the final output: 같은 raw output, turn.completed usage, Self-improvement review 줄이 보였고
+이걸 프리티하게 OMH wrapper report로 정리해야 했어.
+
+[OMH Awareness]
+status=prepared_not_observed; Evidence boundary: pasted status is diagnostic evidence.
+[OMH Route Hint]
+intent=delivery_intent; selected=ultraprocess; confidence=medium.
+mentioned_workflows=ultraprocess.
+not_executed=Codex.
+[omh]
+selected_workflow=ultraprocess
+latest_runtime_run=not_executed=Codex
+execution_observed=false
+review_observed=false
+ci_observed=false
+merge_observed=false
+"""
+
+
 class ChatRouterTests(unittest.TestCase):
     def test_high_confidence_chat_dispatches_to_workflow(self) -> None:
         decision = route_chat_message("risky refactor", source="discord")
@@ -434,6 +458,32 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertFalse(decision["explicit"])
                 self.assertNotEqual(decision["selected_skill"], "ultraprocess")
 
+    def test_pasted_omh_awareness_evaluation_routes_learning_before_delivery(self) -> None:
+        message = sionic_omh_usage_evaluation_prompt()
+
+        decision = route_chat_message(message, source="discord", limit=8)
+        task_card = decision["task_card"]
+        intent = classify_workflow_intent(message)
+        route_plan = public_route_payload(decision)["workflow_route_plan"]
+        stages = [step["stage"] for step in route_plan["steps"]]
+        skills = [step["skill"] for step in route_plan["steps"]]
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "workflow-learning")
+        self.assertEqual(decision["selected_harness"], "workflow-learning")
+        self.assertEqual(task_card["task_type"], "router_design_feedback")
+        self.assertIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+        self.assertIn(intent.intent_class, {"feedback_signal", "meta_discussion"})
+        self.assertFalse(intent.explicit_execution)
+        self.assertIn("diagnostic_status_context", intent.structural_cues)
+        self.assertIn("ultraprocess", intent.not_executed)
+        self.assertIn("Codex", intent.not_executed)
+        self.assertIn("learn", stages)
+        self.assertIn("deliver", stages)
+        self.assertLess(stages.index("learn"), stages.index("deliver"))
+        self.assertLess(skills.index("workflow-learning"), skills.index("ultraprocess"))
+        self.assertTrue(all(step["status"] == "prepared_not_observed" for step in route_plan["steps"]))
+
     def test_workflow_intent_prefers_structural_cues_over_language_tables(self) -> None:
         intent = classify_workflow_intent("OMH route: `$ultraprocess` ≠ ejecutar; Codex handoff token only.")
 
@@ -453,6 +503,67 @@ class ChatRouterTests(unittest.TestCase):
 
         self.assertIsNone(decision["task_card"])
         self.assertNotIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+
+        domain = route_chat_message("고객 관여도 분석해서 Sionic 위키 페이지 개선해줘.", source="discord")
+        self.assertNotEqual(domain["selected_skill"], "workflow-learning")
+        self.assertIsNone(domain["task_card"])
+
+    def test_domain_work_with_pasted_status_does_not_become_omh_quality_loop(self) -> None:
+        message = """Sionic 위키 페이지 사용성 평가하고 더 보기 좋게 만들어줘.
+
+[omh] v1.0.1 | plugin:ready | target:single | coding-agent:runtime(codex)
+[OMH] Native bridge status context.
+Evidence boundary: prepared handoffs are not execution evidence.
+Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
+"""
+
+        decision = route_chat_message(message, source="discord")
+        intent = classify_workflow_intent(message)
+
+        self.assertNotEqual(decision["selected_skill"], "workflow-learning")
+        self.assertNotEqual(decision["selected_skill"], "agent-ops-review")
+        self.assertIsNone(decision["task_card"])
+        self.assertNotIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+        self.assertNotIn(intent.intent_class, {"feedback_signal", "meta_discussion"})
+
+    def test_status_context_before_user_instruction_is_not_discarded(self) -> None:
+        message = """[omh] v1.0.1 | plugin:ready | target:single | coding-agent:runtime(codex)
+[OMH] Native bridge status context.
+Evidence boundary: prepared handoffs are not execution evidence.
+Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
+
+Sionic 작업 말고 OMH 라우터 강화 플랜으로 잡아줘.
+"""
+
+        decision = route_chat_message(message, source="discord")
+        intent = classify_workflow_intent(message)
+
+        self.assertEqual(decision["selected_skill"], "workflow-learning")
+        self.assertEqual(decision["task_card"]["task_type"], "router_design_feedback")
+        self.assertIn(intent.intent_class, {"feedback_signal", "meta_discussion"})
+
+        same_line = route_chat_message("[OMH] 라우터 강화 플랜으로 잡아줘", source="discord")
+        self.assertEqual(same_line["selected_skill"], "workflow-learning")
+        self.assertEqual(same_line["task_card"]["task_type"], "router_design_feedback")
+
+    def test_bounded_omh_usage_review_cues_survive_without_domain_stealing(self) -> None:
+        status = """
+[OMH Awareness]
+status=prepared_not_observed; Evidence boundary: pasted status is diagnostic evidence.
+selected_workflow=ultraprocess
+"""
+        prefixes = (
+            "이번 작업에서 OMH를 덜 쓴 이유를 분석해줘.",
+            "이번 작업에서 OMH를 덜 썼는지 분석해줘.",
+            "이번 작업에서 OMH 관여도 분석해줘.",
+            "이번 작업에서 OMH가 부족했던 점을 분석해줘.",
+            "status=prepared_not_observed; 이번 작업에서 OMH를 덜 쓴 이유를 분석해줘.",
+        )
+        for prefix in prefixes:
+            with self.subTest(prefix=prefix):
+                decision = route_chat_message(prefix + status, source="discord")
+                self.assertEqual(decision["selected_skill"], "workflow-learning")
+                self.assertEqual(decision["task_card"]["task_type"], "router_design_feedback")
 
     def test_catalog_question_dispatches_to_router_without_shell_approval(self) -> None:
         for message in (

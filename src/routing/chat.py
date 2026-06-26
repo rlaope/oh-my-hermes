@@ -6,6 +6,7 @@ from typing import Any
 
 from ..ingress import CHAT_SOURCES, extract_message_text
 from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
+from .intent import scrub_diagnostic_status_text
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
@@ -125,17 +126,18 @@ def route_chat_message(
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
 
+    routing_message = scrub_diagnostic_status_text(message)
     definitions = routable_definitions()
-    full_recommendations = recommend_skills(message, limit=len(definitions))
-    explicit_skill = explicit_skill_invocation(message, definitions)
+    full_recommendations = recommend_skills(routing_message, limit=len(definitions))
+    explicit_skill = explicit_skill_invocation(routing_message, definitions)
     task_card = classify_task(message)
     task_card_overrides_explicit = _task_card_overrides_explicit_invocation(task_card)
     if task_card and (not explicit_skill or task_card_overrides_explicit):
         full_recommendations = _prioritize_recommendation(full_recommendations, task_card_recommendation(task_card))
-    catalog_question = is_skill_catalog_question(message)
+    catalog_question = is_skill_catalog_question(routing_message)
     specific_catalog_match = (
         _specific_capability_catalog_match(full_recommendations)
-        if catalog_question and not _is_broad_capability_catalog_question(message)
+        if catalog_question and not _is_broad_capability_catalog_question(routing_message)
         else None
     )
     if specific_catalog_match is not None:
@@ -147,7 +149,7 @@ def route_chat_message(
     candidate_score = _int_value(top["score"])
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
-    file_or_text_lookup = is_file_or_text_lookup_question(message)
+    file_or_text_lookup = is_file_or_text_lookup_question(routing_message)
 
     if explicit_skill and not task_card_overrides_explicit:
         selected_skill = explicit_skill

@@ -157,6 +157,62 @@ _REFERENCE_CONTEXT_TOKENS = frozenset(
     }
 )
 _NEGATABLE_EXECUTION_CUES = frozenset(_EXECUTION_CUES)
+_DIAGNOSTIC_STATUS_MARKERS = (
+    "[omh awareness]",
+    "[omh route hint]",
+    "[omh]",
+    "evidence boundary",
+    "not_executed=",
+    "latest_runtime_run",
+    "latest runtime run",
+    "execution_observed",
+    "review_observed",
+    "ci_observed",
+    "merge_observed",
+    "prepared_not_observed",
+)
+_DIAGNOSTIC_STATUS_LINE_MARKERS = (
+    *_DIAGNOSTIC_STATUS_MARKERS,
+    "selected_workflow=",
+    "mentioned_workflows=",
+    "mentioned_runtime_terms=",
+    "not_executed=",
+    "intent_class=",
+    "status=",
+    "workflow=",
+    "hints=",
+)
+_OMH_DIAGNOSTIC_EVALUATION_CUES = (
+    "usage evaluation",
+    "usability evaluation",
+    "usage analysis",
+    "analyze the run",
+    "analyze this run",
+    "router improvement",
+    "router hardening",
+    "route improvement",
+    "evaluate omh",
+    "why omh",
+    "사용성 평가",
+    "사용성평가",
+    "omh 관여",
+    "omh관여",
+    "omh 관여도",
+    "omh관여도",
+    "안쓴이유",
+    "안 쓴 이유",
+    "덜 쓴 이유",
+    "덜쓴 이유",
+    "덜 썼",
+    "덜썼",
+    "부족했던 점",
+    "부족한 점",
+    "라우터 강화",
+    "라우터강화",
+    "라우터 개선",
+    "플랜으로 잡",
+    "반복해서 강화",
+)
 
 
 @dataclass(frozen=True)
@@ -220,21 +276,39 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     tokens.update(normalized.split())
     compact = normalized.replace(" ", "")
 
-    mentioned_workflows = _mentioned_workflows(normalized, tokens)
-    mentioned_runtime_terms = _mentioned_runtime_terms(normalized)
-    structural_cues = _structural_cues(message, normalized, tokens)
-    meta_cues = _matched_cues(_META_CUES, normalized, compact)
-    feedback_cues = _matched_cues(_FEEDBACK_CUES, normalized, compact)
-    planning_cues = _matched_cues(_PLANNING_CUES, normalized, compact)
+    diagnostic_status_context = _diagnostic_status_context(normalized, compact)
+    diagnostic_evaluation_context = _diagnostic_omh_evaluation_context(normalized, compact)
+    matching_normalized = (
+        normalized
+        if not diagnostic_status_context or diagnostic_evaluation_context
+        else _without_diagnostic_status_lines(normalized)
+    )
+    matching_compact = matching_normalized.replace(" ", "")
+    matching_tokens = set(routing_tokens(matching_normalized, stopwords=set()))
+    matching_tokens.update(matching_normalized.split())
+
+    mentioned_workflows = _mentioned_workflows(matching_normalized, matching_tokens)
+    mentioned_runtime_terms = _mentioned_runtime_terms(matching_normalized)
+    structural_cues = _structural_cues(
+        message,
+        matching_normalized,
+        matching_tokens,
+        diagnostic_status_context=diagnostic_status_context,
+    )
+    meta_cues = _matched_cues(_META_CUES, matching_normalized, matching_compact)
+    feedback_cues = _matched_cues(_FEEDBACK_CUES, matching_normalized, matching_compact)
+    planning_cues = _matched_cues(_PLANNING_CUES, matching_normalized, matching_compact)
     negated_execution_cues = _compact_tuple(
-        (*_matched_cues(_NEGATED_EXECUTION_CUES, normalized, compact), *_structural_negated_execution_cues(normalized))
+        (*_matched_cues(_NEGATED_EXECUTION_CUES, matching_normalized, matching_compact), *_structural_negated_execution_cues(matching_normalized))
     )
     execution_cues = _suppress_negated_execution_cues(
-        _matched_cues(_EXECUTION_CUES, normalized, compact),
+        _matched_cues(_EXECUTION_CUES, matching_normalized, matching_compact),
         negated_execution_cues,
     )
-    missing_requirements_cues = _matched_cues(_MISSING_REQUIREMENTS_CUES, normalized, compact)
-    routing_context = _routing_context(normalized, tokens)
+    if diagnostic_evaluation_context:
+        execution_cues = _suppress_diagnostic_status_execution_cues(execution_cues, normalized)
+    missing_requirements_cues = _matched_cues(_MISSING_REQUIREMENTS_CUES, matching_normalized, matching_compact)
+    routing_context = _routing_context(matching_normalized, matching_tokens)
 
     specific_runtime_reference = any(term != "Codex" for term in mentioned_runtime_terms)
     workflow_or_specific_runtime = bool(mentioned_workflows or specific_runtime_reference)
@@ -255,7 +329,11 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
 
     if explicit_execution:
         intent_class = "delivery_intent"
-    elif missing_requirements_cues or (feedback_cues and (routing_context or workflow_or_specific_runtime)):
+    elif (
+        missing_requirements_cues
+        or diagnostic_evaluation_context
+        or (feedback_cues and (routing_context or workflow_or_specific_runtime))
+    ):
         intent_class = "feedback_signal"
     elif (meta_cues or structural_reference) and (routing_context or workflow_or_specific_runtime):
         intent_class = "meta_discussion"
@@ -492,7 +570,13 @@ def _mentioned_runtime_terms(normalized: str) -> tuple[str, ...]:
     return tuple(mentioned)
 
 
-def _structural_cues(message: str, normalized: str, tokens: set[str]) -> tuple[str, ...]:
+def _structural_cues(
+    message: str,
+    normalized: str,
+    tokens: set[str],
+    *,
+    diagnostic_status_context: bool = False,
+) -> tuple[str, ...]:
     cues: list[str] = []
     if _explicit_workflow_invocation(normalized, tokens):
         cues.append("workflow_marker")
@@ -504,6 +588,8 @@ def _structural_cues(message: str, normalized: str, tokens: set[str]) -> tuple[s
         cues.append("symbolic_negated_execution")
     if _routing_context(normalized, tokens):
         cues.append("routing_context")
+    if diagnostic_status_context:
+        cues.append("diagnostic_status_context")
     return tuple(cues)
 
 
@@ -553,6 +639,64 @@ def _matched_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple
     return tuple(matches)
 
 
+def _diagnostic_status_context(normalized: str, compact: str) -> bool:
+    for marker in _DIAGNOSTIC_STATUS_MARKERS:
+        normalized_marker = normalized_phrase(marker)
+        if normalized_marker and (
+            normalized_marker in normalized or normalized_marker.replace(" ", "") in compact
+        ):
+            return True
+    return False
+
+
+def _diagnostic_omh_evaluation_context(normalized: str, compact: str) -> bool:
+    if not _diagnostic_status_context(normalized, compact):
+        return False
+    user_region = _without_diagnostic_status_lines(normalized)
+    user_compact = user_region.replace(" ", "")
+    has_user_omh_subject = bool(_matched_omh_system_target_cues(user_region))
+    has_user_router_subject = _routing_context(user_region, set(user_region.split()))
+    if not (has_user_omh_subject or has_user_router_subject):
+        return False
+    return bool(_matched_cues(_OMH_DIAGNOSTIC_EVALUATION_CUES, user_region, user_compact))
+
+
+def _without_diagnostic_status_lines(normalized: str) -> str:
+    kept: list[str] = []
+    for line in normalized.splitlines() or [normalized]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("[omh"):
+            stripped = re.sub(r"^\[omh(?:\s+awareness|\s+route\s+hint)?\]\s*", "", stripped).strip()
+            if not stripped:
+                continue
+        if stripped.startswith(("native bridge status context", "evidence boundary", "latest runtime run")):
+            continue
+        if any(normalized_phrase(marker) in stripped for marker in _DIAGNOSTIC_STATUS_LINE_MARKERS):
+            fragments = [fragment.strip() for fragment in re.split(r"[;|]", stripped)]
+            user_fragments = [
+                fragment
+                for fragment in fragments
+                if fragment and not any(normalized_phrase(marker) in fragment for marker in _DIAGNOSTIC_STATUS_LINE_MARKERS)
+            ]
+            if user_fragments:
+                kept.append(" ".join(user_fragments))
+            continue
+        kept.append(stripped)
+    return "\n".join(kept)
+
+
+def scrub_diagnostic_status_text(message: str) -> str:
+    """Remove pasted/generated OMH status fragments while preserving user text."""
+    normalized = normalized_phrase(message)
+    compact = normalized.replace(" ", "")
+    if not _diagnostic_status_context(normalized, compact):
+        return message
+    scrubbed = _without_diagnostic_status_lines(normalized)
+    return scrubbed or normalized
+
+
 def _compact_tuple(values: tuple[str, ...]) -> tuple[str, ...]:
     seen: list[str] = []
     for value in values:
@@ -568,6 +712,20 @@ def _suppress_negated_execution_cues(
     if not negated_execution_cues:
         return execution_cues
     return tuple(cue for cue in execution_cues if cue not in _NEGATABLE_EXECUTION_CUES)
+
+
+def _suppress_diagnostic_status_execution_cues(execution_cues: tuple[str, ...], normalized: str) -> tuple[str, ...]:
+    return tuple(cue for cue in execution_cues if not _diagnostic_status_only_execution_cue(cue, normalized))
+
+
+def _diagnostic_status_only_execution_cue(cue: str, normalized: str) -> bool:
+    if cue == "execute":
+        scrubbed = re.sub(r"\bnot_executed\b", " ", normalized)
+        return not _contains_bounded_english_cue(scrubbed, "execute")
+    if cue == "merge":
+        scrubbed = re.sub(r"\bmerge_observed\b", " ", normalized)
+        return not _contains_bounded_english_cue(scrubbed, "merge")
+    return False
 
 
 def _explicit_workflow_invocation(normalized: str, tokens: set[str]) -> bool:

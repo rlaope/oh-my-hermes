@@ -17,6 +17,25 @@ MAX_EVIDENCE_REFS = 8
 MAX_EVIDENCE_REF_CHARS = 160
 MAX_ARTIFACT_REFS = 4
 
+_BACKGROUND_PROCESS_WRAPPER_RE = re.compile(
+    r"\[?\s*\bBackground\s+process\s+\S+\s+finished\s+with\s+exit\s+code\s+\d+~?\s+"
+    r"Here'?s\s+the\s+final\s+output:?\s*\]?",
+    re.IGNORECASE,
+)
+_BACKGROUND_PROCESS_COMPLETION_LINE_RE = re.compile(
+    r"^\[?\s*\bBackground\s+process\s+\S+\s+finished\s+with\s+exit\s+code\s+\d+~?\s*\]?\s*$",
+    re.IGNORECASE,
+)
+_FINAL_OUTPUT_HEADER_LINE_RE = re.compile(r"^Here'?s\s+the\s+final\s+output:?$", re.IGNORECASE)
+_FINAL_OUTPUT_HEADER_PREFIX_RE = re.compile(r"^\[?\s*Here'?s\s+the\s+final\s+output:?\s*\]?\s*", re.IGNORECASE)
+_RAW_CODEX_JSONL_RE = re.compile(
+    r'"type"\s*:\s*"(?:turn|item)\.completed"'
+    r'|"\w*usage\w*"\s*:'
+    r'|"\w*(?:input|output|reasoning|cached)_tokens\w*"\s*:',
+    re.IGNORECASE,
+)
+_SELF_IMPROVEMENT_REVIEW_RE = re.compile(r"\bSelf-improvement\s+review\s*:", re.IGNORECASE)
+
 CODING_PROGRESS_REPORTABLE_EVENTS = (
     "workflow_started",
     "dispatch_to_executor",
@@ -68,6 +87,49 @@ def compact_visible_text(value: Any, *, max_chars: int) -> str:
     return f"{text[: max_chars - 3]}..."
 
 
+def sanitize_user_facing_progress_text(value: Any, *, max_chars: int | None = None) -> str:
+    """Drop raw process/JSONL maintenance noise from chat-facing progress copy."""
+    text = str(value)
+    if not text.strip():
+        return ""
+    clean_lines: list[str] = []
+    for raw_line in text.splitlines() or [text]:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _raw_jsonl_or_self_review_noise_line(line):
+            continue
+        line = _BACKGROUND_PROCESS_WRAPPER_RE.sub(" ", line).strip()
+        line = _FINAL_OUTPUT_HEADER_PREFIX_RE.sub("", line).strip()
+        if _raw_progress_noise_line(line):
+            continue
+        clean_lines.append(line)
+    cleaned = re.sub(r"\s+", " ", " ".join(clean_lines)).strip()
+    if not cleaned:
+        return ""
+    if max_chars is None:
+        return cleaned
+    return compact_visible_text(cleaned, max_chars=max_chars)
+
+
+def is_user_facing_progress_noise(value: Any) -> bool:
+    text = str(value)
+    return bool(text.strip()) and not sanitize_user_facing_progress_text(text)
+
+
+def _raw_progress_noise_line(line: str) -> bool:
+    return bool(
+        _BACKGROUND_PROCESS_WRAPPER_RE.search(line)
+        or _BACKGROUND_PROCESS_COMPLETION_LINE_RE.search(line)
+        or _FINAL_OUTPUT_HEADER_LINE_RE.search(line)
+        or _raw_jsonl_or_self_review_noise_line(line)
+    )
+
+
+def _raw_jsonl_or_self_review_noise_line(line: str) -> bool:
+    return bool(_RAW_CODEX_JSONL_RE.search(line) or _SELF_IMPROVEMENT_REVIEW_RE.search(line))
+
+
 def compact_context_refs(
     values: Any,
     *,
@@ -109,7 +171,11 @@ def build_progress_event(
         "event_type": _normalize_progress_event_type(event_type),
         "status": _normalize_choice(status, _PROGRESS_EVENT_STATUSES, "observed"),
         "severity": _normalize_choice(severity, _PROGRESS_EVENT_SEVERITIES, "info"),
-        "summary": compact_visible_text(_strip_code_fences(summary), max_chars=MAX_PROGRESS_EVENT_SUMMARY_CHARS),
+        "summary": compact_visible_text(
+            sanitize_user_facing_progress_text(_strip_code_fences(summary))
+            or "Progress observed; raw process output stayed in artifacts.",
+            max_chars=MAX_PROGRESS_EVENT_SUMMARY_CHARS,
+        ),
         "file_refs": compact_files,
         "artifact_refs": compact_artifacts,
         "evidence_refs": compact_evidence,

@@ -26,6 +26,164 @@ from omh.paths import resolve_paths
 
 
 class CodexProgressTests(unittest.TestCase):
+    def test_background_process_and_usage_noise_do_not_become_user_facing_progress(self) -> None:
+        raw = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": (
+                            "Background process proc_d5eb61ddcf80 finished with exit code 0~\n"
+                            "Here's the final output:"
+                        ),
+                    }
+                ),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": (
+                            "Background process proc_d5eb61ddcf80 finished with exit code 0~ "
+                            "Here's the final output: Targeted tests passed: tests/test_codex_progress.py."
+                        ),
+                    }
+                ),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": (
+                            "[Background process proc_d5eb61ddcf80 finished with exit code 0~ "
+                            "Here's the final output:] Targeted tests passed: tests/test_codex_progress.py."
+                        ),
+                    }
+                ),
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": "Here's the final output: Targeted tests passed: tests/test_codex_progress.py.",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "turn.completed",
+                        "usage": {
+                            "input_tokens": 12345,
+                            "output_tokens": 678,
+                            "reasoning_output_tokens": 90,
+                        },
+                    }
+                ),
+                json.dumps({"role": "assistant", "content": "Self-improvement review: Patched noisy report output."}),
+            ]
+        )
+
+        summary = summarize_codex_jsonl_text(raw, evidence_refs=["codex-final-jsonl"], source="codex-final.jsonl")
+        signal = build_safe_progress_signal(executor_profile="codex", codex_progress_summary=summary)
+        rendered = json.dumps({"summary": summary, "signal": signal}, sort_keys=True)
+
+        self.assertEqual(summary["status"], "completed_or_passed_observed")
+        self.assertEqual(summary["latest_assistant_visible_message"], "Targeted tests passed: tests/test_codex_progress.py.")
+        self.assertEqual(summary["latest_progress_event"]["event_type"], "targeted_tests_passed")
+        self.assertEqual(signal["latest_progress_event_type"], "targeted_tests_passed")
+        for forbidden in (
+            "Background process",
+            "Here's the final output",
+            "turn.completed",
+            '"usage"',
+            "input_tokens",
+            "reasoning_output_tokens",
+            "Self-improvement review",
+        ):
+            self.assertNotIn(forbidden, rendered)
+
+    def test_completed_codex_items_still_count_as_observable_progress(self) -> None:
+        raw = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "content": "Tests passed: tests/test_codex_progress.py.",
+                        "usage": {"input_tokens": 1, "output_tokens": 2},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "python -m unittest tests/test_codex_progress.py",
+                            "aggregated_output": "OK",
+                            "exit_code": 0,
+                            "status": "completed",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {"type": "agent_message", "text": "Tests passed: tests/test_codex_progress.py."},
+                        "usage": {"input_tokens": 10, "output_tokens": 5},
+                    }
+                ),
+            ]
+        )
+
+        summary = summarize_codex_jsonl_text(raw)
+
+        self.assertEqual(summary["status"], "completed_or_passed_observed")
+        self.assertGreater(summary["activity_counts"]["testing"], 0)
+        self.assertEqual(summary["latest_assistant_visible_message"], "Tests passed: tests/test_codex_progress.py.")
+        self.assertEqual(summary["latest_progress_event"]["event_type"], "targeted_tests_passed")
+
+    def test_executor_progress_reports_sanitize_explicit_background_output(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            binding = write_progress_binding(
+                paths,
+                build_progress_binding(
+                    target_type="run",
+                    target_id="run-noisy-1",
+                    executor_profile="codex",
+                    process_session_id="proc_d5eb61ddcf80",
+                    evidence_refs=["codex-background-output"],
+                    now="2026-06-26T00:00:00Z",
+                ),
+            )
+            noisy = "\n".join(
+                [
+                    "Background process proc_d5eb61ddcf80 finished with exit code 0~",
+                    "Here's the final output:",
+                    '{"type":"turn.completed","usage":{"input_tokens":123,"reasoning_output_tokens":45}}',
+                    "Self-improvement review: Patched output copy.",
+                ]
+            )
+
+            observed = observe_executor_progress(
+                paths,
+                binding,
+                build_safe_progress_signal(
+                    executor_profile="codex",
+                    process_status="completed",
+                    explicit_event_type="executor_completed",
+                    explicit_summary=noisy,
+                    evidence_refs=["codex-background-output"],
+                ),
+                observed_at="2026-06-26T00:00:10Z",
+            )
+
+            rendered = json.dumps(observed, sort_keys=True)
+            self.assertEqual(observed["event"]["event_type"], "executor_completed")
+            self.assertIn("separate result evidence", observed["chat_report"])
+            for forbidden in (
+                "Background process",
+                "Here's the final output",
+                "turn.completed",
+                '"usage"',
+                "input_tokens",
+                "reasoning_output_tokens",
+                "Self-improvement review",
+            ):
+                self.assertNotIn(forbidden, rendered)
+
     def test_summarizes_observable_codex_jsonl_without_raw_or_hidden_text(self) -> None:
         raw = "\n".join(
             [

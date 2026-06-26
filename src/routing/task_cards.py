@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from .localization import normalized_phrase, routing_tokens
 from .intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 
@@ -91,8 +93,12 @@ _ROUTER_DESIGN_CONTEXT_PHRASES = (
     "워크플로 학습",
     "워크플로우 학습",
     "라우팅 피드백",
+    "omh가 얼마나 관여",
+    "omh를 얼마나 관여",
     "omh 관여",
-    "얼마나 관여",
+    "omh관여",
+    "omh 관여도",
+    "omh관여도",
 )
 _MAINTENANCE_COMMAND_ALIASES = {
     "update": ("update", "upgrade", "refresh", "업데이트", "업뎃", "갱신"),
@@ -283,18 +289,68 @@ def _is_runtime_portability(normalized: str, compact: str, tokens: set[str]) -> 
     return _phrase_hit(("gateway", "bot", "responder", "게이트웨이", "봇", "응답자"), normalized, compact)
 
 
+def _without_diagnostic_status_lines(normalized: str) -> str:
+    markers = (
+        "[omh awareness]",
+        "[omh route hint]",
+        "[omh]",
+        "native bridge status context",
+        "evidence boundary",
+        "latest runtime run",
+        "selected_workflow=",
+        "mentioned_workflows=",
+        "mentioned_runtime_terms=",
+        "not_executed=",
+        "intent_class=",
+        "status=",
+        "workflow=",
+        "hints=",
+    )
+    kept: list[str] = []
+    for line in normalized.splitlines() or [normalized]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("[omh"):
+            stripped = re.sub(r"^\[omh(?:\s+awareness|\s+route\s+hint)?\]\s*", "", stripped).strip()
+            if not stripped:
+                continue
+        if stripped.startswith(("native bridge status context", "evidence boundary", "latest runtime run")):
+            continue
+        if any(marker in stripped for marker in markers):
+            fragments = [fragment.strip() for fragment in re.split(r"[;|]", stripped)]
+            user_fragments = [fragment for fragment in fragments if fragment and not any(marker in fragment for marker in markers)]
+            if user_fragments:
+                kept.append(" ".join(user_fragments))
+            continue
+        kept.append(stripped)
+    return "\n".join(kept)
+
+
+def _diagnostic_region_router_feedback(normalized: str, compact: str) -> bool:
+    subject = _phrase_hit(("omh", "omh가", "omh를", "omh의", "oh-my-hermes", "oh my hermes", "router", "routing", "route hint", "라우터", "라우팅"), normalized, compact)
+    evaluation = _phrase_hit(("usage evaluation", "usability evaluation", "usage analysis", "router improvement", "router hardening", "route improvement", "evaluate omh", "why omh", "사용성 평가", "사용성평가", "안쓴이유", "안 쓴 이유", "덜 쓴 이유", "덜쓴 이유", "덜 썼", "덜썼", "부족했던 점", "부족한 점", "라우터 강화", "라우터강화", "라우터 개선", "플랜으로 잡", "반복해서 강화"), normalized, compact)
+    return subject and evaluation
+
+
 def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], intent: object) -> bool:
-    phrase_hit = _phrase_hit(_ROUTER_DESIGN_CONTEXT_PHRASES, normalized, compact)
+    structural_cues = set(getattr(intent, "structural_cues", ()))
+    diagnostic_status_context = "diagnostic_status_context" in structural_cues
+    evaluation_region = _without_diagnostic_status_lines(normalized) if diagnostic_status_context else normalized
+    evaluation_compact = evaluation_region.replace(" ", "")
+    phrase_hit = _phrase_hit(_ROUTER_DESIGN_CONTEXT_PHRASES, evaluation_region, evaluation_compact)
     if phrase_hit:
         return True
-    if "missed route" in normalized or "workflow-learning" in normalized:
+    if "missed route" in evaluation_region or "workflow-learning" in evaluation_region:
         return False
+    if diagnostic_status_context:
+        return _diagnostic_region_router_feedback(evaluation_region, evaluation_compact)
     if (
         getattr(intent, "intent_class", "") in META_OR_FEEDBACK_INTENTS
         and not bool(getattr(intent, "explicit_execution", False))
         and (
-            bool(getattr(intent, "mentioned_workflows", ()))
-            or bool(getattr(intent, "mentioned_runtime_terms", ()))
+            (not diagnostic_status_context and bool(getattr(intent, "mentioned_workflows", ())))
+            or (not diagnostic_status_context and bool(getattr(intent, "mentioned_runtime_terms", ())))
             or bool(getattr(intent, "missing_requirements_cues", ()))
             or _phrase_hit(
                 (
@@ -312,8 +368,8 @@ def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], 
                     "워크플로우",
                     "코딩 핸드오프",
                 ),
-                normalized,
-                compact,
+                evaluation_region,
+                evaluation_compact,
             )
         )
     ):
