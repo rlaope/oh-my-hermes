@@ -126,24 +126,35 @@ understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
 
 - **Deep Interview** (`deep-interview`) - clarify the one missing decision
   before planning. Use when the request is still fuzzy.
+
 - **Ralplan** (`ralplan`) - turn repo facts, sources, risks, acceptance
   criteria, and verification commands into a reviewed plan.
+
 - **Ultragoal** (`ultragoal`) - keep an ambitious goal tied to checkpoints and
   completion gates instead of a one-shot answer.
+
 - **Ultra Process** (`ultraprocess`) - run one delivery cycle: research ->
   ralplan -> implementation path -> code review -> docs/status sync.
-- **Loop Engineering** (`loop`) - iterate through research, plan, handoff,
+
+- **Loop** (`loop`) - iterate through research, plan, handoff,
   feedback, and repeat when the right implementation must be discovered.
+
 - **Web Research** (`web-research`) - gather current, source-backed evidence
   for market, docs, competitor, implementation, or best-practice questions.
+
 - **Paper Learning** (`paper-learning`) - explain a supplied paper or paper PDF
   at very easy, moderate, or expert level without dropping section coverage.
+
 - **Source Finder** (`source-finder`) - prepare typed source candidates:
   papers, datasets, repos, docs, public decks, and similar inputs.
+
 - **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for Codex, Claude Code, Hermes, or another runtime without claiming execution.
+
 - **Workflow Learning** (`workflow-learning`) - turn missed routes or weak
   workflows into traces, evals, review queues, regression cases, and patch
   proposals.
+
+<br>
 
 ## What You Get
 

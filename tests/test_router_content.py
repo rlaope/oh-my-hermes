@@ -1337,7 +1337,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("planner", site)
         self.assertIn("Prepared is not observed", site)
         self.assertIn("Workflow surfaces that look like the work they support.", site)
-        self.assertIn("Loop engineering", site)
+        self.assertIn("Loop</span>", site)
         self.assertIn("Prompt cards with source structure and domain scene separated.", site)
         self.assertIn('href="docs/image-gen/"', site)
         self.assertIn('href="docs/hermes-agent-architecture/">Hermes Deepdive</a>', site)
