@@ -118,13 +118,32 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
 </p>
 
-| Need | OMH helps Hermes do this | Example |
-| --- | --- | --- |
-| Plan and decide | Clarify fuzzy goals, produce reviewed plans, choose loopable work, and keep decisions explicit. | "Make onboarding feel smoother." |
-| Learn and gather | Find sources, explain papers, triage signals, and prepare source-backed briefs before synthesis or handoff. | "Find papers, datasets, and repos for this topic." |
-| Create materials and visuals | Shape decks, PDFs, spreadsheets, reports, deliverable packages, and image-card prompts before generation is claimed. | "Make a PR summary card for reviewers." |
-| Delegate coding and ship | Prepare scoped handoffs for Codex, Claude Code, Hermes, or another runtime, then track dispatch, review, CI, and merge evidence separately. | "Turn this issue into a PR-ready plan and hand it to implementation." |
-| Operate and observe | Show setup health, recurring ops plans, workflow learning, memory review, agent ops status, and repair next steps. | "Why did this route to plan? Make it a regression." |
+The full skill catalog is larger. These 10 are the representative modes to
+understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
+[Capabilities](docs/CAPABILITIES.md).
+
+<!-- Surface family anchors: Plan and decide; Learn and gather; Create materials and visuals; Delegate coding and ship; Operate and observe. -->
+
+- **Deep Interview** (`deep-interview`) - clarify the one missing decision
+  before planning. Use when the request is still fuzzy.
+- **Ralplan** (`ralplan`) - turn repo facts, sources, risks, acceptance
+  criteria, and verification commands into a reviewed plan.
+- **Ultragoal** (`ultragoal`) - keep an ambitious goal tied to checkpoints and
+  completion gates instead of a one-shot answer.
+- **Ultra Process** (`ultraprocess`) - run one delivery cycle: research ->
+  ralplan -> implementation path -> code review -> docs/status sync.
+- **Loop Engineering** (`loop`) - iterate through research, plan, handoff,
+  feedback, and repeat when the right implementation must be discovered.
+- **Web Research** (`web-research`) - gather current, source-backed evidence
+  for market, docs, competitor, implementation, or best-practice questions.
+- **Paper Learning** (`paper-learning`) - explain a supplied paper or paper PDF
+  at very easy, moderate, or expert level without dropping section coverage.
+- **Source Finder** (`source-finder`) - prepare typed source candidates:
+  papers, datasets, repos, docs, public decks, and similar inputs.
+- **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for Codex, Claude Code, Hermes, or another runtime without claiming execution.
+- **Workflow Learning** (`workflow-learning`) - turn missed routes or weak
+  workflows into traces, evals, review queues, regression cases, and patch
+  proposals.
 
 ## What You Get
 

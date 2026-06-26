@@ -127,6 +127,13 @@ omh doctor</code>
             plugin observations, and coding handoffs while the user keeps
             speaking in normal chat.
           </p>
+          <p>
+            Modern OMH is a contract system, not a command catalog. Wrapper
+            surfaces can render <code>omh_interact</code>,
+            <code>chat_response/v1</code>, and
+            <code>coding_runtime_handoff/v1</code> without turning a prepared
+            next step into observed work.
+          </p>
         </div>
         <div class="product-grid">
           <article class="product-card">
@@ -199,49 +206,98 @@ omh doctor</code>
       <section class="home-section home-section--ink" id="capabilities">
         <div class="section-heading section-heading--split">
           <div>
-            <p class="home-kicker">Capability map</p>
-            <h2>Modern OMH is a contract system, not a command catalog.</h2>
+            <p class="home-kicker">Representative modes</p>
+            <h2>Start with the 10 workflows that explain OMH.</h2>
           </div>
           <p>
-            The installed skills still matter, but the product story is the
-            renderable path around them: capabilities, route hints, session
-            evidence, worktree guidance, and selected-runtime handoff.
+            The catalog is larger, but these are the modes people should see
+            first. Each card names the mode, the right moment to use it, and
+            the direct skill call when the user wants manual control.
           </p>
         </div>
-        <div class="capability-board" role="group" aria-label="OMH capability lanes">
-          <article class="capability-card capability-card--large">
-            <span>chat surface</span>
-            <h3><code>omh_interact</code> and <code>chat_response/v1</code></h3>
-            <p>
-              Hermes or a wrapper can turn one message into route, role, next
-              action, buttons, status, and evidence boundaries.
-            </p>
+        <div class="mode-note" aria-label="Representative OMH workflow modes">
+          <span>Mode-first, not catalog-first</span>
+          <p>
+            Start here for the public story. The full reference stays in docs
+            for operators who want every workflow, contract, and playbook.
+          </p>
+        </div>
+        <div class="mode-grid">
+          <article class="mode-card mode-card--featured">
+            <span class="mode-card__label">Intent clarity</span>
+            <h3>Deep Interview</h3>
+            <p>Clarify the missing decision before planning.</p>
+            <strong>Best for vague product, research, or coding requests.</strong>
+            <code>deep-interview</code>
           </article>
-          <article class="capability-card">
-            <span>manifest</span>
-            <h3><code>omh capabilities</code></h3>
-            <p>Local manifests explain skills, hooks, playbooks, roles, tools, and evidence rules.</p>
+          <article class="mode-card mode-card--featured">
+            <span class="mode-card__label">Reviewed plan</span>
+            <h3>Ralplan</h3>
+            <p>Plan from facts, sources, risks, and verification.</p>
+            <strong>Best for architecture, risk, and serious implementation plans.</strong>
+            <code>ralplan</code>
           </article>
-          <article class="capability-card">
-            <span>planning</span>
-            <h3><code>deep-interview</code> to <code>ultragoal</code></h3>
-            <p>Fuzzy intent turns into clear goals, acceptance criteria, and durable checkpoints.</p>
+          <article class="mode-card">
+            <span class="mode-card__label">Durable goal</span>
+            <h3>Ultragoal</h3>
+            <p>Give ambitious work checkpoints and completion gates.</p>
+            <strong>Best when progress needs a durable trail.</strong>
+            <code>ultragoal</code>
           </article>
-          <article class="capability-card">
-            <span>loop</span>
-            <h3><code>loop</code></h3>
-            <p>Large goals become a visible cycle of interview, research, plan, handoff, feedback, and resume.</p>
+          <article class="mode-card mode-card--featured">
+            <span class="mode-card__label">One-cycle delivery</span>
+            <h3>Ultra Process</h3>
+            <p>Research -> plan -> implementation path -> review -> sync.</p>
+            <strong>Best for one PR-ready delivery cycle.</strong>
+            <code>ultraprocess</code>
           </article>
-          <article class="capability-card">
-            <span>visual prep</span>
-            <h3><code>img-summary</code></h3>
-            <p>Meetings, PRs, issues, releases, and research become source-specific prompt cards.</p>
+          <article class="mode-card">
+            <span class="mode-card__label">Loop engineering</span>
+            <h3>Loop Engineering</h3>
+            <p>Research, plan, handoff, feedback, repeat.</p>
+            <strong>Best when the next right move must be discovered.</strong>
+            <code>loop</code>
           </article>
-          <article class="capability-card">
-            <span>coding</span>
-            <h3><code>coding_runtime_handoff/v1</code></h3>
-            <p>Codex, Claude Code, Hermes, or another selected runtime receives scoped work only after the path is visible.</p>
+          <article class="mode-card">
+            <span class="mode-card__label">Live evidence</span>
+            <h3>Web Research</h3>
+            <p>Current research with source-backed evidence.</p>
+            <strong>Best for market, docs, competitor, and best-practice questions.</strong>
+            <code>web-research</code>
           </article>
+          <article class="mode-card">
+            <span class="mode-card__label">Paper study</span>
+            <h3>Paper Learning</h3>
+            <p>Explain a paper by level without dropping sections.</p>
+            <strong>Best for very easy, moderate, or expert study.</strong>
+            <code>paper-learning</code>
+          </article>
+          <article class="mode-card">
+            <span class="mode-card__label">Source intake</span>
+            <h3>Source Finder</h3>
+            <p>Find papers, datasets, repos, docs, and public decks.</p>
+            <strong>Best before research or synthesis starts.</strong>
+            <code>source-finder</code>
+          </article>
+          <article class="mode-card">
+            <span class="mode-card__label">Coding handoff</span>
+            <h3>Idea To Deploy</h3>
+            <p>Scoped coding handoff with verification shape.</p>
+            <strong>Best for Codex, Claude Code, Hermes, or another runtime.</strong>
+            <code>idea-to-deploy</code>
+          </article>
+          <article class="mode-card">
+            <span class="mode-card__label">Improve the workflow</span>
+            <h3>Workflow Learning</h3>
+            <p>Trace weak routes into evals and patch proposals.</p>
+            <strong>Best after a missed or weak workflow.</strong>
+            <code>workflow-learning</code>
+          </article>
+        </div>
+        <div class="mode-grid__footer">
+          <span>Full catalog: 40+ OMH workflows, contracts, roles, and playbooks.</span>
+          <a class="text-link" href="docs/#flagship">Open workflow docs</a>
+          <a class="text-link" href="docs/#contracts">Open contracts</a>
         </div>
       </section>
 
@@ -282,6 +338,7 @@ omh doctor</code>
             <div>
               <span>Image gen</span>
               <h3>Prompt cards with source structure and domain scene separated.</h3>
+              <p>Meetings, PRs, issues, releases, and research become source-specific prompt cards.</p>
             </div>
           </a>
           <a class="artifact-card" href="docs/intent-to-plan/" aria-label="Open intent to plan docs">
