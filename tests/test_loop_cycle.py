@@ -76,6 +76,30 @@ class GoalLoopTests(unittest.TestCase):
         visible = build_loop_start_card("Make OMH public launch-ready", include_goal=True)
         self.assertEqual(visible["goal_summary"], "Make OMH public launch-ready")
 
+    def test_explicit_loop_invocation_is_agentic_and_does_not_stop_at_interview(self) -> None:
+        card = build_loop_start_card(
+            "loop reinforcement omh",
+            source="discord",
+            default_permission_profile="execute_with_gates",
+        )
+
+        self.assertEqual(card["schema_version"], LOOP_START_CARD_SCHEMA)
+        self.assertEqual(card["status"], "started_prepared")
+        self.assertEqual(card["next_action"], "start_loop_cycle")
+        self.assertEqual(card["loop_invocation"]["schema_version"], "loop_invocation/v1")
+        self.assertEqual(card["loop_invocation"]["authority_interpretation"], "start_or_continue_until_gate")
+        self.assertEqual(card["loop_invocation"]["progress_policy"], "do_not_stop_until_gate")
+        self.assertIn("permission_blocked", card["loop_invocation"]["stop_conditions"])
+        self.assertIn("deep-interview", card["core_skills"])
+        self.assertIn("ralplan", card["core_skills"])
+        self.assertIn("ultragoal", card["core_skills"])
+        self.assertIn("team", card["core_skills"])
+        self.assertIn("code-review", card["core_skills"])
+        role_ids = [role["id"] for role in card["role_pipeline"]]
+        self.assertEqual(role_ids[:4], ["interviewer", "planner", "researcher", "builder"])
+        self.assertEqual(role_ids[-1], "loop_controller")
+        self.assertFalse(card["permission_profile_required"])
+
     def test_loopability_assessment_classifies_task_project_and_ambition(self) -> None:
         direct = assess_loopability("./loop change the button color", expose_goal=True)
         self.assertEqual(direct["goal_kind"], "task")

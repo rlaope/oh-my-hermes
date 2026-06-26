@@ -34,6 +34,7 @@ from ..parity import build_parity_matrix
 from ..release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from ..skill_pack import builtin_skill_templates
 from ..skills.catalog import builtin_definitions
+from ..system.paths import OmhPaths
 from ..use_cases import (
     USE_CASES,
     build_all_use_case_artifacts,

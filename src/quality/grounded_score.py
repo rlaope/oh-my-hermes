@@ -322,7 +322,7 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         "./loop make this project a 10k star OSS",
         "loop",
         "loop",
-        "reframe_north_star",
+        "start_loop_cycle",
         "clarify",
         False,
         invocation_mode="direct_skill",

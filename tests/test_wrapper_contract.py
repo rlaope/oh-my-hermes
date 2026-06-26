@@ -1149,15 +1149,17 @@ class WrapperContractTests(unittest.TestCase):
 
         serialized = json.dumps(payload)
         self.assertEqual(payload["mode"], "route")
-        self.assertEqual(payload["next_action"], "reframe_north_star")
+        self.assertEqual(payload["next_action"], "start_loop_cycle")
         self.assertEqual(payload["chat_response"]["kind"], "loop")
         self.assertEqual(payload["loop_start_card"]["schema_version"], "loop_start_card/v1")
+        self.assertEqual(payload["loop_start_card"]["status"], "started_prepared")
         self.assertEqual(payload["loop_start_card"]["goal_summary"], "{message}")
+        self.assertEqual(payload["loop_start_card"]["loop_invocation"]["progress_policy"], "do_not_stop_until_gate")
         self.assertEqual(payload["loop_start_card"]["loopability_assessment"]["loopability"], "needs_reframe")
         self.assertEqual(payload["chat_response"]["state"]["loop_start_card"]["schema_version"], "loop_start_card/v1")
         self.assertEqual(payload["chat_response"]["state"]["loopability_assessment"]["goal_kind"], "ambition")
         action_ids = {action["id"] for action in payload["chat_response"]["actions"]}
-        self.assertIn("convert_to_loop_goal", action_ids)
+        self.assertIn("start_loop", action_ids)
         self.assertIn("start_loop", action_ids)
         self.assertIn("show_loop_queue", action_ids)
         self.assertNotIn("10k-star quality", serialized)
@@ -1171,7 +1173,31 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["loop_start_card"]["loopability_assessment"]["goal_kind"], "task")
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertTrue(actions["route_direct_task"]["enabled"])
-        self.assertFalse(actions["start_loop"]["enabled"])
+        self.assertTrue(actions["start_loop"]["enabled"])
+
+    def test_terse_loop_invocation_starts_agentic_loop_without_picker(self) -> None:
+        payload = build_chat_interaction_payload("loop reinforcement omh", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "start_loop_cycle")
+        self.assertEqual(payload["chat_response"]["kind"], "loop")
+        self.assertNotEqual(payload["chat_response"]["kind"], "skill_picker")
+        self.assertEqual(payload["loop_start_card"]["status"], "started_prepared")
+        self.assertEqual(payload["loop_start_card"]["loop_invocation"]["progress_policy"], "do_not_stop_until_gate")
+        self.assertIn("deep-interview", payload["loop_start_card"]["core_skills"])
+        self.assertIn("ralplan", payload["loop_start_card"]["core_skills"])
+        self.assertIn("ultragoal", payload["loop_start_card"]["core_skills"])
+        self.assertIn("team", payload["loop_start_card"]["core_skills"])
+        self.assertEqual(payload["chat_response"]["state"]["permission_profile_required"], False)
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertTrue(actions["start_loop"]["enabled"])
+        self.assertTrue(actions["run_loop_tick"]["enabled"])
+
+        korean = build_chat_interaction_payload("OMH 루프 강화 ㄱㄱ", source="discord")
+        self.assertEqual(korean["mode"], "route")
+        self.assertEqual(korean["next_action"], "start_loop_cycle")
+        self.assertEqual(korean["chat_response"]["kind"], "loop")
+        self.assertEqual(korean["loop_start_card"]["loop_invocation"]["progress_policy"], "do_not_stop_until_gate")
 
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
         cases = (

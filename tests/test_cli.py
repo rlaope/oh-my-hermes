@@ -4141,7 +4141,7 @@ class CliTests(unittest.TestCase):
             ("take this product idea from plan to deploy and monitor safely", "idea-to-deploy", "ack", "present_app_delivery_loop"),
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "ack", "run_cto_loop"),
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
-            ("./loop make this project a 10k star OSS", "loop", "loop", "reframe_north_star"),
+            ("./loop make this project a 10k star OSS", "loop", "loop", "start_loop_cycle"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "ack", "prepare_github_event_ops_card"),
@@ -4442,7 +4442,9 @@ class CliTests(unittest.TestCase):
             start_card = json.loads(stdout)["loop_start_card"]
             self.assertEqual(start_card["schema_version"], "loop_start_card/v1")
             self.assertEqual(start_card["goal_summary"], "{message}")
-            self.assertEqual(start_card["next_action"], "reframe_north_star")
+            self.assertEqual(start_card["next_action"], "start_loop_cycle")
+            self.assertEqual(start_card["status"], "started_prepared")
+            self.assertEqual(start_card["loop_invocation"]["progress_policy"], "do_not_stop_until_gate")
             self.assertEqual(start_card["loopability_assessment"]["schema_version"], "loopability_assessment/v1")
             self.assertEqual(start_card["loopability_assessment"]["goal_kind"], "ambition")
             self.assertEqual(start_card["loopability_assessment"]["loopability"], "needs_reframe")

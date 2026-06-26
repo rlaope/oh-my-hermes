@@ -785,7 +785,7 @@ def build_chat_response_from_route(
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (
-                "Start the loop interview, choose a permission profile, and keep every later step inside the recorded authority envelope."
+                "Start the loop and keep moving through interviewer, planner, builder, reviewer, and next-loop gates while keeping observed evidence separate."
             )
             loop_start_card = build_loop_start_card(
                 message or selected,
@@ -793,9 +793,18 @@ def build_chat_response_from_route(
                 source=str(decision.get("source", "generic")),
             )
             assessment = loop_start_card.get("loopability_assessment", {})
-            loop_next_action = str(assessment.get("recommended_next_action", "start_goal_loop"))
+            loop_next_action = str(loop_start_card.get("next_action") or assessment.get("recommended_next_action", "start_goal_loop"))
             loopability = str(assessment.get("loopability", "loopable"))
-            if loopability == "direct_task":
+            loop_invocation = _nested(loop_start_card, "loop_invocation")
+            explicit_loop = loop_invocation.get("invoked") is True
+            if explicit_loop and loop_next_action == "start_loop_cycle":
+                headline = "Loop started; I will keep going until a real gate."
+                body = (
+                    "I will advance through interviewer, planner, researcher, builder, reviewer, and loop-controller lanes; "
+                    "prepared steps stay separate from observed execution, review, CI, merge, or publication evidence."
+                )
+                primary_action = "start_loop"
+            elif loopability == "direct_task":
                 headline = "This looks like a direct task, not a loop."
                 body = "I can route it to a one-cycle delivery workflow unless you explicitly want repeated discovery."
                 primary_action = "route_direct_task"
@@ -817,8 +826,8 @@ def build_chat_response_from_route(
                 )
             loop_actions.extend(
                 [
-                    _action("start_loop", "Start loop", "primary", enabled=loopability == "loopable"),
-                    _action("run_loop_tick", "Run loop tick", "secondary", enabled=False),
+                    _action("start_loop", "Start loop", "primary", enabled=loopability == "loopable" or explicit_loop),
+                    _action("run_loop_tick", "Run loop tick", "secondary", enabled=explicit_loop),
                     _action("show_loop_queue", "Show loop queue", "secondary", enabled=False),
                     _action("show_loop_status", "Show loop status", "secondary"),
                     _action("cancel", "Cancel", "secondary"),
@@ -839,8 +848,11 @@ def build_chat_response_from_route(
                     "selected_workflow": selected,
                     "workflow_explanation_reason": workflow_explanation_reason,
                     "policy_next_action": policy_next_action,
+                    "loop_invocation": loop_invocation,
+                    "role_pipeline": loop_start_card.get("role_pipeline", []),
+                    "core_skills": loop_start_card.get("core_skills", []),
                     "loopability_assessment": assessment,
-                    "permission_profile_required": True,
+                    "permission_profile_required": bool(loop_start_card.get("permission_profile_required", True)),
                     "loop_start_card": loop_start_card,
                     "evidence_not_observed": [
                         "executor/runtime dispatch",
