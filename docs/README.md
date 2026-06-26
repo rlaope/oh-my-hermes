@@ -85,60 +85,27 @@ The full skill catalog is intentionally larger than the public story. Start
 with these 10 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
 [CAPABILITIES.md](CAPABILITIES.md) for the complete reference.
 
-The intent-to-plan lane includes `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`.
-This section expands that lane into individual representative modes instead of
-a dense command family table.
+<!-- Intent-to-plan anchor: `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`. -->
 
-**Deep Interview**
-
-`deep-interview` asks the smallest useful clarification before planning. Use it
-when a product, research, or coding request is still too vague to execute well.
-
-**Ralplan**
-
-`ralplan` turns repo facts, source evidence, alternatives, risks, acceptance
-criteria, and verification commands into a reviewed plan.
-
-**Ultragoal**
-
-`ultragoal` gives ambitious goals durable checkpoints and completion gates so
-Hermes can report progress without pretending a one-shot answer is enough.
-
-**Ultra Process**
-
-`ultraprocess` is the one-cycle delivery lane: research -> ralplan ->
-implementation path -> code review -> docs/status sync.
-
-**Loop**
-
-`loop` handles loopable projects where the correct next implementation has to
-be discovered through bounded research, plan, handoff, feedback, and repeat
-cycles.
-
-**Web Research**
-
-`web-research` keeps current market, docs, competitor, implementation, and
-best-practice research source-backed.
-
-**Paper Learning**
-
-`paper-learning` explains a supplied paper or paper PDF at very easy,
-moderate, or expert level while preserving section coverage.
-
-**Source Finder**
-
-`source-finder` prepares typed source candidates such as papers, datasets,
-repos, docs, and public decks before research or synthesis starts.
-
-**Idea To Deploy**
-
-`idea-to-deploy` prepares scoped coding work for Codex, Claude Code, Hermes, or
-another runtime without claiming unobserved execution.
-
-**Workflow Learning**
-
-`workflow-learning` turns missed routes or weak workflow attempts into traces,
-evals, review queues, regression cases, and patch proposals.
+- **Deep Interview** (`deep-interview`) - clarify the one missing decision
+  before planning.
+- **Ralplan** (`ralplan`) - turn facts, sources, risks, acceptance criteria,
+  and verification commands into a reviewed plan.
+- **Ultragoal** (`ultragoal`) - give ambitious work durable checkpoints and
+  completion gates.
+- **Ultra Process** (`ultraprocess`) - run one delivery cycle from research to
+  plan, implementation path, review, and docs/status sync.
+- **Loop Engineering** (`loop`) - iterate when the correct next implementation
+  must be discovered through bounded cycles.
+- **Web Research** (`web-research`) - keep current research source-backed.
+- **Paper Learning** (`paper-learning`) - explain a supplied paper or paper PDF
+  by level while preserving section coverage.
+- **Source Finder** (`source-finder`) - prepare typed source candidates before
+  research or synthesis starts.
+- **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for the
+  selected runtime without claiming unobserved execution.
+- **Workflow Learning** (`workflow-learning`) - turn weak workflow attempts into
+  traces, evals, review queues, regression cases, and patch proposals.
 
 ## Documentation Contracts
 

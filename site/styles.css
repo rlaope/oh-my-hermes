@@ -4651,7 +4651,7 @@ body.home-page {
   display: grid;
   align-content: start;
   min-width: 0;
-  min-height: 260px;
+  min-height: 230px;
   padding: 20px;
   border: 1px solid rgba(126, 215, 194, 0.2);
   border-radius: 8px;
@@ -4756,7 +4756,7 @@ body.home-page {
 }
 
 .mode-card--docs {
-  min-height: 250px;
+  min-height: 220px;
   border-color: rgba(25, 116, 102, 0.2);
   background:
     radial-gradient(circle at 18% 0%, rgba(25, 116, 102, 0.1), transparent 34%),
