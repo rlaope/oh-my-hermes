@@ -227,6 +227,10 @@ class PluginCapabilitiesTests(unittest.TestCase):
             plugin_dir = hermes_home / "plugins" / "omh"
             sionic_prompt_fixture = """이번 Sionic 작업에서 OMH가 얼마나 관여했는지 사용성 평가하고,
 왜 OMH를 덜 썼는지 분석해서 라우터 강화 플랜으로 잡아줘.
+Sionic은 마크다운 노트뿐 아니라 위키 페이지/site 생성도 포함했어.
+결과창에는 Background process proc_d5eb61ddcf80 finished with exit code 0~
+Here's the final output: 같은 raw output, turn.completed usage, Self-improvement review 줄이 보였고
+이걸 프리티하게 OMH wrapper report로 정리해야 했어.
 
 [OMH Awareness]
 status=prepared_not_observed; Evidence boundary: pasted status is diagnostic evidence.

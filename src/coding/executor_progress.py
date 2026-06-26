@@ -9,6 +9,7 @@ from typing import Any
 
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, read_jsonl_objects, utc_now
 from ..paths import OmhPaths
+from .context_safety import sanitize_user_facing_progress_text
 
 
 EXECUTOR_PROGRESS_BINDING_SCHEMA_VERSION = "omh_executor_progress_binding/v1"
@@ -303,7 +304,10 @@ def build_progress_event(
         "event_type": event_type,
         "status": status or _status_for_event_type(event_type),
         "severity": severity,
-        "summary": _compact_text(summary or _summary_for_event_type(event_type), 280),
+        "summary": _compact_text(
+            _sanitize_progress_copy(summary) or _summary_for_event_type(event_type),
+            280,
+        ),
         "observed_at": timestamp,
         "evidence_refs": _compact_strings(evidence_refs or binding.get("evidence_refs", [])),
         "signal": _safe_signal(signal or {}),
@@ -351,7 +355,7 @@ def build_safe_progress_signal(
         "codex_artifact_byte_count": progress.get("artifact_byte_count", 0) if profile == "codex" else 0,
         "codex_malformed_event_count": progress.get("malformed_event_count", 0) if profile == "codex" else 0,
         "explicit_event_type": explicit,
-        "explicit_summary": _compact_text(explicit_summary, 280),
+        "explicit_summary": _compact_text(_sanitize_progress_copy(explicit_summary), 280),
         "evidence_ref_count": len(evidence_refs or []),
     }
     return _safe_signal(signal)
@@ -397,7 +401,7 @@ def infer_progress_event_type(signal: dict[str, Any]) -> str:
 def summary_for_signal(signal: dict[str, Any], event_type: str) -> str:
     explicit = str(signal.get("explicit_summary", "")).strip()
     if explicit:
-        return explicit
+        return _sanitize_progress_copy(explicit) or _summary_for_event_type(event_type)
     visible = str(signal.get("assistant_visible_summary", "")).strip()
     if visible and event_type in {
         "repo_exploration",
@@ -409,7 +413,7 @@ def summary_for_signal(signal: dict[str, Any], event_type: str) -> str:
         "executor_blocked",
         "executor_failed",
     }:
-        return _compact_text(visible, 240)
+        return _compact_text(_sanitize_progress_copy(visible) or _summary_for_event_type(event_type), 240)
     return _summary_for_event_type(event_type)
 
 
@@ -961,6 +965,10 @@ def _compact_text(value: str, limit: int) -> str:
     return cleaned[: max(0, limit - 1)].rstrip() + "…"
 
 
+def _sanitize_progress_copy(value: str) -> str:
+    return sanitize_user_facing_progress_text(value)
+
+
 def _clean_object(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item not in ("", None, [], {})}
 
@@ -1004,7 +1012,9 @@ def _safe_progress_summary(summary: dict[str, Any] | None, *, codex_profile: boo
         if isinstance(summary.get("observable_activity", []), list)
     ][:8]
     assistant_visible_summary = _compact_text(
-        str(summary.get("latest_assistant_visible_message") or summary.get("chat_summary") or summary.get("summary") or ""),
+        _sanitize_progress_copy(
+            str(summary.get("latest_assistant_visible_message") or summary.get("chat_summary") or summary.get("summary") or "")
+        ),
         240,
     )
     latest_event_type = _compact_text(str(latest.get("event_type", "")), 80)

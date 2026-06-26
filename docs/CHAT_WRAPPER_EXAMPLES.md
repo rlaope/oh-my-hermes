@@ -267,6 +267,18 @@ intent=unknown; selected=img-summary; confidence=medium
 The wrapper still owns rendering and state recording. The context brief and
 route hint are prompt/context guidance only; they are not workflow execution,
 image generation, scheduled job creation, review, CI, or delivery evidence.
+If a route-hint or managed-skill change has just shipped, a live Hermes Agent
+or gateway may still show the old injected hint until the installed OMH package
+and managed plugin are refreshed with `omh update` or `omh setup`, then the
+Hermes Agent or gateway process is restarted or reloaded.
+
+OMH-owned wrapper and progress reports must render only bounded summaries from
+Codex/background output. They must not echo process completion wrappers such as
+`Background process ... Here's the final output`, raw JSONL `turn.completed` or
+`usage` token objects, token counts, or `Self-improvement review` lines into
+normal chat progress/completion copy. The host process tool may still emit its
+own notification outside OMH control; adapters should treat that as a separate
+Hermes/gateway surface, not as OMH's report body.
 
 Wrappers do not need to wait for plugin load to show the same kind of hint. They
 can call the transport-free backend preview:

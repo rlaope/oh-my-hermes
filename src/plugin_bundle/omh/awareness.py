@@ -18,6 +18,17 @@ _DIAGNOSTIC_STATUS_MARKERS = (
     "merge_observed",
     "prepared_not_observed",
 )
+_DIAGNOSTIC_STATUS_LINE_MARKERS = (
+    *_DIAGNOSTIC_STATUS_MARKERS,
+    "selected_workflow=",
+    "mentioned_workflows=",
+    "mentioned_runtime_terms=",
+    "not_executed=",
+    "intent_class=",
+    "status=",
+    "workflow=",
+    "hints=",
+)
 _OMH_DIAGNOSTIC_EVALUATION_CUES = (
     "usage evaluation",
     "usability evaluation",
@@ -31,16 +42,18 @@ _OMH_DIAGNOSTIC_EVALUATION_CUES = (
     "why omh",
     "사용성 평가",
     "사용성평가",
-    "관여",
-    "부족",
+    "omh 관여",
+    "omh관여",
+    "omh 관여도",
+    "omh관여도",
     "안쓴이유",
     "안 쓴 이유",
+    "덜 쓴 이유",
+    "덜쓴 이유",
     "덜 썼",
     "덜썼",
-    "작업한거 분석",
-    "작업한 거 분석",
-    "분석",
-    "평가",
+    "부족했던 점",
+    "부족한 점",
     "라우터 강화",
     "라우터강화",
     "라우터 개선",
@@ -125,14 +138,17 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
     def _fallback_diagnostic_omh_evaluation_context(text: str, compact: str) -> bool:
         if not _fallback_diagnostic_status_context(text):
             return False
-        has_omh_subject = bool(re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", text)) or "[omh" in text
-        if not has_omh_subject:
+        user_region = _without_diagnostic_status_lines(text)
+        user_compact = user_region.replace(" ", "")
+        has_user_omh_subject = bool(re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", user_region))
+        has_user_router_subject = bool(_matched_text_cues(("router", "routing", "route hint", "라우터", "라우팅"), user_region, user_compact))
+        if not (has_user_omh_subject or has_user_router_subject):
             return False
         return bool(
             _fallback_matched_omh_quality_cues(
                 _OMH_DIAGNOSTIC_EVALUATION_CUES,
-                text,
-                compact,
+                user_region,
+                user_compact,
             )
         )
 
@@ -239,6 +255,7 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
         text = unicodedata.normalize("NFKC", message).casefold()
         compact = text.replace(" ", "")
         diagnostic_evaluation = _fallback_diagnostic_omh_evaluation_context(text, compact)
+        analysis_text = text if diagnostic_evaluation or not _diagnostic_status_context(text) else _without_diagnostic_status_lines(text)
         delivery_workflows = {
             "ultraprocess",
             "ralplan",
@@ -250,9 +267,7 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             "ultrawork",
             "ultraqa",
         }
-        mentioned_workflows = tuple(
-            workflow for workflow in ROUTER_KEYWORD_SKILLS if workflow in text and workflow in delivery_workflows
-        )
+        mentioned_workflows = tuple(workflow for workflow in delivery_workflows if workflow in analysis_text)
         runtime_terms = []
         for term, label in (
             ("codex", "Codex"),
@@ -261,7 +276,7 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             ("one-cycle delivery", "one-cycle delivery"),
             ("one cycle delivery", "one-cycle delivery"),
         ):
-            if term in text and label not in runtime_terms:
+            if term in analysis_text and label not in runtime_terms:
                 runtime_terms.append(label)
         meta_cues = tuple(
             cue
@@ -280,11 +295,9 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 "로그",
                 "트리거",
                 "오해",
-                "분석",
-                "평가",
                 "라우터",
             )
-            if cue in text
+            if cue in analysis_text
         )
         feedback_cues = tuple(
             cue
@@ -296,29 +309,27 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
                 "잘못",
                 "오해",
                 "누락",
-                "관여",
-                "부족",
                 "사용성 평가",
                 "안쓴이유",
                 "안 쓴 이유",
             )
-            if cue in text
+            if cue in analysis_text
         )
-        missing = tuple(cue for cue in ("no requirements", "missing requirements", "요구사항은 없어", "요구사항 없음") if cue in text)
+        missing = tuple(cue for cue in ("no requirements", "missing requirements", "요구사항은 없어", "요구사항 없음") if cue in analysis_text)
         negated_execution = tuple(
             cue
             for cue in ("not asking to implement", "not asking for implementation", "not implement", "do not implement", "don't implement", "without implementation", "no implementation")
-            if cue in text
+            if cue in analysis_text
         )
         execution = tuple(
             cue
             for cue in ("implement", "make a pr", "open a pr", "dispatch", "delegate", "send to codex", "run ultraprocess", "구현", "pr 만들어", "codex로", "맡겨", "실행")
-            if cue in text and not (negated_execution and cue in {"implement", "구현"})
+            if cue in analysis_text and not (negated_execution and cue in {"implement", "구현"})
         )
         routing_context = any(
-            cue in text.split() or cue in text
+            cue in analysis_text.split() or cue in analysis_text
             for cue in ("routing", "route", "workflow", "handoff", "coding", "route hint", "coding handoff", "coding delegate", "라우팅", "워크플로", "코딩")
-        ) or " omh " in f" {text} "
+        ) or " omh " in f" {analysis_text} "
         specific_runtime_reference = any(term != "Codex" for term in runtime_terms)
         workflow_or_specific_runtime = bool(mentioned_workflows or specific_runtime_reference)
         if execution:
@@ -847,11 +858,14 @@ def awareness_context_matches_message(message: str) -> bool:
 def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, object]:
     """Return bounded message-specific workflow hints without exposing raw text."""
     normalized = unicodedata.normalize("NFKC", message).casefold()
-    tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", normalized))
+    diagnostic_status = _diagnostic_status_context(normalized)
+    diagnostic_eval = _prefers_diagnostic_workflow_learning_hint(message, classify_workflow_intent(message))
+    routing_normalized = normalized if diagnostic_eval or not diagnostic_status else _without_diagnostic_status_lines(normalized)
+    tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", routing_normalized))
     hint_limit = max(max_hints, 0)
     intent = classify_workflow_intent(message)
     omh_quality_intent = classify_omh_quality_intent(message)
-    diagnostic_learning_first = _prefers_diagnostic_workflow_learning_hint(message, intent)
+    diagnostic_learning_first = diagnostic_eval
     hints: list[dict[str, object]] = []
     if normalized.strip() and hint_limit:
         if omh_quality_intent.applies and not diagnostic_learning_first:
@@ -868,7 +882,7 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
                 continue
             if _rule_suppressed_by_reference_intent(rule, intent):
                 continue
-            phrase_matches = [phrase for phrase in rule["phrases"] if phrase in normalized]
+            phrase_matches = [phrase for phrase in rule["phrases"] if phrase in routing_normalized]
             token_matches = [token for token in rule["tokens"] if token in tokens]
             if not phrase_matches and not token_matches:
                 continue
@@ -1330,22 +1344,46 @@ def _prefers_diagnostic_workflow_learning_hint(message: str, intent: object) -> 
     if bool(getattr(intent, "explicit_execution", False)):
         return False
     text = unicodedata.normalize("NFKC", message).casefold()
-    compact = text.replace(" ", "")
     if not _diagnostic_status_context(text):
         return False
-    if not (re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", text) or "[omh" in text):
+    user_region = _without_diagnostic_status_lines(text)
+    compact = user_region.replace(" ", "")
+    has_user_omh_subject = re.search(r"(?<![a-z0-9])omh(?![a-z0-9])", user_region) is not None
+    has_user_router_subject = bool(_matched_text_cues(("router", "routing", "route hint", "라우터", "라우팅"), user_region, compact))
+    if not (has_user_omh_subject or has_user_router_subject):
         return False
-    return bool(
-        _matched_text_cues(
-            _OMH_DIAGNOSTIC_EVALUATION_CUES,
-            text,
-            compact,
-        )
-    )
+    return bool(_matched_text_cues(_OMH_DIAGNOSTIC_EVALUATION_CUES, user_region, compact))
 
 
 def _diagnostic_status_context(text: str) -> bool:
     return any(marker in text for marker in _DIAGNOSTIC_STATUS_MARKERS)
+
+
+def _without_diagnostic_status_lines(text: str) -> str:
+    kept: list[str] = []
+    for line in text.splitlines() or [text]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("[omh"):
+            stripped = re.sub(r"^\[omh(?:\s+awareness|\s+route\s+hint)?\]\s*", "", stripped).strip()
+            if not stripped:
+                continue
+        if stripped.startswith(("native bridge status context", "evidence boundary", "latest runtime run")):
+            continue
+        if any(unicodedata.normalize("NFKC", marker).casefold() in stripped for marker in _DIAGNOSTIC_STATUS_LINE_MARKERS):
+            fragments = [fragment.strip() for fragment in re.split(r"[;|]", stripped)]
+            user_fragments = [
+                fragment
+                for fragment in fragments
+                if fragment
+                and not any(unicodedata.normalize("NFKC", marker).casefold() in fragment for marker in _DIAGNOSTIC_STATUS_LINE_MARKERS)
+            ]
+            if user_fragments:
+                kept.append(" ".join(user_fragments))
+            continue
+        kept.append(stripped)
+    return "\n".join(kept)
 
 
 def _matched_text_cues(cues: tuple[str, ...], text: str, compact: str) -> tuple[str, ...]:
