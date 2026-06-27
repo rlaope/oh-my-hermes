@@ -93,25 +93,6 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 
 <br>
 
-## Why OMH
-
-- **Hermes stays the surface** - users ask in plain language, and Hermes can
-  answer with a family, workflow, role, next action, or handoff.
-- **Discovery starts with outcomes** - planning, learning, material creation,
-  coding delegation, and operations appear as capability families before users
-  need to know skill names.
-- **Research and planning are first-class** - source finding, paper learning,
-  web research, briefs, interviews, plans, and strategy work stay in
-  Hermes-facing paths instead of defaulting to coding.
-- **Coding is delegated deliberately** - Codex, Claude Code, Hermes, or another
-  selected executor receives a scoped handoff only after the request is clear.
-- **Prepared is not observed** - plans, generated prompts, status cards,
-  dispatch, execution, review, CI, and merge evidence stay separate.
-- **Local and inspectable** - skills, manifests, plans, sessions, and status
-  records stay in user-owned local directories.
-
-<br>
-
 ## Core Workflows
 
 <p align="center">

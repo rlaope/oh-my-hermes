@@ -1165,8 +1165,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertNotIn("omh update --channel preview", update_section)
         self.assertIn("omh setup", readme)
         self.assertIn("omh doctor", readme)
-        self.assertLess(readme.index("## Quick Start"), readme.index("## Why OMH"))
-        quick_start = readme.split("## Quick Start", 1)[1].split("## Why OMH", 1)[0]
+        self.assertNotIn("## Why OMH", readme)
+        self.assertLess(readme.index("## Quick Start"), readme.index("## Core Workflows"))
+        quick_start = readme.split("## Quick Start", 1)[1].split("## Core Workflows", 1)[0]
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", quick_start)
         self.assertIn("omh setup", quick_start)
         self.assertLess(quick_start.index("omh setup"), quick_start.index("omh doctor"))
