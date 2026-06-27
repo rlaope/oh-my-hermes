@@ -118,6 +118,10 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
 </p>
 
+<p align="center">
+  <img src="assets/omh-skill-magic-promo.png" alt="Friren Agent controlling OMH workflow skills with magic" width="920">
+</p>
+
 The full skill catalog is larger. These 10 are the representative modes to
 understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
 [Capabilities](docs/CAPABILITIES.md).
