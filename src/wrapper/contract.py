@@ -13,6 +13,7 @@ from ..context import build_context_brief
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
 from ..hermes_planning import build_hermes_plan_payload, is_coding_shaped_task
+from ..learning_candidate import build_learning_candidate_card
 from ..memory import memory_recall_pack_for_handoff
 from ..operator_productivity import build_agent_operator_productivity_card
 from ..paths import OmhPaths, resolve_paths
@@ -184,6 +185,8 @@ VISIBLE_ACTIONS = (
     "prepare_patch_proposal",
     "show_patch_proposal",
     "copy_patch_handoff",
+    "show_learning_candidate",
+    "copy_learn_prompt",
     "add_regression_case",
     "audit_learning_readiness",
     "export_learning_bundle",
@@ -570,6 +573,17 @@ def build_chat_interaction_payload(
     base["route"] = route_payload
     if isinstance(route_payload.get("task_card"), dict):
         base["task_card"] = route_payload["task_card"]
+    learning_candidate_card = build_learning_candidate_card(
+        message,
+        source=source,
+        source_metadata=metadata,
+        selected_workflow=str(route_payload.get("selected_skill", "")),
+        selected_harness=str(route_payload.get("selected_harness", "")),
+        thread_key=str(base["thread_key"]),
+    )
+    if learning_candidate_card:
+        base["learning_candidate_card"] = learning_candidate_card
+        route_payload["learning_candidate_card"] = learning_candidate_card
 
     if _is_omh_intro_question(message) and resolved_mode in {"route", "plan", "clarify"}:
         base["mode"] = "route"
@@ -882,6 +896,14 @@ def build_chat_response_from_route(
         if task_card and str(task_card.get("task_type", "")) != "router_design_feedback":
             return _chat_response_from_task_card(
                 task_card,
+                decision=decision,
+                thread_key=thread_key,
+                workflow_explanation_reason=workflow_explanation_reason,
+            )
+        learning_candidate_card = decision.get("learning_candidate_card")
+        if isinstance(learning_candidate_card, dict) and learning_candidate_card:
+            return _chat_response_from_learning_candidate_card(
+                learning_candidate_card,
                 decision=decision,
                 thread_key=thread_key,
                 workflow_explanation_reason=workflow_explanation_reason,
@@ -1315,6 +1337,80 @@ def _route_task_card(decision: dict[str, object]) -> dict[str, object]:
 def _task_card_state(decision: dict[str, object]) -> dict[str, object]:
     task_card = _route_task_card(decision)
     return {"task_card": task_card} if task_card else {}
+
+
+def _chat_response_from_learning_candidate_card(
+    card: dict[str, object],
+    *,
+    decision: dict[str, object],
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object]:
+    target = str(card.get("persistence_target", "review_first"))
+    primary_action = str(card.get("primary_action", "show_learning_candidate"))
+    summary = str(card.get("summary", "")).strip()
+    prompt = card.get("learn_prompt")
+    has_prompt = isinstance(prompt, dict) and bool(prompt.get("copy_text"))
+    if target == "skill_candidate":
+        headline = "I can prepare this for Hermes /learn."
+        body = (
+            "This is a reusable skill candidate. I prepared a sanitized copy-ready /learn prompt for Hermes Agent; "
+            "OMH has not run /learn, created a skill, or changed memory. "
+            f"Candidate: {summary}"
+        )
+    elif target == "memory_candidate":
+        headline = "I can queue this as a memory candidate."
+        body = (
+            "This looks like a durable user preference, so it should go through memory curation review before anything is saved. "
+            f"Candidate: {summary}"
+        )
+    elif target == "session_only":
+        headline = "This should stay session-only."
+        body = (
+            "The request points at transient task, PR, run, process, branch, or channel state. I will show it as a learning signal "
+            "without preparing persistence. "
+            f"Candidate: {summary}"
+        )
+    else:
+        headline = "This learning request needs review first."
+        body = (
+            "The request is ambiguous, conflicting, or cross-channel. Route it through memory curation review before persistence. "
+            f"Candidate: {summary}"
+        )
+
+    actions: list[dict[str, object]] = []
+    if has_prompt:
+        actions.append(_action("copy_learn_prompt", "Copy /learn prompt", "primary", payload=prompt))
+    actions.append(_action("show_learning_candidate", "Show candidate", "primary" if not actions else "secondary", payload=card))
+    if target in {"memory_candidate", "review_first"}:
+        actions.append(_action("prepare_memory_curation_review", "Review memory", "primary" if not has_prompt else "secondary", payload=card))
+        actions.append(_action("show_memory_status", "Show memory status", "secondary"))
+    actions.append(_action("show_status", "Show status", "secondary"))
+
+    return _chat_response(
+        kind="learning_candidate",
+        headline=headline,
+        body=body,
+        phase="learning_candidate_prepared",
+        next_action=primary_action,
+        thread_key=thread_key,
+        actions=actions,
+        claim_boundary=str(card.get("claim_boundary", "Learning candidate is prepared_not_observed.")),
+        extra_state={
+            "route_action": decision.get("action", "dispatch"),
+            "confidence": decision.get("confidence", "high"),
+            "selected_workflow": card.get("recommended_workflow", decision.get("selected_skill", "")),
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "learning_candidate_card_schema": card.get("schema_version", ""),
+            "learning_candidate_target": target,
+            "learning_candidate_status": card.get("status", "prepared_not_observed"),
+            "primary_learning_action": primary_action,
+            "learning_candidate_card": card,
+            "scope": card.get("scope", {}),
+            "artifact_schemas": ["learning_candidate_card/v1", "hermes_learn_prompt/v1"],
+            "evidence_not_observed": card.get("not_observed", []),
+        },
+    )
 
 
 def _chat_response_from_task_card(
@@ -2114,6 +2210,8 @@ def _resolve_mode(mode: str, route: dict[str, object], *, message: str = "") -> 
     action = str(route.get("action", "fallback"))
     if action != "dispatch":
         return _ROUTE_TO_MODE.get(action, "clarify")
+    if isinstance(route.get("learning_candidate_card"), dict):
+        return "route"
     if isinstance(route.get("task_card"), dict):
         return "route"
     selected = str(route.get("selected_skill", ""))

@@ -458,6 +458,110 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertFalse(decision["explicit"])
                 self.assertNotEqual(decision["selected_skill"], "ultraprocess")
 
+    def test_explicit_learn_request_prepares_skill_candidate_card(self) -> None:
+        decision = route_chat_message(
+            "learn this: when opening PRs, run git diff --check before gh pr create",
+            source="discord",
+        )
+        card = decision["learning_candidate_card"]
+        prompt = card["learn_prompt"]["copy_text"]
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "workflow-learning")
+        self.assertEqual(card["schema_version"], "learning_candidate_card/v1")
+        self.assertEqual(card["status"], "prepared_not_observed")
+        self.assertEqual(card["persistence_target"], "skill_candidate")
+        self.assertEqual(card["primary_action"], "copy_learn_prompt")
+        self.assertIn("/learn", prompt)
+        self.assertIn("Use observed facts only", prompt)
+        self.assertIn("reusable Hermes skill", prompt)
+        self.assertIn("Trigger conditions", prompt)
+        self.assertIn("Exact steps", prompt)
+        self.assertIn("Pitfalls", prompt)
+        self.assertIn("Verification commands", prompt)
+        self.assertIn("When not to use", prompt)
+        self.assertIn("prepared_not_observed", card["claim_boundary"])
+        self.assertIn("skill creation", card["not_observed"])
+        self.assertIn("memory write", card["not_observed"])
+
+    def test_user_correction_becomes_memory_candidate_not_skill_prompt(self) -> None:
+        decision = route_chat_message("다음부터 이렇게 답해줘: 짧게 한국어로 요약해", source="discord")
+        card = decision["learning_candidate_card"]
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "memory-curation-review")
+        self.assertEqual(card["persistence_target"], "memory_candidate")
+        self.assertEqual(card["primary_action"], "prepare_memory_curation_review")
+        self.assertEqual(card["review"]["review_workflow"], "memory-curation-review")
+        self.assertNotIn("learn_prompt", card)
+        self.assertIn("Durable user preference", card["summary"])
+
+    def test_learning_classification_separates_memory_skill_and_session_state(self) -> None:
+        skill = route_chat_message(
+            "이 패턴 기억해: after CI fails, run gh pr checks --watch before pushing fixes",
+            source="discord",
+        )["learning_candidate_card"]
+        memory = route_chat_message(
+            "from now on prefer concise Korean final summaries",
+            source="discord",
+        )["learning_candidate_card"]
+        session = route_chat_message("learn this: PR #123 is blocked on CI", source="discord")["learning_candidate_card"]
+
+        self.assertEqual(skill["persistence_target"], "skill_candidate")
+        self.assertIn("learn_prompt", skill)
+        self.assertEqual(memory["persistence_target"], "memory_candidate")
+        self.assertNotIn("learn_prompt", memory)
+        self.assertEqual(session["persistence_target"], "session_only")
+        self.assertNotIn("learn_prompt", session)
+
+    def test_learning_channel_term_collision_routes_to_review_first(self) -> None:
+        decision = route_chat_message(
+            "in channel #ops, learn this pattern from PR #123 for the other thread",
+            source="discord",
+        )
+        card = decision["learning_candidate_card"]
+        serialized = json.dumps(card)
+
+        self.assertEqual(decision["selected_skill"], "memory-curation-review")
+        self.assertEqual(card["persistence_target"], "review_first")
+        self.assertEqual(card["primary_action"], "prepare_memory_curation_review")
+        self.assertIn("channel_or_thread_ref", card["sanitization"]["transient_identifier_categories"])
+        self.assertIn("pull_request_number", card["sanitization"]["transient_identifier_categories"])
+        self.assertNotIn("#ops", serialized)
+        self.assertNotIn("#123", serialized)
+
+    def test_learning_candidate_excludes_transient_pr_state_from_summary_and_prompt(self) -> None:
+        message = (
+            "make a skill from this: for PR #123 on commit abcdef123456 and run_abc123def456 "
+            "with pid 9876, run git diff --check before gh pr create"
+        )
+
+        card = route_chat_message(message, source="discord")["learning_candidate_card"]
+        serialized = json.dumps(card)
+
+        self.assertEqual(card["persistence_target"], "skill_candidate")
+        self.assertIn("pull_request_number", card["sanitization"]["transient_identifier_categories"])
+        self.assertIn("commit_sha", card["sanitization"]["transient_identifier_categories"])
+        self.assertIn("run_id", card["sanitization"]["transient_identifier_categories"])
+        self.assertIn("process_id", card["sanitization"]["transient_identifier_categories"])
+        self.assertNotIn("#123", serialized)
+        self.assertNotIn("abcdef123456", serialized)
+        self.assertNotIn("run_abc123def456", serialized)
+        self.assertNotIn("9876", serialized)
+        self.assertIn("git diff --check", card["learn_prompt"]["copy_text"])
+
+    def test_skill_forcing_transient_only_request_stays_session_only(self) -> None:
+        card = route_chat_message("make a skill from this: PR #123 is blocked on CI", source="discord")[
+            "learning_candidate_card"
+        ]
+        serialized = json.dumps(card)
+
+        self.assertEqual(card["persistence_target"], "session_only")
+        self.assertEqual(card["primary_action"], "show_learning_candidate")
+        self.assertNotIn("learn_prompt", card)
+        self.assertNotIn("#123", serialized)
+        self.assertIn("do not persist transient task", card["summary"])
+
     def test_pasted_omh_awareness_evaluation_routes_learning_before_delivery(self) -> None:
         message = sionic_omh_usage_evaluation_prompt()
 

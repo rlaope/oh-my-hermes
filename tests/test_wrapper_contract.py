@@ -551,6 +551,79 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("automatic skill patch", response["state"]["evidence_not_observed"])
                 self.assertNotIn(message, serialized)
 
+    def test_chat_interaction_renders_learning_candidate_card_with_learn_prompt(self) -> None:
+        message = (
+            "make a skill from this: for PR #123 on commit abcdef123456 and run_abc123def456, "
+            "run git diff --check before gh pr create"
+        )
+
+        payload = build_chat_interaction_payload(
+            message,
+            source="discord",
+            source_metadata={
+                "project_ref": "omhm",
+                "channel_ref": "C-learning",
+                "thread_ref": "T-learning",
+                "target_ref": "hermes-agent",
+                "workflow_ref": "workflow-learning",
+                "executor_ref": "codex",
+            },
+        )
+        response = payload["chat_response"]
+        card = payload["learning_candidate_card"]
+        actions = {action["id"]: action for action in response["actions"]}
+        serialized = json.dumps(payload)
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "copy_learn_prompt")
+        self.assertEqual(response["kind"], "learning_candidate")
+        self.assertEqual(card["schema_version"], "learning_candidate_card/v1")
+        self.assertEqual(card["persistence_target"], "skill_candidate")
+        self.assertEqual(card["scope"]["project_ref"], "omhm")
+        self.assertEqual(card["scope"]["channel_ref"], "C-learning")
+        self.assertEqual(card["scope"]["thread_ref"], "T-learning")
+        self.assertEqual(card["scope"]["target_ref"], "hermes-agent")
+        self.assertEqual(card["scope"]["workflow"], "workflow-learning")
+        self.assertEqual(card["scope"]["executor_runtime"], "codex")
+        self.assertEqual(response["state"]["learning_candidate_status"], "prepared_not_observed")
+        self.assertIn("prepared_not_observed", response["claim_boundary"])
+        self.assertIn("copy_learn_prompt", actions)
+        self.assertEqual(actions["copy_learn_prompt"]["payload"]["command"], "/learn")
+        self.assertIn("Use observed facts only", actions["copy_learn_prompt"]["payload"]["copy_text"])
+        self.assertIn("reusable Hermes skill", actions["copy_learn_prompt"]["payload"]["copy_text"])
+        self.assertNotIn("#123", serialized)
+        self.assertNotIn("abcdef123456", serialized)
+        self.assertNotIn("run_abc123def456", serialized)
+
+    def test_chat_interaction_memory_candidate_uses_review_action_without_learn_prompt(self) -> None:
+        payload = build_chat_interaction_payload(
+            "다음부터 이렇게 답해줘: 짧게 한국어로 요약해",
+            source="discord",
+        )
+        response = payload["chat_response"]
+        actions = {action["id"]: action for action in response["actions"]}
+        card = payload["learning_candidate_card"]
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "prepare_memory_curation_review")
+        self.assertEqual(response["kind"], "learning_candidate")
+        self.assertEqual(card["persistence_target"], "memory_candidate")
+        self.assertNotIn("learn_prompt", card)
+        self.assertNotIn("copy_learn_prompt", actions)
+        self.assertIn("prepare_memory_curation_review", actions)
+        self.assertIn("memory curation review", response["body"])
+
+    def test_learning_candidate_scope_does_not_treat_agent_ref_as_executor_runtime(self) -> None:
+        payload = build_chat_interaction_payload(
+            "learn this: when opening PRs, run git diff --check before gh pr create",
+            source="discord",
+            source_metadata={"agent_ref": "hermes-chat-target"},
+        )
+
+        card = payload["learning_candidate_card"]
+
+        self.assertEqual(card["scope"]["executor_runtime"], "")
+
     def test_route_mode_exposes_visible_omh_usage_trace_for_web_research(self) -> None:
         payload = build_chat_interaction_payload(
             "web-research로 Hermes Agent와 Oh My Codex/OpenCode 계열을 비교해서 OMHM 포지셔닝 근거를 찾아줘.",
