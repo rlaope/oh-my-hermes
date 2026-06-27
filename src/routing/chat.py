@@ -149,6 +149,7 @@ def route_chat_message(
     candidate_score = _int_value(top["score"])
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
+    explicit_loop_signal = _explicit_loop_signal(routing_message, full_recommendations)
     file_or_text_lookup = is_file_or_text_lookup_question(routing_message)
 
     if explicit_skill and not task_card_overrides_explicit:
@@ -191,6 +192,15 @@ def route_chat_message(
         candidate_confidence = "low"
         action = "fallback"
         reason = FILE_LOOKUP_REASON
+        ambiguous = False
+    elif explicit_loop_signal:
+        selected_skill = "loop"
+        candidate_skill = selected_skill
+        candidate_harness = primary_harness_for_skill(candidate_skill)
+        candidate_score = max(candidate_score, 10)
+        candidate_confidence = "high"
+        action = "dispatch"
+        reason = "Explicit loop invocation; start or continue the goal loop instead of opening a picker."
         ambiguous = False
     elif candidate_score == 0:
         selected_skill = _ROUTER_SKILL
@@ -288,6 +298,20 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
 def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] | None = None) -> str | None:
     definitions = definitions or routable_definitions()
     return explicit_skill_name(message, {definition.name for definition in definitions})
+
+
+def _explicit_loop_signal(message: str, recommendations: list[dict[str, object]]) -> bool:
+    normalized = message.strip().casefold()
+    if not normalized:
+        return False
+    has_loop_recommendation = any(str(item.get("skill", "")) == "loop" for item in recommendations[:3])
+    if not has_loop_recommendation:
+        return False
+    if normalized.startswith(("loop", "./loop", "/loop", "$loop")):
+        return True
+    if "omh" in normalized and ("루프" in normalized or " loop" in f" {normalized}" or "loop " in normalized):
+        return True
+    return False
 
 
 def routing_record_payload(

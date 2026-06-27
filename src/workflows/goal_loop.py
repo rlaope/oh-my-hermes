@@ -29,6 +29,7 @@ LOOP_SMALL_LOOP_GUIDANCE_SCHEMA = "loop_small_loop_guidance/v1"
 LOOP_RUN_ONCE_RESULT_SCHEMA = "loop_run_once_result/v1"
 EXECUTOR_LOOP_CAPABILITY_SCHEMA = "executor_loop_capability/v1"
 LOOP_CYCLE_NARRATION_SCHEMA = "loop_cycle_narration/v1"
+LOOP_INVOCATION_SCHEMA = "loop_invocation/v1"
 
 LOOP_PHASES = {
     "interview",
@@ -112,6 +113,49 @@ LOOP_EXECUTOR_OPTIONS = (
 )
 LOOP_EXECUTOR_OPTION_IDS = tuple(str(option["id"]) for option in LOOP_EXECUTOR_OPTIONS)
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+LOOP_CORE_ROLES = (
+    {
+        "id": "interviewer",
+        "skill": "deep-interview",
+        "responsibility": "Resolve only decision-changing ambiguity; do not stop when repo, source, or loop context can answer.",
+    },
+    {
+        "id": "planner",
+        "skill": "ralplan",
+        "responsibility": "Turn the current loop goal into a reviewed plan with risks, alternatives, acceptance criteria, and verification.",
+    },
+    {
+        "id": "researcher",
+        "skill": "web-research",
+        "adjacent_skills": ["source-finder", "best-practice-research"],
+        "responsibility": "Gather current source, web, or repo evidence before planning or handoff when facts are missing.",
+    },
+    {
+        "id": "builder",
+        "skill": "ultragoal",
+        "adjacent_skills": ["team", "ultrawork"],
+        "responsibility": "Prepare the concrete goal, team lanes, or executor handoff for implementation without claiming execution.",
+    },
+    {
+        "id": "reviewer",
+        "skill": "code-review",
+        "adjacent_skills": ["ultraqa", "agent-ops-review"],
+        "responsibility": "Gate observed work with review, QA, verification, CI, and failure-mode checks.",
+    },
+    {
+        "id": "loop_controller",
+        "skill": "loop",
+        "responsibility": "Keep advancing the loop until a real permission, evidence, verification, context, budget, or external-wait gate is reached.",
+    },
+)
+LOOP_CORE_SKILLS = tuple(
+    dict.fromkeys(
+        skill
+        for role in LOOP_CORE_ROLES
+        for skill in (str(role["skill"]), *[str(item) for item in role.get("adjacent_skills", [])])
+    )
+)
 
 _PROFILE_ALLOWED_ACTIONS: dict[str, set[str]] = {
     "observe_only": {"research", "planning"},
@@ -349,15 +393,23 @@ def build_loop_start_card(
     if default_executor not in LOOP_EXECUTOR_OPTION_IDS:
         raise ValueError(f"unsupported loop default executor: {default_executor}")
     assessment = assess_loopability(goal_summary, expose_goal=include_goal)
+    invocation = _loop_invocation_contract(goal_summary, assessment)
+    active_status = _loop_start_status(assessment, invocation)
+    active_next_action = _loop_start_next_action(assessment, invocation)
     return {
         "schema_version": LOOP_START_CARD_SCHEMA,
         "source": _safe_summary(source, limit=120),
-        "status": "interview_required",
+        "status": active_status,
         "goal_summary": summary if include_goal else "{message}",
         "goal_summary_hash": sha256_text(goal_summary),
         "goal_length": len(goal_summary),
-        "next_action": assessment["recommended_next_action"],
+        "next_action": active_next_action,
         "loopability_assessment": assessment,
+        "loop_invocation": invocation,
+        "role_pipeline": _loop_role_pipeline(),
+        "core_skills": list(LOOP_CORE_SKILLS),
+        "agentic_theme": "loop_invocation_means_keep_progressing_until_gate",
+        "permission_profile_required": active_status not in {"started_prepared", "ready_to_start"},
         "default_permission_profile": default_permission_profile,
         "default_executor": _safe_summary(default_executor, limit=120),
         "permission_profiles": [_permission_profile_option(profile) for profile in PERMISSION_PROFILES if profile != "custom"],
@@ -407,6 +459,67 @@ def build_loop_start_card(
         "claim_boundary": _claim_boundary(),
         "runtime_claim_boundary": _runtime_claim_boundary(),
     }
+
+
+def _loop_role_pipeline() -> list[dict[str, Any]]:
+    return [dict(role) for role in LOOP_CORE_ROLES]
+
+
+def _explicit_loop_invocation(goal_summary: str) -> bool:
+    normalized = goal_summary.strip().casefold()
+    if not normalized:
+        return False
+    command_prefixes = ("loop", "./loop", "/loop", "$loop")
+    if normalized.startswith(command_prefixes):
+        return True
+    if "omh" in normalized and (" loop" in f" {normalized}" or "loop " in normalized or "루프" in normalized):
+        return True
+    return False
+
+
+def _loop_invocation_contract(goal_summary: str, assessment: dict[str, Any]) -> dict[str, Any]:
+    explicit = _explicit_loop_invocation(goal_summary)
+    return {
+        "schema_version": LOOP_INVOCATION_SCHEMA,
+        "invoked": explicit,
+        "invocation_strength": "explicit" if explicit else "implicit",
+        "raw_command_redacted": True,
+        "goal_visibility": "redacted_by_default",
+        "authority_interpretation": "start_or_continue_until_gate" if explicit else "prepare_until_user_starts",
+        "progress_policy": "do_not_stop_until_gate" if explicit else "prepare_start_card",
+        "agentic_theme": "interviewer_planner_researcher_builder_reviewer_loop_controller",
+        "core_agent_roles": [str(role["id"]) for role in LOOP_CORE_ROLES],
+        "core_skills": list(LOOP_CORE_SKILLS),
+        "stop_conditions": [
+            "permission_blocked",
+            "unsafe_external_action",
+            "missing_selected_executor_for_code_mutation",
+            "verification_failed",
+            "context_or_budget_exhausted",
+            "external_wait",
+        ],
+        "assessment_goal_kind": str(assessment.get("goal_kind", "unknown")),
+        "assessment_loopability": str(assessment.get("loopability", "unknown")),
+    }
+
+
+def _loop_start_status(assessment: dict[str, Any], invocation: dict[str, Any]) -> str:
+    if invocation.get("invoked") is True:
+        return "started_prepared"
+    if str(assessment.get("loopability", "")) == "loopable":
+        return "ready_to_start"
+    return "interview_required"
+
+
+def _loop_start_next_action(assessment: dict[str, Any], invocation: dict[str, Any]) -> str:
+    if invocation.get("invoked") is True:
+        loopability = str(assessment.get("loopability", ""))
+        if loopability == "direct_task":
+            return "route_direct_task"
+        if loopability == "external_wait_only":
+            return "record_external_wait"
+        return "start_loop_cycle"
+    return str(assessment.get("recommended_next_action", "start_goal_loop"))
 
 
 def record_loop_feedback(

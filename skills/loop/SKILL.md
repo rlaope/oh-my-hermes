@@ -1,6 +1,6 @@
 ---
 name: loop
-description: [omh] Hermes Loop workflow: loopability assessment, goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
+description: [omh] Hermes Loop workflow: agentic interviewer -> planner -> researcher -> builder -> reviewer cycles until a real gate.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, goal-loop]
@@ -68,7 +68,7 @@ Bad example:
 
 ## Use When
 
-Use when the user explicitly starts a high-level goal that is concrete enough to verify, open-ended enough to require iterative discovery, and should be shaped from task/project/ambition into a bounded loop before cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+Use when the user starts a high-level goal or invokes loop. Direct loop invocation means start/continue through interviewer, planner, researcher, builder, reviewer, and loop-controller lanes until a real gate stops it.
 
     Strong routing signals: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan ultragoal feedback`, `token exhaustion resume`, `permission profile`, `star 10k`, `10k star`, `loop engineering`, `루프`, `목표 루프`, `장기 목표`, `끝까지`, `토큰 고갈`, `피드백 루프`
 
@@ -81,7 +81,9 @@ Quality tier: `loop-gated`
 
 Quality bar:
 
-- Start with direct user intent such as `./loop` or an explicit long-horizon goal request, then classify it as task, project, ambition, external-wait, or unclear before cycling.
+- Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
+- Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.
+- Expose core OMH roles: interviewer, planner, researcher, builder, reviewer, and loop controller.
 - Route tiny direct tasks to one-cycle delivery surfaces instead of forcing loop overhead.
 - Reframe a north-star ambition into a bounded arena, observable problem, next loop goal, and next verification without shrinking its ambition.
 - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
@@ -96,7 +98,7 @@ Quality bar:
 
 Handoff policy:
 
-Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/runtime/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+Keep loop orchestration, role sequencing, verification-tier selection, deterministic runtime ticks, loop_engineering/v1 status, feedback evaluation, and permission narration in Hermes; prepare executor/runtime/worktree/connector/verifier handoffs only for concrete work and record completion only from linked evidence.
 
 Required inputs:
 

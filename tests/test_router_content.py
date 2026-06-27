@@ -814,6 +814,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("test as stop signal", skills["loop"].content)
         self.assertIn("queued loop ticks", skills["loop"].content)
         self.assertIn("failure_mode_summary", skills["loop"].content)
+        self.assertIn("direct `loop`, `./loop`, `$loop`", skills["loop"].content)
+        self.assertIn("interviewer, planner, researcher, builder, reviewer, and loop controller", skills["loop"].content)
         self.assertIn("single-cycle-plan-to-pr", skills["ultraprocess"].content)
         self.assertIn("Do not continue into a repeated feedback loop", skills["ultraprocess"].content)
         self.assertIn("code-review gate", skills["ultraprocess"].content)

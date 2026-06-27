@@ -192,7 +192,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### loop
 
-[omh] Hermes Loop workflow: loopability assessment, goal interview, research, planning, runtime ticks, verification tiers, handoff, feedback, and resume cycles.
+[omh] Hermes Loop workflow: agentic interviewer -> planner -> researcher -> builder -> reviewer cycles until a real gate.
 
 - Category: `goal-loop`
 - Phase: `continuous-goal-loop`
@@ -203,9 +203,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Docs visibility: `primary_workflow_skill`
 - Compatibility alias: `false`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
-- Handoff policy: Keep loop orchestration, interviews, research, planning, verification-tier selection, runtime ticks with deterministic queue shapes, loop_engineering/v1 pipeline and building-block status, feedback evaluation, status, and permission-envelope narration in Hermes; prepare selected executor/runtime/worktree/connector/verifier handoffs only when the loop produces concrete work and record completion only from linked goal/runtime evidence.
+- Handoff policy: Keep loop orchestration, role sequencing, verification-tier selection, deterministic runtime ticks, loop_engineering/v1 status, feedback evaluation, and permission narration in Hermes; prepare executor/runtime/worktree/connector/verifier handoffs only for concrete work and record completion only from linked evidence.
 - Why this exists: `loop` exists for goals whose correct implementation cannot be known upfront but can be discovered through bounded cycles of definition, action, verification, and revision without confusing planned cycles with observed progress.
-- Use when: Use when the user explicitly starts a high-level goal that is concrete enough to verify, open-ended enough to require iterative discovery, and should be shaped from task/project/ambition into a bounded loop before cycling through task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime tick queueing, handoff, feedback, and status until the authority envelope or evidence gate stops it.
+- Use when: Use when the user starts a high-level goal or invokes loop. Direct loop invocation means start/continue through interviewer, planner, researcher, builder, reviewer, and loop-controller lanes until a real gate stops it.
 - Do not use when:
   - The user asks for one bounded delivery cycle; use `ultraprocess` or `ultragoal` instead.
   - The user gives only a north-star outcome such as revenue, stars, or adoption and has not accepted a bounded first loop goal.
@@ -222,7 +222,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Expected behavior: Use a direct delivery or PR workflow instead of starting a persistent loop.
   - Why: The task is bounded and should stop after merge evidence rather than create ongoing cycles.
 - Quality bar:
-  - Start with direct user intent such as `./loop` or an explicit long-horizon goal request, then classify it as task, project, ambition, external-wait, or unclear before cycling.
+  - Treat direct `loop`, `./loop`, `$loop`, and OMH loop invocations as a start/continue signal rather than a picker or passive clarification path.
+  - Classify the goal as task, project, ambition, external-wait, or unclear inside the loop, then keep progressing until a real permission, evidence, verification, context, budget, or external-wait gate appears.
+  - Expose core OMH roles: interviewer, planner, researcher, builder, reviewer, and loop controller.
   - Route tiny direct tasks to one-cycle delivery surfaces instead of forcing loop overhead.
   - Reframe a north-star ambition into a bounded arena, observable problem, next loop goal, and next verification without shrinking its ambition.
   - Separate task discovery, distribution, execution, verification, next-task decision, runtime tick queueing, ultragoal/handoff, feedback, waiting, and resume decisions.
@@ -3984,12 +3986,14 @@ Run complete app operation loops from idea through decision, handoff, release, d
 
 ### goal-loop
 
-Run loopable goal projects through task/project/ambition classification, bounded goal shaping, task discovery, distribution, execution, verification tiers, verifier checks, next-task decisions, runtime ticks with deterministic queue shapes, handoff, feedback, waiting, and resumable status without hidden execution.
+Run explicit loop invocations through agentic interviewer -> planner -> researcher -> builder -> reviewer -> loop-controller cycles, with task/project/ambition classification, bounded goal shaping, runtime ticks, handoff, feedback, waiting, and resumable status without hidden execution.
 
-- Use when: Use when a direct loop invocation or explicit long-horizon goal needs to decide whether it is too small, too large, or truly loopable before repeated cycles over automation, worktree, skill, connector, subagent, and verification building blocks.
+- Use when: Use when a direct loop invocation or explicit long-horizon goal should keep progressing until a real gate, while still deciding whether the current item is a task, ambition, external wait, or truly loopable work over automation, worktree, skill, connector, subagent, and verification building blocks.
 - Quality tier: `loop-gated`
 - Quality bar:
-  - Confirm the direct loop trigger and classify whether the goal is a task, project, ambition, external-wait outcome, or unclear request before cycling.
+  - Confirm the direct loop trigger as a start/continue signal and do not stop at a picker or passive clarification card.
+  - Classify whether the goal is a task, project, ambition, external-wait outcome, or unclear request inside the running loop before choosing the next lane.
+  - Make the agentic role chain visible: interviewer, planner, researcher, builder, reviewer, and loop controller.
   - Route direct tasks away from loop overhead and convert ambitions into a north star plus one bounded current loop goal.
   - Confirm north-star goal, bounded arena, observable problem, next verification, reframe, success criteria, and permission profile before cycling.
   - Separate implementable internal work from external outcomes such as stars, market reaction, adoption, or social distribution.
