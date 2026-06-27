@@ -181,6 +181,17 @@ class ExecutorSelection:
     choice_required: bool = False
 
 
+@dataclass(frozen=True)
+class ExecutorHandoffMetadata:
+    executor_target: str
+    executor_choice_required: bool
+    selected_executor_profile: str | None
+    work_owner_mode: str
+    after_acceptance_next_action: str
+    prepared_handoff_field: str
+    prepared_handoff_boundary: str
+
+
 def executor_selection_for_target(executor_target: str, *, action: str) -> ExecutorSelection:
     if action != "delegate":
         return ExecutorSelection(
@@ -232,6 +243,42 @@ def executor_selection_for_target(executor_target: str, *, action: str) -> Execu
             status="prompt_handoff_prepared",
         )
     raise ValueError(f"unsupported coding delegate executor: {executor_target}")
+
+
+def executor_handoff_metadata_for_target(executor_target: str) -> ExecutorHandoffMetadata:
+    selection = executor_selection_for_target(executor_target, action="delegate")
+    return ExecutorHandoffMetadata(
+        executor_target=executor_target,
+        executor_choice_required=selection.choice_required,
+        selected_executor_profile=selection.selected_executor_profile,
+        work_owner_mode=selection.work_owner_mode,
+        after_acceptance_next_action=_executor_after_acceptance_next_action(selection),
+        prepared_handoff_field=_executor_prepared_handoff_field(selection),
+        prepared_handoff_boundary=(
+            "Plan acceptance can prepare an executor/runtime handoff, but it is not dispatch, "
+            "implementation, review, CI, merge-readiness, or merge evidence."
+        ),
+    )
+
+
+def _executor_after_acceptance_next_action(selection: ExecutorSelection) -> str:
+    if selection.choice_required:
+        return "choose_executor"
+    if selection.work_owner_mode == "runtime_handoff":
+        return "show_runtime_handoff"
+    if selection.work_owner_mode == "prompt_only_handoff":
+        return "show_prompt_handoff"
+    return "send_to_executor"
+
+
+def _executor_prepared_handoff_field(selection: ExecutorSelection) -> str:
+    if selection.choice_required:
+        return "executor_selection"
+    if selection.work_owner_mode == "runtime_handoff":
+        return "runtime_handoff"
+    if selection.work_owner_mode == "prompt_only_handoff":
+        return "prompt_handoff"
+    return "executor_handoff"
 
 
 def public_executor_options() -> list[dict[str, object]]:

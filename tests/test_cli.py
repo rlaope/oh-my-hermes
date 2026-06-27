@@ -4142,7 +4142,7 @@ class CliTests(unittest.TestCase):
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "ack", "run_cto_loop"),
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "ack", "prepare_deploy_monitor_plan"),
             ("./loop make this project a 10k star OSS", "loop", "loop", "start_loop_cycle"),
-            ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "process", "start_ultraprocess"),
+            ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "handoff", "choose_executor"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "ack", "prepare_github_event_ops_card"),
             ("리서치 요청했는데 OMH를 안 썼어", "web-research", "ack", "run_hermes_research"),

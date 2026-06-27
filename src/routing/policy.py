@@ -954,6 +954,9 @@ _MEMORY_CURATION_PHRASES = (
     "memory review",
     "memory inspect",
     "context cleanup",
+    "context compaction",
+    "cross-channel context",
+    "channel context collision",
     "stale project context",
     "old project context",
     "hermes remembers",
@@ -963,6 +966,10 @@ _MEMORY_CURATION_PHRASES = (
     "오래된 맥락",
     "오래된 기억",
     "맥락이 오래된",
+    "메모리 압축",
+    "채널 용어",
+    "용어가 겹",
+    "다른 채널",
 )
 _MEMORY_CURATION_CONTEXT_TOKENS = _normalized_token_set(
     {
@@ -980,6 +987,10 @@ _MEMORY_CURATION_CONTEXT_TOKENS = _normalized_token_set(
         "메모리",
         "오래된",
         "중복",
+        "채널",
+        "용어",
+        "압축",
+        "충돌",
         "정리",
     }
 )
@@ -2126,8 +2137,8 @@ def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]
     context = bool(_MEMORY_CURATION_CONTEXT_TOKENS & query_tokens)
     hermes_context = _contains_phrase(normalized_query, ("hermes", "헤르메스"))
     omh_context = _contains_phrase(normalized_query, ("omh", "oh-my-hermes", "oh my hermes"))
-    cleanup = _contains_phrase(normalized_query, ("cleanup", "curate", "review", "inspect", "정리", "점검", "검토"))
-    stale = _contains_phrase(normalized_query, ("stale", "old", "duplicate", "conflicting", "오래된", "중복", "충돌"))
+    cleanup = _contains_phrase(normalized_query, ("cleanup", "curate", "review", "inspect", "정리", "점검", "검토", "관리"))
+    stale = _contains_phrase(normalized_query, ("stale", "old", "duplicate", "conflicting", "overlap", "collision", "오래된", "중복", "충돌", "겹", "압축"))
     capability_intent = bool(_CAPABILITY_INTENT_TOKENS & query_tokens)
     return context and (hermes_context or omh_context or stale or capability_intent) and cleanup
 

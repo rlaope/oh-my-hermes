@@ -9,6 +9,7 @@ import secrets
 from pathlib import Path
 from typing import Any
 
+from ..executors import CODING_EXECUTOR_TARGETS, executor_handoff_metadata_for_target
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..local_store import atomic_write_json, atomic_write_text, utc_now
 from ..memory import validate_handoff_context_pack
@@ -94,12 +95,15 @@ def build_hermes_plan_payload(
     source: str = "generic",
     limit: int = 3,
     source_metadata: dict[str, str] | None = None,
+    executor_target: str = "codex",
 ) -> dict[str, object]:
     task = message.strip()
     if not task:
         raise ValueError("hermes plan requires a task description")
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported hermes plan source: {source}")
+    if executor_target not in CODING_EXECUTOR_TARGETS:
+        raise ValueError(f"unsupported hermes plan executor: {executor_target}")
     if limit < 1:
         raise ValueError("hermes plan --limit must be at least 1")
 
@@ -111,7 +115,12 @@ def build_hermes_plan_payload(
         "schema_version": SCHEMA_VERSION,
         "source": source,
         "plan": plan.to_dict(),
-        "wrapper_contract": _wrapper_contract(plan, source=source, source_metadata=metadata),
+        "wrapper_contract": _wrapper_contract(
+            plan,
+            source=source,
+            source_metadata=metadata,
+            executor_target=executor_target,
+        ),
         "recommendations": recommendations,
     }
     if metadata:
@@ -795,9 +804,16 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
     return compact
 
 
-def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[str, str]) -> dict[str, object]:
+def _wrapper_contract(
+    plan: HermesPlan,
+    *,
+    source: str,
+    source_metadata: dict[str, str],
+    executor_target: str,
+) -> dict[str, object]:
     coding_available = plan.status == "draft" and _is_coding_shaped(plan.task_statement)
     metadata_args = _source_metadata_argv(source_metadata)
+    executor_handoff = executor_handoff_metadata_for_target(executor_target)
     contract: dict[str, object] = {
         "schema_version": WRAPPER_CONTRACT_VERSION,
         "source": source,
@@ -847,7 +863,7 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
                         "coding",
                         "delegate",
                         "--executor",
-                        "codex",
+                        executor_target,
                         "--source",
                         source,
                         "--record",
@@ -855,6 +871,13 @@ def _wrapper_contract(plan: HermesPlan, *, source: str, source_metadata: dict[st
                         "{plan_artifact}",
                         *metadata_args,
                     ],
+                    "executor_target": executor_handoff.executor_target,
+                    "executor_choice_required": executor_handoff.executor_choice_required,
+                    "selected_executor_profile": executor_handoff.selected_executor_profile,
+                    "work_owner_mode": executor_handoff.work_owner_mode,
+                    "after_acceptance_next_action": executor_handoff.after_acceptance_next_action,
+                    "prepared_handoff_field": executor_handoff.prepared_handoff_field,
+                    "prepared_handoff_boundary": executor_handoff.prepared_handoff_boundary,
                     "plan_artifact_arg": "--from-plan",
                     "prompt_template_field": "delegation.delegation_prompt_template",
                     "include_message_flag": "--include-message",
@@ -1019,6 +1042,10 @@ def _is_coding_shaped(task: str) -> bool:
             )
         )
     )
+
+
+def is_coding_shaped_task(task: str) -> bool:
+    return _is_coding_shaped(task)
 
 
 def _markdown_list(values: object) -> list[str]:

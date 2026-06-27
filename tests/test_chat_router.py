@@ -744,6 +744,16 @@ selected_workflow=ultraprocess
         self.assertEqual(decision["selected_harness"], "memory-curation-review")
         self.assertEqual(decision["confidence"], "high")
 
+        cross_channel = route_chat_message(
+            "시간이 지나며 메모리 압축되고 다른 채널 용어가 겹쳐서 OMH 맥락 관리가 필요해",
+            source="discord",
+        )
+
+        self.assertEqual(cross_channel["action"], "dispatch")
+        self.assertEqual(cross_channel["selected_skill"], "memory-curation-review")
+        self.assertEqual(cross_channel["selected_harness"], "memory-curation-review")
+        self.assertEqual(cross_channel["confidence"], "high")
+
     def test_event_text_extraction_supports_discord_slack_and_generic_shapes(self) -> None:
         self.assertEqual(extract_message_text({"message": {"content": "risky refactor"}}), "risky refactor")
         self.assertEqual(extract_message_text({"message": {"text": "risky refactor"}}), "risky refactor")
