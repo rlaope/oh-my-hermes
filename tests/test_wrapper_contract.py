@@ -256,6 +256,83 @@ class WrapperContractTests(unittest.TestCase):
         self.assertNotIn("executor_handoff", payload["delegation"])
         self.assertIn("prompt_handoff", payload["delegation"])
 
+    def test_auto_plan_coding_request_carries_setup_executor_owner(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, default_executor="claude-code")
+
+            payload = build_chat_interaction_payload(
+                "risky refactor with tests",
+                source="discord",
+                paths=paths,
+            )
+
+        coding_delegate = payload["plan"]["wrapper_contract"]["coding_delegate"]
+        state = payload["chat_response"]["state"]
+        self.assertEqual(payload["mode"], "plan")
+        self.assertTrue(coding_delegate["available"])
+        self.assertEqual(coding_delegate["executor_target"], "claude-code")
+        self.assertEqual(coding_delegate["selected_executor_profile"], "claude-code")
+        self.assertEqual(coding_delegate["prepared_handoff_field"], "prompt_handoff")
+        self.assertEqual(coding_delegate["executor_resolution"]["source"], "setup_profile")
+        self.assertEqual(state["selected_executor_profile"], "claude-code")
+        self.assertFalse(state["executor_choice_required"])
+        self.assertIn("not dispatch", state["prepared_handoff_boundary"])
+
+    def test_plan_mode_choose_executor_default_exposes_choice_requirement(self) -> None:
+        payload = build_chat_interaction_payload(
+            "risky refactor with tests",
+            source="discord",
+            mode="plan",
+        )
+
+        coding_delegate = payload["plan"]["wrapper_contract"]["coding_delegate"]
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertEqual(payload["mode"], "plan")
+        self.assertEqual(coding_delegate["executor_target"], "choose")
+        self.assertTrue(coding_delegate["executor_choice_required"])
+        self.assertEqual(coding_delegate["after_acceptance_next_action"], "choose_executor")
+        self.assertTrue(payload["chat_response"]["state"]["executor_choice_required"])
+        self.assertIn("choose_executor", actions)
+        self.assertTrue(actions["choose_executor"]["enabled"])
+
+    def test_route_coding_workflow_uses_setup_runtime_handoff_boundary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, default_executor="omx-runtime")
+
+            payload = build_chat_interaction_payload(
+                "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
+                source="discord",
+                paths=paths,
+            )
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "ultraprocess")
+        self.assertEqual(payload["next_action"], "show_runtime_handoff")
+        self.assertEqual(payload["executor_resolution"]["source"], "setup_profile")
+        self.assertEqual(payload["delegation"]["selected_executor_profile"], "omx-runtime")
+        self.assertEqual(payload["delegation"]["runtime_handoff"]["status"], "prepared_not_observed")
+        self.assertEqual(payload["chat_response"]["state"]["selected_executor_profile"], "omx-runtime")
+        self.assertEqual(payload["chat_response"]["state"]["handoff_status"], "prepared_not_observed")
+        self.assertIn("prepared only", payload["chat_response"]["claim_boundary"])
+        self.assertIn("has not started", payload["chat_response"]["claim_boundary"])
+
+    def test_route_coding_workflow_requires_executor_choice_without_default(self) -> None:
+        payload = build_chat_interaction_payload(
+            "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
+            source="discord",
+        )
+
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "ultraprocess")
+        self.assertEqual(payload["next_action"], "choose_executor")
+        self.assertTrue(payload["delegation"]["executor_selection"]["choice_required"])
+        self.assertTrue(payload["chat_response"]["state"]["executor_choice_required"])
+        self.assertIn("choose_executor", actions)
+        self.assertIn("not dispatch", payload["chat_response"]["claim_boundary"])
+
     def test_clarify_mode_has_no_handoff_actions(self) -> None:
         payload = build_chat_interaction_payload("fix maybe", mode="delegate")
 
@@ -1163,6 +1240,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("start_loop", action_ids)
         self.assertIn("show_loop_queue", action_ids)
         self.assertNotIn("10k-star quality", serialized)
+        self.assertEqual(action_ids, {action["id"] for action in payload["chat_response"]["actions"]})
 
     def test_loop_interaction_routes_tiny_goal_to_direct_task_action(self) -> None:
         payload = build_chat_interaction_payload("./loop change the button color", source="discord")
@@ -1173,7 +1251,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["loop_start_card"]["loopability_assessment"]["goal_kind"], "task")
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertTrue(actions["route_direct_task"]["enabled"])
-        self.assertTrue(actions["start_loop"]["enabled"])
+        self.assertFalse(actions["start_loop"]["enabled"])
 
     def test_terse_loop_invocation_starts_agentic_loop_without_picker(self) -> None:
         payload = build_chat_interaction_payload("loop reinforcement omh", source="discord")
@@ -1191,13 +1269,42 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["chat_response"]["state"]["permission_profile_required"], False)
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         self.assertTrue(actions["start_loop"]["enabled"])
-        self.assertTrue(actions["run_loop_tick"]["enabled"])
+        self.assertFalse(actions["run_loop_tick"]["enabled"])
+        self.assertEqual(
+            1,
+            sum(1 for action in payload["chat_response"]["actions"] if action["id"] == "start_loop"),
+        )
 
         korean = build_chat_interaction_payload("OMH 루프 강화 ㄱㄱ", source="discord")
         self.assertEqual(korean["mode"], "route")
+        self.assertTrue(korean["route"]["explicit"])
         self.assertEqual(korean["next_action"], "start_loop_cycle")
         self.assertEqual(korean["chat_response"]["kind"], "loop")
         self.assertEqual(korean["loop_start_card"]["loop_invocation"]["progress_policy"], "do_not_stop_until_gate")
+
+        empty_command = build_chat_interaction_payload("./loop", source="discord")
+        self.assertEqual(empty_command["next_action"], "ask_goal_boundary")
+        self.assertIn("clarification", empty_command["chat_response"]["headline"].lower())
+        empty_actions = {action["id"]: action for action in empty_command["chat_response"]["actions"]}
+        self.assertFalse(empty_actions["start_loop"]["enabled"])
+        self.assertFalse(empty_actions["choose_permission_profile"]["enabled"])
+
+        help_command = build_chat_interaction_payload("omh loop help", source="discord")
+        self.assertEqual(help_command["next_action"], "ask_goal_boundary")
+        self.assertTrue(help_command["route"]["explicit"])
+        help_actions = {action["id"]: action for action in help_command["chat_response"]["actions"]}
+        self.assertFalse(help_actions["start_loop"]["enabled"])
+
+    def test_loop_mentions_do_not_force_explicit_loop_dispatch(self) -> None:
+        lookup = build_chat_interaction_payload("look up OMH loop docs", source="discord")
+
+        self.assertNotEqual(lookup["next_action"], "start_loop_cycle")
+        lookup_actions = {action["id"]: action for action in lookup["chat_response"].get("actions", [])}
+        if "start_loop" in lookup_actions:
+            self.assertFalse(lookup_actions["start_loop"]["enabled"])
+
+        loopback = build_chat_interaction_payload("loopback interface on OMH is broken", source="discord")
+        self.assertNotEqual(loopback["next_action"], "start_loop_cycle")
 
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
         cases = (
@@ -1210,23 +1317,19 @@ class WrapperContractTests(unittest.TestCase):
                 payload = build_chat_interaction_payload(message, source="discord")
 
                 self.assertEqual(payload["mode"], "route")
-                self.assertEqual(payload["next_action"], "start_ultraprocess")
-                self.assertEqual(payload["chat_response"]["kind"], "process")
+                self.assertEqual(payload["next_action"], "choose_executor")
+                self.assertEqual(payload["chat_response"]["kind"], "handoff")
                 self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
-                self.assertEqual(payload["chat_response"]["state"]["cycle_policy"], "single_cycle")
-                self.assertFalse(payload["chat_response"]["state"]["continues_after_feedback"])
-                self.assertIn("implementation_handoff", payload["chat_response"]["state"]["process_stages"])
-                self.assertIn("stop_or_recommend_next_workflow", payload["chat_response"]["state"]["process_stages"])
-                self.assertIn("PR creation", payload["chat_response"]["state"]["evidence_not_observed"])
+                self.assertTrue(payload["chat_response"]["state"]["executor_choice_required"])
+                self.assertTrue(payload["delegation"]["executor_selection"]["choice_required"])
                 explanation = payload["chat_response"]["state"]["workflow_explanation"]
                 self.assertEqual(explanation["selected_workflow"], "ultraprocess")
                 self.assertEqual(explanation["workflow_context_id"], "intent_to_plan")
                 self.assertIn("ultraprocess", explanation["workflow_context_card"]["representative_workflows"])
-                self.assertIn("PR creation", explanation["not_evidence_yet"])
+                self.assertIn("executor/runtime dispatch", explanation["not_evidence_yet"])
                 actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
-                self.assertTrue(actions["start_ultraprocess"]["enabled"])
-                self.assertFalse(actions["prepare_handoff"]["enabled"])
-                self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
+                self.assertTrue(actions["choose_executor"]["enabled"])
+                self.assertIn("not dispatch", payload["chat_response"]["claim_boundary"])
 
     def test_visual_summary_interaction_exposes_prompt_card_actions(self) -> None:
         cases = (

@@ -12,7 +12,7 @@ from ..capabilities.families import capability_family_cards
 from ..context import build_context_brief
 from ..executors import executor_label
 from ..goal_loop import build_loop_start_card
-from ..hermes_planning import build_hermes_plan_payload
+from ..hermes_planning import build_hermes_plan_payload, is_coding_shaped_task
 from ..memory import memory_recall_pack_for_handoff
 from ..operator_productivity import build_agent_operator_productivity_card
 from ..paths import OmhPaths, resolve_paths
@@ -261,6 +261,23 @@ _DIRECT_WORKFLOW_SKILLS = {
     "wiki",
     *_RETAINED_DELEGATION_SKILLS,
 } - (_CLARIFICATION_SKILLS | {"cancel"})
+_CODING_OWNER_NEXT_ACTIONS = frozenset(
+    {
+        "prepare_coding_handoff",
+        "prepare_coding_runtime_handoff",
+        "start_ultraprocess",
+    }
+)
+_CODING_OWNER_WORKFLOWS = frozenset(
+    {
+        "ultraprocess",
+        "ultrawork",
+        "ultragoal",
+        "ralph",
+        "ai-slop-cleaner",
+    }
+)
+_CODING_OWNER_WHEN_CODE_SHAPED = frozenset({"code-review", "loop"})
 _STATUS_COPY = {
     "prepare_coding_delegation": (
         "handoff",
@@ -409,8 +426,10 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "actions. Webhook delivery and GitHub mutations stay unobserved until a wrapper records them."
     ),
     "memory-curation-review": (
-        "I will surface stale, duplicate, or conflicting memory and context candidates for approve, reject, or "
-        "update choices. Nothing is written until approval is observed."
+        "I will surface stale, duplicate, cross-channel, or conflicting memory/context candidates with source, "
+        "channel, and target scope before approve, reject, or update choices. Compacted summaries and recalled "
+        "context are routing context, not proof of the current external source. Nothing is written until approval "
+        "is observed."
     ),
     "voice-operator": (
         "I will turn the short voice or mobile request into a concise clarify, plan, status, handoff, or "
@@ -598,8 +617,9 @@ def build_chat_interaction_payload(
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "show_command_preview"))
         return _finish_interaction(base, target_notice)
 
+    resolved_executor_target, executor_resolution = _resolve_delegate_executor_target(executor_target, paths)
+
     if resolved_mode == "delegate":
-        resolved_executor_target, executor_resolution = _resolve_delegate_executor_target(executor_target, paths)
         delegation = build_coding_delegation_payload(
             message,
             source=source,
@@ -618,19 +638,7 @@ def build_chat_interaction_payload(
         delegation["executor_resolution"] = executor_resolution
         base["delegation"] = delegation
         base["executor_resolution"] = executor_resolution
-        action = str(_nested(delegation, "delegation").get("action", "fallback"))
-        if action == "delegate" and delegation.get("executor_handoff"):
-            base["next_action"] = "send_to_executor"
-        elif action == "delegate" and delegation.get("runtime_handoff"):
-            base["next_action"] = "show_runtime_handoff"
-        elif action == "delegate" and delegation.get("prompt_handoff"):
-            base["next_action"] = "show_prompt_handoff"
-        elif action == "delegate" and _nested(delegation, "executor_selection").get("choice_required"):
-            base["next_action"] = "choose_executor"
-        elif action == "clarify":
-            base["next_action"] = "answer_clarification"
-        else:
-            base["next_action"] = "route_coding_request"
+        base["next_action"] = _delegation_next_action(delegation)
         base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
         return _finish_interaction(base, target_notice)
 
@@ -645,19 +653,45 @@ def build_chat_interaction_payload(
         return _finish_interaction(base, target_notice)
 
     if resolved_mode == "route":
-        base["chat_response"] = build_chat_response_from_route(
+        route_response = build_chat_response_from_route(
             route_payload,
             thread_key=str(base["thread_key"]),
             message=message,
             include_message=include_message,
         )
+        if _route_requires_coding_owner(route_payload, route_response, message):
+            return _finish_interaction(
+                _attach_coding_owner_handoff(
+                    base,
+                    message,
+                    source=source,
+                    limit=limit,
+                    include_message=include_message,
+                    source_metadata=metadata,
+                    resolved_executor_target=resolved_executor_target,
+                    executor_resolution=executor_resolution,
+                    paths=paths,
+                ),
+                target_notice,
+            )
+        base["chat_response"] = route_response
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "dispatch_to_workflow"))
         loop_start_card = _nested(_nested(base["chat_response"], "state"), "loop_start_card")
         if loop_start_card:
             base["loop_start_card"] = loop_start_card
         return _finish_interaction(base, target_notice)
 
-    plan = build_hermes_plan_payload(message, source=source, limit=limit, source_metadata=metadata)
+    plan = build_hermes_plan_payload(
+        message,
+        source=source,
+        limit=limit,
+        source_metadata=metadata,
+        executor_target=resolved_executor_target,
+    )
+    if _plan_has_coding_delegate(plan):
+        coding_delegate = _nested(_nested(plan, "wrapper_contract"), "coding_delegate")
+        coding_delegate["executor_resolution"] = executor_resolution
+        base["executor_resolution"] = executor_resolution
     base["plan"] = _public_plan_payload(plan, include_message=include_message)
     contract = _nested(plan, "wrapper_contract")
     next_action = str(contract.get("next_action", "present_plan"))
@@ -700,6 +734,76 @@ def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | No
         "explicit_override": requested != "choose",
         "claim_boundary": "Executor default resolution is routing preference only; it is not dispatch, execution, review, CI, or merge evidence.",
     }
+
+
+def _attach_coding_owner_handoff(
+    base: dict[str, object],
+    message: str,
+    *,
+    source: str,
+    limit: int,
+    include_message: bool,
+    source_metadata: dict[str, str],
+    resolved_executor_target: str,
+    executor_resolution: dict[str, object],
+    paths: OmhPaths | None,
+) -> dict[str, object]:
+    delegation = build_coding_delegation_payload(
+        message,
+        source=source,
+        limit=limit,
+        include_message=include_message,
+        source_metadata=source_metadata,
+        executor_target=resolved_executor_target,
+        force_coding_handoff=True,
+        memory_recall_pack=memory_recall_pack_for_handoff(
+            paths,
+            message,
+            executor_target=resolved_executor_target,
+        )
+        if paths
+        else None,
+    )
+    delegation["executor_resolution"] = executor_resolution
+    base["delegation"] = delegation
+    base["executor_resolution"] = executor_resolution
+    base["next_action"] = _delegation_next_action(delegation)
+    base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
+    return base
+
+
+def _delegation_next_action(delegation: dict[str, object]) -> str:
+    action = str(_nested(delegation, "delegation").get("action", "fallback"))
+    if action == "delegate" and delegation.get("executor_handoff"):
+        return "send_to_executor"
+    if action == "delegate" and delegation.get("runtime_handoff"):
+        return "show_runtime_handoff"
+    if action == "delegate" and delegation.get("prompt_handoff"):
+        return "show_prompt_handoff"
+    if action == "delegate" and _nested(delegation, "executor_selection").get("choice_required"):
+        return "choose_executor"
+    if action == "clarify":
+        return "answer_clarification"
+    return "route_coding_request"
+
+
+def _route_requires_coding_owner(route_payload: dict[str, object], route_response: dict[str, object], message: str) -> bool:
+    if str(route_payload.get("action", "")) != "dispatch":
+        return False
+    selected = str(route_payload.get("selected_skill", "") or _nested(route_response, "state").get("selected_workflow", ""))
+    policy_next_action = str(_nested(route_response, "state").get("policy_next_action", ""))
+    if selected in _CODING_OWNER_WORKFLOWS:
+        return True
+    if policy_next_action in _CODING_OWNER_NEXT_ACTIONS:
+        return True
+    if selected in _CODING_OWNER_WHEN_CODE_SHAPED:
+        return is_coding_shaped_task(message)
+    return False
+
+
+def _plan_has_coding_delegate(plan_payload: dict[str, object]) -> bool:
+    coding_delegate = _nested(_nested(plan_payload, "wrapper_contract"), "coding_delegate")
+    return bool(coding_delegate.get("available", False))
 
 
 def build_chat_status_interaction(
@@ -804,6 +908,10 @@ def build_chat_response_from_route(
                     "prepared steps stay separate from observed execution, review, CI, merge, or publication evidence."
                 )
                 primary_action = "start_loop"
+            elif loopability == "needs_clarification":
+                headline = "This needs a loop goal clarification."
+                body = "I need a bounded arena, observable problem, next verification, or stop condition before a loop can start."
+                primary_action = "assess_loopability"
             elif loopability == "direct_task":
                 headline = "This looks like a direct task, not a loop."
                 body = "I can route it to a one-cycle delivery workflow unless you explicitly want repeated discovery."
@@ -824,10 +932,18 @@ def build_chat_response_from_route(
                 loop_actions.append(
                     _action("choose_permission_profile", "Choose permission profile", "secondary", enabled=loopability == "loopable")
                 )
+            if primary_action != "start_loop":
+                loop_actions.append(
+                    _action(
+                        "start_loop",
+                        "Start loop",
+                        "primary",
+                        enabled=loopability == "loopable" or (explicit_loop and loop_next_action == "start_loop_cycle"),
+                    )
+                )
             loop_actions.extend(
                 [
-                    _action("start_loop", "Start loop", "primary", enabled=loopability == "loopable" or explicit_loop),
-                    _action("run_loop_tick", "Run loop tick", "secondary", enabled=explicit_loop),
+                    _action("run_loop_tick", "Run loop tick", "secondary", enabled=False),
                     _action("show_loop_queue", "Show loop queue", "secondary", enabled=False),
                     _action("show_loop_status", "Show loop status", "secondary"),
                     _action("cancel", "Cancel", "secondary"),
@@ -1311,10 +1427,17 @@ def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key
     actions = [_action("accept_plan", "Accept plan", "primary"), _action("revise_plan", "Revise plan", "secondary")]
     coding_delegate = _nested(contract, "coding_delegate")
     if coding_delegate.get("available"):
+        if coding_delegate.get("executor_choice_required"):
+            actions.append(_action("choose_executor", "Choose executor", "secondary"))
         actions.append(_action("prepare_handoff", "Prepare handoff", "secondary", enabled=False))
     selected = str(plan.get("recommended_workflow", "plan"))
+    executor_resolution = _nested(coding_delegate, "executor_resolution")
+    selected_executor = coding_delegate.get("selected_executor_profile")
+    executor_choice_required = bool(coding_delegate.get("executor_choice_required", False))
     next_copy = (
-        "Accept or revise the plan first; the handoff button stays disabled until acceptance."
+        "Accept or revise the plan first; choose the executor before handoff if needed."
+        if executor_choice_required
+        else "Accept or revise the plan first; the handoff button stays disabled until acceptance."
         if coding_delegate.get("available")
         else "Accept or revise the plan before this moves to the selected workflow."
     )
@@ -1332,6 +1455,12 @@ def build_chat_response_from_plan(plan_payload: dict[str, object], *, thread_key
             "plan_status": plan.get("status", "draft"),
             "review_gate": plan.get("review_gate", {}),
             "coding_delegate_available": bool(coding_delegate.get("available", False)),
+            "executor_choice_required": executor_choice_required,
+            "selected_executor_profile": selected_executor,
+            "work_owner_mode": coding_delegate.get("work_owner_mode", ""),
+            "executor_resolution": executor_resolution,
+            "prepared_handoff_field": coding_delegate.get("prepared_handoff_field", ""),
+            "prepared_handoff_boundary": coding_delegate.get("prepared_handoff_boundary", ""),
             "evidence_not_observed": [
                 "plan acceptance",
                 "executor/runtime dispatch",
@@ -1366,10 +1495,14 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             extra_state={
                 "delegation_action": action,
                 "intent": delegation.get("intent", "unknown"),
+                "selected_workflow": delegation.get("recommended_workflow", ""),
                 "work_owner_mode": delegation_payload.get("work_owner_mode", "external_executor"),
                 "selected_executor_profile": delegation_payload.get("selected_executor_profile", "codex"),
+                "executor_choice_required": False,
                 "dispatch_policy": delegation_payload.get("dispatch_policy", "ask_before_dispatch"),
                 "executor_target": handoff.get("executor_target", "codex"),
+                "handoff_status": handoff.get("status", "prepared_not_observed"),
+                "prepared_handoff_boundary": "Prepared handoff is not execution evidence.",
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
                 "executor_resolution": executor_resolution,
             },
@@ -1394,10 +1527,14 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             extra_state={
                 "delegation_action": action,
                 "intent": delegation.get("intent", "unknown"),
+                "selected_workflow": delegation.get("recommended_workflow", ""),
                 "work_owner_mode": "prompt_only_handoff",
                 "selected_executor_profile": selected,
+                "executor_choice_required": False,
                 "dispatch_policy": "prepare_only",
                 "dispatchable": False,
+                "handoff_status": prompt_handoff.get("status", "prepared_not_observed"),
+                "prepared_handoff_boundary": "Prompt handoff is prepared only; OMH has not dispatched it to an executor.",
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
                 "executor_resolution": executor_resolution,
             },
@@ -1447,12 +1584,20 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             extra_state={
                 "delegation_action": action,
                 "intent": delegation.get("intent", "unknown"),
+                "selected_workflow": delegation.get("recommended_workflow", ""),
                 "work_owner_mode": "runtime_handoff",
                 "selected_executor_profile": selected,
+                "executor_choice_required": False,
                 "runtime_family": runtime_profile.get("runtime_family", ""),
                 "underlying_agent": runtime_profile.get("underlying_agent", ""),
                 "dispatch_policy": "prepare_only",
                 "dispatchable": False,
+                "handoff_status": runtime_handoff.get("status", "prepared_not_observed"),
+                "prepared_handoff_boundary": (
+                    hermes_coding_team_claim_boundary()
+                    if selected == "hermes"
+                    else "Runtime handoff is prepared only; OMH has not started Hermes, OMX, OMO, OMC, workers, tmux, or worktrees."
+                ),
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
                 "executor_resolution": executor_resolution,
             },
@@ -1470,10 +1615,13 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             extra_state={
                 "delegation_action": action,
                 "intent": delegation.get("intent", "unknown"),
+                "selected_workflow": delegation.get("recommended_workflow", ""),
                 "work_owner_mode": "external_executor",
                 "selected_executor_profile": None,
+                "executor_choice_required": True,
                 "dispatchable": False,
                 "executor_options": _nested(delegation_payload, "executor_selection").get("options", []),
+                "prepared_handoff_boundary": "Executor choice is not dispatch or implementation evidence.",
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
                 "executor_resolution": executor_resolution,
             },

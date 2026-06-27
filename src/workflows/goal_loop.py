@@ -113,6 +113,8 @@ LOOP_EXECUTOR_OPTIONS = (
 )
 LOOP_EXECUTOR_OPTION_IDS = tuple(str(option["id"]) for option in LOOP_EXECUTOR_OPTIONS)
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+LOOP_COMMAND_RE = re.compile(r"^(?:\./|/|\$)?loop(?:\s|$)")
+OMH_LOOP_COMMAND_RE = re.compile(r"^omh\s+(?:loop|루프)(?:\s|$)")
 
 LOOP_CORE_ROLES = (
     {
@@ -409,7 +411,7 @@ def build_loop_start_card(
         "role_pipeline": _loop_role_pipeline(),
         "core_skills": list(LOOP_CORE_SKILLS),
         "agentic_theme": "loop_invocation_means_keep_progressing_until_gate",
-        "permission_profile_required": active_status not in {"started_prepared", "ready_to_start"},
+        "permission_profile_required": active_next_action == "choose_permission_profile" or active_status == "interview_required",
         "default_permission_profile": default_permission_profile,
         "default_executor": _safe_summary(default_executor, limit=120),
         "permission_profiles": [_permission_profile_option(profile) for profile in PERMISSION_PROFILES if profile != "custom"],
@@ -466,23 +468,48 @@ def _loop_role_pipeline() -> list[dict[str, Any]]:
 
 
 def _explicit_loop_invocation(goal_summary: str) -> bool:
+    return explicit_loop_invocation_signal(goal_summary)
+
+
+def explicit_loop_invocation_signal(goal_summary: str) -> bool:
     normalized = goal_summary.strip().casefold()
     if not normalized:
         return False
-    command_prefixes = ("loop", "./loop", "/loop", "$loop")
-    if normalized.startswith(command_prefixes):
+    if LOOP_COMMAND_RE.match(normalized):
         return True
-    if "omh" in normalized and (" loop" in f" {normalized}" or "loop " in normalized or "루프" in normalized):
+    if OMH_LOOP_COMMAND_RE.match(normalized):
         return True
     return False
 
 
+def _loop_invocation_payload(goal_summary: str) -> str:
+    normalized = goal_summary.strip().casefold()
+    match = LOOP_COMMAND_RE.match(normalized)
+    if match:
+        return normalized[match.end() :].strip()
+    match = OMH_LOOP_COMMAND_RE.match(normalized)
+    if match:
+        return normalized[match.end() :].strip()
+    return normalized
+
+
+def _loop_invocation_help_query(goal_summary: str) -> bool:
+    payload = _loop_invocation_payload(goal_summary)
+    if not payload:
+        return False
+    return bool(re.search(r"\b(help|docs?|commands?|what|how)\b", payload)) or any(
+        term in payload for term in ("도움", "설명", "명령", "뭐야")
+    )
+
+
 def _loop_invocation_contract(goal_summary: str, assessment: dict[str, Any]) -> dict[str, Any]:
     explicit = _explicit_loop_invocation(goal_summary)
+    help_query = explicit and _loop_invocation_help_query(goal_summary)
     return {
         "schema_version": LOOP_INVOCATION_SCHEMA,
         "invoked": explicit,
         "invocation_strength": "explicit" if explicit else "implicit",
+        "help_or_catalog_query": help_query,
         "raw_command_redacted": True,
         "goal_visibility": "redacted_by_default",
         "authority_interpretation": "start_or_continue_until_gate" if explicit else "prepare_until_user_starts",
@@ -514,6 +541,10 @@ def _loop_start_status(assessment: dict[str, Any], invocation: dict[str, Any]) -
 def _loop_start_next_action(assessment: dict[str, Any], invocation: dict[str, Any]) -> str:
     if invocation.get("invoked") is True:
         loopability = str(assessment.get("loopability", ""))
+        if invocation.get("help_or_catalog_query") is True:
+            return str(assessment.get("recommended_next_action", "ask_goal_boundary"))
+        if loopability == "needs_clarification":
+            return str(assessment.get("recommended_next_action", "ask_goal_boundary"))
         if loopability == "direct_task":
             return "route_direct_task"
         if loopability == "external_wait_only":

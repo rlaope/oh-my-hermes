@@ -180,6 +180,7 @@ def build_coding_delegation_payload(
     memory_recall_pack: dict[str, object] | None = None,
     plan_artifact: dict[str, object] | None = None,
     prefer_direct_coding_handoff: bool = True,
+    force_coding_handoff: bool = False,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -206,6 +207,8 @@ def build_coding_delegation_payload(
     ):
         workflow = "plan"
     action = _action_for(intent, score, workflow)
+    if force_coding_handoff and action == "clarify" and intent in {"coding", "review"} and score >= 4:
+        action = "delegate"
     if action == "fallback":
         workflow = "oh-my-hermes"
     elif action == "clarify" and workflow not in _RETAINED_HERMES_WORKFLOWS:

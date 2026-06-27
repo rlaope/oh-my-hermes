@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 import hashlib
 from typing import Any
 
+from ..goal_loop import explicit_loop_invocation_signal
 from ..ingress import CHAT_SOURCES, extract_message_text
 from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
 from .intent import scrub_diagnostic_status_text
@@ -237,10 +238,10 @@ def route_chat_message(
         selected_harness=selected_harness,
         candidate_skill=candidate_skill,
         candidate_harness=candidate_harness,
-        confidence="high" if explicit_skill and not task_card_overrides_explicit else candidate_confidence,
-        score=max(candidate_score, 1) if explicit_skill and not task_card_overrides_explicit else candidate_score,
+        confidence="high" if (explicit_skill and not task_card_overrides_explicit) or explicit_loop_signal else candidate_confidence,
+        score=max(candidate_score, 1) if (explicit_skill and not task_card_overrides_explicit) or explicit_loop_signal else candidate_score,
         threshold=min_confidence,
-        explicit=bool(explicit_skill and not task_card_overrides_explicit),
+        explicit=bool((explicit_skill and not task_card_overrides_explicit) or explicit_loop_signal),
         ambiguous=ambiguous,
         reason=reason,
         clarification=clarification,
@@ -301,17 +302,10 @@ def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] |
 
 
 def _explicit_loop_signal(message: str, recommendations: list[dict[str, object]]) -> bool:
-    normalized = message.strip().casefold()
-    if not normalized:
-        return False
     has_loop_recommendation = any(str(item.get("skill", "")) == "loop" for item in recommendations[:3])
     if not has_loop_recommendation:
         return False
-    if normalized.startswith(("loop", "./loop", "/loop", "$loop")):
-        return True
-    if "omh" in normalized and ("루프" in normalized or " loop" in f" {normalized}" or "loop " in normalized):
-        return True
-    return False
+    return explicit_loop_invocation_signal(message)
 
 
 def routing_record_payload(

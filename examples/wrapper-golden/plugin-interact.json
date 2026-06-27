@@ -47,6 +47,7 @@
         "action_ids": [
           "accept_plan",
           "revise_plan",
+          "choose_executor",
           "prepare_handoff"
         ],
         "wrapper_session_recorded": true,

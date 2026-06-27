@@ -100,6 +100,20 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(role_ids[-1], "loop_controller")
         self.assertFalse(card["permission_profile_required"])
 
+        natural = build_loop_start_card("Long horizon goal: reduce install friction and verify with a smoke test")
+        self.assertEqual(natural["status"], "ready_to_start")
+        self.assertEqual(natural["next_action"], "choose_permission_profile")
+        self.assertTrue(natural["permission_profile_required"])
+
+        empty_command = build_loop_start_card("./loop")
+        self.assertEqual(empty_command["status"], "started_prepared")
+        self.assertEqual(empty_command["loopability_assessment"]["loopability"], "needs_clarification")
+        self.assertEqual(empty_command["next_action"], "ask_goal_boundary")
+
+        help_command = build_loop_start_card("omh loop help")
+        self.assertTrue(help_command["loop_invocation"]["help_or_catalog_query"])
+        self.assertEqual(help_command["next_action"], "ask_goal_boundary")
+
     def test_loopability_assessment_classifies_task_project_and_ambition(self) -> None:
         direct = assess_loopability("./loop change the button color", expose_goal=True)
         self.assertEqual(direct["goal_kind"], "task")
