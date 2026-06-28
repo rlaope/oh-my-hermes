@@ -524,6 +524,26 @@ class ChatRouterTests(unittest.TestCase):
                 "guard:executor_runtime_readiness",
             ),
             (
+                "claude code 연결돼 있어?",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "I want to use codex as my coding agent",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "코딩 에이전트 codex로 바꾸고 싶어",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "how do I see the current Codex session?",
+                "ultraprocess",
+                "guard:coding_progress_status",
+            ),
+            (
                 "Obsidian 말고 markdown folder에 리서치 결과 저장하고 싶어",
                 "research-department",
                 "guard:research_department",
@@ -565,6 +585,24 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_skill"], "img-summary")
                 self.assertEqual(decision["selected_harness"], "img-summary")
                 self.assertEqual(decision["confidence"], "high")
+
+    def test_catalog_questions_cover_installed_workflow_language(self) -> None:
+        cases = (
+            "what workflows are installed?",
+            "which skills are installed?",
+            "what installed commands does OMH have?",
+            "설치된 스킬 뭐 있어?",
+            "깔린 워크플로우 알려줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn("Catalog question", decision["reason"])
 
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (
