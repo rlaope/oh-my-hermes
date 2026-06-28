@@ -6,12 +6,16 @@ from typing import Any
 CHAT_SOURCES = ("generic", "discord", "slack", "telegram", "hermes")
 SOURCE_METADATA_KEYS = (
     "source_event_id",
+    "project_ref",
     "channel_ref",
+    "thread_ref",
     "user_ref",
     "timestamp",
     "agent_ref",
     "target_ref",
     "runtime_ref",
+    "workflow_ref",
+    "executor_ref",
     "hermes_home",
     "agent_count",
     "target_count",
@@ -42,6 +46,7 @@ _SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
         ("event", "id"),
         ("event", "client_msg_id"),
     ),
+    "project_ref": (("project_ref",), ("project", "id"), ("repository", "full_name"), ("repo", "full_name")),
     "channel_ref": (
         ("channel",),
         ("channel_id",),
@@ -50,6 +55,7 @@ _SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
         ("event", "channel"),
         ("channel", "id"),
     ),
+    "thread_ref": (("thread_ref",), ("thread", "id"), ("message", "thread_ts"), ("event", "thread_ts")),
     "user_ref": (
         ("user",),
         ("user_id",),
@@ -70,6 +76,8 @@ _SOURCE_METADATA_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "agent_ref": (("agent_ref",), ("agent", "id"), ("bot", "id"), ("message", "agent", "id"), ("event", "agent", "id")),
     "target_ref": (("target_ref",), ("target", "id"), ("workspace", "id"), ("team", "id"), ("guild_id",)),
     "runtime_ref": (("runtime_ref",), ("runtime", "id"), ("hermes", "runtime_id"), ("hermes_runtime", "id")),
+    "workflow_ref": (("workflow_ref",), ("workflow", "id"), ("workflow", "name")),
+    "executor_ref": (("executor_ref",), ("executor", "id"), ("executor", "profile")),
     "hermes_home": (("hermes_home",), ("runtime", "hermes_home"), ("hermes", "home")),
     "agent_count": (("agent_count",), ("agents_count",), ("target", "agent_count"), ("runtime", "agent_count"), ("hermes", "agent_count")),
     "target_count": (("target_count",), ("targets_count",), ("runtime", "target_count"), ("hermes", "target_count")),

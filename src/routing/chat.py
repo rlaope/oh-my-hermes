@@ -18,6 +18,7 @@ from .policy import (
 from .recommend import recommend_skills
 from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
+from ..learning_candidate import build_learning_candidate_card
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
 
@@ -102,6 +103,7 @@ class ChatRouteDecision:
     routing_prompt: str
     task_card: dict[str, object] | None
     workflow_route_plan: dict[str, object] | None
+    learning_candidate_card: dict[str, object] | None
     recommendations: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -223,6 +225,28 @@ def route_chat_message(
         reason = f"Best match confidence {candidate_confidence} is below {min_confidence}; clarify before dispatch."
 
     selected_harness = primary_harness_for_skill(selected_skill)
+    learning_candidate_card = build_learning_candidate_card(
+        message,
+        source=source,
+        selected_workflow=selected_skill,
+        selected_harness=selected_harness,
+    )
+    if learning_candidate_card:
+        selected_skill = str(learning_candidate_card.get("recommended_workflow", selected_skill))
+        selected_harness = primary_harness_for_skill(selected_skill)
+        candidate_skill = selected_skill
+        candidate_harness = selected_harness
+        candidate_score = max(candidate_score, 12)
+        candidate_confidence = "high"
+        action = "dispatch"
+        ambiguous = False
+        reason = "Explicit learning signal; prepare a reviewable learning candidate card without running Hermes /learn."
+        learning_candidate_card = build_learning_candidate_card(
+            message,
+            source=source,
+            selected_workflow=selected_skill,
+            selected_harness=selected_harness,
+        )
     workflow_route_plan = build_workflow_route_plan(
         message,
         full_recommendations,
@@ -248,6 +272,7 @@ def route_chat_message(
         routing_prompt=_routing_prompt(action, selected_skill, candidate_skill, reason, message),
         task_card=task_card,
         workflow_route_plan=workflow_route_plan,
+        learning_candidate_card=learning_candidate_card,
         recommendations=recommendations,
     )
     return decision.to_dict()
@@ -288,6 +313,8 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
         route.pop("routing_prompt", None)
     if not route.get("task_card"):
         route.pop("task_card", None)
+    if not route.get("learning_candidate_card"):
+        route.pop("learning_candidate_card", None)
     workflow_route_plan = compact_workflow_route_plan(route.get("workflow_route_plan"))
     if workflow_route_plan:
         route["workflow_route_plan"] = workflow_route_plan
@@ -342,6 +369,9 @@ def routing_record_payload(
     task_card = decision.get("task_card")
     if isinstance(task_card, dict) and task_card:
         payload["task_card"] = task_card
+    learning_candidate_card = decision.get("learning_candidate_card")
+    if isinstance(learning_candidate_card, dict) and learning_candidate_card:
+        payload["learning_candidate_card"] = learning_candidate_card
     return payload
 
 
