@@ -164,6 +164,25 @@ _RESEARCH_DEPARTMENT_PHRASES = (
     "시장 리서치",
     "수집 합성 브리핑",
 )
+_RESEARCH_DEPARTMENT_SETUP_PHRASES = (
+    "knowledge store",
+    "knowledge storage",
+    "knowledge base",
+    "knowledge summarizer",
+    "synthesis tool",
+    "source inbox",
+    "research inbox",
+    "markdown folder",
+    "note vault",
+    "obsidian",
+    "notebooklm",
+    "지식 저장소",
+    "지식 요약 도구",
+    "요약 도구",
+    "마크다운 폴더",
+    "노트 저장소",
+    "옵시디언",
+)
 _PAPER_LEARNING_PAPER_TOKENS = _normalized_token_set(
     {
         "paper",
@@ -1060,6 +1079,17 @@ _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "runtime readiness",
     "codex readiness",
     "claude code readiness",
+    "coding agent readiness",
+    "coding agent connection status",
+    "coding agent connection check",
+    "check the coding agent connection",
+    "check codex connection",
+    "check claude code connection",
+    "ping codex",
+    "ping claude code",
+    "one-time coding agent check",
+    "one time coding agent check",
+    "first-use coding agent readiness",
     "can this task run in codex",
     "can this run in codex",
     "can this run in claude",
@@ -1082,6 +1112,13 @@ _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "코덱스랑 클로드",
     "코덱스와 클로드",
     "코덱스 클로드",
+    "코딩 에이전트 연결 상태",
+    "코딩 에이전트 연결 확인",
+    "코덱스 연결 확인",
+    "클로드 코드 연결 확인",
+    "ping 한번",
+    "한번만 확인",
+    "안되면 물어",
 )
 _EXECUTOR_RUNTIME_READINESS_TOKENS = _normalized_token_set(
     {
@@ -1102,6 +1139,106 @@ _EXECUTOR_RUNTIME_READINESS_TOKENS = _normalized_token_set(
         "정해",
         "코덱스",
         "클로드",
+    }
+)
+_EXECUTOR_READINESS_CHECK_TOKENS = _normalized_token_set(
+    {
+        "readiness",
+        "ready",
+        "connection",
+        "connect",
+        "configured",
+        "configure",
+        "ping",
+        "check",
+        "fallback",
+        "first",
+        "one-time",
+        "once",
+        "준비",
+        "연결",
+        "확인",
+        "한번",
+        "한번만",
+        "안되면",
+        "물어",
+        "설정",
+    }
+)
+_TOOLBELT_READINESS_PHRASES = (
+    "toolbelt-readiness",
+    "tool readiness",
+    "connector readiness",
+    "credential readiness",
+    "credential check",
+    "credential missing",
+    "missing credential",
+    "missing api key",
+    "api key missing",
+    "missing connector",
+    "connector missing",
+    "tool not connected",
+    "external tool missing",
+    "image tool missing",
+    "image tool not connected",
+    "image generation blocked",
+    "image generation setup",
+    "choose image tool",
+    "set up image tool",
+    "setup image tool",
+    "connect image tool",
+    "connect gpt image",
+    "gpt image tool",
+    "fal_key",
+    "fal key",
+    "FAL_KEY",
+    "mcp setup",
+    "mcp readiness",
+    "외부 도구",
+    "커넥터",
+    "자격증명",
+    "api 키",
+    "키가 없어",
+    "키 없어서",
+    "이미지 도구",
+    "이미지 생성 도구",
+    "이미지 생성이 막",
+    "이미지 생성 막",
+    "이미지 도구 연결",
+    "이미지 도구 설정",
+    "gpt 이미지 도구",
+    "도구 연결",
+)
+_TOOLBELT_READINESS_TOKENS = _normalized_token_set(
+    {
+        "tool",
+        "tools",
+        "toolbelt",
+        "connector",
+        "connect",
+        "connected",
+        "credential",
+        "credentials",
+        "api",
+        "key",
+        "missing",
+        "blocked",
+        "unavailable",
+        "setup",
+        "configure",
+        "mcp",
+        "fal",
+        "gpt",
+        "도구",
+        "외부",
+        "커넥터",
+        "연결",
+        "자격증명",
+        "키",
+        "없어",
+        "없어서",
+        "막히",
+        "설정",
     }
 )
 _MATERIALS_PACKAGE_PHRASES = (
@@ -2002,6 +2139,15 @@ EXECUTOR_RUNTIME_READINESS_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; executor/runtime comparison should show tool gaps and handoff mode before selection.",
     activation_status="active",
 )
+TOOLBELT_READINESS_GUARD = RoutingGuardRule(
+    id="toolbelt_readiness_before_generic_or_visual_fallback",
+    rule="Missing connector, credential, API key, MCP, or image-tool setup requests should route to toolbelt-readiness before generic fallback or visual prompt preparation.",
+    matched_label="guard:toolbelt_readiness",
+    preferred_skills=("toolbelt-readiness",),
+    score_boost=54,
+    why="Matched guard/trigger metadata; missing tool, connector, credential, or image generator setup should show readiness gaps before claiming workflow execution.",
+    activation_status="active",
+)
 MATERIALS_PACKAGE_GUARD = RoutingGuardRule(
     id="materials_package_before_report_or_clarify",
     rule="Multi-format document, spreadsheet, deck, or PDF packaging requests should route to materials-package before generic report planning.",
@@ -2171,6 +2317,7 @@ ROUTING_GUARD_RULES = (
     RELEASE_CLAIM_REVIEW_GUARD,
     DOCTOR_HEALTH_GUARD,
     EXECUTOR_RUNTIME_READINESS_GUARD,
+    TOOLBELT_READINESS_GUARD,
     VOICE_OPERATOR_GUARD,
     VISUAL_SUMMARY_GUARD,
     DELIVERABLE_PACKAGE_GUARD,
@@ -2318,6 +2465,8 @@ def active_routing_guard_rules(
         rules.append(DOCTOR_HEALTH_GUARD)
     if _executor_runtime_readiness_guard_applies(normalized_query, query_tokens):
         rules.append(EXECUTOR_RUNTIME_READINESS_GUARD)
+    if _toolbelt_readiness_guard_applies(normalized_query, query_tokens):
+        rules.append(TOOLBELT_READINESS_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
         rules.append(VOICE_OPERATOR_GUARD)
     if _visual_summary_guard_applies(normalized_query, query_tokens):
@@ -2840,6 +2989,44 @@ def _explicit_material_export_requested(normalized_query: str, query_tokens: set
 def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if is_explicit_one_off_request(normalized_query, query_tokens):
         return False
+    research_infra_setup = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_SETUP_PHRASES)
+    if research_infra_setup:
+        research_context = bool(
+            {
+                "research",
+                "source",
+                "sources",
+                "brief",
+                "briefing",
+                "summary",
+                "synthesis",
+                "knowledge",
+                "storage",
+                "store",
+                "리서치",
+                "출처",
+                "자료",
+                "브리핑",
+                "요약",
+                "지식",
+                "저장",
+            }
+            & query_tokens
+        ) or _contains_phrase(
+            normalized_query,
+            (
+                "research result",
+                "research results",
+                "source inbox",
+                "knowledge store",
+                "synthesis tool",
+                "리서치 결과",
+                "지식 저장",
+                "요약 도구",
+            ),
+        )
+        if research_context:
+            return True
     recurring = (
         _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens)
         or bool({"ongoing", "durable", "24", "daily", "weekly", "monthly", "매일", "매주"} & query_tokens)
@@ -3045,6 +3232,8 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
 def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _visual_summary_guard_applies(normalized_query, query_tokens):
         return False
+    if _executor_readiness_check_requested(normalized_query, query_tokens):
+        return False
     if _coding_session_status_only_guard_applies(normalized_query, query_tokens):
         return False
     explicit_phrase = _contains_phrase(normalized_query, _CODING_HANDOFF_PHRASES)
@@ -3242,6 +3431,8 @@ def _hermes_coding_team_guard_applies(normalized_query: str, query_tokens: set[s
 def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         return False
+    if _executor_readiness_check_requested(normalized_query, query_tokens):
+        return False
     if _coding_session_status_only_guard_applies(normalized_query, query_tokens):
         return True
     if _contains_phrase(normalized_query, _CODING_PROGRESS_STATUS_PHRASES):
@@ -3387,6 +3578,8 @@ def _reliability_review_context_applies(normalized_query: str, query_tokens: set
 def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _EXECUTOR_RUNTIME_READINESS_PHRASES):
         return True
+    if _executor_readiness_check_requested(normalized_query, query_tokens):
+        return True
     runtime_intent = bool(_EXECUTOR_RUNTIME_READINESS_TOKENS & query_tokens) or _contains_phrase(
         normalized_query,
         ("runtime", "executor", "handoff", "런타임", "실행", "위임", "넘길", "넘길지"),
@@ -3411,6 +3604,71 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
         ),
     )
     return runtime_intent and named_executor and (selection or run_capability)
+
+
+def _executor_readiness_check_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    named_executor = _contains_phrase(
+        normalized_query,
+        ("codex", "claude code", "coding agent", "executor", "코덱스", "클로드", "코딩 에이전트"),
+    )
+    readiness = bool(_EXECUTOR_READINESS_CHECK_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        (
+            "connection status",
+            "connection check",
+            "readiness check",
+            "ping once",
+            "ping 한번",
+            "first-use",
+            "first use",
+            "one-time check",
+            "one time check",
+            "once before",
+            "연결 상태",
+            "연결 확인",
+            "한번만 확인",
+            "안되면 물어",
+        ),
+    )
+    return named_executor and readiness
+
+
+def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _executor_readiness_check_requested(normalized_query, query_tokens):
+        return False
+    if _doctor_health_guard_applies(normalized_query, query_tokens):
+        return False
+    if _adversarial_qa_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _TOOLBELT_READINESS_PHRASES):
+        return True
+    tool_context = bool(_TOOLBELT_READINESS_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("api key", "external tool", "image tool", "image generator", "mcp server", "도구", "커넥터"),
+    )
+    missing_or_setup = _contains_phrase(
+        normalized_query,
+        (
+            "missing",
+            "not connected",
+            "not configured",
+            "blocked",
+            "unavailable",
+            "setup",
+            "set up",
+            "connect",
+            "choose",
+            "credential",
+            "없어",
+            "없어서",
+            "막혀",
+            "막히",
+            "연결",
+            "설정",
+            "고르",
+        ),
+    )
+    return tool_context and missing_or_setup
 
 
 def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
