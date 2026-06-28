@@ -722,14 +722,23 @@ _OMH_MISSED_WORKFLOW_PHRASES = (
     "did not use omh",
     "didn't use omh",
     "didnt use omh",
+    "omh was not used",
     "not using omh",
     "without omh",
     "missed omh",
     "skipped omh",
+    "skipped omh for",
+    "hermes skipped omh",
     "forgot omh",
     "not aware of omh",
     "did not know omh",
     "didn't know omh",
+    "omh 안 쓰고",
+    "omh 안 썼",
+    "omh를 안 썼",
+    "omh를 안 써",
+    "omh 기능을 안 썼",
+    "omh 기능 안 썼",
 )
 _MISSED_WORKFLOW_ACTION_PHRASES = (
     "did not use",
@@ -1024,6 +1033,8 @@ _WORKFLOW_LEARNING_PHRASES = (
     "routing went wrong",
     "routing failed",
     "hermes should learn",
+    "why omh was not used",
+    "why did not use omh",
     "이번 실행 학습",
     "이번 워크플로우 학습",
     "다음에 스킬 개선",
@@ -1031,6 +1042,12 @@ _WORKFLOW_LEARNING_PHRASES = (
     "회귀 케이스",
     "omh 안 썼어",
     "omh 안 썼",
+    "omh 기능을 안 썼",
+    "omh 기능 안 썼",
+    "왜 omh를 안 썼",
+    "왜 omh 안 썼",
+    "omh 안 썼는지 학습",
+    "omh를 안 썼는지 학습",
     "워크플로 누락",
     "라우팅 누락",
 )
@@ -1370,6 +1387,13 @@ _MATERIALS_PACKAGE_PHRASES = (
     "package it as a pdf",
     "ppt로 만들",
     "pdf로 만들",
+    "ppt 만들어",
+    "ppt 만들어줘",
+    "피피티 만들",
+    "피피티 만들어",
+    "피피티 만들어줘",
+    "슬라이드 만들",
+    "슬라이드 만들어",
 )
 _MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
     {
@@ -1385,6 +1409,9 @@ _MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
         "hwp",
         "document",
         "피디에프",
+        "피피티",
+        "슬라이드",
+        "덱",
         "엑셀",
         "문서",
         "자료",
@@ -3047,11 +3074,28 @@ def _paper_learning_guard_applies(normalized_query: str, query_tokens: set[str])
             "이해하고 싶",
         ),
     )
+    supplied_pdf_context = (
+        bool({"pdf", "피디에프"} & query_tokens)
+        and not bool({"ppt", "pptx", "deck", "slides", "피피티", "슬라이드", "덱"} & query_tokens)
+        and not _contains_phrase(
+            normalized_query,
+            (
+                "pdf deck",
+                "pdf slide",
+                "pdf slide deck",
+                "pdf report",
+                "pdf를 ppt",
+                "pdf를 ppt로",
+                "pdf to ppt",
+                "pdf into ppt",
+            ),
+        )
+    )
     search_only = bool({"find", "search", "latest", "current", "fresh"} & query_tokens) or _contains_phrase(
         normalized_query,
         ("find papers", "search papers", "latest papers", "current papers", "논문 찾아", "최신 논문"),
     )
-    return paper_context and explanation_context and not search_only
+    return (paper_context or supplied_pdf_context) and explanation_context and not search_only
 
 
 def _paper_validation_or_citation_requested(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -3450,6 +3494,25 @@ def _materials_package_guard_applies(normalized_query: str, query_tokens: set[st
         normalized_query,
         ("make", "turn into", "prepare", "export", "만들", "정리", "준비", "공유"),
     )
+    non_pdf_output_formats = {
+        "ppt",
+        "pptx",
+        "spreadsheet",
+        "excel",
+        "xlsx",
+        "deck",
+        "slides",
+        "docx",
+        "hwp",
+        "document",
+        "피피티",
+        "슬라이드",
+        "덱",
+        "엑셀",
+        "문서",
+    }
+    if action and _MATERIALS_PACKAGE_FORMAT_TOKENS & query_tokens & non_pdf_output_formats:
+        return True
     return format_hits >= 2 and action
 
 
