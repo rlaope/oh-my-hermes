@@ -86,6 +86,7 @@ class RecommendationPolicy:
 @dataclass(frozen=True)
 class _PreparedDefinition:
     definition: SkillDefinition
+    policy: RecommendationPolicy
     trigger_phrases: tuple[str, ...]
     command_trigger_phrases: tuple[str, ...]
     plain_trigger_phrases: tuple[str, ...]
@@ -556,6 +557,7 @@ def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
     trigger_phrases = tuple(normalized_phrase(trigger) for trigger in definition.triggers)
     return _PreparedDefinition(
         definition=definition,
+        policy=_policy_for(definition),
         trigger_phrases=trigger_phrases,
         command_trigger_phrases=tuple(trigger for trigger in trigger_phrases if trigger in _COMMAND_TRIGGER_PHRASES),
         plain_trigger_phrases=tuple(trigger for trigger in trigger_phrases if trigger and trigger not in _COMMAND_TRIGGER_PHRASES),
@@ -577,6 +579,7 @@ def _score_definition(
     locale_matches: tuple[str, ...],
 ) -> Recommendation:
     definition = prepared.definition
+    policy = prepared.policy
     score = 0
     matched: set[str] = set()
 
@@ -607,11 +610,11 @@ def _score_definition(
             score += 2
             matched.add(f"{field_name}:{normalized_value}")
 
-    for token in sorted(query_tokens & prepared.trigger_tokens):
+    for token in query_tokens & prepared.trigger_tokens:
         score += 3
         matched.add(f"trigger:{token}")
 
-    for token in sorted(query_tokens & prepared.metadata_tokens):
+    for token in query_tokens & prepared.metadata_tokens:
         score += 1
         matched.add(f"metadata:{token}")
 
@@ -630,9 +633,9 @@ def _score_definition(
         confidence=_confidence(score),
         matched=matched_tuple,
         why=_why(matched_tuple),
-        next_action=_next_action(definition),
-        evidence_boundary=_evidence_boundary(definition),
-        wrapper_guidance=_wrapper_guidance(definition),
+        next_action=policy.next_action,
+        evidence_boundary=policy.evidence_boundary,
+        wrapper_guidance=policy.wrapper_guidance,
         suggested_prompt=_suggested_prompt(definition.name, original_query),
     )
 
