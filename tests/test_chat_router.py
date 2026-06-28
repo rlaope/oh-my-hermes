@@ -439,6 +439,41 @@ class ChatRouterTests(unittest.TestCase):
                 f"trigger:{normalized_phrase('what are you working on')}",
             ),
             (
+                "I want to understand this paper PDF",
+                "paper-learning",
+                "guard:paper_learning",
+            ),
+            (
+                "논문 PDF 이해하고 싶어",
+                "paper-learning",
+                "guard:paper_learning",
+            ),
+            (
+                "open this in codex",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "attach existing codex session",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "claude code로 이어서 작업해줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "setup이 잘 됐는지 봐줘",
+                "doctor",
+                "guard:doctor_health",
+            ),
+            (
+                "설치 잘 됐어?",
+                "doctor",
+                "guard:doctor_health",
+            ),
+            (
                 "今何してる？",
                 "agent-ops-review",
                 f"trigger:{normalized_phrase('今何してる')}",
