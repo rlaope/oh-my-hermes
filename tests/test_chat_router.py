@@ -429,6 +429,41 @@ class ChatRouterTests(unittest.TestCase):
                 "trigger:throughput",
             ),
             (
+                "what's going on?",
+                "agent-ops-review",
+                "trigger:" + normalized_phrase("what's going on"),
+            ),
+            (
+                "what are you working on?",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('what are you working on')}",
+            ),
+            (
+                "今何してる？",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('今何してる')}",
+            ),
+            (
+                "现在在做什么？",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('现在在做什么')}",
+            ),
+            (
+                "qué está pasando?",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('qué está pasando')}",
+            ),
+            (
+                "qu'est-ce qui se passe?",
+                "agent-ops-review",
+                "trigger:" + normalized_phrase("qu'est-ce qui se passe"),
+            ),
+            (
+                "was ist los?",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('was ist los')}",
+            ),
+            (
                 "무슨일이노",
                 "agent-ops-review",
                 f"trigger:{normalized_phrase('무슨일이노')}",
