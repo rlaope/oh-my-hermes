@@ -4171,13 +4171,18 @@ class CliTests(unittest.TestCase):
             json.loads(stdout)
         self.assertIn("OMH route hint", stdout)
         self.assertIn("Source: discord", stdout)
+        self.assertIn("Status: hinted", stdout)
         self.assertIn("Workflow: img-summary", stdout)
         self.assertIn("Next action: prepare_visual_prompt_card", stdout)
         self.assertIn("Hints: 2", stdout)
+        self.assertIn("Matched cues: image", stdout)
+        self.assertIn("Adjacent workflows: materials-package, report-package, research-department", stdout)
         self.assertIn("[omh] img-summary looks relevant.", stdout)
         self.assertIn("Hint details:", stdout)
         self.assertIn("- img-summary: prepare_visual_prompt_card (materials_and_visuals)", stdout)
+        self.assertIn("  matched: image", stdout)
         self.assertIn("- automation-blueprint: prepare_scheduled_ops_blueprint (automation_and_status)", stdout)
+        self.assertIn("  matched: cron", stdout)
         self.assertIn("Actions:", stdout)
         self.assertIn("- open_workflow: Open img-summary (enabled)", stdout)
         self.assertIn("Checkpoint:", stdout)
@@ -4195,6 +4200,22 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "chat_route_hint/v1")
         self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
+
+    def test_chat_route_hint_summary_renders_no_hint_without_unknown_workflow(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "slack", "--summary", "zzzzzz"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("OMH route hint", stdout)
+        self.assertIn("Source: slack", stdout)
+        self.assertIn("Status: no_hint", stdout)
+        self.assertIn("Workflow: none", stdout)
+        self.assertIn("Next action: open_picker_or_clarify", stdout)
+        self.assertIn("Hints: 0", stdout)
+        self.assertNotIn("Workflow: unknown", stdout)
+        self.assertIn("[omh] no strong workflow hint yet.", stdout)
+        self.assertIn("- open_picker: Open omh (enabled)", stdout)
+        self.assertIn("- clarify: Clarify (enabled)", stdout)
 
     def test_chat_route_hint_can_emit_manual_prompt_context(self) -> None:
         status, stdout, stderr = run_cli(

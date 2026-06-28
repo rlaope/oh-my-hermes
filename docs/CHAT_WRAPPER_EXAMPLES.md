@@ -291,7 +291,7 @@ omh chat route-hint --source discord --summary "make an image explaining the cro
 
 The preview payload also includes `generic_tool_checkpoint.routes`, so adapters
 do not need to parse prose before opening generic tool surfaces. The `--summary`
-form prints the same primary workflow, next action, hint
+form prints the same status, primary workflow, next action, matched cues, hint
 details, checkpoint, and evidence boundary for operator QA. Adapters should
 continue to consume the default JSON payload.
 

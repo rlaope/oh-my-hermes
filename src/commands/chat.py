@@ -381,12 +381,16 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
     route_hint = _as_mapping(payload.get("route_hint"))
     state = _as_mapping(response.get("state"))
     state_route_hint = _as_mapping(state.get("route_hint"))
+    hints = [item for item in _as_list(route_hint.get("hints")) if isinstance(item, dict)]
+    primary_hint = hints[0] if hints else {}
+    status = _text(route_hint.get("status") or ("hinted" if hints else "no_hint"), "unknown")
+    fallback_workflow = "none" if status == "no_hint" else "unknown"
     selected_workflow = _text(
         route_hint.get("primary_workflow")
         or route_hint.get("selected_workflow")
         or state_route_hint.get("primary_workflow")
         or state.get("selected_workflow"),
-        "unknown",
+        fallback_workflow,
     )
     next_action = _text(
         route_hint.get("primary_next_action")
@@ -395,13 +399,23 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
         "unknown",
     )
     source = _text(payload.get("source"), "generic")
-    hint_count = len([item for item in _as_list(route_hint.get("hints")) if isinstance(item, dict)])
+    hint_count = len(hints)
 
     print("OMH route hint")
     print(f"Source: {source}")
+    print(f"Status: {status}")
     print(f"Workflow: {selected_workflow}")
     print(f"Next action: {next_action}")
     print(f"Hints: {hint_count}")
+
+    matched_cues = _text_items(_as_list(primary_hint.get("matched_cues")))
+    if matched_cues:
+        print(f"Matched cues: {_join_text_items(matched_cues)}")
+    adjacent_workflows = _text_items(
+        _as_list(route_hint.get("adjacent_workflows")) or _as_list(primary_hint.get("adjacent_workflows"))
+    )
+    if adjacent_workflows:
+        print(f"Adjacent workflows: {_join_text_items(adjacent_workflows)}")
 
     headline = _text(response.get("headline"))
     body = _text(response.get("body"))
@@ -412,7 +426,6 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
         if body:
             print(body)
 
-    hints = [item for item in _as_list(route_hint.get("hints")) if isinstance(item, dict)]
     if hints:
         print()
         print("Hint details:")
@@ -422,6 +435,9 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
             action = _text(hint.get("next_action"), "unknown")
             reason = _text(hint.get("reason"))
             print(f"- {workflow}: {action} ({lane})")
+            hint_cues = _text_items(_as_list(hint.get("matched_cues")))
+            if hint_cues:
+                print(f"  matched: {_join_text_items(hint_cues)}")
             if reason:
                 print(f"  why: {reason}")
 
@@ -478,6 +494,16 @@ def _first_hint_value(route_hint: dict[str, object], key: str) -> object:
     if not hints or not isinstance(hints[0], dict):
         return ""
     return hints[0].get(key, "")
+
+
+def _text_items(items: list[object]) -> list[str]:
+    return [_text(item) for item in items if _text(item)]
+
+
+def _join_text_items(items: list[str], limit: int = 6) -> str:
+    visible = items[:limit]
+    suffix = f", +{len(items) - limit} more" if len(items) > limit else ""
+    return ", ".join(visible) + suffix
 
 
 def _first_recommendation_value(route: dict[str, object], key: str) -> object:
