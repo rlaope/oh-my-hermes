@@ -4357,6 +4357,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], "chat_interaction/v1")
         self.assertEqual(payload["route"]["selected_skill"], "ralplan")
 
+    def test_chat_interact_summary_shows_common_visual_actions_without_json_escape_hatch(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--summary", "make an image explaining the cron feature"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Workflow: img-summary", stdout)
+        self.assertIn("Actions:", stdout)
+        self.assertIn("- show_visual_prompt_card: Show card (enabled)", stdout)
+        self.assertIn("- choose_image_generator: Choose image tool (enabled)", stdout)
+        self.assertIn("- record_visual_delivery: Record delivery (enabled)", stdout)
+        self.assertIn("- show_visual_status: Show visual status (enabled)", stdout)
+        self.assertNotIn("more action(s) in --json", stdout)
+        self.assertIn("Not evidence yet:", stdout)
+        self.assertIn("- image generation", stdout)
+
     def test_chat_interact_summary_renders_catalog_picker_without_shell_json(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "interact", "--source", "discord", "--summary", "what OMH workflows are available?"],

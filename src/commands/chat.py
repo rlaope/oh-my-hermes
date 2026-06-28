@@ -270,14 +270,15 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
     if actions:
         print()
         print("Actions:")
-        for action in actions[:8]:
+        action_limit = 12
+        for action in actions[:action_limit]:
             action_id = _text(action.get("id"), "action")
             label = _text(action.get("label"), action_id)
             enabled = bool(action.get("enabled", True))
             state_label = "enabled" if enabled else "disabled"
             print(f"- {action_id}: {label} ({state_label})")
-        if len(actions) > 8:
-            print(f"- ... {len(actions) - 8} more action(s) in --json")
+        if len(actions) > action_limit:
+            print(f"- ... {len(actions) - action_limit} more action(s) in --json")
 
     not_evidence = [
         _text(item)
