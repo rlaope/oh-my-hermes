@@ -51,6 +51,28 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(decision["confidence"], "high")
         self.assertIn("User message:\nrisky refactor", decision["routing_prompt"])
 
+    def test_safe_feature_chat_routes_to_reviewed_plan_across_common_phrasings(self) -> None:
+        cases = (
+            ("safely add a feature", None),
+            ("add a feature safely", None),
+            ("안전하게 기능 추가하고 싶어", "locale:ko:safe_feature"),
+            ("새 기능 안전하게 넣고 싶어", "locale:ko:safe_feature"),
+            ("Quiero agregar una función de forma segura a este repo", "locale:es:safe_feature"),
+            ("Je veux ajouter une fonctionnalité en toute sécurité à ce repo", "locale:fr:safe_feature"),
+            ("Ich möchte sicher eine Funktion hinzufügen", "locale:de:safe_feature"),
+        )
+
+        for message, locale_match in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "ralplan")
+                self.assertEqual(decision["selected_harness"], "planning")
+                self.assertIn("guard:safe_feature_change", decision["recommendations"][0]["matched"])
+                if locale_match is not None:
+                    self.assertIn(locale_match, decision["recommendations"][0]["matched"])
+
     def test_low_signal_chat_falls_back_to_router(self) -> None:
         decision = route_chat_message("zzzzunknownphrase", source="slack")
 

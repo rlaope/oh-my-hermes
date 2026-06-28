@@ -3100,6 +3100,10 @@ class CliTests(unittest.TestCase):
             ("支付失败问题经常出现", "feedback-triage", "locale:zh:payment_failure"),
             ("危険なリファクタリングだと思います", "ralplan", "locale:ja:risky_refactor"),
             ("这个重构很危险", "ralplan", "locale:zh:risky_refactor"),
+            ("안전하게 기능 추가하고 싶어", "ralplan", "locale:ko:safe_feature"),
+            ("Quiero agregar una función de forma segura a este repo", "ralplan", "locale:es:safe_feature"),
+            ("Je veux ajouter une fonctionnalité en toute sécurité à ce repo", "ralplan", "locale:fr:safe_feature"),
+            ("Ich möchte sicher eine Funktion hinzufügen", "ralplan", "locale:de:safe_feature"),
             ("Quiero convertir este issue en un PR", "plan", "locale:es:issue_to_pr"),
             ("Je veux transformer cette issue en PR", "plan", "locale:fr:issue_to_pr"),
             ("Ich möchte dieses Issue für einen PR vorbereiten", "plan", "locale:de:issue_to_pr"),
@@ -3521,7 +3525,7 @@ class CliTests(unittest.TestCase):
                 self.assertIn("process orchestration", top["evidence_boundary"])
                 self.assertIn("prepared_not_observed", top["wrapper_guidance"])
 
-    def test_chat_interact_multilingual_feature_request_uses_plan_surface(self) -> None:
+    def test_chat_interact_multilingual_safe_feature_request_uses_reviewed_plan_surface(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "interact", "--source", "hermes", "Ajoute une fonctionnalité en toute sécurité à ce dépôt"]
         )
@@ -3531,7 +3535,8 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["mode"], "plan")
         self.assertEqual(payload["chat_response"]["kind"], "plan")
-        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "plan")
+        self.assertEqual(payload["route"]["selected_skill"], "ralplan")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ralplan")
         self.assertIn("Accept plan", {action["label"] for action in payload["chat_response"]["actions"]})
 
     def test_chat_interact_render_profile_override_is_preserved(self) -> None:

@@ -37,7 +37,10 @@ _CANONICAL_PAYMENT_FAILURE = (
 _CANONICAL_RISKY_REFACTOR = (
     "dangerous refactor risky refactor unsafe refactor reviewed plan consensus planning acceptance criteria"
 )
-_CANONICAL_SAFE_FEATURE = "safely add a feature to this repo feature add safe plan"
+_CANONICAL_SAFE_FEATURE = (
+    "safely add feature safe feature change reviewed consensus acceptance criteria "
+    "risk verification command before executor handoff"
+)
 _CANONICAL_ISSUE_TO_PR = "issue to pr pr-ready issue plan acceptance criteria coding handoff request-to-handoff"
 _CANONICAL_WEB_RESEARCH = (
     "web research web search search the web current sources source-backed research "
@@ -153,6 +156,18 @@ _ALIASES: tuple[LocaleAlias, ...] = (
         "risky_refactor",
         ("riskantes refactoring", "gefährliches refactoring", "gefaehrliches refactoring", "riskante refaktorierung"),
         _CANONICAL_RISKY_REFACTOR,
+    ),
+    LocaleAlias(
+        "ko",
+        "safe_feature",
+        (
+            "안전하게 기능 추가",
+            "기능 안전하게 추가",
+            "기능 추가를 안전하게",
+            "새 기능 안전하게 넣",
+            "안전하게 새 기능",
+        ),
+        _CANONICAL_SAFE_FEATURE,
     ),
     LocaleAlias(
         "ja",
