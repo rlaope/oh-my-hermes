@@ -1539,9 +1539,9 @@ class WrapperContractTests(unittest.TestCase):
             ),
             (
                 "Codex 작업이 어디까지 진행됐는지 알려줘",
-                "agent-ops-review",
-                "show_agent_ops_review",
-                "agent_ops_review",
+                "ultraprocess",
+                "choose_executor",
+                "handoff",
             ),
             (
                 "Claude Code로 넘길지 Codex로 넘길지 정해줘",

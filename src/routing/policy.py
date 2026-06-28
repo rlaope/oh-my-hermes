@@ -800,6 +800,20 @@ _PRODUCT_SHAPING_UNCERTAINTY_TOKENS = _normalized_token_set(
         "모호",
     }
 )
+_DEEP_INTERVIEW_PHRASES = (
+    "deep interview",
+    "run a deep interview",
+    "do a deep interview",
+    "start a deep interview",
+    "deep interview before planning",
+    "interview before planning",
+    "ask clarifying questions before planning",
+    "ask questions before planning",
+    "딥인터뷰",
+    "딥 인터뷰",
+    "계획 전에 인터뷰",
+    "계획 전에 질문",
+)
 _FEEDBACK_TRIAGE_PHRASES = (
     "customer feedback",
     "customer notes",
@@ -1150,6 +1164,11 @@ _MEMORY_CURATION_PHRASES = (
     "memory curation",
     "memory review",
     "memory inspect",
+    "stale memories",
+    "record stale memories",
+    "review stale memories",
+    "inspect stale memories",
+    "ask me what to keep",
     "context cleanup",
     "context compaction",
     "cross-channel context",
@@ -1171,7 +1190,9 @@ _MEMORY_CURATION_PHRASES = (
 _MEMORY_CURATION_CONTEXT_TOKENS = _normalized_token_set(
     {
         "memory",
+        "memories",
         "context",
+        "contexts",
         "remember",
         "remembers",
         "stale",
@@ -1235,7 +1256,11 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "coding progress",
     "codex progress",
     "codex status",
+    "codex session status",
     "codex work session",
+    "codex session do so far",
+    "what did the codex session do",
+    "what did the codex session do so far",
     "track the codex work session",
     "track codex work session",
     "coding agent status",
@@ -1263,6 +1288,9 @@ _CODING_SESSION_STATUS_ONLY_PHRASES = (
     "coding session looks stuck",
     "codex session looks stuck",
     "claude code session looks stuck",
+    "codex session status",
+    "what did the codex session do",
+    "what did the codex session do so far",
     "what is it doing",
     "what did the coding agent do",
     "what did codex do",
@@ -1760,6 +1788,15 @@ PRODUCT_SHAPING_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; fuzzy product-shaping requests need one clarifying interview before plan or execution.",
     activation_status="active",
 )
+DEEP_INTERVIEW_GUARD = RoutingGuardRule(
+    id="deep_interview_before_generic_plan",
+    rule="Explicit deep-interview or interview-before-planning requests should route to deep-interview before generic planning.",
+    matched_label="guard:deep_interview",
+    preferred_skills=("deep-interview",),
+    score_boost=36,
+    why="Matched explicit deep-interview language; ask the smallest useful clarification before planning or handoff.",
+    activation_status="active",
+)
 WORKFLOW_LEARNING_GUARD = RoutingGuardRule(
     id="workflow_learning_before_skill_management",
     rule="Requests to learn from a workflow, improve a skill next time, or add routing regressions should route to workflow-learning before generic skill management.",
@@ -1984,11 +2021,11 @@ HERMES_CODING_TEAM_GUARD = RoutingGuardRule(
 )
 CODING_PROGRESS_STATUS_GUARD = RoutingGuardRule(
     id="coding_progress_status_before_clarify",
-    rule="Executor or coding-agent progress/status requests should route to agent-ops-review before generic clarification.",
+    rule="Executor or coding-agent progress/status requests should route to Ultraprocess before generic clarification.",
     matched_label="guard:coding_progress_status",
-    preferred_skills=("agent-ops-review",),
+    preferred_skills=("ultraprocess",),
     score_boost=56,
-    why="Matched guard/trigger metadata; coding progress questions should render a manager-facing status card with observed gaps.",
+    why="Matched guard/trigger metadata; coding progress questions should render the selected handoff/session status without claiming missing evidence.",
     activation_status="active",
 )
 GITHUB_EVENT_OPS_GUARD = RoutingGuardRule(
@@ -2077,6 +2114,7 @@ ROUTING_GUARD_RULES = (
     SAFE_FEATURE_PLAN_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
     PRODUCT_SHAPING_GUARD,
+    DEEP_INTERVIEW_GUARD,
     PERSISTENT_COMPLETION_GUARD,
     RESEARCH_BRIEF_GUARD,
     STRATEGY_BRIEF_GUARD,
@@ -2162,6 +2200,8 @@ def active_routing_guard_rules(
         rules.append(FEEDBACK_BEFORE_CODING_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
         rules.append(PRODUCT_SHAPING_GUARD)
+    if _deep_interview_guard_applies(normalized_query, query_tokens):
+        rules.append(DEEP_INTERVIEW_GUARD)
     if _persistent_completion_guard_applies(normalized_query, query_tokens):
         rules.append(PERSISTENT_COMPLETION_GUARD)
     if _research_brief_guard_applies(normalized_query, query_tokens):
@@ -2178,9 +2218,12 @@ def active_routing_guard_rules(
         rules.append(CLEANUP_REFACTOR_GUARD)
     if _durable_research_goal_guard_applies(normalized_query, query_tokens):
         rules.append(DURABLE_RESEARCH_GUARD)
-    if _loop_goal_guard_applies(normalized_query, query_tokens):
+    loop_goal_applies = _loop_goal_guard_applies(normalized_query, query_tokens)
+    if loop_goal_applies:
         rules.append(LOOP_GOAL_GUARD)
-    workflow_learning_applies = _workflow_learning_guard_applies(normalized_query, query_tokens)
+    workflow_learning_applies = (
+        not loop_goal_applies or _contains_phrase(normalized_query, _WORKFLOW_LEARNING_PHRASES)
+    ) and _workflow_learning_guard_applies(normalized_query, query_tokens)
     if workflow_learning_applies:
         rules.append(WORKFLOW_LEARNING_GUARD)
     if not workflow_learning_applies and _omh_quality_improvement_guard_applies(normalized_query):
@@ -2278,6 +2321,15 @@ def _product_shaping_guard_applies(normalized_query: str, query_tokens: set[str]
     product_context = bool(_PRODUCT_SHAPING_CONTEXT_TOKENS & query_tokens)
     shaping_uncertainty = bool(_PRODUCT_SHAPING_UNCERTAINTY_TOKENS & query_tokens)
     return product_context and shaping_uncertainty
+
+
+def _deep_interview_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _DEEP_INTERVIEW_PHRASES):
+        return True
+    interview = bool({"interview", "인터뷰"} & query_tokens)
+    clarify = bool({"clarify", "clarifying", "question", "questions", "질문"} & query_tokens)
+    before_plan = _contains_phrase(normalized_query, ("before planning", "before plan", "계획 전에", "플랜 전에"))
+    return (interview or clarify) and before_plan
 
 
 def _direct_coding_task_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2632,7 +2684,7 @@ def _durable_research_goal_guard_applies(normalized_query: str, query_tokens: se
 
 
 def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    explicit_loop = _contains_phrase(
+    explicit_loop = "loop" in query_tokens or _contains_phrase(
         normalized_query,
         ("loopable", "loop engineering", "goal loop", "루프", "반복해서"),
     )
@@ -2641,10 +2693,15 @@ def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> b
         ("keep improving", "reduce friction", "reducing friction", "반복 개선"),
     )
     product_or_oss_goal = bool({"oss", "repo", "repository", "install", "first-run", "friction", "product"} & query_tokens)
-    north_star = bool({"star-worthy", "starworthy", "stars", "adoption"} & query_tokens) or _contains_phrase(
+    north_star = bool({"star", "stars", "star-worthy", "starworthy", "10k-star", "100k-star", "adoption"} & query_tokens) or _contains_phrase(
         normalized_query,
-        ("star worthy", "star-worthy", "first-run friction", "10k star", "100k star"),
+        ("star worthy", "star-worthy", "first-run friction", "10k star", "10k-star", "100k star", "100k-star"),
     )
+    observability_context = bool(
+        {"token", "tokens", "cost", "latency", "history", "telemetry", "observability", "usage"} & query_tokens
+    ) or _contains_phrase(normalized_query, ("run history", "token cost", "cost latency"))
+    if explicit_loop and observability_context and not (north_star or repeated_improvement):
+        return False
     if is_explicit_one_off_request(normalized_query, query_tokens) and not (explicit_loop or repeated_improvement or north_star):
         return False
     return explicit_loop or (repeated_improvement and (product_or_oss_goal or north_star)) or (north_star and product_or_oss_goal)
@@ -3070,7 +3127,22 @@ def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]
         return False
     if _contains_phrase(normalized_query, _MEMORY_CURATION_PHRASES):
         return True
-    cleanup = _contains_phrase(normalized_query, ("cleanup", "curate", "review", "inspect", "정리", "점검", "검토", "관리"))
+    cleanup = _contains_phrase(
+        normalized_query,
+        (
+            "cleanup",
+            "curate",
+            "review",
+            "inspect",
+            "record",
+            "what to keep",
+            "keep",
+            "정리",
+            "점검",
+            "검토",
+            "관리",
+        ),
+    )
     stale = _contains_phrase(normalized_query, ("stale", "old", "duplicate", "conflicting", "overlap", "collision", "오래된", "중복", "충돌", "겹", "압축"))
     capability_intent = bool(_CAPABILITY_INTENT_TOKENS & query_tokens)
     return context and (hermes_context or omh_context or stale or capability_intent) and cleanup

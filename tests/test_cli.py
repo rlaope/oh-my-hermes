@@ -4183,7 +4183,7 @@ class CliTests(unittest.TestCase):
             ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "ack", "prepare_operating_record"),
             ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "ack", "prepare_material_package"),
-            ("Codex 작업이 어디까지 진행됐는지 알려줘", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
+            ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "choose_executor"),
             ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "ack", "prepare_executor_runtime_readiness"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "ack", "prepare_agent_board_card"),
             ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
@@ -5176,7 +5176,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(direct["workflow-learning-improvement"]["observed"]["playbook"]["id"], "workflow-learning")
         self.assertEqual(direct["visual-summary-poster"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["korean-meeting-image-summary"]["observed"]["playbook"]["id"], "img-summary")
-        self.assertEqual(direct["coding-agent-progress-status"]["observed"]["playbook"]["id"], "agent-ops-review")
+        self.assertEqual(direct["coding-agent-progress-status"]["observed"]["playbook"]["id"], "ultraprocess")
         self.assertEqual(
             direct["executor-runtime-selection"]["observed"]["handoff_status"],
             "prepared_not_observed",
