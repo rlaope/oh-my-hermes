@@ -59,7 +59,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `doctor`: `doctor`, `$doctor`, `diagnose omh`, `installation health`
 - `github-event-ops`: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`, `pull request webhook`, `github webhook`
 - `agent-board`: `agent-board`, `agent board`, `kanban`, `multi agent board`, `multiple hermes agents`, `multiple hermes profiles`, `hermes profiles`
-- `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`, `context review`, `context cleanup`
+- `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`
 - `gateway-intent-card`: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`, `session delivery`, `silent update`
 - `executor-runtime-readiness`: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`, `missing tools`, `handoff mode`
 - `deliverable-package`: `deliverable-package`, `deliverable mode`, `file attachment`, `attach file`, `attachment status`, `file delivery`, `file deliverable status`

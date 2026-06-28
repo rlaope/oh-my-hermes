@@ -1435,12 +1435,18 @@ selected_workflow=ultraprocess
         )
 
     def test_memory_context_chat_dispatches_to_curation_review(self) -> None:
-        decision = route_chat_message("Hermes가 기억하는 맥락을 점검하고 정리해줘", source="discord")
+        for message in (
+            "Hermes가 기억하는 맥락을 점검하고 정리해줘",
+            "메모리 업데이트 할 거 있는지 검사해줘",
+            "현재 hermes가 기억하는 맥락을 점검하고 피드백 받아줘",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
 
-        self.assertEqual(decision["action"], "dispatch")
-        self.assertEqual(decision["selected_skill"], "memory-curation-review")
-        self.assertEqual(decision["selected_harness"], "memory-curation-review")
-        self.assertEqual(decision["confidence"], "high")
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "memory-curation-review")
+                self.assertEqual(decision["selected_harness"], "memory-curation-review")
+                self.assertEqual(decision["confidence"], "high")
 
         cross_channel = route_chat_message(
             "시간이 지나며 메모리 압축되고 다른 채널 용어가 겹쳐서 OMH 맥락 관리가 필요해",

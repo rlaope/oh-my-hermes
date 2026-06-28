@@ -176,6 +176,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertTrue(awareness_context_matches_message("make a poster explaining cron automation"))
         self.assertTrue(awareness_context_matches_message("크론 기능 설명 사진 하나 만들어줘"))
         self.assertTrue(awareness_context_matches_message("PR 요약을 이미지가 아니라 사진처럼 만들어줘"))
+        self.assertTrue(awareness_context_matches_message("현재 hermes가 기억하는 맥락을 점검하고 피드백 받아줘"))
         self.assertTrue(awareness_context_matches_message("作成して、PRの要約画像"))
         self.assertTrue(awareness_context_matches_message("生成一张发布说明海报"))
         self.assertTrue(awareness_context_matches_message("make a PR summary card for reviewers"))
