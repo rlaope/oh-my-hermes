@@ -214,6 +214,9 @@ def build_learning_candidate_card(
     thread_key: str = "",
     executor_runtime: str = "",
 ) -> dict[str, object] | None:
+    if selected_workflow == "workflow-learning" and _is_missed_omh_workflow_feedback(message):
+        return None
+
     signal = detect_learning_signal(message)
     if signal is None:
         return None
@@ -447,6 +450,40 @@ def _candidate_summary(target: str, sanitized: str) -> str:
     if target == "session_only":
         return "Session-only learning signal; do not persist transient task, PR, run, process, branch, or channel state."
     return "Review-first learning signal; cross-channel, conflicting, or underspecified context needs memory curation review before persistence."
+
+
+def _is_missed_omh_workflow_feedback(message: str) -> bool:
+    text = _fold(message)
+    compact = text.replace(" ", "")
+    if not text or "omh" not in text:
+        return False
+    missed_route_phrases = (
+        "did not use omh",
+        "didn't use omh",
+        "didnt use omh",
+        "not use omh",
+        "skipped omh",
+        "omh was not used",
+        "omh was skipped",
+        "why omh was not used",
+        "why did not use omh",
+    )
+    if any(phrase in text for phrase in missed_route_phrases):
+        return True
+    missed_route_compact_phrases = (
+        "omh안썼",
+        "omh안썻",
+        "omh안쓰",
+        "omh를안썼",
+        "omh를안썻",
+        "omh를안쓰",
+        "omh기능을안썼",
+        "omh기능을안썻",
+        "omh기능안썼",
+        "omh기능안썻",
+        "omh누락",
+    )
+    return any(phrase in compact for phrase in missed_route_compact_phrases)
 
 
 def _strip_learning_signal(message: str) -> str:

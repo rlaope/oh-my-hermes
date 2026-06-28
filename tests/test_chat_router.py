@@ -617,7 +617,9 @@ class ChatRouterTests(unittest.TestCase):
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (
             "이 논문 PDF 아주 쉽게 설명해줘",
+            "이 PDF 쉽게 설명해줘",
             "Explain this arXiv paper at expert level without dropping details",
+            "explain this PDF at an easy level",
             "./paper-explainer explain the attached paper at moderate difficulty",
             "Can OMH help me summarize a paper PDF?",
             "Can OMH help with paper summaries?",
@@ -645,6 +647,10 @@ class ChatRouterTests(unittest.TestCase):
         file_export = route_chat_message("PDF를 PPT로 바꿔줘", source="discord")
         self.assertEqual(file_export["selected_skill"], "materials-package")
         self.assertEqual(file_export["selected_harness"], "materials-package")
+
+        short_ppt_export = route_chat_message("PPT 만들어줘", source="discord")
+        self.assertEqual(short_ppt_export["selected_skill"], "materials-package")
+        self.assertEqual(short_ppt_export["selected_harness"], "materials-package")
 
         mixed_export_cases = (
             "explain this paper and make a PPT",
@@ -708,6 +714,8 @@ class ChatRouterTests(unittest.TestCase):
     def test_explicit_workflow_learning_feedback_wins_over_domain_terms(self) -> None:
         cases = (
             "Hermes did not use OMH for my image request; record this as workflow learning",
+            "프리렌이 OMH 기능을 안 썼어",
+            "이번 요청에서 왜 OMH를 안 썼는지 학습해줘",
             "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
             "OMH 안 썼어",
             "missed route: Hermes skipped OMH for my image request",
@@ -723,6 +731,23 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], "workflow-learning")
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("guard:workflow_learning", decision["recommendations"][0]["matched"])
+
+    def test_missed_omh_feedback_recovers_to_domain_workflow_when_not_learning_request(self) -> None:
+        cases = (
+            ("Hermes가 OMH 안 쓰고 그냥 이미지 만들었어", "img-summary", "img-summary"),
+            ("이미지 생성 요청을 했는데 OMH를 안 썼어", "img-summary", "img-summary"),
+            ("리서치 요청했는데 OMH를 안 썼어", "web-research", "research"),
+            ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "operating-rhythm"),
+        )
+
+        for message, skill, harness in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertEqual(decision["selected_harness"], harness)
+                self.assertEqual(decision["confidence"], "high")
 
     def test_runtime_portability_task_card_sits_above_workflow_route(self) -> None:
         message = (

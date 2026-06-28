@@ -284,6 +284,7 @@ class CliTests(unittest.TestCase):
         for message in (
             "missed route: OMH was not used",
             "OMH 안 썼어",
+            "이번 요청에서 왜 OMH를 안 썼는지 학습해줘",
             "missed route: Hermes skipped OMH for my image request",
             "Hermes did not use OMH for my image request; record this as workflow learning",
             "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
@@ -4485,6 +4486,7 @@ class CliTests(unittest.TestCase):
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
             ("논문 PDF 이해하고 싶어", "paper-learning", "paper_learning", "prepare_paper_learning"),
+            ("이 PDF 쉽게 설명해줘", "paper-learning", "paper_learning", "prepare_paper_learning"),
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ops_review", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "strategy_brief", "prepare_strategy_brief"),
@@ -4498,6 +4500,7 @@ class CliTests(unittest.TestCase):
             ("리서치 요청했는데 OMH를 안 썼어", "web-research", "web_research", "run_hermes_research"),
             ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "operating_rhythm", "prepare_operating_record"),
             ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
+            ("PPT 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "materials_package", "prepare_material_package"),
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "send_to_executor"),
             ("今何してる？", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
