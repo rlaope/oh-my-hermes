@@ -4431,7 +4431,7 @@ class CliTests(unittest.TestCase):
 
     def test_chat_interact_routes_grounded_operator_examples(self) -> None:
         cases = (
-            ("결제 실패 이슈가 자주 나와", "feedback-triage", "ack", "triage_feedback"),
+            ("결제 실패 이슈가 자주 나와", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("이 이슈 PR로 만들 수 있게 정리해줘", "ralplan", "plan", "present_plan"),
             ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa", "ack", "dispatch_to_workflow"),
             ("이거 위험한 리팩터링 같아", "ralplan", "plan", "present_plan"),
@@ -4447,7 +4447,7 @@ class CliTests(unittest.TestCase):
             ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
-            ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "ack", "triage_feedback"),
+            ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ack", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "ack", "prepare_strategy_brief"),
             ("take this product idea from plan to deploy and monitor safely", "idea-to-deploy", "ack", "present_app_delivery_loop"),
