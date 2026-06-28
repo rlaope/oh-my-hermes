@@ -1277,6 +1277,48 @@ def build_chat_response_from_route(
                     ],
                 },
             )
+        if selected == "web-research" or policy_next_action == "run_hermes_research":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A web research card is not source retrieval evidence."
+            body = (
+                "I will keep this as Hermes-side research: define the source boundaries, freshness window, source diversity, "
+                "citation confidence, and retrieval gaps before turning findings into a plan, report, or coding handoff. "
+                "I will not claim sources were fetched or verified until observed."
+            )
+            return _chat_response(
+                kind="web_research",
+                headline="I can gather source-backed current evidence for this.",
+                body=body,
+                phase="web_research_prepared",
+                next_action="run_hermes_research",
+                thread_key=thread_key,
+                actions=[
+                    _action("run_hermes_research", "Start research", "primary"),
+                    _action("record_source_observation", "Record source observation", "secondary"),
+                    _action("prepare_source_finder_plan", "Prepare source finder", "secondary"),
+                    _action("prepare_research_department_plan", "Prepare research ops", "secondary"),
+                    _action("prepare_report_package", "Prepare report", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "web_research_brief/v1",
+                    "observation_schema": "source_observation/v1",
+                    "research_scope": "source_backed_current_evidence",
+                    "evidence_not_observed": [
+                        "source retrieval",
+                        "source access",
+                        "citation verification",
+                        "source diversity",
+                        "freshness confirmation",
+                        "downstream plan or handoff",
+                    ],
+                },
+            )
         if selected == "agent-ops-review" or policy_next_action == "prepare_agent_ops_review":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "An agent ops review card is not runtime evidence."
             card = build_agent_operator_productivity_card(
