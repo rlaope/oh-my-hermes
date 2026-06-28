@@ -1092,7 +1092,15 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "coding progress",
     "codex progress",
     "codex status",
+    "codex work session",
+    "track the codex work session",
+    "track codex work session",
     "coding agent status",
+    "coding agent session",
+    "what changed in the coding agent session",
+    "what changed in coding agent session",
+    "tell me what changed",
+    "work session and tell me what changed",
     "where is codex",
     "codex 작업",
     "codex 작업이 어디까지",
@@ -1530,6 +1538,15 @@ RISKY_REFACTOR_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; risky code-change requests should get a reviewed plan before cleanup.",
     activation_status="active",
 )
+SAFE_FEATURE_PLAN_GUARD = RoutingGuardRule(
+    id="safe_feature_change_before_generic_plan",
+    rule="Safe feature-change requests should route to ralplan before generic planning.",
+    matched_label="guard:safe_feature_change",
+    preferred_skills=("ralplan",),
+    score_boost=32,
+    why="Matched safe feature-change language; prepare a reviewed plan before executor handoff.",
+    activation_status="active",
+)
 FEEDBACK_BEFORE_CODING_GUARD = RoutingGuardRule(
     id="feedback_before_coding",
     rule="Product feedback and bug reports should route through triage/investigation before coding handoff unless code work is explicit.",
@@ -1826,6 +1843,7 @@ PAPER_LEARNING_GUARD = RoutingGuardRule(
 )
 ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
+    SAFE_FEATURE_PLAN_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
     PRODUCT_SHAPING_GUARD,
     PERSISTENT_COMPLETION_GUARD,
@@ -1900,6 +1918,8 @@ def active_routing_guard_rules(
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
+    if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
+        rules.append(SAFE_FEATURE_PLAN_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
         rules.append(PRODUCT_SHAPING_GUARD)
     if _persistent_completion_guard_applies(normalized_query, query_tokens):
@@ -2030,6 +2050,22 @@ def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[st
 
 def _omh_quality_improvement_guard_applies(normalized_query: str) -> bool:
     return classify_omh_quality_intent(normalized_query).applies
+
+
+def _safe_feature_plan_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    safe_signal = bool({"safe", "safely", "safety", "안전", "안전하게"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("safe feature", "safely add a feature", "safe plan", "안전하게 기능", "안전한 기능"),
+    )
+    feature_change = bool({"feature", "features", "기능"} & query_tokens) and (
+        bool({"add", "implement", "change", "build", "추가", "구현"} & query_tokens)
+        or _contains_phrase(normalized_query, ("add a feature", "feature change", "기능 추가"))
+    )
+    scope_or_handoff = bool({"repo", "repository", "handoff", "plan", "codebase", "executor"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("this repo", "this repository", "before handoff", "request-to-handoff", "코드베이스", "핸드오프"),
+    )
+    return safe_signal and feature_change and scope_or_handoff
 
 
 def _persistent_completion_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

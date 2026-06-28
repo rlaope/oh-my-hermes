@@ -172,6 +172,10 @@ class ChatRouterTests(unittest.TestCase):
                 "doctor",
             ),
             (
+                "Track the Codex work session and tell me what changed.",
+                "agent-ops-review",
+            ),
+            (
                 "finish the invoice export recovery until the smoke test passes or a blocker is recorded.",
                 "ralph",
             ),

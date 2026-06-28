@@ -46,6 +46,7 @@ _FALLBACK_SKILLS = ("oh-my-hermes", "plan", "deep-interview")
 _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/planning guidance."
 _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     {
+        "safe_feature_change_before_generic_plan",
         "img_summary_before_materials_or_delivery",
         "paper_learning_before_materials_or_research_ops",
         "source_finder_before_generic_web_research",
