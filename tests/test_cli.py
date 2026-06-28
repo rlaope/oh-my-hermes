@@ -3012,6 +3012,31 @@ class CliTests(unittest.TestCase):
         self.assertTrue({"plan", "ralplan"} & top_names)
         self.assertTrue(any(recommendation["hermes_role"] == "planner" for recommendation in recommendations))
 
+    def test_recommend_direct_small_coding_tasks_use_one_cycle_delivery(self) -> None:
+        cases = (
+            "fix the login bug",
+            "implement dark mode toggle",
+            "change the button color to blue",
+            "README 제목 수정해줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "ultraprocess")
+                self.assertEqual(recommendations[0]["next_action"], "start_ultraprocess")
+                self.assertIn("guard:direct_coding_task", recommendations[0]["matched"])
+                self.assertIn("process orchestration", recommendations[0]["evidence_boundary"])
+
+        status, stdout, stderr = run_cli(["recommend", "결제 실패 이슈가 자주 나와", "--limit", "3"])
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(stdout)["recommendations"][0]["skill"], "feedback-triage")
+
     def test_recommend_json_includes_multi_workflow_route_plan(self) -> None:
         message = "Research current install friction, make a reviewed plan, implement with Codex, and run code review."
         status, stdout, stderr = run_cli(["recommend", message, "--limit", "2", "--json"])

@@ -1004,6 +1004,45 @@ selected_workflow=ultraprocess
                 self.assertEqual(decision["selected_harness"], "goal-execution")
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_direct_small_coding_tasks_route_to_one_cycle_delivery(self) -> None:
+        cases = (
+            "fix the login bug",
+            "implement dark mode toggle",
+            "add a settings button",
+            "change the button color to blue",
+            "make the navbar sticky",
+            "update the README title",
+            "rename this variable",
+            "버튼 색 파란색으로 바꿔줘",
+            "로그인 버그 고쳐줘",
+            "다크모드 토글 추가해줘",
+            "README 제목 수정해줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "ultraprocess")
+                self.assertEqual(decision["selected_harness"], "goal-execution")
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn("guard:direct_coding_task", decision["recommendations"][0]["matched"])
+
+    def test_direct_coding_guard_preserves_non_coding_and_review_routes(self) -> None:
+        cases = (
+            ("결제 실패 이슈가 자주 나와", "feedback-triage"),
+            ("릴리즈 전에 README claim이 실제 코드와 맞는가 봐줘", "code-review"),
+            ("회의록 요약 이미지 카드 만들어줘", "img-summary"),
+        )
+
+        for message, selected_skill in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], selected_skill)
+                self.assertNotIn("guard:direct_coding_task", decision["recommendations"][0]["matched"])
+
     def test_multi_workflow_route_plan_exposes_research_plan_delivery_review_order(self) -> None:
         decision = route_chat_message(
             "Research current install friction, make a reviewed plan, implement with Codex, "

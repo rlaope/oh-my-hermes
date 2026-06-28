@@ -1910,6 +1910,15 @@ DELIVERY_CYCLE_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; PR or delivery-cycle requests need the one-cycle process lane rather than research-only routing.",
     activation_status="active",
 )
+DIRECT_CODING_TASK_GUARD = RoutingGuardRule(
+    id="direct_coding_task_before_fallback",
+    rule="Concrete code-edit requests should route to the one-cycle delivery lane instead of falling back to the generic picker.",
+    matched_label="guard:direct_coding_task",
+    preferred_skills=("ultraprocess",),
+    score_boost=44,
+    why="Matched explicit code-edit language; prepare one bounded implementation cycle instead of asking which workflow to use.",
+    activation_status="active",
+)
 CODING_HANDOFF_STATUS_GUARD = RoutingGuardRule(
     id="coding_handoff_status_before_clarify",
     rule="Executor-named coding handoff plus progress/status tracking should route to Ultraprocess instead of generic clarification.",
@@ -2100,6 +2109,7 @@ ROUTING_GUARD_RULES = (
     VISUAL_SUMMARY_GUARD,
     DELIVERABLE_PACKAGE_GUARD,
     DELIVERY_CYCLE_GUARD,
+    DIRECT_CODING_TASK_GUARD,
     CODING_HANDOFF_STATUS_GUARD,
 )
 
@@ -2145,6 +2155,9 @@ def active_routing_guard_rules(
         rules.append(RISKY_REFACTOR_GUARD)
     if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
         rules.append(SAFE_FEATURE_PLAN_GUARD)
+    direct_coding_task_applies = _direct_coding_task_guard_applies(normalized_query, query_tokens)
+    if direct_coding_task_applies:
+        rules.append(DIRECT_CODING_TASK_GUARD)
     if _feedback_before_coding_guard_applies(normalized_query, query_tokens):
         rules.append(FEEDBACK_BEFORE_CODING_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
@@ -2267,12 +2280,152 @@ def _product_shaping_guard_applies(normalized_query: str, query_tokens: set[str]
     return product_context and shaping_uncertainty
 
 
+def _direct_coding_task_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(
+        normalized_query,
+        (
+            "before coding",
+            "before code",
+            "before implementation",
+            "before writing code",
+            "repro plan before coding",
+            "reproduction plan before coding",
+            "구현 전에",
+            "코딩 전에",
+        ),
+    ):
+        return False
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _materials_package_guard_applies(normalized_query, query_tokens):
+        return False
+    if _source_finder_guard_applies(normalized_query, query_tokens):
+        return False
+    if _paper_learning_guard_applies(normalized_query, query_tokens):
+        return False
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        return False
+    if _coding_progress_status_guard_applies(normalized_query, query_tokens):
+        return False
+    if _release_claim_review_guard_applies(normalized_query, query_tokens):
+        return False
+    if _doctor_health_guard_applies(normalized_query, query_tokens):
+        return False
+    if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
+        return False
+    if _risky_refactor_guard_applies(normalized_query, query_tokens):
+        return False
+    if _cleanup_refactor_guard_applies(normalized_query, query_tokens):
+        return False
+
+    action = bool(
+        {
+            "add",
+            "adjust",
+            "build",
+            "change",
+            "delete",
+            "edit",
+            "fix",
+            "implement",
+            "make",
+            "patch",
+            "remove",
+            "rename",
+            "set",
+            "tweak",
+            "update",
+        }
+        & query_tokens
+    ) or _contains_phrase(
+        normalized_query,
+        (
+            "바꿔",
+            "고쳐",
+            "수정",
+            "추가",
+            "구현",
+            "삭제",
+            "제거",
+            "변경",
+            "넣어",
+            "만들어",
+        ),
+    )
+    if not action:
+        return False
+
+    concrete_surface = bool(
+        {
+            "api",
+            "bug",
+            "button",
+            "component",
+            "css",
+            "dark",
+            "docs",
+            "file",
+            "function",
+            "login",
+            "mode",
+            "navbar",
+            "readme",
+            "route",
+            "router",
+            "setting",
+            "settings",
+            "style",
+            "test",
+            "tests",
+            "title",
+            "toggle",
+            "variable",
+        }
+        & query_tokens
+    ) or _contains_phrase(
+        normalized_query,
+        (
+            "button color",
+            "dark mode",
+            "settings button",
+            "navbar",
+            "readme title",
+            "rename this variable",
+            "login bug",
+            "버튼 색",
+            "버그 고쳐",
+            "다크모드",
+            "토글 추가",
+            "readme 제목",
+            "리드미 제목",
+            "변수명",
+        ),
+    )
+    if not concrete_surface:
+        return False
+
+    review_only = _contains_phrase(
+        normalized_query,
+        (
+            "claim matches",
+            "review before release",
+            "before release",
+            "릴리즈 전에",
+            "주장과 실제",
+            "맞는지 검토",
+        ),
+    )
+    return not review_only
+
+
 def _feedback_before_coding_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _gateway_intent_guard_applies(normalized_query, query_tokens):
         return False
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         return False
     if _doctor_health_guard_applies(normalized_query, query_tokens):
+        return False
+    if _direct_coding_task_guard_applies(normalized_query, query_tokens):
         return False
     planning_before_coding = _contains_phrase(
         normalized_query,
