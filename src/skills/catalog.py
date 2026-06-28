@@ -4789,11 +4789,16 @@ def _default_surface_exposure(name: str) -> SurfaceExposure:
 
 
 def _projected_definitions(projection: str) -> list[SkillDefinition]:
-    return [
+    return list(_projected_definitions_cached(projection))
+
+
+@lru_cache(maxsize=8)
+def _projected_definitions_cached(projection: str) -> tuple[SkillDefinition, ...]:
+    return tuple(
         definition
         for definition in _builtin_definitions_cached()
         if projection in surface_exposure_for_skill(definition.name).projections
-    ]
+    )
 
 
 @lru_cache(maxsize=1)
