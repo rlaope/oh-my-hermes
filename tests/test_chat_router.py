@@ -14,6 +14,7 @@ from omh.chat_router import (
     routing_record_payload,
 )
 from omh.routing.intent import classify_workflow_intent
+from omh.routing.localization import normalized_phrase
 from omh.skills.catalog import primary_harness_for_skill
 
 
@@ -426,6 +427,16 @@ class ChatRouterTests(unittest.TestCase):
                 "show me quality, blockers, and throughput for AI-agent work",
                 "agent-ops-review",
                 "trigger:throughput",
+            ),
+            (
+                "무슨일이노",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('무슨일이노')}",
+            ),
+            (
+                "지금 뭐 하고 있어?",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('지금 뭐 하고 있어')}",
             ),
             (
                 "I want Hermes to learn from this workflow and improve the skill next time",
