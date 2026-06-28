@@ -27,9 +27,9 @@ This is a Hermes-native `autoresearch-goal` workflow skill.
 
 Good example:
 
-- Prompt: autoresearch-goal: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `autoresearch-goal` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: autoresearch-goal: keep researching AI agent memory practices until the evidence gaps are closed or logged.
+- Expected behavior: Run a durable research loop with critic checks, source gaps, and a stop or checkpoint condition.
+- Why: The request is research that needs persistence and review, not a one-shot brief.
 
 Bad example:
 

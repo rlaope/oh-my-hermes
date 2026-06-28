@@ -27,9 +27,9 @@ This is a Hermes-native `research-brief` workflow skill.
 
 Good example:
 
-- Prompt: research-brief: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `research-brief` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: research-brief: compare three onboarding analytics vendors using customer notes and confidence gaps.
+- Expected behavior: Prepare a source-backed brief with evidence, inference, confidence, and retrieval gaps separated.
+- Why: The user needs business research synthesis, not recurring operations or coding.
 
 Bad example:
 

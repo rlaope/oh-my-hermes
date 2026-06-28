@@ -27,9 +27,9 @@ This is a Hermes-native `ask` workflow skill.
 
 Good example:
 
-- Prompt: ask: handle a review request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `ask` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.
+- Expected behavior: Prepare an advisor prompt, capture the response boundary, and summarize reusable critique.
+- Why: The user wants outside review before committing to a direction.
 
 Bad example:
 

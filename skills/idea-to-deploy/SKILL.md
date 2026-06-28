@@ -27,9 +27,9 @@ This is a Hermes-native `idea-to-deploy` workflow skill.
 
 Good example:
 
-- Prompt: idea-to-deploy: handle a delivery request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `idea-to-deploy` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: idea-to-deploy: turn this onboarding idea into a scoped plan, implementation handoff, QA gate, and release path.
+- Expected behavior: Prepare the idea-to-release lane while keeping implementation, QA, and deploy evidence observed-only.
+- Why: The request spans product shaping through deploy readiness instead of a single task.
 
 Bad example:
 

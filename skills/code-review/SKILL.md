@@ -28,7 +28,7 @@ This is a Hermes-native `code-review` workflow skill.
 
 Good example:
 
-- Prompt: $code-review check this PR for install/update UX regressions and missing tests.
+- Prompt: $code-review review this PR for install/update UX regressions and missing tests.
 - Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.
 - Why: The task is explicitly review-shaped and has a behavioral risk surface.
 

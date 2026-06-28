@@ -27,9 +27,9 @@ This is a Hermes-native `ralph` workflow skill.
 
 Good example:
 
-- Prompt: ralph: handle a execution request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `ralph` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: ralph: finish the invoice export recovery until the smoke test passes or a blocker is recorded.
+- Expected behavior: Keep one completion owner, track evidence after every recovery step, and stop only on pass, block, or explicit cancel.
+- Why: The request needs persistent completion pressure with an observable stop condition.
 
 Bad example:
 

@@ -28,7 +28,7 @@ This is a Hermes-native `feedback-triage` workflow skill.
 
 Good example:
 
-- Prompt: feedback-triage these payment failure reports and feature requests before we plan fixes.
+- Prompt: Cluster these customer payment failure reports and feature requests before we plan fixes.
 - Expected behavior: Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.
 - Why: The input is mixed feedback that needs classification before delivery decisions.
 

@@ -96,9 +96,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ralph`, `$ralph`, `finish until done`, `persistent execution`, `self-referential loop`
 - Good example:
-  - Prompt: ralph: handle a execution request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `ralph` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: ralph: finish the invoice export recovery until the smoke test passes or a blocker is recorded.
+  - Expected behavior: Keep one completion owner, track evidence after every recovery step, and stop only on pass, block, or explicit cancel.
+  - Why: The request needs persistent completion pressure with an observable stop condition.
 - Bad example:
   - Prompt: ralph: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ralph`.
@@ -151,7 +151,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user expects hidden Hermes code execution rather than explicit executor handoff and observed verification evidence.
 - Strong routing signals: `ultragoal`, `$ultragoal`, `durable goal`, `multi-goal`, `goal ledger`
 - Good example:
-  - Prompt: $ultragoal add per-skill quality rubrics, regenerate skills, test, and open a PR.
+  - Prompt: $ultragoal turn OMH skill quality into a durable goal with rubrics, generated skill sync, tests, and a PR gate.
   - Expected behavior: Create or update a goal ledger, split the story into verifiable checkpoints, and close only after generated docs, skills, and tests match.
   - Why: The task has multiple milestones and a final quality gate that should be inspectable across interruptions.
 - Bad example:
@@ -376,7 +376,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user asked for immediate read-only analysis and the ambiguity does not change the answer.
 - Strong routing signals: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `온보딩`, `부드럽게`, `모호한 제품 요청`, `기획자`, `개발자 사이`
 - Good example:
-  - Prompt: $deep-interview design channel-specific routing, but do not assume what channels mean.
+  - Prompt: $deep-interview before planning Discord and Slack routing, ask what each channel owns and what evidence counts.
   - Expected behavior: Ask one decision-changing question at a time, then produce goals, non-goals, and acceptance criteria.
   - Why: The request explicitly rejects assumptions and needs product boundaries before implementation.
 - Bad example:
@@ -430,9 +430,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `team`, `$team`, `swarm`, `parallel agents`, `coordinated workers`
 - Good example:
-  - Prompt: team: handle a execution request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `team` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: team: coordinate parallel agents for frontend polish, copy polish, and QA with worker ACKs.
+  - Expected behavior: Assign lanes, require worker ACK/result evidence, and keep integration verification separate.
+  - Why: The work benefits from multiple coordinated workers with disjoint ownership.
 - Bad example:
   - Prompt: team: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `team`.
@@ -486,7 +486,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
 - Strong routing signals: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
 - Good example:
-  - Prompt: $ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.
+  - Prompt: $ultrawork split the accepted docs refresh, CLI output polish, and test updates into parallel implementation lanes.
   - Expected behavior: Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.
   - Why: The work can be split cleanly and benefits from parallel execution discipline.
 - Bad example:
@@ -668,9 +668,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `research-brief`, `business-research`, `business research`, `research brief`, `source-backed business research`, `customer feedback trends`, `feedback trends`, `market evidence`, `data search`, `source scan`, `자료 조사`, `데이터 서치`, `근거 조사`, `피드백 추세`, `고객 피드백 추세`
 - Good example:
-  - Prompt: research-brief: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `research-brief` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: research-brief: compare three onboarding analytics vendors using customer notes and confidence gaps.
+  - Expected behavior: Prepare a source-backed brief with evidence, inference, confidence, and retrieval gaps separated.
+  - Why: The user needs business research synthesis, not recurring operations or coding.
 - Bad example:
   - Prompt: research-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `research-brief`.
@@ -724,7 +724,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.
 - Strong routing signals: `research-department`, `research department`, `research ops department`, `research operations department`, `scout analyst briefer`, `scout analyst brief`, `daily research department`, `competitor research department`, `market research department`, `paper review`, `weekly paper review`, `research paper review`, `paper research`, `notebooklm research`, `obsidian research vault`, `knowledge store`, `knowledge storage`, `synthesis tool`, `knowledge summarizer`, `research inbox`, `source inbox`, `briefing status`, `리서치 부서`, `리서치 조직`, `리서치 운영`, `수집 합성 브리핑`, `지식 저장소`, `요약 도구`, `경쟁사 리서치 부서`
 - Good example:
-  - Prompt: research-department 매일 경쟁사와 시장 뉴스를 수집해서 변화가 있으면 브리핑해줘.
+  - Prompt: Set up a Scout, Analyst, and Briefer research flow for daily competitor and market changes.
   - Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, knowledge-store and synthesis-tool readiness, and observed-only evidence requirements.
   - Why: The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.
 - Bad example:
@@ -852,9 +852,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`, `next strategy`, `다음 전략`, `전략 정리`, `전략 메모`, `전략 옵션`, `의사결정`, `리더십 회의`
 - Good example:
-  - Prompt: strategy-brief: handle a strategy request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `strategy-brief` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: strategy-brief: decide whether our onboarding should prioritize solo founders or enterprise buyers.
+  - Expected behavior: Frame options, tradeoffs, assumptions, rejected paths, and the decision evidence needed.
+  - Why: The request is strategy-shaped and should not jump directly into implementation.
 - Bad example:
   - Prompt: strategy-brief: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `strategy-brief`.
@@ -909,7 +909,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.
 - Strong routing signals: `meeting-brief`, `meeting brief`, `meeting agenda`, `agenda`, `discussion prompts`, `decisions needed`, `record template`, `meeting topics`, `회의 주제`, `회의 아젠다`, `아젠다`, `회의 준비`, `논의 질문`, `결정할 것`, `기록 템플릿`
 - Good example:
-  - Prompt: meeting-brief for a leadership sync on setup UX, plugin bridge defaults, and release risk.
+  - Prompt: Prepare a meeting agenda for a leadership sync on setup UX, plugin bridge defaults, and release risk.
   - Expected behavior: Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.
   - Why: The request is preparation for a meeting and should separate prep from observed outcomes.
 - Bad example:
@@ -966,7 +966,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user wants current market research rather than triage of supplied signals.
 - Strong routing signals: `feedback-triage`, `customer-feedback-triage`, `feedback triage`, `customer feedback`, `feedback cluster`, `bug or feature`, `feature request triage`, `payment failure feedback`, `feedback trends`, `payment failure`, `payment failure issue`, `payment failure reports`, `고객 피드백`, `피드백`, `피드백 분류`, `피드백을 모아서`, `결제 실패`, `결제 실패 이슈`, `결제 실패 피드백`, `결제 오류`, `고객 불만`, `버그 제보`, `버그 기능 요청`, `기능 요청`
 - Good example:
-  - Prompt: feedback-triage these payment failure reports and feature requests before we plan fixes.
+  - Prompt: Cluster these customer payment failure reports and feature requests before we plan fixes.
   - Expected behavior: Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.
   - Why: The input is mixed feedback that needs classification before delivery decisions.
 - Bad example:
@@ -1020,9 +1020,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ops-review`, `ops review`, `weekly ops review`, `status review`, `operating review`, `release risks`, `risks and blockers`, `priorities`, `weekly status`, `운영 리뷰`, `주간 운영`, `상태 리뷰`, `리스크`, `블로커`, `우선순위`, `릴리즈 리스크`
 - Good example:
-  - Prompt: ops-review: handle a operations request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `ops-review` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: ops-review: summarize this week’s support queue, release blockers, owner status, and next operating risks.
+  - Expected behavior: Create an operations status review with owners, blockers, evidence gaps, and next actions.
+  - Why: The request is an operating review rather than a one-off plan or coding handoff.
 - Bad example:
   - Prompt: ops-review: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ops-review`.
@@ -1333,7 +1333,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.
 - Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `every morning`, `every day`, `daily digest`, `weekly digest`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `매일`, `매주`, `정기`, `예약`, `반복`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`
 - Good example:
-  - Prompt: automation-blueprint every morning check competitor news and send a Slack digest only if something changed.
+  - Prompt: automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.
   - Expected behavior: Prepare hermes_ops_blueprint/v1 with schedule intent, Slack delivery policy, silence rule, research/report skills, missing evidence, and next confirmation.
   - Why: The request is recurring, delivery-shaped, and must stay prepared until host automation and gateway delivery are observed.
 - Bad example:
@@ -1445,9 +1445,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`, `ship this idea`, `ship this feature`, `launch this feature`, `product delivery loop`, `app delivery loop`, `complete product loop`, `end-to-end app operation`, `완제품 루프`, `아이디어부터 배포`, `기획부터 배포`, `출시까지`, `앱 운영 루프`
 - Good example:
-  - Prompt: idea-to-deploy: handle a delivery request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `idea-to-deploy` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: idea-to-deploy: turn this onboarding idea into a scoped plan, implementation handoff, QA gate, and release path.
+  - Expected behavior: Prepare the idea-to-release lane while keeping implementation, QA, and deploy evidence observed-only.
+  - Why: The request spans product shaping through deploy readiness instead of a single task.
 - Bad example:
   - Prompt: idea-to-deploy: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `idea-to-deploy`.
@@ -1502,9 +1502,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `cto-loop`, `cto loop`, `cto`, `cto pm`, `pm dev qa security ops`, `roadmap technical tradeoffs`, `technical tradeoff`, `delivery risk`, `release readiness`, `technical leadership loop`, `leadership operating loop`, `engineering leadership`, `CTO 구조`, `PM 구조`, `로드맵`, `아키텍처 트레이드오프`, `기술 리더십`, `출시 준비`
 - Good example:
-  - Prompt: cto-loop: handle a leadership request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `cto-loop` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: cto-loop: run the PM, dev, QA, security, and ops loop for this risky billing launch.
+  - Expected behavior: Prepare the CTO operating model with role responsibilities, gates, blockers, and status boundaries.
+  - Why: The request needs a leadership operating loop, not just a generic plan.
 - Bad example:
   - Prompt: cto-loop: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `cto-loop`.
@@ -1560,9 +1560,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `deploy-and-monitor`, `deploy and monitor`, `deploy monitor`, `deployment monitoring`, `release monitor`, `post deploy`, `post-deploy`, `rollback`, `rollback gate`, `health check`, `incident watch`, `release health`, `배포 모니터링`, `배포 감시`, `롤백`, `헬스 체크`, `장애 감시`, `릴리즈 모니터링`
 - Good example:
-  - Prompt: deploy-and-monitor: handle a monitoring request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `deploy-and-monitor` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: deploy-and-monitor: prepare the release monitor, rollback signals, health checks, and post-deploy status card.
+  - Expected behavior: Create release monitoring guidance with deployment, metric, rollback, and observation boundaries.
+  - Why: The request is about deploy readiness and monitoring rather than code review alone.
 - Bad example:
   - Prompt: deploy-and-monitor: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `deploy-and-monitor`.
@@ -1618,9 +1618,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`, `real-world qa`, `qa scenario`, `release qa`, `장애 상황`, `쿠버네티스 장애`, `적절히 진단`, `검증 체크리스트`, `릴리즈 전 gate`
 - Good example:
-  - Prompt: ultraqa: handle a verification request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `ultraqa` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: $ultraqa test the setup wizard with hostile install paths, stale config, and missing PATH cases.
+  - Expected behavior: Generate adversarial QA scenarios, expected signals, observed results, and fix-or-retry routing.
+  - Why: The request asks for verification pressure and hostile scenarios.
 - Bad example:
   - Prompt: ultraqa: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ultraqa`.
@@ -1794,7 +1794,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The request is broad product critique, strategy, or planning rather than code or evidence review.
 - Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`
 - Good example:
-  - Prompt: $code-review check this PR for install/update UX regressions and missing tests.
+  - Prompt: $code-review review this PR for install/update UX regressions and missing tests.
   - Expected behavior: Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.
   - Why: The task is explicitly review-shaped and has a behavioral risk surface.
 - Bad example:
@@ -1850,9 +1850,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ai-slop-cleaner`, `$ai-slop-cleaner`, `cleanup`, `deslop`, `refactor`, `risky`, `behavior-preserving refactor`, `risk analysis`, `refactor workflow`, `legacy refactor`, `리팩터링`, `리팩토링`, `위험 분석`, `변경 범위 제한`, `회귀 테스트`
 - Good example:
-  - Prompt: ai-slop-cleaner: handle a maintenance request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `ai-slop-cleaner` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: $ai-slop-cleaner remove duplicated router branches and lock behavior with regression tests before refactoring.
+  - Expected behavior: Plan cleanup, preserve behavior, delete or simplify code, and prove it with targeted tests.
+  - Why: The request is maintenance cleanup with regression risk.
 - Bad example:
   - Prompt: ai-slop-cleaner: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ai-slop-cleaner`.
@@ -1904,9 +1904,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `best-practice-research`, `best practice`, `official docs`, `upstream guidance`
 - Good example:
-  - Prompt: best-practice-research: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `best-practice-research` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: best-practice-research: check official docs and upstream examples before we choose the plugin packaging pattern.
+  - Expected behavior: Gather primary-source guidance, compare options, and separate evidence from recommendation.
+  - Why: The request needs citation-backed best-practice research before implementation.
 - Bad example:
   - Prompt: best-practice-research: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `best-practice-research`.
@@ -1957,9 +1957,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `autoresearch-goal`, `research goal`, `durable research`, `critic research`
 - Good example:
-  - Prompt: autoresearch-goal: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `autoresearch-goal` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: autoresearch-goal: keep researching AI agent memory practices until the evidence gaps are closed or logged.
+  - Expected behavior: Run a durable research loop with critic checks, source gaps, and a stop or checkpoint condition.
+  - Why: The request is research that needs persistence and review, not a one-shot brief.
 - Bad example:
   - Prompt: autoresearch-goal: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `autoresearch-goal`.
@@ -2010,9 +2010,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `performance-goal`, `performance goal`, `latency`, `throughput`, `benchmark`
 - Good example:
-  - Prompt: performance-goal: handle a optimization request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `performance-goal` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: performance-goal: benchmark recommendation latency, optimize hot paths safely, and prove no regressions.
+  - Expected behavior: Create a measurement-led optimization loop with baseline, change, verification, and regression evidence.
+  - Why: The request is performance optimization and needs measured before/after proof.
 - Bad example:
   - Prompt: performance-goal: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `performance-goal`.
@@ -2064,9 +2064,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `wiki`, `project wiki`, `memory`, `notes`
 - Good example:
-  - Prompt: wiki: handle a knowledge request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `wiki` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: wiki: capture the final router architecture decisions and retrieval hints in the project knowledge base.
+  - Expected behavior: Write durable project knowledge with source context, staleness notes, and follow-up links.
+  - Why: The request is knowledge capture rather than planning or execution.
 - Bad example:
   - Prompt: wiki: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `wiki`.
@@ -2117,9 +2117,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `ask`, `$ask`, `external advisor`, `claude`, `gemini`
 - Good example:
-  - Prompt: ask: handle a review request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `ask` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.
+  - Expected behavior: Prepare an advisor prompt, capture the response boundary, and summarize reusable critique.
+  - Why: The user wants outside review before committing to a direction.
 - Bad example:
   - Prompt: ask: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
@@ -2220,9 +2220,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
 - Strong routing signals: `skill`, `$skill`, `skills`, `manage skills`
 - Good example:
-  - Prompt: skill: handle a operator request that needs explicit evidence boundaries and a clear stop condition.
-  - Expected behavior: Run `skill` only after naming the target, evidence boundary, and stop condition.
-  - Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+  - Prompt: $skill list installed OMH skills and show the catalog metadata for each workflow.
+  - Expected behavior: Manage or inspect the skill catalog without claiming runtime execution or external evidence.
+  - Why: The request is operator skill management, not a user workflow run.
 - Bad example:
   - Prompt: skill: treat casual chat or unaccepted work as if this workflow already produced verified results.
   - Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `skill`.

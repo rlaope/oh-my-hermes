@@ -28,7 +28,7 @@ This is a Hermes-native `ultragoal` workflow skill.
 
 Good example:
 
-- Prompt: $ultragoal add per-skill quality rubrics, regenerate skills, test, and open a PR.
+- Prompt: $ultragoal turn OMH skill quality into a durable goal with rubrics, generated skill sync, tests, and a PR gate.
 - Expected behavior: Create or update a goal ledger, split the story into verifiable checkpoints, and close only after generated docs, skills, and tests match.
 - Why: The task has multiple milestones and a final quality gate that should be inspectable across interruptions.
 

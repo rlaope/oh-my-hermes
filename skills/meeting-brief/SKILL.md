@@ -28,7 +28,7 @@ This is a Hermes-native `meeting-brief` workflow skill.
 
 Good example:
 
-- Prompt: meeting-brief for a leadership sync on setup UX, plugin bridge defaults, and release risk.
+- Prompt: Prepare a meeting agenda for a leadership sync on setup UX, plugin bridge defaults, and release risk.
 - Expected behavior: Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.
 - Why: The request is preparation for a meeting and should separate prep from observed outcomes.
 

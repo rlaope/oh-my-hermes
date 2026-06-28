@@ -28,7 +28,7 @@ This is a Hermes-native `automation-blueprint` workflow skill.
 
 Good example:
 
-- Prompt: automation-blueprint every morning check competitor news and send a Slack digest only if something changed.
+- Prompt: automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.
 - Expected behavior: Prepare hermes_ops_blueprint/v1 with schedule intent, Slack delivery policy, silence rule, research/report skills, missing evidence, and next confirmation.
 - Why: The request is recurring, delivery-shaped, and must stay prepared until host automation and gateway delivery are observed.
 

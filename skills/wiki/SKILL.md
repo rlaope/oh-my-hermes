@@ -27,9 +27,9 @@ This is a Hermes-native `wiki` workflow skill.
 
 Good example:
 
-- Prompt: wiki: handle a knowledge request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `wiki` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: wiki: capture the final router architecture decisions and retrieval hints in the project knowledge base.
+- Expected behavior: Write durable project knowledge with source context, staleness notes, and follow-up links.
+- Why: The request is knowledge capture rather than planning or execution.
 
 Bad example:
 
