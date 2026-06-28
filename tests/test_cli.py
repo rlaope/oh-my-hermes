@@ -3439,6 +3439,8 @@ class CliTests(unittest.TestCase):
             "경쟁사 뉴스 브리핑 카드",
             "릴리즈 노트 발표 이미지",
             "크론 기능 설명 이미지 하나 만들어줘",
+            "이미지로 크론 기능 설명해줘",
+            "사진으로 회의록 요약해줘",
             "회의록을 보기 좋은 세로 이미지로 요약해줘",
             "PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘",
             "이미지 요약 카드 만들어줘",
@@ -3520,6 +3522,7 @@ class CliTests(unittest.TestCase):
             "investigate the image upload bug report",
             "prepare image assets package",
             "debug image upload failures before release",
+            "이미지로 처리하는 파이썬 스크립트 만들어줘",
         )
 
         for message in cases:
@@ -4078,6 +4081,7 @@ class CliTests(unittest.TestCase):
             "does OMH support image generation?",
             "이미지 생성해줘",
             "이미지 만들어줘",
+            "이미지로 크론 기능 설명해줘",
             "generate an image",
             "generate an image.",
         )
@@ -4374,6 +4378,19 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("more action(s) in --json", stdout)
         self.assertIn("Not evidence yet:", stdout)
         self.assertIn("- image generation", stdout)
+
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--summary", "이미지로 크론 기능 설명해줘"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Workflow: img-summary", stdout)
+        self.assertIn("Next action: prepare_visual_prompt_card", stdout)
+        self.assertIn("- choose_image_generator: Choose image tool (enabled)", stdout)
+        self.assertIn("- record_visual_delivery: Record delivery (enabled)", stdout)
+        self.assertNotIn("more action(s) in --json", stdout)
 
     def test_chat_interact_summary_renders_catalog_picker_without_shell_json(self) -> None:
         status, stdout, stderr = run_cli(
