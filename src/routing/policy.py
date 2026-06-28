@@ -2459,7 +2459,12 @@ def active_routing_guard_rules(
         rules.append(RISKY_REFACTOR_GUARD)
     if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
         rules.append(SAFE_FEATURE_PLAN_GUARD)
-    direct_coding_task_applies = _direct_coding_task_guard_applies(normalized_query, query_tokens)
+    visual_summary_applies = _visual_summary_guard_applies(normalized_query, query_tokens)
+    direct_coding_task_applies = _direct_coding_task_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    )
     if direct_coding_task_applies:
         rules.append(DIRECT_CODING_TASK_GUARD)
     if _feedback_before_coding_guard_applies(
@@ -2498,9 +2503,18 @@ def active_routing_guard_rules(
         rules.append(WORKFLOW_LEARNING_GUARD)
     if not workflow_learning_applies and _omh_quality_improvement_guard_applies(normalized_query):
         rules.append(OMH_QUALITY_IMPROVEMENT_GUARD)
-    delivery_cycle_applies = _delivery_cycle_guard_applies(normalized_query, query_tokens)
+    delivery_cycle_applies = _delivery_cycle_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    )
     paper_learning_applies = (
-        not delivery_cycle_applies and _paper_learning_guard_applies(normalized_query, query_tokens)
+        not delivery_cycle_applies
+        and _paper_learning_guard_applies(
+            normalized_query,
+            query_tokens,
+            visual_summary_applies=visual_summary_applies,
+        )
     )
     if paper_learning_applies:
         rules.append(PAPER_LEARNING_GUARD)
@@ -2525,11 +2539,19 @@ def active_routing_guard_rules(
         not delivery_cycle_applies
         and not paper_learning_applies
         and not research_department_applies
-        and _source_finder_guard_applies(normalized_query, query_tokens)
+        and _source_finder_guard_applies(
+            normalized_query,
+            query_tokens,
+            visual_summary_applies=visual_summary_applies,
+        )
     )
     if source_finder_applies:
         rules.append(SOURCE_FINDER_GUARD)
-    if _missed_workflow_operating_record_guard_applies(normalized_query, query_tokens):
+    if _missed_workflow_operating_record_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    ):
         rules.append(MISSED_WORKFLOW_OPERATING_RHYTHM_GUARD)
     if _web_research_guard_applies(normalized_query, query_tokens) and not paper_learning_applies and not source_finder_applies:
         rules.append(WEB_RESEARCH_BEFORE_PROCESS_GUARD)
@@ -2537,9 +2559,17 @@ def active_routing_guard_rules(
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
-    deliverable_package_applies = _deliverable_package_guard_applies(normalized_query, query_tokens)
+    deliverable_package_applies = _deliverable_package_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    )
     if (
-        _materials_package_guard_applies(normalized_query, query_tokens)
+        _materials_package_guard_applies(
+            normalized_query,
+            query_tokens,
+            visual_summary_applies=visual_summary_applies,
+        )
         and not paper_learning_applies
         and not deliverable_package_applies
     ):
@@ -2564,11 +2594,15 @@ def active_routing_guard_rules(
         rules.append(TOOLBELT_READINESS_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
         rules.append(VOICE_OPERATOR_GUARD)
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+    if visual_summary_applies:
         rules.append(VISUAL_SUMMARY_GUARD)
     if deliverable_package_applies:
         rules.append(DELIVERABLE_PACKAGE_GUARD)
-    if _coding_handoff_status_guard_applies(normalized_query, query_tokens):
+    if _coding_handoff_status_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    ):
         rules.append(CODING_HANDOFF_STATUS_GUARD)
     if delivery_cycle_applies:
         rules.append(DELIVERY_CYCLE_GUARD)
@@ -2604,7 +2638,12 @@ def _deep_interview_guard_applies(normalized_query: str, query_tokens: set[str])
     return (interview or clarify) and before_plan
 
 
-def _direct_coding_task_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+def _direct_coding_task_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
     if _contains_phrase(
         normalized_query,
         (
@@ -2719,13 +2758,25 @@ def _direct_coding_task_guard_applies(normalized_query: str, query_tokens: set[s
     if review_only:
         return False
 
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
-    if _materials_package_guard_applies(normalized_query, query_tokens):
+    if _materials_package_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    ):
         return False
-    if _source_finder_guard_applies(normalized_query, query_tokens):
+    if _source_finder_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    ):
         return False
-    if _paper_learning_guard_applies(normalized_query, query_tokens):
+    if _paper_learning_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    ):
         return False
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         return False
@@ -3008,8 +3059,13 @@ def _explicit_scheduled_ops_blueprint_requested(normalized_query: str, query_tok
     return blueprint and scheduled_context
 
 
-def _paper_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _paper_learning_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if _explicit_material_export_requested(normalized_query, query_tokens):
         return False
@@ -3191,12 +3247,21 @@ def _research_department_guard_applies(normalized_query: str, query_tokens: set[
     )
 
 
-def _source_finder_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _source_finder_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if _explicit_material_export_requested(normalized_query, query_tokens):
         return False
-    if _paper_learning_guard_applies(normalized_query, query_tokens):
+    if _paper_learning_guard_applies(
+        normalized_query,
+        query_tokens,
+        visual_summary_applies=visual_summary_applies,
+    ):
         return False
     if _research_department_guard_applies(normalized_query, query_tokens):
         return False
@@ -3314,8 +3379,13 @@ def _missed_workflow_research_guard_applies(normalized_query: str, query_tokens:
     )
 
 
-def _missed_workflow_operating_record_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _missed_workflow_operating_record_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if not _missed_omh_workflow_context_applies(normalized_query):
         return False
@@ -3362,8 +3432,13 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
     )
 
 
-def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _coding_handoff_status_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if _executor_readiness_check_requested(normalized_query, query_tokens):
         return False
@@ -3451,8 +3526,13 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
     return (issue_or_pr or ci_event) and event_or_pr_prep and (github_context or event_context or ci_event)
 
 
-def _materials_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _materials_package_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if _contains_phrase(normalized_query, ("report package", "leadership status deck", "monthly leadership status")):
         return False
@@ -3932,6 +4012,16 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
     return False
 
 
+def _cached_visual_summary_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    visual_summary_applies: bool | None,
+) -> bool:
+    if visual_summary_applies is not None:
+        return visual_summary_applies
+    return _visual_summary_guard_applies(normalized_query, query_tokens)
+
+
 def _is_short_visual_summary_request(normalized_query: str) -> bool:
     compact = normalized_query.strip(" \t\r\n.!?,;:()[]{}\"'`~。？！、，；：")
     return compact in _VISUAL_SUMMARY_SHORT_REQUEST_PHRASES
@@ -3941,8 +4031,13 @@ def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
     return has_normalized_missed_omh_workflow_context(normalized_query)
 
 
-def _deliverable_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _deliverable_package_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if _deliverable_gateway_context_applies(normalized_query, query_tokens):
         return False
@@ -3966,8 +4061,13 @@ def _deliverable_gateway_context_applies(normalized_query: str, query_tokens: se
     return not deliverable_file_context
 
 
-def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
+def _delivery_cycle_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    visual_summary_applies: bool | None = None,
+) -> bool:
+    if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     return _delivery_cycle_terms(normalized_query, query_tokens) and _contains_phrase(
         normalized_query,
