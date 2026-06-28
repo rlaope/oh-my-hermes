@@ -7,6 +7,7 @@ from ..context_safety import compact_progress_events
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_route_payload, route_chat_message, route_explanation_payload
+from ..routing.missed_route import is_missed_route_feedback
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
 from ..capabilities.families import capability_family_cards
 from ..context import build_context_brief
@@ -3587,47 +3588,7 @@ def _selected_recommendation_policy(decision: dict[str, object], selected: str) 
 
 
 def _is_missed_route_feedback(message: str) -> bool:
-    text = " ".join(message.lower().split())
-    compact = text.replace(" ", "")
-    if not text:
-        return False
-    missed_route_phrases = (
-        "missed route",
-        "missed workflow",
-        "missing route",
-        "wrong route",
-        "wrong workflow",
-        "did not use omh",
-        "didn't use omh",
-        "didnt use omh",
-        "not use omh",
-        "skipped omh",
-        "omh was not used",
-        "omh was skipped",
-        "expected omh",
-        "expected workflow",
-    )
-    if any(phrase in text for phrase in missed_route_phrases):
-        return True
-    missed_route_compact_phrases = (
-        "omh안썼",
-        "omh안썻",
-        "omh안썼어",
-        "omh안썻어",
-        "omh안쓰",
-        "omh를안썼",
-        "omh를안썻",
-        "omh를안쓰",
-        "omh기능안썼",
-        "omh기능안썻",
-        "omh기능안쓰",
-        "omh안씀",
-        "omh누락",
-        "워크플로누락",
-        "라우팅누락",
-        "잘못라우팅",
-    )
-    return any(phrase in compact for phrase in missed_route_compact_phrases)
+    return is_missed_route_feedback(message)
 
 
 def _workflow_explanation_reason_for_route(
