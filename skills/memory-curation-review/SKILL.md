@@ -65,7 +65,7 @@ Bad example:
 
 Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
 
-    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory context review`, `context review`, `context cleanup`, `context curation`, `curate memory`, `stale memory`, `stale project context`, `old project context`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `프로젝트 맥락`, `프로젝트 맥락이 오래된`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `기억하는 맥락`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
+    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
 
 ## Catalog Metadata
 
