@@ -4466,6 +4466,8 @@ def workflow_explanation_payload(
     workflow = _usage_workflow(state)
     label = workflow or _usage_label(state, kind=kind, phase=phase, next_action=next_action)
     harness = primary_harness_for_skill(workflow) if workflow else ""
+    next_action_label = next_action.replace("_", " ")
+    not_evidence_yet = _workflow_explanation_not_evidence(state, claim_boundary=claim_boundary)
     payload: dict[str, object] = {
         "schema_version": WORKFLOW_EXPLANATION_SCHEMA_VERSION,
         "selected_workflow": workflow,
@@ -4473,8 +4475,11 @@ def workflow_explanation_payload(
         "selected_harness": harness,
         "why_this_workflow": _workflow_explanation_reason(state, workflow=workflow, label=label),
         "next_action": next_action,
-        "next_action_label": next_action.replace("_", " "),
-        "not_evidence_yet": _workflow_explanation_not_evidence(state, claim_boundary=claim_boundary),
+        "next_action_label": next_action_label,
+        "recommended_reply": _workflow_recommended_reply(workflow, label, next_action_label, not_evidence_yet),
+        "primary_action_label": _workflow_primary_action_label(workflow, label),
+        "primary_action_hint": _workflow_primary_action_hint(workflow, label, next_action_label, not_evidence_yet),
+        "not_evidence_yet": not_evidence_yet,
         "claim_boundary": claim_boundary,
         "rendering_hint": "Show this as a compact why/next/not-evidence card in chat surfaces.",
     }
@@ -4495,6 +4500,34 @@ def _workflow_explanation_reason(state: dict[str, object], *, workflow: str, lab
     if workflow:
         return f"Selected `{workflow}` from the message, workflow metadata, and guardrail policy."
     return f"Using the `{label}` response state for this step."
+
+
+def _workflow_recommended_reply(workflow: str, label: str, next_action_label: str, not_evidence_yet: list[str]) -> str:
+    name = workflow or label
+    not_evidence = _first_not_evidence_item(not_evidence_yet)
+    suffix = f" This is still not {not_evidence} evidence." if not_evidence else " This is guidance, not execution evidence."
+    return f"I will use `{name}` and start with {next_action_label}.{suffix}"
+
+
+def _workflow_primary_action_label(workflow: str, label: str) -> str:
+    name = workflow or label
+    return f"Open {name}"
+
+
+def _workflow_primary_action_hint(
+    workflow: str,
+    label: str,
+    next_action_label: str,
+    not_evidence_yet: list[str],
+) -> str:
+    name = workflow or label
+    not_evidence = _first_not_evidence_item(not_evidence_yet)
+    suffix = f"; do not claim {not_evidence} until observed" if not_evidence else "; keep evidence claims separate"
+    return f"Route to `{name}` and run `{next_action_label}`{suffix}."
+
+
+def _first_not_evidence_item(items: list[str]) -> str:
+    return items[0].replace("_", " ") if items else ""
 
 
 def _workflow_explanation_not_evidence(state: dict[str, object], *, claim_boundary: str) -> list[str]:

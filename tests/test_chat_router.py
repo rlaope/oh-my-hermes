@@ -1303,6 +1303,11 @@ selected_workflow=ultraprocess
         self.assertIn("not MCP server installation", explanation["claim_boundary"])
         self.assertIn("API access", explanation["claim_boundary"])
         self.assertIn("connector invocation", explanation["not_evidence_yet"])
+        self.assertIn("toolbelt-readiness", explanation["recommended_reply"])
+        self.assertIn("prepare toolbelt readiness", explanation["recommended_reply"])
+        self.assertEqual(explanation["primary_action_label"], "Open toolbelt-readiness")
+        self.assertIn("do not claim", explanation["primary_action_hint"])
+        self.assertIn("execution", explanation["primary_action_hint"])
         self.assertIn("why / next / not-yet-evidence", explanation["rendering_hint"])
         self.assertNotIn(message, json.dumps(explanation, ensure_ascii=False))
 

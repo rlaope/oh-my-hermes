@@ -938,6 +938,10 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("reproduction evidence", explanation["not_evidence_yet"])
         self.assertIn("coding handoff", explanation["not_evidence_yet"])
         self.assertIn("verification", explanation["not_evidence_yet"])
+        self.assertIn("feedback-triage", explanation["recommended_reply"])
+        self.assertIn("triage feedback", explanation["recommended_reply"])
+        self.assertEqual(explanation["primary_action_label"], "Open feedback-triage")
+        self.assertIn("do not claim completed feedback triage", explanation["primary_action_hint"])
 
     def test_review_quality_cards_expose_verification_boundaries(self) -> None:
         cases = (
