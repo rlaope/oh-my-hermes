@@ -88,6 +88,8 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
 
 
 def cmd_chat_route_hint(args: argparse.Namespace) -> int:
+    if bool(getattr(args, "summary", False)) and bool(getattr(args, "json", False)):
+        raise OmhError("--summary and --json cannot be used together")
     try:
         event_or_message, source_metadata = _chat_input_and_metadata(args)
         message = extract_message_text(event_or_message) if isinstance(event_or_message, dict) else str(event_or_message)
@@ -100,7 +102,10 @@ def cmd_chat_route_hint(args: argparse.Namespace) -> int:
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
-    _print_json(payload)
+    if bool(getattr(args, "summary", False)):
+        _print_chat_route_hint_summary(payload)
+    else:
+        _print_json(payload)
     return 0
 
 
@@ -369,6 +374,110 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
 
     print()
     print("Use --json for the full machine-readable route payload.")
+
+
+def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
+    response = _as_mapping(payload.get("chat_response"))
+    route_hint = _as_mapping(payload.get("route_hint"))
+    state = _as_mapping(response.get("state"))
+    state_route_hint = _as_mapping(state.get("route_hint"))
+    selected_workflow = _text(
+        route_hint.get("primary_workflow")
+        or route_hint.get("selected_workflow")
+        or state_route_hint.get("primary_workflow")
+        or state.get("selected_workflow"),
+        "unknown",
+    )
+    next_action = _text(
+        route_hint.get("primary_next_action")
+        or state_route_hint.get("primary_next_action")
+        or state.get("next_action"),
+        "unknown",
+    )
+    source = _text(payload.get("source"), "generic")
+    hint_count = len([item for item in _as_list(route_hint.get("hints")) if isinstance(item, dict)])
+
+    print("OMH route hint")
+    print(f"Source: {source}")
+    print(f"Workflow: {selected_workflow}")
+    print(f"Next action: {next_action}")
+    print(f"Hints: {hint_count}")
+
+    headline = _text(response.get("headline"))
+    body = _text(response.get("body"))
+    if headline or body:
+        print()
+        if headline:
+            print(headline)
+        if body:
+            print(body)
+
+    hints = [item for item in _as_list(route_hint.get("hints")) if isinstance(item, dict)]
+    if hints:
+        print()
+        print("Hint details:")
+        for hint in hints[:5]:
+            workflow = _text(hint.get("workflow"), "unknown")
+            lane = _text(hint.get("lane"), "unknown")
+            action = _text(hint.get("next_action"), "unknown")
+            reason = _text(hint.get("reason"))
+            print(f"- {workflow}: {action} ({lane})")
+            if reason:
+                print(f"  why: {reason}")
+
+    actions = [action for action in _as_list(response.get("actions")) if isinstance(action, dict)]
+    if actions:
+        print()
+        print("Actions:")
+        for action in actions[:6]:
+            action_id = _text(action.get("id"), "action")
+            label = _text(action.get("label"), action_id)
+            enabled = bool(action.get("enabled", True))
+            state_label = "enabled" if enabled else "disabled"
+            print(f"- {action_id}: {label} ({state_label})")
+
+    checkpoint = _as_mapping(payload.get("generic_tool_checkpoint"))
+    checkpoint_body = _text(checkpoint.get("body"))
+    if checkpoint_body:
+        print()
+        print("Checkpoint:")
+        print(f"  {checkpoint_body}")
+
+    not_evidence = [
+        _text(item)
+        for item in (
+            _as_list(route_hint.get("not_executed"))
+            or _as_list(_first_hint_value(route_hint, "not_evidence_yet"))
+            or _as_list(checkpoint.get("not_evidence_yet"))
+        )
+        if _text(item)
+    ]
+    if not_evidence:
+        print()
+        print("Not evidence yet:")
+        for item in not_evidence[:6]:
+            print(f"- {item}")
+
+    prompt_context = _text(payload.get("prompt_context"))
+    if prompt_context:
+        print()
+        print("Prompt context: included")
+
+    boundary = _text(payload.get("claim_boundary") or response.get("claim_boundary") or route_hint.get("claim_boundary"))
+    if boundary:
+        print()
+        print("Boundary:")
+        print(f"  {boundary}")
+
+    print()
+    print("Use --json for the full machine-readable route hint payload.")
+
+
+def _first_hint_value(route_hint: dict[str, object], key: str) -> object:
+    hints = _as_list(route_hint.get("hints"))
+    if not hints or not isinstance(hints[0], dict):
+        return ""
+    return hints[0].get(key, "")
 
 
 def _first_recommendation_value(route: dict[str, object], key: str) -> object:
@@ -751,6 +860,16 @@ def _add_chat_commands(sub) -> None:
         "--prompt-context",
         action="store_true",
         help="Also include the compact plugin-style prompt context string for wrappers that inject context manually.",
+    )
+    route_hint.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a compact human-readable route-hint summary instead of the default JSON payload.",
+    )
+    route_hint.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the full machine-readable JSON route-hint payload. This is the default.",
     )
     route_hint.set_defaults(func=cmd_chat_route_hint)
 
