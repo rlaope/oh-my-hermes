@@ -93,6 +93,11 @@ _ROUTER_DESIGN_CONTEXT_PHRASES = (
     "워크플로 학습",
     "워크플로우 학습",
     "라우팅 피드백",
+    "라우터 강화",
+    "라우터강화",
+    "라우터 개선",
+    "라우터개선",
+    "플랜으로 잡",
     "omh가 얼마나 관여",
     "omh를 얼마나 관여",
     "omh 관여",
@@ -215,6 +220,48 @@ _CODE_CLEANUP_TARGET_TOKENS = frozenset(
         "회귀",
         "구현",
     )
+)
+_EXECUTOR_STATUS_CONTEXT_PHRASES = (
+    "codex",
+    "claude code",
+    "coding agent",
+    "executor",
+    "코덱스",
+    "클로드",
+    "코딩 에이전트",
+)
+_EXECUTOR_STATUS_SIGNAL_PHRASES = (
+    "latest status",
+    "current status",
+    "status of",
+    "handoff status",
+    "coding handoff",
+    "tests passed",
+    "pr is open",
+    "pr opened",
+    "what is still missing",
+    "what's still missing",
+    "what evidence is still missing",
+    "progress",
+    "running",
+    "session",
+    "진행상태",
+    "진행 상황",
+)
+_EXECUTOR_STATUS_META_EXCLUSION_PHRASES = (
+    "developer test",
+    "developer note",
+    "setup test",
+    "token only",
+    "not asking to implement",
+    "vocabulary",
+    "route:",
+    "routing",
+    "router",
+    "용어",
+    "라우팅",
+    "라우터",
+    "라우터 강화",
 )
 
 
@@ -354,6 +401,11 @@ def _without_diagnostic_status_lines(normalized: str) -> str:
             stripped = re.sub(r"^\[omh(?:\s+awareness|\s+route\s+hint)?\]\s*", "", stripped).strip()
             if not stripped:
                 continue
+        stripped = re.sub(r"\bnative bridge status context\.?", "", stripped).strip()
+        stripped = re.sub(r"\bevidence boundary:[^.]*\.?", "", stripped).strip()
+        stripped = re.sub(r"\blatest runtime run:[^.]*\.?", "", stripped).strip()
+        if not stripped:
+            continue
         if stripped.startswith(("native bridge status context", "evidence boundary", "latest runtime run")):
             continue
         if any(marker in stripped for marker in markers):
@@ -378,6 +430,8 @@ def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], 
     evaluation_region = _without_diagnostic_status_lines(normalized) if diagnostic_status_context else normalized
     evaluation_compact = evaluation_region.replace(" ", "")
     if _is_code_cleanup_request(evaluation_region, tokens):
+        return False
+    if _is_executor_status_question(evaluation_region, evaluation_compact, tokens):
         return False
     phrase_hit = _phrase_hit(_ROUTER_DESIGN_CONTEXT_PHRASES, evaluation_region, evaluation_compact)
     if phrase_hit:
@@ -422,6 +476,16 @@ def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], 
     ):
         return True
     return False
+
+
+def _is_executor_status_question(evaluation_region: str, evaluation_compact: str, tokens: set[str]) -> bool:
+    if _phrase_hit(_EXECUTOR_STATUS_META_EXCLUSION_PHRASES, evaluation_region, evaluation_compact):
+        return False
+    executor_context = _phrase_hit(_EXECUTOR_STATUS_CONTEXT_PHRASES, evaluation_region, evaluation_compact)
+    status_signal = _phrase_hit(_EXECUTOR_STATUS_SIGNAL_PHRASES, evaluation_region, evaluation_compact) or bool(
+        {"status", "progress", "running", "session", "handoff"} & tokens
+    )
+    return executor_context and status_signal
 
 
 def _is_code_cleanup_request(evaluation_region: str, tokens: set[str]) -> bool:

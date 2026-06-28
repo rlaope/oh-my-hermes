@@ -1270,8 +1270,14 @@ _CODING_SESSION_STATUS_ONLY_PHRASES = (
     "did the coding agent finish",
     "says done",
     "said done",
+    "tests passed",
+    "pr is open",
+    "pr opened",
+    "what is still missing",
+    "what's still missing",
     "what evidence is still missing",
     "evidence is still missing",
+    "still missing",
     "is codex done",
     "is claude code done",
 )
@@ -1972,7 +1978,7 @@ CODING_PROGRESS_STATUS_GUARD = RoutingGuardRule(
     rule="Executor or coding-agent progress/status requests should route to agent-ops-review before generic clarification.",
     matched_label="guard:coding_progress_status",
     preferred_skills=("agent-ops-review",),
-    score_boost=28,
+    score_boost=56,
     why="Matched guard/trigger metadata; coding progress questions should render a manager-facing status card with observed gaps.",
     activation_status="active",
 )
@@ -2459,8 +2465,6 @@ def _durable_research_goal_guard_applies(normalized_query: str, query_tokens: se
 
 
 def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if is_explicit_one_off_request(normalized_query, query_tokens):
-        return False
     explicit_loop = _contains_phrase(
         normalized_query,
         ("loopable", "loop engineering", "goal loop", "루프", "반복해서"),
@@ -2474,7 +2478,9 @@ def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> b
         normalized_query,
         ("star worthy", "star-worthy", "first-run friction", "10k star", "100k star"),
     )
-    return explicit_loop or (repeated_improvement and (product_or_oss_goal or north_star))
+    if is_explicit_one_off_request(normalized_query, query_tokens) and not (explicit_loop or repeated_improvement or north_star):
+        return False
+    return explicit_loop or (repeated_improvement and (product_or_oss_goal or north_star)) or (north_star and product_or_oss_goal)
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2655,13 +2661,14 @@ def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -
         "web",
         "search",
         "sources",
-        "source",
         "citation",
         "citations",
         "links",
         "official",
         "upstream",
     } & query_tokens:
+        return True
+    if "source" in query_tokens and not _contains_phrase(normalized_query, ("open source", "open-source")):
         return True
     if {"latest", "current", "freshness"} & query_tokens:
         freshness_context = bool(
@@ -2919,8 +2926,43 @@ def _agent_board_guard_applies(normalized_query: str, query_tokens: set[str]) ->
 
 def _gateway_intent_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     platform = bool({"discord", "slack", "telegram", "whatsapp", "signal", "gateway", "platform"} & query_tokens)
-    policy = bool({"thread", "delivery", "silent", "attachment", "status", "origin"} & query_tokens)
-    return platform and policy and _deliverable_gateway_context_applies(normalized_query, query_tokens)
+    policy = bool(
+        {
+            "thread",
+            "delivery",
+            "silent",
+            "silently",
+            "quiet",
+            "quietly",
+            "attachment",
+            "file",
+            "status",
+            "origin",
+            "update",
+            "updates",
+        }
+        & query_tokens
+    )
+    gateway_context = _deliverable_gateway_context_applies(normalized_query, query_tokens) or bool(
+        {
+            "message",
+            "messages",
+            "thread",
+            "attachment",
+            "file",
+            "voice",
+            "origin",
+            "delivery",
+            "status",
+            "update",
+            "updates",
+        }
+        & query_tokens
+    ) or _contains_phrase(
+        normalized_query,
+        ("file attachment", "sent an attachment", "update the thread", "thread quietly", "voice note"),
+    )
+    return platform and policy and gateway_context
 
 
 def _hermes_coding_team_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2931,6 +2973,8 @@ def _hermes_coding_team_guard_applies(normalized_query: str, query_tokens: set[s
 
 
 def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        return False
     if _coding_session_status_only_guard_applies(normalized_query, query_tokens):
         return True
     if _contains_phrase(normalized_query, _CODING_PROGRESS_STATUS_PHRASES):
