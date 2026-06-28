@@ -156,6 +156,11 @@ class ChatRouterTests(unittest.TestCase):
             "이 논문 PDF 아주 쉽게 설명해줘",
             "Explain this arXiv paper at expert level without dropping details",
             "./paper-explainer explain the attached paper at moderate difficulty",
+            "Can OMH help me summarize a paper PDF?",
+            "Can OMH help with paper summaries?",
+            "¿Puede OMH ayudar con un resumen de paper PDF?",
+            "OMHで論文PDFを説明できる？",
+            "OMH可以解释论文PDF吗？",
         )
         for message in explanation_cases:
             with self.subTest(message=message):
@@ -242,6 +247,7 @@ class ChatRouterTests(unittest.TestCase):
             "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
             "OMH 안 썼어",
             "missed route: Hermes skipped OMH for my image request",
+            "Can OMH help me improve a workflow that went wrong?",
         )
 
         for message in cases:
@@ -818,6 +824,12 @@ selected_workflow=ultraprocess
         self.assertIn("not dispatch", route_plan["steps"][2]["evidence_boundary"])
 
     def test_risky_refactor_route_plan_keeps_ralplan_before_delivery(self) -> None:
+        capability_question = route_chat_message("What OMH workflow should I use for a risky refactor?", source="discord")
+
+        self.assertEqual(capability_question["action"], "dispatch")
+        self.assertEqual(capability_question["selected_skill"], "ralplan")
+        self.assertEqual(capability_question["selected_harness"], "planning")
+
         decision = route_chat_message(
             "위험한 리팩터링 같아. 코드베이스 조사하고 계획 세운 뒤 구현 리뷰 문서 PR까지",
             source="discord",
