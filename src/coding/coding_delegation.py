@@ -179,6 +179,8 @@ def build_coding_delegation_payload(
     context_pack: dict[str, object] | None = None,
     memory_recall_pack: dict[str, object] | None = None,
     plan_artifact: dict[str, object] | None = None,
+    preferred_workflow: str | None = None,
+    preferred_workflow_score: int | None = None,
     prefer_direct_coding_handoff: bool = True,
     force_coding_handoff: bool = False,
 ) -> dict[str, object]:
@@ -193,6 +195,11 @@ def build_coding_delegation_payload(
         raise ValueError("coding delegate --limit must be at least 1")
 
     full_recommendations = recommend_skills(message, limit=max(limit, 5), apply_guardrails=False)
+    full_recommendations = _prioritize_preferred_workflow(
+        full_recommendations,
+        preferred_workflow=preferred_workflow,
+        preferred_workflow_score=preferred_workflow_score,
+    )
     recommendations = _compact_recommendations(full_recommendations[:limit])
     top = full_recommendations[0]
     workflow = str(top["skill"])
@@ -1105,6 +1112,55 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
             }
         )
     return compact
+
+
+def _prioritize_preferred_workflow(
+    recommendations: list[dict[str, object]],
+    *,
+    preferred_workflow: str | None,
+    preferred_workflow_score: int | None,
+) -> list[dict[str, object]]:
+    workflow = str(preferred_workflow or "").strip()
+    if not workflow:
+        return recommendations
+    route_score = _int_or_none(preferred_workflow_score)
+    prioritized: dict[str, object] | None = None
+    rest: list[dict[str, object]] = []
+    for item in recommendations:
+        if str(item.get("skill", "")) == workflow and prioritized is None:
+            prioritized = dict(item)
+            if route_score is not None:
+                prioritized["score"] = max(int(prioritized.get("score", 0)), route_score)
+            matched = list(prioritized.get("matched", [])) if isinstance(prioritized.get("matched"), list) else []
+            if "route:selected_workflow" not in matched:
+                matched.insert(0, "route:selected_workflow")
+            prioritized["matched"] = matched
+            prioritized["confidence"] = "high"
+        else:
+            rest.append(item)
+    if prioritized is None:
+        prioritized = {
+            "skill": workflow,
+            "score": max(route_score or 0, 4),
+            "confidence": "high",
+            "matched": ["route:selected_workflow"],
+        }
+    return [prioritized] + [item for item in rest if str(item.get("skill", "")) != workflow]
+
+
+def _int_or_none(value: object) -> int | None:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _has_any(value: str, terms: tuple[str, ...]) -> bool:

@@ -195,7 +195,7 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "Track the Codex work session and tell me what changed.",
-                "agent-ops-review",
+                "ultraprocess",
             ),
             (
                 "finish the invoice export recovery until the smoke test passes or a blocker is recorded.",
@@ -223,7 +223,7 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "What did the coding agent do while I was away?",
-                "agent-ops-review",
+                "ultraprocess",
             ),
             (
                 "PR 42 has failing CI, summarize the risk and next fix path.",
@@ -231,7 +231,7 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "The Claude Code session looks stuck; what is it doing and what should I do next?",
-                "agent-ops-review",
+                "ultraprocess",
             ),
             (
                 "Voice note: release risky. check fast and ask before action.",
@@ -263,15 +263,15 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "Claude Code says done; what evidence is still missing?",
-                "agent-ops-review",
+                "ultraprocess",
             ),
             (
                 "The coding agent says tests passed and PR is open; what is still missing?",
-                "agent-ops-review",
+                "ultraprocess",
             ),
             (
                 "What is the latest status of the Codex handoff?",
-                "agent-ops-review",
+                "ultraprocess",
             ),
             (
                 "I installed it but omh is not found in a new terminal.",
@@ -344,6 +344,53 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], primary_harness_for_skill(skill))
                 self.assertEqual(decision["recommendations"][0]["skill"], skill)
                 self.assertEqual(decision["confidence"], "high")
+
+    def test_route_quality_pass_handles_real_chat_misroutes(self) -> None:
+        cases = (
+            (
+                "I need a 10k-star OSS loop to improve first-run experience",
+                "loop",
+                "guard:loop_goal",
+            ),
+            (
+                "what did the codex session do so far?",
+                "ultraprocess",
+                "guard:coding_progress_status",
+            ),
+            (
+                "coding-agent status for the codex handoff",
+                "ultraprocess",
+                "guard:coding_handoff_status",
+            ),
+            (
+                "record stale memories and ask me what to keep",
+                "memory-curation-review",
+                "guard:memory_curation",
+            ),
+            (
+                "run a deep interview before planning",
+                "deep-interview",
+                "guard:deep_interview",
+            ),
+            (
+                "show me quality, blockers, and throughput for AI-agent work",
+                "agent-ops-review",
+                "trigger:throughput",
+            ),
+            (
+                "I want Hermes to learn from this workflow and improve the skill next time",
+                "workflow-learning",
+                "guard:workflow_learning",
+            ),
+        )
+
+        for message, skill, marker in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertIn(marker, decision["recommendations"][0]["matched"])
 
     def test_visual_summary_chat_dispatches_to_img_summary(self) -> None:
         cases = (

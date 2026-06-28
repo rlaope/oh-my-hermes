@@ -684,6 +684,7 @@ def build_chat_interaction_payload(
                     source_metadata=metadata,
                     resolved_executor_target=resolved_executor_target,
                     executor_resolution=executor_resolution,
+                    route_payload=route_payload,
                     paths=paths,
                 ),
                 target_notice,
@@ -760,6 +761,7 @@ def _attach_coding_owner_handoff(
     source_metadata: dict[str, str],
     resolved_executor_target: str,
     executor_resolution: dict[str, object],
+    route_payload: dict[str, object],
     paths: OmhPaths | None,
 ) -> dict[str, object]:
     delegation = build_coding_delegation_payload(
@@ -770,6 +772,8 @@ def _attach_coding_owner_handoff(
         source_metadata=source_metadata,
         executor_target=resolved_executor_target,
         force_coding_handoff=True,
+        preferred_workflow=str(route_payload.get("selected_skill", "")),
+        preferred_workflow_score=_intish(route_payload.get("score", 0)),
         memory_recall_pack=memory_recall_pack_for_handoff(
             paths,
             message,
