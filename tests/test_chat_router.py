@@ -220,6 +220,58 @@ class ChatRouterTests(unittest.TestCase):
                 "doctor",
             ),
             (
+                "CI is red after my latest push, help me triage the failure.",
+                "github-event-ops",
+            ),
+            (
+                "A reviewer left comments on my PR; summarize what to fix first.",
+                "github-event-ops",
+            ),
+            (
+                "Customers keep asking for refunds after checkout timeouts.",
+                "feedback-triage",
+            ),
+            (
+                "The dashboard 500s after login; make a repro plan before coding.",
+                "feedback-triage",
+            ),
+            (
+                "Use Codex to implement the accepted plan and keep me posted.",
+                "ultraprocess",
+            ),
+            (
+                "Claude Code says done; what evidence is still missing?",
+                "agent-ops-review",
+            ),
+            (
+                "I installed it but omh is not found in a new terminal.",
+                "doctor",
+            ),
+            (
+                "Hermes skills list does not show OMH after setup.",
+                "doctor",
+            ),
+            (
+                "Every morning collect AI agent news, synthesize it, and brief me.",
+                "research-department",
+            ),
+            (
+                "Every Monday remind the team to review stale issues.",
+                "automation-blueprint",
+            ),
+            (
+                "A Telegram user sent an attachment; decide delivery and thread policy.",
+                "gateway-intent-card",
+            ),
+            (
+                "Make this OSS star-worthy by repeatedly reducing first-run friction.",
+                "loop",
+            ),
+            (
+                "Let Hermes itself code this with workers and worktrees.",
+                "team",
+            ),
+            (
                 "decide whether our onboarding should prioritize solo founders or enterprise buyers.",
                 "strategy-brief",
             ),
@@ -875,6 +927,7 @@ selected_workflow=ultraprocess
         cases = (
             "웹서치해서 최신 자료와 출처 정리해줘",
             "search the web for current sources and citations",
+            "Search the web for current best practices on Python packaging.",
             "查一下最新资料和来源",
             "web-research로 Hermes Agent와 Oh My Codex/OpenCode 계열을 비교해서 OMHM 포지셔닝 근거를 찾아줘.",
         )
@@ -890,6 +943,9 @@ selected_workflow=ultraprocess
                 top = decision["recommendations"][0]
                 self.assertIn("freshness", str(top["wrapper_guidance"]).lower())
                 self.assertIn("retrieval", str(top["evidence_boundary"]).lower())
+
+        generic_status = route_chat_message("What is the current status?", source="discord")
+        self.assertNotEqual(generic_status["selected_skill"], "web-research")
 
     def test_delivery_cycle_chat_beats_research_department_for_pr_requests(self) -> None:
         cases = (
