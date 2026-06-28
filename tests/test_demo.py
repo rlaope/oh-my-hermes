@@ -53,7 +53,7 @@ class OrchestrationDemoTests(unittest.TestCase):
         self.assertFalse(status["prepared"]["handoff_available"])
         self.assertNotEqual(status["run_id"], "demo-prepared-codex-handoff")
         self.assertEqual(status_step["chat_response"]["state"]["phase"], "executor_choice_required")
-        self.assertIn("Choose executor", [action["label"] for action in status_step["chat_response"]["actions"]])
+        self.assertIn("Choose coding agent", [action["label"] for action in status_step["chat_response"]["actions"]])
 
     def test_codex_demo_keeps_codex_specific_alias_only_when_selected(self) -> None:
         demo = build_orchestration_demo(executor_target="codex")
@@ -67,7 +67,7 @@ class OrchestrationDemoTests(unittest.TestCase):
         self.assertEqual(status["prepared"]["executor_target"], "codex")
         self.assertEqual(status["prepared"]["handoff_schema_version"], "coding_executor_handoff/v1")
         self.assertTrue(status["prepared"]["handoff_available"])
-        self.assertIn("Send to Codex", [action["label"] for action in status_step["chat_response"]["actions"]])
+        self.assertIn("Open in Codex", [action["label"] for action in status_step["chat_response"]["actions"]])
 
     def test_prompt_and_runtime_demo_profiles_are_not_collapsed_to_codex(self) -> None:
         cases = (
