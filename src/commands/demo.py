@@ -4,7 +4,7 @@ import argparse
 
 from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..demo import DEFAULT_ORCHESTRATION_MESSAGE, build_orchestration_demo
-from ..grounded_score import build_grounded_score_demo
+from ..grounded_score import build_grounded_score_demo, format_grounded_score_summary
 from ..ingress import CHAT_SOURCES
 from ..installer import OmhError
 from .common import _print_json
@@ -28,9 +28,13 @@ def cmd_demo_orchestration(args: argparse.Namespace) -> int:
 
 def cmd_demo_grounded_score(args: argparse.Namespace) -> int:
     try:
-        _print_json(build_grounded_score_demo(source=args.source))
+        payload = build_grounded_score_demo(source=args.source)
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
+    if args.summary:
+        print(format_grounded_score_summary(payload))
+    else:
+        _print_json(payload)
     return 0
 
 
@@ -56,4 +60,7 @@ def _add_demo_commands(sub) -> None:
 
     grounded_score = demo_sub.add_parser("grounded-score")
     grounded_score.add_argument("--source", choices=CHAT_SOURCES, default="discord")
+    output = grounded_score.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
+    output.add_argument("--summary", action="store_true", help="Print a compact human-readable score summary.")
     grounded_score.set_defaults(func=cmd_demo_grounded_score)

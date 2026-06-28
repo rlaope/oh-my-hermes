@@ -372,6 +372,54 @@ def build_grounded_score_demo(*, source: str = "discord") -> dict[str, object]:
     }
 
 
+def format_grounded_score_summary(payload: dict[str, object]) -> str:
+    summary = _nested(payload, "summary")
+    scenario_rows = _dict_rows(payload.get("scenarios", []))
+    total = int(summary.get("scenario_count", len(scenario_rows)) or 0)
+    perfect = sum(1 for scenario in scenario_rows if int(_value(scenario, "score", 0)) == 10)
+    average = summary.get("average_score", 0)
+    minimum = summary.get("minimum_score", 0)
+    maximum = summary.get("maximum_score", 0)
+    all_10 = bool(summary.get("all_10", False))
+    lines = [
+        "OMH grounded score",
+        f"Source: {payload.get('source', 'unknown')}",
+        f"Result: {perfect}/{total} scenarios at 10/10" + (" (all passing)" if all_10 else ""),
+        f"Score range: min {minimum}, avg {average}, max {maximum}",
+        "",
+        "What this proves:",
+    ]
+    for basis in payload.get("score_basis", []):
+        lines.append(f"- {basis}")
+    lines.extend(["", "Scenario rollup:"])
+    for scenario in scenario_rows:
+        observed = _nested(scenario, "observed")
+        skill = observed.get("skill", "unknown")
+        next_action = observed.get("next_action", "unknown")
+        handoff = observed.get("handoff_status", "unknown")
+        score = scenario.get("score", 0)
+        status = "ok" if int(score) == 10 else "needs attention"
+        lines.append(f"- {scenario.get('title', 'Untitled scenario')}: {score}/10 {status}; {skill} -> {next_action}; {handoff}")
+    failed = [scenario for scenario in scenario_rows if int(_value(scenario, "score", 0)) != 10]
+    if failed:
+        lines.extend(["", "Failures:"])
+        for scenario in failed:
+            failed_checks = [
+                str(check.get("name", "unknown"))
+                for check in scenario.get("checks", [])
+                if isinstance(check, dict) and not check.get("passed", False)
+            ]
+            lines.append(f"- {scenario.get('id', 'unknown')}: {', '.join(failed_checks) or 'unknown check failure'}")
+    lines.extend(
+        [
+            "",
+            f"Boundary: {payload.get('claim_boundary', '')}",
+            "Use --json for the full machine-readable payload.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _evaluate_grounded_scenario(scenario: GroundedScenario, *, source: str) -> dict[str, object]:
     route = route_chat_message(scenario.message, source=source)
     interaction = build_chat_interaction_payload(scenario.message, source=source)
@@ -497,3 +545,15 @@ def _boundary_observation(delegation: dict[str, object]) -> str:
 def _nested(payload: dict[str, object], key: str) -> dict[str, object]:
     value = payload.get(key)
     return value if isinstance(value, dict) else {}
+
+
+def _dict_rows(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _value(payload: object, key: str, default: object = "") -> object:
+    if isinstance(payload, dict):
+        return payload.get(key, default)
+    return default
