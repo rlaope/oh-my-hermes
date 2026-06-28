@@ -574,6 +574,9 @@ User-facing effect:
 The following examples were run through `omh chat interact --source discord`.
 They show how different natural-language messages should produce different
 wrapper-native responses instead of forcing every request into coding.
+Every route payload also includes `route_explanation/v1`, a compact
+why/next/not-yet-evidence card that wrappers can render next to the main
+response without exposing shell commands or raw prompt text.
 
 ### Startup Product Triage
 
