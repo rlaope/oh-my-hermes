@@ -60,6 +60,8 @@ _SCHEDULED_OPS_CONTEXT_TOKENS = _normalized_token_set(
     {
         "check",
         "checks",
+        "remind",
+        "reminder",
         "monitor",
         "monitoring",
         "watch",
@@ -123,6 +125,9 @@ _RESEARCH_DEPARTMENT_STRONG_TOKENS = _normalized_token_set(
 )
 _RESEARCH_DEPARTMENT_SUPPORT_TOKENS = _normalized_token_set(
     {
+        "collect",
+        "synthesize",
+        "synthesis",
         "news",
         "source",
         "sources",
@@ -141,6 +146,10 @@ _RESEARCH_DEPARTMENT_PHRASES = (
     "research ops",
     "research operations",
     "scout analyst briefer",
+    "collect ai agent news",
+    "collect news synthesize brief",
+    "collect news, synthesize",
+    "collect, synthesize, and brief",
     "daily research",
     "weekly research",
     "competitor research",
@@ -846,9 +855,12 @@ _FEEDBACK_TRIAGE_PRODUCT_TOKENS = _normalized_token_set(
     {
         "app",
         "product",
+        "dashboard",
         "checkout",
         "payment",
         "billing",
+        "refund",
+        "refunds",
         "login",
         "signup",
         "onboarding",
@@ -881,6 +893,10 @@ _FEEDBACK_TRIAGE_ISSUE_TOKENS = _normalized_token_set(
         "failing",
         "failure",
         "failures",
+        "timeout",
+        "timeouts",
+        "500",
+        "500s",
         "error",
         "errors",
         "problem",
@@ -906,6 +922,7 @@ _FEEDBACK_TRIAGE_DECISION_TOKENS = _normalized_token_set(
         "roadmap",
         "investigate",
         "reproduce",
+        "repro",
         "triage",
         "결정",
         "선택",
@@ -1251,6 +1268,10 @@ _CODING_SESSION_STATUS_ONLY_PHRASES = (
     "what did codex do",
     "what did claude code do",
     "did the coding agent finish",
+    "says done",
+    "said done",
+    "what evidence is still missing",
+    "evidence is still missing",
     "is codex done",
     "is claude code done",
 )
@@ -1289,6 +1310,15 @@ _GITHUB_EVENT_OPS_PHRASES = (
     "github issue",
     "github pr",
     "github issue 들어온",
+    "reviewer left comments on my pr",
+    "reviewer left comments",
+    "pr comments",
+    "ci is red",
+    "red ci",
+    "job failed",
+    "test job failed",
+    "build failed",
+    "latest push failed",
 )
 _GITHUB_EVENT_OPS_TOKENS = _normalized_token_set(
     {
@@ -1564,6 +1594,7 @@ _CODING_HANDOFF_CONTROL_TOKENS = _normalized_token_set(
         "assign",
         "track",
         "tracking",
+        "posted",
         "status",
         "progress",
         "session",
@@ -1587,6 +1618,8 @@ _CODING_HANDOFF_CONTROL_TOKENS = _normalized_token_set(
 _CODING_HANDOFF_PHRASES = (
     "delegate to codex",
     "send to codex",
+    "use codex to implement",
+    "use claude code to implement",
     "codex implement",
     "codex implementation",
     "codex handoff",
@@ -1596,6 +1629,7 @@ _CODING_HANDOFF_PHRASES = (
     "codex로 구현 맡겨",
     "codex로 맡겨",
     "track coding progress",
+    "keep me posted",
     "coding agent progress",
     "open in codex",
     "attach codex session",
@@ -1620,6 +1654,7 @@ _SCHEDULED_OPS_PHRASES = (
     "cron spec",
     "every morning",
     "every day",
+    "every monday",
     "every week",
     "every month",
     "notify if",
@@ -1815,6 +1850,15 @@ DURABLE_RESEARCH_GUARD = RoutingGuardRule(
     why="Matched durable research loop language with evidence gaps and a stop condition.",
     activation_status="active",
 )
+LOOP_GOAL_GUARD = RoutingGuardRule(
+    id="loop_goal_before_generic_clarification",
+    rule="Loopable product or OSS improvement goals should route to loop before generic clarification.",
+    matched_label="guard:loop_goal",
+    preferred_skills=("loop",),
+    score_boost=30,
+    why="Matched loopable goal language; assess the goal shape and start a bounded loop instead of a passive clarification.",
+    activation_status="active",
+)
 WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     id="web_research_before_process",
     rule="Plain web/source/current-evidence requests should route to web research before one-cycle delivery.",
@@ -1903,6 +1947,24 @@ AGENT_BOARD_GUARD = RoutingGuardRule(
     preferred_skills=("agent-board",),
     score_boost=26,
     why="Matched guard/trigger metadata; multiple Hermes targets need a board/status contract before work is claimed.",
+    activation_status="active",
+)
+GATEWAY_INTENT_GUARD = RoutingGuardRule(
+    id="gateway_intent_before_feedback_triage",
+    rule="Messenger origin, thread, delivery, silent update, or attachment policy requests should route to gateway-intent-card before product feedback triage.",
+    matched_label="guard:gateway_intent",
+    preferred_skills=("gateway-intent-card",),
+    score_boost=34,
+    why="Matched gateway/session policy language; prepare an origin, thread, delivery, and attachment card before treating the message as product feedback.",
+    activation_status="active",
+)
+HERMES_CODING_TEAM_GUARD = RoutingGuardRule(
+    id="hermes_coding_team_before_generic_clarification",
+    rule="Hermes-owned coding requests with workers, worktrees, team, or swarm language should route to team before generic clarification.",
+    matched_label="guard:hermes_coding_team",
+    preferred_skills=("team",),
+    score_boost=34,
+    why="Matched Hermes-owned coding team language; prepare worker/worktree lanes and evidence boundaries instead of generic clarification.",
     activation_status="active",
 )
 CODING_PROGRESS_STATUS_GUARD = RoutingGuardRule(
@@ -2008,6 +2070,7 @@ ROUTING_GUARD_RULES = (
     ADVERSARIAL_QA_GUARD,
     CLEANUP_REFACTOR_GUARD,
     DURABLE_RESEARCH_GUARD,
+    LOOP_GOAL_GUARD,
     WORKFLOW_LEARNING_GUARD,
     OMH_QUALITY_IMPROVEMENT_GUARD,
     PAPER_LEARNING_GUARD,
@@ -2021,6 +2084,8 @@ ROUTING_GUARD_RULES = (
     MATERIALS_PACKAGE_GUARD,
     MEMORY_CURATION_GUARD,
     AGENT_BOARD_GUARD,
+    GATEWAY_INTENT_GUARD,
+    HERMES_CODING_TEAM_GUARD,
     CODING_PROGRESS_STATUS_GUARD,
     RELEASE_CLAIM_REVIEW_GUARD,
     DOCTOR_HEALTH_GUARD,
@@ -2094,6 +2159,8 @@ def active_routing_guard_rules(
         rules.append(CLEANUP_REFACTOR_GUARD)
     if _durable_research_goal_guard_applies(normalized_query, query_tokens):
         rules.append(DURABLE_RESEARCH_GUARD)
+    if _loop_goal_guard_applies(normalized_query, query_tokens):
+        rules.append(LOOP_GOAL_GUARD)
     workflow_learning_applies = _workflow_learning_guard_applies(normalized_query, query_tokens)
     if workflow_learning_applies:
         rules.append(WORKFLOW_LEARNING_GUARD)
@@ -2149,6 +2216,10 @@ def active_routing_guard_rules(
         rules.append(MEMORY_CURATION_GUARD)
     if _agent_board_guard_applies(normalized_query, query_tokens):
         rules.append(AGENT_BOARD_GUARD)
+    if _gateway_intent_guard_applies(normalized_query, query_tokens):
+        rules.append(GATEWAY_INTENT_GUARD)
+    if _hermes_coding_team_guard_applies(normalized_query, query_tokens):
+        rules.append(HERMES_CODING_TEAM_GUARD)
     if _coding_progress_status_guard_applies(normalized_query, query_tokens):
         rules.append(CODING_PROGRESS_STATUS_GUARD)
     if _release_claim_review_guard_applies(normalized_query, query_tokens):
@@ -2191,11 +2262,17 @@ def _product_shaping_guard_applies(normalized_query: str, query_tokens: set[str]
 
 
 def _feedback_before_coding_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _gateway_intent_guard_applies(normalized_query, query_tokens):
+        return False
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         return False
     if _doctor_health_guard_applies(normalized_query, query_tokens):
         return False
-    if _explicit_delivery_or_implementation_requested(normalized_query, query_tokens):
+    planning_before_coding = _contains_phrase(
+        normalized_query,
+        ("before coding", "before code", "before implementation", "before writing code", "구현 전에", "코딩 전에"),
+    )
+    if _explicit_delivery_or_implementation_requested(normalized_query, query_tokens) and not planning_before_coding:
         return False
     if _contains_phrase(normalized_query, _FEEDBACK_TRIAGE_PHRASES):
         return True
@@ -2381,6 +2458,25 @@ def _durable_research_goal_guard_applies(normalized_query: str, query_tokens: se
     return durable and research and stop_condition
 
 
+def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if is_explicit_one_off_request(normalized_query, query_tokens):
+        return False
+    explicit_loop = _contains_phrase(
+        normalized_query,
+        ("loopable", "loop engineering", "goal loop", "루프", "반복해서"),
+    )
+    repeated_improvement = bool({"repeatedly", "iteratively", "iterate", "until"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("keep improving", "reduce friction", "reducing friction", "반복 개선"),
+    )
+    product_or_oss_goal = bool({"oss", "repo", "repository", "install", "first-run", "friction", "product"} & query_tokens)
+    north_star = bool({"star-worthy", "starworthy", "stars", "adoption"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("star worthy", "star-worthy", "first-run friction", "10k star", "100k star"),
+    )
+    return explicit_loop or (repeated_improvement and (product_or_oss_goal or north_star))
+
+
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if is_explicit_one_off_request(normalized_query, query_tokens):
         return False
@@ -2504,8 +2600,17 @@ def _research_department_guard_applies(normalized_query: str, query_tokens: set[
         or (generic_research and support)
         or _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
     )
+    collect_synthesize_brief = (
+        bool({"collect", "synthesize", "synthesis"} & query_tokens)
+        and bool({"brief", "briefing", "digest", "news"} & query_tokens)
+    ) or _contains_phrase(
+        normalized_query,
+        ("collect news synthesize", "collect, synthesize", "collect and brief", "synthesize and brief"),
+    )
     explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
-    return recurring and research and (support or specific_research_domain or explicit_research_ops)
+    return recurring and (research or collect_synthesize_brief) and (
+        support or specific_research_domain or explicit_research_ops or collect_synthesize_brief
+    )
 
 
 def _source_finder_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2544,6 +2649,8 @@ def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -
         return False
     if _delivery_cycle_terms(normalized_query, query_tokens):
         return False
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        return False
     if {
         "web",
         "search",
@@ -2552,13 +2659,47 @@ def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -
         "citation",
         "citations",
         "links",
-        "latest",
-        "current",
-        "freshness",
         "official",
         "upstream",
     } & query_tokens:
         return True
+    if {"latest", "current", "freshness"} & query_tokens:
+        freshness_context = bool(
+            {
+                "api",
+                "best",
+                "docs",
+                "documentation",
+                "news",
+                "official",
+                "paper",
+                "papers",
+                "practice",
+                "practices",
+                "research",
+                "source",
+                "sources",
+                "upstream",
+                "version",
+                "web",
+            }
+            & query_tokens
+        ) or _contains_phrase(
+            normalized_query,
+            (
+                "current sources",
+                "current best",
+                "current docs",
+                "current api",
+                "current version",
+                "latest sources",
+                "latest docs",
+                "latest api",
+                "latest version",
+            ),
+        )
+        if freshness_context:
+            return True
     return _contains_phrase(
         normalized_query,
         (
@@ -2661,16 +2802,72 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
     if _contains_phrase(normalized_query, _GITHUB_EVENT_OPS_PHRASES):
         return True
     github_context = _contains_phrase(normalized_query, ("github", "깃허브"))
+    ci_event = bool({"ci", "build", "job"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        (
+            "ci failed",
+            "failed ci",
+            "failing ci",
+            "ci failing",
+            "ci is red",
+            "red ci",
+            "job failed",
+            "job failing",
+            "build failed",
+            "test job failed",
+            "latest push",
+        ),
+    )
     issue_or_pr = bool(_GITHUB_EVENT_OPS_TOKENS & query_tokens) or _contains_phrase(
         normalized_query,
         ("issue", "pull request", "pr", "이슈"),
     )
     event_or_pr_prep = _contains_phrase(
         normalized_query,
-        ("opened", "failed ci", "ci failed", "failing ci", "ci failing", "label", "review", "to pr", "into a pr", "pr 만들", "pr로", "들어온"),
+        (
+            "opened",
+            "failed ci",
+            "ci failed",
+            "failing ci",
+            "ci failing",
+            "ci is red",
+            "red ci",
+            "job failed",
+            "job failing",
+            "build failed",
+            "test job failed",
+            "reviewer left comments",
+            "pr comments",
+            "latest push",
+            "label",
+            "review",
+            "to pr",
+            "into a pr",
+            "pr 만들",
+            "pr로",
+            "들어온",
+        ),
     )
-    event_context = _contains_phrase(normalized_query, ("opened", "failed ci", "ci failed", "failing ci", "ci failing", "label", "들어온"))
-    return issue_or_pr and event_or_pr_prep and (github_context or event_context)
+    event_context = _contains_phrase(
+        normalized_query,
+        (
+            "opened",
+            "failed ci",
+            "ci failed",
+            "failing ci",
+            "ci failing",
+            "ci is red",
+            "red ci",
+            "job failed",
+            "job failing",
+            "build failed",
+            "test job failed",
+            "label",
+            "latest push",
+            "들어온",
+        ),
+    )
+    return (issue_or_pr or ci_event) and event_or_pr_prep and (github_context or event_context or ci_event)
 
 
 def _materials_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2689,11 +2886,16 @@ def _materials_package_guard_applies(normalized_query: str, query_tokens: set[st
 
 
 def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _contains_phrase(normalized_query, _MEMORY_CURATION_PHRASES):
-        return True
     context = bool(_MEMORY_CURATION_CONTEXT_TOKENS & query_tokens)
     hermes_context = _contains_phrase(normalized_query, ("hermes", "헤르메스"))
     omh_context = _contains_phrase(normalized_query, ("omh", "oh-my-hermes", "oh my hermes"))
+    memory_context = bool({"memory", "memories", "context", "contexts", "기억", "메모리", "맥락"} & query_tokens)
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens) and not (
+        hermes_context or omh_context or memory_context
+    ):
+        return False
+    if _contains_phrase(normalized_query, _MEMORY_CURATION_PHRASES):
+        return True
     cleanup = _contains_phrase(normalized_query, ("cleanup", "curate", "review", "inspect", "정리", "점검", "검토", "관리"))
     stale = _contains_phrase(normalized_query, ("stale", "old", "duplicate", "conflicting", "overlap", "collision", "오래된", "중복", "충돌", "겹", "압축"))
     capability_intent = bool(_CAPABILITY_INTENT_TOKENS & query_tokens)
@@ -2713,6 +2915,19 @@ def _agent_board_guard_applies(normalized_query: str, query_tokens: set[str]) ->
     named_roles = len({"pm", "cto", "qa", "security", "ops", "release"} & query_tokens) >= 2
     agents = bool({"agent", "agents", "에이전트"} & query_tokens)
     return (team_context and multi_agent and board_or_roles) or (coordination and agents and named_roles)
+
+
+def _gateway_intent_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    platform = bool({"discord", "slack", "telegram", "whatsapp", "signal", "gateway", "platform"} & query_tokens)
+    policy = bool({"thread", "delivery", "silent", "attachment", "status", "origin"} & query_tokens)
+    return platform and policy and _deliverable_gateway_context_applies(normalized_query, query_tokens)
+
+
+def _hermes_coding_team_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    hermes_owner = _contains_phrase(normalized_query, ("hermes itself", "hermes coding", "hermes-owned coding", "헤르메스가 코딩"))
+    coding = bool({"code", "coding", "implement", "implementation", "refactor", "fix"} & query_tokens)
+    team_runtime = bool({"worker", "workers", "worktree", "worktrees", "team", "swarm", "parallel"} & query_tokens)
+    return hermes_owner and coding and team_runtime
 
 
 def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2772,6 +2987,9 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "skills still look stale",
             "skills look stale",
             "hermes skills still",
+            "hermes skills list does not show",
+            "hermes skills list does not show omh",
+            "skills list does not show omh",
             "hermes cannot see the skills",
             "hermes can't see the skills",
             "cannot see the skills",
@@ -2798,6 +3016,7 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "doctor",
             "health",
             "registration",
+            "installed",
             "stale",
             "skills",
             "path",
@@ -2818,6 +3037,10 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "stale",
             "missing",
             "not found",
+            "not show",
+            "does not show",
+            "doesn't show",
+            "not visible",
             "broken",
             "doesn't work",
             "not working",
