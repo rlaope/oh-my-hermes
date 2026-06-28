@@ -2462,7 +2462,11 @@ def active_routing_guard_rules(
     direct_coding_task_applies = _direct_coding_task_guard_applies(normalized_query, query_tokens)
     if direct_coding_task_applies:
         rules.append(DIRECT_CODING_TASK_GUARD)
-    if _feedback_before_coding_guard_applies(normalized_query, query_tokens):
+    if _feedback_before_coding_guard_applies(
+        normalized_query,
+        query_tokens,
+        direct_coding_task_applies=direct_coding_task_applies,
+    ):
         rules.append(FEEDBACK_BEFORE_CODING_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
         rules.append(PRODUCT_SHAPING_GUARD)
@@ -2615,29 +2619,6 @@ def _direct_coding_task_guard_applies(normalized_query: str, query_tokens: set[s
         ),
     ):
         return False
-    if _visual_summary_guard_applies(normalized_query, query_tokens):
-        return False
-    if _materials_package_guard_applies(normalized_query, query_tokens):
-        return False
-    if _source_finder_guard_applies(normalized_query, query_tokens):
-        return False
-    if _paper_learning_guard_applies(normalized_query, query_tokens):
-        return False
-    if _github_event_ops_guard_applies(normalized_query, query_tokens):
-        return False
-    if _coding_progress_status_guard_applies(normalized_query, query_tokens):
-        return False
-    if _release_claim_review_guard_applies(normalized_query, query_tokens):
-        return False
-    if _doctor_health_guard_applies(normalized_query, query_tokens):
-        return False
-    if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
-        return False
-    if _risky_refactor_guard_applies(normalized_query, query_tokens):
-        return False
-    if _cleanup_refactor_guard_applies(normalized_query, query_tokens):
-        return False
-
     action = bool(
         {
             "add",
@@ -2735,17 +2716,49 @@ def _direct_coding_task_guard_applies(normalized_query: str, query_tokens: set[s
             "맞는지 검토",
         ),
     )
-    return not review_only
+    if review_only:
+        return False
+
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _materials_package_guard_applies(normalized_query, query_tokens):
+        return False
+    if _source_finder_guard_applies(normalized_query, query_tokens):
+        return False
+    if _paper_learning_guard_applies(normalized_query, query_tokens):
+        return False
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        return False
+    if _coding_progress_status_guard_applies(normalized_query, query_tokens):
+        return False
+    if _release_claim_review_guard_applies(normalized_query, query_tokens):
+        return False
+    if _doctor_health_guard_applies(normalized_query, query_tokens):
+        return False
+    if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
+        return False
+    if _risky_refactor_guard_applies(normalized_query, query_tokens):
+        return False
+    if _cleanup_refactor_guard_applies(normalized_query, query_tokens):
+        return False
+    return True
 
 
-def _feedback_before_coding_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+def _feedback_before_coding_guard_applies(
+    normalized_query: str,
+    query_tokens: set[str],
+    *,
+    direct_coding_task_applies: bool | None = None,
+) -> bool:
     if _gateway_intent_guard_applies(normalized_query, query_tokens):
         return False
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         return False
     if _doctor_health_guard_applies(normalized_query, query_tokens):
         return False
-    if _direct_coding_task_guard_applies(normalized_query, query_tokens):
+    if direct_coding_task_applies is None:
+        direct_coding_task_applies = _direct_coding_task_guard_applies(normalized_query, query_tokens)
+    if direct_coding_task_applies:
         return False
     planning_before_coding = _contains_phrase(
         normalized_query,
