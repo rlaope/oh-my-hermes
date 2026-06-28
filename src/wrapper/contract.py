@@ -6,7 +6,7 @@ from typing import Any
 from ..context_safety import compact_progress_events
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
-from ..routing.chat import public_route_payload, route_chat_message
+from ..routing.chat import public_route_payload, route_chat_message, route_explanation_payload
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
 from ..capabilities.families import capability_family_cards
 from ..context import build_context_brief
@@ -2471,6 +2471,7 @@ def _catalog_question_route_payload(route_payload: dict[str, object]) -> dict[st
             "threshold": "high",
         }
     )
+    updated["route_explanation"] = route_explanation_payload(updated)
     return updated
 
 
@@ -2504,6 +2505,7 @@ def _omh_status_route_payload(route_payload: dict[str, object]) -> dict[str, obj
             "threshold": "high",
         }
     )
+    updated["route_explanation"] = route_explanation_payload(updated)
     return updated
 
 
@@ -2537,6 +2539,7 @@ def _omh_quickstart_route_payload(route_payload: dict[str, object]) -> dict[str,
             "threshold": "high",
         }
     )
+    updated["route_explanation"] = route_explanation_payload(updated)
     return updated
 
 
@@ -2570,6 +2573,7 @@ def _omh_intro_route_payload(route_payload: dict[str, object]) -> dict[str, obje
             "threshold": "high",
         }
     )
+    updated["route_explanation"] = route_explanation_payload(updated)
     return updated
 
 

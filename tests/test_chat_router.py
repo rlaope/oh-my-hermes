@@ -1260,6 +1260,26 @@ selected_workflow=ultraprocess
         expanded = public_route_payload(decision, include_message=True)
         self.assertIn(message, str(expanded["routing_prompt"]))
 
+    def test_public_route_payload_includes_human_route_explanation(self) -> None:
+        message = "FAL_KEY 없어서 이미지 생성이 막히면 어떻게 연결해야 해?"
+        decision = route_chat_message(message, source="discord")
+
+        public = public_route_payload(decision)
+        explanation = public["route_explanation"]
+
+        self.assertEqual(explanation["schema_version"], "route_explanation/v1")
+        self.assertEqual(explanation["selected_workflow"], "toolbelt-readiness")
+        self.assertEqual(explanation["selected_harness"], "toolbelt-readiness")
+        self.assertEqual(explanation["action"], "dispatch")
+        self.assertEqual(explanation["next_action"], "prepare_toolbelt_readiness")
+        self.assertNotIn("Matched guard/trigger metadata", explanation["why_this_workflow"])
+        self.assertTrue(str(explanation["why_this_workflow"]).startswith("Missing tool"))
+        self.assertIn("not MCP server installation", explanation["claim_boundary"])
+        self.assertIn("API access", explanation["claim_boundary"])
+        self.assertIn("connector invocation", explanation["not_evidence_yet"])
+        self.assertIn("why / next / not-yet-evidence", explanation["rendering_hint"])
+        self.assertNotIn(message, json.dumps(explanation, ensure_ascii=False))
+
 
 if __name__ == "__main__":
     unittest.main()

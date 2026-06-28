@@ -1195,6 +1195,22 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("answer:file_lookup", actions)
         self.assertTrue(actions["answer:file_lookup"]["enabled"])
 
+    def test_interaction_route_explanation_matches_special_route_overrides(self) -> None:
+        payload = build_chat_interaction_payload("What is OMH and how should I use it?", source="discord")
+
+        route = payload["route"]
+        explanation = route["route_explanation"]
+        self.assertEqual(route["selected_skill"], "oh-my-hermes")
+        self.assertEqual(
+            route["routing_instruction"],
+            "Show the OMH context brief and offer the workflow picker as the next action.",
+        )
+        self.assertEqual(explanation["schema_version"], "route_explanation/v1")
+        self.assertEqual(explanation["selected_workflow"], "oh-my-hermes")
+        self.assertEqual(explanation["next_action"], "show_context_brief")
+        self.assertIn("Context brief output", explanation["claim_boundary"])
+        self.assertIn("execution", explanation["not_evidence_yet"])
+
     def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
         cases = {
             "./": "./omh",

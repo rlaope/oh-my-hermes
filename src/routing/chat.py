@@ -25,6 +25,7 @@ from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routabl
 FILE_LOOKUP_REASON = (
     "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
 )
+ROUTE_EXPLANATION_SCHEMA_VERSION = "route_explanation/v1"
 _ROUTER_SKILL = "oh-my-hermes"
 _SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE = 6
 _SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset(
@@ -343,7 +344,38 @@ def public_route_payload(decision: dict[str, object], *, include_message: bool =
         route["workflow_route_plan"] = workflow_route_plan
     else:
         route.pop("workflow_route_plan", None)
+    route["route_explanation"] = route_explanation_payload(route)
     return route
+
+
+def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
+    """Build a compact human-facing explanation without storing the raw message."""
+    action = str(route.get("action", "fallback"))
+    selected = str(route.get("selected_skill", ""))
+    harness = str(route.get("selected_harness", "")) or primary_harness_for_skill(selected)
+    recommendation = _selected_recommendation(route)
+    next_action = _route_next_action(route, recommendation)
+    claim_boundary = _route_claim_boundary(route, recommendation)
+    why = _route_explanation_reason(route)
+    not_evidence_yet = _not_evidence_from_boundary(claim_boundary)
+    headline = _route_explanation_headline(action, selected)
+    summary = _route_explanation_summary(action, selected, next_action, why)
+    return {
+        "schema_version": ROUTE_EXPLANATION_SCHEMA_VERSION,
+        "selected_workflow": selected,
+        "selected_harness": harness,
+        "action": action,
+        "confidence": str(route.get("confidence", "low")),
+        "score": _int_value(route.get("score", 0)),
+        "why_this_workflow": why,
+        "next_action": next_action,
+        "next_action_label": next_action.replace("_", " ") if next_action else "",
+        "not_evidence_yet": not_evidence_yet,
+        "claim_boundary": claim_boundary,
+        "headline": headline,
+        "summary": summary,
+        "rendering_hint": "Show this as the compact why / next / not-yet-evidence card in chat surfaces.",
+    }
 
 
 def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] | None = None) -> str | None:
@@ -500,6 +532,120 @@ def _compact_recommendations(recommendations: object) -> list[dict[str, object]]
             }
         )
     return compact
+
+
+def _selected_recommendation(route: dict[str, object]) -> dict[str, object]:
+    selected = str(route.get("selected_skill", ""))
+    recommendations = route.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        return {}
+    first: dict[str, object] = {}
+    for item in recommendations:
+        if not isinstance(item, dict):
+            continue
+        if not first:
+            first = item
+        if str(item.get("skill", "")) == selected:
+            return item
+    return first
+
+
+def _route_next_action(route: dict[str, object], recommendation: dict[str, object]) -> str:
+    action = str(route.get("action", "fallback"))
+    if action == "dispatch":
+        return str(recommendation.get("next_action") or "dispatch_to_workflow")
+    if action == "fallback" and _is_file_lookup_reason(str(route.get("reason", ""))):
+        return "answer_file_lookup"
+    if action == "clarify":
+        return "answer_clarification"
+    return "ask_one_clarification"
+
+
+def _route_claim_boundary(route: dict[str, object], recommendation: dict[str, object]) -> str:
+    boundary = str(recommendation.get("evidence_boundary", "")).strip()
+    if boundary:
+        return boundary
+    if _is_file_lookup_reason(str(route.get("reason", ""))):
+        return "No OMH workflow, execution, or file inspection has started."
+    if str(route.get("action", "")) == "dispatch":
+        return "Routing guidance is not workflow execution evidence."
+    return "No execution has started."
+
+
+def _route_explanation_reason(route: dict[str, object]) -> str:
+    reason = str(route.get("reason", "")).strip()
+    if reason:
+        return _human_route_reason(reason)
+    clarification = str(route.get("clarification", "")).strip()
+    if clarification:
+        return clarification
+    return "Selected from catalog metadata, trigger phrases, and deterministic guardrail policy."
+
+
+def _human_route_reason(reason: str) -> str:
+    for prefix in (
+        "Matched guard/trigger metadata; ",
+        "Matched high-level task abstraction before workflow routing. ",
+    ):
+        if reason.startswith(prefix):
+            return _capitalize_sentence(reason[len(prefix) :])
+    return reason
+
+
+def _capitalize_sentence(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    return text[:1].upper() + text[1:]
+
+
+def _route_explanation_headline(action: str, selected: str) -> str:
+    if action == "dispatch":
+        return f"Use `{selected}` for this request."
+    if action == "clarify":
+        return "Ask one question before choosing a workflow."
+    return "Keep this in the router until the target is clear."
+
+
+def _route_explanation_summary(action: str, selected: str, next_action: str, why: str) -> str:
+    if action == "dispatch":
+        return f"`{selected}` is selected because {why} Next action: `{next_action}`."
+    if action == "clarify":
+        return f"The router needs one clarification before dispatch. Best candidate: `{selected}`."
+    return f"The router should not dispatch yet. Reason: {why}"
+
+
+def _not_evidence_from_boundary(boundary: str) -> list[str]:
+    text = boundary.lower()
+    items: list[str] = []
+    for marker, label in (
+        ("plan acceptance", "plan acceptance"),
+        ("dispatch", "executor/runtime dispatch"),
+        ("execution", "execution"),
+        ("implementation", "implementation"),
+        ("image", "image generation"),
+        ("file", "file generation/export"),
+        ("download", "download"),
+        ("search", "source retrieval"),
+        ("api", "API access"),
+        ("credential", "credential validation"),
+        ("connector", "connector invocation"),
+        ("delivery", "delivery"),
+        ("attachment", "attachment"),
+        ("review", "review"),
+        ("verification", "verification"),
+        ("ci", "CI"),
+        ("merge", "merge"),
+    ):
+        if marker in text and label not in items:
+            items.append(label)
+    if items:
+        return items
+    if "prepared" in text:
+        return ["execution", "verification", "delivery"]
+    if "no execution" in text:
+        return ["execution"]
+    return ["completion claim without observed evidence"]
 
 
 def _int_value(value: object, default: int = 0) -> int:
