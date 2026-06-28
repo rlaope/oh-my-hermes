@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import re
 
 from .localization import normalized_phrase, routing_tokens
@@ -317,7 +318,7 @@ def _maintenance_command(normalized: str, compact: str, tokens: set[str]) -> str
 def _maintenance_surface_hit(normalized: str, compact: str, tokens: set[str]) -> bool:
     if "omh" in tokens or "oh-my-hermes" in normalized or "oh my hermes" in normalized:
         return True
-    return any(surface.replace(" ", "") in compact for surface in _MAINTENANCE_SURFACE_PHRASES)
+    return any(surface_compact in compact for _surface, _surface_normalized, surface_compact in _maintenance_surfaces())
 
 
 def _maintenance_alias_hit(
@@ -327,14 +328,8 @@ def _maintenance_alias_hit(
     compact: str,
     tokens: set[str],
 ) -> bool:
-    for alias in aliases:
-        normalized_alias = normalized_phrase(alias)
-        if not normalized_alias:
-            continue
-        compact_alias = normalized_alias.replace(" ", "")
-        for surface in _MAINTENANCE_SURFACE_PHRASES:
-            normalized_surface = normalized_phrase(surface)
-            compact_surface = normalized_surface.replace(" ", "")
+    for _alias, normalized_alias, compact_alias in _normalized_phrase_options(aliases):
+        for _surface, normalized_surface, compact_surface in _maintenance_surfaces():
             if f"{normalized_surface} {normalized_alias}" in normalized:
                 return True
             if f"{compact_surface}{compact_alias}" in compact:
@@ -349,12 +344,7 @@ def _is_near_exact_maintenance_request(normalized: str, compact: str, tokens: se
         return False
     explain_hit = _phrase_hit(_MAINTENANCE_EXPLANATION_CUES, normalized, compact)
     run_hit = _phrase_hit(_MAINTENANCE_RUN_CUES, normalized, compact)
-    exact_hit = any(
-        compact == f"{normalized_phrase(surface).replace(' ', '')}{normalized_phrase(alias).replace(' ', '')}"
-        for surface in _MAINTENANCE_SURFACE_PHRASES
-        for aliases in _MAINTENANCE_COMMAND_ALIASES.values()
-        for alias in aliases
-    )
+    exact_hit = compact in _maintenance_exact_compact_requests()
     meaningful = {token for token in tokens if token not in _MAINTENANCE_FILLER_TOKENS}
     if exact_hit:
         return True
@@ -507,13 +497,34 @@ def _is_code_cleanup_request(evaluation_region: str, tokens: set[str]) -> bool:
 
 
 def _phrase_hit(phrases: tuple[str, ...], normalized: str, compact: str) -> bool:
-    for phrase in phrases:
-        normalized_phrase_value = normalized_phrase(phrase)
-        if normalized_phrase_value and (
-            normalized_phrase_value in normalized or normalized_phrase_value.replace(" ", "") in compact
-        ):
+    for _phrase, normalized_phrase_value, compact_phrase_value in _normalized_phrase_options(phrases):
+        if normalized_phrase_value in normalized or compact_phrase_value in compact:
             return True
     return False
+
+
+@lru_cache(maxsize=128)
+def _normalized_phrase_options(phrases: tuple[str, ...]) -> tuple[tuple[str, str, str], ...]:
+    return tuple(
+        (phrase, normalized, normalized.replace(" ", ""))
+        for phrase in phrases
+        if (normalized := normalized_phrase(phrase))
+    )
+
+
+@lru_cache(maxsize=1)
+def _maintenance_surfaces() -> tuple[tuple[str, str, str], ...]:
+    return _normalized_phrase_options(_MAINTENANCE_SURFACE_PHRASES)
+
+
+@lru_cache(maxsize=1)
+def _maintenance_exact_compact_requests() -> frozenset[str]:
+    return frozenset(
+        f"{surface_compact}{alias_compact}"
+        for _surface, _normalized_surface, surface_compact in _maintenance_surfaces()
+        for aliases in _MAINTENANCE_COMMAND_ALIASES.values()
+        for _alias, _normalized_alias, alias_compact in _normalized_phrase_options(aliases)
+    )
 
 
 def _runtime_portability_card() -> dict[str, object]:
