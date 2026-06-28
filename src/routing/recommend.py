@@ -521,13 +521,14 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     prepared_definitions = _prepared_routable_definitions()
     definitions = [prepared.definition for prepared in prepared_definitions]
     explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
-    scored = [
-        _score_definition(prepared, normalized_query, query_tokens, query, routing_text.locale_matches)
-        for prepared in prepared_definitions
-    ]
+    scored = []
+    for prepared in prepared_definitions:
+        recommendation = _score_definition(prepared, normalized_query, query_tokens, query, routing_text.locale_matches)
+        if recommendation is not None:
+            scored.append(recommendation)
     if explicit_skill != "automation-blueprint" and is_explicit_one_off_request(normalized_query, query_tokens):
         scored = [recommendation for recommendation in scored if recommendation.skill != "automation-blueprint"]
-    matches = [recommendation for recommendation in scored if recommendation.score > 0]
+    matches = scored
     if apply_guardrails:
         guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
         matches = _ensure_guardrail_candidates(matches, definitions, guards, query)
@@ -577,7 +578,7 @@ def _score_definition(
     query_tokens: set[str],
     original_query: str,
     locale_matches: tuple[str, ...],
-) -> Recommendation:
+) -> Recommendation | None:
     definition = prepared.definition
     policy = prepared.policy
     score = 0
@@ -617,6 +618,9 @@ def _score_definition(
     for token in query_tokens & prepared.metadata_tokens:
         score += 1
         matched.add(f"metadata:{token}")
+
+    if score <= 0:
+        return None
 
     if score > 0:
         matched.update(f"locale:{match}" for match in locale_matches)
