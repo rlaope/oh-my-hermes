@@ -184,6 +184,26 @@ class ChatRouterTests(unittest.TestCase):
                 "research-brief",
             ),
             (
+                "Help me decide what to build next from these customer notes.",
+                "feedback-triage",
+            ),
+            (
+                "The app keeps crashing after login.",
+                "feedback-triage",
+            ),
+            (
+                "Users say checkout is broken.",
+                "feedback-triage",
+            ),
+            (
+                "This issue should become a PR.",
+                "github-event-ops",
+            ),
+            (
+                "What did the coding agent do while I was away?",
+                "agent-ops-review",
+            ),
+            (
                 "decide whether our onboarding should prioritize solo founders or enterprise buyers.",
                 "strategy-brief",
             ),

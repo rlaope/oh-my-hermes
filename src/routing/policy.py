@@ -791,6 +791,132 @@ _PRODUCT_SHAPING_UNCERTAINTY_TOKENS = _normalized_token_set(
         "모호",
     }
 )
+_FEEDBACK_TRIAGE_PHRASES = (
+    "customer feedback",
+    "customer notes",
+    "customer reports",
+    "customers report",
+    "customers say",
+    "user feedback",
+    "user reports",
+    "users report",
+    "users say",
+    "app keeps crashing",
+    "keeps crashing after login",
+    "checkout is broken",
+    "checkout keeps failing",
+    "payment failures keep coming up",
+    "payment failure keeps coming up",
+    "what to build next from customer notes",
+    "decide what to build next from customer notes",
+    "decide what to build next from these customer notes",
+    "고객 피드백",
+    "고객 노트",
+    "고객 제보",
+    "사용자 제보",
+    "사용자 피드백",
+    "결제 실패 이슈",
+    "결제 실패가 자주",
+    "체크아웃이 깨",
+    "체크아웃 실패",
+    "로그인 후 크래시",
+)
+_FEEDBACK_TRIAGE_SOURCE_TOKENS = _normalized_token_set(
+    {
+        "customer",
+        "customers",
+        "user",
+        "users",
+        "feedback",
+        "notes",
+        "report",
+        "reports",
+        "reported",
+        "signal",
+        "signals",
+        "고객",
+        "사용자",
+        "피드백",
+        "제보",
+        "노트",
+        "신호",
+    }
+)
+_FEEDBACK_TRIAGE_PRODUCT_TOKENS = _normalized_token_set(
+    {
+        "app",
+        "product",
+        "checkout",
+        "payment",
+        "billing",
+        "login",
+        "signup",
+        "onboarding",
+        "cart",
+        "subscription",
+        "앱",
+        "제품",
+        "체크아웃",
+        "결제",
+        "청구",
+        "로그인",
+        "가입",
+        "온보딩",
+    }
+)
+_FEEDBACK_TRIAGE_ISSUE_TOKENS = _normalized_token_set(
+    {
+        "bug",
+        "bugs",
+        "issue",
+        "issues",
+        "broken",
+        "breaks",
+        "crash",
+        "crashes",
+        "crashing",
+        "fail",
+        "fails",
+        "failed",
+        "failing",
+        "failure",
+        "failures",
+        "error",
+        "errors",
+        "problem",
+        "problems",
+        "버그",
+        "이슈",
+        "깨",
+        "고장",
+        "크래시",
+        "실패",
+        "에러",
+        "문제",
+    }
+)
+_FEEDBACK_TRIAGE_DECISION_TOKENS = _normalized_token_set(
+    {
+        "decide",
+        "choose",
+        "prioritize",
+        "rank",
+        "build",
+        "next",
+        "roadmap",
+        "investigate",
+        "reproduce",
+        "triage",
+        "결정",
+        "선택",
+        "우선순위",
+        "다음",
+        "로드맵",
+        "조사",
+        "재현",
+        "트리아지",
+    }
+)
 _WORKFLOW_LEARNING_PHRASES = (
     "learn from this workflow",
     "learn from this workflow run",
@@ -1097,6 +1223,12 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "track codex work session",
     "coding agent status",
     "coding agent session",
+    "what did the coding agent do",
+    "what did the coding agent do while i was away",
+    "what has the coding agent done",
+    "what did codex do",
+    "what did claude code do",
+    "did the coding agent finish",
     "what changed in the coding agent session",
     "what changed in coding agent session",
     "tell me what changed",
@@ -1131,6 +1263,14 @@ _CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
 )
 _GITHUB_EVENT_OPS_PHRASES = (
     "github issue to pr",
+    "issue to pr",
+    "issue into a pr",
+    "issue should become a pr",
+    "issue should become pr",
+    "this issue should become a pr",
+    "turn this issue into a pr",
+    "make this issue into a pr",
+    "convert this issue into a pr",
     "issue opened",
     "pr opened",
     "github issue",
@@ -1552,9 +1692,9 @@ FEEDBACK_BEFORE_CODING_GUARD = RoutingGuardRule(
     rule="Product feedback and bug reports should route through triage/investigation before coding handoff unless code work is explicit.",
     matched_label="guard:feedback_before_coding",
     preferred_skills=("feedback-triage",),
-    score_boost=0,
-    why="Product feedback and bug reports should get triage/investigation before coding handoff.",
-    activation_status="cataloged",
+    score_boost=34,
+    why="Matched customer or product signal language; triage the signal and investigation path before planning fixes.",
+    activation_status="active",
 )
 PRODUCT_SHAPING_GUARD = RoutingGuardRule(
     id="product_shaping_before_ops_review",
@@ -1920,6 +2060,8 @@ def active_routing_guard_rules(
         rules.append(RISKY_REFACTOR_GUARD)
     if _safe_feature_plan_guard_applies(normalized_query, query_tokens):
         rules.append(SAFE_FEATURE_PLAN_GUARD)
+    if _feedback_before_coding_guard_applies(normalized_query, query_tokens):
+        rules.append(FEEDBACK_BEFORE_CODING_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
         rules.append(PRODUCT_SHAPING_GUARD)
     if _persistent_completion_guard_applies(normalized_query, query_tokens):
@@ -2032,6 +2174,22 @@ def _product_shaping_guard_applies(normalized_query: str, query_tokens: set[str]
     product_context = bool(_PRODUCT_SHAPING_CONTEXT_TOKENS & query_tokens)
     shaping_uncertainty = bool(_PRODUCT_SHAPING_UNCERTAINTY_TOKENS & query_tokens)
     return product_context and shaping_uncertainty
+
+
+def _feedback_before_coding_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        return False
+    if _doctor_health_guard_applies(normalized_query, query_tokens):
+        return False
+    if _explicit_delivery_or_implementation_requested(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _FEEDBACK_TRIAGE_PHRASES):
+        return True
+    source_signal = bool(_FEEDBACK_TRIAGE_SOURCE_TOKENS & query_tokens)
+    product_context = bool(_FEEDBACK_TRIAGE_PRODUCT_TOKENS & query_tokens)
+    issue_signal = bool(_FEEDBACK_TRIAGE_ISSUE_TOKENS & query_tokens)
+    decision_signal = bool(_FEEDBACK_TRIAGE_DECISION_TOKENS & query_tokens)
+    return (source_signal and (issue_signal or decision_signal)) or (product_context and issue_signal)
 
 
 def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2788,6 +2946,25 @@ def _delivery_cycle_guard_applies(normalized_query: str, query_tokens: set[str])
             "계획 구현 리뷰 문서",
             "기획 구현 리뷰 문서",
             "pr까지",
+        ),
+    )
+
+
+def _explicit_delivery_or_implementation_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _delivery_cycle_terms(normalized_query, query_tokens):
+        return True
+    return _contains_phrase(
+        normalized_query,
+        (
+            "write the code",
+            "implement the fix",
+            "fix the code",
+            "open the pr",
+            "merge the pr",
+            "코드 작성",
+            "수정 구현",
+            "pr 열",
+            "pr 머지",
         ),
     )
 
