@@ -921,6 +921,263 @@ _DELIVERY_RUNTIME_CHAT_CARDS: dict[str, dict[str, object]] = {
 }
 
 _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "automation-blueprint": {
+        "kind": "automation_blueprint",
+        "headline": "I can turn this into a scheduled ops blueprint.",
+        "body": (
+            "I will prepare the recurring workflow: schedule, source inputs, delivery target, silence policy, "
+            "confirmation card, and status update rules. Host cron creation, source retrieval, gateway delivery, "
+            "and no-agent execution stay observed-only."
+        ),
+        "phase": "automation_blueprint_prepared",
+        "next_action": "prepare_scheduled_ops_blueprint",
+        "artifact_schema": "automation_blueprint_card/v1",
+        "claim_boundary_suffix": "It is not host cron creation, automation enablement, source retrieval, delivery, or no-agent execution evidence.",
+        "actions": [
+            {"id": "prepare_scheduled_ops_blueprint", "label": "Prepare automation", "style": "primary"},
+            {"id": "prepare_toolbelt_readiness", "label": "Check toolbelt", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "capture_schedule",
+            "define_source_inputs",
+            "set_delivery_and_silence_policy",
+            "prepare_confirmation_card",
+        ],
+        "evidence_not_observed": [
+            "host cron creation",
+            "Hermes automation enablement",
+            "source retrieval",
+            "gateway delivery",
+            "no-agent execution",
+            "recipient receipt",
+        ],
+    },
+    "agent-board": {
+        "kind": "agent_board",
+        "headline": "I can prepare a board for multiple Hermes agents.",
+        "body": (
+            "I will prepare the agent board: targets, roles, tasks, handoff lanes, heartbeat expectations, blocker "
+            "states, and completion rules. Other agents accepting, working, heartbeat-ing, or completing work remains "
+            "unobserved until target-specific evidence exists."
+        ),
+        "phase": "agent_board_prepared",
+        "next_action": "prepare_agent_board_card",
+        "artifact_schema": "agent_board_card/v1",
+        "claim_boundary_suffix": "It is not target acceptance, agent heartbeat, task execution, blocker resolution, handoff receipt, or completion evidence.",
+        "actions": [
+            {"id": "prepare_agent_board_card", "label": "Open agent board", "style": "primary"},
+            {"id": "refresh_status", "label": "Refresh status", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "detect_targets",
+            "assign_role_lanes",
+            "record_task_and_handoff_states",
+            "require_target_specific_heartbeat_evidence",
+        ],
+        "evidence_not_observed": [
+            "target acceptance",
+            "agent heartbeat",
+            "task execution",
+            "blocker resolution",
+            "handoff receipt",
+            "completion",
+        ],
+    },
+    "memory-curation-review": {
+        "kind": "memory_curation",
+        "headline": "I can review memory and context before anything is changed.",
+        "body": (
+            "I will prepare a memory curation review: stale facts, duplicate notes, conflicting context, source scope, "
+            "target/thread ownership, and approve/reject/update choices. Memory files, skill notes, and recalled context "
+            "stay unchanged until an approved write is observed."
+        ),
+        "phase": "memory_curation_prepared",
+        "next_action": "prepare_memory_curation_review",
+        "artifact_schema": "memory_curation_card/v1",
+        "claim_boundary_suffix": "It is not Hermes internal memory, MEMORY.md, USER.md, skill-file modification, approved memory write, or external source freshness evidence.",
+        "actions": [
+            {"id": "prepare_memory_curation_review", "label": "Review memory", "style": "primary"},
+            {"id": "show_memory_status", "label": "Show memory status", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "list_context_candidates",
+            "classify_stale_duplicate_conflicting_items",
+            "ask_for_approve_reject_update",
+            "record_write_only_after_observed_approval",
+        ],
+        "evidence_not_observed": [
+            "approved memory write",
+            "MEMORY.md modification",
+            "USER.md modification",
+            "skill-file modification",
+            "external source freshness",
+            "Hermes internal memory update",
+        ],
+    },
+    "gateway-intent-card": {
+        "kind": "gateway_intent",
+        "headline": "I can normalize this gateway intent before platform work.",
+        "body": (
+            "I will prepare the gateway intent: origin, thread key, delivery policy, silent updates, attachment rules, "
+            "status-update behavior, and what the wrapper should ask next. Platform login, message sends, thread mutation, "
+            "attachments, and delivery stay observed-only."
+        ),
+        "phase": "gateway_intent_prepared",
+        "next_action": "prepare_gateway_intent_card",
+        "artifact_schema": "gateway_intent_card/v1",
+        "claim_boundary_suffix": "It is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_gateway_intent_card", "label": "Open gateway card", "style": "primary"},
+            {"id": "prepare_toolbelt_readiness", "label": "Check toolbelt", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "normalize_origin_and_thread",
+            "choose_delivery_and_silence_policy",
+            "separate_attachment_rules_from_upload_evidence",
+            "prepare_status_update_contract",
+        ],
+        "evidence_not_observed": [
+            "platform login",
+            "message send",
+            "thread mutation",
+            "attachment upload",
+            "delivery",
+            "recipient acknowledgement",
+        ],
+    },
+    "deliverable-package": {
+        "kind": "deliverable_package",
+        "headline": "I can prepare the deliverable package and its delivery trail.",
+        "body": (
+            "I will prepare the deliverable path: required files, generation owner, export steps, render or formula QA, "
+            "approval points, attachment status, and delivery evidence slots. Generated binaries, uploads, attachments, "
+            "and approvals stay observed-only."
+        ),
+        "phase": "deliverable_package_prepared",
+        "next_action": "prepare_deliverable_package",
+        "artifact_schema": "deliverable_package_card/v1",
+        "claim_boundary_suffix": "It is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_deliverable_package", "label": "Prepare deliverable", "style": "primary"},
+            {"id": "prepare_material_package", "label": "Prepare source package", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "inventory_required_files",
+            "assign_generation_owner",
+            "prepare_export_and_qa_checks",
+            "record_attachment_and_delivery_evidence_slots",
+        ],
+        "evidence_not_observed": [
+            "binary generation",
+            "render QA",
+            "formula recalculation",
+            "approval",
+            "upload",
+            "attachment",
+            "delivery",
+        ],
+    },
+    "voice-operator": {
+        "kind": "voice_operator",
+        "headline": "I can turn the short request into a safe operator card.",
+        "body": (
+            "I will normalize the voice or mobile-style request into a concise clarify, plan, status, handoff, or "
+            "confirmation action. Speech recognition, notification delivery, platform action, and risky execution stay "
+            "unobserved until explicitly confirmed."
+        ),
+        "phase": "voice_operator_prepared",
+        "next_action": "prepare_voice_operator_card",
+        "artifact_schema": "voice_operator_card/v1",
+        "claim_boundary_suffix": "It is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
+        "actions": [
+            {"id": "prepare_voice_operator_card", "label": "Open voice card", "style": "primary"},
+            {"id": "answer:clarify", "label": "Ask/answer clarification", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "normalize_short_input",
+            "detect_risky_or_destructive_intent",
+            "ask_one_confirmation_when_needed",
+            "route_to_concrete_workflow_after_confirmation",
+        ],
+        "evidence_not_observed": [
+            "speech recognition proof",
+            "mobile notification delivery",
+            "accepted execution",
+            "platform action",
+            "destructive approval",
+            "workflow completion",
+        ],
+    },
+    "toolbelt-readiness": {
+        "kind": "toolbelt_readiness",
+        "headline": "I can check the tools this workflow needs before claiming it can run.",
+        "body": (
+            "I will prepare the toolbelt readiness card: required MCP servers, CLIs, APIs, credentials, connectors, "
+            "missing pieces, fallback mode, and safe setup next step. Installation, credential validation, API access, "
+            "connector invocation, and workflow execution stay observed-only."
+        ),
+        "phase": "toolbelt_readiness_prepared",
+        "next_action": "prepare_toolbelt_readiness",
+        "artifact_schema": "toolbelt_readiness_card/v1",
+        "claim_boundary_suffix": "It is not MCP installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
+        "actions": [
+            {"id": "prepare_toolbelt_readiness", "label": "Check toolbelt", "style": "primary"},
+            {"id": "run_omh_doctor", "label": "Run doctor", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "list_required_tools",
+            "separate_installed_from_unobserved",
+            "name_missing_credentials_or_connectors",
+            "choose_safe_fallback_or_setup_step",
+        ],
+        "evidence_not_observed": [
+            "MCP installation",
+            "credential validation",
+            "API access",
+            "connector invocation",
+            "workflow execution",
+            "external service success",
+        ],
+    },
+    "ops-observability-card": {
+        "kind": "ops_observability",
+        "headline": "I can prepare observability without inventing provider truth.",
+        "body": (
+            "I will prepare a wrapper-safe observability card: token, cost, latency, run history, queue, failure modes, "
+            "and evidence gaps. Local estimates stay separate from provider billing, quota truth, full tracing, "
+            "performance proof, and workflow completion."
+        ),
+        "phase": "ops_observability_prepared",
+        "next_action": "prepare_ops_observability_card",
+        "artifact_schema": "ops_observability_card/v1",
+        "claim_boundary_suffix": "It is not provider billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+        "actions": [
+            {"id": "prepare_ops_observability_card", "label": "Open observability", "style": "primary"},
+            {"id": "refresh_status", "label": "Refresh status", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "collect_local_runtime_records",
+            "separate_estimates_from_provider_truth",
+            "summarize_failure_modes",
+            "mark_missing_trace_or_billing_evidence",
+        ],
+        "evidence_not_observed": [
+            "provider billing truth",
+            "provider quota truth",
+            "complete tracing",
+            "performance proof",
+            "workflow completion",
+            "external telemetry fetch",
+        ],
+    },
     "operating-rhythm": {
         "kind": "operating_rhythm",
         "headline": "I can turn this into an operating rhythm record.",
