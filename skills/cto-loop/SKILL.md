@@ -27,9 +27,9 @@ This is a Hermes-native `cto-loop` workflow skill.
 
 Good example:
 
-- Prompt: cto-loop: handle a leadership request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `cto-loop` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: cto-loop: run the PM, dev, QA, security, and ops loop for this risky billing launch.
+- Expected behavior: Prepare the CTO operating model with role responsibilities, gates, blockers, and status boundaries.
+- Why: The request needs a leadership operating loop, not just a generic plan.
 
 Bad example:
 

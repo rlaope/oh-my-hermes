@@ -27,9 +27,9 @@ This is a Hermes-native `ultraqa` workflow skill.
 
 Good example:
 
-- Prompt: ultraqa: handle a verification request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `ultraqa` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: $ultraqa test the setup wizard with hostile install paths, stale config, and missing PATH cases.
+- Expected behavior: Generate adversarial QA scenarios, expected signals, observed results, and fix-or-retry routing.
+- Why: The request asks for verification pressure and hostile scenarios.
 
 Bad example:
 

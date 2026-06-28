@@ -27,9 +27,9 @@ This is a Hermes-native `team` workflow skill.
 
 Good example:
 
-- Prompt: team: handle a execution request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `team` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: team: coordinate parallel agents for frontend polish, copy polish, and QA with worker ACKs.
+- Expected behavior: Assign lanes, require worker ACK/result evidence, and keep integration verification separate.
+- Why: The work benefits from multiple coordinated workers with disjoint ownership.
 
 Bad example:
 

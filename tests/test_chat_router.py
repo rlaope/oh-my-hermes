@@ -76,6 +76,21 @@ class ChatRouterTests(unittest.TestCase):
         self.assertTrue(decision["explicit"])
         self.assertEqual(decision["confidence"], "high")
 
+    def test_explicit_skill_invocation_wins_over_router_feedback_card(self) -> None:
+        for message, skill in (
+            ("$deep-interview before planning Discord and Slack routing, ask what each channel owns.", "deep-interview"),
+            ("$code-review review this PR for install/update UX regressions and missing tests.", "code-review"),
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertEqual(decision["selected_harness"], primary_harness_for_skill(skill))
+                self.assertTrue(decision["explicit"])
+                self.assertIsNone(decision["task_card"])
+                self.assertEqual(decision["reason"], "Explicit workflow invocation wins over heuristic routing.")
+
     def test_operations_surfaces_dispatch_to_dedicated_harnesses(self) -> None:
         cases = (
             (

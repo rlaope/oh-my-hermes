@@ -27,9 +27,9 @@ This is a Hermes-native `ai-slop-cleaner` workflow skill.
 
 Good example:
 
-- Prompt: ai-slop-cleaner: handle a maintenance request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `ai-slop-cleaner` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: $ai-slop-cleaner remove duplicated router branches and lock behavior with regression tests before refactoring.
+- Expected behavior: Plan cleanup, preserve behavior, delete or simplify code, and prove it with targeted tests.
+- Why: The request is maintenance cleanup with regression risk.
 
 Bad example:
 

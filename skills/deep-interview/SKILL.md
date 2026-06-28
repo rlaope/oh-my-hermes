@@ -28,7 +28,7 @@ This is a Hermes-native `deep-interview` workflow skill.
 
 Good example:
 
-- Prompt: $deep-interview design channel-specific routing, but do not assume what channels mean.
+- Prompt: $deep-interview before planning Discord and Slack routing, ask what each channel owns and what evidence counts.
 - Expected behavior: Ask one decision-changing question at a time, then produce goals, non-goals, and acceptance criteria.
 - Why: The request explicitly rejects assumptions and needs product boundaries before implementation.
 

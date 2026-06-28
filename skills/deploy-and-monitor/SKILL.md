@@ -27,9 +27,9 @@ This is a Hermes-native `deploy-and-monitor` workflow skill.
 
 Good example:
 
-- Prompt: deploy-and-monitor: handle a monitoring request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `deploy-and-monitor` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: deploy-and-monitor: prepare the release monitor, rollback signals, health checks, and post-deploy status card.
+- Expected behavior: Create release monitoring guidance with deployment, metric, rollback, and observation boundaries.
+- Why: The request is about deploy readiness and monitoring rather than code review alone.
 
 Bad example:
 

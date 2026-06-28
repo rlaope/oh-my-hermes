@@ -27,9 +27,9 @@ This is a Hermes-native `ops-review` workflow skill.
 
 Good example:
 
-- Prompt: ops-review: handle a operations request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `ops-review` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: ops-review: summarize this week’s support queue, release blockers, owner status, and next operating risks.
+- Expected behavior: Create an operations status review with owners, blockers, evidence gaps, and next actions.
+- Why: The request is an operating review rather than a one-off plan or coding handoff.
 
 Bad example:
 

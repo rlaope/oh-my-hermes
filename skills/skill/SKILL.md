@@ -27,9 +27,9 @@ This is a Hermes-native `skill` workflow skill.
 
 Good example:
 
-- Prompt: skill: handle a operator request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `skill` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: $skill list installed OMH skills and show the catalog metadata for each workflow.
+- Expected behavior: Manage or inspect the skill catalog without claiming runtime execution or external evidence.
+- Why: The request is operator skill management, not a user workflow run.
 
 Bad example:
 

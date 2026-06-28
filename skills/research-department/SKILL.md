@@ -29,7 +29,7 @@ This is a Hermes-native `research-department` workflow skill.
 
 Good example:
 
-- Prompt: research-department 매일 경쟁사와 시장 뉴스를 수집해서 변화가 있으면 브리핑해줘.
+- Prompt: Set up a Scout, Analyst, and Briefer research flow for daily competitor and market changes.
 - Expected behavior: Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, knowledge-store and synthesis-tool readiness, and observed-only evidence requirements.
 - Why: The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.
 

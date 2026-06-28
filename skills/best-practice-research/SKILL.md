@@ -27,9 +27,9 @@ This is a Hermes-native `best-practice-research` workflow skill.
 
 Good example:
 
-- Prompt: best-practice-research: handle a research request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `best-practice-research` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: best-practice-research: check official docs and upstream examples before we choose the plugin packaging pattern.
+- Expected behavior: Gather primary-source guidance, compare options, and separate evidence from recommendation.
+- Why: The request needs citation-backed best-practice research before implementation.
 
 Bad example:
 

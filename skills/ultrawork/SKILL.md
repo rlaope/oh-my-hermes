@@ -28,7 +28,7 @@ This is a Hermes-native `ultrawork` workflow skill.
 
 Good example:
 
-- Prompt: $ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.
+- Prompt: $ultrawork split the accepted docs refresh, CLI output polish, and test updates into parallel implementation lanes.
 - Expected behavior: Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.
 - Why: The work can be split cleanly and benefits from parallel execution discipline.
 

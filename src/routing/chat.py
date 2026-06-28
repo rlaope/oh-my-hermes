@@ -139,7 +139,11 @@ def route_chat_message(
     full_recommendations = recommend_skills(routing_message, limit=len(definitions))
     explicit_skill = explicit_skill_invocation(routing_message, definitions)
     task_card = classify_task(message)
-    task_card_overrides_explicit = _task_card_overrides_explicit_invocation(task_card)
+    explicit_prefix = _has_explicit_invocation_prefix(routing_message)
+    task_card_overrides_explicit = _task_card_overrides_explicit_invocation(
+        task_card,
+        explicit_prefix=explicit_prefix,
+    )
     if task_card and (not explicit_skill or task_card_overrides_explicit):
         full_recommendations = _prioritize_recommendation(full_recommendations, task_card_recommendation(task_card))
     catalog_question = is_skill_catalog_question(routing_message)
@@ -283,10 +287,24 @@ def route_chat_message(
     return decision.to_dict()
 
 
-def _task_card_overrides_explicit_invocation(task_card: dict[str, object] | None) -> bool:
+def _has_explicit_invocation_prefix(message: str) -> bool:
+    first = message.strip().split(maxsplit=1)[0].strip(":,").lower()
+    return first.startswith(("$", "/", "./", "@"))
+
+
+def _task_card_overrides_explicit_invocation(
+    task_card: dict[str, object] | None,
+    *,
+    explicit_prefix: bool,
+) -> bool:
     if not isinstance(task_card, dict):
         return False
-    return task_card.get("task_type") in {"router_design_feedback", "omh_cli_maintenance"}
+    task_type = task_card.get("task_type")
+    if task_type == "omh_cli_maintenance":
+        return True
+    if task_type == "router_design_feedback":
+        return not explicit_prefix
+    return False
 
 
 def route_chat_event(

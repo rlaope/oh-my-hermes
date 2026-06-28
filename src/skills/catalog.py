@@ -352,10 +352,12 @@ class SkillDefinition:
                 ),
             )
         if self.good_example is None:
+            default_good_example = _DEFAULT_GOOD_EXAMPLES.get(self.name)
             object.__setattr__(
                 self,
                 "good_example",
-                SkillExample(
+                default_good_example
+                or SkillExample(
                     prompt=(
                         f"{routing_hint}: handle a {self.category} request that needs "
                         "explicit evidence boundaries and a clear stop condition."
@@ -389,6 +391,90 @@ class SkillDefinition:
                 "recovery_notes",
                 _default_recovery_notes(self.name, self.category, self.hermes_role, self.quality_tier),
             )
+
+
+_DEFAULT_GOOD_EXAMPLES = {
+    "ralph": SkillExample(
+        prompt="ralph: finish the invoice export recovery until the smoke test passes or a blocker is recorded.",
+        expected="Keep one completion owner, track evidence after every recovery step, and stop only on pass, block, or explicit cancel.",
+        why="The request needs persistent completion pressure with an observable stop condition.",
+    ),
+    "team": SkillExample(
+        prompt="team: coordinate parallel agents for frontend polish, copy polish, and QA with worker ACKs.",
+        expected="Assign lanes, require worker ACK/result evidence, and keep integration verification separate.",
+        why="The work benefits from multiple coordinated workers with disjoint ownership.",
+    ),
+    "research-brief": SkillExample(
+        prompt="research-brief: compare three onboarding analytics vendors using customer notes and confidence gaps.",
+        expected="Prepare a source-backed brief with evidence, inference, confidence, and retrieval gaps separated.",
+        why="The user needs business research synthesis, not recurring operations or coding.",
+    ),
+    "strategy-brief": SkillExample(
+        prompt="strategy-brief: decide whether our onboarding should prioritize solo founders or enterprise buyers.",
+        expected="Frame options, tradeoffs, assumptions, rejected paths, and the decision evidence needed.",
+        why="The request is strategy-shaped and should not jump directly into implementation.",
+    ),
+    "ops-review": SkillExample(
+        prompt="ops-review: summarize this week’s support queue, release blockers, owner status, and next operating risks.",
+        expected="Create an operations status review with owners, blockers, evidence gaps, and next actions.",
+        why="The request is an operating review rather than a one-off plan or coding handoff.",
+    ),
+    "idea-to-deploy": SkillExample(
+        prompt="idea-to-deploy: turn this onboarding idea into a scoped plan, implementation handoff, QA gate, and release path.",
+        expected="Prepare the idea-to-release lane while keeping implementation, QA, and deploy evidence observed-only.",
+        why="The request spans product shaping through deploy readiness instead of a single task.",
+    ),
+    "cto-loop": SkillExample(
+        prompt="cto-loop: run the PM, dev, QA, security, and ops loop for this risky billing launch.",
+        expected="Prepare the CTO operating model with role responsibilities, gates, blockers, and status boundaries.",
+        why="The request needs a leadership operating loop, not just a generic plan.",
+    ),
+    "deploy-and-monitor": SkillExample(
+        prompt="deploy-and-monitor: prepare the release monitor, rollback signals, health checks, and post-deploy status card.",
+        expected="Create release monitoring guidance with deployment, metric, rollback, and observation boundaries.",
+        why="The request is about deploy readiness and monitoring rather than code review alone.",
+    ),
+    "ultraqa": SkillExample(
+        prompt="$ultraqa test the setup wizard with hostile install paths, stale config, and missing PATH cases.",
+        expected="Generate adversarial QA scenarios, expected signals, observed results, and fix-or-retry routing.",
+        why="The request asks for verification pressure and hostile scenarios.",
+    ),
+    "ai-slop-cleaner": SkillExample(
+        prompt="$ai-slop-cleaner remove duplicated router branches and lock behavior with regression tests before refactoring.",
+        expected="Plan cleanup, preserve behavior, delete or simplify code, and prove it with targeted tests.",
+        why="The request is maintenance cleanup with regression risk.",
+    ),
+    "best-practice-research": SkillExample(
+        prompt="best-practice-research: check official docs and upstream examples before we choose the plugin packaging pattern.",
+        expected="Gather primary-source guidance, compare options, and separate evidence from recommendation.",
+        why="The request needs citation-backed best-practice research before implementation.",
+    ),
+    "autoresearch-goal": SkillExample(
+        prompt="autoresearch-goal: keep researching AI agent memory practices until the evidence gaps are closed or logged.",
+        expected="Run a durable research loop with critic checks, source gaps, and a stop or checkpoint condition.",
+        why="The request is research that needs persistence and review, not a one-shot brief.",
+    ),
+    "performance-goal": SkillExample(
+        prompt="performance-goal: benchmark recommendation latency, optimize hot paths safely, and prove no regressions.",
+        expected="Create a measurement-led optimization loop with baseline, change, verification, and regression evidence.",
+        why="The request is performance optimization and needs measured before/after proof.",
+    ),
+    "wiki": SkillExample(
+        prompt="wiki: capture the final router architecture decisions and retrieval hints in the project knowledge base.",
+        expected="Write durable project knowledge with source context, staleness notes, and follow-up links.",
+        why="The request is knowledge capture rather than planning or execution.",
+    ),
+    "ask": SkillExample(
+        prompt="ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.",
+        expected="Prepare an advisor prompt, capture the response boundary, and summarize reusable critique.",
+        why="The user wants outside review before committing to a direction.",
+    ),
+    "skill": SkillExample(
+        prompt="$skill list installed OMH skills and show the catalog metadata for each workflow.",
+        expected="Manage or inspect the skill catalog without claiming runtime execution or external evidence.",
+        why="The request is operator skill management, not a user workflow run.",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -763,7 +849,7 @@ _DEFINITIONS = [
             "The user expects hidden Hermes code execution rather than explicit executor handoff and observed verification evidence.",
         ),
         good_example=SkillExample(
-            prompt="$ultragoal add per-skill quality rubrics, regenerate skills, test, and open a PR.",
+            prompt="$ultragoal turn OMH skill quality into a durable goal with rubrics, generated skill sync, tests, and a PR gate.",
             expected="Create or update a goal ledger, split the story into verifiable checkpoints, and close only after generated docs, skills, and tests match.",
             why="The task has multiple milestones and a final quality gate that should be inspectable across interruptions.",
         ),
@@ -1016,7 +1102,7 @@ _DEFINITIONS = [
             "The user asked for immediate read-only analysis and the ambiguity does not change the answer.",
         ),
         good_example=SkillExample(
-            prompt="$deep-interview design channel-specific routing, but do not assume what channels mean.",
+            prompt="$deep-interview before planning Discord and Slack routing, ask what each channel owns and what evidence counts.",
             expected="Ask one decision-changing question at a time, then produce goals, non-goals, and acceptance criteria.",
             why="The request explicitly rejects assumptions and needs product boundaries before implementation.",
         ),
@@ -1090,7 +1176,7 @@ _DEFINITIONS = [
             "The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.",
         ),
         good_example=SkillExample(
-            prompt="$ultrawork implement docs refresh, CLI output polish, and tests as separate accepted lanes.",
+            prompt="$ultrawork split the accepted docs refresh, CLI output polish, and test updates into parallel implementation lanes.",
             expected="Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.",
             why="The work can be split cleanly and benefits from parallel execution discipline.",
         ),
@@ -1415,7 +1501,7 @@ _DEFINITIONS = [
             "The user asks for coding implementation; prepare a selected executor/runtime handoff after the research plan is accepted.",
         ),
         good_example=SkillExample(
-            prompt="research-department 매일 경쟁사와 시장 뉴스를 수집해서 변화가 있으면 브리핑해줘.",
+            prompt="Set up a Scout, Analyst, and Briefer research flow for daily competitor and market changes.",
             expected="Prepare research_department_plan/v1 with Scout/Analyst/Briefer lanes, source inbox buckets, briefing status, knowledge-store and synthesis-tool readiness, and observed-only evidence requirements.",
             why="The request is recurring, source-backed, and operational; a single research brief would miss the ongoing workflow/status boundary.",
         ),
@@ -1622,7 +1708,7 @@ _DEFINITIONS = [
             "The follow-up is implementation work that already has accepted requirements and should become a plan or handoff.",
         ),
         good_example=SkillExample(
-            prompt="meeting-brief for a leadership sync on setup UX, plugin bridge defaults, and release risk.",
+            prompt="Prepare a meeting agenda for a leadership sync on setup UX, plugin bridge defaults, and release risk.",
             expected="Prepare agenda topics, prompts, decisions needed, and a record template with unknowns marked.",
             why="The request is preparation for a meeting and should separate prep from observed outcomes.",
         ),
@@ -1688,7 +1774,7 @@ _DEFINITIONS = [
             "The user wants current market research rather than triage of supplied signals.",
         ),
         good_example=SkillExample(
-            prompt="feedback-triage these payment failure reports and feature requests before we plan fixes.",
+            prompt="Cluster these customer payment failure reports and feature requests before we plan fixes.",
             expected="Cluster bug signals and feature asks, rank severity or opportunity, and recommend research, planning, or coding as a next workflow.",
             why="The input is mixed feedback that needs classification before delivery decisions.",
         ),
@@ -2222,7 +2308,7 @@ _DEFINITIONS = [
             "The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.",
         ),
         good_example=SkillExample(
-            prompt="automation-blueprint every morning check competitor news and send a Slack digest only if something changed.",
+            prompt="automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.",
             expected="Prepare hermes_ops_blueprint/v1 with schedule intent, Slack delivery policy, silence rule, research/report skills, missing evidence, and next confirmation.",
             why="The request is recurring, delivery-shaped, and must stay prepared until host automation and gateway delivery are observed.",
         ),
@@ -2642,7 +2728,7 @@ _DEFINITIONS = [
             "The request is broad product critique, strategy, or planning rather than code or evidence review.",
         ),
         good_example=SkillExample(
-            prompt="$code-review check this PR for install/update UX regressions and missing tests.",
+            prompt="$code-review review this PR for install/update UX regressions and missing tests.",
             expected="Lead with ranked findings, cite concrete evidence, then list open questions and test gaps.",
             why="The task is explicitly review-shaped and has a behavioral risk surface.",
         ),
