@@ -167,6 +167,12 @@ class ChatRouteDecision:
         }
 
 
+@dataclass(frozen=True)
+class _CatalogFastPathResult:
+    decision: ChatRouteDecision | None
+    catalog_question: bool
+
+
 def route_chat_message(
     message: str,
     *,
@@ -191,8 +197,8 @@ def route_chat_message(
         source=source,
         min_confidence=min_confidence,
     )
-    if fast_catalog_decision is not None:
-        return fast_catalog_decision.to_dict()
+    if fast_catalog_decision.decision is not None:
+        return fast_catalog_decision.decision.to_dict()
 
     definitions = routable_definitions()
     full_recommendations = recommend_skills(routing_message, limit=len(definitions))
@@ -205,7 +211,7 @@ def route_chat_message(
     )
     if task_card and (not explicit_skill or task_card_overrides_explicit):
         full_recommendations = _prioritize_recommendation(full_recommendations, task_card_recommendation(task_card))
-    catalog_question = is_skill_catalog_question(routing_message)
+    catalog_question = fast_catalog_decision.catalog_question
     specific_catalog_match = (
         _specific_capability_catalog_match(full_recommendations)
         if catalog_question and not _is_broad_capability_catalog_question(routing_message)
@@ -357,15 +363,16 @@ def _catalog_fast_path_decision(
     routing_message: str,
     source: str,
     min_confidence: str,
-) -> ChatRouteDecision | None:
+) -> _CatalogFastPathResult:
     direct_picker = _direct_picker_alias(routing_message)
+    catalog_question = False if direct_picker else is_skill_catalog_question(routing_message)
     catalog_picker = (
         not direct_picker
-        and is_skill_catalog_question(routing_message)
+        and catalog_question
         and _generic_omh_catalog_question(routing_message)
     )
     if not direct_picker and not catalog_picker:
-        return None
+        return _CatalogFastPathResult(decision=None, catalog_question=catalog_question)
 
     matched = ("direct_picker_alias",) if direct_picker else ("catalog_question",)
     score = 12 if direct_picker else 11
@@ -376,26 +383,29 @@ def _catalog_fast_path_decision(
     )
     selected_harness = primary_harness_for_skill(_ROUTER_SKILL)
     recommendation = _router_picker_recommendation(message, matched=matched, score=score)
-    return ChatRouteDecision(
-        schema_version=1,
-        source=source,
-        action="dispatch",
-        selected_skill=_ROUTER_SKILL,
-        selected_harness=selected_harness,
-        candidate_skill=_ROUTER_SKILL,
-        candidate_harness=selected_harness,
-        confidence="high",
-        score=score,
-        threshold=min_confidence,
-        explicit=direct_picker,
-        ambiguous=False,
-        reason=reason,
-        clarification="",
-        routing_prompt=_routing_prompt("dispatch", _ROUTER_SKILL, _ROUTER_SKILL, reason, message),
-        task_card=None,
-        workflow_route_plan=None,
-        learning_candidate_card=None,
-        recommendations=(recommendation,),
+    return _CatalogFastPathResult(
+        decision=ChatRouteDecision(
+            schema_version=1,
+            source=source,
+            action="dispatch",
+            selected_skill=_ROUTER_SKILL,
+            selected_harness=selected_harness,
+            candidate_skill=_ROUTER_SKILL,
+            candidate_harness=selected_harness,
+            confidence="high",
+            score=score,
+            threshold=min_confidence,
+            explicit=direct_picker,
+            ambiguous=False,
+            reason=reason,
+            clarification="",
+            routing_prompt=_routing_prompt("dispatch", _ROUTER_SKILL, _ROUTER_SKILL, reason, message),
+            task_card=None,
+            workflow_route_plan=None,
+            learning_candidate_card=None,
+            recommendations=(recommendation,),
+        ),
+        catalog_question=catalog_question,
     )
 
 
