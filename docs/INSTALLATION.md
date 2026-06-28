@@ -838,8 +838,8 @@ Before calling the bot integration ready, verify these points:
   routing through deterministic locale hints when a tested phrase matches. For
   example, Japanese or Chinese payment-failure reports route to
   `feedback-triage`, French safe-feature requests route to a plan surface, and
-  Spanish issue-to-PR requests route to a request-to-handoff playbook without
-  claiming machine translation happened.
+  Spanish, French, or German issue-to-PR requests route to `github-event-ops`
+  without claiming machine translation happened.
 - The rendered `chat_response` does not expose `omh`, argv arrays, or shell
   command text to the end user.
 - Clarification and fallback interactions do not expose `send_to_executor` or

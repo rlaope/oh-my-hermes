@@ -190,6 +190,10 @@ class ChatRouterTests(unittest.TestCase):
                 "deliverable-package",
             ),
             (
+                "summarize this PDF deck into action items",
+                "materials-package",
+            ),
+            (
                 "after omh update says setup is next but Hermes skills still look stale.",
                 "doctor",
             ),
@@ -227,6 +231,14 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "PR 42 has failing CI, summarize the risk and next fix path.",
+                "github-event-ops",
+            ),
+            (
+                "このPRをレビューしやすい計画にして",
+                "github-event-ops",
+            ),
+            (
+                "Quiero preparar este issue para un PR",
                 "github-event-ops",
             ),
             (
@@ -471,6 +483,7 @@ class ChatRouterTests(unittest.TestCase):
             "find GitHub repos, datasets, and public presentations for this idea",
             "./source-finder find docs and specs for browser automation standards",
             "논문 데이터셋 찾아서 후보로 정리해줘",
+            "공개 프레젠테이션 자료를 찾아서 요약해줘",
         )
         for message in acquisition_cases:
             with self.subTest(message=message):
