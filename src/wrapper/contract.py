@@ -776,6 +776,150 @@ _REVIEW_QUALITY_CHAT_CARDS: dict[str, dict[str, object]] = {
     },
 }
 
+_DELIVERY_RUNTIME_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "idea-to-deploy": {
+        "kind": "app_delivery_loop",
+        "headline": "I can shape this into a product delivery loop.",
+        "body": (
+            "I will prepare the idea-to-deploy loop: product intent, plan lane, implementation boundary, release gate, "
+            "monitoring checks, rollback questions, and owner handoffs. This is not implementation, deploy, monitoring, "
+            "or customer-impact evidence."
+        ),
+        "phase": "app_delivery_loop_prepared",
+        "next_action": "present_app_delivery_loop",
+        "artifact_schema": "app_delivery_loop_card/v1",
+        "actions": [
+            {"id": "present_app_delivery_loop", "label": "Show delivery loop", "style": "primary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare implementation handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "accepted product scope and implementation owner"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "shape_product_intent",
+            "prepare_plan_lane",
+            "separate_implementation_from_release",
+            "define_monitoring_and_rollback_checks",
+        ],
+        "evidence_not_observed": [
+            "accepted product scope",
+            "implementation",
+            "deployment",
+            "monitoring",
+            "rollback readiness",
+            "customer impact",
+            "CI",
+        ],
+    },
+    "cto-loop": {
+        "kind": "cto_loop",
+        "headline": "I can run this as a leadership decision loop.",
+        "body": (
+            "I will prepare the CTO loop: roadmap question, architecture tradeoffs, delivery risk, security or reliability "
+            "questions, release readiness gates, and decision owners. It is not stakeholder approval, architecture sign-off, "
+            "implementation, or release evidence."
+        ),
+        "phase": "cto_loop_prepared",
+        "next_action": "run_cto_loop",
+        "artifact_schema": "cto_loop_card/v1",
+        "actions": [
+            {"id": "run_cto_loop", "label": "Open CTO loop", "style": "primary"},
+            {"id": "prepare_strategy_brief", "label": "Prepare strategy", "style": "secondary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare implementation handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "accepted decision and scoped implementation work"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "frame_leadership_question",
+            "compare_architecture_tradeoffs",
+            "name_delivery_and_release_risks",
+            "capture_decision_before_execution",
+        ],
+        "evidence_not_observed": [
+            "stakeholder approval",
+            "architecture sign-off",
+            "implementation",
+            "release readiness",
+            "security review",
+            "CI",
+            "merge",
+        ],
+    },
+    "deploy-and-monitor": {
+        "kind": "deploy_monitor_plan",
+        "headline": "I can prepare the deploy and monitor plan.",
+        "body": (
+            "I will prepare release operations: deploy intent, preflight gates, rollback plan, health checks, monitoring "
+            "signals, incident fallback, and post-deploy review. This does not mean deploy, rollback, health, monitoring, "
+            "or incident response has been observed."
+        ),
+        "phase": "deploy_monitor_plan_prepared",
+        "next_action": "prepare_deploy_monitor_plan",
+        "artifact_schema": "deploy_monitor_plan_card/v1",
+        "actions": [
+            {"id": "prepare_deploy_monitor_plan", "label": "Prepare deploy plan", "style": "primary"},
+            {"id": "run_local_operator_check", "label": "Show local checks", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "capture_release_intent",
+            "list_preflight_gates",
+            "define_health_signals",
+            "separate_observed_deploy_from_plan",
+        ],
+        "evidence_not_observed": [
+            "preflight pass",
+            "deploy execution",
+            "rollback readiness",
+            "health check pass",
+            "monitoring signal",
+            "incident response",
+            "post-deploy approval",
+        ],
+    },
+    "executor-runtime-readiness": {
+        "kind": "executor_runtime_readiness",
+        "headline": "I can check which coding path is ready.",
+        "body": (
+            "I will prepare a runtime readiness card: Codex, Claude Code, Hermes, and generic runtime options; required "
+            "tools; missing setup; fallback path; and what a wrapper can ask next. This is not executor dispatch, session "
+            "attachment, implementation, verification, or CI evidence."
+        ),
+        "phase": "executor_runtime_readiness_prepared",
+        "next_action": "prepare_executor_runtime_readiness",
+        "artifact_schema": "executor_runtime_readiness_card/v1",
+        "actions": [
+            {"id": "prepare_executor_runtime_readiness", "label": "Check coding path", "style": "primary"},
+            {"id": "choose_executor", "label": "Choose coding agent", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "list_available_coding_paths",
+            "check_missing_tools_without_dispatch",
+            "choose_or_confirm_executor",
+            "prepare_handoff_after_choice",
+        ],
+        "evidence_not_observed": [
+            "executor dispatch",
+            "session attachment",
+            "implementation",
+            "verification",
+            "review",
+            "CI",
+            "merge",
+        ],
+    },
+}
+
 def _ack_actions_for_next_action(next_action: str) -> list[dict[str, object]]:
     actions: list[dict[str, object]] = []
     primary = _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION.get(next_action)
@@ -1226,6 +1370,47 @@ def _review_quality_chat_response(
     )
 
 
+def _delivery_runtime_chat_response(
+    *,
+    selected: str,
+    policy_next_action: str,
+    policy: dict[str, object],
+    decision: dict[str, object],
+    action: str,
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object] | None:
+    if selected not in _DELIVERY_RUNTIME_CHAT_CARDS:
+        return None
+    config = _DELIVERY_RUNTIME_CHAT_CARDS[selected]
+    next_action = str(config["next_action"])
+    action_specs = config.get("actions", [])
+    actions = [_action_from_spec(spec) for spec in action_specs if isinstance(spec, dict)]
+    evidence_boundary = str(policy.get("evidence_boundary", "")) or "This prepared delivery/runtime card is not observed execution evidence."
+    if "execution" not in evidence_boundary.lower():
+        evidence_boundary = f"{evidence_boundary} It is not execution evidence.".strip()
+    return _chat_response(
+        kind=str(config["kind"]),
+        headline=str(config["headline"]),
+        body=str(config["body"]),
+        phase=str(config["phase"]),
+        next_action=next_action,
+        thread_key=thread_key,
+        actions=actions,
+        claim_boundary=evidence_boundary,
+        extra_state={
+            "route_action": action,
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": selected,
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "policy_next_action": policy_next_action,
+            "artifact_schema": str(config["artifact_schema"]),
+            "recommended_flow": list(config.get("recommended_flow", [])),
+            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+        },
+    )
+
+
 def build_chat_response_from_route(
     decision: dict[str, object],
     *,
@@ -1361,6 +1546,17 @@ def build_chat_response_from_route(
         )
         if review_quality_response:
             return review_quality_response
+        delivery_runtime_response = _delivery_runtime_chat_response(
+            selected=selected,
+            policy_next_action=policy_next_action,
+            policy=policy,
+            decision=decision,
+            action=action,
+            thread_key=thread_key,
+            workflow_explanation_reason=workflow_explanation_reason,
+        )
+        if delivery_runtime_response:
+            return delivery_runtime_response
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (

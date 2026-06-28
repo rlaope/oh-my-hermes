@@ -678,6 +678,55 @@ What gets better for the team:
 - Report cards separate outline preparation from binary export, render QA,
   approval, and delivery.
 
+### Delivery And Runtime Cards
+
+```text
+# product-delivery
+
+operator
+take this product idea from plan to deploy and monitor safely
+
+Hermes Agent  BOT
+[omh] idea-to-deploy - I can shape this into a product delivery loop.
+
+I will prepare the idea-to-deploy loop: product intent, plan lane,
+implementation boundary, release gate, monitoring checks, rollback questions,
+and owner handoffs. This is not implementation, deploy, monitoring, or
+customer-impact evidence.
+
+[ Show delivery loop ] [ Prepare implementation handoff ] disabled [ Show status ]
+
+Claim boundary: A product delivery loop is not implementation, deployment, monitoring, rollback, or customer-impact evidence.
+```
+
+```text
+# runtime-choice
+
+operator
+Claude Code로 넘길지 Codex로 넘길지 정해줘
+
+Hermes Agent  BOT
+[omh] executor-runtime-readiness - I can check which coding path is ready.
+
+I will prepare a runtime readiness card: Codex, Claude Code, Hermes, and
+generic runtime options; required tools; missing setup; fallback path; and what
+a wrapper can ask next. This is not executor dispatch, session attachment,
+implementation, verification, or CI evidence.
+
+[ Check coding path ] [ Choose coding agent ] [ Show status ]
+
+Claim boundary: Runtime readiness is not executor dispatch, session attachment, implementation, verification, review, CI, or merge evidence.
+```
+
+What gets better for the team:
+
+- Product delivery loops show the full lane without implying code was written
+  or deployed.
+- Coding-agent choice can be shown as a practical readiness card instead of a
+  vague handoff sentence.
+- The wrapper has clear disabled states before implementation or runtime
+  evidence exists.
+
 ### Real-World QA Check
 
 ```text
