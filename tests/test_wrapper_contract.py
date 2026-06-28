@@ -638,7 +638,8 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(trace["schema_version"], "omh_usage_trace/v1")
         self.assertEqual(trace["visible_prefix"], "[omh] web-research")
         self.assertEqual(trace["selected_harness"], "research")
-        self.assertEqual(trace["evidence_state"], "routing_not_execution")
+        self.assertEqual(trace["evidence_state"], "prepared_not_observed")
+        self.assertEqual(response["kind"], "web_research")
         explanation = response["state"]["workflow_explanation"]
         self.assertEqual(explanation["schema_version"], "omh_workflow_explanation/v1")
         self.assertEqual(explanation["selected_workflow"], "web-research")
@@ -652,9 +653,17 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(trace["workflow_context_id"], "research_and_ops")
         self.assertIn("why_this_workflow", explanation)
         self.assertEqual(explanation["next_action"], "run_hermes_research")
-        self.assertTrue(explanation["not_evidence_yet"])
+        self.assertIn("source retrieval", explanation["not_evidence_yet"])
+        self.assertIn("citation verification", explanation["not_evidence_yet"])
+        self.assertNotIn("implementation", explanation["not_evidence_yet"])
         self.assertTrue(response["headline"].startswith("[omh] web-research - "))
-        self.assertEqual(response["plain_headline"], "I know which workflow should handle this.")
+        self.assertEqual(response["plain_headline"], "I can gather source-backed current evidence for this.")
+        self.assertIn("source boundaries", response["body"])
+        self.assertIn("citation confidence", response["body"])
+        actions = {action["id"]: action for action in response["actions"]}
+        self.assertTrue(actions["run_hermes_research"]["enabled"])
+        self.assertTrue(actions["record_source_observation"]["enabled"])
+        self.assertTrue(actions["prepare_report_package"]["enabled"])
         self.assertEqual(rendering["schema_version"], "omh_messenger_rendering/v1")
         self.assertIn("markdown_table", rendering["avoid_blocks"])
         self.assertEqual(rendering["table_policy"], "convert_tables_to_bullets_for_messenger")
@@ -1760,12 +1769,6 @@ class WrapperContractTests(unittest.TestCase):
                 "code-review",
                 "prepare_review_or_followup_handoff",
                 "review path",
-            ),
-            (
-                "web search latest secure login UX evidence",
-                "web-research",
-                "run_hermes_research",
-                "source-backed research lane",
             ),
             (
                 "route Discord Slack Telegram threads with delivery policy",

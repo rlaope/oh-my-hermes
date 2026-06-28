@@ -4457,7 +4457,7 @@ class CliTests(unittest.TestCase):
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "handoff", "choose_executor"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "ack", "prepare_github_event_ops_card"),
-            ("리서치 요청했는데 OMH를 안 썼어", "web-research", "ack", "run_hermes_research"),
+            ("리서치 요청했는데 OMH를 안 썼어", "web-research", "web_research", "run_hermes_research"),
             ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "ack", "prepare_operating_record"),
             ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "ack", "prepare_memory_curation_review"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "ack", "prepare_material_package"),
