@@ -604,6 +604,8 @@ class ChatRouterTests(unittest.TestCase):
             "Create an image summary card from these notes.",
             "make a poster explaining cron automation",
             "make an image explaining the cron feature",
+            "크론 기능 설명 사진 하나 만들어줘",
+            "PR 요약을 이미지가 아니라 사진처럼 만들어줘",
             "create a picture card from these meeting notes",
             "make a visual one-pager for this release",
             "作成して、PRの要約画像",
