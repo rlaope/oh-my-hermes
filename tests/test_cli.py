@@ -4161,6 +4161,41 @@ class CliTests(unittest.TestCase):
         self.assertTrue(payload["wrapper_contract"]["does_not_require_plugin_load"])
         self.assertNotIn(message, json.dumps(payload))
 
+    def test_chat_route_hint_summary_renders_operator_readable_hint(self) -> None:
+        message = "make an image explaining the cron feature"
+        status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", "--summary", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH route hint", stdout)
+        self.assertIn("Source: discord", stdout)
+        self.assertIn("Workflow: img-summary", stdout)
+        self.assertIn("Next action: prepare_visual_prompt_card", stdout)
+        self.assertIn("Hints: 2", stdout)
+        self.assertIn("[omh] img-summary looks relevant.", stdout)
+        self.assertIn("Hint details:", stdout)
+        self.assertIn("- img-summary: prepare_visual_prompt_card (materials_and_visuals)", stdout)
+        self.assertIn("- automation-blueprint: prepare_scheduled_ops_blueprint (automation_and_status)", stdout)
+        self.assertIn("Actions:", stdout)
+        self.assertIn("- open_workflow: Open img-summary (enabled)", stdout)
+        self.assertIn("Checkpoint:", stdout)
+        self.assertIn("Before generic tools, check OMH prep/status/learning", stdout)
+        self.assertIn("Not evidence yet:", stdout)
+        self.assertIn("- image generation", stdout)
+        self.assertIn("Boundary:", stdout)
+        self.assertIn("not workflow execution", stdout)
+        self.assertIn("Use --json for the full machine-readable route hint payload.", stdout)
+
+        status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", "--json", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_route_hint/v1")
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
+
     def test_chat_route_hint_can_emit_manual_prompt_context(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "route-hint", "--source", "discord", "--prompt-context", "missed route: OMH was not used"]
@@ -4173,6 +4208,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("[OMH Route Hint]", payload["prompt_context"])
         self.assertIn("selected=workflow-learning", payload["prompt_context"])
         self.assertIn("Prompt context is for Hermes routing guidance only", payload["prompt_context_boundary"])
+
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--summary", "--prompt-context", "missed route: OMH was not used"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Workflow: workflow-learning", stdout)
+        self.assertIn("Next action: record_missed_route", stdout)
+        self.assertIn("Prompt context: included", stdout)
+
+    def test_chat_route_hint_rejects_conflicting_output_modes(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--summary", "--json", "make an image"],
+            output_json=False,
+        )
+
+        self.assertNotEqual(status, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("--summary and --json cannot be used together", stderr)
 
     def test_chat_route_file_lookup_does_not_emit_workflow_clarification(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])

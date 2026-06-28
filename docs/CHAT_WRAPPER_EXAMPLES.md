@@ -20,6 +20,7 @@ uv run python examples/slack-adapter-shim.py --plugin-interact examples/wrapper-
 uv run python examples/discord-adapter-shim.py --route-hint examples/wrapper-events/discord-route-hint-visual.json
 uv run python examples/slack-adapter-shim.py --route-hint examples/wrapper-events/slack-route-hint-missed-route.json
 uv run python -m omh.cli chat route-hint --source discord "make an image explaining the cron feature"
+uv run python -m omh.cli chat route-hint --source discord --summary "make an image explaining the cron feature"
 uv run python -m omh.cli chat native-command --source discord
 uv run python -m omh.cli chat native-command --source slack
 uv run python -m omh.cli chat native-command --source telegram
@@ -285,11 +286,16 @@ can call the transport-free backend preview:
 
 ```sh
 omh chat route-hint --source discord "make an image explaining the cron feature"
+omh chat route-hint --source discord --summary "make an image explaining the cron feature"
 ```
 
 The preview payload also includes `generic_tool_checkpoint.routes`, so adapters
-do not need to parse prose before opening generic tool surfaces. The current
-OMH-first map is:
+do not need to parse prose before opening generic tool surfaces. The `--summary`
+form prints the same primary workflow, next action, hint
+details, checkpoint, and evidence boundary for operator QA. Adapters should
+continue to consume the default JSON payload.
+
+The current OMH-first map is:
 
 - image tools -> `img-summary` / `prepare_visual_prompt_card`
 - file tools -> `materials-package` / `prepare_material_package`
