@@ -7848,7 +7848,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(_rendered_terminal_rows(lines, columns=20), 6)
 
-    def test_setup_keyboard_menu_repaints_using_wrapped_terminal_rows(self) -> None:
+    def test_setup_keyboard_menu_repaints_only_option_rows(self) -> None:
         options = [
             {"choice": "1", "value": "codex", "label": "Codex", "description": "Short."},
             {
@@ -7866,7 +7866,10 @@ class CliTests(unittest.TestCase):
             default_choice="1",
             use_color=False,
         )
-        expected_rows = setup_commands._rendered_terminal_rows(lines, columns=20)
+        intro_lines = ["Choose who Hermes should suggest for coding work."]
+        option_lines = setup_commands._choice_menu_option_lines(lines, intro_lines)
+        full_rows = setup_commands._rendered_terminal_rows(lines, columns=20)
+        option_rows = setup_commands._rendered_terminal_rows(option_lines, columns=20)
         output = io.StringIO()
 
         with (
@@ -7883,7 +7886,11 @@ class CliTests(unittest.TestCase):
             )
 
         self.assertEqual(value, "hermes")
-        self.assertIn(f"\033[{expected_rows}F\033[J", output.getvalue())
+        rendered = output.getvalue()
+        self.assertLess(option_rows, full_rows)
+        self.assertIn(f"\033[{option_rows}F\033[J", rendered)
+        self.assertNotIn(f"\033[{full_rows}F\033[J", rendered)
+        self.assertEqual(rendered.count("Default coding agent"), 1)
 
     def test_setup_executor_copy_uses_simple_coding_agent_names(self) -> None:
         from omh.commands.language import tr

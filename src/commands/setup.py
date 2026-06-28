@@ -1367,7 +1367,8 @@ def _keyboard_single_choice(
     language: str = "en",
 ) -> str:
     cursor = _default_choice_index(options, default_choice)
-    rendered_rows = 0
+    rendered_option_rows = 0
+    first_render = True
     while True:
         lines = _choice_menu_lines(
             title,
@@ -1378,11 +1379,15 @@ def _keyboard_single_choice(
             use_color=use_color,
             language=language,
         )
-        if rendered_rows:
-            sys.stdout.write(f"\033[{rendered_rows}F\033[J")
-        sys.stdout.write("\n".join(lines) + "\n")
+        option_lines = _choice_menu_option_lines(lines, intro_lines)
+        if first_render:
+            sys.stdout.write("\n".join(lines) + "\n")
+            first_render = False
+        else:
+            sys.stdout.write(f"\033[{rendered_option_rows}F\033[J")
+            sys.stdout.write("\n".join(option_lines) + "\n")
         sys.stdout.flush()
-        rendered_rows = _rendered_terminal_rows(lines)
+        rendered_option_rows = _rendered_terminal_rows(option_lines)
         key = _read_tui_key()
         if key in {"\x03", "\x04"}:
             raise KeyboardInterrupt
@@ -1425,6 +1430,11 @@ def _choice_menu_lines(
         if option["description"]:
             lines.append(f"      {option['description']}")
     return lines
+
+
+def _choice_menu_option_lines(lines: list[str], intro_lines: list[str]) -> list[str]:
+    option_start = 3 + len(intro_lines)
+    return lines[option_start:]
 
 
 def _rendered_terminal_rows(lines: list[str], columns: int | None = None) -> int:
