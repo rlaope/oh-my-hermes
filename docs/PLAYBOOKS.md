@@ -99,9 +99,9 @@ omh playbook recommend "I want to safely add a feature to this repo"
 
 The top playbook is `request-to-handoff`. A wrapper can show why that flagship
 path was chosen, name the responsible role, keep handoff disabled until plan
-acceptance, then show executor selection, `Send to executor`, prompt handoff,
-and `Show status` actions based on the configured executor profile. `Send to
-Codex` is only a compatibility alias when the Codex lifecycle profile is
+acceptance, then show coding-agent selection, `Open in Codex`, prompt handoff,
+and `Show status` actions based on the configured coding-agent profile. `Open
+in Codex` is only a compatibility alias when the Codex lifecycle profile is
 selected.
 
 The user-facing improvement is simple: the user describes the work naturally,

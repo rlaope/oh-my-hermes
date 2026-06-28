@@ -962,13 +962,13 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
     if status == "executor_choice_required":
         return response(
             kind="handoff",
-            headline="Choose who should own the coding work.",
-            body="Hermes can keep shaping the work, prepare a prompt-only handoff, or prepare a Codex lifecycle handoff.",
+            headline="Choose the coding agent.",
+            body="Pick Codex, Claude Code, Hermes, or a runtime path before this becomes a prepared coding handoff.",
             phase="executor_choice_required",
             next_action="choose_executor",
             thread_key=thread_key,
-            actions=[_action("choose_executor", "Choose executor", "primary"), _action("cancel", "Cancel", "secondary")],
-            claim_boundary="Choosing an executor is not dispatch or implementation evidence.",
+            actions=[_action("choose_executor", "Choose coding agent", "primary"), _action("cancel", "Cancel", "secondary")],
+            claim_boundary="Choosing a coding agent is not dispatch or implementation evidence.",
         )
     if status == "executor_selected":
         selected = str(session.get("selected_executor_profile") or "Hermes")

@@ -311,7 +311,7 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         "Codex 작업이 진행중인지 확인하고 지금 어떤 상태인지 알려줘",
         "ultraprocess",
         "handoff",
-        "choose_executor",
+        "send_to_executor",
         "clarify",
         False,
         expected_playbook="ultraprocess",

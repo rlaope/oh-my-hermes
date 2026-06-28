@@ -1381,28 +1381,82 @@ class WrapperContractTests(unittest.TestCase):
 
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
         cases = (
-            "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
-            "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
+            (
+                "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
+                "choose_executor",
+                True,
+                "choose_executor",
+                "Choose coding agent",
+            ),
+            (
+                "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
+                "send_to_executor",
+                False,
+                "send_to_executor",
+                "Open in Codex",
+            ),
         )
 
-        for message in cases:
+        for message, next_action, choice_required, primary_action, primary_label in cases:
             with self.subTest(message=message):
                 payload = build_chat_interaction_payload(message, source="discord")
 
                 self.assertEqual(payload["mode"], "route")
-                self.assertEqual(payload["next_action"], "choose_executor")
+                self.assertEqual(payload["next_action"], next_action)
                 self.assertEqual(payload["chat_response"]["kind"], "handoff")
                 self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ultraprocess")
-                self.assertTrue(payload["chat_response"]["state"]["executor_choice_required"])
-                self.assertTrue(payload["delegation"]["executor_selection"]["choice_required"])
+                self.assertEqual(payload["chat_response"]["state"]["executor_choice_required"], choice_required)
+                self.assertEqual(payload["delegation"]["executor_selection"]["choice_required"], choice_required)
                 explanation = payload["chat_response"]["state"]["workflow_explanation"]
                 self.assertEqual(explanation["selected_workflow"], "ultraprocess")
                 self.assertEqual(explanation["workflow_context_id"], "intent_to_plan")
                 self.assertIn("ultraprocess", explanation["workflow_context_card"]["representative_workflows"])
-                self.assertIn("executor/runtime dispatch", explanation["not_evidence_yet"])
+                self.assertIn(
+                    "executor/runtime dispatch" if choice_required else "execution",
+                    explanation["not_evidence_yet"],
+                )
                 actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
-                self.assertTrue(actions["choose_executor"]["enabled"])
-                self.assertIn("not dispatch", payload["chat_response"]["claim_boundary"])
+                self.assertTrue(actions[primary_action]["enabled"])
+                self.assertEqual(actions[primary_action]["label"], primary_label)
+                if choice_required:
+                    self.assertIn("not dispatch", payload["chat_response"]["claim_boundary"])
+                else:
+                    self.assertIn("not execution evidence", payload["chat_response"]["claim_boundary"])
+
+    def test_codex_status_question_surfaces_session_evidence_boundary(self) -> None:
+        payload = build_chat_interaction_payload("Codex 작업이 어디까지 진행됐는지 알려줘", source="discord")
+
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        state = payload["chat_response"]["state"]
+        self.assertEqual(payload["route"]["selected_skill"], "ultraprocess")
+        self.assertEqual(payload["next_action"], "send_to_executor")
+        self.assertEqual(payload["executor_resolution"]["source"], "message_mention")
+        self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "codex")
+        self.assertEqual(state["selected_executor_profile"], "codex")
+        self.assertTrue(state["coding_status_request"])
+        self.assertTrue(state["route_context"]["coding_status_request"])
+        self.assertIn("session evidence is not attached yet", payload["chat_response"]["headline"])
+        self.assertEqual(actions["send_to_executor"]["label"], "Open in Codex")
+        self.assertEqual(actions["send_to_codex"]["label"], "Open in Codex")
+        self.assertFalse(actions["attach_executor_session"]["enabled"])
+        self.assertIn("wrapper session id", actions["attach_executor_session"]["payload"]["disabled_reason"])
+
+    def test_claude_code_status_question_surfaces_prompt_session_boundary(self) -> None:
+        payload = build_chat_interaction_payload("Claude Code session looks stuck", source="discord")
+
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        state = payload["chat_response"]["state"]
+        self.assertEqual(payload["route"]["selected_skill"], "ultraprocess")
+        self.assertEqual(payload["next_action"], "show_prompt_handoff")
+        self.assertEqual(payload["executor_resolution"]["source"], "message_mention")
+        self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "claude-code")
+        self.assertEqual(state["selected_executor_profile"], "claude-code")
+        self.assertTrue(state["coding_status_request"])
+        self.assertIn("session evidence is not attached yet", payload["chat_response"]["headline"])
+        self.assertEqual(actions["show_prompt_handoff"]["label"], "Show Claude Code prompt")
+        self.assertEqual(actions["copy_prompt_handoff"]["label"], "Copy Claude Code prompt")
+        self.assertEqual(actions["choose_executor"]["label"], "Change coding agent")
+        self.assertFalse(actions["attach_executor_session"]["enabled"])
 
     def test_visual_summary_interaction_exposes_prompt_card_actions(self) -> None:
         cases = (
@@ -1540,7 +1594,7 @@ class WrapperContractTests(unittest.TestCase):
             (
                 "Codex 작업이 어디까지 진행됐는지 알려줘",
                 "ultraprocess",
-                "choose_executor",
+                "send_to_executor",
                 "handoff",
             ),
             (
