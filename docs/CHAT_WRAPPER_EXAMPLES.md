@@ -795,6 +795,79 @@ What gets better for the team:
 - Operators can show users a concrete next action without pretending the
   external system already ran.
 
+### Operations Support Cards
+
+These cards make the hidden operating layer visible without asking the user to
+read JSON or approve shell commands.
+
+```text
+# memory-curation
+
+operator
+Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘
+
+Hermes Agent  BOT
+[omh] memory-curation-review - I can review memory and context before anything is changed.
+
+I will prepare a memory curation review: stale facts, duplicate notes,
+conflicting context, source scope, target/thread ownership, and
+approve/reject/update choices. Memory files, skill notes, and recalled context
+stay unchanged until an approved write is observed.
+
+[ Review memory ] [ Show memory status ] [ Show status ]
+
+Claim boundary: Memory review is not Hermes internal memory, MEMORY.md, USER.md, skill-file modification, or approved write evidence.
+```
+
+```text
+# agent-board
+
+operator
+우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘
+
+Hermes Agent  BOT
+[omh] agent-board - I can prepare a board for multiple Hermes agents.
+
+I will prepare the agent board: targets, roles, tasks, handoff lanes, heartbeat
+expectations, blocker states, and completion rules. Other agents accepting,
+working, heartbeat-ing, or completing work remains unobserved until
+target-specific evidence exists.
+
+[ Open agent board ] [ Refresh status ] [ Show status ]
+
+Claim boundary: An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed.
+```
+
+```text
+# toolbelt-and-observability
+
+operator
+show token cost latency run history for this automation loop
+
+Hermes Agent  BOT
+[omh] ops-observability-card - I can prepare observability without inventing provider truth.
+
+I will prepare a wrapper-safe observability card: token, cost, latency, run
+history, queue, failure modes, and evidence gaps. Local estimates stay separate
+from provider billing, quota truth, full tracing, performance proof, and
+workflow completion.
+
+[ Open observability ] [ Refresh status ] [ Show status ]
+
+Claim boundary: An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.
+```
+
+What gets better for the operator:
+
+- Scheduled ops, memory cleanup, multi-agent boards, gateway policy, voice
+  requests, tool readiness, deliverables, and observability now get dedicated
+  card kinds instead of generic acknowledgement copy.
+- Wrappers can render the same primary action every time, then keep evidence
+  gaps visible until a runtime record proves them.
+- The user sees whether OMH is preparing a card, checking tools, reviewing
+  memory, or opening an agent board without needing to know backend command
+  names.
+
 ### Real-World QA Check
 
 ```text

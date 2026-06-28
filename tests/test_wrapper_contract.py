@@ -1050,6 +1050,70 @@ class WrapperContractTests(unittest.TestCase):
     def test_workflow_operations_cards_expose_observation_boundaries(self) -> None:
         cases = (
             (
+                "매일 아침 릴리즈 위험을 확인하고 변화가 있으면 슬랙에 알려줘",
+                "automation-blueprint",
+                "automation_blueprint",
+                "I can turn this into a scheduled ops blueprint.",
+                "host cron creation",
+                "prepare_scheduled_ops_blueprint",
+            ),
+            (
+                "우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘",
+                "agent-board",
+                "agent_board",
+                "I can prepare a board for multiple Hermes agents.",
+                "target acceptance",
+                "prepare_agent_board_card",
+            ),
+            (
+                "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
+                "memory-curation-review",
+                "memory_curation",
+                "I can review memory and context before anything is changed.",
+                "approved memory write",
+                "prepare_memory_curation_review",
+            ),
+            (
+                "route Discord Slack Telegram threads with delivery policy",
+                "gateway-intent-card",
+                "gateway_intent",
+                "I can normalize this gateway intent before platform work.",
+                "platform login",
+                "prepare_gateway_intent_card",
+            ),
+            (
+                "이 보고서를 파일로 만들어서 첨부할 수 있게 준비해줘",
+                "deliverable-package",
+                "deliverable_package",
+                "I can prepare the deliverable package and its delivery trail.",
+                "binary generation",
+                "prepare_deliverable_package",
+            ),
+            (
+                "does OMH support voice commands?",
+                "voice-operator",
+                "voice_operator",
+                "I can turn the short request into a safe operator card.",
+                "speech recognition proof",
+                "prepare_voice_operator_card",
+            ),
+            (
+                "can OMH help with MCP setup?",
+                "toolbelt-readiness",
+                "toolbelt_readiness",
+                "I can check the tools this workflow needs before claiming it can run.",
+                "MCP installation",
+                "prepare_toolbelt_readiness",
+            ),
+            (
+                "show token cost latency run history for this automation loop",
+                "ops-observability-card",
+                "ops_observability",
+                "I can prepare observability without inventing provider truth.",
+                "provider billing truth",
+                "prepare_ops_observability_card",
+            ),
+            (
                 "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
                 "operating-rhythm",
                 "operating_rhythm",
@@ -1104,6 +1168,10 @@ class WrapperContractTests(unittest.TestCase):
                     self.assertFalse(actions["prepare_coding_handoff"]["enabled"])
                 if workflow == "research-department":
                     self.assertTrue(actions["run_hermes_research"]["enabled"])
+                if workflow == "memory-curation-review":
+                    self.assertTrue(actions["show_memory_status"]["enabled"])
+                if workflow in {"gateway-intent-card", "toolbelt-readiness", "automation-blueprint"}:
+                    self.assertIn("prepare_toolbelt_readiness", actions)
 
     def test_blocker_status_uses_status_usage_trace_label(self) -> None:
         response = build_chat_response_from_status({"next_action": "surface_ci_blocker"})
@@ -1837,7 +1905,7 @@ class WrapperContractTests(unittest.TestCase):
                 "음성으로 짧게 말한 요청을 안전하게 정리해줘",
                 "voice-operator",
                 "prepare_voice_operator_card",
-                "ack",
+                "voice_operator",
             ),
             (
                 "GitHub PR이 열리면 리뷰하고 CI 실패 원인을 정리해줘",
@@ -1849,7 +1917,7 @@ class WrapperContractTests(unittest.TestCase):
                 "우리 팀 Hermes agent 여러 명으로 작업 보드 관리하고 싶어",
                 "agent-board",
                 "prepare_agent_board_card",
-                "ack",
+                "agent_board",
             ),
             (
                 "GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘",
@@ -1861,7 +1929,7 @@ class WrapperContractTests(unittest.TestCase):
                 "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
                 "memory-curation-review",
                 "prepare_memory_curation_review",
-                "ack",
+                "memory_curation",
             ),
             (
                 "첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘",
@@ -1885,7 +1953,7 @@ class WrapperContractTests(unittest.TestCase):
                 "우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘",
                 "agent-board",
                 "prepare_agent_board_card",
-                "ack",
+                "agent_board",
             ),
             (
                 "릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘",
@@ -1919,8 +1987,8 @@ class WrapperContractTests(unittest.TestCase):
                 "매일 아침 릴리즈 위험을 확인하고 변화가 있으면 슬랙에 알려줘",
                 "automation-blueprint",
                 "prepare_scheduled_ops_blueprint",
-                "recurring Hermes ops workflow",
-                "ack",
+                "recurring workflow",
+                "automation_blueprint",
             ),
             (
                 "내 경쟁사 시장 뉴스를 매일 수집하고 분석해서 브리핑해줘",
@@ -1941,28 +2009,28 @@ class WrapperContractTests(unittest.TestCase):
                 "deliverable-package",
                 "prepare_deliverable_package",
                 "deliverable path",
-                "ack",
+                "deliverable_package",
             ),
             (
                 "can OMH help with MCP setup?",
                 "toolbelt-readiness",
                 "prepare_toolbelt_readiness",
-                "MCP, CLI, API",
-                "ack",
+                "MCP servers, CLIs, APIs",
+                "toolbelt_readiness",
             ),
             (
                 "does OMH support memory cleanup?",
                 "memory-curation-review",
                 "prepare_memory_curation_review",
-                "approve, reject, or update",
-                "ack",
+                "approve/reject/update",
+                "memory_curation",
             ),
             (
                 "does OMH support voice commands?",
                 "voice-operator",
                 "prepare_voice_operator_card",
-                "confirmation before risky actions",
-                "ack",
+                "voice or mobile-style request",
+                "voice_operator",
             ),
             (
                 "OMH로 GitHub issue webhook 처리 가능해?",
@@ -1990,14 +2058,14 @@ class WrapperContractTests(unittest.TestCase):
                 "gateway-intent-card",
                 "prepare_gateway_intent_card",
                 "gateway intent",
-                "ack",
+                "gateway_intent",
             ),
             (
                 "show token cost latency run history for this automation loop",
                 "ops-observability-card",
                 "prepare_ops_observability_card",
                 "observability card",
-                "ack",
+                "ops_observability",
             ),
             (
                 "turn this sprint retro into a report package with decisions and actions",
