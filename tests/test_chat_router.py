@@ -534,7 +534,17 @@ class ChatRouterTests(unittest.TestCase):
                 "guard:executor_runtime_readiness",
             ),
             (
+                "is Codex installed?",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
                 "코딩 에이전트 codex로 바꾸고 싶어",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "codex 깔려있어?",
                 "executor-runtime-readiness",
                 "guard:executor_runtime_readiness",
             ),
