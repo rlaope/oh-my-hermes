@@ -1178,6 +1178,105 @@ def build_chat_response_from_route(
                     ),
                 },
             )
+        if selected == "paper-learning" or policy_next_action == "prepare_paper_learning":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A paper-learning card is not paper validation evidence."
+            body = (
+                "I will prepare a paper-learning card: explanation level, source/PDF state, section coverage, "
+                "key claims, figures or equations to revisit, and a coverage ledger. I will not claim full extraction, "
+                "citation checking, math validation, reproduction, or peer review until those are observed."
+            )
+            return _chat_response(
+                kind="paper_learning",
+                headline="I can explain this paper with the right depth.",
+                body=body,
+                phase="paper_learning_prepared",
+                next_action="prepare_paper_learning",
+                thread_key=thread_key,
+                actions=[
+                    _action("choose_explanation_level", "Choose level", "primary"),
+                    _action("show_paper_source_requirements", "Show source needs", "secondary"),
+                    _action("record_paper_metadata", "Record metadata", "secondary"),
+                    _action("record_paper_excerpt_observed", "Record excerpt", "secondary"),
+                    _action("record_file_text_extraction_observed", "Record text extraction", "secondary"),
+                    _action("show_paper_learning", "Show paper learning", "secondary"),
+                    _action("continue_next_section", "Next section", "secondary"),
+                    _action("revise_explanation_level", "Revise level", "secondary"),
+                    _action("show_coverage_ledger", "Coverage ledger", "secondary"),
+                    _action("record_user_review", "Record user review", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "paper_learning_card/v1",
+                    "source_state_schema": "paper_source_state/v1",
+                    "coverage_ledger_schema": "paper_coverage_ledger/v1",
+                    "default_level": "choose",
+                    "evidence_not_observed": [
+                        "full PDF extraction",
+                        "figure OCR",
+                        "external citation checking",
+                        "math validation",
+                        "code reproduction",
+                        "peer review",
+                        "proof that paper claims are true",
+                    ],
+                },
+            )
+        if selected == "source-finder" or policy_next_action == "prepare_source_finder_plan":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "A source-finder plan is not source retrieval evidence."
+            body = (
+                "I will prepare a source-finder plan: typed candidate categories, search/acquisition status, "
+                "missing provenance, license or access checks, and the best downstream workflow. I will not claim "
+                "web search, download, clone, extraction, verification, or downstream processing until observed."
+            )
+            return _chat_response(
+                kind="source_finder",
+                headline="I can turn this into a source acquisition plan.",
+                body=body,
+                phase="source_finder_prepared",
+                next_action="prepare_source_finder_plan",
+                thread_key=thread_key,
+                actions=[
+                    _action("show_source_candidates", "Show candidates", "primary"),
+                    _action("record_source_candidate", "Record candidate", "secondary"),
+                    _action("record_source_link_observed", "Record source link", "secondary"),
+                    _action("record_download_observed", "Record download", "secondary"),
+                    _action("record_file_hash", "Record file hash", "secondary"),
+                    _action("record_text_extraction_observed", "Record text extraction", "secondary"),
+                    _action("record_license_check", "Record license check", "secondary"),
+                    _action("choose_source", "Choose source", "secondary"),
+                    _action("route_to_downstream_workflow", "Route downstream", "secondary"),
+                    _action("show_acquisition_status", "Show acquisition status", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "source_finder_plan/v1",
+                    "candidate_schema": "source_candidate_set/v1",
+                    "acquisition_status_schema": "source_acquisition_status/v1",
+                    "downstream_workflow_required": True,
+                    "evidence_not_observed": [
+                        "web search",
+                        "download",
+                        "repository clone",
+                        "file extraction",
+                        "file hash verification",
+                        "license verification",
+                        "source correctness verification",
+                        "downstream processing",
+                    ],
+                },
+            )
         if selected == "agent-ops-review" or policy_next_action == "prepare_agent_ops_review":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "An agent ops review card is not runtime evidence."
             card = build_agent_operator_productivity_card(

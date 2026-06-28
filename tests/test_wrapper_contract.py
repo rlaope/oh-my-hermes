@@ -1527,6 +1527,54 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("image_generation_setup/v1", explanation["why_this_workflow"])
                 self.assertIn("visual QA", explanation["not_evidence_yet"])
 
+    def test_paper_learning_interaction_uses_learning_evidence_not_coding_gates(self) -> None:
+        payload = build_chat_interaction_payload("explique ce PDF de recherche simplement", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "prepare_paper_learning")
+        self.assertEqual(payload["chat_response"]["kind"], "paper_learning")
+        self.assertIn("paper-learning card", payload["chat_response"]["body"])
+        self.assertNotIn("CI", payload["chat_response"]["body"])
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "paper-learning")
+        self.assertEqual(payload["chat_response"]["state"]["artifact_schema"], "paper_learning_card/v1")
+        self.assertEqual(payload["chat_response"]["state"]["source_state_schema"], "paper_source_state/v1")
+        self.assertEqual(payload["chat_response"]["state"]["coverage_ledger_schema"], "paper_coverage_ledger/v1")
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertTrue(actions["choose_explanation_level"]["enabled"])
+        self.assertTrue(actions["show_paper_learning"]["enabled"])
+        self.assertTrue(actions["record_file_text_extraction_observed"]["enabled"])
+        self.assertIn("full PDF extraction", payload["chat_response"]["claim_boundary"])
+        self.assertIn("figure OCR", payload["chat_response"]["state"]["evidence_not_observed"])
+        explanation = payload["chat_response"]["state"]["workflow_explanation"]
+        self.assertEqual(explanation["selected_workflow"], "paper-learning")
+        self.assertIn("full PDF extraction", explanation["not_evidence_yet"])
+        self.assertNotIn("review", explanation["not_evidence_yet"])
+        self.assertNotIn("CI", explanation["not_evidence_yet"])
+
+    def test_source_finder_interaction_uses_acquisition_evidence_not_coding_gates(self) -> None:
+        payload = build_chat_interaction_payload("trouve le dépôt GitHub et le PDF public", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "prepare_source_finder_plan")
+        self.assertEqual(payload["chat_response"]["kind"], "source_finder")
+        self.assertIn("source-finder plan", payload["chat_response"]["body"])
+        self.assertNotIn("CI", payload["chat_response"]["body"])
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "source-finder")
+        self.assertEqual(payload["chat_response"]["state"]["artifact_schema"], "source_finder_plan/v1")
+        self.assertEqual(payload["chat_response"]["state"]["candidate_schema"], "source_candidate_set/v1")
+        self.assertEqual(payload["chat_response"]["state"]["acquisition_status_schema"], "source_acquisition_status/v1")
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertTrue(actions["show_source_candidates"]["enabled"])
+        self.assertTrue(actions["record_source_link_observed"]["enabled"])
+        self.assertTrue(actions["route_to_downstream_workflow"]["enabled"])
+        self.assertIn("web search", payload["chat_response"]["claim_boundary"])
+        self.assertIn("download", payload["chat_response"]["state"]["evidence_not_observed"])
+        explanation = payload["chat_response"]["state"]["workflow_explanation"]
+        self.assertEqual(explanation["selected_workflow"], "source-finder")
+        self.assertIn("web search", explanation["not_evidence_yet"])
+        self.assertNotIn("review", explanation["not_evidence_yet"])
+        self.assertNotIn("CI", explanation["not_evidence_yet"])
+
     def test_generic_catalog_question_still_uses_picker(self) -> None:
         payload = build_chat_interaction_payload("OMH 기능 뭐 있어?", source="discord")
 
