@@ -900,6 +900,33 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertTrue(response["headline"].startswith(f"[omh] {workflow} - "))
                 self.assertNotIn("[omh]", response["body"])
 
+    def test_feedback_triage_interaction_shows_investigation_before_coding(self) -> None:
+        payload = build_chat_interaction_payload("결제 실패 이슈가 자주 나와", source="discord")
+
+        response = payload["chat_response"]
+        trace = response["usage_trace"]
+        explanation = response["state"]["workflow_explanation"]
+        actions = {action["id"]: action for action in response["actions"]}
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "feedback-triage")
+        self.assertEqual(payload["next_action"], "triage_feedback")
+        self.assertEqual(response["kind"], "feedback_triage")
+        self.assertEqual(trace["visible_prefix"], "[omh] feedback-triage")
+        self.assertEqual(trace["evidence_state"], "prepared_not_observed")
+        self.assertEqual(response["plain_headline"], "I can triage this signal before anyone codes.")
+        self.assertIn("cluster reports", response["body"])
+        self.assertIn("reproduction questions", response["body"])
+        self.assertIn("coding handoff only follows", response["body"])
+        self.assertTrue(actions["triage_feedback"]["enabled"])
+        self.assertFalse(actions["prepare_coding_handoff"]["enabled"])
+        self.assertIn("classified bug/request/question", actions["prepare_coding_handoff"]["payload"]["requires"])
+        self.assertTrue(actions["prepare_report_package"]["enabled"])
+        self.assertIn("completed feedback triage", explanation["not_evidence_yet"])
+        self.assertIn("reproduction evidence", explanation["not_evidence_yet"])
+        self.assertIn("coding handoff", explanation["not_evidence_yet"])
+        self.assertIn("verification", explanation["not_evidence_yet"])
+
     def test_blocker_status_uses_status_usage_trace_label(self) -> None:
         response = build_chat_response_from_status({"next_action": "surface_ci_blocker"})
 

@@ -978,6 +978,60 @@ def build_chat_response_from_route(
                 thread_key=thread_key,
                 workflow_explanation_reason=workflow_explanation_reason,
             )
+        if selected == "feedback-triage" or policy_next_action == "triage_feedback":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "Feedback triage is not implementation evidence."
+            body = (
+                "I will treat this as a customer or product signal first: cluster reports, separate bug, request, "
+                "and question paths, name severity and affected surface, then prepare investigation and reproduction "
+                "questions. A coding handoff only follows after the signal is classified and reproduction or acceptance "
+                "evidence exists."
+            )
+            return _chat_response(
+                kind="feedback_triage",
+                headline="I can triage this signal before anyone codes.",
+                body=body,
+                phase="feedback_triage_prepared",
+                next_action="triage_feedback",
+                thread_key=thread_key,
+                actions=[
+                    _action("triage_feedback", "Triage signal", "primary"),
+                    _action(
+                        "prepare_coding_handoff",
+                        "Prepare fix handoff",
+                        "secondary",
+                        enabled=False,
+                        payload={"requires": "classified bug/request/question path and reproduction or acceptance evidence"},
+                    ),
+                    _action("prepare_report_package", "Prepare triage report", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "feedback_triage_card/v1",
+                    "recommended_flow": [
+                        "cluster_signal",
+                        "classify_bug_request_question",
+                        "prepare_investigation_or_repro_plan",
+                        "prepare_coding_handoff_if_needed",
+                    ],
+                    "evidence_not_observed": [
+                        "completed feedback triage",
+                        "observed customer examples",
+                        "severity confirmation",
+                        "reproduction evidence",
+                        "coding handoff",
+                        "fix implementation",
+                        "root cause",
+                        "roadmap decision",
+                        "verification",
+                    ],
+                },
+            )
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (

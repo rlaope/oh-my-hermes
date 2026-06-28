@@ -593,12 +593,15 @@ operator
 결제 실패 이슈가 자주 나와
 
 Hermes Agent  BOT
-[omh] feedback-triage - I know which workflow should handle this.
+[omh] feedback-triage - I can triage this signal before anyone codes.
 
-Cluster feedback and recommend the next workflow; do not create a coding handoff
-unless code work is explicit.
+I will treat this as a customer or product signal first: cluster reports,
+separate bug, request, and question paths, name severity and affected surface,
+then prepare investigation and reproduction questions. A coding handoff only
+follows after the signal is classified and reproduction or acceptance evidence
+exists.
 
-[ Show status ]
+[ Triage signal ] [ Prepare triage report ] [ Show status ]
 
 Claim boundary: Feedback triage is not a roadmap, implementation plan, or coding handoff by default.
 ```
