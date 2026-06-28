@@ -758,12 +758,17 @@ Lower-level debug surfaces remain available when an adapter needs them:
 
 ```sh
 omh chat route --source discord --record "risky refactor"
+omh chat route --source discord --summary "risky refactor"
 omh hermes plan --source discord --record "risky refactor with review"
 omh hermes plan-accept .hermes/plans/<accepted-plan.md>
 omh coding delegate --executor codex --source discord --record --from-plan .hermes/plans/<accepted-plan.md>
 omh coding delegate --executor claude-code --source discord --record "risky refactor"
 omh runtime delegation-status --run <run-id>
 ```
+
+`omh chat route --summary` is for operator inspection of the lower-level route
+decision. It does not replace the default JSON payload that adapters should
+consume.
 
 `omh hermes plan --record` writes a draft `hermes_plan/v1` Markdown artifact
 under `.hermes/plans/`. Each plan includes a deterministic `quality_gate` and

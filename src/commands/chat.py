@@ -43,6 +43,8 @@ from .runtime import _validate_runtime_names
 
 
 def cmd_chat_route(args: argparse.Namespace) -> int:
+    if bool(getattr(args, "summary", False)) and bool(getattr(args, "json", False)):
+        raise OmhError("--summary and --json cannot be used together")
     message = _chat_message(args)
     try:
         decision = route_chat_message(message, source=args.source, limit=args.limit, min_confidence=args.min_confidence)
@@ -78,7 +80,10 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
             ),
         )
         payload["runtime"] = {"run": run, "routing": routing}
-    _print_json(payload)
+    if bool(getattr(args, "summary", False)):
+        _print_chat_route_summary(payload)
+    else:
+        _print_json(payload)
     return 0
 
 
@@ -292,6 +297,85 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
 
     print()
     print("Use --json for the full machine-readable payload.")
+
+
+def _print_chat_route_summary(payload: dict[str, object]) -> None:
+    route = _as_mapping(payload.get("route"))
+    route_explanation = _as_mapping(route.get("route_explanation"))
+    selected_workflow = _text(route.get("selected_skill") or route_explanation.get("selected_workflow"), "unknown")
+    selected_harness = _text(route.get("selected_harness") or route_explanation.get("selected_harness"), "unknown")
+    action = _text(route.get("action") or route_explanation.get("action"), "unknown")
+    source = _text(route.get("source"), "generic")
+    confidence = _text(route.get("confidence") or route_explanation.get("confidence"), "unknown")
+    score = _text(route.get("score") or route_explanation.get("score"), "0")
+    next_action = _text(route_explanation.get("next_action") or _first_recommendation_value(route, "next_action"), "unknown")
+
+    print("OMH chat route")
+    print(f"Source: {source}")
+    print(f"Workflow: {selected_workflow}")
+    print(f"Harness: {selected_harness}")
+    print(f"Action: {action}")
+    print(f"Next action: {next_action}")
+    print(f"Confidence: {confidence} (score {score})")
+
+    why = _text(route_explanation.get("why_this_workflow") or route.get("reason"))
+    if why:
+        print()
+        print("Why:")
+        print(f"  {why}")
+
+    recommendations = [item for item in _as_list(route.get("recommendations")) if isinstance(item, dict)]
+    if recommendations:
+        print()
+        print("Top recommendations:")
+        for item in recommendations[:5]:
+            skill = _text(item.get("skill"), "unknown")
+            item_next = _text(item.get("next_action"), "unknown")
+            item_confidence = _text(item.get("confidence"), "unknown")
+            item_score = _text(item.get("score"), "0")
+            print(f"- {skill}: {item_next} ({item_confidence}, score {item_score})")
+
+    route_plan = _as_mapping(route.get("workflow_route_plan"))
+    steps = [item for item in _as_list(route_plan.get("steps")) if isinstance(item, dict)]
+    if steps:
+        print()
+        print("Route plan:")
+        for step in steps[:6]:
+            order = _text(step.get("order"), "?")
+            stage = _text(step.get("stage"), "stage")
+            skill = _text(step.get("skill"), "workflow")
+            status = _text(step.get("status"), "prepared_not_observed")
+            print(f"- {order}. {stage}: {skill} ({status})")
+
+    not_evidence = [_text(item) for item in _as_list(route_explanation.get("not_evidence_yet")) if _text(item)]
+    if not_evidence:
+        print()
+        print("Not evidence yet:")
+        for item in not_evidence[:6]:
+            print(f"- {item}")
+
+    boundary = _text(route_explanation.get("claim_boundary") or _first_recommendation_value(route, "evidence_boundary"))
+    if boundary:
+        print()
+        print("Boundary:")
+        print(f"  {boundary}")
+
+    run = _as_mapping(_as_mapping(payload.get("runtime")).get("run"))
+    if run:
+        print()
+        print("Runtime record:")
+        print(f"  run_id: {_text(run.get('run_id'), 'unknown')}")
+        print("  status: recorded metadata only")
+
+    print()
+    print("Use --json for the full machine-readable route payload.")
+
+
+def _first_recommendation_value(route: dict[str, object], key: str) -> object:
+    recommendations = _as_list(route.get("recommendations"))
+    if not recommendations or not isinstance(recommendations[0], dict):
+        return ""
+    return recommendations[0].get(key, "")
 
 
 def _add_target_metadata_options(parser: argparse.ArgumentParser) -> None:
@@ -630,6 +714,16 @@ def _add_chat_commands(sub) -> None:
     route.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     route.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     route.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    route.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a compact human-readable route summary instead of the default JSON payload.",
+    )
+    route.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the full machine-readable JSON route payload. This is the default.",
+    )
     route.set_defaults(func=cmd_chat_route)
 
     route_hint = chat_sub.add_parser(
