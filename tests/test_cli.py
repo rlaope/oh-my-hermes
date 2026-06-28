@@ -1941,6 +1941,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("cases artifact --all --json", items["use_case_artifact_bundle"]["command"])
         self.assertIn("cases replay --json", items["use_case_replay"]["command"])
         self.assertIn("cases readiness --json", items["use_case_readiness"]["command"])
+        self.assertIn("demo chat-card-coverage --json", items["chat_card_coverage"]["command"])
         self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
         self.assertIn("release evidence-bundle --version 1.0.0 --write --json", items["release_evidence_bundle"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
@@ -2017,6 +2018,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Score: 100/100", stdout)
         self.assertIn("skill_content: passed", stdout)
         self.assertIn("use_cases: passed", stdout)
+        self.assertIn("chat_card_coverage: passed", stdout)
         self.assertIn("parity_contracts: passed", stdout)
         self.assertIn("release_checklist: passed", stdout)
         self.assertIn("Boundary:", stdout)
@@ -2038,8 +2040,10 @@ class CliTests(unittest.TestCase):
         gates = {gate["id"]: gate for gate in payload["gates"]}
         self.assertEqual(
             set(gates),
-            {"skill_content", "use_cases", "parity_contracts", "release_checklist"},
+            {"skill_content", "use_cases", "chat_card_coverage", "parity_contracts", "release_checklist"},
         )
+        self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
+        self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
         self.assertEqual(gates["parity_contracts"]["status"], "passed")
         self.assertIn("not run the release checklist", payload["boundary"])
 
@@ -2073,6 +2077,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH release evidence bundle for 1.0.1", stdout)
             self.assertIn("Status: ready", stdout)
             self.assertIn("Written: no", stdout)
+            self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
 
@@ -2088,6 +2093,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["status"], "ready")
             self.assertTrue(payload["written"])
             self.assertEqual(payload["summary"]["product_readiness_status"], "ready")
+            self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
+            self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
             self.assertIn("local_artifact_store: not_written", payload["warnings"])
             self.assertTrue(Path(payload["artifact_path"]).exists())
             self.assertTrue((omh_home / "runtime" / "release-evidence" / "index.json").exists())

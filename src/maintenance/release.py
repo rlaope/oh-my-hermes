@@ -31,6 +31,7 @@ from ..plugin_bundle.omh.tools.capability_tool import (
     standalone_skill_capability_items,
 )
 from ..parity import build_parity_matrix
+from ..quality.chat_card_coverage import build_chat_card_coverage_demo
 from ..release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from ..skill_pack import builtin_skill_templates
 from ..skills.catalog import builtin_definitions
@@ -234,13 +235,23 @@ def release_readiness_checklist(
             "Use-case readiness proves deterministic local use-case contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
+            "chat_card_coverage",
+            "Check wrapper chat card coverage",
+            "uv run python -m omh.cli demo chat-card-coverage --json",
+            "contract-quality",
+            True,
+            False,
+            "Chat card coverage reports all dedicated workflow cards passing with generic ack count 0.",
+            "Chat card coverage proves deterministic local wrapper-card contracts only; it does not prove live Hermes chat rendering, platform delivery, executor work, review, CI, merge, or plugin-load evidence.",
+        ),
+        ReleaseChecklistItem(
             "product_readiness",
             "Check product readiness rollup",
             f"{omh_display} release product-readiness --version {release_version} --json",
             "contract-quality",
             True,
             False,
-            "Product readiness reports skill-content, G1-G10 use-case, parity, and release checklist gates as passing.",
+            "Product readiness reports skill-content, G1-G10 use-case, wrapper chat card coverage, parity, and release checklist gates as passing.",
             "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
@@ -250,7 +261,7 @@ def release_readiness_checklist(
             "evidence-packaging",
             True,
             False,
-            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, and parity snapshots.",
+            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, chat card coverage, and parity snapshots.",
             "The evidence bundle packages local deterministic evidence only; it is not live Hermes runtime use, connector execution, executor dispatch, review, CI, merge, delivery, or release publication evidence.",
         ),
         ReleaseChecklistItem(
@@ -454,6 +465,7 @@ def product_readiness_report(
     omh_display = _shell_word(omh_command)
     skill_content = skill_content_smoke()
     parity = build_parity_matrix()
+    chat_cards = build_chat_card_coverage_demo()
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
 
     checklist_items = checklist.get("items", [])
@@ -468,6 +480,7 @@ def product_readiness_report(
         "harness_validate",
         "skill_content_smoke",
         "use_case_readiness",
+        "chat_card_coverage",
         "product_readiness",
         "release_evidence_bundle",
         "installed_command_smoke",
@@ -483,6 +496,8 @@ def product_readiness_report(
         if count:
             parity_errors.append(f"{status_key}: {count}")
 
+    chat_card_summary = chat_cards.get("summary", {}) if isinstance(chat_cards.get("summary"), Mapping) else {}
+    chat_card_errors = _chat_card_coverage_errors(chat_cards)
     gates = [
         _product_readiness_gate(
             "skill_content",
@@ -513,6 +528,20 @@ def product_readiness_report(
             _string_list(skill_content.get("use_case_readiness_failures")),
             _string_list(skill_content.get("use_case_readiness_warnings")),
             str(skill_content.get("use_case_readiness_boundary", "")),
+        ),
+        _product_readiness_gate(
+            "chat_card_coverage",
+            "Wrapper chat card coverage",
+            "passed" if not chat_card_errors else "failed",
+            True,
+            (
+                f"{chat_card_summary.get('passing_count', 0)}/{chat_card_summary.get('case_count', 0)} "
+                f"dedicated workflow cards; generic ack {chat_card_summary.get('generic_ack_count', 0)}"
+            ),
+            "omh demo chat-card-coverage --json",
+            chat_card_errors,
+            [],
+            str(chat_cards.get("claim_boundary", "")),
         ),
         _product_readiness_gate(
             "parity_contracts",
@@ -1175,6 +1204,36 @@ def _skill_content_product_errors(payload: Mapping[str, object]) -> list[str]:
     return errors
 
 
+def _chat_card_coverage_ready(payload: Mapping[str, object]) -> bool:
+    return not _chat_card_coverage_errors(payload)
+
+
+def _chat_card_coverage_errors(payload: Mapping[str, object]) -> list[str]:
+    errors: list[str] = []
+    summary = payload.get("summary")
+    if not isinstance(summary, Mapping):
+        return ["summary_missing"]
+    if not bool(summary.get("all_passing")):
+        errors.append("not_all_card_coverage_cases_passed")
+    if int(summary.get("generic_ack_count", 0) or 0) != 0:
+        errors.append(f"generic_ack_count: {summary.get('generic_ack_count')}")
+    cases = payload.get("cases")
+    if not isinstance(cases, Sequence) or isinstance(cases, (str, bytes)):
+        errors.append("cases_not_sequence")
+        return errors
+    for case in cases:
+        if not isinstance(case, Mapping) or bool(case.get("passed")):
+            continue
+        case_id = str(case.get("id") or "unknown")
+        issues = case.get("issues")
+        if isinstance(issues, Sequence) and not isinstance(issues, (str, bytes)):
+            issue_text = ", ".join(str(issue) for issue in issues) or "unknown issue"
+        else:
+            issue_text = "unknown issue"
+        errors.append(f"{case_id}: {issue_text}")
+    return errors
+
+
 def _blocking_gate_messages(payload: Mapping[str, object]) -> list[str]:
     gates = payload.get("gates", [])
     if not isinstance(gates, Sequence) or isinstance(gates, (str, bytes)):
@@ -1238,6 +1297,7 @@ def release_evidence_bundle(
     product = product_readiness_report(version=release_version, omh_command=omh_command)
     skill_content = skill_content_smoke()
     use_cases = use_case_readiness(resolved_paths)
+    chat_cards = build_chat_card_coverage_demo()
     parity = build_parity_matrix()
     local_store_status = _release_local_store_status(use_cases)
     required_status = {
@@ -1245,6 +1305,7 @@ def release_evidence_bundle(
         "product_readiness": "passed" if product.get("status") == "ready" else "failed",
         "skill_content": "passed" if skill_content.get("ok") else "failed",
         "use_case_readiness": "passed" if use_cases.get("blocking_failures") == 0 else "failed",
+        "chat_card_coverage": "passed" if _chat_card_coverage_ready(chat_cards) else "failed",
         "parity_contracts": "passed" if _parity_contracts_ready(parity) else "failed",
     }
     blocking_failures = [
@@ -1255,6 +1316,7 @@ def release_evidence_bundle(
     warnings = []
     if local_store_status != "passed":
         warnings.append(f"local_artifact_store: {local_store_status}")
+    chat_card_summary = chat_cards.get("summary", {}) if isinstance(chat_cards.get("summary"), Mapping) else {}
     payload: dict[str, object] = {
         "schema_version": RELEASE_EVIDENCE_BUNDLE_SCHEMA,
         "mode": "live",
@@ -1273,6 +1335,9 @@ def release_evidence_bundle(
             "skill_content_ok": skill_content.get("ok"),
             "use_case_readiness_status": use_cases.get("status"),
             "use_case_readiness_score": use_cases.get("score"),
+            "chat_card_coverage_passing": chat_card_summary.get("passing_count"),
+            "chat_card_coverage_total": chat_card_summary.get("case_count"),
+            "chat_card_generic_ack_count": chat_card_summary.get("generic_ack_count"),
             "local_artifact_store": local_store_status,
             "parity_available": (parity.get("summary") or {}).get("available")
             if isinstance(parity.get("summary"), Mapping)
@@ -1286,6 +1351,7 @@ def release_evidence_bundle(
             "product_readiness": product,
             "skill_content": skill_content,
             "use_case_readiness": use_cases,
+            "chat_card_coverage": chat_cards,
             "parity_contracts": parity,
         },
         "claims": [
@@ -1294,6 +1360,7 @@ def release_evidence_bundle(
             "product_readiness_rollup_ready",
             "skill_content_smoke_ready",
             "g1_to_g10_use_case_readiness_ready",
+            "chat_card_coverage_ready",
             "parity_contract_matrix_ready",
         ],
         "not_evidence_for": [
