@@ -32,7 +32,7 @@ class KeywordManifestTests(unittest.TestCase):
         self.assertIn("risky_refactor_before_cleanup", rules)
         self.assertIn("planning/review", rules["risky_refactor_before_cleanup"])
         self.assertEqual(catalog["risky_refactor_before_cleanup"]["activation_status"], "active")
-        self.assertEqual(catalog["feedback_before_coding"]["activation_status"], "cataloged")
+        self.assertEqual(catalog["feedback_before_coding"]["activation_status"], "active")
         self.assertIn("ultragoal", skills)
         self.assertIn("$ultragoal", skills["ultragoal"]["triggers"])
         self.assertEqual(skills["ops-observability-card"]["exposure"], "harness_only")
