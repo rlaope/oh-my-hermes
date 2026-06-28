@@ -202,6 +202,24 @@ class EfficiencyContractTests(unittest.TestCase):
                 self.assertEqual(route_hint["primary_workflow"], "source-finder")
                 self.assertEqual(route_hint["primary_next_action"], "prepare_source_finder_plan")
 
+        multilingual_hint_cases = (
+            ("haz una imagen que explique la función cron", "img-summary", "prepare_visual_prompt_card"),
+            ("erstelle ein Bild, das die Cron-Funktion erklärt", "img-summary", "prepare_visual_prompt_card"),
+            ("生成一张解释 cron 功能的图片", "img-summary", "prepare_visual_prompt_card"),
+            ("trouve le dépôt GitHub et le PDF public", "source-finder", "prepare_source_finder_plan"),
+            ("このテーマの論文PDFとデータセットを探して", "source-finder", "prepare_source_finder_plan"),
+            ("帮我找这个主题的论文PDF和数据集", "source-finder", "prepare_source_finder_plan"),
+            ("convierte este PDF en una presentación", "materials-package", "prepare_material_package"),
+            ("transforme ce PDF en présentation", "materials-package", "prepare_material_package"),
+            ("mach daraus eine PDF und Excel Datei", "materials-package", "prepare_material_package"),
+        )
+        for message, workflow, next_action in multilingual_hint_cases:
+            with self.subTest(message=message):
+                route_hint = awareness_route_hint(message)
+
+                self.assertEqual(route_hint["primary_workflow"], workflow)
+                self.assertEqual(route_hint["primary_next_action"], next_action)
+
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
         standalone_items = standalone_skill_capability_items()

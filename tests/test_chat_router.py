@@ -87,6 +87,11 @@ class ChatRouterTests(unittest.TestCase):
             ("encuentra el paper y el dataset para este tema", "source-finder", "locale:es:source_finder"),
             ("trouve le dépôt GitHub et le PDF public", "source-finder", "locale:fr:source_finder"),
             ("finde paper und dataset zu diesem thema", "source-finder", "locale:de:source_finder"),
+            ("このテーマの論文PDFとデータセットを探して", "source-finder", "locale:ja:source_finder"),
+            ("帮我找这个主题的论文PDF和数据集", "source-finder", "locale:zh:source_finder"),
+            ("convierte este PDF en una presentación", "materials-package", "trigger:pdf"),
+            ("transforme ce PDF en présentation", "materials-package", "trigger:pdf"),
+            ("mach daraus eine PDF und Excel Datei", "materials-package", "trigger:pdf"),
         )
 
         for message, skill, locale_match in cases:
