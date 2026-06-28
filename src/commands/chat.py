@@ -100,6 +100,8 @@ def cmd_chat_route_hint(args: argparse.Namespace) -> int:
 
 
 def cmd_chat_interact(args: argparse.Namespace) -> int:
+    if bool(getattr(args, "summary", False)) and bool(getattr(args, "json", False)):
+        raise OmhError("--summary and --json cannot be used together")
     try:
         if args.run_id:
             status = summarize_delegated_coding_status(_paths(args), args.run_id)
@@ -126,7 +128,10 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
         raise OmhError(f"runtime run not found: {args.run_id}") from exc
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
-    _print_json(payload)
+    if bool(getattr(args, "summary", False)):
+        _print_chat_interaction_summary(payload)
+    else:
+        _print_json(payload)
     return 0
 
 
@@ -206,6 +211,87 @@ def _context_pack(args: argparse.Namespace) -> dict[str, object] | None:
 
 def _has_target_metadata(source_metadata: dict[str, str]) -> bool:
     return any(source_metadata.get(key) for key in TARGET_METADATA_KEYS)
+
+
+def _as_mapping(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _text(value: object, default: str = "") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
+def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
+    response = _as_mapping(payload.get("chat_response"))
+    route = _as_mapping(payload.get("route"))
+    state = _as_mapping(response.get("state"))
+    route_explanation = _as_mapping(route.get("route_explanation"))
+    source = _text(payload.get("source"), "generic")
+    selected_workflow = _text(
+        state.get("selected_workflow")
+        or route.get("selected_skill")
+        or route_explanation.get("selected_workflow")
+        or response.get("kind"),
+        "unknown",
+    )
+    next_action = _text(payload.get("next_action") or state.get("next_action") or route.get("action"), "unknown")
+    print("OMH chat interaction")
+    print(f"Source: {source}")
+    print(f"Workflow: {selected_workflow}")
+    print(f"Next action: {next_action}")
+
+    headline = _text(response.get("headline") or response.get("plain_headline"))
+    body = _text(response.get("body") or response.get("plain_body"))
+    if headline or body:
+        print()
+        if headline:
+            print(headline)
+        if body:
+            print(body)
+
+    actions = [action for action in _as_list(response.get("actions")) if isinstance(action, dict)]
+    if actions:
+        print()
+        print("Actions:")
+        for action in actions[:8]:
+            action_id = _text(action.get("id"), "action")
+            label = _text(action.get("label"), action_id)
+            enabled = bool(action.get("enabled", True))
+            state_label = "enabled" if enabled else "disabled"
+            print(f"- {action_id}: {label} ({state_label})")
+        if len(actions) > 8:
+            print(f"- ... {len(actions) - 8} more action(s) in --json")
+
+    not_evidence = [
+        _text(item)
+        for item in (
+            _as_list(state.get("evidence_not_observed"))
+            or _as_list(route_explanation.get("not_evidence_yet"))
+            or _as_list(response.get("not_evidence_yet"))
+        )
+        if _text(item)
+    ]
+    if not_evidence:
+        print()
+        print("Not evidence yet:")
+        for item in not_evidence[:6]:
+            print(f"- {item}")
+
+    boundary = _text(response.get("claim_boundary") or route_explanation.get("claim_boundary"))
+    if boundary:
+        print()
+        print("Boundary:")
+        print(f"  {boundary}")
+
+    print()
+    print("Use --json for the full machine-readable payload.")
 
 
 def _add_target_metadata_options(parser: argparse.ArgumentParser) -> None:
@@ -611,6 +697,16 @@ def _add_chat_commands(sub) -> None:
     interact.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     interact.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     interact.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    interact.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a compact human-readable operator summary instead of the default JSON envelope.",
+    )
+    interact.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the full machine-readable JSON envelope. This is the default.",
+    )
     _add_render_profile_option(interact)
     _add_target_metadata_options(interact)
     interact.set_defaults(func=cmd_chat_interact)
