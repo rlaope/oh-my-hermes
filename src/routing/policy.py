@@ -438,8 +438,10 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
         "圖片",
         "图片",
     }
-)
-_VISUAL_SUMMARY_CARD_TOKENS = _normalized_token_set({"card", "poster", "one-pager", "카드", "포스터", "海报", "海報"})
+) - {"one", "pager"}
+_VISUAL_SUMMARY_CARD_TOKENS = _normalized_token_set(
+    {"card", "poster", "one-pager", "카드", "포스터", "海报", "海報"}
+) - {"one", "pager"}
 _VISUAL_SUMMARY_CAPABILITY_TOKENS = _normalized_token_set(
     {
         "support",
@@ -1434,6 +1436,13 @@ _CODING_HANDOFF_PHRASES = (
     "진행 상태 추적",
 )
 _SCHEDULED_OPS_PHRASES = (
+    "automation blueprint",
+    "scheduled ops blueprint",
+    "ops blueprint",
+    "cron blueprint",
+    "schedule blueprint",
+    "hermes cron spec",
+    "cron spec",
     "every morning",
     "every day",
     "every week",
@@ -1450,6 +1459,15 @@ _SCHEDULED_OPS_PHRASES = (
     "변화 없으면",
     "바뀐 게 없으면",
     "조용히",
+)
+_EXPLICIT_SCHEDULED_OPS_BLUEPRINT_PHRASES = (
+    "automation blueprint",
+    "scheduled ops blueprint",
+    "ops blueprint",
+    "cron blueprint",
+    "schedule blueprint",
+    "hermes cron spec",
+    "cron spec",
 )
 _ONE_OFF_TOKENS = _normalized_token_set(
     {
@@ -1791,17 +1809,21 @@ def active_routing_guard_rules(
     )
     if paper_learning_applies:
         rules.append(PAPER_LEARNING_GUARD)
+    scheduled_ops_blueprint_applies = (
+        not delivery_cycle_applies and _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens)
+    )
+    explicit_scheduled_ops_blueprint = _explicit_scheduled_ops_blueprint_requested(normalized_query, query_tokens)
     research_department_applies = (
         not delivery_cycle_applies
         and not paper_learning_applies
+        and not explicit_scheduled_ops_blueprint
         and _research_department_guard_applies(normalized_query, query_tokens)
     )
     if research_department_applies:
         rules.append(RESEARCH_DEPARTMENT_GUARD)
     if (
-        not delivery_cycle_applies
-        and _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens)
-        and not research_department_applies
+        scheduled_ops_blueprint_applies
+        and (explicit_scheduled_ops_blueprint or not research_department_applies)
     ):
         rules.append(SCHEDULED_OPS_BLUEPRINT_GUARD)
     source_finder_applies = (
@@ -1891,6 +1913,16 @@ def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: 
     if _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens and _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens:
         return True
     return _contains_phrase(normalized_query, _SCHEDULED_OPS_PHRASES)
+
+
+def _explicit_scheduled_ops_blueprint_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _EXPLICIT_SCHEDULED_OPS_BLUEPRINT_PHRASES):
+        return True
+    blueprint = "blueprint" in query_tokens
+    scheduled_context = bool(_SCHEDULED_OPS_STRONG_TOKENS & query_tokens) or bool(
+        _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens
+    )
+    return blueprint and scheduled_context
 
 
 def _paper_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2217,6 +2249,8 @@ def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: s
 
 
 def _release_claim_review_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _reliability_review_context_applies(normalized_query, query_tokens):
+        return False
     if _contains_phrase(normalized_query, _RELEASE_CLAIM_REVIEW_PHRASES):
         return True
     review_intent = bool(_RELEASE_CLAIM_REVIEW_TOKENS & query_tokens)
@@ -2226,6 +2260,22 @@ def _release_claim_review_guard_applies(normalized_query: str, query_tokens: set
     )
     compare_or_verify = _contains_phrase(normalized_query, ("match", "matches", "verify", "review", "맞는지", "검토", "통과"))
     return review_intent and claim_or_release and compare_or_verify
+
+
+def _reliability_review_context_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    reliability = bool({"reliability", "slo", "postmortem", "incident"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        (
+            "reliability review",
+            "service reliability",
+            "slo review",
+            "incident review",
+            "incident postmortem",
+            "error budget",
+        ),
+    )
+    review = bool({"review", "check", "검토"} & query_tokens)
+    return reliability and review
 
 
 def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
