@@ -727,6 +727,74 @@ What gets better for the team:
 - The wrapper has clear disabled states before implementation or runtime
   evidence exists.
 
+### Workflow Operations Cards
+
+```text
+# research-ops
+
+operator
+I need a weekly leadership brief from support tickets, competitor news, and release risks
+
+Hermes Agent  BOT
+[omh] research-department - I can organize this into a research department flow.
+
+I will prepare Scout, Analyst, and Briefer lanes: source inbox, synthesis
+questions, briefing format, cadence, knowledge-store readiness, and delivery
+policy. Source retrieval, synthesis, verification, storage, and delivery stay
+unobserved until recorded.
+
+[ Prepare research flow ] [ Start research ] [ Prepare brief ] [ Show status ]
+
+Claim boundary: Research department preparation is not source retrieval, synthesis, verification, storage, or delivery evidence.
+```
+
+```text
+# file-package
+
+operator
+첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘
+
+Hermes Agent  BOT
+[omh] materials-package - I can prepare the material package without pretending files exist.
+
+I will prepare the material package: source files, target formats, extraction
+needs, formulas or layout risks, export checklist, render QA, approval, and
+delivery steps. Binary files, uploads, render checks, and attachments remain
+observed-only.
+
+[ Prepare package ] [ Prepare deliverable ] [ Show status ]
+
+Claim boundary: A material package is not binary export, render QA, upload, attachment, approval, or delivery evidence.
+```
+
+```text
+# github-events
+
+operator
+GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘
+
+Hermes Agent  BOT
+[omh] github-event-ops - I can prepare this GitHub event without claiming webhook work happened.
+
+I will prepare the GitHub event card: event type, issue or PR context, triage
+labels, review path, CI questions, docs-sync needs, and follow-up handoff.
+Webhook receipt, GitHub mutation, code changes, review, CI, and docs sync stay
+observed-only.
+
+[ Open event card ] [ Prepare review ] [ Prepare fix handoff ] disabled [ Show status ]
+
+Claim boundary: A GitHub event card is not webhook receipt, GitHub mutation, code execution, review, CI, docs sync, or merge evidence.
+```
+
+What gets better for the team:
+
+- Research department, material packaging, and GitHub event requests no longer
+  read like generic workflow acknowledgements.
+- File and GitHub cards keep generated files, uploads, mutation, review, CI,
+  docs sync, and merge separate from preparation.
+- Operators can show users a concrete next action without pretending the
+  external system already ran.
+
 ### Real-World QA Check
 
 ```text
