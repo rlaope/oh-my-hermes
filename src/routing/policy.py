@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
+from .missed_route import has_missed_omh_workflow_context
 
 
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
@@ -717,52 +718,6 @@ _VISUAL_SUMMARY_PHRASES = (
     "發布說明圖",
     "总结海报",
     "摘要海报",
-)
-_OMH_MISSED_WORKFLOW_PHRASES = (
-    "did not use omh",
-    "didn't use omh",
-    "didnt use omh",
-    "omh was not used",
-    "not using omh",
-    "without omh",
-    "missed omh",
-    "skipped omh",
-    "skipped omh for",
-    "hermes skipped omh",
-    "forgot omh",
-    "not aware of omh",
-    "did not know omh",
-    "didn't know omh",
-    "omh 안 쓰고",
-    "omh 안 썼",
-    "omh를 안 썼",
-    "omh를 안 써",
-    "omh 기능을 안 썼",
-    "omh 기능 안 썼",
-)
-_MISSED_WORKFLOW_ACTION_PHRASES = (
-    "did not use",
-    "didn't use",
-    "didnt use",
-    "does not use",
-    "doesn't use",
-    "doesnt use",
-    "not using",
-    "missed",
-    "skipped",
-    "forgot",
-    "not aware",
-    "did not know",
-    "didn't know",
-    "does not know",
-    "몰랐",
-    "모르",
-    "안 썼",
-    "안 써",
-    "안쓰",
-    "안 쓰",
-    "놓쳤",
-    "빠졌",
 )
 _MISSED_WORKFLOW_RESEARCH_TOKENS = _normalized_token_set(
     {
@@ -3969,11 +3924,7 @@ def _is_short_visual_summary_request(normalized_query: str) -> bool:
 
 
 def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
-    if _contains_phrase(normalized_query, _OMH_MISSED_WORKFLOW_PHRASES):
-        return True
-    return ("omh" in normalized_query or "oh-my-hermes" in normalized_query) and _contains_phrase(
-        normalized_query, _MISSED_WORKFLOW_ACTION_PHRASES
-    )
+    return has_missed_omh_workflow_context(normalized_query)
 
 
 def _deliverable_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
