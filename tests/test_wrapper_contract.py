@@ -989,6 +989,64 @@ class WrapperContractTests(unittest.TestCase):
                 if workflow == "ultraqa":
                     self.assertEqual(actions["dispatch_to_workflow"]["payload"]["claim_boundary"], "route_only_not_scenario_execution")
 
+    def test_delivery_runtime_cards_expose_execution_boundaries(self) -> None:
+        cases = (
+            (
+                "take this product idea from plan to deploy and monitor safely",
+                "idea-to-deploy",
+                "app_delivery_loop",
+                "I can shape this into a product delivery loop.",
+                "implementation",
+                "present_app_delivery_loop",
+            ),
+            (
+                "run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness",
+                "cto-loop",
+                "cto_loop",
+                "I can run this as a leadership decision loop.",
+                "architecture sign-off",
+                "run_cto_loop",
+            ),
+            (
+                "deploy and monitor this release with rollback and health checks",
+                "deploy-and-monitor",
+                "deploy_monitor_plan",
+                "I can prepare the deploy and monitor plan.",
+                "deploy execution",
+                "prepare_deploy_monitor_plan",
+            ),
+            (
+                "Claude Code로 넘길지 Codex로 넘길지 정해줘",
+                "executor-runtime-readiness",
+                "executor_runtime_readiness",
+                "I can check which coding path is ready.",
+                "executor dispatch",
+                "prepare_executor_runtime_readiness",
+            ),
+        )
+
+        for message, workflow, kind, headline, not_evidence, primary_action in cases:
+            with self.subTest(workflow=workflow):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                response = payload["chat_response"]
+                explanation = response["state"]["workflow_explanation"]
+                actions = {str(action["id"]): action for action in response["actions"]}
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], workflow)
+                self.assertEqual(response["kind"], kind)
+                self.assertEqual(response["plain_headline"], headline)
+                self.assertEqual(response["state"]["selected_workflow"], workflow)
+                self.assertEqual(response["state"]["artifact_schema"], f"{kind}_card/v1")
+                self.assertEqual(response["actions"][0]["id"], primary_action)
+                self.assertIn(not_evidence, explanation["not_evidence_yet"])
+                self.assertIn("execution", response["claim_boundary"].lower())
+                if workflow in {"idea-to-deploy", "cto-loop"}:
+                    self.assertFalse(actions["prepare_coding_handoff"]["enabled"])
+                if workflow == "executor-runtime-readiness":
+                    self.assertTrue(actions["choose_executor"]["enabled"])
+
     def test_blocker_status_uses_status_usage_trace_label(self) -> None:
         response = build_chat_response_from_status({"next_action": "surface_ci_blocker"})
 
@@ -1715,7 +1773,7 @@ class WrapperContractTests(unittest.TestCase):
                 "Codex랑 Claude Code 중 어떤 런타임으로 넘겨야 해?",
                 "executor-runtime-readiness",
                 "prepare_executor_runtime_readiness",
-                "ack",
+                "executor_runtime_readiness",
             ),
             (
                 "음성으로 짧게 말한 요청을 안전하게 정리해줘",
@@ -1763,7 +1821,7 @@ class WrapperContractTests(unittest.TestCase):
                 "Claude Code로 넘길지 Codex로 넘길지 정해줘",
                 "executor-runtime-readiness",
                 "prepare_executor_runtime_readiness",
-                "ack",
+                "executor_runtime_readiness",
             ),
             (
                 "우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘",
