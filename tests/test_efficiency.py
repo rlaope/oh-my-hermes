@@ -189,6 +189,19 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(doctor_hint["primary_workflow"], "doctor")
         self.assertEqual(doctor_hint["primary_next_action"], "check_install_or_setup_health")
 
+        source_finder_messages = (
+            "논문 pdf 링크 찾아줘",
+            "source candidates for this market research",
+            "공개 데이터셋 찾아줘",
+            "github oss repo 찾아서 비교해줘",
+        )
+        for message in source_finder_messages:
+            with self.subTest(message=message):
+                route_hint = awareness_route_hint(message)
+
+                self.assertEqual(route_hint["primary_workflow"], "source-finder")
+                self.assertEqual(route_hint["primary_next_action"], "prepare_source_finder_plan")
+
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
         standalone_items = standalone_skill_capability_items()

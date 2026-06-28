@@ -710,9 +710,16 @@ class ChatRouterTests(unittest.TestCase):
         acquisition_cases = (
             "find papers and datasets for browser agent benchmarks",
             "find GitHub repos, datasets, and public presentations for this idea",
+            "find paper pdf links and dataset links for this topic",
             "./source-finder find docs and specs for browser automation standards",
+            "paper pdf link 찾아줘",
+            "논문 pdf 링크 찾아줘",
+            "dataset 링크 찾아줘",
+            "공개 데이터셋 찾아줘",
             "논문 데이터셋 찾아서 후보로 정리해줘",
             "공개 프레젠테이션 자료를 찾아서 요약해줘",
+            "github oss repo 찾아서 비교해줘",
+            "이 주제 관련 소스 후보 찾아줘",
         )
         for message in acquisition_cases:
             with self.subTest(message=message):
