@@ -26,6 +26,7 @@ uv run python -m omh.cli chat native-command --source slack
 uv run python -m omh.cli chat native-command --source telegram
 uv run python -m omh.cli demo orchestration
 uv run python -m omh.cli demo orchestration --executor hermes
+uv run python -m omh.cli demo chat-card-coverage --summary
 ```
 
 The first command renders the fixture event in
@@ -360,6 +361,18 @@ workflow `next_action` first, then a status action. A route such as
 `prepare_review_or_followup_handoff`, `prepare_gateway_intent_card`,
 `prepare_ops_observability_card`, or `prepare_report_package` is still only a
 prepared wrapper action until observed work or evidence is recorded.
+
+Release QA can guard this with the deterministic card coverage gate:
+
+```sh
+omh demo chat-card-coverage --summary
+```
+
+That gate checks the important user-facing workflow routes, confirms they render
+dedicated card kinds instead of generic `ack`, and verifies next action, primary
+action availability, claim boundary copy, and not-yet-observed evidence. It is
+wrapper-contract coverage only; it does not prove live Hermes chat rendering,
+platform delivery, executor work, review, CI, or merge.
 
 ```text
 Hermes Agent  BOT

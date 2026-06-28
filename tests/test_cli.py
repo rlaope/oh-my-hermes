@@ -5488,6 +5488,47 @@ class CliTests(unittest.TestCase):
         self.assertIn("Boundary: This is deterministic local contract-compliance evaluation", stdout)
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
+    def test_demo_chat_card_coverage_keeps_user_facing_routes_dedicated(self) -> None:
+        status, stdout, stderr = run_cli(["demo", "chat-card-coverage"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_card_coverage/v1")
+        self.assertEqual(payload["summary"]["case_count"], 25)
+        self.assertEqual(payload["summary"]["passing_count"], 25)
+        self.assertEqual(payload["summary"]["generic_ack_count"], 0)
+        self.assertTrue(payload["summary"]["all_passing"])
+        self.assertIn("not live Hermes chat", payload["claim_boundary"])
+        failed = [case["id"] for case in payload["cases"] if not case["passed"]]
+        self.assertEqual(failed, [])
+        cases = {case["id"]: case for case in payload["cases"]}
+        self.assertEqual(cases["automation-blueprint"]["observed"]["kind"], "automation_blueprint")
+        self.assertEqual(cases["agent-board"]["observed"]["kind"], "agent_board")
+        self.assertEqual(cases["memory-curation-review"]["observed"]["kind"], "memory_curation")
+        self.assertEqual(cases["gateway-intent-card"]["observed"]["kind"], "gateway_intent")
+        self.assertEqual(cases["deliverable-package"]["observed"]["kind"], "deliverable_package")
+        self.assertEqual(cases["voice-operator"]["observed"]["kind"], "voice_operator")
+        self.assertEqual(cases["toolbelt-readiness"]["observed"]["kind"], "toolbelt_readiness")
+        self.assertEqual(cases["ops-observability-card"]["observed"]["kind"], "ops_observability")
+
+    def test_demo_chat_card_coverage_summary_is_human_readable(self) -> None:
+        status, stdout, stderr = run_cli(["demo", "chat-card-coverage", "--summary"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH chat card coverage", stdout)
+        self.assertIn("Result: 25/25 workflow cards dedicated (all passing)", stdout)
+        self.assertIn("Generic ack responses: 0", stdout)
+        self.assertIn(
+            "Scheduled ops blueprint: ok; automation-blueprint -> automation_blueprint -> prepare_scheduled_ops_blueprint",
+            stdout,
+        )
+        self.assertIn("Boundary: This is deterministic local wrapper-card coverage", stdout)
+        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+
     def test_coding_delegate_include_message_expands_prompt_for_non_logging_wrappers(self) -> None:
         status, stdout, stderr = run_cli(["coding", "delegate", "--include-message", "risky", "refactor"])
 
