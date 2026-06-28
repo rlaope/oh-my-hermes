@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from functools import lru_cache
 import re
 
@@ -492,9 +492,22 @@ class Recommendation:
     suggested_prompt: str
 
     def to_dict(self) -> dict[str, object]:
-        data = asdict(self)
-        data["matched"] = list(self.matched)
-        return data
+        return {
+            "skill": self.skill,
+            "description": self.description,
+            "category": self.category,
+            "phase": self.phase,
+            "hermes_role": self.hermes_role,
+            "handoff_policy": self.handoff_policy,
+            "score": self.score,
+            "confidence": self.confidence,
+            "matched": list(self.matched),
+            "why": self.why,
+            "next_action": self.next_action,
+            "evidence_boundary": self.evidence_boundary,
+            "wrapper_guidance": self.wrapper_guidance,
+            "suggested_prompt": self.suggested_prompt,
+        }
 
 
 def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = True) -> list[dict[str, object]]:

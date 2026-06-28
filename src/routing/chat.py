@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import hashlib
 from typing import Any
 
@@ -113,9 +113,29 @@ class ChatRouteDecision:
     recommendations: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
-        data = asdict(self)
-        data["recommendations"] = list(self.recommendations)
-        return data
+        return {
+            "schema_version": self.schema_version,
+            "source": self.source,
+            "action": self.action,
+            "selected_skill": self.selected_skill,
+            "selected_harness": self.selected_harness,
+            "candidate_skill": self.candidate_skill,
+            "candidate_harness": self.candidate_harness,
+            "confidence": self.confidence,
+            "score": self.score,
+            "threshold": self.threshold,
+            "explicit": self.explicit,
+            "ambiguous": self.ambiguous,
+            "reason": self.reason,
+            "clarification": self.clarification,
+            "routing_prompt": self.routing_prompt,
+            "task_card": dict(self.task_card) if self.task_card else None,
+            "workflow_route_plan": self.workflow_route_plan,
+            "learning_candidate_card": (
+                dict(self.learning_candidate_card) if self.learning_candidate_card else None
+            ),
+            "recommendations": [dict(recommendation) for recommendation in self.recommendations],
+        }
 
 
 def route_chat_message(

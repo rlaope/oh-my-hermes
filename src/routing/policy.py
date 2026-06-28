@@ -5,7 +5,7 @@ from functools import lru_cache
 
 from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
-from .missed_route import has_missed_omh_workflow_context
+from .missed_route import has_normalized_missed_omh_workflow_context
 
 
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
@@ -3925,7 +3925,7 @@ def _is_short_visual_summary_request(normalized_query: str) -> bool:
 
 
 def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
-    return has_missed_omh_workflow_context(normalized_query)
+    return has_normalized_missed_omh_workflow_context(normalized_query)
 
 
 def _deliverable_package_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

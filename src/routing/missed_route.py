@@ -97,11 +97,17 @@ MISSED_ROUTE_COMPACT_PHRASES = (
 
 
 def has_missed_omh_workflow_context(message: str) -> bool:
-    normalized = normalized_phrase(message)
-    if _contains_phrase(normalized, OMH_MISSED_WORKFLOW_PHRASES):
+    return has_normalized_missed_omh_workflow_context(normalized_phrase(message))
+
+
+def has_normalized_missed_omh_workflow_context(normalized_message: str) -> bool:
+    has_omh_context = "omh" in normalized_message or "oh-my-hermes" in normalized_message
+    if not has_omh_context:
+        return False
+    if _contains_phrase(normalized_message, OMH_MISSED_WORKFLOW_PHRASES):
         return True
-    return ("omh" in normalized or "oh-my-hermes" in normalized) and _contains_phrase(
-        normalized,
+    return _contains_phrase(
+        normalized_message,
         MISSED_WORKFLOW_ACTION_PHRASES,
     )
 
