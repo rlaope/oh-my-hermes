@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 from .localization import normalized_phrase
 
 
@@ -121,9 +123,24 @@ def is_missed_omh_workflow_feedback(message: str) -> bool:
 
 
 def _contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
-    return any(normalized_phrase(phrase) in text for phrase in phrases)
+    return any(phrase in text for phrase in _normalized_phrases(phrases))
 
 
 def _contains_compact_phrase(text: str, phrases: tuple[str, ...]) -> bool:
     compact = text.replace(" ", "")
-    return any(normalized_phrase(phrase).replace(" ", "") in compact for phrase in phrases)
+    return any(phrase in compact for phrase in _normalized_compact_phrases(phrases))
+
+
+@lru_cache(maxsize=16)
+def _normalized_phrases(phrases: tuple[str, ...]) -> tuple[str, ...]:
+    normalized_phrases: list[str] = []
+    for phrase in phrases:
+        normalized = normalized_phrase(phrase)
+        if normalized:
+            normalized_phrases.append(normalized)
+    return tuple(normalized_phrases)
+
+
+@lru_cache(maxsize=16)
+def _normalized_compact_phrases(phrases: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(phrase.replace(" ", "") for phrase in _normalized_phrases(phrases))

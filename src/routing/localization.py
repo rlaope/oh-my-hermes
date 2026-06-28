@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import re
 import unicodedata
 
@@ -555,12 +556,20 @@ def prepare_routing_text(value: str) -> RoutingText:
     folded = _fold_for_match(original)
     additions: list[str] = []
     matches: list[str] = []
-    for alias in _ALIASES:
-        if any(_fold_for_match(phrase) in folded for phrase in alias.phrases):
+    for alias, folded_phrases in _folded_alias_phrases():
+        if any(phrase in folded for phrase in folded_phrases):
             additions.append(alias.canonical)
             matches.append(f"{alias.locale}:{alias.label}")
     scoring_text = " ".join((original, *additions)).strip()
     return RoutingText(original=original, scoring_text=scoring_text, locale_matches=tuple(sorted(set(matches))))
+
+
+@lru_cache(maxsize=1)
+def _folded_alias_phrases() -> tuple[tuple[LocaleAlias, tuple[str, ...]], ...]:
+    folded_aliases: list[tuple[LocaleAlias, tuple[str, ...]]] = []
+    for alias in _ALIASES:
+        folded_aliases.append((alias, tuple(_fold_for_match(phrase) for phrase in alias.phrases)))
+    return tuple(folded_aliases)
 
 
 def routing_tokens(value: str, *, stopwords: set[str] | None = None) -> set[str]:
