@@ -943,6 +943,24 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(explanation["primary_action_label"], "Open feedback-triage")
         self.assertIn("do not claim completed feedback triage", explanation["primary_action_hint"])
 
+    def test_plan_interaction_keeps_route_specific_reason_in_workflow_explanation(self) -> None:
+        payload = build_chat_interaction_payload("I want to safely add a feature to this repo", source="discord")
+
+        response = payload["chat_response"]
+        explanation = response["state"]["workflow_explanation"]
+
+        self.assertEqual(payload["mode"], "plan")
+        self.assertEqual(payload["route"]["selected_skill"], "ralplan")
+        self.assertEqual(response["kind"], "plan")
+        self.assertEqual(explanation["selected_workflow"], "ralplan")
+        self.assertIn("safe feature-change language", explanation["why_this_workflow"])
+        self.assertEqual(explanation["next_action"], "accept_or_revise_plan")
+        self.assertEqual(explanation["route_next_action"], "present_plan")
+        self.assertIn("accept or revise plan", explanation["recommended_reply"])
+        self.assertIn("present plan", explanation["route_recommended_reply"])
+        self.assertIn("do not claim plan acceptance", explanation["primary_action_hint"])
+        self.assertIn("do not claim execution", explanation["route_primary_action_hint"])
+
     def test_review_quality_cards_expose_verification_boundaries(self) -> None:
         cases = (
             (

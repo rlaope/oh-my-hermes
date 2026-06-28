@@ -4357,6 +4357,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(response["state"]["selected_workflow"], "ralplan")
         self.assertIn("because it needs a safe plan first", response["headline"])
         self.assertIn("not execution evidence", response["claim_boundary"])
+        explanation = response["state"]["workflow_explanation"]
+        self.assertIn("safe feature-change language", explanation["why_this_workflow"])
+        self.assertEqual(explanation["next_action"], "accept_or_revise_plan")
+        self.assertEqual(explanation["route_next_action"], "present_plan")
+        self.assertIn("present plan", explanation["route_recommended_reply"])
+        self.assertIn("accept or revise plan", explanation["recommended_reply"])
         actions = {action["id"]: action for action in response["actions"]}
         self.assertTrue(actions["accept_plan"]["enabled"])
         self.assertTrue(actions["revise_plan"]["enabled"])
