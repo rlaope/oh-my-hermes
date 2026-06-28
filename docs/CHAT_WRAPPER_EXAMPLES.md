@@ -595,7 +595,10 @@ They show how different natural-language messages should produce different
 wrapper-native responses instead of forcing every request into coding.
 Every route payload also includes `route_explanation/v1`, a compact
 why/next/not-yet-evidence card that wrappers can render next to the main
-response without exposing shell commands or raw prompt text.
+response without exposing shell commands or raw prompt text. The same card now
+also carries `recommended_reply`, `primary_action_label`, and
+`primary_action_hint` so a chat surface can show a natural first reply and a
+clear next button without inventing copy or implying execution happened.
 
 ### Startup Product Triage
 
@@ -975,6 +978,7 @@ What gets better for the team:
 | Selected workflow/harness | `chat_response.usage_trace.selected_workflow`, `chat_response.usage_trace.selected_harness` |
 | Workflow pattern card | `chat_response.state.workflow_explanation.workflow_context_card.label`, `.user_examples`, `.first_response_shape`, and `chat_response.usage_trace.workflow_context_id` |
 | Why/next/not-evidence card | `chat_response.state.workflow_explanation.why_this_workflow`, `chat_response.state.workflow_explanation.next_action_label`, `chat_response.state.workflow_explanation.not_evidence_yet` |
+| First reply guidance | `chat_response.state.workflow_explanation.recommended_reply`, `chat_response.state.workflow_explanation.primary_action_label`, `chat_response.state.workflow_explanation.primary_action_hint` |
 | Rendering profile and hints | `chat_response.messenger_rendering.render_profile`, `chat_response.messenger_rendering.transforms_applied`, `chat_response.messenger_rendering.fallback_transforms_applied`, `chat_response.messenger_rendering.preferred_blocks`, `chat_response.messenger_rendering.avoid_blocks`, `chat_response.messenger_rendering.table_policy`, `chat_response.messenger_rendering.prefix_policy` |
 | Button ids | `chat_response.actions[].id` |
 | Thread key | `thread_key` |

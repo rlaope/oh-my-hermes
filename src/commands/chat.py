@@ -330,6 +330,18 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
         print("Why:")
         print(f"  {why}")
 
+    recommended_reply = _text(route_explanation.get("recommended_reply"))
+    if recommended_reply:
+        print()
+        print("Reply:")
+        print(f"  {recommended_reply}")
+
+    primary_action_hint = _text(route_explanation.get("primary_action_hint"))
+    if primary_action_hint:
+        print()
+        print("Action hint:")
+        print(f"  {primary_action_hint}")
+
     recommendations = [item for item in _as_list(route.get("recommendations")) if isinstance(item, dict)]
     if recommendations:
         print()

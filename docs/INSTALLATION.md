@@ -847,9 +847,10 @@ Before calling the bot integration ready, verify these points:
   `omh chat interact --source slack "<message>"` returns a
   `chat_interaction/v1` envelope with a renderable `chat_response/v1`.
 - The route contains `route_explanation/v1` with the selected workflow, why it
-  was selected, the next action, and a short list of states that are not evidence
-  yet. Special OMH intro, quickstart, status, and catalog routes refresh this
-  card after they override the base route.
+  was selected, the next action, a wrapper-ready `recommended_reply`, a
+  `primary_action_label`, a `primary_action_hint`, and a short list of states
+  that are not evidence yet. Special OMH intro, quickstart, status, and catalog
+  routes refresh this card after they override the base route.
 - Common non-English requests should preserve the user's original text while
   routing through deterministic locale hints when a tested phrase matches. For
   example, Japanese or Chinese payment-failure reports route to

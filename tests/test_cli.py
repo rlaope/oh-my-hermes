@@ -4056,6 +4056,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Confidence: high (score 32)", stdout)
         self.assertIn("Why:", stdout)
         self.assertIn("Matched safe feature-change language", stdout)
+        self.assertIn("Reply:", stdout)
+        self.assertIn("I will use `ralplan` first and start with present plan.", stdout)
+        self.assertIn("Action hint:", stdout)
+        self.assertIn("Route to `ralplan` and run `present plan`", stdout)
         self.assertIn("Top recommendations:", stdout)
         self.assertIn("- ralplan: present_plan (high, score 32)", stdout)
         self.assertIn("Route plan:", stdout)
@@ -4071,6 +4075,8 @@ class CliTests(unittest.TestCase):
         route = json.loads(stdout)["route"]
         self.assertEqual(route["selected_skill"], "ralplan")
         self.assertEqual(route["route_explanation"]["next_action"], "present_plan")
+        self.assertEqual(route["route_explanation"]["primary_action_label"], "Open ralplan")
+        self.assertIn("present plan", route["route_explanation"]["recommended_reply"])
 
     def test_chat_route_summary_shows_recorded_runtime_metadata_only(self) -> None:
         with TemporaryDirectory() as tmp:

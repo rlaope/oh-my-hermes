@@ -1687,6 +1687,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("chat_response.state.workflow_explanation.workflow_context_card", text)
         self.assertIn("first_response_shape", text)
         self.assertIn("chat_response.state.workflow_explanation.not_evidence_yet", text)
+        self.assertIn("chat_response.state.workflow_explanation.recommended_reply", text)
+        self.assertIn("chat_response.state.workflow_explanation.primary_action_hint", text)
         self.assertIn("Telegram can register the `omh` bot command menu", text)
         self.assertIn("Startup Product Triage", text)
         self.assertIn("Real-World QA Check", text)

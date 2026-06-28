@@ -360,6 +360,7 @@ def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
     not_evidence_yet = _not_evidence_from_boundary(claim_boundary)
     headline = _route_explanation_headline(action, selected)
     summary = _route_explanation_summary(action, selected, next_action, why)
+    next_action_label = next_action.replace("_", " ") if next_action else ""
     return {
         "schema_version": ROUTE_EXPLANATION_SCHEMA_VERSION,
         "selected_workflow": selected,
@@ -369,7 +370,10 @@ def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
         "score": _int_value(route.get("score", 0)),
         "why_this_workflow": why,
         "next_action": next_action,
-        "next_action_label": next_action.replace("_", " ") if next_action else "",
+        "next_action_label": next_action_label,
+        "recommended_reply": _route_recommended_reply(action, selected, next_action_label, not_evidence_yet),
+        "primary_action_label": _route_primary_action_label(action, selected, next_action_label),
+        "primary_action_hint": _route_primary_action_hint(action, selected, next_action_label, not_evidence_yet),
         "not_evidence_yet": not_evidence_yet,
         "claim_boundary": claim_boundary,
         "headline": headline,
@@ -613,6 +617,50 @@ def _route_explanation_summary(action: str, selected: str, next_action: str, why
     if action == "clarify":
         return f"The router needs one clarification before dispatch. Best candidate: `{selected}`."
     return f"The router should not dispatch yet. Reason: {why}"
+
+
+def _route_recommended_reply(
+    action: str,
+    selected: str,
+    next_action_label: str,
+    not_evidence_yet: list[str],
+) -> str:
+    if action == "dispatch":
+        not_evidence = _first_not_evidence(not_evidence_yet)
+        suffix = f" This is still not {not_evidence} evidence." if not_evidence else " This is routing guidance, not execution evidence."
+        return f"I will use `{selected}` first and start with {next_action_label}.{suffix}"
+    if action == "clarify":
+        return "I need one clarification before choosing a workflow; no plan or execution has started."
+    return "I will keep this in the router until the target is clear; no workflow or execution has started."
+
+
+def _route_primary_action_label(action: str, selected: str, next_action_label: str) -> str:
+    if action == "dispatch":
+        return f"Open {selected}"
+    if action == "clarify":
+        return "Answer clarification"
+    if next_action_label == "answer file lookup":
+        return "Answer file lookup"
+    return "Clarify request"
+
+
+def _route_primary_action_hint(
+    action: str,
+    selected: str,
+    next_action_label: str,
+    not_evidence_yet: list[str],
+) -> str:
+    if action == "dispatch":
+        not_evidence = _first_not_evidence(not_evidence_yet)
+        suffix = f"; do not claim {not_evidence} until observed" if not_evidence else "; keep evidence claims separate"
+        return f"Route to `{selected}` and run `{next_action_label}`{suffix}."
+    if action == "clarify":
+        return "Ask one blocking question, then reroute with the answer."
+    return "Answer directly or ask for the missing target before dispatching a workflow."
+
+
+def _first_not_evidence(items: list[str]) -> str:
+    return items[0].replace("_", " ") if items else ""
 
 
 def _not_evidence_from_boundary(boundary: str) -> list[str]:
