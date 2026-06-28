@@ -550,6 +550,113 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "refresh_status": ("refresh_status", "Refresh status"),
 }
 
+_OPERATING_BRIEF_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "ops-review": {
+        "kind": "ops_review",
+        "headline": "I can turn this into an operating review.",
+        "body": (
+            "I will prepare a compact operating review: observed status, customer signals, release risks, blockers, "
+            "owners, and follow-up questions. Unknowns stay visible until source, owner, delivery, or runtime evidence "
+            "is recorded."
+        ),
+        "phase": "ops_review_prepared",
+        "next_action": "prepare_ops_review",
+        "artifact_schema": "ops_review_card/v1",
+        "actions": [
+            {"id": "prepare_ops_review", "label": "Prepare ops review", "style": "primary"},
+            {"id": "prepare_report_package", "label": "Prepare report", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "summarize_observed_status",
+            "name_customer_and_release_risks",
+            "separate_blockers_from_unknowns",
+            "assign_follow_up_owners",
+        ],
+        "evidence_not_observed": [
+            "source status review",
+            "customer signal review",
+            "owner confirmation",
+            "release decision",
+            "follow-up completion",
+            "implementation",
+            "CI",
+            "merge",
+        ],
+    },
+    "strategy-brief": {
+        "kind": "strategy_brief",
+        "headline": "I can shape this into strategy options.",
+        "body": (
+            "I will prepare the strategy brief: decision frame, options, tradeoffs, assumptions, evidence gaps, "
+            "decision owner, and open questions. Coding or delivery work stays disabled until a decision is accepted."
+        ),
+        "phase": "strategy_brief_prepared",
+        "next_action": "prepare_strategy_brief",
+        "artifact_schema": "strategy_brief_card/v1",
+        "actions": [
+            {"id": "prepare_strategy_brief", "label": "Prepare strategy", "style": "primary"},
+            {"id": "prepare_meeting_brief", "label": "Prepare meeting brief", "style": "secondary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare coding handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "accepted decision and scoped implementation work"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "frame_decision",
+            "list_options_and_tradeoffs",
+            "name_evidence_gaps",
+            "capture_decision_and_next_work",
+        ],
+        "evidence_not_observed": [
+            "source-backed market evidence",
+            "accepted decision",
+            "stakeholder approval",
+            "coding handoff",
+            "implementation",
+            "verification",
+        ],
+    },
+    "report-package": {
+        "kind": "report_package",
+        "headline": "I can package this into a report people can review.",
+        "body": (
+            "I will prepare the report package: source inputs, narrative outline, missing numbers, reviewer checkpoints, "
+            "export checklist, and delivery status. Binary export, visual QA, approval, and attachment remain observed-only."
+        ),
+        "phase": "report_package_prepared",
+        "next_action": "prepare_report_package",
+        "artifact_schema": "report_package_card/v1",
+        "actions": [
+            {"id": "prepare_report_package", "label": "Prepare report", "style": "primary"},
+            {"id": "prepare_material_package", "label": "Prepare file package", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "collect_source_inputs",
+            "draft_report_outline",
+            "mark_missing_numbers",
+            "prepare_export_and_delivery_checks",
+        ],
+        "evidence_not_observed": [
+            "source review completion",
+            "stakeholder approval",
+            "binary export",
+            "render QA",
+            "attachment or delivery",
+            "publication",
+        ],
+    },
+}
+
+_OPERATING_BRIEF_WORKFLOW_BY_NEXT_ACTION = {
+    str(config["next_action"]): workflow for workflow, config in _OPERATING_BRIEF_CHAT_CARDS.items()
+}
+
 
 def _ack_actions_for_next_action(next_action: str) -> list[dict[str, object]]:
     actions: list[dict[str, object]] = []
@@ -919,6 +1026,46 @@ def build_chat_status_interaction(
     return _finish_interaction(payload, None)
 
 
+def _operating_brief_chat_response(
+    *,
+    selected: str,
+    policy_next_action: str,
+    policy: dict[str, object],
+    decision: dict[str, object],
+    action: str,
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object] | None:
+    workflow = selected if selected in _OPERATING_BRIEF_CHAT_CARDS else _OPERATING_BRIEF_WORKFLOW_BY_NEXT_ACTION.get(policy_next_action, "")
+    if not workflow:
+        return None
+    config = _OPERATING_BRIEF_CHAT_CARDS[workflow]
+    next_action = str(config["next_action"])
+    action_specs = config.get("actions", [])
+    actions = [_action_from_spec(spec) for spec in action_specs if isinstance(spec, dict)]
+    evidence_boundary = str(policy.get("evidence_boundary", "")) or "This prepared operating card is not observed work evidence."
+    return _chat_response(
+        kind=str(config["kind"]),
+        headline=str(config["headline"]),
+        body=str(config["body"]),
+        phase=str(config["phase"]),
+        next_action=next_action,
+        thread_key=thread_key,
+        actions=actions,
+        claim_boundary=evidence_boundary,
+        extra_state={
+            "route_action": action,
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": workflow,
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "policy_next_action": policy_next_action,
+            "artifact_schema": str(config["artifact_schema"]),
+            "recommended_flow": list(config.get("recommended_flow", [])),
+            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+        },
+    )
+
+
 def build_chat_response_from_route(
     decision: dict[str, object],
     *,
@@ -1032,6 +1179,17 @@ def build_chat_response_from_route(
                     ],
                 },
             )
+        operating_brief_response = _operating_brief_chat_response(
+            selected=selected,
+            policy_next_action=policy_next_action,
+            policy=policy,
+            decision=decision,
+            action=action,
+            thread_key=thread_key,
+            workflow_explanation_reason=workflow_explanation_reason,
+        )
+        if operating_brief_response:
+            return operating_brief_response
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (
