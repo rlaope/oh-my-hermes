@@ -70,6 +70,10 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     }
 )
 _COMMAND_TRIGGER_PHRASES = frozenset(("/", "./", "/o", "./o", "/om", "./om", "/omh", "./omh", "/skills", "./skills"))
+_COMMAND_TRIGGER_PATTERNS = {
+    phrase: re.compile(rf"(?<![\w./-]){re.escape(phrase)}(?![\w./-])")
+    for phrase in _COMMAND_TRIGGER_PHRASES
+}
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,8 @@ class RecommendationPolicy:
 class _PreparedDefinition:
     definition: SkillDefinition
     trigger_phrases: tuple[str, ...]
+    command_trigger_phrases: tuple[str, ...]
+    plain_trigger_phrases: tuple[str, ...]
     trigger_tokens: frozenset[str]
     name_phrase: str
     description_phrase: str
@@ -534,9 +540,12 @@ def _prepared_routable_definitions() -> tuple[_PreparedDefinition, ...]:
 
 
 def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
+    trigger_phrases = tuple(normalized_phrase(trigger) for trigger in definition.triggers)
     return _PreparedDefinition(
         definition=definition,
-        trigger_phrases=tuple(normalized_phrase(trigger) for trigger in definition.triggers),
+        trigger_phrases=trigger_phrases,
+        command_trigger_phrases=tuple(trigger for trigger in trigger_phrases if trigger in _COMMAND_TRIGGER_PHRASES),
+        plain_trigger_phrases=tuple(trigger for trigger in trigger_phrases if trigger and trigger not in _COMMAND_TRIGGER_PHRASES),
         trigger_tokens=frozenset(_tokens(" ".join(definition.triggers))),
         name_phrase=normalized_phrase(definition.name),
         description_phrase=normalized_phrase(definition.description),
@@ -558,8 +567,13 @@ def _score_definition(
     score = 0
     matched: set[str] = set()
 
-    for trigger_phrase in prepared.trigger_phrases:
-        if _trigger_phrase_match(normalized_query, trigger_phrase):
+    for trigger_phrase in prepared.plain_trigger_phrases:
+        if _phrase_match(normalized_query, trigger_phrase):
+            score += 6
+            matched.add(f"trigger:{trigger_phrase}")
+
+    for trigger_phrase in prepared.command_trigger_phrases:
+        if _command_trigger_match(normalized_query, trigger_phrase):
             score += 6
             matched.add(f"trigger:{trigger_phrase}")
 
@@ -726,11 +740,8 @@ def _strip_path_like_fragments(value: str) -> str:
     return " ".join(neutralized)
 
 
-def _trigger_phrase_match(query: str, value: str) -> bool:
-    if value in _COMMAND_TRIGGER_PHRASES:
-        escaped = re.escape(value)
-        return bool(re.search(rf"(?<![\w./-]){escaped}(?![\w./-])", query))
-    return _phrase_match(query, value)
+def _command_trigger_match(query: str, value: str) -> bool:
+    return bool(_COMMAND_TRIGGER_PATTERNS[value].search(query))
 
 
 def _phrase_match(query: str, value: str) -> bool:
