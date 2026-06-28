@@ -533,12 +533,18 @@ def _contains_non_ascii(value: str) -> bool:
 
 
 def _contains_bounded_english_cue(normalized: str, normalized_cue: str) -> bool:
+    pattern = _bounded_english_cue_pattern(normalized_cue)
+    return pattern is not None and pattern.search(normalized) is not None
+
+
+@lru_cache(maxsize=512)
+def _bounded_english_cue_pattern(normalized_cue: str) -> re.Pattern[str] | None:
     parts = re.findall(r"[a-z0-9]+", normalized_cue)
     if not parts:
-        return False
+        return None
     separator = r"[\s_-]+"
     pattern = r"(?<![a-z0-9])" + separator.join(re.escape(part) for part in parts) + r"(?![a-z0-9])"
-    return re.search(pattern, normalized) is not None
+    return re.compile(pattern)
 
 
 def is_workflow_meta_or_feedback(message: str) -> bool:
