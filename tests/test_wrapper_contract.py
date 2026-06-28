@@ -1047,6 +1047,64 @@ class WrapperContractTests(unittest.TestCase):
                 if workflow == "executor-runtime-readiness":
                     self.assertTrue(actions["choose_executor"]["enabled"])
 
+    def test_workflow_operations_cards_expose_observation_boundaries(self) -> None:
+        cases = (
+            (
+                "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
+                "operating-rhythm",
+                "operating_rhythm",
+                "I can turn this into an operating rhythm record.",
+                "meeting completion",
+                "prepare_operating_record",
+            ),
+            (
+                "첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘",
+                "materials-package",
+                "materials_package",
+                "I can prepare the material package without pretending files exist.",
+                "binary export",
+                "prepare_material_package",
+            ),
+            (
+                "I need a weekly leadership brief from support tickets, competitor news, and release risks",
+                "research-department",
+                "research_department",
+                "I can organize this into a research department flow.",
+                "source retrieval",
+                "prepare_research_department_plan",
+            ),
+            (
+                "GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘",
+                "github-event-ops",
+                "github_event_ops",
+                "I can prepare this GitHub event without claiming webhook work happened.",
+                "webhook receipt",
+                "prepare_github_event_ops_card",
+            ),
+        )
+
+        for message, workflow, kind, headline, not_evidence, primary_action in cases:
+            with self.subTest(workflow=workflow):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                response = payload["chat_response"]
+                explanation = response["state"]["workflow_explanation"]
+                actions = {str(action["id"]): action for action in response["actions"]}
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], workflow)
+                self.assertEqual(response["kind"], kind)
+                self.assertEqual(response["plain_headline"], headline)
+                self.assertEqual(response["state"]["selected_workflow"], workflow)
+                self.assertEqual(response["state"]["artifact_schema"], f"{kind}_card/v1")
+                self.assertEqual(response["actions"][0]["id"], primary_action)
+                self.assertIn(not_evidence, explanation["not_evidence_yet"])
+                self.assertIn(not_evidence, response["claim_boundary"])
+                if workflow == "github-event-ops":
+                    self.assertFalse(actions["prepare_coding_handoff"]["enabled"])
+                if workflow == "research-department":
+                    self.assertTrue(actions["run_hermes_research"]["enabled"])
+
     def test_blocker_status_uses_status_usage_trace_label(self) -> None:
         response = build_chat_response_from_status({"next_action": "surface_ci_blocker"})
 
@@ -1785,7 +1843,7 @@ class WrapperContractTests(unittest.TestCase):
                 "GitHub PR이 열리면 리뷰하고 CI 실패 원인을 정리해줘",
                 "github-event-ops",
                 "prepare_github_event_ops_card",
-                "ack",
+                "github_event_ops",
             ),
             (
                 "우리 팀 Hermes agent 여러 명으로 작업 보드 관리하고 싶어",
@@ -1797,7 +1855,7 @@ class WrapperContractTests(unittest.TestCase):
                 "GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘",
                 "github-event-ops",
                 "prepare_github_event_ops_card",
-                "ack",
+                "github_event_ops",
             ),
             (
                 "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
@@ -1809,7 +1867,7 @@ class WrapperContractTests(unittest.TestCase):
                 "첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘",
                 "materials-package",
                 "prepare_material_package",
-                "ack",
+                "materials_package",
             ),
             (
                 "Codex 작업이 어디까지 진행됐는지 알려줘",
@@ -1868,15 +1926,15 @@ class WrapperContractTests(unittest.TestCase):
                 "내 경쟁사 시장 뉴스를 매일 수집하고 분석해서 브리핑해줘",
                 "research-department",
                 "prepare_research_department_plan",
-                "research workflow",
-                "ack",
+                "Scout, Analyst, and Briefer",
+                "research_department",
             ),
             (
                 "이 회의록을 PPT와 PDF로 정리해줘",
                 "materials-package",
                 "prepare_material_package",
                 "material package",
-                "ack",
+                "materials_package",
             ),
             (
                 "이 보고서를 파일로 만들어서 첨부할 수 있게 준비해줘",
@@ -1910,8 +1968,8 @@ class WrapperContractTests(unittest.TestCase):
                 "OMH로 GitHub issue webhook 처리 가능해?",
                 "github-event-ops",
                 "prepare_github_event_ops_card",
-                "triage, review, label",
-                "ack",
+                "triage labels",
+                "github_event_ops",
             ),
             (
                 "we need a competitor market scan and strategy memo for next week's leadership meeting",

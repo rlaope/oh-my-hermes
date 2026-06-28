@@ -920,6 +920,148 @@ _DELIVERY_RUNTIME_CHAT_CARDS: dict[str, dict[str, object]] = {
     },
 }
 
+_WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "operating-rhythm": {
+        "kind": "operating_rhythm",
+        "headline": "I can turn this into an operating rhythm record.",
+        "body": (
+            "I will prepare the operating rhythm: cadence, meeting topics, decisions, owners, follow-up slots, "
+            "and what needs confirmation. Meeting outcomes, owner acceptance, and completed follow-ups stay unobserved "
+            "until recorded."
+        ),
+        "phase": "operating_rhythm_prepared",
+        "next_action": "prepare_operating_record",
+        "artifact_schema": "operating_rhythm_card/v1",
+        "claim_boundary_suffix": "It is not meeting completion, decision approval, owner acceptance, or follow-up evidence.",
+        "actions": [
+            {"id": "prepare_operating_record", "label": "Prepare rhythm", "style": "primary"},
+            {"id": "prepare_report_package", "label": "Prepare record package", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "capture_cadence",
+            "list_meeting_topics",
+            "separate_decisions_from_open_questions",
+            "record_owner_follow_up_slots",
+        ],
+        "evidence_not_observed": [
+            "meeting completion",
+            "decision approval",
+            "owner acceptance",
+            "follow-up completion",
+            "source notes reviewed",
+            "delivery",
+        ],
+    },
+    "materials-package": {
+        "kind": "materials_package",
+        "headline": "I can prepare the material package without pretending files exist.",
+        "body": (
+            "I will prepare the material package: source files, target formats, extraction needs, formulas or layout risks, "
+            "export checklist, render QA, approval, and delivery steps. Binary files, uploads, render checks, and attachments "
+            "remain observed-only."
+        ),
+        "phase": "materials_package_prepared",
+        "next_action": "prepare_material_package",
+        "artifact_schema": "materials_package_card/v1",
+        "claim_boundary_suffix": "It is not binary export, render QA, upload, attachment, approval, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_material_package", "label": "Prepare package", "style": "primary"},
+            {"id": "prepare_deliverable_package", "label": "Prepare deliverable", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "inventory_source_files",
+            "choose_target_formats",
+            "name_extraction_or_layout_risks",
+            "prepare_export_and_render_qa_checks",
+        ],
+        "evidence_not_observed": [
+            "source extraction",
+            "binary export",
+            "formula validation",
+            "render QA",
+            "upload",
+            "attachment",
+            "approval",
+        ],
+    },
+    "research-department": {
+        "kind": "research_department",
+        "headline": "I can organize this into a research department flow.",
+        "body": (
+            "I will prepare Scout, Analyst, and Briefer lanes: source inbox, synthesis questions, briefing format, cadence, "
+            "knowledge-store readiness, and delivery policy. Source retrieval, synthesis, verification, storage, and delivery "
+            "stay unobserved until recorded."
+        ),
+        "phase": "research_department_prepared",
+        "next_action": "prepare_research_department_plan",
+        "artifact_schema": "research_department_card/v1",
+        "claim_boundary_suffix": "It is not source retrieval, synthesis, verification, knowledge-store write, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_research_department_plan", "label": "Prepare research flow", "style": "primary"},
+            {"id": "run_hermes_research", "label": "Start research", "style": "secondary"},
+            {"id": "prepare_report_package", "label": "Prepare brief", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "define_scout_sources",
+            "prepare_analyst_questions",
+            "choose_briefing_format",
+            "separate_retrieval_from_synthesis_and_delivery",
+        ],
+        "evidence_not_observed": [
+            "source retrieval",
+            "source verification",
+            "synthesis",
+            "knowledge-store write",
+            "brief delivery",
+            "stakeholder approval",
+        ],
+    },
+    "github-event-ops": {
+        "kind": "github_event_ops",
+        "headline": "I can prepare this GitHub event without claiming webhook work happened.",
+        "body": (
+            "I will prepare the GitHub event card: event type, issue or PR context, triage labels, review path, CI questions, "
+            "docs-sync needs, and follow-up handoff. Webhook receipt, GitHub mutation, code changes, review, CI, and docs sync "
+            "stay observed-only."
+        ),
+        "phase": "github_event_ops_prepared",
+        "next_action": "prepare_github_event_ops_card",
+        "artifact_schema": "github_event_ops_card/v1",
+        "claim_boundary_suffix": "It is not webhook receipt, webhook delivery, GitHub mutation, code execution, review, CI, docs-sync, or merge evidence.",
+        "actions": [
+            {"id": "prepare_github_event_ops_card", "label": "Open event card", "style": "primary"},
+            {"id": "prepare_review_or_followup_handoff", "label": "Prepare review", "style": "secondary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare fix handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "observed event context and accepted implementation scope"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "classify_github_event",
+            "prepare_triage_or_review_path",
+            "separate_ci_and_docs_questions",
+            "prepare_follow_up_handoff_if_scope_is_accepted",
+        ],
+        "evidence_not_observed": [
+            "webhook receipt",
+            "GitHub mutation",
+            "label application",
+            "code execution",
+            "completed review",
+            "CI",
+            "docs sync",
+            "merge",
+        ],
+    },
+}
+
 def _ack_actions_for_next_action(next_action: str) -> list[dict[str, object]]:
     actions: list[dict[str, object]] = []
     primary = _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION.get(next_action)
@@ -1411,6 +1553,48 @@ def _delivery_runtime_chat_response(
     )
 
 
+def _workflow_operations_chat_response(
+    *,
+    selected: str,
+    policy_next_action: str,
+    policy: dict[str, object],
+    decision: dict[str, object],
+    action: str,
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object] | None:
+    if selected not in _WORKFLOW_OPERATIONS_CHAT_CARDS:
+        return None
+    config = _WORKFLOW_OPERATIONS_CHAT_CARDS[selected]
+    next_action = str(config["next_action"])
+    action_specs = config.get("actions", [])
+    actions = [_action_from_spec(spec) for spec in action_specs if isinstance(spec, dict)]
+    evidence_boundary = str(policy.get("evidence_boundary", "")) or "This prepared workflow operations card is not observed work evidence."
+    claim_boundary_suffix = str(config.get("claim_boundary_suffix", "")).strip()
+    if claim_boundary_suffix and claim_boundary_suffix.lower() not in evidence_boundary.lower():
+        evidence_boundary = f"{evidence_boundary} {claim_boundary_suffix}".strip()
+    return _chat_response(
+        kind=str(config["kind"]),
+        headline=str(config["headline"]),
+        body=str(config["body"]),
+        phase=str(config["phase"]),
+        next_action=next_action,
+        thread_key=thread_key,
+        actions=actions,
+        claim_boundary=evidence_boundary,
+        extra_state={
+            "route_action": action,
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": selected,
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "policy_next_action": policy_next_action,
+            "artifact_schema": str(config["artifact_schema"]),
+            "recommended_flow": list(config.get("recommended_flow", [])),
+            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+        },
+    )
+
+
 def build_chat_response_from_route(
     decision: dict[str, object],
     *,
@@ -1557,6 +1741,17 @@ def build_chat_response_from_route(
         )
         if delivery_runtime_response:
             return delivery_runtime_response
+        workflow_operations_response = _workflow_operations_chat_response(
+            selected=selected,
+            policy_next_action=policy_next_action,
+            policy=policy,
+            decision=decision,
+            action=action,
+            thread_key=thread_key,
+            workflow_explanation_reason=workflow_explanation_reason,
+        )
+        if workflow_operations_response:
+            return workflow_operations_response
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (
