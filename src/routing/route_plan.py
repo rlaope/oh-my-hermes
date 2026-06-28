@@ -156,6 +156,14 @@ _STAGE_SIGNAL_PHRASES = {
         "검증",
     ),
 }
+_STAGE_SIGNAL_OPTIONS = {
+    stage: tuple(
+        (normalized, " " not in phrase)
+        for phrase in phrases
+        if (normalized := normalized_phrase(phrase))
+    )
+    for stage, phrases in _STAGE_SIGNAL_PHRASES.items()
+}
 
 
 @dataclass(frozen=True)
@@ -365,11 +373,11 @@ def _risk_or_review_signal(normalized: str) -> bool:
 def _stages_from_signals(normalized: str, tokens: set[str]) -> tuple[str, ...]:
     stages: list[str] = []
     for stage in _STAGE_ORDER:
-        phrases = _STAGE_SIGNAL_PHRASES.get(stage, ())
-        if any(normalized_phrase(phrase) in normalized for phrase in phrases):
+        signal_options = _STAGE_SIGNAL_OPTIONS.get(stage, ())
+        if any(phrase in normalized for phrase, _is_token_candidate in signal_options):
             stages.append(stage)
             continue
-        if any(normalized_phrase(phrase) in tokens for phrase in phrases if " " not in phrase):
+        if any(phrase in tokens for phrase, is_token_candidate in signal_options if is_token_candidate):
             stages.append(stage)
     return tuple(stages)
 
