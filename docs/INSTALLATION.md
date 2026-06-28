@@ -671,7 +671,12 @@ Minimal wrapper calls:
 omh chat interact --source discord --event-json event.json
 omh chat interact --source slack "risky refactor"
 printf '%s' "$SLACK_TEXT" | omh chat interact --source slack --stdin
+omh chat interact --source discord --summary "risky refactor"
 ```
+
+The default output is the machine-readable `chat_interaction/v1` JSON envelope
+that wrappers should render. Use `--summary` only when an operator wants to
+inspect the same response contract quickly in a terminal.
 
 If the wrapper can identify the current Hermes agent target, include that as
 metadata rather than asking the user to choose a command:

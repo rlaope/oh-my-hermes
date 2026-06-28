@@ -4192,6 +4192,60 @@ class CliTests(unittest.TestCase):
         self.assertTrue(response["state"]["coding_delegate_available"])
         self.assertNotIn(message, json.dumps(payload))
 
+    def test_chat_interact_summary_renders_operator_readable_plan(self) -> None:
+        message = "I want to safely add a feature to this repo"
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "--summary", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH chat interaction", stdout)
+        self.assertIn("Source: discord", stdout)
+        self.assertIn("Workflow: ralplan", stdout)
+        self.assertIn("Next action: present_plan", stdout)
+        self.assertIn("[omh] ralplan - I routed this to `ralplan`", stdout)
+        self.assertIn("Actions:", stdout)
+        self.assertIn("- accept_plan: Accept plan (enabled)", stdout)
+        self.assertIn("- prepare_handoff: Prepare handoff (disabled)", stdout)
+        self.assertIn("Boundary:", stdout)
+        self.assertIn("A draft plan is not execution evidence.", stdout)
+        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "--json", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_interaction/v1")
+        self.assertEqual(payload["route"]["selected_skill"], "ralplan")
+
+    def test_chat_interact_summary_renders_catalog_picker_without_shell_json(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--summary", "what OMH workflows are available?"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("OMH chat interaction", stdout)
+        self.assertIn("Workflow: oh-my-hermes", stdout)
+        self.assertIn("Next action: choose_skill", stdout)
+        self.assertIn("[omh] oh-my-hermes - Here are the OMH workflows.", stdout)
+        self.assertIn("- choose_skill: Choose workflow (enabled)", stdout)
+        self.assertIn("- search_skills: Search workflows (enabled)", stdout)
+        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+
+    def test_chat_interact_rejects_conflicting_output_modes(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--summary", "--json", "risky refactor"],
+            output_json=False,
+        )
+
+        self.assertNotEqual(status, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("--summary and --json cannot be used together", stderr)
+
     def test_chat_interact_routes_grounded_operator_examples(self) -> None:
         cases = (
             ("결제 실패 이슈가 자주 나와", "feedback-triage", "ack", "triage_feedback"),
