@@ -2314,13 +2314,27 @@ def _safe_feature_plan_guard_applies(normalized_query: str, query_tokens: set[st
     )
     feature_change = bool({"feature", "features", "기능"} & query_tokens) and (
         bool({"add", "implement", "change", "build", "추가", "구현"} & query_tokens)
-        or _contains_phrase(normalized_query, ("add a feature", "feature change", "기능 추가"))
+        or _contains_phrase(normalized_query, ("add a feature", "feature change", "기능 추가", "기능 안전하게 넣"))
     )
     scope_or_handoff = bool({"repo", "repository", "handoff", "plan", "codebase", "executor"} & query_tokens) or _contains_phrase(
         normalized_query,
         ("this repo", "this repository", "before handoff", "request-to-handoff", "코드베이스", "핸드오프"),
     )
-    return safe_signal and feature_change and scope_or_handoff
+    return safe_signal and feature_change and (
+        scope_or_handoff
+        or _contains_phrase(
+            normalized_query,
+            (
+                "safely add a feature",
+                "add a feature safely",
+                "feature safely",
+                "safe feature",
+                "안전하게 기능",
+                "안전한 기능",
+                "기능 안전하게",
+            ),
+        )
+    )
 
 
 def _persistent_completion_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

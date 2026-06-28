@@ -58,7 +58,7 @@ class WorkflowLearningTests(unittest.TestCase):
         self.assertEqual(trace["privacy"]["mode"], "metadata_only")
         self.assertFalse(trace["privacy"]["raw_prompt_stored"])
         self.assertEqual(trace["source"]["message_length"], len(message))
-        self.assertEqual(trace["workflow"]["selected_workflow"], "plan")
+        self.assertEqual(trace["workflow"]["selected_workflow"], "ralplan")
         self.assertIn("plan acceptance", trace["reasoning_summary"]["not_evidence_yet"])
         self.assertNotIn(message, serialized)
         self.assertNotIn("secret-token-123", serialized)
