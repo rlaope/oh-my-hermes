@@ -1484,20 +1484,26 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertNotIn("capability_summary", payload["chat_response"]["state"])
 
     def test_file_lookup_fallback_card_uses_lookup_copy(self) -> None:
-        payload = build_chat_interaction_payload("search docs/WORKFLOWS.md for loop", source="discord")
+        for message in ("search docs/WORKFLOWS.md for loop", "README 파일 찾아줘"):
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
 
-        self.assertEqual(payload["mode"], "clarify")
-        self.assertEqual(payload["route"]["action"], "fallback")
-        self.assertEqual(payload["next_action"], "answer_file_lookup")
-        response = payload["chat_response"]
-        self.assertEqual(response["kind"], "clarification")
-        self.assertIn("file or text lookup", response["body"])
-        self.assertIn("file or text lookup", response["state"]["routing_instruction"])
-        self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
-        self.assertNotIn("choose the right workflow", response["body"])
-        actions = {action["id"]: action for action in response["actions"]}
-        self.assertIn("answer:file_lookup", actions)
-        self.assertTrue(actions["answer:file_lookup"]["enabled"])
+                self.assertEqual(payload["mode"], "clarify")
+                self.assertEqual(payload["route"]["action"], "fallback")
+                self.assertEqual(payload["next_action"], "answer_file_lookup")
+                response = payload["chat_response"]
+                self.assertEqual(response["kind"], "clarification")
+                self.assertIn("file or text lookup", response["body"])
+                self.assertIn("file or text lookup", response["state"]["routing_instruction"])
+                self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
+                explanation = response["state"]["workflow_explanation"]
+                self.assertIn("file inspection", explanation["claim_boundary"])
+                self.assertIn("file inspection", explanation["not_evidence_yet"])
+                self.assertNotIn("review", explanation["not_evidence_yet"])
+                self.assertNotIn("choose the right workflow", response["body"])
+                actions = {action["id"]: action for action in response["actions"]}
+                self.assertIn("answer:file_lookup", actions)
+                self.assertTrue(actions["answer:file_lookup"]["enabled"])
 
     def test_interaction_route_explanation_matches_special_route_overrides(self) -> None:
         payload = build_chat_interaction_payload("What is OMH and how should I use it?", source="discord")

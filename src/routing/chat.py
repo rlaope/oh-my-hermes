@@ -566,11 +566,11 @@ def _route_next_action(route: dict[str, object], recommendation: dict[str, objec
 
 
 def _route_claim_boundary(route: dict[str, object], recommendation: dict[str, object]) -> str:
+    if _is_file_lookup_reason(str(route.get("reason", ""))):
+        return "No OMH workflow, execution, or file inspection has started."
     boundary = str(recommendation.get("evidence_boundary", "")).strip()
     if boundary:
         return boundary
-    if _is_file_lookup_reason(str(route.get("reason", ""))):
-        return "No OMH workflow, execution, or file inspection has started."
     if str(route.get("action", "")) == "dispatch":
         return "Routing guidance is not workflow execution evidence."
     return "No execution has started."
@@ -665,6 +665,11 @@ def _first_not_evidence(items: list[str]) -> str:
 
 def _not_evidence_from_boundary(boundary: str) -> list[str]:
     text = boundary.lower()
+    if "file inspection" in text:
+        items = ["file inspection"]
+        if "execution" in text:
+            items.append("execution")
+        return items
     items: list[str] = []
     for marker, label in (
         ("plan acceptance", "plan acceptance"),

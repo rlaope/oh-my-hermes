@@ -360,6 +360,26 @@ _PATH_REFERENCE_MARKERS = (
     "readme",
     "section",
 )
+_FILE_LOOKUP_ACTION_MARKERS = (
+    "find",
+    "show",
+    "open",
+    "read",
+    "search",
+    "look up",
+    "lookup",
+    "locate",
+    "찾아",
+    "찾아줘",
+    "보여",
+    "보여줘",
+    "열어",
+    "열어줘",
+    "읽어",
+    "읽어줘",
+    "검색",
+    "어디",
+)
 _CATALOG_COLLISION_MARKERS = _CATALOG_COLLECTION_WORDS + ("명령어",)
 _OPERATOR_ACTION_QUESTION_MARKERS = (
     "how can i",
@@ -431,12 +451,31 @@ def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
     if _contains_catalog_token(search_texts, _WORKFLOW_REVIEW_INTENT_MARKERS):
         return False
     if _contains_catalog_token(search_texts, _PATH_REFERENCE_MARKERS):
+        if _contains_file_lookup_action(search_texts):
+            return True
         return _contains_catalog_token(search_texts, _CONTEXT_MARKERS) or _contains_catalog_token(
             search_texts, _CATALOG_COLLISION_MARKERS
         ) or _contains_catalog_token(search_texts, _NAMED_WORKFLOW_MARKERS)
     return _contains_catalog_token(search_texts, _FILE_OR_TEXT_MARKERS) and _contains_catalog_token(
         search_texts, _CATALOG_COLLISION_MARKERS
     )
+
+
+def _contains_file_lookup_action(search_texts: tuple[str, ...]) -> bool:
+    for text in search_texts:
+        word_text = _word_search_text(text)
+        for marker in _FILE_LOOKUP_ACTION_MARKERS:
+            if marker.isascii():
+                if f" {marker} " in word_text:
+                    return True
+            elif marker in text:
+                return True
+    return False
+
+
+def _word_search_text(text: str) -> str:
+    cleaned = "".join(character if character.isalnum() else " " for character in text)
+    return f" {' '.join(cleaned.split())} "
 
 
 def _is_named_workflow_catalog_question(search_texts: tuple[str, ...]) -> bool:

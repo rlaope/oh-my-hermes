@@ -4287,7 +4287,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("--summary and --json cannot be used together", stderr)
 
     def test_chat_route_file_lookup_does_not_emit_workflow_clarification(self) -> None:
-        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "README", "파일", "찾아줘"])
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
@@ -4299,10 +4299,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("file or text lookup", route["clarification"])
         self.assertIn("file or text lookup", route["routing_instruction"])
         self.assertNotIn("ask one concise clarification", route["routing_instruction"])
+        self.assertIn("file inspection", route["route_explanation"]["not_evidence_yet"])
+        self.assertNotIn("review", route["route_explanation"]["not_evidence_yet"])
         self.assertNotEqual(route["recommendations"][0]["skill"], route["selected_skill"])
 
     def test_chat_interact_file_lookup_fallback_uses_lookup_card(self) -> None:
-        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "search", "docs/WORKFLOWS.md", "for", "loop"])
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "README", "파일", "찾아줘"])
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
@@ -4314,6 +4316,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(response["kind"], "clarification")
         self.assertIn("file or text lookup", response["body"])
         self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
+        explanation = response["state"]["workflow_explanation"]
+        self.assertIn("file inspection", explanation["not_evidence_yet"])
+        self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotIn("choose the right workflow", response["body"])
 
     def test_chat_route_and_interact_guard_short_omh_maintenance_command(self) -> None:
