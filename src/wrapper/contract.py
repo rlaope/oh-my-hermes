@@ -3431,6 +3431,7 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
             payload["target_topology"] = topology
     response = payload.get("chat_response")
     if isinstance(response, dict):
+        response = _chat_response_with_route_explanation(response, _nested(payload, "route"))
         if target_notice:
             response = _chat_response_with_target_notice(response, target_notice)
         payload["chat_response"] = _chat_response_with_render_profile(
@@ -3439,6 +3440,42 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
             source_metadata=_nested(payload, "source_metadata"),
         )
     return payload
+
+
+def _chat_response_with_route_explanation(
+    response: dict[str, object], route_payload: dict[str, object]
+) -> dict[str, object]:
+    route_explanation = _nested(route_payload, "route_explanation")
+    if not route_explanation:
+        return response
+    updated = dict(response)
+    state = dict(_nested(updated, "state"))
+    workflow_explanation = dict(_nested(state, "workflow_explanation"))
+    if not workflow_explanation:
+        return response
+
+    existing_reason = str(workflow_explanation.get("why_this_workflow") or "").strip()
+    route_reason = str(route_explanation.get("why_this_workflow") or "").strip()
+    if route_reason:
+        if existing_reason and existing_reason not in route_reason:
+            reason = f"{route_reason} {existing_reason}"
+        else:
+            reason = route_reason
+        workflow_explanation["why_this_workflow"] = reason
+        state["workflow_explanation_reason"] = reason
+    for source_key, target_key in (
+        ("action", "route_action"),
+        ("next_action", "route_next_action"),
+        ("recommended_reply", "route_recommended_reply"),
+        ("primary_action_label", "route_primary_action_label"),
+        ("primary_action_hint", "route_primary_action_hint"),
+    ):
+        value = route_explanation.get(source_key)
+        if value:
+            workflow_explanation[target_key] = value
+    state["workflow_explanation"] = workflow_explanation
+    updated["state"] = state
+    return updated
 
 
 def _chat_response_with_target_notice(response: dict[str, object], target_notice: dict[str, object]) -> dict[str, object]:
