@@ -244,6 +244,14 @@ class ChatRouterTests(unittest.TestCase):
                 "agent-ops-review",
             ),
             (
+                "The coding agent says tests passed and PR is open; what is still missing?",
+                "agent-ops-review",
+            ),
+            (
+                "What is the latest status of the Codex handoff?",
+                "agent-ops-review",
+            ),
+            (
                 "I installed it but omh is not found in a new terminal.",
                 "doctor",
             ),
@@ -264,7 +272,15 @@ class ChatRouterTests(unittest.TestCase):
                 "gateway-intent-card",
             ),
             (
+                "Slack message has a file attachment and should update the thread quietly.",
+                "gateway-intent-card",
+            ),
+            (
                 "Make this OSS star-worthy by repeatedly reducing first-run friction.",
+                "loop",
+            ),
+            (
+                "Make a 100k star open source project from this repo.",
                 "loop",
             ),
             (
