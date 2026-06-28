@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
@@ -3993,4 +3994,14 @@ def _explicit_delivery_or_implementation_requested(normalized_query: str, query_
 
 
 def _contains_phrase(normalized_query: str, phrases: tuple[str, ...] | frozenset[str]) -> bool:
-    return any(normalized_phrase(phrase) in normalized_query for phrase in phrases)
+    return any(phrase in normalized_query for phrase in _normalized_phrase_options(phrases))
+
+
+@lru_cache(maxsize=512)
+def _normalized_phrase_options(phrases: tuple[str, ...] | frozenset[str]) -> tuple[str, ...]:
+    normalized_phrases: list[str] = []
+    for phrase in phrases:
+        normalized = normalized_phrase(phrase)
+        if normalized:
+            normalized_phrases.append(normalized)
+    return tuple(normalized_phrases)
