@@ -3129,9 +3129,9 @@ class CliTests(unittest.TestCase):
             ("Quiero agregar una función de forma segura a este repo", "ralplan", "locale:es:safe_feature"),
             ("Je veux ajouter une fonctionnalité en toute sécurité à ce repo", "ralplan", "locale:fr:safe_feature"),
             ("Ich möchte sicher eine Funktion hinzufügen", "ralplan", "locale:de:safe_feature"),
-            ("Quiero convertir este issue en un PR", "plan", "locale:es:issue_to_pr"),
-            ("Je veux transformer cette issue en PR", "plan", "locale:fr:issue_to_pr"),
-            ("Ich möchte dieses Issue für einen PR vorbereiten", "plan", "locale:de:issue_to_pr"),
+            ("Quiero convertir este issue en un PR", "github-event-ops", "locale:es:issue_to_pr"),
+            ("Je veux transformer cette issue en PR", "github-event-ops", "locale:fr:issue_to_pr"),
+            ("Ich möchte dieses Issue für einen PR vorbereiten", "github-event-ops", "locale:de:issue_to_pr"),
         )
 
         for message, expected_skill, locale_match in cases:
