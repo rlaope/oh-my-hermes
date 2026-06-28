@@ -523,11 +523,17 @@ with:
 omh chat interact --source discord "<message>"
 omh playbook recommend "<message>" --limit 1
 omh coding delegate --executor codex --source discord "<message>"
-omh demo grounded-score
+omh demo grounded-score --summary
+omh demo grounded-score --json
 ```
 
 The purpose of the matrix is to keep Hermes users command-agnostic while giving
 wrapper operators a concrete contract result to render.
+
+`omh demo grounded-score --summary` prints a compact operator-readable rollup;
+`omh demo grounded-score --json` prints the full machine-readable payload.
+The default `omh demo grounded-score` output remains JSON for wrapper
+compatibility.
 
 `omh demo grounded-score` is a deterministic contract-compliance demo over 28
 representative messages. The score is 10/10 only when the expected chat route,

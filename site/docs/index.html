@@ -622,7 +622,10 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
           </p>
           <p>
             Reproduce the contract-compliance score gate with
-            <code>omh demo grounded-score</code>. A case reaches
+            <code>omh demo grounded-score --summary</code> for an operator-readable
+            rollup, or <code>omh demo grounded-score --json</code> for the full
+            machine-readable payload. The default command still emits JSON for
+            wrapper compatibility. A case reaches
             <code>10/10</code> only when route, response kind, next action,
             playbook confidence, and evidence boundary all match; execution,
             review, CI, and merge never count unless observed.

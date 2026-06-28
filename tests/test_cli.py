@@ -5227,6 +5227,30 @@ class CliTests(unittest.TestCase):
         self.assertEqual(direct["direct-goal-loop"]["expected"]["invocation_mode"], "direct_skill")
         self.assertEqual(direct["direct-ultraprocess-cycle"]["expected"]["invocation_mode"], "direct_skill")
 
+        status, stdout, stderr = run_cli(["demo", "grounded-score", "--json"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        explicit_payload = json.loads(stdout)
+        self.assertEqual(explicit_payload["schema_version"], "grounded_score_evaluation/v1")
+        self.assertEqual(explicit_payload["summary"]["scenario_count"], 28)
+
+    def test_demo_grounded_score_summary_is_human_readable(self) -> None:
+        status, stdout, stderr = run_cli(["demo", "grounded-score", "--summary"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH grounded score", stdout)
+        self.assertIn("Result: 28/28 scenarios at 10/10 (all passing)", stdout)
+        self.assertIn(
+            "Startup SaaS product triage: 10/10 ok; feedback-triage -> triage_feedback; handoff_absent",
+            stdout,
+        )
+        self.assertIn("Boundary: This is deterministic local contract-compliance evaluation", stdout)
+        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+
     def test_coding_delegate_include_message_expands_prompt_for_non_logging_wrappers(self) -> None:
         status, stdout, stderr = run_cli(["coding", "delegate", "--include-message", "risky", "refactor"])
 
