@@ -135,6 +135,7 @@ VISIBLE_ACTIONS = (
     "record_visual_qa",
     "record_visual_delivery",
     "show_visual_status",
+    "dispatch_to_workflow",
     "run_hermes_research",
     "prepare_strategy_brief",
     "prepare_meeting_brief",
@@ -657,6 +658,123 @@ _OPERATING_BRIEF_WORKFLOW_BY_NEXT_ACTION = {
     str(config["next_action"]): workflow for workflow, config in _OPERATING_BRIEF_CHAT_CARDS.items()
 }
 
+_REVIEW_QUALITY_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "ultraqa": {
+        "kind": "qa_review",
+        "headline": "I can turn this into QA scenarios and observed checks.",
+        "body": (
+            "I will prepare the QA lane: scenario list, expected behavior, cheap checks, expensive checks, known gaps, "
+            "and follow-up handoff options. No product diagnosis, verification, fix, CI, or release-readiness claim is made "
+            "until matching observations exist."
+        ),
+        "phase": "qa_review_prepared",
+        "next_action": "dispatch_to_workflow",
+        "artifact_schema": "qa_review_card/v1",
+        "actions": [
+            {
+                "id": "dispatch_to_workflow",
+                "label": "Prepare QA workflow",
+                "style": "primary",
+                "payload": {"claim_boundary": "route_only_not_scenario_execution"},
+            },
+            {"id": "prepare_review_or_followup_handoff", "label": "Prepare follow-up review", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "define_scenarios",
+            "name_expected_behavior",
+            "separate_observed_checks_from_gaps",
+            "prepare_follow_up_handoff_if_needed",
+        ],
+        "evidence_not_observed": [
+            "scenario execution",
+            "product diagnosis",
+            "observed checks",
+            "fix implementation",
+            "verification",
+            "CI",
+            "release readiness",
+        ],
+    },
+    "code-review": {
+        "kind": "review_check",
+        "headline": "I can review the claims before we call this done.",
+        "body": (
+            "I will prepare a review lane: claims to inspect, evidence to verify, missing tests, risk areas, and any "
+            "follow-up fix handoff. Review preparation is not a completed review, fix, CI result, or merge decision."
+        ),
+        "phase": "review_check_prepared",
+        "next_action": "prepare_review_or_followup_handoff",
+        "artifact_schema": "review_check_card/v1",
+        "claim_boundary_suffix": "It is not verification, CI, merge-readiness, or merge evidence.",
+        "actions": [
+            {"id": "prepare_review_or_followup_handoff", "label": "Prepare review", "style": "primary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare fix handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "observed findings that require code changes"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "list_review_claims",
+            "check_evidence",
+            "separate_findings_from_fix_handoffs",
+            "record_verification_gaps",
+        ],
+        "evidence_not_observed": [
+            "completed review",
+            "accepted findings",
+            "fix implementation",
+            "test execution",
+            "CI",
+            "merge readiness",
+            "merge",
+        ],
+    },
+    "reliability-review": {
+        "kind": "reliability_review",
+        "headline": "I can review reliability without declaring the system healthy.",
+        "body": (
+            "I will prepare the reliability review: service boundary, incident or SLO context, error-budget questions, "
+            "risk hypotheses, remediation options, and verification gates. Healthy status, closure, or remediation success "
+            "stays unobserved until evidence is recorded."
+        ),
+        "phase": "reliability_review_prepared",
+        "next_action": "prepare_reliability_review",
+        "artifact_schema": "reliability_review_card/v1",
+        "actions": [
+            {"id": "prepare_reliability_review", "label": "Review reliability", "style": "primary"},
+            {"id": "prepare_review_or_followup_handoff", "label": "Prepare follow-up review", "style": "secondary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare remediation handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "accepted remediation scope and observed reliability evidence"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "define_service_boundary",
+            "capture_slo_or_incident_context",
+            "separate_risks_from_observed_health",
+            "prepare_remediation_handoff_if_needed",
+        ],
+        "evidence_not_observed": [
+            "SLO pass",
+            "healthy error budget",
+            "incident closure",
+            "remediation completion",
+            "verification",
+            "review",
+            "CI",
+            "merge",
+        ],
+    },
+}
 
 def _ack_actions_for_next_action(next_action: str) -> list[dict[str, object]]:
     actions: list[dict[str, object]] = []
@@ -1066,6 +1184,48 @@ def _operating_brief_chat_response(
     )
 
 
+def _review_quality_chat_response(
+    *,
+    selected: str,
+    policy_next_action: str,
+    policy: dict[str, object],
+    decision: dict[str, object],
+    action: str,
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object] | None:
+    if selected not in _REVIEW_QUALITY_CHAT_CARDS:
+        return None
+    config = _REVIEW_QUALITY_CHAT_CARDS[selected]
+    next_action = str(config["next_action"])
+    action_specs = config.get("actions", [])
+    actions = [_action_from_spec(spec) for spec in action_specs if isinstance(spec, dict)]
+    evidence_boundary = str(policy.get("evidence_boundary", "")) or "This prepared review card is not observed review evidence."
+    claim_boundary_suffix = str(config.get("claim_boundary_suffix", "")).strip()
+    if claim_boundary_suffix and claim_boundary_suffix.lower() not in evidence_boundary.lower():
+        evidence_boundary = f"{evidence_boundary} {claim_boundary_suffix}".strip()
+    return _chat_response(
+        kind=str(config["kind"]),
+        headline=str(config["headline"]),
+        body=str(config["body"]),
+        phase=str(config["phase"]),
+        next_action=next_action,
+        thread_key=thread_key,
+        actions=actions,
+        claim_boundary=evidence_boundary,
+        extra_state={
+            "route_action": action,
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": selected,
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "policy_next_action": policy_next_action,
+            "artifact_schema": str(config["artifact_schema"]),
+            "recommended_flow": list(config.get("recommended_flow", [])),
+            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+        },
+    )
+
+
 def build_chat_response_from_route(
     decision: dict[str, object],
     *,
@@ -1190,6 +1350,17 @@ def build_chat_response_from_route(
         )
         if operating_brief_response:
             return operating_brief_response
+        review_quality_response = _review_quality_chat_response(
+            selected=selected,
+            policy_next_action=policy_next_action,
+            policy=policy,
+            decision=decision,
+            action=action,
+            thread_key=thread_key,
+            workflow_explanation_reason=workflow_explanation_reason,
+        )
+        if review_quality_response:
+            return review_quality_response
         if selected == "loop" or policy_next_action == "start_goal_loop":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A goal loop is orchestration state only."
             body = str(policy.get("wrapper_guidance", "")) or (

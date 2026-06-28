@@ -4433,9 +4433,9 @@ class CliTests(unittest.TestCase):
         cases = (
             ("결제 실패 이슈가 자주 나와", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("이 이슈 PR로 만들 수 있게 정리해줘", "ralplan", "plan", "present_plan"),
-            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa", "ack", "dispatch_to_workflow"),
+            ("쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?", "ultraqa", "qa_review", "dispatch_to_workflow"),
             ("이거 위험한 리팩터링 같아", "ralplan", "plan", "present_plan"),
-            ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "ack", "prepare_review_or_followup_handoff"),
+            ("AI가 했다고 했는데 실제로 뭐 했는지 모르겠다", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             ("온보딩을 더 부드럽게 만들고 싶어", "deep-interview", "clarification", "answer_clarification"),
             (
                 "I need to improve our onboarding but I don't know where to start",
@@ -4443,7 +4443,7 @@ class CliTests(unittest.TestCase):
                 "clarification",
                 "answer_clarification",
             ),
-            ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
+            ("릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
@@ -4464,7 +4464,7 @@ class CliTests(unittest.TestCase):
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "send_to_executor"),
             ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "ack", "prepare_executor_runtime_readiness"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "ack", "prepare_agent_board_card"),
-            ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "ack", "prepare_review_or_followup_handoff"),
+            ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             (
                 "I want Hermes to learn from this workflow and improve the skill next time",
                 "workflow-learning",
