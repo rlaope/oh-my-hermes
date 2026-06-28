@@ -122,6 +122,20 @@ into one operator-readable card. It should be ready before a release, but it
 still proves only local deterministic contracts, not live Hermes selection or
 runtime execution.
 
+The grounded routing score checks representative operator requests end to end:
+
+```sh
+omh demo grounded-score --json
+```
+
+It should report every scenario at `10/10`. This catches regressions where a
+realistic operator message still routes somewhere, but the selected skill,
+response kind, next action, playbook recommendation, coding boundary, or
+prepared-vs-observed wording no longer matches the product contract. It remains
+local deterministic contract-compliance evidence only: it does not prove live
+Hermes chat rendering, executor execution, review, CI, merge, delivery, or
+plugin loading.
+
 The wrapper chat-card gate checks the user-facing card corpus:
 
 ```sh
@@ -141,12 +155,12 @@ The product readiness rollup sits one level above use cases:
 omh release product-readiness --version 1.0.1 --json
 ```
 
-It checks the generated skill content, G1-G10 readiness, wrapper chat-card
-coverage, parity matrix, and release checklist shape in one operator-readable
-card. It is useful for release notes and maintainer handoff, but it is still
-local deterministic evidence only: it does not run the checklist, mutate Hermes,
-dispatch executors, review code, pass CI, merge, deliver messages, or spend
-provider budget.
+It checks the generated skill content, G1-G10 readiness, grounded routing score,
+wrapper chat-card coverage, parity matrix, and release checklist shape in one
+operator-readable card. It is useful for release notes and maintainer handoff,
+but it is still local deterministic evidence only: it does not run the
+checklist, mutate Hermes, dispatch executors, review code, pass CI, merge,
+deliver messages, or spend provider budget.
 
 When the local release story is ready, write an attachable evidence bundle:
 
@@ -156,8 +170,8 @@ omh release evidence-bundle --version 1.0.1 --write --json
 
 The bundle writes `omh_release_evidence_bundle/v1` under
 `.omh/runtime/release-evidence/` with the checklist, product readiness,
-skill-content smoke, use-case readiness, chat-card coverage, and parity
-snapshots. It is useful for release PRs and notes, but it is still local
+skill-content smoke, use-case readiness, grounded score, chat-card coverage, and
+parity snapshots. It is useful for release PRs and notes, but it is still local
 deterministic evidence only; live Hermes smoke, CI, review, merge, delivery, and
 GitHub release publication must be observed separately.
 
