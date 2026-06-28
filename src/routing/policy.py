@@ -895,6 +895,11 @@ _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "runtime readiness",
     "codex readiness",
     "claude code readiness",
+    "can this task run in codex",
+    "can this run in codex",
+    "can this run in claude",
+    "run in codex or claude",
+    "run in codex, claude",
     "codex or claude",
     "codex and claude",
     "codex vs claude",
@@ -1048,6 +1053,9 @@ _AGENT_BOARD_PHRASES = (
     "multi agent board",
     "multiple hermes agents",
     "multiple hermes profiles",
+    "coordinate pm cto qa",
+    "coordinate pm cto qa and release agents",
+    "coordinate release agents",
     "roles and board",
     "role board",
     "task board",
@@ -1174,6 +1182,11 @@ _VOICE_OPERATOR_PHRASES = (
     "voice operator",
     "voice-first",
     "mobile command",
+    "from mobile",
+    "on mobile",
+    "from phone",
+    "mobile request",
+    "mobile note",
     "spoken request",
     "short voice",
     "hands free",
@@ -1676,6 +1689,15 @@ RELEASE_CLAIM_REVIEW_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; release claim checks need review boundaries instead of plain file lookup.",
     activation_status="active",
 )
+DOCTOR_HEALTH_GUARD = RoutingGuardRule(
+    id="doctor_health_before_skill_catalog",
+    rule="OMH install, setup, update, stale skill, or registration health confusion should route to doctor.",
+    matched_label="guard:doctor_health",
+    preferred_skills=("doctor",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; setup/update health confusion should run diagnostics before skill catalog management.",
+    activation_status="active",
+)
 VOICE_OPERATOR_GUARD = RoutingGuardRule(
     id="voice_operator_before_generic_clarification",
     rule="Voice, mobile, or terse accessibility-sensitive requests should route to voice-operator before generic clarification.",
@@ -1749,6 +1771,7 @@ ROUTING_GUARD_RULES = (
     AGENT_BOARD_GUARD,
     CODING_PROGRESS_STATUS_GUARD,
     RELEASE_CLAIM_REVIEW_GUARD,
+    DOCTOR_HEALTH_GUARD,
     EXECUTOR_RUNTIME_READINESS_GUARD,
     VOICE_OPERATOR_GUARD,
     VISUAL_SUMMARY_GUARD,
@@ -1842,7 +1865,12 @@ def active_routing_guard_rules(
         rules.append(MISSED_WORKFLOW_WEB_RESEARCH_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
-    if _materials_package_guard_applies(normalized_query, query_tokens) and not paper_learning_applies:
+    deliverable_package_applies = _deliverable_package_guard_applies(normalized_query, query_tokens)
+    if (
+        _materials_package_guard_applies(normalized_query, query_tokens)
+        and not paper_learning_applies
+        and not deliverable_package_applies
+    ):
         rules.append(MATERIALS_PACKAGE_GUARD)
     if _memory_curation_guard_applies(normalized_query, query_tokens):
         rules.append(MEMORY_CURATION_GUARD)
@@ -1852,13 +1880,15 @@ def active_routing_guard_rules(
         rules.append(CODING_PROGRESS_STATUS_GUARD)
     if _release_claim_review_guard_applies(normalized_query, query_tokens):
         rules.append(RELEASE_CLAIM_REVIEW_GUARD)
+    if _doctor_health_guard_applies(normalized_query, query_tokens):
+        rules.append(DOCTOR_HEALTH_GUARD)
     if _executor_runtime_readiness_guard_applies(normalized_query, query_tokens):
         rules.append(EXECUTOR_RUNTIME_READINESS_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
         rules.append(VOICE_OPERATOR_GUARD)
     if _visual_summary_guard_applies(normalized_query, query_tokens):
         rules.append(VISUAL_SUMMARY_GUARD)
-    if _deliverable_package_guard_applies(normalized_query, query_tokens):
+    if deliverable_package_applies:
         rules.append(DELIVERABLE_PACKAGE_GUARD)
     if _coding_handoff_status_guard_applies(normalized_query, query_tokens):
         rules.append(CODING_HANDOFF_STATUS_GUARD)
@@ -2231,7 +2261,10 @@ def _agent_board_guard_applies(normalized_query: str, query_tokens: set[str]) ->
     )
     board_or_roles = bool({"board", "kanban", "role", "roles", "보드", "역할", "칸반"} & query_tokens)
     team_context = bool(_AGENT_BOARD_CONTEXT_TOKENS & query_tokens)
-    return team_context and multi_agent and board_or_roles
+    coordination = bool({"coordinate", "assign", "handoff", "route", "조율", "배정", "분배"} & query_tokens)
+    named_roles = len({"pm", "cto", "qa", "security", "ops", "release"} & query_tokens) >= 2
+    agents = bool({"agent", "agents", "에이전트"} & query_tokens)
+    return (team_context and multi_agent and board_or_roles) or (coordination and agents and named_roles)
 
 
 def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2260,6 +2293,81 @@ def _release_claim_review_guard_applies(normalized_query: str, query_tokens: set
     )
     compare_or_verify = _contains_phrase(normalized_query, ("match", "matches", "verify", "review", "맞는지", "검토", "통과"))
     return review_intent and claim_or_release and compare_or_verify
+
+
+def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    code_change_context = {"implementation", "router"} & query_tokens and {
+        "fix",
+        "code",
+        "change",
+        "수정",
+        "구현",
+    } & query_tokens
+    if code_change_context:
+        return False
+    if _contains_phrase(
+        normalized_query,
+        (
+            "after omh update",
+            "omh update says setup",
+            "setup is next",
+            "skills still look stale",
+            "skills look stale",
+            "hermes skills still",
+            "install looks broken",
+            "setup looks broken",
+            "registration looks broken",
+            "omh가 이상",
+            "설치가 이상",
+            "셋업이 이상",
+            "스킬이 안 보여",
+            "스킬이 stale",
+        ),
+    ):
+        return True
+    omh_context = _contains_phrase(normalized_query, ("omh", "oh-my-hermes", "oh my hermes", "hermes skills"))
+    maintenance = bool(
+        {
+            "install",
+            "setup",
+            "update",
+            "doctor",
+            "health",
+            "registration",
+            "stale",
+            "skills",
+            "path",
+            "설치",
+            "셋업",
+            "업데이트",
+            "닥터",
+            "스킬",
+            "등록",
+            "상태",
+        }
+        & query_tokens
+    )
+    confusion = _contains_phrase(
+        normalized_query,
+        (
+            "still",
+            "stale",
+            "missing",
+            "not found",
+            "broken",
+            "doesn't work",
+            "not working",
+            "says setup",
+            "look stale",
+            "looks stale",
+            "안 보여",
+            "안됨",
+            "안 돼",
+            "이상",
+            "깨짐",
+        ),
+    )
+    return omh_context and maintenance and confusion
 
 
 def _reliability_review_context_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2293,13 +2401,29 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
         normalized_query,
         ("which", "choose", "compare", "vs", "중 어떤", "어떤", "골라", "선택", "정해", "할까", "넘길지"),
     )
-    return runtime_intent and named_executor and selection
+    run_capability = _contains_phrase(
+        normalized_query,
+        (
+            "can this task run",
+            "can this run",
+            "run in codex",
+            "run in claude",
+            "run with codex",
+            "run with claude",
+        ),
+    )
+    return runtime_intent and named_executor and (selection or run_capability)
 
 
 def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _VOICE_OPERATOR_PHRASES):
         return True
     if _VOICE_OPERATOR_TOKENS & query_tokens and _CAPABILITY_INTENT_TOKENS & query_tokens:
+        return True
+    if _VOICE_OPERATOR_TOKENS & query_tokens and _contains_phrase(
+        normalized_query,
+        ("from mobile", "on mobile", "from phone", "mobile request", "mobile note"),
+    ):
         return True
     return bool(_VOICE_OPERATOR_TOKENS & query_tokens) and _contains_phrase(
         normalized_query,
