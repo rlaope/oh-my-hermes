@@ -134,6 +134,40 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], harness)
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_operator_surface_good_examples_route_without_skill_names(self) -> None:
+        cases = (
+            (
+                "can this task run in Codex, Claude Code, or Hermes coding?",
+                "executor-runtime-readiness",
+            ),
+            (
+                "coordinate PM, CTO, QA, and release agents on this launch checklist.",
+                "agent-board",
+            ),
+            (
+                "release before lunch, check risky parts from mobile.",
+                "voice-operator",
+            ),
+            (
+                "turn this research into PPT and PDF with attachment status.",
+                "deliverable-package",
+            ),
+            (
+                "after omh update says setup is next but Hermes skills still look stale.",
+                "doctor",
+            ),
+        )
+
+        for message, skill in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertEqual(decision["selected_harness"], primary_harness_for_skill(skill))
+                self.assertEqual(decision["recommendations"][0]["skill"], skill)
+                self.assertEqual(decision["confidence"], "high")
+
     def test_visual_summary_chat_dispatches_to_img_summary(self) -> None:
         cases = (
             "이미지 요약 카드 만들어줘",
@@ -403,6 +437,8 @@ class ChatRouterTests(unittest.TestCase):
 
         self.assertIsNone(decision["task_card"])
         self.assertNotIn("task_card:omh_cli_maintenance", decision["recommendations"][0]["matched"])
+        self.assertNotEqual(decision["selected_skill"], "doctor")
+        self.assertNotIn("guard:doctor_health", decision["recommendations"][0]["matched"])
 
         explanation = route_chat_message("omh update 설명해줘", source="discord")
         self.assertIsNone(explanation["task_card"])
