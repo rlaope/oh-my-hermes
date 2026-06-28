@@ -171,6 +171,38 @@ class ChatRouterTests(unittest.TestCase):
                 "after omh update says setup is next but Hermes skills still look stale.",
                 "doctor",
             ),
+            (
+                "finish the invoice export recovery until the smoke test passes or a blocker is recorded.",
+                "ralph",
+            ),
+            (
+                "compare three onboarding analytics vendors using customer notes and confidence gaps.",
+                "research-brief",
+            ),
+            (
+                "decide whether our onboarding should prioritize solo founders or enterprise buyers.",
+                "strategy-brief",
+            ),
+            (
+                "turn this onboarding idea into a scoped plan, implementation handoff, QA gate, and release path.",
+                "idea-to-deploy",
+            ),
+            (
+                "run the PM, dev, QA, security, and ops loop for this risky billing launch.",
+                "cto-loop",
+            ),
+            (
+                "test the setup wizard with hostile install paths, stale config, and missing PATH cases.",
+                "ultraqa",
+            ),
+            (
+                "remove duplicated router branches and lock behavior with regression tests before refactoring.",
+                "ai-slop-cleaner",
+            ),
+            (
+                "keep researching AI agent memory practices until the evidence gaps are closed or logged.",
+                "autoresearch-goal",
+            ),
         )
 
         for message, skill in cases:

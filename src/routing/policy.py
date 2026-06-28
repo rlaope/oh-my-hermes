@@ -1572,6 +1572,78 @@ OMH_QUALITY_IMPROVEMENT_GUARD = RoutingGuardRule(
     ),
     activation_status="active",
 )
+PERSISTENT_COMPLETION_GUARD = RoutingGuardRule(
+    id="persistent_completion_before_board_status",
+    rule="Persistent finish-until-pass-or-block requests should route to ralph before board/status surfaces.",
+    matched_label="guard:persistent_completion",
+    preferred_skills=("ralph",),
+    score_boost=38,
+    why="Matched completion-loop language with a concrete pass/block stop condition.",
+    activation_status="active",
+)
+RESEARCH_BRIEF_GUARD = RoutingGuardRule(
+    id="research_brief_before_wiki",
+    rule="Comparison and evidence-gap research synthesis should route to research-brief before durable wiki capture.",
+    matched_label="guard:research_brief",
+    preferred_skills=("research-brief",),
+    score_boost=38,
+    why="Matched comparison research with evidence, confidence, or notes; prepare a brief before capturing knowledge.",
+    activation_status="active",
+)
+STRATEGY_BRIEF_GUARD = RoutingGuardRule(
+    id="strategy_brief_before_generic_plan",
+    rule="Business prioritization and segment decisions should route to strategy-brief before generic planning.",
+    matched_label="guard:strategy_brief",
+    preferred_skills=("strategy-brief",),
+    score_boost=40,
+    why="Matched strategy decision language; prepare options and tradeoffs before implementation planning.",
+    activation_status="active",
+)
+APP_DELIVERY_LOOP_GUARD = RoutingGuardRule(
+    id="app_delivery_loop_before_generic_plan",
+    rule="Idea-to-release paths should route to idea-to-deploy before generic planning.",
+    matched_label="guard:app_delivery_loop",
+    preferred_skills=("idea-to-deploy",),
+    score_boost=38,
+    why="Matched idea, handoff, QA, and release path language; use the app delivery loop surface.",
+    activation_status="active",
+)
+CTO_LOOP_GUARD = RoutingGuardRule(
+    id="cto_loop_before_generic_loop",
+    rule="PM/dev/QA/security/ops leadership loops should route to cto-loop before generic loop handling.",
+    matched_label="guard:cto_loop",
+    preferred_skills=("cto-loop",),
+    score_boost=48,
+    why="Matched leadership role loop language; prepare the CTO operating model rather than a generic loop.",
+    activation_status="active",
+)
+ADVERSARIAL_QA_GUARD = RoutingGuardRule(
+    id="adversarial_qa_before_generic_help",
+    rule="Hostile, adversarial, missing-path, or stale-config testing requests should route to ultraqa.",
+    matched_label="guard:adversarial_qa",
+    preferred_skills=("ultraqa",),
+    score_boost=42,
+    why="Matched adversarial QA scenario language; route to the QA harness instead of generic help.",
+    activation_status="active",
+)
+CLEANUP_REFACTOR_GUARD = RoutingGuardRule(
+    id="cleanup_refactor_before_workflow_learning",
+    rule="Code cleanup/refactor requests with regression-test language should route to ai-slop-cleaner before workflow-learning.",
+    matched_label="guard:cleanup_refactor",
+    preferred_skills=("ai-slop-cleaner",),
+    score_boost=50,
+    why="Matched concrete cleanup/refactor work with behavior-locking tests; use the cleanup harness rather than process learning.",
+    activation_status="active",
+)
+DURABLE_RESEARCH_GUARD = RoutingGuardRule(
+    id="durable_research_goal_before_wiki",
+    rule="Keep-researching-until-gap-closed requests should route to autoresearch-goal before wiki capture.",
+    matched_label="guard:durable_research_goal",
+    preferred_skills=("autoresearch-goal",),
+    score_boost=44,
+    why="Matched durable research loop language with evidence gaps and a stop condition.",
+    activation_status="active",
+)
 WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     id="web_research_before_process",
     rule="Plain web/source/current-evidence requests should route to web research before one-cycle delivery.",
@@ -1756,6 +1828,14 @@ ROUTING_GUARD_RULES = (
     RISKY_REFACTOR_GUARD,
     FEEDBACK_BEFORE_CODING_GUARD,
     PRODUCT_SHAPING_GUARD,
+    PERSISTENT_COMPLETION_GUARD,
+    RESEARCH_BRIEF_GUARD,
+    STRATEGY_BRIEF_GUARD,
+    APP_DELIVERY_LOOP_GUARD,
+    CTO_LOOP_GUARD,
+    ADVERSARIAL_QA_GUARD,
+    CLEANUP_REFACTOR_GUARD,
+    DURABLE_RESEARCH_GUARD,
     WORKFLOW_LEARNING_GUARD,
     OMH_QUALITY_IMPROVEMENT_GUARD,
     PAPER_LEARNING_GUARD,
@@ -1822,9 +1902,26 @@ def active_routing_guard_rules(
         rules.append(RISKY_REFACTOR_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
         rules.append(PRODUCT_SHAPING_GUARD)
-    if _workflow_learning_guard_applies(normalized_query, query_tokens):
+    if _persistent_completion_guard_applies(normalized_query, query_tokens):
+        rules.append(PERSISTENT_COMPLETION_GUARD)
+    if _research_brief_guard_applies(normalized_query, query_tokens):
+        rules.append(RESEARCH_BRIEF_GUARD)
+    if _strategy_brief_guard_applies(normalized_query, query_tokens):
+        rules.append(STRATEGY_BRIEF_GUARD)
+    if _app_delivery_loop_guard_applies(normalized_query, query_tokens):
+        rules.append(APP_DELIVERY_LOOP_GUARD)
+    if _cto_loop_guard_applies(normalized_query, query_tokens):
+        rules.append(CTO_LOOP_GUARD)
+    if _adversarial_qa_guard_applies(normalized_query, query_tokens):
+        rules.append(ADVERSARIAL_QA_GUARD)
+    if _cleanup_refactor_guard_applies(normalized_query, query_tokens):
+        rules.append(CLEANUP_REFACTOR_GUARD)
+    if _durable_research_goal_guard_applies(normalized_query, query_tokens):
+        rules.append(DURABLE_RESEARCH_GUARD)
+    workflow_learning_applies = _workflow_learning_guard_applies(normalized_query, query_tokens)
+    if workflow_learning_applies:
         rules.append(WORKFLOW_LEARNING_GUARD)
-    if _omh_quality_improvement_guard_applies(normalized_query):
+    if not workflow_learning_applies and _omh_quality_improvement_guard_applies(normalized_query):
         rules.append(OMH_QUALITY_IMPROVEMENT_GUARD)
     delivery_cycle_applies = _delivery_cycle_guard_applies(normalized_query, query_tokens)
     paper_learning_applies = (
@@ -1933,6 +2030,147 @@ def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[st
 
 def _omh_quality_improvement_guard_applies(normalized_query: str) -> bool:
     return classify_omh_quality_intent(normalized_query).applies
+
+
+def _persistent_completion_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    completion = _contains_phrase(
+        normalized_query,
+        (
+            "finish until",
+            "until done",
+            "until the smoke test passes",
+            "until smoke test passes",
+            "until the test passes",
+            "until tests pass",
+            "until a blocker",
+            "or a blocker is recorded",
+            "blocker is recorded",
+        ),
+    )
+    pass_or_block = bool({"pass", "passes", "blocker", "blocked", "done"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("smoke test", "stop condition", "completion owner", "완료될 때까지", "막히면"),
+    )
+    return completion and pass_or_block
+
+
+def _research_brief_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _research_department_guard_applies(normalized_query, query_tokens):
+        return False
+    compare = bool({"compare", "comparison", "benchmark", "evaluate", "vendors", "vendor"} & query_tokens)
+    evidence = bool({"notes", "evidence", "confidence", "gaps", "sources", "customer"} & query_tokens)
+    research_subject = bool({"vendor", "vendors", "market", "competitor", "analytics", "customer"} & query_tokens)
+    phrase = _contains_phrase(
+        normalized_query,
+        (
+            "compare three",
+            "compare vendors",
+            "compare products",
+            "using customer notes",
+            "confidence gaps",
+            "research brief",
+        ),
+    )
+    return phrase or (compare and research_subject and evidence)
+
+
+def _strategy_brief_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    strategy_action = bool({"decide", "prioritize", "strategy", "positioning", "choose"} & query_tokens)
+    business_target = bool(
+        {
+            "buyers",
+            "segments",
+            "enterprise",
+            "founders",
+            "market",
+            "onboarding",
+            "pricing",
+            "positioning",
+            "roadmap",
+        }
+        & query_tokens
+    )
+    tradeoff = _contains_phrase(
+        normalized_query,
+        ("whether", "or", "rather than", "prioritize", "decide whether", "전략", "우선순위", "결정"),
+    )
+    return strategy_action and business_target and tradeoff
+
+
+def _app_delivery_loop_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    idea = "idea" in query_tokens or _contains_phrase(normalized_query, ("this idea", "feature idea", "제품 아이디어"))
+    path = _contains_phrase(
+        normalized_query,
+        (
+            "scoped plan",
+            "implementation handoff",
+            "qa gate",
+            "release path",
+            "idea to deploy",
+            "idea-to-deploy",
+        ),
+    )
+    delivery_terms = len({"plan", "handoff", "qa", "release", "deploy"} & query_tokens) >= 3
+    return idea and (path or delivery_terms)
+
+
+def _cto_loop_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, ("cto loop", "cto-loop", "cto operating model")):
+        return True
+    role_names = ("pm", "cto", "dev", "qa", "security", "ops")
+    named_roles = {role for role in role_names if role in query_tokens or _contains_phrase(normalized_query, (role,))}
+    launch_or_risk = bool({"launch", "release", "billing", "risky", "risk"} & query_tokens)
+    loop = "loop" in query_tokens or _contains_phrase(normalized_query, ("operating loop", "leadership loop"))
+    return len(named_roles) >= 4 and loop and launch_or_risk
+
+
+def _adversarial_qa_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    qa_context = bool({"test", "tests", "qa", "wizard"} & query_tokens)
+    adversarial = bool({"hostile", "adversarial", "stale", "missing", "invalid", "broken"} & query_tokens)
+    scenario_phrase = _contains_phrase(
+        normalized_query,
+        (
+            "hostile install",
+            "hostile paths",
+            "stale config",
+            "missing path",
+            "missing PATH",
+            "adversarial qa",
+            "hostile cases",
+        ),
+    )
+    return qa_context and (adversarial or scenario_phrase)
+
+
+def _cleanup_refactor_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    cleanup = bool({"cleanup", "clean", "remove", "dedupe", "deduplicate", "simplify", "refactor", "refactoring"} & query_tokens)
+    code_surface = bool({"code", "router", "routing", "branches", "implementation"} & query_tokens)
+    behavior_lock = bool({"regression", "tests", "test", "behavior"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("lock behavior", "regression tests", "before refactoring"),
+    )
+    phrase = _contains_phrase(
+        normalized_query,
+        ("remove duplicated", "remove duplicate", "clean up duplicated", "cleanup duplicated", "duplicated router"),
+    )
+    return (cleanup or phrase) and code_surface and behavior_lock
+
+
+def _durable_research_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    durable = _contains_phrase(
+        normalized_query,
+        (
+            "keep researching",
+            "continue researching",
+            "until the evidence gaps are closed",
+            "until evidence gaps are closed",
+            "evidence gaps are closed or logged",
+            "durable research",
+        ),
+    )
+    research = bool({"research", "researching", "evidence", "gaps", "sources"} & query_tokens)
+    stop_condition = _contains_phrase(normalized_query, ("until", "closed or logged", "checkpoint", "stop condition"))
+    return durable and research and stop_condition
 
 
 def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
