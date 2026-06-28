@@ -204,6 +204,22 @@ class ChatRouterTests(unittest.TestCase):
                 "agent-ops-review",
             ),
             (
+                "PR 42 has failing CI, summarize the risk and next fix path.",
+                "github-event-ops",
+            ),
+            (
+                "The Claude Code session looks stuck; what is it doing and what should I do next?",
+                "agent-ops-review",
+            ),
+            (
+                "Voice note: release risky. check fast and ask before action.",
+                "voice-operator",
+            ),
+            (
+                "omh setup says done but Hermes cannot see the skills.",
+                "doctor",
+            ),
+            (
                 "decide whether our onboarding should prioritize solo founders or enterprise buyers.",
                 "strategy-brief",
             ),

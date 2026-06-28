@@ -47,12 +47,14 @@ _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/pl
 _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     {
         "coding_progress_status_before_clarify",
+        "doctor_health_before_skill_catalog",
         "feedback_before_coding",
         "github_event_ops_before_generic_planning",
         "safe_feature_change_before_generic_plan",
         "img_summary_before_materials_or_delivery",
         "paper_learning_before_materials_or_research_ops",
         "source_finder_before_generic_web_research",
+        "voice_operator_before_generic_clarification",
         "missed_workflow_research_recovery",
         "missed_workflow_operating_record_recovery",
         "product_shaping_before_ops_review",
