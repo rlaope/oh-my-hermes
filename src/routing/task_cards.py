@@ -177,6 +177,45 @@ _MAINTENANCE_FILLER_TOKENS = frozenset(
         "실행",
     }
 )
+_CODE_CLEANUP_ACTION_TOKENS = frozenset(
+    normalized_phrase(term)
+    for term in (
+        "cleanup",
+        "clean",
+        "remove",
+        "dedupe",
+        "deduplicate",
+        "simplify",
+        "refactor",
+        "refactoring",
+        "lock",
+        "정리",
+        "제거",
+        "중복",
+        "리팩터링",
+    )
+)
+_CODE_CLEANUP_TARGET_TOKENS = frozenset(
+    normalized_phrase(term)
+    for term in (
+        "code",
+        "branch",
+        "branches",
+        "router",
+        "routing",
+        "test",
+        "tests",
+        "regression",
+        "behavior",
+        "implementation",
+        "코드",
+        "라우터",
+        "라우팅",
+        "테스트",
+        "회귀",
+        "구현",
+    )
+)
 
 
 def classify_task(message: str) -> dict[str, object] | None:
@@ -338,6 +377,8 @@ def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], 
     diagnostic_status_context = "diagnostic_status_context" in structural_cues
     evaluation_region = _without_diagnostic_status_lines(normalized) if diagnostic_status_context else normalized
     evaluation_compact = evaluation_region.replace(" ", "")
+    if _is_code_cleanup_request(evaluation_region, tokens):
+        return False
     phrase_hit = _phrase_hit(_ROUTER_DESIGN_CONTEXT_PHRASES, evaluation_region, evaluation_compact)
     if phrase_hit:
         return True
@@ -381,6 +422,24 @@ def _is_router_design_feedback(normalized: str, compact: str, tokens: set[str], 
     ):
         return True
     return False
+
+
+def _is_code_cleanup_request(evaluation_region: str, tokens: set[str]) -> bool:
+    action = bool(_CODE_CLEANUP_ACTION_TOKENS & tokens) or _phrase_hit(
+        (
+            "remove duplicated",
+            "remove duplicate",
+            "lock behavior",
+            "regression tests",
+            "before refactoring",
+            "cleanup code",
+            "clean up code",
+        ),
+        evaluation_region,
+        evaluation_region.replace(" ", ""),
+    )
+    target = bool(_CODE_CLEANUP_TARGET_TOKENS & tokens)
+    return action and target
 
 
 def _phrase_hit(phrases: tuple[str, ...], normalized: str, compact: str) -> bool:
