@@ -474,7 +474,7 @@ Every wrapper-facing `chat_response/v1` can render a first-line usage marker
 from `chat_response.usage_trace.visible_prefix`, for example:
 
 ```text
-[omh] web-research - I know which workflow should handle this.
+[omh] web-research - I can gather source-backed current evidence for this.
 ```
 
 That marker is product status, not a command the user has to learn. The same
@@ -612,6 +612,71 @@ What gets better for the team:
 - The next step is investigation and reproduction planning before any coding
   handoff.
 - The future handoff can carry acceptance criteria and verification checks.
+
+### Operating Review, Strategy, And Report Cards
+
+```text
+# weekly-ops
+
+operator
+prepare weekly ops review from customer feedback and release risks
+
+Hermes Agent  BOT
+[omh] ops-review - I can turn this into an operating review.
+
+I will prepare a compact operating review: observed status, customer signals,
+release risks, blockers, owners, and follow-up questions. Unknowns stay visible
+until source, owner, delivery, or runtime evidence is recorded.
+
+[ Prepare ops review ] [ Prepare report ] [ Show status ]
+
+Claim boundary: An ops review is not implementation, release, CI, review, or merge evidence.
+```
+
+```text
+# strategy
+
+operator
+we need a competitor market scan and strategy memo for next week's leadership meeting
+
+Hermes Agent  BOT
+[omh] strategy-brief - I can shape this into strategy options.
+
+I will prepare the strategy brief: decision frame, options, tradeoffs,
+assumptions, evidence gaps, decision owner, and open questions. Coding or
+delivery work stays disabled until a decision is accepted.
+
+[ Prepare strategy ] [ Prepare meeting brief ] [ Prepare coding handoff ] disabled [ Show status ]
+
+Claim boundary: A strategy brief is not an accepted decision or implementation evidence.
+```
+
+```text
+# leadership-report
+
+operator
+create a PPT report package for a monthly leadership status deck
+
+Hermes Agent  BOT
+[omh] report-package - I can package this into a report people can review.
+
+I will prepare the report package: source inputs, narrative outline, missing
+numbers, reviewer checkpoints, export checklist, and delivery status. Binary
+export, visual QA, approval, and attachment remain observed-only.
+
+[ Prepare report ] [ Prepare file package ] [ Show status ]
+
+Claim boundary: A report package or PPT-ready outline is not source-review completion, stakeholder approval, presentation delivery, or binary PPTX export evidence.
+```
+
+What gets better for the team:
+
+- Ops review, strategy, and report packaging no longer look like generic routing
+  acknowledgements.
+- Strategy cards make implementation handoff visibly unavailable until a
+  decision exists.
+- Report cards separate outline preparation from binary export, render QA,
+  approval, and delivery.
 
 ### Real-World QA Check
 

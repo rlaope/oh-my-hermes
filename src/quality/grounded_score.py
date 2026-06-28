@@ -167,7 +167,7 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         "Leadership report package",
         "create a PPT report package for a monthly leadership status deck",
         "report-package",
-        "ack",
+        "report_package",
         "prepare_report_package",
         "clarify",
         False,

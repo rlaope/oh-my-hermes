@@ -455,9 +455,21 @@ class WrapperContractTests(unittest.TestCase):
 
         self.assertEqual(payload["mode"], "route")
         self.assertEqual(payload["next_action"], "prepare_ops_review")
-        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "ops-review")
-        self.assertEqual(payload["chat_response"]["state"]["policy_next_action"], "prepare_ops_review")
-        self.assertIn("observed status", payload["chat_response"]["body"])
+        response = payload["chat_response"]
+        actions = {str(action["id"]): action for action in response["actions"]}
+
+        self.assertEqual(response["kind"], "ops_review")
+        self.assertEqual(response["plain_headline"], "I can turn this into an operating review.")
+        self.assertEqual(response["state"]["selected_workflow"], "ops-review")
+        self.assertEqual(response["state"]["policy_next_action"], "prepare_ops_review")
+        self.assertEqual(response["state"]["artifact_schema"], "ops_review_card/v1")
+        self.assertIn("observed status", response["body"])
+        self.assertIn("release risks", response["body"])
+        self.assertIn("Unknowns stay visible", response["body"])
+        self.assertTrue(actions["prepare_ops_review"]["enabled"])
+        self.assertIn("prepare_report_package", actions)
+        self.assertIn("source status review", response["state"]["evidence_not_observed"])
+        self.assertIn("release decision", response["state"]["workflow_explanation"]["not_evidence_yet"])
         self.assertIn("not implementation", payload["chat_response"]["claim_boundary"])
 
     def test_workflow_learning_route_exposes_audit_card_actions(self) -> None:
@@ -1742,89 +1754,102 @@ class WrapperContractTests(unittest.TestCase):
                 "automation-blueprint",
                 "prepare_scheduled_ops_blueprint",
                 "recurring Hermes ops workflow",
+                "ack",
             ),
             (
                 "내 경쟁사 시장 뉴스를 매일 수집하고 분석해서 브리핑해줘",
                 "research-department",
                 "prepare_research_department_plan",
                 "research workflow",
+                "ack",
             ),
             (
                 "이 회의록을 PPT와 PDF로 정리해줘",
                 "materials-package",
                 "prepare_material_package",
                 "material package",
+                "ack",
             ),
             (
                 "이 보고서를 파일로 만들어서 첨부할 수 있게 준비해줘",
                 "deliverable-package",
                 "prepare_deliverable_package",
                 "deliverable path",
+                "ack",
             ),
             (
                 "can OMH help with MCP setup?",
                 "toolbelt-readiness",
                 "prepare_toolbelt_readiness",
                 "MCP, CLI, API",
+                "ack",
             ),
             (
                 "does OMH support memory cleanup?",
                 "memory-curation-review",
                 "prepare_memory_curation_review",
                 "approve, reject, or update",
+                "ack",
             ),
             (
                 "does OMH support voice commands?",
                 "voice-operator",
                 "prepare_voice_operator_card",
                 "confirmation before risky actions",
+                "ack",
             ),
             (
                 "OMH로 GitHub issue webhook 처리 가능해?",
                 "github-event-ops",
                 "prepare_github_event_ops_card",
                 "triage, review, label",
+                "ack",
             ),
             (
                 "we need a competitor market scan and strategy memo for next week's leadership meeting",
                 "strategy-brief",
                 "prepare_strategy_brief",
-                "strategy options",
+                "decision frame",
+                "strategy_brief",
             ),
             (
                 "AI가 했다고 했는데 실제로 뭐 했는지 모르겠다",
                 "code-review",
                 "prepare_review_or_followup_handoff",
                 "review path",
+                "ack",
             ),
             (
                 "route Discord Slack Telegram threads with delivery policy",
                 "gateway-intent-card",
                 "prepare_gateway_intent_card",
                 "gateway intent",
+                "ack",
             ),
             (
                 "show token cost latency run history for this automation loop",
                 "ops-observability-card",
                 "prepare_ops_observability_card",
                 "observability card",
+                "ack",
             ),
             (
                 "turn this sprint retro into a report package with decisions and actions",
                 "report-package",
                 "prepare_report_package",
-                "report package",
+                "source inputs",
+                "report_package",
             ),
         )
 
-        for message, selected_workflow, next_action, body_marker in cases:
+        for message, selected_workflow, next_action, body_marker, response_kind in cases:
             with self.subTest(message=message):
                 payload = build_chat_interaction_payload(message, source="discord")
 
                 self.assertEqual(payload["mode"], "route")
                 self.assertEqual(payload["route"]["selected_skill"], selected_workflow)
                 self.assertEqual(payload["next_action"], next_action)
-                self.assertEqual(payload["chat_response"]["kind"], "ack")
+                self.assertEqual(payload["chat_response"]["kind"], response_kind)
                 self.assertIn(body_marker, payload["chat_response"]["body"])
                 action_ids = [str(action["id"]) for action in payload["chat_response"]["actions"]]
                 self.assertEqual(action_ids[0], next_action)
