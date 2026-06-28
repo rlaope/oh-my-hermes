@@ -676,7 +676,9 @@ omh chat interact --source discord --summary "risky refactor"
 
 The default output is the machine-readable `chat_interaction/v1` JSON envelope
 that wrappers should render. Use `--summary` only when an operator wants to
-inspect the same response contract quickly in a terminal.
+inspect the same response contract quickly in a terminal. The summary keeps the
+usual chat actions visible for operator QA; use JSON only when an adapter needs
+the complete machine-readable payload.
 
 If the wrapper can identify the current Hermes agent target, include that as
 metadata rather than asking the user to choose a command:
