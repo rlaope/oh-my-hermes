@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 import re
 
 from .localization import normalized_phrase, routing_tokens
@@ -517,11 +518,8 @@ def _matched_omh_system_target_cues(normalized: str) -> tuple[str, ...]:
 
 def _matched_omh_quality_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple[str, ...]:
     matches: list[str] = []
-    for cue in cues:
-        normalized_cue = normalized_phrase(cue)
-        if not normalized_cue:
-            continue
-        if _contains_non_ascii(normalized_cue):
+    for cue, normalized_cue, contains_non_ascii in _normalized_quality_cues(cues):
+        if contains_non_ascii:
             if normalized_cue in normalized or normalized_cue.replace(" ", "") in compact:
                 matches.append(cue)
             continue
@@ -554,8 +552,7 @@ def has_missing_requirements_signal(message: str) -> bool:
 
 def _mentioned_workflows(normalized: str, tokens: set[str]) -> tuple[str, ...]:
     mentioned: list[str] = []
-    for workflow in WORKFLOW_VOCABULARY:
-        normalized_workflow = normalized_phrase(workflow)
+    for workflow, normalized_workflow in _normalized_workflow_vocabulary():
         if normalized_workflow in tokens or normalized_workflow in normalized:
             mentioned.append(workflow)
     return tuple(mentioned)
@@ -563,8 +560,7 @@ def _mentioned_workflows(normalized: str, tokens: set[str]) -> tuple[str, ...]:
 
 def _mentioned_runtime_terms(normalized: str) -> tuple[str, ...]:
     mentioned: list[str] = []
-    for term, label in RUNTIME_VOCABULARY.items():
-        normalized_term = normalized_phrase(term)
+    for _term, label, normalized_term in _normalized_runtime_vocabulary():
         if normalized_term and normalized_term in normalized and label not in mentioned:
             mentioned.append(label)
     return tuple(mentioned)
@@ -598,8 +594,7 @@ def _quoted_known_term_reference(message: str) -> bool:
     quoted_chunks = re.findall(r"[`\"']([^`\"']+)[`\"']", normalized)
     if not quoted_chunks:
         return False
-    known_terms = tuple(normalized_phrase(term) for term in (*WORKFLOW_VOCABULARY, *RUNTIME_VOCABULARY))
-    return any(any(term and term in chunk for term in known_terms) for chunk in quoted_chunks)
+    return any(any(term in chunk for term in _normalized_known_terms()) for chunk in quoted_chunks)
 
 
 def _structural_reference_context(
@@ -625,26 +620,20 @@ def _structural_negated_execution_cues(normalized: str) -> tuple[str, ...]:
 def _symbolic_negated_execution(normalized: str) -> bool:
     if "!=" not in normalized and "≠" not in normalized:
         return False
-    return any(normalized_phrase(cue) in normalized for cue in _EXECUTION_CUES)
+    return any(normalized_cue in normalized for _cue, normalized_cue in _normalized_cues(_EXECUTION_CUES))
 
 
 def _matched_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple[str, ...]:
     matches: list[str] = []
-    for cue in cues:
-        normalized_cue = normalized_phrase(cue)
-        if not normalized_cue:
-            continue
+    for cue, normalized_cue in _normalized_cues(cues):
         if normalized_cue in normalized or normalized_cue.replace(" ", "") in compact:
             matches.append(cue)
     return tuple(matches)
 
 
 def _diagnostic_status_context(normalized: str, compact: str) -> bool:
-    for marker in _DIAGNOSTIC_STATUS_MARKERS:
-        normalized_marker = normalized_phrase(marker)
-        if normalized_marker and (
-            normalized_marker in normalized or normalized_marker.replace(" ", "") in compact
-        ):
+    for _marker, normalized_marker in _normalized_cues(_DIAGNOSTIC_STATUS_MARKERS):
+        if normalized_marker in normalized or normalized_marker.replace(" ", "") in compact:
             return True
     return False
 
@@ -663,6 +652,7 @@ def _diagnostic_omh_evaluation_context(normalized: str, compact: str) -> bool:
 
 def _without_diagnostic_status_lines(normalized: str) -> str:
     kept: list[str] = []
+    diagnostic_line_markers = _normalized_cues(_DIAGNOSTIC_STATUS_LINE_MARKERS)
     for line in normalized.splitlines() or [normalized]:
         stripped = line.strip()
         if not stripped:
@@ -673,12 +663,12 @@ def _without_diagnostic_status_lines(normalized: str) -> str:
                 continue
         if stripped.startswith(("native bridge status context", "evidence boundary", "latest runtime run")):
             continue
-        if any(normalized_phrase(marker) in stripped for marker in _DIAGNOSTIC_STATUS_LINE_MARKERS):
+        if any(normalized_marker in stripped for _marker, normalized_marker in diagnostic_line_markers):
             fragments = [fragment.strip() for fragment in re.split(r"[;|]", stripped)]
             user_fragments = [
                 fragment
                 for fragment in fragments
-                if fragment and not any(normalized_phrase(marker) in fragment for marker in _DIAGNOSTIC_STATUS_LINE_MARKERS)
+                if fragment and not any(normalized_marker in fragment for _marker, normalized_marker in diagnostic_line_markers)
             ]
             if user_fragments:
                 kept.append(" ".join(user_fragments))
@@ -703,6 +693,45 @@ def _compact_tuple(values: tuple[str, ...]) -> tuple[str, ...]:
         if value and value not in seen:
             seen.append(value)
     return tuple(seen)
+
+
+@lru_cache(maxsize=128)
+def _normalized_cues(cues: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
+    return tuple((cue, normalized) for cue in cues if (normalized := normalized_phrase(cue)))
+
+
+@lru_cache(maxsize=128)
+def _normalized_quality_cues(cues: tuple[str, ...]) -> tuple[tuple[str, str, bool], ...]:
+    return tuple(
+        (cue, normalized, _contains_non_ascii(normalized))
+        for cue in cues
+        if (normalized := normalized_phrase(cue))
+    )
+
+
+@lru_cache(maxsize=1)
+def _normalized_workflow_vocabulary() -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (workflow, normalized)
+        for workflow in WORKFLOW_VOCABULARY
+        if (normalized := normalized_phrase(workflow))
+    )
+
+
+@lru_cache(maxsize=1)
+def _normalized_runtime_vocabulary() -> tuple[tuple[str, str, str], ...]:
+    return tuple(
+        (term, label, normalized)
+        for term, label in RUNTIME_VOCABULARY.items()
+        if (normalized := normalized_phrase(term))
+    )
+
+
+@lru_cache(maxsize=1)
+def _normalized_known_terms() -> tuple[str, ...]:
+    workflow_terms = tuple(normalized for _workflow, normalized in _normalized_workflow_vocabulary())
+    runtime_terms = tuple(normalized for _term, _label, normalized in _normalized_runtime_vocabulary())
+    return workflow_terms + runtime_terms
 
 
 def _suppress_negated_execution_cues(
