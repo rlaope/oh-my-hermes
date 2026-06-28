@@ -4484,6 +4484,7 @@ class CliTests(unittest.TestCase):
             ("위험 분석, 변경 범위 제한, 테스트 전략, Codex 구현, 리뷰, 회귀 테스트로 리팩터링 표준화해줘", "ai-slop-cleaner", "plan", "present_plan"),
             ("지금은 Hermes가 답할 차례인지, coding handoff를 준비할 차례인지, review gate를 열 차례인지 정리해줘", "plan", "plan", "present_plan"),
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
+            ("논문 PDF 이해하고 싶어", "paper-learning", "paper_learning", "prepare_paper_learning"),
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ops_review", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "strategy_brief", "prepare_strategy_brief"),
@@ -4505,6 +4506,9 @@ class CliTests(unittest.TestCase):
             ("무슨일이노", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
             ("지금 뭐 하고 있어?", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
             ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("codex로 열어줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("claude code로 이어서 작업해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("설치 잘 됐어?", "doctor", "ack", "run_local_operator_check"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "agent_board", "prepare_agent_board_card"),
             ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             (
