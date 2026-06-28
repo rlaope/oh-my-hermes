@@ -534,6 +534,9 @@ wrapper operators a concrete contract result to render.
 `omh chat interact --summary` prints a compact operator-readable view of the
 same wrapper response, actions, evidence gaps, and claim boundary. The default
 `omh chat interact` output remains JSON for adapter compatibility.
+When only the lower-level router needs inspection, `omh chat route --summary`
+prints why the workflow was selected, the next action, route-plan steps, and
+the same evidence boundary while keeping default `chat route` output as JSON.
 
 `omh demo grounded-score --summary` prints a compact operator-readable rollup;
 `omh demo grounded-score --json` prints the full machine-readable payload.

@@ -4011,6 +4011,66 @@ class CliTests(unittest.TestCase):
         self.assertIn("{message}", route["routing_prompt_template"])
         self.assertNotIn("risky refactor", json.dumps(route))
 
+    def test_chat_route_summary_renders_operator_readable_route(self) -> None:
+        message = "I want to safely add a feature to this repo"
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "--summary", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH chat route", stdout)
+        self.assertIn("Source: discord", stdout)
+        self.assertIn("Workflow: ralplan", stdout)
+        self.assertIn("Harness: planning", stdout)
+        self.assertIn("Action: dispatch", stdout)
+        self.assertIn("Next action: present_plan", stdout)
+        self.assertIn("Confidence: high (score 32)", stdout)
+        self.assertIn("Why:", stdout)
+        self.assertIn("Matched safe feature-change language", stdout)
+        self.assertIn("Top recommendations:", stdout)
+        self.assertIn("- ralplan: present_plan (high, score 32)", stdout)
+        self.assertIn("Route plan:", stdout)
+        self.assertIn("- 1. triage: feedback-triage (prepared_not_observed)", stdout)
+        self.assertIn("Boundary:", stdout)
+        self.assertIn("A recommendation or draft plan is not execution evidence.", stdout)
+        self.assertIn("Use --json for the full machine-readable route payload.", stdout)
+
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "--json", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        route = json.loads(stdout)["route"]
+        self.assertEqual(route["selected_skill"], "ralplan")
+        self.assertEqual(route["route_explanation"]["next_action"], "present_plan")
+
+    def test_chat_route_summary_shows_recorded_runtime_metadata_only(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, stdout, stderr = run_cli(
+                base + ["chat", "route", "--source", "discord", "--record", "--summary", "payment failures keep coming up"],
+                output_json=False,
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertIn("Workflow: feedback-triage", stdout)
+            self.assertIn("Next action: triage_feedback", stdout)
+            self.assertIn("Runtime record:", stdout)
+            self.assertIn("run_id: ", stdout)
+            self.assertIn("status: recorded metadata only", stdout)
+
+    def test_chat_route_rejects_conflicting_output_modes(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "route", "--source", "discord", "--summary", "--json", "risky refactor"],
+            output_json=False,
+        )
+
+        self.assertNotEqual(status, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("--summary and --json cannot be used together", stderr)
+
     def test_chat_route_dispatches_image_capability_questions_to_img_summary(self) -> None:
         cases = (
             "이미지 생성 기능 뭐 있어?",

@@ -355,14 +355,16 @@ hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code>
             <code>plugin tool: omh_interact
 omh chat interact --source discord "risky refactor"
 omh chat interact --source slack "diagnose installation health"
-omh chat interact --source discord --summary "risky refactor"</code>
+omh chat interact --source discord --summary "risky refactor"
+omh chat route --source discord --summary "risky refactor"</code>
           </div>
           <p>
             <code>omh_interact</code> is the plugin-native path: it returns the
             same chat envelope and records a metadata-only wrapper session with
             producer provenance. The CLI examples are adapter backend
-            equivalents. The <code>--summary</code> form is for operator
-            inspection; wrappers should keep using the JSON envelope or plugin
+            equivalents. The <code>chat interact --summary</code> and
+            <code>chat route --summary</code> forms are for operator
+            inspection; wrappers should keep using the JSON envelopes or plugin
             tool output. Fixture-backed examples cover both shell-free workflow
             picker responses and plugin-produced planning cards. A response can be
             an answer, a clarification request, policy-specific workflow
