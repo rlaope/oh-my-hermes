@@ -1077,6 +1077,10 @@ selected_workflow=ultraprocess
                 self.assertIn("file or text lookup", public_payload["routing_instruction"])
                 self.assertNotIn("ask one concise clarification", public_payload["routing_instruction"])
                 explanation = public_payload["route_explanation"]
+                self.assertEqual(explanation["headline"], "Answer as a file or text lookup.")
+                self.assertIn("Answer directly as a file or text lookup", explanation["summary"])
+                self.assertIn("I will answer this as a file or text lookup", explanation["recommended_reply"])
+                self.assertNotIn("target is clear", explanation["recommended_reply"])
                 self.assertIn("file inspection", explanation["claim_boundary"])
                 self.assertIn("file inspection", explanation["not_evidence_yet"])
                 self.assertNotIn("review", explanation["not_evidence_yet"])

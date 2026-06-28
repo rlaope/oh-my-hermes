@@ -358,7 +358,7 @@ def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
     claim_boundary = _route_claim_boundary(route, recommendation)
     why = _route_explanation_reason(route)
     not_evidence_yet = _not_evidence_from_boundary(claim_boundary)
-    headline = _route_explanation_headline(action, selected)
+    headline = _route_explanation_headline(action, selected, next_action)
     summary = _route_explanation_summary(action, selected, next_action, why)
     next_action_label = next_action.replace("_", " ") if next_action else ""
     return {
@@ -603,11 +603,13 @@ def _capitalize_sentence(value: str) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _route_explanation_headline(action: str, selected: str) -> str:
+def _route_explanation_headline(action: str, selected: str, next_action: str) -> str:
     if action == "dispatch":
         return f"Use `{selected}` for this request."
     if action == "clarify":
         return "Ask one question before choosing a workflow."
+    if next_action == "answer_file_lookup":
+        return "Answer as a file or text lookup."
     return "Keep this in the router until the target is clear."
 
 
@@ -616,6 +618,8 @@ def _route_explanation_summary(action: str, selected: str, next_action: str, why
         return f"`{selected}` is selected because {why} Next action: `{next_action}`."
     if action == "clarify":
         return f"The router needs one clarification before dispatch. Best candidate: `{selected}`."
+    if next_action == "answer_file_lookup":
+        return f"Answer directly as a file or text lookup; do not dispatch a workflow. Reason: {why}"
     return f"The router should not dispatch yet. Reason: {why}"
 
 
@@ -631,6 +635,8 @@ def _route_recommended_reply(
         return f"I will use `{selected}` first and start with {next_action_label}.{suffix}"
     if action == "clarify":
         return "I need one clarification before choosing a workflow; no plan or execution has started."
+    if next_action_label == "answer file lookup":
+        return "I will answer this as a file or text lookup; no file inspection or workflow execution has started."
     return "I will keep this in the router until the target is clear; no workflow or execution has started."
 
 

@@ -4299,8 +4299,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("file or text lookup", route["clarification"])
         self.assertIn("file or text lookup", route["routing_instruction"])
         self.assertNotIn("ask one concise clarification", route["routing_instruction"])
-        self.assertIn("file inspection", route["route_explanation"]["not_evidence_yet"])
-        self.assertNotIn("review", route["route_explanation"]["not_evidence_yet"])
+        explanation = route["route_explanation"]
+        self.assertEqual(explanation["headline"], "Answer as a file or text lookup.")
+        self.assertIn("I will answer this as a file or text lookup", explanation["recommended_reply"])
+        self.assertNotIn("target is clear", explanation["recommended_reply"])
+        self.assertIn("file inspection", explanation["not_evidence_yet"])
+        self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotEqual(route["recommendations"][0]["skill"], route["selected_skill"])
 
     def test_chat_interact_file_lookup_fallback_uses_lookup_card(self) -> None:
@@ -4317,6 +4321,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("file or text lookup", response["body"])
         self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
         explanation = response["state"]["workflow_explanation"]
+        self.assertIn("I will answer this as a file or text lookup", explanation["route_recommended_reply"])
+        self.assertNotIn("target is clear", explanation["route_recommended_reply"])
         self.assertIn("file inspection", explanation["not_evidence_yet"])
         self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotIn("choose the right workflow", response["body"])

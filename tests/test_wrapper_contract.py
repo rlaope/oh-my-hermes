@@ -1497,6 +1497,8 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("file or text lookup", response["state"]["routing_instruction"])
                 self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
                 explanation = response["state"]["workflow_explanation"]
+                self.assertIn("I will answer this as a file or text lookup", explanation["route_recommended_reply"])
+                self.assertNotIn("target is clear", explanation["route_recommended_reply"])
                 self.assertIn("file inspection", explanation["claim_boundary"])
                 self.assertIn("file inspection", explanation["not_evidence_yet"])
                 self.assertNotIn("review", explanation["not_evidence_yet"])
