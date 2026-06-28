@@ -345,6 +345,12 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
     print(f"  Artifact: {payload.get('artifact_path')}")
     print(f"  Product readiness: {summary.get('product_readiness_status')} ({summary.get('product_readiness_score')}/100)")
     print(f"  Use-case readiness: {summary.get('use_case_readiness_status')} ({summary.get('use_case_readiness_score')}/100)")
+    if "grounded_score_perfect" in summary or "grounded_score_total" in summary:
+        print(
+            "  Grounded score: "
+            f"{summary.get('grounded_score_perfect')}/{summary.get('grounded_score_total')} "
+            f"(avg {summary.get('grounded_score_average')})"
+        )
     if "chat_card_coverage_passing" in summary or "chat_card_coverage_total" in summary:
         print(
             "  Chat card coverage: "
