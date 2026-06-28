@@ -2802,7 +2802,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### agent-ops-review
 
-[omh] Hermes agent ops review workflow: help a manager inspect AI-agent research, coding, review, status, blockers, quality gates, and throughput levers.
+[omh] Hermes agent ops review workflow: help managers inspect AI-agent progress, blockers, quality gates, and throughput levers.
 
 - Category: `operator`
 - Phase: `manager-review`
@@ -2815,14 +2815,14 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Preferred usage: Use as an installed Hermes workflow skill when a manager wants quality, blockers, next actions, and throughput guidance for AI-agent work.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `agent-ops-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when Hermes should explain AI-agent work from a manager/operator perspective: quality gates, progress, blockers, next actions, and throughput opportunities across research, coding, review, and status.
+- Use when: Use when Hermes should explain AI-agent work: quality gates, progress, blockers, next actions, and throughput.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `codex progress`, `codex status`, `coding agent status`, `where is codex`, `research coding review status`, `ai agent manager`, `third-party manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `무슨일이노`, `무슨 일이야`, `무슨 일 있어`, `지금 뭐 하고 있어`, `지금 뭐해`, `뭐하는 중`, `뭐 하고 있는 중`, `리서치 코딩 리뷰`
+- Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `codex progress`, `codex status`, `coding agent status`, `where is codex`, `research coding review status`, `what's going on`, `what are you working on`, `今何してる`, `现在在做什么`, `qué está pasando`, `qu'est-ce qui se passe`, `was ist los`, `ai agent manager`, `third-party manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `무슨일이노`, `지금 뭐 하고 있어`, `리서치 코딩 리뷰`
 - Good example:
-  - Prompt: agent-ops-review show me quality, blockers, and throughput for AI-agent research, coding, and review work.
+  - Prompt: agent-ops-review show quality, blockers, and throughput for AI-agent work.
   - Expected behavior: Produce `prepare_agent_ops_review` with required context, wrapper actions, and not-evidence boundaries.
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
@@ -2852,7 +2852,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Artifact expectations:
   - agent-ops-review/v1 metadata-only runtime or wrapper card when recorded
 - Safety rules:
-  - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge-readiness, merge, platform delivery, provider billing, or live runtime telemetry evidence.
+  - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ### workflow-learning
