@@ -373,7 +373,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(trace["schema_version"], "workflow_learning_trace/v1")
             self.assertEqual(trace["privacy"]["mode"], "metadata_only")
             self.assertFalse(trace["privacy"]["raw_prompt_stored"])
-            self.assertEqual(trace["workflow"]["selected_workflow"], "plan")
+            self.assertEqual(trace["workflow"]["selected_workflow"], "ralplan")
             self.assertEqual(record["interaction"]["chat_response"]["state"]["learning_trace_ref"], record["learning_trace_ref"])
             self.assertNotIn(message, json.dumps(trace))
 
@@ -3033,7 +3033,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("routing guidance only", route_plan["claim_boundary"])
 
-    def test_recommend_safe_feature_routes_to_plan_with_wrapper_copy(self) -> None:
+    def test_recommend_safe_feature_routes_to_ralplan_with_wrapper_copy(self) -> None:
         message = "I want to safely add a feature to this repo"
         status, stdout, stderr = run_cli(["recommend", message, "--limit", "2"])
 
@@ -3041,7 +3041,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         recommendations = json.loads(stdout)["recommendations"]
         top = recommendations[0]
-        self.assertEqual(top["skill"], "plan")
+        self.assertEqual(top["skill"], "ralplan")
         self.assertEqual(top["confidence"], "high")
         self.assertEqual(top["next_action"], "present_plan")
         self.assertIn("not execution evidence", top["evidence_boundary"])
@@ -4105,9 +4105,13 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["mode"], "plan")
         self.assertEqual(payload["next_action"], "present_plan")
-        self.assertEqual(payload["route"]["selected_skill"], "plan")
+        self.assertEqual(payload["route"]["selected_skill"], "ralplan")
+        self.assertEqual(payload["plan"]["plan"]["recommended_workflow"], "ralplan")
+        self.assertEqual(payload["plan"]["plan"]["planning_mode"], "review-gated")
         response = payload["chat_response"]
         self.assertEqual(response["kind"], "plan")
+        self.assertTrue(response["headline"].startswith("[omh] ralplan - "))
+        self.assertEqual(response["state"]["selected_workflow"], "ralplan")
         self.assertIn("because it needs a safe plan first", response["headline"])
         self.assertIn("not execution evidence", response["claim_boundary"])
         actions = {action["id"]: action for action in response["actions"]}
@@ -5069,7 +5073,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], "orchestration_demo/v1")
         self.assertEqual(payload["executor_target"], "choose")
         self.assertEqual([step["id"] for step in payload["steps"]], ["recommend", "chat", "plan", "handoff", "status_card"])
-        self.assertEqual(payload["steps"][0]["payload"]["recommendations"][0]["skill"], "plan")
+        self.assertEqual(payload["steps"][0]["payload"]["recommendations"][0]["skill"], "ralplan")
         handoff_payload = payload["steps"][3]["payload"]
         self.assertEqual(handoff_payload["chat_response"]["state"]["next_action"], "choose_executor")
         self.assertEqual(handoff_payload["executor_handoff"], {})

@@ -618,8 +618,10 @@ def _unquote_scalar(value: str) -> str:
 def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
     lowered = task.lower()
     score = _int_value(top.get("score", 0))
+    top_skill = str(top.get("skill", ""))
     weak = len(task.split()) <= 2 and (score == 0 or any(term in lowered for term in _CLARIFY_TERMS))
     review_shaped = any(term in lowered for term in _REVIEW_TERMS)
+    reviewed_plan_shaped = review_shaped or top_skill == "ralplan"
     coding_shaped = _is_coding_shaped(task)
 
     if weak:
@@ -656,7 +658,7 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
             stop_condition="A clarified task statement is available for planning.",
         )
 
-    workflow = "ralplan" if review_shaped else "plan"
+    workflow = "ralplan" if reviewed_plan_shaped else "plan"
     harness = "planning"
     handoff = (
         "Use `omh coding delegate --executor codex --record --from-plan <accepted-plan.md>` after this plan is accepted for a run-backed Codex handoff."
@@ -668,9 +670,9 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
         task_statement=task,
         recommended_workflow=workflow,
         recommended_harness=harness,
-        planning_mode="review-gated" if review_shaped else "structured",
+        planning_mode="review-gated" if reviewed_plan_shaped else "structured",
         clarified_assumptions=("The task statement is sufficient for a first deterministic planning scaffold.",),
-        goals=_goals(coding_shaped, review_shaped),
+        goals=_goals(coding_shaped, reviewed_plan_shaped),
         non_goals=(
             "Do not execute code or mutate Hermes core from the planning command.",
             "Do not claim architect or critic approval without wrapper evidence.",
@@ -681,8 +683,8 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
             "Make acceptance criteria and verification visible before execution.",
             "Separate planned work from observed implementation evidence.",
         ),
-        options=_options("reviewed" if review_shaped else "structured"),
-        chosen_direction=_chosen_direction(coding_shaped, review_shaped),
+        options=_options("reviewed" if reviewed_plan_shaped else "structured"),
+        chosen_direction=_chosen_direction(coding_shaped, reviewed_plan_shaped),
         rejection_rationale=(
             "Direct execution is rejected until the plan names success criteria and verification.",
             "Claimed multi-role consensus is rejected unless wrapper metadata proves those reviews ran.",
@@ -711,7 +713,7 @@ def _plan_for(task: str, top: dict[str, object]) -> HermesPlan:
             status="draft",
             top=top,
             coding_shaped=coding_shaped,
-            review_shaped=review_shaped,
+            review_shaped=reviewed_plan_shaped,
         ),
         deep_interview=_deep_interview_contract(
             task,
