@@ -499,6 +499,16 @@ class ChatRouterTests(unittest.TestCase):
                 "guard:doctor_health",
             ),
             (
+                "update 했는데 잘 된거야?",
+                "doctor",
+                "guard:doctor_health",
+            ),
+            (
+                "setup에서 위아래키 누르면 느려",
+                "doctor",
+                "guard:doctor_health",
+            ),
+            (
                 "今何してる？",
                 "agent-ops-review",
                 f"trigger:{normalized_phrase('今何してる')}",
@@ -599,6 +609,7 @@ class ChatRouterTests(unittest.TestCase):
             "이 내용을 공유용 요약 카드로 만들어줘",
             "회의록을 공유용 카드로 만들어줘",
             "회의록을 보기 좋은 세로 이미지로 요약해줘",
+            "회의록을 사람들한테 공유할 세로 이미지로 만들어줘",
             "PR 요약 포스터 만들어줘",
             "PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘",
             "Create an image summary card from these notes.",
@@ -612,6 +623,8 @@ class ChatRouterTests(unittest.TestCase):
             "生成一张发布说明海报",
             "make a workflow learning image card",
             "Can you generate an image with GPT from this meeting summary?",
+            "사진 생성해줘",
+            "사진 만들어줘",
         )
 
         for message in cases:
