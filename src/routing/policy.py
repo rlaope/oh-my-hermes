@@ -1241,6 +1241,19 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "진행됐는지",
     "진행되었는지",
 )
+_CODING_SESSION_STATUS_ONLY_PHRASES = (
+    "session looks stuck",
+    "coding session looks stuck",
+    "codex session looks stuck",
+    "claude code session looks stuck",
+    "what is it doing",
+    "what did the coding agent do",
+    "what did codex do",
+    "what did claude code do",
+    "did the coding agent finish",
+    "is codex done",
+    "is claude code done",
+)
 _CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
     {
         "codex",
@@ -1329,6 +1342,7 @@ _RELEASE_CLAIM_REVIEW_TOKENS = _normalized_token_set(
 _VOICE_OPERATOR_PHRASES = (
     "voice operator",
     "voice-first",
+    "voice note",
     "mobile command",
     "from mobile",
     "on mobile",
@@ -2631,6 +2645,8 @@ def _delivery_cycle_terms(normalized_query: str, query_tokens: set[str]) -> bool
 def _coding_handoff_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _visual_summary_guard_applies(normalized_query, query_tokens):
         return False
+    if _coding_session_status_only_guard_applies(normalized_query, query_tokens):
+        return False
     explicit_phrase = _contains_phrase(normalized_query, _CODING_HANDOFF_PHRASES)
     executor = bool(_CODING_HANDOFF_EXECUTOR_TOKENS & query_tokens) or _contains_phrase(
         normalized_query,
@@ -2651,9 +2667,9 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
     )
     event_or_pr_prep = _contains_phrase(
         normalized_query,
-        ("opened", "failed ci", "ci failed", "label", "review", "to pr", "into a pr", "pr 만들", "pr로", "들어온"),
+        ("opened", "failed ci", "ci failed", "failing ci", "ci failing", "label", "review", "to pr", "into a pr", "pr 만들", "pr로", "들어온"),
     )
-    event_context = _contains_phrase(normalized_query, ("opened", "failed ci", "ci failed", "label", "들어온"))
+    event_context = _contains_phrase(normalized_query, ("opened", "failed ci", "ci failed", "failing ci", "ci failing", "label", "들어온"))
     return issue_or_pr and event_or_pr_prep and (github_context or event_context)
 
 
@@ -2700,6 +2716,8 @@ def _agent_board_guard_applies(normalized_query: str, query_tokens: set[str]) ->
 
 
 def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _coding_session_status_only_guard_applies(normalized_query, query_tokens):
+        return True
     if _contains_phrase(normalized_query, _CODING_PROGRESS_STATUS_PHRASES):
         return True
     executor = _contains_phrase(
@@ -2711,6 +2729,14 @@ def _coding_progress_status_guard_applies(normalized_query: str, query_tokens: s
         ("progress", "status", "running", "where", "어디까지", "진행", "상태"),
     )
     return executor and progress
+
+
+def _coding_session_status_only_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    executor = _contains_phrase(
+        normalized_query,
+        ("codex", "claude code", "coding agent", "executor", "코덱스", "클로드", "코딩 에이전트"),
+    )
+    return executor and _contains_phrase(normalized_query, _CODING_SESSION_STATUS_ONLY_PHRASES)
 
 
 def _release_claim_review_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -2746,6 +2772,12 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "skills still look stale",
             "skills look stale",
             "hermes skills still",
+            "hermes cannot see the skills",
+            "hermes can't see the skills",
+            "cannot see the skills",
+            "can't see the skills",
+            "setup says done but hermes cannot see",
+            "setup says done but hermes can't see",
             "install looks broken",
             "setup looks broken",
             "registration looks broken",
