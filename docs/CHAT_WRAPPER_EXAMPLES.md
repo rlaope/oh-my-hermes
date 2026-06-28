@@ -315,6 +315,11 @@ workflow-native. If the user asks "이미지 생성 기능 뭐 있어?", "이미
 render the `img-summary` card with `show_visual_prompt_card`,
 `choose_image_generator`, and `image_generation_setup/v1` actions instead of
 falling back to the generic OMH workflow picker or a generic clarification.
+If the user says the generator is blocked because an image connector, API key,
+or credential is missing, route to `toolbelt-readiness` first. Examples include
+"FAL_KEY 없어서 이미지 생성이 막히면 어떻게 연결해야 해?" or "the image tool is
+not connected." That card should explain the missing tool/credential and the
+safe setup action before any `img-summary` generation claim.
 
 For first-use explanation questions, avoid dropping the user into the full
 catalog immediately. If the user asks "what is OMH and how do I use it?" or

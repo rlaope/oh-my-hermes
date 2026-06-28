@@ -178,6 +178,18 @@ class ChatRouterTests(unittest.TestCase):
                 "executor-runtime-readiness",
             ),
             (
+                "내 코딩 에이전트 연결 상태 한번만 확인하고 안되면 물어봐",
+                "executor-runtime-readiness",
+            ),
+            (
+                "FAL_KEY 없어서 이미지 생성이 막히면 어떻게 연결해야 해?",
+                "toolbelt-readiness",
+            ),
+            (
+                "Obsidian 말고 markdown folder에 리서치 결과 저장하고 싶어",
+                "research-department",
+            ),
+            (
                 "coordinate PM, CTO, QA, and release agents on this launch checklist.",
                 "agent-board",
             ),
@@ -394,6 +406,21 @@ class ChatRouterTests(unittest.TestCase):
                 "workflow-learning",
                 "guard:workflow_learning",
             ),
+            (
+                "FAL_KEY 없어서 이미지 생성이 막히면 어떻게 연결해야 해?",
+                "toolbelt-readiness",
+                "guard:toolbelt_readiness",
+            ),
+            (
+                "내 코딩 에이전트 연결 상태 한번만 확인하고 안되면 물어봐",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "Obsidian 말고 markdown folder에 리서치 결과 저장하고 싶어",
+                "research-department",
+                "guard:research_department",
+            ),
         )
 
         for message, skill, marker in cases:
@@ -420,6 +447,7 @@ class ChatRouterTests(unittest.TestCase):
             "作成して、PRの要約画像",
             "生成一张发布说明海报",
             "make a workflow learning image card",
+            "Can you generate an image with GPT from this meeting summary?",
         )
 
         for message in cases:

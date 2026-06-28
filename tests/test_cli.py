@@ -3429,6 +3429,7 @@ class CliTests(unittest.TestCase):
             "Create a one-page infographic for the automation feature.",
             "make a poster explaining cron automation",
             "make a visual one-pager for this release",
+            "Can you generate an image with GPT from this meeting summary?",
             "Create an image summary card from these notes.",
             "회의록을 세로 요약 이미지로 만들어줘",
             "회의록을 공유용 카드로 만들어줘",
@@ -3463,6 +3464,46 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(top["next_action"], "prepare_visual_prompt_card")
                 self.assertIn("not generated image", top["evidence_boundary"])
                 self.assertIn("visual_prompt_card/v1", top["wrapper_guidance"])
+
+    def test_recommend_routes_missing_tool_and_runtime_readiness(self) -> None:
+        cases = (
+            (
+                "FAL_KEY 없어서 이미지 생성이 막히면 어떻게 연결해야 해?",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                "guard:toolbelt_readiness",
+            ),
+            (
+                "이미지 도구가 연결 안 됐으면 GPT image tool로 어떻게 설정해?",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                "guard:toolbelt_readiness",
+            ),
+            (
+                "내 코딩 에이전트 연결 상태 한번만 확인하고 안되면 물어봐",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "Obsidian 말고 markdown folder에 리서치 결과 저장하고 싶어",
+                "research-department",
+                "prepare_research_department_plan",
+                "guard:research_department",
+            ),
+        )
+
+        for message, skill, next_action, guard_label in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], skill)
+                self.assertEqual(top["confidence"], "high")
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(guard_label, top["matched"])
 
     def test_recommend_plain_summary_report_does_not_overroute_to_visual_summary(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "prepare monthly summary report", "--limit", "3"])
