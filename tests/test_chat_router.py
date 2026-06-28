@@ -1059,6 +1059,8 @@ selected_workflow=ultraprocess
             "search docs/WORKFLOWS.md for loop",
             "show img-summary in README.md",
             "what does OMH do in docs/ARCHITECTURE.md?",
+            "README 파일 찾아줘",
+            "README 보여줘",
         ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
@@ -1074,6 +1076,20 @@ selected_workflow=ultraprocess
                 public_payload = public_route_payload(decision)
                 self.assertIn("file or text lookup", public_payload["routing_instruction"])
                 self.assertNotIn("ask one concise clarification", public_payload["routing_instruction"])
+                explanation = public_payload["route_explanation"]
+                self.assertIn("file inspection", explanation["claim_boundary"])
+                self.assertIn("file inspection", explanation["not_evidence_yet"])
+                self.assertNotIn("review", explanation["not_evidence_yet"])
+
+    def test_korean_file_lookup_does_not_steal_readme_edit_requests(self) -> None:
+        lookup = route_chat_message("README 파일 찾아줘", source="discord")
+        edit = route_chat_message("README 제목 수정해줘", source="discord")
+
+        self.assertEqual(lookup["action"], "fallback")
+        self.assertEqual(lookup["selected_skill"], "oh-my-hermes")
+        self.assertIn("File or text lookup", lookup["reason"])
+        self.assertNotEqual(edit["reason"], lookup["reason"])
+        self.assertNotEqual(edit["action"], "fallback")
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (

@@ -4572,6 +4572,11 @@ def _workflow_explanation_not_evidence(state: dict[str, object], *, claim_bounda
     if isinstance(explicit, list) and explicit:
         return [str(item) for item in explicit if str(item)]
     text = claim_boundary.lower()
+    if "file inspection" in text:
+        items = ["file inspection"]
+        if "execution" in text:
+            items.append("execution")
+        return items
     items: list[str] = []
     for marker, label in (
         ("plan acceptance", "plan acceptance"),
