@@ -3994,7 +3994,10 @@ def _explicit_delivery_or_implementation_requested(normalized_query: str, query_
 
 
 def _contains_phrase(normalized_query: str, phrases: tuple[str, ...] | frozenset[str]) -> bool:
-    return any(phrase in normalized_query for phrase in _normalized_phrase_options(phrases))
+    for phrase in _normalized_phrase_options(phrases):
+        if phrase in normalized_query:
+            return True
+    return False
 
 
 @lru_cache(maxsize=512)
