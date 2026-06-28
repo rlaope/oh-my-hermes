@@ -939,6 +939,56 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("coding handoff", explanation["not_evidence_yet"])
         self.assertIn("verification", explanation["not_evidence_yet"])
 
+    def test_review_quality_cards_expose_verification_boundaries(self) -> None:
+        cases = (
+            (
+                "쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?",
+                "ultraqa",
+                "qa_review",
+                "I can turn this into QA scenarios and observed checks.",
+                "scenario execution",
+                "dispatch_to_workflow",
+            ),
+            (
+                "AI가 했다고 했는데 실제로 뭐 했는지 모르겠다",
+                "code-review",
+                "review_check",
+                "I can review the claims before we call this done.",
+                "completed review",
+                "prepare_review_or_followup_handoff",
+            ),
+            (
+                "run an incident postmortem SLO error budget service reliability review",
+                "reliability-review",
+                "reliability_review",
+                "I can review reliability without declaring the system healthy.",
+                "SLO pass",
+                "prepare_reliability_review",
+            ),
+        )
+
+        for message, workflow, kind, headline, not_evidence, primary_action in cases:
+            with self.subTest(workflow=workflow):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                response = payload["chat_response"]
+                explanation = response["state"]["workflow_explanation"]
+                actions = {str(action["id"]): action for action in response["actions"]}
+
+                self.assertEqual(payload["mode"], "route")
+                self.assertEqual(payload["route"]["selected_skill"], workflow)
+                self.assertEqual(response["kind"], kind)
+                self.assertEqual(response["plain_headline"], headline)
+                self.assertEqual(response["state"]["selected_workflow"], workflow)
+                self.assertEqual(response["state"]["artifact_schema"], f"{kind}_card/v1")
+                self.assertEqual(response["actions"][0]["id"], primary_action)
+                self.assertIn(not_evidence, explanation["not_evidence_yet"])
+                self.assertIn("verification", response["claim_boundary"].lower())
+                if workflow in {"code-review", "reliability-review"}:
+                    self.assertFalse(actions["prepare_coding_handoff"]["enabled"])
+                if workflow == "ultraqa":
+                    self.assertEqual(actions["dispatch_to_workflow"]["payload"]["claim_boundary"], "route_only_not_scenario_execution")
+
     def test_blocker_status_uses_status_usage_trace_label(self) -> None:
         response = build_chat_response_from_status({"next_action": "surface_ci_blocker"})
 
@@ -1725,7 +1775,7 @@ class WrapperContractTests(unittest.TestCase):
                 "릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘",
                 "code-review",
                 "prepare_review_or_followup_handoff",
-                "ack",
+                "review_check",
             ),
         )
 
@@ -1816,8 +1866,8 @@ class WrapperContractTests(unittest.TestCase):
                 "AI가 했다고 했는데 실제로 뭐 했는지 모르겠다",
                 "code-review",
                 "prepare_review_or_followup_handoff",
-                "review path",
-                "ack",
+                "claims to inspect",
+                "review_check",
             ),
             (
                 "route Discord Slack Telegram threads with delivery policy",

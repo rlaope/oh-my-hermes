@@ -687,13 +687,16 @@ operator
 쿠버네티스 장애 상황에서 Cloudy가 적절히 진단하나?
 
 Hermes Agent  BOT
-[omh] ultraqa - I know which workflow should handle this.
+[omh] ultraqa - I can turn this into QA scenarios and observed checks.
 
-I will prepare a safe next step for `ultraqa` before claiming any work happened.
+I will prepare the QA lane: scenario list, expected behavior, cheap checks,
+expensive checks, known gaps, and follow-up handoff options. No product
+diagnosis, verification, fix, CI, or release-readiness claim is made until
+matching observations exist.
 
-[ Show status ]
+[ Prepare QA workflow ] [ Prepare follow-up review ] [ Show status ]
 
-Claim boundary: Routing is not execution evidence.
+Claim boundary: A QA workflow route is not observed scenario execution, verification, fix evidence, CI, or release readiness evidence.
 ```
 
 What gets better for the team:
@@ -739,13 +742,15 @@ maintainer
 릴리즈 전에 README claim이 실제 코드와 맞는가, doctor/harness가 통과하는가 봐줘
 
 Hermes Agent  BOT
-[omh] code-review - I know which workflow should handle this.
+[omh] code-review - I can review the claims before we call this done.
 
-Surface findings separately from any code changes; fixes need their own executor evidence.
+I will prepare a review lane: claims to inspect, evidence to verify, missing
+tests, risk areas, and any follow-up fix handoff. Review preparation is not a
+completed review, fix, CI result, or merge decision.
 
-[ Show status ]
+[ Prepare review ] [ Prepare fix handoff ] disabled [ Show status ]
 
-Claim boundary: A review recommendation is not a completed review or fix evidence.
+Claim boundary: A review recommendation is not a completed review or fix evidence. It is not verification, CI, merge-readiness, or merge evidence.
 ```
 
 What gets better for the team:
