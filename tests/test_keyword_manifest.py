@@ -22,6 +22,9 @@ class KeywordManifestTests(unittest.TestCase):
         self.assertEqual(manifest["conflict_policy"]["tied_scores"], "clarify")
         self.assertIn("ja", manifest["locale_policy"]["supported_alias_locales"])
         self.assertIn("payment_failure", manifest["locale_policy"]["alias_labels"])
+        self.assertIn("visual_summary", manifest["locale_policy"]["alias_labels"])
+        self.assertIn("paper_learning", manifest["locale_policy"]["alias_labels"])
+        self.assertIn("source_finder", manifest["locale_policy"]["alias_labels"])
 
     def test_keyword_manifest_includes_guard_rules_and_skill_triggers(self) -> None:
         manifest = keyword_detector_manifest()

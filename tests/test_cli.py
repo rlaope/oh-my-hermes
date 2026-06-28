@@ -3132,6 +3132,17 @@ class CliTests(unittest.TestCase):
             ("Quiero convertir este issue en un PR", "github-event-ops", "locale:es:issue_to_pr"),
             ("Je veux transformer cette issue en PR", "github-event-ops", "locale:fr:issue_to_pr"),
             ("Ich möchte dieses Issue für einen PR vorbereiten", "github-event-ops", "locale:de:issue_to_pr"),
+            ("haz una imagen que explique la función cron", "img-summary", "locale:es:visual_summary"),
+            ("erstelle ein Bild, das die Cron-Funktion erklärt", "img-summary", "locale:de:visual_summary"),
+            ("cron機能を説明する画像を作って", "img-summary", "locale:ja:visual_summary"),
+            ("生成一张解释 cron 功能的图片", "img-summary", "locale:zh:visual_summary"),
+            ("explícame este paper en un nivel fácil", "paper-learning", "locale:es:paper_learning"),
+            ("explique ce PDF de recherche simplement", "paper-learning", "locale:fr:paper_learning"),
+            ("erkläre dieses Paper einfach", "paper-learning", "locale:de:paper_learning"),
+            ("この論文PDFをやさしく説明して", "paper-learning", "locale:ja:paper_learning"),
+            ("encuentra el paper y el dataset para este tema", "source-finder", "locale:es:source_finder"),
+            ("trouve le dépôt GitHub et le PDF public", "source-finder", "locale:fr:source_finder"),
+            ("finde paper und dataset zu diesem thema", "source-finder", "locale:de:source_finder"),
         )
 
         for message, expected_skill, locale_match in cases:
