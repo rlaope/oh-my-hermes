@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 from typing import Any
 
@@ -88,6 +89,34 @@ _BROAD_CAPABILITY_TOPIC_TOKENS = frozenset(
         "스킬",
     }
 )
+_DIRECT_PICKER_ALIASES = frozenset(("./omh", "/omh", "./skills", "/skills"))
+_GENERIC_CATALOG_COLLECTION_MARKERS = (
+    "workflow",
+    "workflows",
+    "skill",
+    "skills",
+    "command",
+    "commands",
+    "기능",
+    "명령",
+    "스킬",
+    "워크플로",
+    "워크플로우",
+)
+_GENERIC_CATALOG_LISTING_MARKERS = (
+    "available",
+    "installed",
+    "do you have",
+    "list",
+    "show",
+    "menu",
+    "picker",
+    "뭐 있어",
+    "무엇이 있어",
+    "목록",
+    "리스트",
+    "할 수 있는",
+)
 
 
 @dataclass(frozen=True)
@@ -156,6 +185,15 @@ def route_chat_message(
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
 
     routing_message = scrub_diagnostic_status_text(message)
+    fast_catalog_decision = _catalog_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_catalog_decision is not None:
+        return fast_catalog_decision.to_dict()
+
     definitions = routable_definitions()
     full_recommendations = recommend_skills(routing_message, limit=len(definitions))
     explicit_skill = explicit_skill_invocation(routing_message, definitions)
@@ -311,6 +349,105 @@ def route_chat_message(
 def _has_explicit_invocation_prefix(message: str) -> bool:
     first = message.strip().split(maxsplit=1)[0].strip(":,").lower()
     return first.startswith(("$", "/", "./", "@"))
+
+
+def _catalog_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    direct_picker = _direct_picker_alias(routing_message)
+    catalog_picker = (
+        not direct_picker
+        and is_skill_catalog_question(routing_message)
+        and _generic_omh_catalog_question(routing_message)
+    )
+    if not direct_picker and not catalog_picker:
+        return None
+
+    matched = ("direct_picker_alias",) if direct_picker else ("catalog_question",)
+    score = 12 if direct_picker else 11
+    reason = (
+        "Direct OMH picker alias; show the workflow picker without scoring every workflow."
+        if direct_picker
+        else "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
+    )
+    selected_harness = primary_harness_for_skill(_ROUTER_SKILL)
+    recommendation = _router_picker_recommendation(message, matched=matched, score=score)
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=_ROUTER_SKILL,
+        selected_harness=selected_harness,
+        candidate_skill=_ROUTER_SKILL,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=score,
+        threshold=min_confidence,
+        explicit=direct_picker,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", _ROUTER_SKILL, _ROUTER_SKILL, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _direct_picker_alias(message: str) -> bool:
+    compact = message.strip().lower().strip(" \t\r\n.!?,;:")
+    return compact in _DIRECT_PICKER_ALIASES
+
+
+def _generic_omh_catalog_question(message: str) -> bool:
+    text = message.strip().lower()
+    if _is_broad_capability_catalog_question(text):
+        return True
+    if not any(marker in text for marker in ("omh", "oh-my-hermes", "oh my hermes")):
+        return False
+    named_hits = sum(1 for skill in _SPECIFIC_CAPABILITY_CATALOG_SKILLS if skill in text)
+    if named_hits:
+        return False
+    has_collection = any(marker in text for marker in _GENERIC_CATALOG_COLLECTION_MARKERS)
+    has_listing_intent = any(marker in text for marker in _GENERIC_CATALOG_LISTING_MARKERS)
+    return has_collection and has_listing_intent
+
+
+def _router_picker_recommendation(query: str, *, matched: tuple[str, ...], score: int) -> dict[str, object]:
+    definition = _router_skill_definition()
+    return {
+        "skill": definition.name,
+        "description": definition.description,
+        "category": definition.category,
+        "phase": definition.phase,
+        "hermes_role": definition.hermes_role,
+        "handoff_policy": definition.handoff_policy,
+        "score": score,
+        "confidence": "high",
+        "matched": list(matched),
+        "why": "Matched the OMH workflow picker entry point.",
+        "next_action": "choose_skill",
+        "evidence_boundary": (
+            "Skill picker routing is not plan acceptance, dispatch, execution, review, CI, or verification evidence."
+        ),
+        "wrapper_guidance": (
+            "Render the OMH workflow picker in chat; do not ask the user to approve `omh list` for catalog discovery."
+        ),
+        "suggested_prompt": f"Use oh-my-hermes for: {query}",
+    }
+
+
+@lru_cache(maxsize=1)
+def _router_skill_definition() -> SkillDefinition:
+    for definition in routable_definitions():
+        if definition.name == _ROUTER_SKILL:
+            return definition
+    raise RuntimeError("oh-my-hermes router skill definition is missing")
 
 
 def _task_card_overrides_explicit_invocation(

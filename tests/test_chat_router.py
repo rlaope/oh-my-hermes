@@ -125,6 +125,31 @@ class ChatRouterTests(unittest.TestCase):
         self.assertTrue(decision["explicit"])
         self.assertEqual(decision["confidence"], "high")
 
+    def test_direct_picker_alias_uses_fast_catalog_route(self) -> None:
+        for message in ("./omh", "/omh", "./skills", "/skills"):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["candidate_skill"], "oh-my-hermes")
+                self.assertTrue(decision["explicit"])
+                self.assertEqual(decision["recommendations"][0]["skill"], "oh-my-hermes")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+                self.assertEqual(decision["recommendations"][0]["matched"], ["direct_picker_alias"])
+                public = public_route_payload(decision)
+                self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
+
+    def test_generic_omh_catalog_question_uses_fast_catalog_route(self) -> None:
+        decision = route_chat_message("what OMH workflows are available?", source="discord")
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+        self.assertFalse(decision["explicit"])
+        self.assertEqual(decision["recommendations"][0]["skill"], "oh-my-hermes")
+        self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+        self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
+
     def test_explicit_skill_invocation_wins_over_router_feedback_card(self) -> None:
         for message, skill in (
             ("$deep-interview before planning Discord and Slack routing, ask what each channel owns.", "deep-interview"),
