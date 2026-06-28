@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from functools import lru_cache
 
 from .agents import agent_role_capabilities
 from .families import capability_family_projection
@@ -66,6 +67,11 @@ LANE_PLAYBOOK_IDS = {
 
 
 def capability_snapshot() -> dict[str, object]:
+    return deepcopy(_capability_snapshot_template())
+
+
+@lru_cache(maxsize=1)
+def _capability_snapshot_template() -> dict[str, object]:
     agent_roles = agent_role_capabilities()
     skills = skill_capabilities()
     hooks = hook_manifest()
@@ -75,7 +81,7 @@ def capability_snapshot() -> dict[str, object]:
     tools = tool_requirements_manifest()
     awareness = awareness_primer_payload()
     families = capability_family_projection()
-    snapshot = {
+    return {
         "schema_version": CAPABILITY_MANIFEST_SCHEMA_VERSION,
         "manifest_id": "omh_capabilities",
         "determinism": "static_projection_no_runtime_clock",
@@ -110,11 +116,15 @@ def capability_snapshot() -> dict[str, object]:
             "no runtime_topology schema in this PR",
         ],
     }
-    return deepcopy(snapshot)
 
 
 def capability_summary() -> dict[str, object]:
-    snapshot = capability_snapshot()
+    return deepcopy(_capability_summary_template())
+
+
+@lru_cache(maxsize=1)
+def _capability_summary_template() -> dict[str, object]:
+    snapshot = _capability_snapshot_template()
     awareness = snapshot["omh_awareness"]
     skills = {str(item.get("id")): item for item in snapshot["skills"] if isinstance(item, dict)}
     playbooks = {str(item.get("id")): item for item in snapshot["playbooks"] if isinstance(item, dict)}

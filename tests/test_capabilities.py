@@ -28,24 +28,27 @@ class CapabilityManifestTests(unittest.TestCase):
     def test_capability_snapshot_is_deterministic_and_boundary_safe(self) -> None:
         first = capability_snapshot()
         second = capability_snapshot()
+        first["summary"]["skills"] = -1
+        first["skills"].clear()
+        third = capability_snapshot()
 
-        self.assertEqual(first, second)
-        self.assertEqual(first["schema_version"], "omh_capability_manifest/v1")
-        self.assertEqual(first["determinism"], "static_projection_no_runtime_clock")
-        self.assertEqual(first["omh_awareness"]["schema_version"], "omh_awareness/v1")
-        self.assertIn("workflow-shaped requests", first["omh_awareness"]["purpose"])
-        self.assertIn("Hermes-native workflow pack", first["omh_awareness"]["product_context"])
-        self.assertIn("every OMH skill", first["omh_awareness"]["all_skill_context_rule"])
-        self.assertIn("generic tool can render or execute", first["omh_awareness"]["all_skill_context_rule"])
-        self.assertIn("Every generated workflow skill", first["omh_awareness"]["skill_coverage"])
-        self.assertIn("meeting notes -> meeting-brief", " ".join(first["omh_awareness"]["cross_lane_examples"]))
-        self.assertIn("img-summary", json.dumps(first["omh_awareness"], sort_keys=True))
-        self.assertGreaterEqual(first["summary"]["skills"], 30)
-        self.assertGreaterEqual(first["summary"]["agent_roles"], 8)
-        self.assertGreaterEqual(first["summary"]["playbooks"], 20)
-        self.assertIn("no runtime_topology schema in this PR", first["non_goals"])
-        self.assertNotIn("runtime_topology", first)
-        self.assertIn("Prepared OMH capability", first["evidence_boundaries"]["prepared_is_not"])
+        self.assertEqual(second, third)
+        self.assertEqual(third["schema_version"], "omh_capability_manifest/v1")
+        self.assertEqual(third["determinism"], "static_projection_no_runtime_clock")
+        self.assertEqual(third["omh_awareness"]["schema_version"], "omh_awareness/v1")
+        self.assertIn("workflow-shaped requests", third["omh_awareness"]["purpose"])
+        self.assertIn("Hermes-native workflow pack", third["omh_awareness"]["product_context"])
+        self.assertIn("every OMH skill", third["omh_awareness"]["all_skill_context_rule"])
+        self.assertIn("generic tool can render or execute", third["omh_awareness"]["all_skill_context_rule"])
+        self.assertIn("Every generated workflow skill", third["omh_awareness"]["skill_coverage"])
+        self.assertIn("meeting notes -> meeting-brief", " ".join(third["omh_awareness"]["cross_lane_examples"]))
+        self.assertIn("img-summary", json.dumps(third["omh_awareness"], sort_keys=True))
+        self.assertGreaterEqual(third["summary"]["skills"], 30)
+        self.assertGreaterEqual(third["summary"]["agent_roles"], 8)
+        self.assertGreaterEqual(third["summary"]["playbooks"], 20)
+        self.assertIn("no runtime_topology schema in this PR", third["non_goals"])
+        self.assertNotIn("runtime_topology", third)
+        self.assertIn("Prepared OMH capability", third["evidence_boundaries"]["prepared_is_not"])
 
     def test_awareness_lanes_cover_every_catalog_workflow_surface(self) -> None:
         awareness = capability_snapshot()["omh_awareness"]
@@ -117,6 +120,9 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(normalize_capability_section("tools"), "tool_requirements")
 
     def test_capability_summary_is_human_facing_catalog_context(self) -> None:
+        summary = capability_summary()
+        summary["capability_families"].clear()
+        summary["totals"]["skills"] = -1
         summary = capability_summary()
         families = {family["id"]: family for family in summary["capability_families"]}
         lanes = {lane["id"]: lane for lane in summary["lanes"]}
