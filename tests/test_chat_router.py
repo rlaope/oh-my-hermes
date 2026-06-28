@@ -104,6 +104,11 @@ class ChatRouterTests(unittest.TestCase):
                 "reliability-review",
             ),
             (
+                "Can OMH run a release reliability review before launch?",
+                "reliability-review",
+                "reliability-review",
+            ),
+            (
                 "엑셀 매출 리포트를 PDF로 만들고 렌더 QA까지 준비해줘",
                 "materials-package",
                 "materials-package",
@@ -112,6 +117,11 @@ class ChatRouterTests(unittest.TestCase):
                 "every morning check competitor news and send a Slack digest only if something changed",
                 "research-department",
                 "research-department",
+            ),
+            (
+                "Can OMH make an automation blueprint for a daily research digest?",
+                "automation-blueprint",
+                "scheduled-ops-blueprint",
             ),
         )
 
@@ -765,6 +775,7 @@ selected_workflow=ultraprocess
             "codex로 이 기능 구현 맡겨줘",
             "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
             "$ultraprocess로 이 repo 변경을 PR-ready까지 준비해줘",
+            "Can OMH do one full research plan implementation review cycle?",
         )
 
         for message in cases:
