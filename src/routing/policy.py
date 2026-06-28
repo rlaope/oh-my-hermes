@@ -471,6 +471,7 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
     {
         "visual",
         "image",
+        "photo",
         "vertical",
         "infographic",
         "poster",
@@ -534,6 +535,13 @@ _VISUAL_SUMMARY_SHORT_REQUEST_PHRASES = frozenset(
         "이미지 생성해 줘",
         "이미지를 만들어줘",
         "이미지를 생성해줘",
+        "사진 만들어줘",
+        "사진 생성해줘",
+        "사진을 만들어줘",
+        "사진을 생성해줘",
+        "generate a photo",
+        "make a photo",
+        "create a photo",
     )
 )
 _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
@@ -581,6 +589,9 @@ _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = _normalized_token_set(
         "cron",
         "automation",
         "shareable",
+        "share",
+        "shared",
+        "sharing",
         "research",
         "news",
         "competitor",
@@ -591,6 +602,8 @@ _VISUAL_SUMMARY_OUTPUT_CONTEXT_TOKENS = _normalized_token_set(
         "안내",
         "설명해줘",
         "설명해",
+        "공유",
+        "공유할",
         "공유용",
         "워크플로우",
         "브리핑",
@@ -679,6 +692,8 @@ _VISUAL_SUMMARY_PHRASES = (
     "세로 이미지 카드",
     "세로 이미지로 요약",
     "세로 이미지로 요약해줘",
+    "세로 이미지로 만들어",
+    "세로 이미지로 만들어줘",
     "이미지 카드",
     "이미지로 요약",
     "이미지로 요약해줘",
@@ -3844,18 +3859,45 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "is it set up",
             "did setup work",
             "did install work",
+            "did update work",
+            "update ok",
+            "update worked",
+            "is update ok",
             "setup이 잘 됐",
             "setup 잘 됐",
             "셋업 잘 됐",
             "설치 잘 됐",
             "설치가 잘 됐",
+            "update 잘 됐",
+            "update 잘됐",
+            "update 했는데 잘",
+            "업데이트 잘 됐",
+            "업데이트 잘됐",
+            "업데이트 했는데 잘",
+            "업데이트했는데 잘",
             "잘 됐는지",
             "잘되었는지",
             "잘 됐어",
             "잘됐어",
         ),
     )
-    return simple_health_question or (omh_context and maintenance and confusion)
+    setup_ui_health_question = _contains_phrase(
+        normalized_query,
+        (
+            "setup slow",
+            "setup feels slow",
+            "setup is slow",
+            "setup arrow key",
+            "setup arrow keys",
+            "setup keyboard",
+            "setup에서 위아래키",
+            "setup 위아래키",
+            "셋업에서 위아래키",
+            "위아래키 누르면 느려",
+            "키보드로 이동하면 느려",
+        ),
+    )
+    return simple_health_question or setup_ui_health_question or (omh_context and maintenance and confusion)
 
 
 def _reliability_review_context_applies(normalized_query: str, query_tokens: set[str]) -> bool:

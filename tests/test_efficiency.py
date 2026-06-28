@@ -27,6 +27,7 @@ from omh.plugin_bundle.omh.awareness import (
     awareness_primer_payload,
     awareness_primer_context,
     awareness_primer_markdown,
+    awareness_route_hint,
     awareness_workflow_context_markdown,
     workflow_context_card_for_workflow,
 )
@@ -183,6 +184,10 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertTrue(awareness_context_matches_message("what is the coding handoff status?"))
         self.assertFalse(awareness_context_matches_message("prepare a sandwich"))
         self.assertFalse(awareness_context_matches_message(""))
+
+        doctor_hint = awareness_route_hint("update 했는데 잘 된거야?")
+        self.assertEqual(doctor_hint["primary_workflow"], "doctor")
+        self.assertEqual(doctor_hint["primary_next_action"], "check_install_or_setup_health")
 
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
