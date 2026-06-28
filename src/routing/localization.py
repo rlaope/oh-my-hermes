@@ -46,6 +46,18 @@ _CANONICAL_WEB_RESEARCH = (
     "web research web search search the web current sources source-backed research "
     "citations links freshness source diversity retrieval gap"
 )
+_CANONICAL_VISUAL_SUMMARY = (
+    "img-summary visual summary image card summary image explainer image visual prompt card "
+    "image generation prompt explain feature cron workflow poster infographic"
+)
+_CANONICAL_PAPER_LEARNING = (
+    "paper-learning paper pdf research paper explain summarize easy moderate expert "
+    "section walkthrough coverage ledger without dropping details"
+)
+_CANONICAL_SOURCE_FINDER = (
+    "source-finder find source candidates papers datasets github repository public pdf links "
+    "presentation materials acquisition status downstream workflow"
+)
 
 
 @dataclass(frozen=True)
@@ -326,6 +338,210 @@ _ALIASES: tuple[LocaleAlias, ...] = (
             "neueste quellen",
         ),
         _CANONICAL_WEB_RESEARCH,
+    ),
+    LocaleAlias(
+        "ja",
+        "visual_summary",
+        (
+            "画像を作って",
+            "画像で説明",
+            "説明する画像",
+            "要約画像",
+            "インフォグラフィック",
+            "ポスターを作って",
+        ),
+        _CANONICAL_VISUAL_SUMMARY,
+    ),
+    LocaleAlias(
+        "zh",
+        "visual_summary",
+        (
+            "解释 cron 功能的图片",
+            "解释功能的图片",
+            "说明图片",
+            "說明圖片",
+            "摘要图片",
+            "摘要圖片",
+            "信息图",
+            "資訊圖",
+            "海报",
+            "海報",
+        ),
+        _CANONICAL_VISUAL_SUMMARY,
+    ),
+    LocaleAlias(
+        "es",
+        "visual_summary",
+        (
+            "haz una imagen",
+            "hacer una imagen",
+            "crea una imagen",
+            "crear una imagen",
+            "imagen que explique",
+            "imagen explicando",
+            "infografía",
+            "infografia",
+            "póster",
+            "poster",
+        ),
+        _CANONICAL_VISUAL_SUMMARY,
+    ),
+    LocaleAlias(
+        "fr",
+        "visual_summary",
+        (
+            "fais une image",
+            "faire une image",
+            "crée une image",
+            "cree une image",
+            "image qui explique",
+            "image explicative",
+            "infographie",
+            "affiche",
+        ),
+        _CANONICAL_VISUAL_SUMMARY,
+    ),
+    LocaleAlias(
+        "de",
+        "visual_summary",
+        (
+            "erstelle ein bild",
+            "mach ein bild",
+            "bild das",
+            "bild, das",
+            "bild erklären",
+            "bild erklaren",
+            "infografik",
+            "poster",
+        ),
+        _CANONICAL_VISUAL_SUMMARY,
+    ),
+    LocaleAlias(
+        "ja",
+        "paper_learning",
+        (
+            "論文pdfをやさしく説明",
+            "論文pdfを簡単に説明",
+            "この論文pdfを説明",
+            "この論文をやさしく説明",
+            "この論文を要約",
+        ),
+        _CANONICAL_PAPER_LEARNING,
+    ),
+    LocaleAlias(
+        "zh",
+        "paper_learning",
+        (
+            "解释这篇论文 pdf",
+            "解釋這篇論文 pdf",
+            "简单解释这篇论文",
+            "簡單解釋這篇論文",
+            "总结这篇论文",
+            "總結這篇論文",
+        ),
+        _CANONICAL_PAPER_LEARNING,
+    ),
+    LocaleAlias(
+        "es",
+        "paper_learning",
+        (
+            "explicame este paper",
+            "explícame este paper",
+            "explica este paper",
+            "explica este artículo",
+            "explica este articulo",
+            "resumir este paper",
+            "paper en un nivel fácil",
+            "paper en un nivel facil",
+        ),
+        _CANONICAL_PAPER_LEARNING,
+    ),
+    LocaleAlias(
+        "fr",
+        "paper_learning",
+        (
+            "explique ce pdf de recherche",
+            "explique cet article",
+            "explique ce papier",
+            "résume ce papier",
+            "resume ce papier",
+            "simplement ce papier",
+        ),
+        _CANONICAL_PAPER_LEARNING,
+    ),
+    LocaleAlias(
+        "de",
+        "paper_learning",
+        (
+            "erkläre dieses paper",
+            "erklaere dieses paper",
+            "erkläre dieses pdf",
+            "erklaere dieses pdf",
+            "dieses paper einfach",
+            "dieses paper zusammenfassen",
+        ),
+        _CANONICAL_PAPER_LEARNING,
+    ),
+    LocaleAlias(
+        "ja",
+        "source_finder",
+        (
+            "論文とデータセットを探",
+            "githubリポジトリを探",
+            "公開pdfを探",
+            "発表資料を探",
+        ),
+        _CANONICAL_SOURCE_FINDER,
+    ),
+    LocaleAlias(
+        "zh",
+        "source_finder",
+        (
+            "找论文和数据集",
+            "找論文和資料集",
+            "查找 github 仓库",
+            "查找 github 倉庫",
+            "公开 pdf 链接",
+            "公開 pdf 連結",
+        ),
+        _CANONICAL_SOURCE_FINDER,
+    ),
+    LocaleAlias(
+        "es",
+        "source_finder",
+        (
+            "encuentra el paper y el dataset",
+            "encuentra papers y datasets",
+            "buscar paper y dataset",
+            "encuentra el repositorio github",
+            "encuentra fuentes descargables",
+        ),
+        _CANONICAL_SOURCE_FINDER,
+    ),
+    LocaleAlias(
+        "fr",
+        "source_finder",
+        (
+            "trouve le dépôt github",
+            "trouve le depot github",
+            "trouve le pdf public",
+            "trouve les papers et datasets",
+            "trouve des sources téléchargeables",
+            "trouve des sources telechargeables",
+        ),
+        _CANONICAL_SOURCE_FINDER,
+    ),
+    LocaleAlias(
+        "de",
+        "source_finder",
+        (
+            "finde paper und dataset",
+            "finde papers und datasets",
+            "finde das github repository",
+            "finde öffentliche pdfs",
+            "finde offentliche pdfs",
+        ),
+        _CANONICAL_SOURCE_FINDER,
     ),
 )
 
