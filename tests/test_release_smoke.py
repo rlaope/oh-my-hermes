@@ -40,6 +40,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("use_case_artifact_bundle", items)
         self.assertIn("use_case_replay", items)
         self.assertIn("use_case_readiness", items)
+        self.assertIn("chat_card_coverage", items)
         self.assertIn("product_readiness", items)
         self.assertIn("release_evidence_bundle", items)
         self.assertIn("live_tap_smoke", items)
@@ -78,8 +79,13 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertEqual(items["use_case_readiness"]["command"], "uv run python -m omh.cli cases readiness --json")
         self.assertIn("readiness", items["use_case_readiness"]["evidence_required"])
         self.assertIn("deterministic local use-case contracts", items["use_case_readiness"]["proof_boundary"])
+        self.assertEqual(items["chat_card_coverage"]["command"], "uv run python -m omh.cli demo chat-card-coverage --json")
+        self.assertIn("generic ack count 0", items["chat_card_coverage"]["evidence_required"])
+        self.assertIn("deterministic local wrapper-card contracts", items["chat_card_coverage"]["proof_boundary"])
+        self.assertIn("does not prove live Hermes chat rendering", items["chat_card_coverage"]["proof_boundary"])
         self.assertEqual(items["product_readiness"]["command"], "/tmp/omh release product-readiness --version 1.0.0 --json")
         self.assertIn("skill-content", items["product_readiness"]["evidence_required"])
+        self.assertIn("wrapper chat card coverage", items["product_readiness"]["evidence_required"])
         self.assertIn("product contracts", items["product_readiness"]["proof_boundary"])
         self.assertEqual(items["release_evidence_bundle"]["command"], "/tmp/omh release evidence-bundle --version 1.0.0 --write --json")
         self.assertIn("omh_release_evidence_bundle/v1", items["release_evidence_bundle"]["evidence_required"])
@@ -231,10 +237,15 @@ class ReleaseSmokeTests(unittest.TestCase):
         gates = {gate["id"]: gate for gate in payload["gates"]}
         self.assertEqual(
             set(gates),
-            {"skill_content", "use_cases", "parity_contracts", "release_checklist"},
+            {"skill_content", "use_cases", "chat_card_coverage", "parity_contracts", "release_checklist"},
         )
         self.assertEqual(gates["skill_content"]["status"], "passed")
         self.assertEqual(gates["use_cases"]["status"], "passed")
+        self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
+        self.assertIn("25/25 dedicated workflow cards", gates["chat_card_coverage"]["summary"])
+        self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
+        self.assertEqual(gates["chat_card_coverage"]["command"], "omh demo chat-card-coverage --json")
+        self.assertIn("deterministic local wrapper-card coverage", gates["chat_card_coverage"]["proof_boundary"])
         self.assertEqual(gates["parity_contracts"]["status"], "passed")
         self.assertEqual(gates["release_checklist"]["status"], "passed")
         self.assertIn(
@@ -257,8 +268,13 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertFalse(paths.release_evidence_index_path.exists())
             self.assertIn("local_artifact_store: not_written", payload["warnings"])
             self.assertEqual(payload["summary"]["product_readiness_status"], "ready")
+            self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
+            self.assertEqual(payload["summary"]["chat_card_coverage_total"], 25)
+            self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
             self.assertEqual(payload["evidence"]["product_readiness"]["schema_version"], "omh_product_readiness/v1")
             self.assertEqual(payload["evidence"]["release_checklist"]["schema_version"], "release_readiness_checklist/v1")
+            self.assertEqual(payload["evidence"]["chat_card_coverage"]["schema_version"], "chat_card_coverage/v1")
+            self.assertIn("chat_card_coverage_ready", payload["claims"])
             self.assertIn("executor_dispatch", payload["not_evidence_for"])
 
             written = release_evidence_bundle(version="v1.0.1", omh_command="/tmp/omh command", paths=paths, write=True)
