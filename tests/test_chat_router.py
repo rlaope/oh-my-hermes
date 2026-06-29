@@ -843,6 +843,10 @@ class ChatRouterTests(unittest.TestCase):
             chat_router_impl,
             "recommend_skills",
             side_effect=AssertionError("exact workflow-id capability questions should use the catalog fast path"),
+        ), mock.patch.object(
+            chat_router_impl,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("exact workflow-id capability questions should render a card, not a route plan"),
         ):
             decision = route_chat_message("what can OMH do for paper-learning?", source="discord")
 
@@ -856,6 +860,7 @@ class ChatRouterTests(unittest.TestCase):
             ["catalog_question", "name:paper-learning"],
         )
         self.assertIn("exact OMH capability", decision["recommendations"][0]["why"])
+        self.assertNotIn("workflow_route_plan", public_route_payload(decision))
 
     def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
         for phrase in ("plan", "team", "ask"):

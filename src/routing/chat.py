@@ -547,12 +547,7 @@ def _catalog_fast_path_decision(
                 clarification="",
                 routing_prompt=_routing_prompt("dispatch", exact_skill, exact_skill, reason, message),
                 task_card=None,
-                workflow_route_plan=build_workflow_route_plan(
-                    message,
-                    [recommendation],
-                    selected_skill=exact_skill,
-                    action="dispatch",
-                ),
+                workflow_route_plan=None,
                 learning_candidate_card=None,
                 recommendations=(recommendation,),
             ),
