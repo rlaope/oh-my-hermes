@@ -83,6 +83,11 @@ class CatalogQuestionTests(unittest.TestCase):
             "이 파일에서 기능 목록 찾아줘",
             "이 경로에서 workflow 언급 찾아줘",
             "command not found: omh",
+            "comando no encontrado: omh",
+            "commande introuvable: omh",
+            "Befehl nicht gefunden: omh",
+            "コマンドが見つかりません: omh",
+            "找不到命令: omh",
             "프리렌이 OMH 안 쓰고 일반 도구로 이미지 만들었어",
             "이미지 생성 요청을 했는데 OMH를 안 썼어",
         )
