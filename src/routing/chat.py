@@ -228,10 +228,41 @@ _DIRECT_ANSWER_CONCEPT_STARTERS = (
     "explain what ",
     "explain the concept of ",
 )
+_DIRECT_ANSWER_MULTILINGUAL_CONCEPT_STARTERS = (
+    "¿qué es ",
+    "qué es ",
+    "que es ",
+    "qu'est-ce que ",
+    "qu’est-ce que ",
+    "was ist ",
+)
 _DIRECT_ANSWER_CONCEPT_EXPLAIN_STARTERS = (
     "explain ",
     "describe ",
     "tell me about ",
+)
+_DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_STARTERS = (
+    "explícame ",
+    "explicame ",
+    "explique ",
+    "erkläre ",
+    "erklaere ",
+)
+_DIRECT_ANSWER_MULTILINGUAL_CONCEPT_MARKERS = (
+    "とは何ですか",
+    "とはなんですか",
+    "とは何",
+    "是什么",
+    "是什麼",
+)
+_DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS = (
+    "説明して",
+    "説明してください",
+    "解释一下",
+    "解釋一下",
+)
+_DIRECT_ANSWER_MULTILINGUAL_CONTEXT_QUESTIONS = (
+    "was ist los",
 )
 _DIRECT_ANSWER_KOREAN_CONCEPT_MARKERS = (
     "뭐야",
@@ -276,6 +307,12 @@ _DIRECT_ANSWER_ACKNOWLEDGEMENTS = (
     "ok",
     "okay",
     "got it",
+    "gracias",
+    "merci",
+    "danke",
+    "ありがとう",
+    "谢谢",
+    "謝謝",
     "고마워",
     "감사합니다",
     "감사",
@@ -303,6 +340,9 @@ _DIRECT_ANSWER_CONTEXT_QUESTIONS = (
 )
 _DIRECT_ANSWER_ERROR_HELP_STARTERS = (
     "command not found",
+    "comando no encontrado",
+    "commande introuvable",
+    "befehl nicht gefunden",
     "permission denied",
     "modulenotfounderror",
     "module not found",
@@ -311,6 +351,8 @@ _DIRECT_ANSWER_ERROR_HELP_STARTERS = (
     "explain this stack trace",
     "please explain this stack trace",
     "why is this failing",
+    "コマンドが見つかりません",
+    "找不到命令",
 )
 _DIRECT_ANSWER_KOREAN_ERROR_HELP_SUBJECTS = (
     "이 오류",
@@ -382,6 +424,7 @@ _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
     "going on",
     "working on",
     "poster",
+    "paper",
     "summary card",
     "as image",
     "as an image",
@@ -404,6 +447,8 @@ _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
     "this code",
     "attached paper",
     "attached pdf",
+    "論文",
+    "论文",
     "이 논문",
     "이 pdf",
     "이 코드",
@@ -481,6 +526,10 @@ _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS = (
     "summarize the paragraph",
     "summarise the paragraph",
     "translate this",
+    "traduce esto",
+    "traduis ceci",
+    "übersetze das",
+    "uebersetze das",
     "translate this paragraph",
     "rewrite this paragraph",
     "rephrase this paragraph",
@@ -494,6 +543,13 @@ _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS = (
     "proofread this",
     "fix grammar in this",
     "make this more natural",
+    "resume esto",
+    "résume ceci",
+    "fass das zusammen",
+    "これを英語に翻訳して",
+    "これを要約して",
+    "把这句话翻译",
+    "总结一下",
 )
 _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_SUBJECTS = (
     "이 문장",
@@ -1690,17 +1746,28 @@ def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
         direct_text, _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS
     ):
         return False
+    stripped = direct_text.strip(" \t\r\n.!?¿¡。！？")
+    if any(stripped.startswith(marker) for marker in _DIRECT_ANSWER_MULTILINGUAL_CONTEXT_QUESTIONS):
+        return False
     has_concept_keyword = _contains_concept_keyword(direct_text)
     if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_STARTERS):
         return has_concept_keyword or _is_short_generic_concept_question(direct_text)
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_MULTILINGUAL_CONCEPT_STARTERS):
+        return _is_short_generic_multilingual_concept_question(direct_text)
     if any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_CONCEPT_MARKERS):
         return has_concept_keyword or _is_short_generic_korean_concept_question(direct_text)
+    if any(marker in direct_text for marker in _DIRECT_ANSWER_MULTILINGUAL_CONCEPT_MARKERS):
+        return _is_short_generic_multilingual_concept_question(direct_text)
     if has_concept_keyword and any(
         direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_EXPLAIN_STARTERS
     ):
         return True
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_STARTERS):
+        return _is_short_generic_multilingual_concept_question(direct_text)
     if any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_EXPLAIN_MARKERS):
         return has_concept_keyword or _is_short_generic_korean_concept_question(direct_text)
+    if any(marker in direct_text for marker in _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS):
+        return _is_short_generic_multilingual_concept_question(direct_text)
     return False
 
 
@@ -1723,6 +1790,25 @@ def _is_short_generic_korean_concept_question(text: str) -> bool:
         return False
     if not any("\uac00" <= character <= "\ud7a3" for character in compact):
         return False
+    return len(compact) <= _DIRECT_ANSWER_GENERIC_KOREAN_CONCEPT_MAX_CHARS
+
+
+def _is_short_generic_multilingual_concept_question(text: str) -> bool:
+    compact = text.strip(" \t\r\n.!?¿¡。！？")
+    if not compact:
+        return False
+    for starter in _DIRECT_ANSWER_MULTILINGUAL_CONCEPT_STARTERS + _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_STARTERS:
+        if compact.startswith(starter):
+            compact = compact[len(starter) :].strip(" \t\r\n.!?¿¡。！？")
+            break
+    for marker in _DIRECT_ANSWER_MULTILINGUAL_CONCEPT_MARKERS + _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS:
+        compact = compact.replace(marker, "")
+    compact = compact.strip(" \t\r\n.!?¿¡。！？")
+    if not compact:
+        return False
+    words = _word_tokens(compact)
+    if words:
+        return len(words) <= _DIRECT_ANSWER_GENERIC_CONCEPT_MAX_WORDS
     return len(compact) <= _DIRECT_ANSWER_GENERIC_KOREAN_CONCEPT_MAX_CHARS
 
 
