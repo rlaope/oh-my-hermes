@@ -562,6 +562,11 @@ def locale_aliases() -> tuple[LocaleAlias, ...]:
 
 
 def prepare_routing_text(value: str) -> RoutingText:
+    return _prepare_routing_text_cached(value)
+
+
+@lru_cache(maxsize=8192)
+def _prepare_routing_text_cached(value: str) -> RoutingText:
     original = value.strip()
     folded = _fold_for_match(original)
     additions: list[str] = []

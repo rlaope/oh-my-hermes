@@ -539,6 +539,19 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_prepare_routing_text_cache_reuses_locale_alias_scan(self) -> None:
+        localization_module._prepare_routing_text_cached.cache_clear()
+
+        first = localization_module.prepare_routing_text("生成一张解释 cron 功能的图片")
+        second = localization_module.prepare_routing_text("生成一张解释 cron 功能的图片")
+        cache_info = localization_module._prepare_routing_text_cached.cache_info()
+
+        self.assertIs(first, second)
+        self.assertIn("visual summary", second.scoring_text)
+        self.assertIn("zh:visual_summary", second.locale_matches)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_routing_token_cache_reuses_terms_without_payload_poisoning(self) -> None:
         localization_module._routing_terms_cached.cache_clear()
         localization_module._routing_tokens_cached.cache_clear()
