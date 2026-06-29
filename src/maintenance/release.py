@@ -149,6 +149,19 @@ class ReleaseChecklistItem:
         }
 
 
+@dataclass(frozen=True)
+class ReleaseQualityEvidence:
+    skill_content: dict[str, object]
+    parity: dict[str, object]
+    grounded_score: dict[str, object]
+    chat_cards: dict[str, object]
+    route_hints: dict[str, object]
+    context_briefs: dict[str, object]
+    routing_precision: dict[str, object]
+    hermes_ux: dict[str, object]
+    checklist: dict[str, object]
+
+
 def release_readiness_checklist(
     *,
     version: str = __version__,
@@ -517,7 +530,15 @@ def product_readiness_report(
     omh_command: str = "omh",
 ) -> dict[str, object]:
     release_version = _normalize_release_version(version)
-    omh_display = _shell_word(omh_command)
+    evidence = _build_release_quality_evidence(release_version=release_version, omh_command=omh_command)
+    return _product_readiness_report_from_evidence(
+        release_version=release_version,
+        omh_command=omh_command,
+        evidence=evidence,
+    )
+
+
+def _build_release_quality_evidence(*, release_version: str, omh_command: str) -> ReleaseQualityEvidence:
     skill_content = skill_content_smoke()
     parity = build_parity_matrix()
     grounded_score = build_grounded_score_demo()
@@ -536,6 +557,35 @@ def product_readiness_report(
         routing_precision=routing_precision,
     )
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
+    return ReleaseQualityEvidence(
+        skill_content=skill_content,
+        parity=parity,
+        grounded_score=grounded_score,
+        chat_cards=chat_cards,
+        route_hints=route_hints,
+        context_briefs=context_briefs,
+        routing_precision=routing_precision,
+        hermes_ux=hermes_ux,
+        checklist=checklist,
+    )
+
+
+def _product_readiness_report_from_evidence(
+    *,
+    release_version: str,
+    omh_command: str,
+    evidence: ReleaseQualityEvidence,
+) -> dict[str, object]:
+    omh_display = _shell_word(omh_command)
+    skill_content = evidence.skill_content
+    parity = evidence.parity
+    grounded_score = evidence.grounded_score
+    chat_cards = evidence.chat_cards
+    route_hints = evidence.route_hints
+    context_briefs = evidence.context_briefs
+    routing_precision = evidence.routing_precision
+    hermes_ux = evidence.hermes_ux
+    checklist = evidence.checklist
 
     checklist_items = checklist.get("items", [])
     checklist_ids = {
@@ -1571,26 +1621,22 @@ def release_evidence_bundle(
 ) -> dict[str, object]:
     release_version = _normalize_release_version(version)
     resolved_paths = paths or OmhPaths(omh_home=Path("~/.omh").expanduser(), hermes_home=Path("~/.hermes").expanduser())
-    checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
-    product = product_readiness_report(version=release_version, omh_command=omh_command)
-    skill_content = skill_content_smoke()
+    quality_evidence = _build_release_quality_evidence(release_version=release_version, omh_command=omh_command)
+    checklist = quality_evidence.checklist
+    product = _product_readiness_report_from_evidence(
+        release_version=release_version,
+        omh_command=omh_command,
+        evidence=quality_evidence,
+    )
+    skill_content = quality_evidence.skill_content
     use_cases = use_case_readiness(resolved_paths)
-    grounded_score = build_grounded_score_demo()
-    chat_cards = build_chat_card_coverage_demo()
-    route_hints = build_route_hint_alignment_demo(
-        grounded_score=grounded_score,
-        chat_card_coverage=chat_cards,
-    )
-    context_briefs = build_context_brief_coverage_demo()
-    routing_precision = build_routing_precision_demo()
-    hermes_ux = build_hermes_ux_quality_demo(
-        grounded_score=grounded_score,
-        chat_card_coverage=chat_cards,
-        route_hint_alignment=route_hints,
-        context_brief_coverage=context_briefs,
-        routing_precision=routing_precision,
-    )
-    parity = build_parity_matrix()
+    grounded_score = quality_evidence.grounded_score
+    chat_cards = quality_evidence.chat_cards
+    route_hints = quality_evidence.route_hints
+    context_briefs = quality_evidence.context_briefs
+    routing_precision = quality_evidence.routing_precision
+    hermes_ux = quality_evidence.hermes_ux
+    parity = quality_evidence.parity
     local_store_status = _release_local_store_status(use_cases)
     required_status = {
         "release_checklist": "passed" if checklist.get("ok") else "failed",

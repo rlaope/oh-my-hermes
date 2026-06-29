@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 import json
 import sys
 import subprocess
@@ -8,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import omh.maintenance.release as release_module
 from omh.paths import OmhPaths
 from omh.release import (
     hermes_release_smoke_plan,
@@ -390,6 +392,41 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(index["schema_version"], "omh_release_evidence_index/v1")
             self.assertEqual(index["latest_version"], "1.0.1")
             self.assertEqual(index["latest_artifact_path"], str(artifact_path))
+
+    def test_release_evidence_bundle_reuses_product_readiness_quality_evidence(self) -> None:
+        counted_names = (
+            "skill_content_smoke",
+            "build_parity_matrix",
+            "build_grounded_score_demo",
+            "build_chat_card_coverage_demo",
+            "build_route_hint_alignment_demo",
+            "build_context_brief_coverage_demo",
+            "build_routing_precision_demo",
+            "build_hermes_ux_quality_demo",
+            "release_readiness_checklist",
+        )
+        counts = {name: 0 for name in counted_names}
+
+        def counted(name: str):
+            original = getattr(release_module, name)
+
+            def wrapper(*args, **kwargs):
+                counts[name] += 1
+                return original(*args, **kwargs)
+
+            return wrapper
+
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            with ExitStack() as stack:
+                for name in counted_names:
+                    stack.enter_context(patch.object(release_module, name, side_effect=counted(name)))
+                payload = release_evidence_bundle(version="v1.0.1", omh_command="/tmp/omh command", paths=paths)
+
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["evidence"]["product_readiness"]["status"], "ready")
+        for name in counted_names:
+            self.assertEqual(counts[name], 1, name)
 
     def test_release_readiness_checklist_rejects_empty_version(self) -> None:
         with self.assertRaises(ValueError):
