@@ -226,10 +226,14 @@ _EXECUTOR_STATUS_CONTEXT_PHRASES = (
     "codex",
     "claude code",
     "coding agent",
+    "coding handoff",
+    "coding work",
     "executor",
     "코덱스",
     "클로드",
     "코딩 에이전트",
+    "코딩 작업",
+    "코딩 핸드오프",
 )
 _EXECUTOR_STATUS_SIGNAL_PHRASES = (
     "latest status",

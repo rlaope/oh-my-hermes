@@ -1592,6 +1592,11 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "track codex work session",
     "coding agent status",
     "coding agent session",
+    "coding handoff status",
+    "coding handoff progress",
+    "coding work status",
+    "coding work progress",
+    "what is the coding handoff status",
     "what did the coding agent do",
     "what did the coding agent do while i was away",
     "what has the coding agent done",
@@ -1615,6 +1620,10 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "codex 작업이 어디까지",
     "코덱스 작업",
     "작업이 어디까지",
+    "코딩 작업 어디까지",
+    "코딩 작업 지금 어디까지",
+    "코딩 작업 진행상황",
+    "코딩 작업 상태",
     "진행됐는지",
     "진행되었는지",
 )
@@ -1643,6 +1652,11 @@ _CODING_SESSION_STATUS_ONLY_PHRASES = (
     "still missing",
     "is codex done",
     "is claude code done",
+    "coding handoff status",
+    "what is the coding handoff status",
+    "coding work status",
+    "코딩 작업 어디까지",
+    "코딩 작업 지금 어디까지",
 )
 _CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
     {
@@ -1665,6 +1679,7 @@ _CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
         "코덱스",
         "클로드",
         "세션",
+        "핸드오프",
     }
 )
 _GITHUB_EVENT_OPS_PHRASES = (
@@ -2519,7 +2534,20 @@ def meets_confidence_threshold(confidence: str, threshold: str) -> bool:
 
 
 def explicit_skill_invocation(message: str, names: set[str]) -> str | None:
-    first = message.strip().split(maxsplit=1)[0].strip(":,").lower()
+    stripped = message.strip()
+    words = [word.strip(":,").lower() for word in stripped.split()]
+    if len(words) >= 3 and words[0] == "use" and words[1] in {
+        "omh",
+        "oh-my-hermes",
+        "oh-my-hermes-agent",
+    }:
+        candidate = words[2]
+        if candidate in names:
+            return candidate
+        alias = _EXPLICIT_SKILL_ALIASES.get(candidate)
+        if alias in names:
+            return alias
+    first = stripped.split(maxsplit=1)[0].strip(":,").lower()
     used_prefix = False
     for prefix in sorted(EXPLICIT_INVOCATION_PREFIXES, key=len, reverse=True):
         if first.startswith(prefix):
@@ -2686,7 +2714,7 @@ def active_routing_guard_rules(
         rules.append(TOOLBELT_READINESS_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
         rules.append(VOICE_OPERATOR_GUARD)
-    if visual_summary_applies:
+    if visual_summary_applies and not workflow_learning_applies:
         rules.append(VISUAL_SUMMARY_GUARD)
     if deliverable_package_applies:
         rules.append(DELIVERABLE_PACKAGE_GUARD)
