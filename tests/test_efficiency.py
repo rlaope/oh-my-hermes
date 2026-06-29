@@ -9,6 +9,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_skill_templates
+from omh.routing import chat as chat_module
 from omh.routing import catalog_questions as catalog_questions_module
 from omh.routing import localization as localization_module
 from omh.routing import recommend as recommend_module
@@ -529,6 +530,23 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertGreaterEqual(search_cache.hits, 1)
         self.assertGreater(token_cache.misses, 0)
         self.assertGreater(token_cache.hits, 0)
+
+    def test_chat_route_decision_cache_is_reused_without_payload_poisoning(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+
+        first = chat_module.route_chat_message("risky refactor with implementation and review", source="discord")
+        first["selected_skill"] = "mutated"
+        first["recommendations"][0]["skill"] = "mutated"
+        first["workflow_route_plan"]["steps"][0]["skill"] = "mutated"
+
+        second = chat_module.route_chat_message("risky refactor with implementation and review", source="discord")
+        cache_info = chat_module._route_chat_message_cached.cache_info()
+
+        self.assertNotEqual(second["selected_skill"], "mutated")
+        self.assertNotEqual(second["recommendations"][0]["skill"], "mutated")
+        self.assertNotEqual(second["workflow_route_plan"]["steps"][0]["skill"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
 
     def test_workflow_route_plan_cache_is_reused_without_payload_poisoning(self) -> None:
         route_plan_module._build_workflow_route_plan_cached.cache_clear()
