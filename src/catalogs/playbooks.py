@@ -2364,6 +2364,11 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
     task = query.strip()
     if not task:
         raise ValueError("playbook recommend requires a task description")
+    return _copy_playbook_recommendation_payload(_recommend_playbooks_cached(task, limit))
+
+
+@lru_cache(maxsize=512)
+def _recommend_playbooks_cached(task: str, limit: int) -> dict[str, object]:
     routing_text = prepare_routing_text(task)
     query_tokens = _tokens(routing_text.scoring_text)
     query_terms = _terms(routing_text.scoring_text)
@@ -2378,6 +2383,31 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
         "query": task,
         "recommendations": matches[:limit],
     }
+
+
+def _copy_playbook_recommendation_payload(payload: dict[str, object]) -> dict[str, object]:
+    copied = dict(payload)
+    recommendations = payload.get("recommendations", [])
+    copied["recommendations"] = [
+        _copy_playbook_recommendation(item) if isinstance(item, dict) else item
+        for item in (recommendations if isinstance(recommendations, list) else [])
+    ]
+    return copied
+
+
+def _copy_playbook_recommendation(recommendation: dict[str, object]) -> dict[str, object]:
+    copied = dict(recommendation)
+    for key in (
+        "matched",
+        "pipeline",
+        "wrapper_actions",
+        "retained_by_hermes",
+        "delegated_to_executor",
+        "not_evidence_until_observed",
+    ):
+        values = recommendation.get(key, [])
+        copied[key] = list(values) if isinstance(values, list | tuple) else []
+    return copied
 
 
 def _playbook_by_id(playbook_id: str) -> Playbook:

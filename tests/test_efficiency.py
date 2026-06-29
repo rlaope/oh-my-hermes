@@ -557,20 +557,28 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(tokens_cache.misses, 1)
         self.assertGreaterEqual(tokens_cache.hits, 1)
 
-    def test_playbook_recommendation_reuses_cached_term_tokens(self) -> None:
+    def test_playbook_recommendation_cache_is_reused_without_payload_poisoning(self) -> None:
+        playbooks_module._recommend_playbooks_cached.cache_clear()
         playbooks_module._playbook_scoring_profiles.cache_clear()
         playbooks_module._tokens_cached.cache_clear()
         playbooks_module._terms_cached.cache_clear()
         playbooks_module._normalized_term_tokens.cache_clear()
 
         first = playbooks_module.recommend_playbooks("risky refactor", limit=2)
+        first["recommendations"][0]["id"] = "mutated"
+        first["recommendations"][0]["matched"].append("mutated")
+        first["recommendations"][0]["pipeline"][0] = "mutated"
         second = playbooks_module.recommend_playbooks("risky refactor", limit=2)
+        result_cache = playbooks_module._recommend_playbooks_cached.cache_info()
         profile_cache = playbooks_module._playbook_scoring_profiles.cache_info()
         term_cache = playbooks_module._normalized_term_tokens.cache_info()
 
-        self.assertEqual(first, second)
+        self.assertNotEqual(second["recommendations"][0]["id"], "mutated")
+        self.assertNotIn("mutated", second["recommendations"][0]["matched"])
+        self.assertNotEqual(second["recommendations"][0]["pipeline"][0], "mutated")
+        self.assertEqual(result_cache.misses, 1)
+        self.assertGreaterEqual(result_cache.hits, 1)
         self.assertEqual(profile_cache.misses, 1)
-        self.assertGreaterEqual(profile_cache.hits, 1)
         self.assertGreater(term_cache.misses, 0)
 
     def test_phrase_match_cache_reuses_repeated_recommendation_pairs(self) -> None:
