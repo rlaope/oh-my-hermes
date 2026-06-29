@@ -208,6 +208,14 @@ class ChatRouterTests(unittest.TestCase):
             "just explain Python virtualenv",
             "can you explain Python virtualenv",
             "summarize this paragraph in Korean",
+            "summarize this in Korean",
+            "translate this to Korean",
+            "rewrite this more politely",
+            "make this more natural",
+            "이 문장 영어로 번역해줘",
+            "이 문단 요약해줘",
+            "이 글을 더 자연스럽게 고쳐줘",
+            "이 텍스트 맞춤법 봐줘",
             "what is OAuth in simple terms?",
             "what is a loop in Python?",
             "파이썬 loop가 뭐야?",
@@ -288,6 +296,10 @@ class ChatRouterTests(unittest.TestCase):
             "GraphQL 설명해줘",
             "쿠버네티스가 뭐야?",
             "이 에러 무슨 뜻이야?",
+            "translate this to Korean",
+            "summarize this in Korean",
+            "이 문장 영어로 번역해줘",
+            "이 문단 요약해줘",
         ):
             with self.subTest(message=message), mock.patch.object(
                 chat_router_impl,
@@ -308,6 +320,25 @@ class ChatRouterTests(unittest.TestCase):
             public = public_route_payload(decision)
             self.assertEqual(public["route_explanation"]["next_action"], "answer_directly")
             self.assertNotIn("workflow_route_plan", public)
+
+    def test_plain_text_transform_keeps_workflow_blockers(self) -> None:
+        cases = (
+            ("회의록 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
+            ("PR 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
+            ("논문 요약해줘", "paper-learning", "prepare_paper_learning"),
+            ("이 PDF 요약해줘", "materials-package", "prepare_material_package"),
+            ("README 요약해줘", "oh-my-hermes", "answer_file_lookup"),
+            ("이 파일 요약해줘", "oh-my-hermes", "answer_file_lookup"),
+        )
+
+        for message, selected_skill, next_action in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                public = public_route_payload(decision)
+
+                self.assertEqual(decision["selected_skill"], selected_skill)
+                self.assertEqual(public["route_explanation"]["next_action"], next_action)
+                self.assertNotEqual(decision["recommendations"][0]["matched"], ["direct_answer_fast_path"])
 
     def test_below_threshold_chat_clarifies_before_dispatch(self) -> None:
         decision = route_chat_message("architecture", min_confidence="high")

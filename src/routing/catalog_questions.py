@@ -429,11 +429,20 @@ _PATH_REFERENCE_MARKERS = (
     "readme",
     "section",
 )
+_FILE_SUMMARY_TARGET_MARKERS = (
+    "file",
+    "files",
+    "readme",
+    "파일",
+)
 _FILE_LOOKUP_ACTION_MARKERS = (
     "find",
     "show",
     "open",
     "read",
+    "summarize",
+    "summarise",
+    "summary",
     "search",
     "look up",
     "lookup",
@@ -446,6 +455,7 @@ _FILE_LOOKUP_ACTION_MARKERS = (
     "열어줘",
     "읽어",
     "읽어줘",
+    "요약",
     "검색",
     "어디",
 )
@@ -526,6 +536,10 @@ def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
         return False
     if _contains_catalog_token(search_texts, _FILE_OR_TEXT_MARKERS) and _contains_catalog_token(
         search_texts, _REPO_LOOKUP_CONTEXT_MARKERS
+    ):
+        return True
+    if _contains_catalog_token(search_texts, _FILE_SUMMARY_TARGET_MARKERS) and _contains_file_lookup_action(
+        search_texts
     ):
         return True
     if _contains_catalog_token(search_texts, _PATH_REFERENCE_MARKERS):
