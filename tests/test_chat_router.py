@@ -868,6 +868,56 @@ class ChatRouterTests(unittest.TestCase):
         self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotIn("CI", explanation["not_evidence_yet"])
 
+    def test_exact_capability_cards_use_concrete_not_evidence_labels(self) -> None:
+        cases = {
+            "meeting-brief": (
+                "meeting occurrence",
+                "decision acceptance",
+            ),
+            "operating-rhythm": (
+                "meeting/scrum/sprint/retro occurrence",
+                "decision acceptance",
+                "action item completion",
+            ),
+            "deploy-and-monitor": (
+                "deployment",
+                "health check",
+                "rollback",
+                "incident evidence",
+            ),
+            "agent-board": (
+                "target acceptance",
+                "work progress",
+                "heartbeat",
+                "completion",
+            ),
+            "ops-observability-card": (
+                "billing truth",
+                "provider quota truth",
+                "complete tracing",
+                "performance proof",
+                "workflow completion",
+            ),
+            "performance-goal": (
+                "runtime proof",
+                "tool invocation",
+                "MCP server",
+                "CI",
+                "platform action",
+            ),
+        }
+
+        for skill, expected_labels in cases.items():
+            with self.subTest(skill=skill):
+                decision = route_chat_message(f"what can OMH do for {skill}?", source="discord")
+                public = public_route_payload(decision)
+
+                self.assertNotIn("workflow_route_plan", public)
+                not_evidence_yet = public["route_explanation"]["not_evidence_yet"]
+                for label in expected_labels:
+                    self.assertIn(label, not_evidence_yet)
+                self.assertNotIn("completion claim without observed evidence", not_evidence_yet)
+
     def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
         for phrase in ("plan", "team", "ask"):
             with self.subTest(phrase=phrase):
