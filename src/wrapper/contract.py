@@ -24,6 +24,7 @@ from ..probe import probe_capabilities
 from ..quickstart import build_quickstart_card
 from ..skills.catalog import installable_skill_definitions, primary_harness_for_skill, retained_delegation_skill_names
 from ..setup_profiles import read_setup_profile
+from ..surfaces.evidence_copy import not_evidence_action_suffix, not_evidence_reply_suffix
 from ..visual_summary import image_generation_setup_fallback
 from .hermes_runtime import (
     hermes_coding_team_body,
@@ -4579,8 +4580,7 @@ def _workflow_explanation_reason(state: dict[str, object], *, workflow: str, lab
 
 def _workflow_recommended_reply(workflow: str, label: str, next_action_label: str, not_evidence_yet: list[str]) -> str:
     name = workflow or label
-    not_evidence = _first_not_evidence_item(not_evidence_yet)
-    suffix = f" This is still not evidence of {not_evidence}." if not_evidence else " This is guidance, not execution evidence."
+    suffix = not_evidence_reply_suffix(not_evidence_yet, fallback=" This is guidance, not execution evidence.")
     return f"I will use `{name}` and start with {next_action_label}.{suffix}"
 
 
@@ -4596,13 +4596,8 @@ def _workflow_primary_action_hint(
     not_evidence_yet: list[str],
 ) -> str:
     name = workflow or label
-    not_evidence = _first_not_evidence_item(not_evidence_yet)
-    suffix = f"; do not claim {not_evidence} until observed" if not_evidence else "; keep evidence claims separate"
+    suffix = not_evidence_action_suffix(not_evidence_yet)
     return f"Route to `{name}` and run `{next_action_label}`{suffix}."
-
-
-def _first_not_evidence_item(items: list[str]) -> str:
-    return items[0].replace("_", " ") if items else ""
 
 
 def _workflow_explanation_not_evidence(state: dict[str, object], *, claim_boundary: str) -> list[str]:

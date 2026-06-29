@@ -21,6 +21,7 @@ from .recommend import recommendation_for_definition, recommend_skills
 from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
 from ..learning_candidate import build_learning_candidate_card
+from ..surfaces.evidence_copy import not_evidence_action_suffix, not_evidence_reply_suffix
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
 
@@ -1196,8 +1197,10 @@ def _route_recommended_reply(
     not_evidence_yet: list[str],
 ) -> str:
     if action == "dispatch":
-        not_evidence = _first_not_evidence(not_evidence_yet)
-        suffix = f" This is still not evidence of {not_evidence}." if not_evidence else " This is routing guidance, not execution evidence."
+        suffix = not_evidence_reply_suffix(
+            not_evidence_yet,
+            fallback=" This is routing guidance, not execution evidence.",
+        )
         return f"I will use `{selected}` first and start with {next_action_label}.{suffix}"
     if action == "clarify":
         return "I need one clarification before choosing a workflow; no plan or execution has started."
@@ -1227,18 +1230,13 @@ def _route_primary_action_hint(
     not_evidence_yet: list[str],
 ) -> str:
     if action == "dispatch":
-        not_evidence = _first_not_evidence(not_evidence_yet)
-        suffix = f"; do not claim {not_evidence} until observed" if not_evidence else "; keep evidence claims separate"
+        suffix = not_evidence_action_suffix(not_evidence_yet)
         return f"Route to `{selected}` and run `{next_action_label}`{suffix}."
     if action == "clarify":
         return "Ask one blocking question, then reroute with the answer."
     if next_action_label == "answer directly":
         return "Answer in the current chat without opening a workflow, picker, or handoff."
     return "Answer directly or ask for the missing target before dispatching a workflow."
-
-
-def _first_not_evidence(items: list[str]) -> str:
-    return items[0].replace("_", " ") if items else ""
 
 
 def _not_evidence_from_boundary(boundary: str) -> list[str]:
