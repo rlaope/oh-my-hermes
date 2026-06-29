@@ -255,6 +255,16 @@ def route_chat_message(
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
 
+    return _clone_jsonish(_route_chat_message_cached(message, source, limit, min_confidence))
+
+
+@lru_cache(maxsize=2048)
+def _route_chat_message_cached(
+    message: str,
+    source: str,
+    limit: int,
+    min_confidence: str,
+) -> dict[str, object]:
     routing_message = scrub_diagnostic_status_text(message)
     fast_catalog_decision = _catalog_fast_path_decision(
         message,
@@ -428,6 +438,16 @@ def route_chat_message(
         recommendations=recommendations,
     )
     return decision.to_dict()
+
+
+def _clone_jsonish(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _clone_jsonish(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clone_jsonish(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_jsonish(item) for item in value)
+    return value
 
 
 def _has_explicit_invocation_prefix(message: str) -> bool:
