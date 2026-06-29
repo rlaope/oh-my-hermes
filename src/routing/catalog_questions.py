@@ -462,6 +462,7 @@ _OPERATOR_ACTION_QUESTION_MARKERS = (
 )
 
 
+@lru_cache(maxsize=4096)
 def is_skill_catalog_question(message: str) -> bool:
     lowered = message.strip().lower()
     if not lowered:
@@ -496,6 +497,7 @@ def is_skill_catalog_question(message: str) -> bool:
     return has_context and len(words) <= 4 and _contains_catalog_token(search_texts, _PLURAL_CATALOG_WORDS)
 
 
+@lru_cache(maxsize=4096)
 def is_file_or_text_lookup_question(message: str) -> bool:
     lowered = message.strip().lower()
     if not lowered:
