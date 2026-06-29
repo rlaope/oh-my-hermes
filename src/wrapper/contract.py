@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import hashlib
+from pathlib import Path
 from typing import Any
 
 from ..context_safety import compact_progress_events
@@ -3177,7 +3178,7 @@ def build_chat_response_from_status(status_payload: dict[str, Any], *, thread_ke
 
 
 def build_chat_response_from_omh_status_roadmap(paths: OmhPaths, *, thread_key: str = "") -> dict[str, object]:
-    probe = probe_capabilities(paths, include_roadmap=True)
+    probe = _omh_status_probe(paths)
     roadmap = _nested(probe, "capability_gap_roadmap")
     summary = _nested(roadmap, "summary")
     next_actions = _roadmap_next_actions(roadmap, limit=3)
@@ -3228,6 +3229,143 @@ def build_chat_response_from_omh_status_roadmap(paths: OmhPaths, *, thread_key: 
             ],
         },
     )
+
+
+def _omh_status_probe(paths: OmhPaths) -> dict[str, object]:
+    return _clone_static_dict(
+        _omh_status_probe_cached(
+            str(paths.omh_home),
+            str(paths.hermes_home),
+            _omh_status_probe_fingerprint(paths),
+        )
+    )
+
+
+@lru_cache(maxsize=64)
+def _omh_status_probe_cached(
+    omh_home: str,
+    hermes_home: str,
+    _fingerprint: tuple[tuple[str, int, int, int], ...],
+) -> dict[str, object]:
+    return _omh_status_probe_projection(
+        probe_capabilities(OmhPaths(omh_home=Path(omh_home), hermes_home=Path(hermes_home)), include_roadmap=True)
+    )
+
+
+def _omh_status_probe_projection(probe: dict[str, object]) -> dict[str, object]:
+    roadmap = probe.get("capability_gap_roadmap")
+    return {
+        "claim_boundary": probe.get("claim_boundary"),
+        "plugin_distribution_ready": bool(probe.get("plugin_distribution_ready")),
+        "plugin_runtime_active": bool(probe.get("plugin_runtime_active")),
+        "native_integration_claim_ready": bool(probe.get("native_integration_claim_ready")),
+        "team_worker_readiness_ready": bool(probe.get("team_worker_readiness_ready")),
+        "mcp_host_session_observed": bool(probe.get("mcp_host_session_observed")),
+        "capability_gap_roadmap": roadmap if isinstance(roadmap, dict) else {},
+    }
+
+
+def _omh_status_probe_fingerprint(paths: OmhPaths) -> tuple[tuple[str, int, int, int], ...]:
+    watched = (
+        paths.hermes_config_path,
+        paths.skills_dir / "oh-my-hermes" / "SKILL.md",
+        paths.runtime_state_path,
+        paths.runtime_runs_dir,
+        paths.runtime_wrapper_sessions_dir,
+        paths.runtime_mcp_host_sessions_path,
+        paths.runtime_plugin_host_observations_path,
+        paths.runtime_worktrees_path,
+        paths.executor_readiness_path,
+        paths.target_registry_path,
+        paths.hermes_home / "hooks.yaml",
+        paths.hermes_home / "hooks.json",
+        paths.hermes_home / ".mcp.json",
+        paths.hermes_home / "mcp.json",
+        paths.hermes_plugins_dir,
+        paths.hermes_plugin_dir,
+        paths.hermes_plugin_dir / ".omh-plugin-manifest.json",
+        paths.hermes_plugin_dir / "plugin.yaml",
+        paths.hermes_plugin_dir / "__init__.py",
+        paths.hermes_home / "apps",
+    )
+    run_child_fingerprint = _child_dir_fingerprints(paths.runtime_runs_dir)
+    session_child_fingerprint = _child_dir_fingerprints(paths.runtime_wrapper_sessions_dir)
+    runtime_files = (
+        _glob_fingerprints(
+            paths.runtime_runs_dir,
+            "*/run.json",
+            child_dir_fingerprints=run_child_fingerprint,
+        )
+        + _glob_fingerprints(
+            paths.runtime_runs_dir,
+            "*/wrapper.json",
+            child_dir_fingerprints=run_child_fingerprint,
+        )
+        + _glob_fingerprints(
+            paths.runtime_runs_dir,
+            "*/runtime_observations.jsonl",
+            child_dir_fingerprints=run_child_fingerprint,
+        )
+        + _glob_fingerprints(
+            paths.runtime_wrapper_sessions_dir,
+            "*/session.json",
+            child_dir_fingerprints=session_child_fingerprint,
+        )
+        + _glob_fingerprints(
+            paths.runtime_wrapper_sessions_dir,
+            "*/runtime_observations.jsonl",
+            child_dir_fingerprints=session_child_fingerprint,
+        )
+    )
+    return tuple(_path_fingerprint(path) for path in watched) + runtime_files
+
+
+def _glob_fingerprints(
+    root: Path,
+    pattern: str,
+    *,
+    child_dir_fingerprints: tuple[tuple[str, int, int, int], ...] | None = None,
+    limit: int = 256,
+) -> tuple[tuple[str, int, int, int], ...]:
+    paths = _glob_fingerprint_paths_cached(
+        str(root),
+        pattern,
+        limit,
+        _path_fingerprint(root),
+        child_dir_fingerprints if child_dir_fingerprints is not None else _child_dir_fingerprints(root, limit=limit),
+    )
+    return tuple(_path_fingerprint(Path(path)) for path in paths)
+
+
+@lru_cache(maxsize=128)
+def _glob_fingerprint_paths_cached(
+    root: str,
+    pattern: str,
+    limit: int,
+    _root_fingerprint: tuple[str, int, int, int],
+    _child_dir_fingerprints: tuple[tuple[str, int, int, int], ...],
+) -> tuple[str, ...]:
+    try:
+        paths = sorted(Path(root).glob(pattern))
+    except OSError:
+        return ()
+    return tuple(str(path) for path in paths[:limit])
+
+
+def _child_dir_fingerprints(root: Path, *, limit: int = 256) -> tuple[tuple[str, int, int, int], ...]:
+    try:
+        children = sorted(path for path in root.iterdir() if path.is_dir())
+    except OSError:
+        return ()
+    return tuple(_path_fingerprint(path) for path in children[:limit])
+
+
+def _path_fingerprint(path: Path) -> tuple[str, int, int, int]:
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), 0, 0, 0)
+    return (str(path), int(stat.st_mtime_ns), int(stat.st_size), int(stat.st_mode))
 
 
 def build_chat_response_from_omh_quickstart(
