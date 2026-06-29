@@ -23,12 +23,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 15)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 15)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 19)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 19)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 54)
-        self.assertEqual(payload["summary"]["total_passing_count"], 54)
+        self.assertEqual(payload["summary"]["total_case_count"], 58)
+        self.assertEqual(payload["summary"]["total_passing_count"], 58)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -86,6 +86,30 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(interventions["exact-paper-learning-capability"]["observed"]["route_workflow"], "paper-learning")
         self.assertEqual(interventions["short-korean-paper-learning"]["observed"]["route_workflow"], "paper-learning")
         self.assertEqual(interventions["korean-agent-status-slang"]["observed"]["route_workflow"], "agent-ops-review")
+        self.assertEqual(
+            interventions["korean-agent-status-slang"]["observed"]["next_action"],
+            "refresh_agent_ops_status",
+        )
+        self.assertEqual(interventions["korean-agent-status-briefing"]["observed"]["route_workflow"], "agent-ops-review")
+        self.assertEqual(
+            interventions["korean-agent-status-briefing"]["observed"]["next_action"],
+            "refresh_agent_ops_status",
+        )
+        self.assertEqual(interventions["korean-agent-progress-question"]["observed"]["route_workflow"], "agent-ops-review")
+        self.assertEqual(
+            interventions["korean-agent-progress-question"]["observed"]["next_action"],
+            "refresh_agent_ops_status",
+        )
+        self.assertEqual(interventions["english-agent-status-update"]["observed"]["route_workflow"], "agent-ops-review")
+        self.assertEqual(
+            interventions["english-agent-status-update"]["observed"]["next_action"],
+            "refresh_agent_ops_status",
+        )
+        self.assertEqual(interventions["english-agent-current-work"]["observed"]["route_workflow"], "agent-ops-review")
+        self.assertEqual(
+            interventions["english-agent-current-work"]["observed"]["next_action"],
+            "refresh_agent_ops_status",
+        )
         self.assertEqual(interventions["loopable-project"]["observed"]["route_workflow"], "loop")
         self.assertEqual(interventions["one-cycle-delivery"]["observed"]["route_workflow"], "ultraprocess")
         self.assertEqual(interventions["scheduled-research-blueprint"]["observed"]["route_workflow"], "automation-blueprint")
@@ -101,7 +125,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("39/39 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 15/15 expected workflow cases passing", stdout)
+        self.assertIn("Interventions: 19/19 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)

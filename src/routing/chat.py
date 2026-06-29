@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
 import re
+import unicodedata
 from typing import Any
 
 from ..goal_loop import explicit_loop_invocation_signal
@@ -263,6 +264,40 @@ _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS = (
 )
 _DIRECT_ANSWER_MULTILINGUAL_CONTEXT_QUESTIONS = (
     "was ist los",
+)
+_AGENT_OPS_STATUS_FAST_PATH_SKILL = "agent-ops-review"
+_AGENT_OPS_STATUS_FAST_PATH_EXACT_PHRASES = (
+    "status update please",
+    "give me a status update",
+    "show me the current status",
+    "what is the current status",
+    "what are you doing",
+    "what are you working on",
+    "where are we",
+    "where are we at",
+    "qué está pasando",
+    "que esta pasando",
+    "qu'est-ce qui se passe",
+    "was ist los",
+    "今何してる",
+    "现在在做什么",
+)
+_AGENT_OPS_STATUS_FAST_PATH_COMPACT_PHRASES = (
+    "무슨일이야",
+    "무슨일있었어",
+    "무슨일이노",
+    "뭔일임",
+    "뭐해",
+    "지금뭐해",
+    "지금뭐하는중이야",
+    "지금뭐하고있어",
+    "작업상황브리핑해줘",
+    "작업상황알려줘",
+    "진행상황알려줘",
+    "현재상태알려줘",
+    "현재진행상황",
+    "어디까지됐어",
+    "어디까지됨",
 )
 _DIRECT_ANSWER_KOREAN_CONCEPT_MARKERS = (
     "뭐야",
@@ -798,6 +833,14 @@ def _route_chat_message_cached(
     )
     if fast_file_lookup_decision is not None:
         return fast_file_lookup_decision.to_dict()
+    fast_agent_ops_status_decision = _agent_ops_status_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_agent_ops_status_decision is not None:
+        return fast_agent_ops_status_decision.to_dict()
     fast_direct_answer_decision = _direct_answer_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1206,6 +1249,73 @@ def _router_file_lookup_recommendation(query: str) -> dict[str, object]:
         "wrapper_guidance": "Answer as a file or text lookup; ask for the missing target if needed.",
         "suggested_prompt": query,
     }
+
+
+def _agent_ops_status_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if explicit_skill_invocation(routing_message):
+        return None
+    matched_phrase = _agent_ops_status_fast_path_match(routing_message)
+    if not matched_phrase:
+        return None
+    selected_harness = primary_harness_for_skill(_AGENT_OPS_STATUS_FAST_PATH_SKILL)
+    reason = (
+        "Short status/progress question; show the Hermes agent ops review instead of a direct answer "
+        "or gateway policy card."
+    )
+    definition = _skill_definition_by_name(_AGENT_OPS_STATUS_FAST_PATH_SKILL)
+    recommendation = recommendation_for_definition(
+        definition,
+        message,
+        matched=("agent_ops_status_fast_path", f"phrase:{matched_phrase}"),
+        score=14,
+        why=reason,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=_AGENT_OPS_STATUS_FAST_PATH_SKILL,
+        selected_harness=selected_harness,
+        candidate_skill=_AGENT_OPS_STATUS_FAST_PATH_SKILL,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=14,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt(
+            "dispatch",
+            _AGENT_OPS_STATUS_FAST_PATH_SKILL,
+            _AGENT_OPS_STATUS_FAST_PATH_SKILL,
+            reason,
+            message,
+        ),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _agent_ops_status_fast_path_match(message: str) -> str | None:
+    value = unicodedata.normalize("NFC", message)
+    text = re.sub(r"\s+", " ", value.strip().lower().strip(" \t\r\n.!?,;:~…？"))
+    if text in _AGENT_OPS_STATUS_FAST_PATH_EXACT_PHRASES:
+        return text
+    compact = re.sub(r"[\s\?\!\.,;:~…？]+", "", value.strip().lower())
+    if compact in _AGENT_OPS_STATUS_FAST_PATH_COMPACT_PHRASES:
+        return compact
+    return None
 
 
 def _direct_answer_fast_path_decision(

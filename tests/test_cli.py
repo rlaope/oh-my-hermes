@@ -2074,7 +2074,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
         self.assertEqual(gates["routing_precision"]["status"], "passed")
         self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
-        self.assertIn("15/15 interventions", gates["routing_precision"]["summary"])
+        self.assertIn("19/19 interventions", gates["routing_precision"]["summary"])
         self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
         self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
         self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2116,7 +2116,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 8/8 (route hints 7, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 39/39 negative controls, 15/15 interventions "
+                "Routing precision: 39/39 negative controls, 19/19 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2147,8 +2147,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_passing"], 39)
             self.assertEqual(payload["summary"]["routing_precision_total"], 39)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 15)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 15)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 19)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 19)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
@@ -4675,11 +4675,11 @@ class CliTests(unittest.TestCase):
             ("PPT 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "materials_package", "prepare_material_package"),
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "send_to_executor"),
-            ("今何してる？", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
-            ("现在在做什么？", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
-            ("qué está pasando?", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
-            ("무슨일이노", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
-            ("지금 뭐 하고 있어?", "agent-ops-review", "agent_ops_review", "show_agent_ops_review"),
+            ("今何してる？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
+            ("现在在做什么？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
+            ("qué está pasando?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
+            ("무슨일이노", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
+            ("지금 뭐 하고 있어?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("codex로 열어줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("claude code로 이어서 작업해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
