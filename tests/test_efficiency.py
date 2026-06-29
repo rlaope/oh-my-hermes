@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
@@ -20,6 +22,7 @@ from omh.skills import render as render_module
 from omh.workflows import hermes_planning as hermes_planning_module
 from omh.workflows import learning_candidate as learning_candidate_module
 from omh.wrapper import contract as contract_module
+from omh.paths import OmhPaths
 from omh.release import (
     AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
     AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
@@ -748,6 +751,49 @@ class EfficiencyContractTests(unittest.TestCase):
                 self.assertEqual(first, second)
                 self.assertEqual(cache_info.misses, 1)
                 self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_omh_status_probe_cache_reuses_probe_without_payload_poisoning(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            contract_module._omh_status_probe_cached.cache_clear()
+
+            first = contract_module.build_chat_response_from_omh_status_roadmap(paths)
+            first["state"]["probe_summary"]["plugin_distribution_ready"] = "mutated"
+            second = contract_module.build_chat_response_from_omh_status_roadmap(paths)
+            cache_info = contract_module._omh_status_probe_cached.cache_info()
+
+            self.assertFalse(second["state"]["probe_summary"]["plugin_distribution_ready"])
+            self.assertEqual(cache_info.misses, 1)
+            self.assertGreaterEqual(cache_info.hits, 1)
+
+            paths.hermes_home.mkdir(parents=True, exist_ok=True)
+            paths.hermes_config_path.write_text("skills:\n  external_dirs: []\n", encoding="utf-8")
+            contract_module.build_chat_response_from_omh_status_roadmap(paths)
+            refreshed_cache_info = contract_module._omh_status_probe_cached.cache_info()
+
+            self.assertEqual(refreshed_cache_info.misses, 2)
+
+            session_dir = paths.runtime_wrapper_sessions_dir / "session-1"
+            session_dir.mkdir(parents=True, exist_ok=True)
+            session_path = session_dir / "session.json"
+            session_path.write_text('{"session_id":"session-1"}\n', encoding="utf-8")
+            before = contract_module._omh_status_probe_fingerprint(paths)
+            session_path.write_text('{"session_id":"session-1","status":"updated"}\n', encoding="utf-8")
+            after = contract_module._omh_status_probe_fingerprint(paths)
+
+            self.assertNotEqual(before, after)
+
+            run_dir = paths.runtime_runs_dir / "run-1"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            contract_module._glob_fingerprint_paths_cached.cache_clear()
+            self.assertEqual(contract_module._glob_fingerprints(paths.runtime_runs_dir, "*/wrapper.json"), ())
+            wrapper_path = run_dir / "wrapper.json"
+            wrapper_path.write_text('{"schema_version":"wrapper_observation/v1"}\n', encoding="utf-8")
+
+            self.assertIn(
+                contract_module._path_fingerprint(wrapper_path),
+                contract_module._glob_fingerprints(paths.runtime_runs_dir, "*/wrapper.json"),
+            )
 
     def test_chat_interaction_reuses_executor_target_hint_cache(self) -> None:
         contract_module._executor_target_from_message.cache_clear()
