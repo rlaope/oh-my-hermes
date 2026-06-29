@@ -71,6 +71,27 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_directly",
         "direct_answer",
     ),
+    RoutingPrecisionCase(
+        "python-virtualenv-help",
+        "Python virtualenv how-to stays direct",
+        "how do I create a virtualenv in Python?",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "paragraph-summary",
+        "Small text transform stays direct",
+        "summarize this paragraph in Korean",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "plain-concept-help",
+        "Plain concept explanation stays direct",
+        "what is OAuth in simple terms?",
+        "answer_directly",
+        "direct_answer",
+    ),
 )
 
 
@@ -157,6 +178,42 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "paper-learning",
         "prepare_paper_learning",
         "paper_learning",
+    ),
+    RoutingInterventionCase(
+        "loopable-project",
+        "Loopable project requests open loop",
+        "run a loop to improve first-run experience until install friction is lower",
+        "dispatch",
+        "loop",
+        "choose_permission_profile",
+        "loop",
+    ),
+    RoutingInterventionCase(
+        "one-cycle-delivery",
+        "One-cycle delivery requests open ultraprocess",
+        "turn this vague request into one cycle: research, plan, implement, review, and docs sync",
+        "dispatch",
+        "ultraprocess",
+        "choose_executor",
+        "handoff",
+    ),
+    RoutingInterventionCase(
+        "scheduled-research-blueprint",
+        "Scheduled research requests open automation blueprint",
+        "make a daily competitor research digest blueprint every morning",
+        "dispatch",
+        "automation-blueprint",
+        "prepare_scheduled_ops_blueprint",
+        "automation_blueprint",
+    ),
+    RoutingInterventionCase(
+        "workflow-learning",
+        "Workflow improvement requests open workflow learning",
+        "turn this failed workflow into a skill improvement proposal",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
     ),
 )
 

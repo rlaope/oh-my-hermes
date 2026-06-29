@@ -202,6 +202,14 @@ _DIRECT_ANSWER_STARTERS = (
     "describe ",
     "tell me ",
 )
+_DIRECT_ANSWER_HOW_TO_STARTERS = (
+    "how ",
+    "how do ",
+    "how do i ",
+    "how can ",
+    "how can i ",
+    "how to ",
+)
 _DIRECT_ANSWER_KEYWORDS = (
     "python",
     "list comprehension",
@@ -214,6 +222,55 @@ _DIRECT_ANSWER_KEYWORDS = (
     "means",
     "mean",
     "concept",
+)
+_DIRECT_ANSWER_SETUP_KEYWORDS = (
+    "virtualenv",
+    "virtual env",
+    "virtual environment",
+    "venv",
+    "python environment",
+    "pip install",
+    "pipx",
+    "path in zsh",
+    "path in bash",
+    "shell profile",
+)
+_DIRECT_ANSWER_HARD_BLOCKERS = (
+    "omh",
+    "oh-my-hermes",
+    "oh my hermes",
+    "hermes",
+    "workflow",
+    "workflows",
+    "skill",
+    "skills",
+    "codex",
+    "claude",
+    "pr",
+    "issue",
+    "repo",
+    "repository",
+    "codebase",
+    "research",
+    "paper",
+    "pdf",
+    "image",
+    "poster",
+    "summary card",
+)
+_DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS = (
+    "summarize this paragraph",
+    "summarise this paragraph",
+    "summarize the paragraph",
+    "summarise the paragraph",
+    "translate this paragraph",
+    "rewrite this paragraph",
+    "rephrase this paragraph",
+    "summarize this sentence",
+    "summarise this sentence",
+    "translate this sentence",
+    "rewrite this sentence",
+    "rephrase this sentence",
 )
 _DIRECT_ANSWER_BLOCKERS = (
     "omh",
@@ -1058,16 +1115,32 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
     text = message.strip().lower()
     if not text:
         return False
+    if _is_plain_setup_how_to_question(text):
+        return True
     if _contains_direct_answer_blocker(text):
         return False
+    if any(text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
+        return True
     if any(text.startswith(starter) for starter in _DIRECT_ANSWER_STARTERS):
         return True
     return any(keyword in text for keyword in _DIRECT_ANSWER_KEYWORDS) and "?" in text
 
 
+def _is_plain_setup_how_to_question(text: str) -> bool:
+    if not any(text.startswith(starter) for starter in _DIRECT_ANSWER_HOW_TO_STARTERS):
+        return False
+    if _contains_marker(text, _DIRECT_ANSWER_HARD_BLOCKERS):
+        return False
+    return any(keyword in text for keyword in _DIRECT_ANSWER_SETUP_KEYWORDS)
+
+
 def _contains_direct_answer_blocker(text: str) -> bool:
+    return _contains_marker(text, _DIRECT_ANSWER_BLOCKERS)
+
+
+def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
     word_text = f" {' '.join(''.join(character if character.isalnum() else ' ' for character in text).split())} "
-    for marker in _DIRECT_ANSWER_BLOCKERS:
+    for marker in markers:
         if marker.isascii() and marker.replace("-", "").replace(" ", "").isalnum():
             if f" {marker} " in word_text:
                 return True

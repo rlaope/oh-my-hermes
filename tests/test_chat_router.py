@@ -201,6 +201,23 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(decision["confidence"], "low")
         self.assertIn("Ask which workflow", decision["clarification"])
 
+    def test_plain_how_to_and_text_transform_stay_direct_answers(self) -> None:
+        for message in (
+            "how do I create a virtualenv in Python?",
+            "how to create a Python virtual environment?",
+            "summarize this paragraph in Korean",
+            "what is OAuth in simple terms?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "fallback")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["candidate_skill"], "oh-my-hermes")
+                self.assertEqual(decision["confidence"], "low")
+                self.assertIn("answer directly", decision["reason"])
+                self.assertIn("Answer directly in the current chat", decision["clarification"])
+
     def test_below_threshold_chat_clarifies_before_dispatch(self) -> None:
         decision = route_chat_message("architecture", min_confidence="high")
 
