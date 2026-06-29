@@ -128,10 +128,12 @@ def is_missed_omh_workflow_feedback(message: str) -> bool:
     return is_missed_route_feedback(normalized)
 
 
+@lru_cache(maxsize=4096)
 def _contains_phrase(text: str, phrases: tuple[str, ...]) -> bool:
     return any(phrase in text for phrase in _normalized_phrases(phrases))
 
 
+@lru_cache(maxsize=4096)
 def _contains_compact_phrase(text: str, phrases: tuple[str, ...]) -> bool:
     compact = text.replace(" ", "")
     return any(phrase in compact for phrase in _normalized_compact_phrases(phrases))
