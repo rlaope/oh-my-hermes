@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from functools import lru_cache
 import hashlib
 import re
 import unicodedata
@@ -1611,6 +1613,11 @@ def awareness_context_matches_message(message: str) -> bool:
 
 def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, object]:
     """Return bounded message-specific workflow hints without exposing raw text."""
+    return deepcopy(_awareness_route_hint_cached(message, max(max_hints, 0)))
+
+
+@lru_cache(maxsize=512)
+def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, object]:
     normalized = unicodedata.normalize("NFKC", message).casefold()
     routing_text = _localized_routing_text(message)
     localized_normalized = unicodedata.normalize("NFKC", routing_text).casefold()
@@ -1622,7 +1629,7 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
         else _without_diagnostic_status_lines(localized_normalized)
     )
     tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", routing_normalized))
-    hint_limit = max(max_hints, 0)
+    hint_limit = max_hints
     intent = classify_workflow_intent(message)
     omh_quality_intent = classify_omh_quality_intent(message)
     diagnostic_learning_first = diagnostic_eval
