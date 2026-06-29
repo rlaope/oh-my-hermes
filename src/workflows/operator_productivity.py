@@ -141,6 +141,38 @@ _FOCUS_TERMS = {
         "처리량",
     ),
 }
+_STATUS_FOCUS_EXACT_PHRASES = (
+    "status update please",
+    "give me a status update",
+    "show me the current status",
+    "what is the current status",
+    "where are we",
+    "where are we at",
+    "what are you doing",
+    "what are you working on",
+    "qué está pasando",
+    "que esta pasando",
+    "qu'est-ce qui se passe",
+    "was ist los",
+    "今何してる",
+    "现在在做什么",
+)
+_STATUS_FOCUS_COMPACT_PHRASES = (
+    "무슨일이야",
+    "무슨일있었어",
+    "무슨일이노",
+    "뭔일임",
+    "뭐해",
+    "지금뭐해",
+    "지금뭐하는중이야",
+    "지금뭐하고있어",
+    "작업상황브리핑해줘",
+    "작업상황알려줘",
+    "진행상황알려줘",
+    "현재상태알려줘",
+    "어디까지됐어",
+    "어디까지됨",
+)
 
 
 def build_agent_operator_productivity_card(
@@ -512,6 +544,12 @@ def _detect_focus(request: str, requested_focus: str) -> str:
     if requested_focus != "auto":
         return requested_focus
     value = request.lower()
+    normalized = re.sub(r"\s+", " ", value.strip().strip(" \t\r\n.!?,;:~…？"))
+    if normalized in _STATUS_FOCUS_EXACT_PHRASES:
+        return "status"
+    compact = re.sub(r"[\s\?\!\.,;:~…？]+", "", value)
+    if compact in _STATUS_FOCUS_COMPACT_PHRASES:
+        return "status"
     scores = {
         focus: sum(1 for term in terms if term.lower() in value)
         for focus, terms in _FOCUS_TERMS.items()

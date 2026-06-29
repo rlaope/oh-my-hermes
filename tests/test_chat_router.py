@@ -232,7 +232,6 @@ class ChatRouterTests(unittest.TestCase):
             "what happened?",
             "what should I do next?",
             "what did I just ask?",
-            "무슨 일이야?",
             "내가 방금 뭐라고 했지?",
             "이 오류 왜 나?",
             "이 에러 해결방법 알려줘",
@@ -386,6 +385,39 @@ class ChatRouterTests(unittest.TestCase):
             self.assertEqual(decision["recommendations"][0]["matched"], ["direct_answer_fast_path"])
             public = public_route_payload(decision)
             self.assertEqual(public["route_explanation"]["next_action"], "answer_directly")
+            self.assertNotIn("workflow_route_plan", public)
+
+    def test_status_question_fast_path_uses_agent_ops_review(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        for message in (
+            "무슨 일이야?",
+            "작업상황 브리핑해줘",
+            "어디까지 됐어?",
+            "what are you doing?",
+            "status update please",
+            "今何してる？",
+            "现在在做什么？",
+            "was ist los",
+        ):
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("status questions should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("status questions should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], "agent-ops-review")
+            self.assertEqual(decision["confidence"], "high")
+            self.assertEqual(decision["recommendations"][0]["matched"][0], "agent_ops_status_fast_path")
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], "prepare_agent_ops_review")
             self.assertNotIn("workflow_route_plan", public)
 
     def test_plain_text_transform_keeps_workflow_blockers(self) -> None:
@@ -766,7 +798,7 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "what are you working on?",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('what are you working on')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "I want to understand this paper PDF",
@@ -816,42 +848,42 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "今何してる？",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('今何してる')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "现在在做什么？",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('现在在做什么')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "qué está pasando?",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('qué está pasando')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "qu'est-ce qui se passe?",
                 "agent-ops-review",
-                "trigger:" + normalized_phrase("qu'est-ce qui se passe"),
+                "agent_ops_status_fast_path",
             ),
             (
                 "was ist los?",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('was ist los')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "무슨일이노",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('무슨일이노')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "뭔일임?",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('뭔일임')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "지금 뭐 하고 있어?",
                 "agent-ops-review",
-                f"trigger:{normalized_phrase('지금 뭐 하고 있어')}",
+                "agent_ops_status_fast_path",
             ),
             (
                 "I want Hermes to learn from this workflow and improve the skill next time",

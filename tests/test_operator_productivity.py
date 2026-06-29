@@ -147,6 +147,22 @@ class OperatorProductivityTests(unittest.TestCase):
         self.assertIn("show_agent_ops_review", {action["id"] for action in payload["chat_response"]["actions"]})
         self.assertNotIn("omh list", json.dumps(payload))
 
+    def test_chat_interact_renders_status_refresh_for_short_status_questions(self) -> None:
+        for message in (
+            "작업상황 브리핑해줘",
+            "status update please",
+            "今何してる？",
+        ):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+
+                self.assertEqual(status, 0, stderr)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["route"]["selected_skill"], "agent-ops-review")
+                self.assertEqual(payload["chat_response"]["kind"], "agent_ops_review")
+                self.assertEqual(payload["next_action"], "refresh_agent_ops_status")
+                self.assertIn("Progress, blockers, and throughput", payload["chat_response"]["headline"])
+
     def test_catalog_installs_agent_ops_review_and_maps_harness(self) -> None:
         self.assertIn("agent-ops-review", installable_skill_names())
         self.assertEqual(primary_harness_for_skill("agent-ops-review"), "agent-ops-review")
