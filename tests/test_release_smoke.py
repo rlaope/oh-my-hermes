@@ -261,78 +261,85 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("does not prove the target Hermes profile", payload["proof_boundary"])
 
     def test_product_readiness_report_rolls_up_public_release_story(self) -> None:
-        payload = product_readiness_report(version="v1.0.1", omh_command="/tmp/omh command")
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            payload = product_readiness_report(version="v1.0.1", omh_command="/tmp/omh command", paths=paths)
 
-        self.assertEqual(payload["schema_version"], "omh_product_readiness/v1")
-        self.assertEqual(payload["status"], "ready")
-        self.assertEqual(payload["score"], 100)
-        self.assertTrue(payload["observed"])
-        self.assertEqual(payload["version"], "1.0.1")
-        self.assertEqual(payload["blocking_failures"], 0)
-        gates = {gate["id"]: gate for gate in payload["gates"]}
-        self.assertEqual(
-            set(gates),
-            {
-                "skill_content",
-                "use_cases",
-                "grounded_score",
-                "chat_card_coverage",
-                "route_hint_alignment",
-                "context_brief_coverage",
-                "routing_precision",
-                "hermes_ux_quality",
-                "parity_contracts",
-                "release_checklist",
-            },
-        )
-        self.assertEqual(gates["skill_content"]["status"], "passed")
-        self.assertEqual(gates["use_cases"]["status"], "passed")
-        self.assertEqual(gates["grounded_score"]["status"], "passed")
-        self.assertIn("28/28 scenarios at 10/10", gates["grounded_score"]["summary"])
-        self.assertIn("avg 10.0", gates["grounded_score"]["summary"])
-        self.assertEqual(gates["grounded_score"]["command"], "omh demo grounded-score --json")
-        self.assertIn("deterministic local contract-compliance", gates["grounded_score"]["proof_boundary"])
-        self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
-        self.assertIn("25/25 dedicated workflow cards", gates["chat_card_coverage"]["summary"])
-        self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
-        self.assertEqual(gates["chat_card_coverage"]["command"], "omh demo chat-card-coverage --json")
-        self.assertIn("deterministic local wrapper-card coverage", gates["chat_card_coverage"]["proof_boundary"])
-        self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
-        self.assertIn("53/53 route hints aligned", gates["route_hint_alignment"]["summary"])
-        self.assertIn("missing 0", gates["route_hint_alignment"]["summary"])
-        self.assertIn("mismatches 0", gates["route_hint_alignment"]["summary"])
-        self.assertEqual(gates["route_hint_alignment"]["command"], "omh demo route-hint-alignment --json")
-        self.assertIn("deterministic local agreement", gates["route_hint_alignment"]["proof_boundary"])
-        self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
-        self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
-        self.assertIn("route hints 7", gates["context_brief_coverage"]["summary"])
-        self.assertIn("catalog picker hints 1", gates["context_brief_coverage"]["summary"])
-        self.assertEqual(gates["context_brief_coverage"]["command"], "omh demo context-brief-coverage --json")
-        self.assertIn("deterministic local OMH mental-model", gates["context_brief_coverage"]["proof_boundary"])
-        self.assertEqual(gates["routing_precision"]["status"], "passed")
-        self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
-        self.assertIn("19/19 interventions", gates["routing_precision"]["summary"])
-        self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
-        self.assertIn("catalog pickers 0", gates["routing_precision"]["summary"])
-        self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
-        self.assertEqual(gates["routing_precision"]["command"], "omh demo routing-precision --json")
-        self.assertIn("deterministic local over-intervention", gates["routing_precision"]["proof_boundary"])
-        self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
-        self.assertIn("5/5 UX gates passing", gates["hermes_ux_quality"]["summary"])
-        self.assertIn("routing avg 10.0", gates["hermes_ux_quality"]["summary"])
-        self.assertIn("generic ack 0", gates["hermes_ux_quality"]["summary"])
-        self.assertIn("context 8/8", gates["hermes_ux_quality"]["summary"])
-        self.assertEqual(gates["hermes_ux_quality"]["command"], "omh demo hermes-ux-quality --json")
-        self.assertIn("deterministic local routing", gates["hermes_ux_quality"]["proof_boundary"])
-        self.assertEqual(gates["parity_contracts"]["status"], "passed")
-        self.assertEqual(gates["release_checklist"]["status"], "passed")
-        self.assertIn(
-            "'/tmp/omh command' release checklist --version 1.0.1 --json",
-            gates["release_checklist"]["command"],
-        )
-        self.assertIn("deterministic local OMH package", payload["boundary"])
-        self.assertIn("Attach observed evidence", " ".join(payload["next_actions"]))
-        self.assertIn("evidence-bundle", " ".join(payload["next_actions"]))
+            self.assertEqual(payload["schema_version"], "omh_product_readiness/v1")
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["score"], 100)
+            self.assertTrue(payload["observed"])
+            self.assertEqual(payload["version"], "1.0.1")
+            self.assertEqual(payload["blocking_failures"], 0)
+            self.assertEqual(payload["local_artifact_store"], "not_written")
+            self.assertIn("local_artifact_store: not_written", payload["warnings"])
+            self.assertIn("cases artifact --all --write", " ".join(payload["next_actions"]))
+            gates = {gate["id"]: gate for gate in payload["gates"]}
+            self.assertEqual(
+                set(gates),
+                {
+                    "skill_content",
+                    "use_cases",
+                    "grounded_score",
+                    "chat_card_coverage",
+                    "route_hint_alignment",
+                    "context_brief_coverage",
+                    "routing_precision",
+                    "hermes_ux_quality",
+                    "parity_contracts",
+                    "release_checklist",
+                },
+            )
+            self.assertEqual(gates["skill_content"]["status"], "passed")
+            self.assertEqual(gates["use_cases"]["status"], "passed")
+            self.assertIn("local artifact store not_written", gates["use_cases"]["summary"])
+            self.assertEqual(gates["use_cases"]["warnings"], ["local_artifact_store: not_written"])
+            self.assertEqual(gates["grounded_score"]["status"], "passed")
+            self.assertIn("28/28 scenarios at 10/10", gates["grounded_score"]["summary"])
+            self.assertIn("avg 10.0", gates["grounded_score"]["summary"])
+            self.assertEqual(gates["grounded_score"]["command"], "omh demo grounded-score --json")
+            self.assertIn("deterministic local contract-compliance", gates["grounded_score"]["proof_boundary"])
+            self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
+            self.assertIn("25/25 dedicated workflow cards", gates["chat_card_coverage"]["summary"])
+            self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
+            self.assertEqual(gates["chat_card_coverage"]["command"], "omh demo chat-card-coverage --json")
+            self.assertIn("deterministic local wrapper-card coverage", gates["chat_card_coverage"]["proof_boundary"])
+            self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
+            self.assertIn("53/53 route hints aligned", gates["route_hint_alignment"]["summary"])
+            self.assertIn("missing 0", gates["route_hint_alignment"]["summary"])
+            self.assertIn("mismatches 0", gates["route_hint_alignment"]["summary"])
+            self.assertEqual(gates["route_hint_alignment"]["command"], "omh demo route-hint-alignment --json")
+            self.assertIn("deterministic local agreement", gates["route_hint_alignment"]["proof_boundary"])
+            self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
+            self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
+            self.assertIn("route hints 7", gates["context_brief_coverage"]["summary"])
+            self.assertIn("catalog picker hints 1", gates["context_brief_coverage"]["summary"])
+            self.assertEqual(gates["context_brief_coverage"]["command"], "omh demo context-brief-coverage --json")
+            self.assertIn("deterministic local OMH mental-model", gates["context_brief_coverage"]["proof_boundary"])
+            self.assertEqual(gates["routing_precision"]["status"], "passed")
+            self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
+            self.assertIn("19/19 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
+            self.assertIn("catalog pickers 0", gates["routing_precision"]["summary"])
+            self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
+            self.assertEqual(gates["routing_precision"]["command"], "omh demo routing-precision --json")
+            self.assertIn("deterministic local over-intervention", gates["routing_precision"]["proof_boundary"])
+            self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
+            self.assertIn("5/5 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("routing avg 10.0", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("generic ack 0", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("context 8/8", gates["hermes_ux_quality"]["summary"])
+            self.assertEqual(gates["hermes_ux_quality"]["command"], "omh demo hermes-ux-quality --json")
+            self.assertIn("deterministic local routing", gates["hermes_ux_quality"]["proof_boundary"])
+            self.assertEqual(gates["parity_contracts"]["status"], "passed")
+            self.assertEqual(gates["release_checklist"]["status"], "passed")
+            self.assertIn(
+                "'/tmp/omh command' release checklist --version 1.0.1 --json",
+                gates["release_checklist"]["command"],
+            )
+            self.assertIn("deterministic local OMH package", payload["boundary"])
+            self.assertIn("Attach observed evidence", " ".join(payload["next_actions"]))
+            self.assertIn("evidence-bundle", " ".join(payload["next_actions"]))
 
     def test_release_evidence_bundle_packages_and_writes_local_evidence(self) -> None:
         with TemporaryDirectory() as tmp:
