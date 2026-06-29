@@ -15,6 +15,7 @@ from omh.chat_router import (
 )
 from omh.routing.intent import classify_workflow_intent
 from omh.routing.localization import normalized_phrase
+from omh.plugin_bundle.omh.awareness import awareness_route_hint
 from omh.skills.catalog import primary_harness_for_skill
 
 
@@ -73,6 +74,90 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertIn("guard:safe_feature_change", decision["recommendations"][0]["matched"])
                 if locale_match is not None:
                     self.assertIn(locale_match, decision["recommendations"][0]["matched"])
+
+    def test_chat_route_hints_align_with_operator_status_and_planning_phrases(self) -> None:
+        cases = (
+            (
+                "what is the coding handoff status?",
+                "ultraprocess",
+                "show_coding_handoff_status",
+                None,
+            ),
+            (
+                "코딩 작업 지금 어디까지 됐어?",
+                "ultraprocess",
+                "show_coding_handoff_status",
+                None,
+            ),
+            (
+                "이미지 생성 요청에서 OMH 안 썼어. 다음엔 img-summary 쓰게 기록해줘",
+                "workflow-learning",
+                "record_missed_route",
+                None,
+            ),
+            (
+                "웹서치해서 최신 자료 정리해줘",
+                "web-research",
+                "gather_source_backed_evidence",
+                None,
+            ),
+            (
+                "I want to safely add a feature to this repo",
+                "ralplan",
+                "present_plan",
+                None,
+            ),
+            (
+                "위험한 리팩터링 같아",
+                "ralplan",
+                "present_plan",
+                None,
+            ),
+            (
+                "이 이슈 PR로 만들 수 있게 정리해줘",
+                "ralplan",
+                "present_plan",
+                None,
+            ),
+            (
+                "./loop star-worthy OSS 만들기",
+                "loop",
+                "assess_loopability",
+                None,
+            ),
+            (
+                "Use OMH ultraprocess for: improve README and open PR",
+                "ultraprocess",
+                "prepare_one_cycle_delivery",
+                None,
+            ),
+        )
+
+        for message, selected_skill, hint_action, task_type in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], selected_skill)
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], selected_skill)
+                self.assertEqual(hint["primary_next_action"], hint_action)
+                if task_type is None:
+                    self.assertIsNone(decision["task_card"])
+                else:
+                    self.assertEqual(decision["task_card"]["task_type"], task_type)
+
+    def test_coding_handoff_status_is_not_router_design_feedback(self) -> None:
+        decision = route_chat_message("what is the coding handoff status?", source="discord")
+
+        self.assertEqual(decision["selected_skill"], "ultraprocess")
+        self.assertIsNone(decision["task_card"])
+        self.assertNotIn("task_card:router_design_feedback", decision["recommendations"][0]["matched"])
+
+        meta_feedback = route_chat_message("Codex handoff라는 용어를 쓰면 라우팅이 오해되는 것 같아.", source="discord")
+        self.assertEqual(meta_feedback["selected_skill"], "workflow-learning")
+        self.assertEqual(meta_feedback["task_card"]["task_type"], "router_design_feedback")
 
     def test_multilingual_chat_routes_content_workflows_without_external_translation(self) -> None:
         cases = (
