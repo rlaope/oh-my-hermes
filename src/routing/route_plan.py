@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from ..skills.catalog import routable_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
@@ -199,16 +200,36 @@ def build_workflow_route_plan(
 ) -> dict[str, object] | None:
     if action == "fallback":
         return None
-    recommendation_list = _recommendation_list(recommendations)
-    if not recommendation_list:
+    recommendation_signature = _recommendation_signature(recommendations)
+    if not recommendation_signature:
         return None
+    return _clone_workflow_route_plan(
+        _build_workflow_route_plan_cached(
+            message,
+            recommendation_signature,
+            selected_skill,
+            action,
+        )
+    )
+
+
+@lru_cache(maxsize=2048)
+def _build_workflow_route_plan_cached(
+    message: str,
+    recommendation_signature: tuple[tuple[str, int, str, tuple[str, ...]], ...],
+    selected_skill: str,
+    action: str,
+) -> dict[str, object] | None:
+    if action == "fallback":
+        return None
+    recommendation_list = _recommendation_list_from_signature(recommendation_signature)
 
     routing_text = prepare_routing_text(message)
     normalized = normalized_phrase(routing_text.scoring_text)
     tokens = routing_tokens(normalized, stopwords=_STOPWORDS)
     signal_stages = set(_stages_from_signals(normalized, tokens))
     by_skill = {item["skill"]: item for item in recommendation_list if item.get("skill")}
-    definition_names = {definition.name for definition in routable_definitions()}
+    definition_names = _routable_definition_names()
     steps_by_stage: dict[str, _RouteStep] = {}
 
     for item in recommendation_list:
@@ -265,6 +286,38 @@ def build_workflow_route_plan(
     }
 
 
+def _clone_workflow_route_plan(value: dict[str, object] | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    cloned: dict[str, object] = {
+        "schema_version": str(value.get("schema_version", SCHEMA_VERSION)),
+        "mode": str(value.get("mode", "multi_workflow")),
+        "primary_skill": str(value.get("primary_skill", "")),
+        "stages": list(value.get("stages", [])) if isinstance(value.get("stages"), list) else [],
+        "steps": [],
+        "next_action": str(value.get("next_action", "")),
+        "claim_boundary": CLAIM_BOUNDARY,
+    }
+    steps = value.get("steps", [])
+    if isinstance(steps, list):
+        cloned["steps"] = [
+            {
+                "order": int(step.get("order", index + 1)),
+                "stage": str(step.get("stage", "")),
+                "skill": str(step.get("skill", "")),
+                "score": _int_value(step.get("score", 0)),
+                "confidence": str(step.get("confidence", "low")),
+                "matched": list(step.get("matched", [])) if isinstance(step.get("matched"), list) else [],
+                "reason": str(step.get("reason", "")),
+                "evidence_boundary": str(step.get("evidence_boundary", "")),
+                "status": "prepared_not_observed",
+            }
+            for index, step in enumerate(steps)
+            if isinstance(step, dict)
+        ]
+    return cloned
+
+
 def _ordered_stages(steps_by_stage: dict[str, _RouteStep], *, selected_skill: str) -> list[str]:
     stages = [stage for stage in _STAGE_ORDER if stage in steps_by_stage]
     if selected_skill == "workflow-learning" and "learn" in stages:
@@ -315,6 +368,43 @@ def _recommendation_list(recommendations: object) -> list[dict[str, object]]:
         if isinstance(item, dict):
             items.append(dict(item))
     return items
+
+
+def _recommendation_signature(recommendations: object) -> tuple[tuple[str, int, str, tuple[str, ...]], ...]:
+    signature: list[tuple[str, int, str, tuple[str, ...]]] = []
+    for item in _recommendation_list(recommendations):
+        skill = str(item.get("skill", ""))
+        if not skill:
+            continue
+        matched = item.get("matched", [])
+        signature.append(
+            (
+                skill,
+                _int_value(item.get("score", 0)),
+                str(item.get("confidence", "low")),
+                tuple(str(value) for value in matched) if isinstance(matched, list) else (),
+            )
+        )
+    return tuple(signature)
+
+
+def _recommendation_list_from_signature(
+    signature: tuple[tuple[str, int, str, tuple[str, ...]], ...],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "skill": skill,
+            "score": score,
+            "confidence": confidence,
+            "matched": list(matched),
+        }
+        for skill, score, confidence, matched in signature
+    ]
+
+
+@lru_cache(maxsize=1)
+def _routable_definition_names() -> frozenset[str]:
+    return frozenset(definition.name for definition in routable_definitions())
 
 
 def _step_from_recommendation(stage: str, item: dict[str, object]) -> _RouteStep:

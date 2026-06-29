@@ -13,6 +13,7 @@ from omh.routing import catalog_questions as catalog_questions_module
 from omh.routing import localization as localization_module
 from omh.routing import recommend as recommend_module
 from omh.routing import policy as policy_module
+from omh.routing import route_plan as route_plan_module
 from omh.skills import render as render_module
 from omh.wrapper import contract as contract_module
 from omh.release import (
@@ -528,6 +529,40 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertGreaterEqual(search_cache.hits, 1)
         self.assertGreater(token_cache.misses, 0)
         self.assertGreater(token_cache.hits, 0)
+
+    def test_workflow_route_plan_cache_is_reused_without_payload_poisoning(self) -> None:
+        route_plan_module._build_workflow_route_plan_cached.cache_clear()
+        route_plan_module._routable_definition_names.cache_clear()
+
+        recommendations = recommend_module.recommend_skills("risky refactor", limit=10)
+        first = route_plan_module.build_workflow_route_plan(
+            "risky refactor",
+            recommendations,
+            selected_skill="ralplan",
+            action="dispatch",
+        )
+        self.assertIsNotNone(first)
+        assert first is not None
+        first["steps"][0]["skill"] = "mutated"
+        first["steps"][0]["matched"].append("mutated")
+
+        second = route_plan_module.build_workflow_route_plan(
+            "risky refactor",
+            recommendations,
+            selected_skill="ralplan",
+            action="dispatch",
+        )
+        cache_info = route_plan_module._build_workflow_route_plan_cached.cache_info()
+        definition_names_cache = route_plan_module._routable_definition_names.cache_info()
+
+        self.assertIsNotNone(second)
+        assert second is not None
+        self.assertNotEqual(second["steps"][0]["skill"], "mutated")
+        self.assertNotIn("mutated", second["steps"][0]["matched"])
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+        self.assertEqual(definition_names_cache.misses, 1)
+        self.assertGreaterEqual(definition_names_cache.hits, 0)
 
     def test_catalog_capability_summary_cache_is_reused_without_payload_poisoning(self) -> None:
         contract_module._catalog_capability_summary_cached.cache_clear()
