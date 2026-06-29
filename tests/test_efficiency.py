@@ -704,18 +704,17 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(profile_cache.misses, 1)
         self.assertGreater(term_cache.misses, 0)
 
-    def test_phrase_match_cache_reuses_repeated_recommendation_pairs(self) -> None:
-        recommend_module._phrase_match.cache_clear()
+    def test_direct_phrase_match_preserves_recommendation_scoring(self) -> None:
         recommend_module._recommend_skills_cached.cache_clear()
 
         first = recommend_module.recommend_skills("risky refactor", limit=2)
         recommend_module._recommend_skills_cached.cache_clear()
         second = recommend_module.recommend_skills("risky refactor", limit=2)
-        cache_info = recommend_module._phrase_match.cache_info()
 
         self.assertEqual(first, second)
-        self.assertGreater(cache_info.misses, 0)
-        self.assertGreater(cache_info.hits, 0)
+        self.assertTrue(recommend_module._phrase_match("risky refactor", "risky refactor planning"))
+        self.assertTrue(recommend_module._phrase_match("risky refactor planning", "risky refactor"))
+        self.assertFalse(recommend_module._phrase_match("payment failures", "risky refactor"))
 
     def test_catalog_question_caches_repeated_search_and_token_checks(self) -> None:
         catalog_questions_module.is_skill_catalog_question.cache_clear()

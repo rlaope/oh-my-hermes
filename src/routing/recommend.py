@@ -797,7 +797,6 @@ def _command_trigger_match(query: str, value: str) -> bool:
     return bool(_COMMAND_TRIGGER_PATTERNS[value].search(query))
 
 
-@lru_cache(maxsize=16384)
 def _phrase_match(query: str, value: str) -> bool:
     return bool(query and value and (query in value or value in query))
 
