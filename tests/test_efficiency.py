@@ -574,6 +574,16 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_route_boundary_gap_labels_reuse_static_extractors(self) -> None:
+        self.assertIsInstance(chat_module._BOUNDARY_MARKER_LABELS, tuple)
+        self.assertIsInstance(chat_module._BOUNDARY_REGEX_LABELS, tuple)
+
+        boundary = "Status guidance is not proof that a runtime, tool, MCP server, CI job, or platform action ran."
+        with patch.object(chat_module.re, "search", side_effect=AssertionError("use precompiled route-boundary patterns")):
+            labels = chat_module._not_evidence_from_boundary(boundary)
+
+        self.assertEqual(labels, ["runtime proof", "tool invocation", "MCP server", "platform action", "CI"])
+
     def test_learning_candidate_detection_cache_reuses_negative_messages(self) -> None:
         learning_candidate_module._detect_learning_signal_cached.cache_clear()
 
