@@ -9,6 +9,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_skill_templates
+from omh.routing import catalog_questions as catalog_questions_module
 from omh.routing import localization as localization_module
 from omh.routing import recommend as recommend_module
 from omh.routing import policy as policy_module
@@ -465,6 +466,22 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertGreater(cache_info.misses, 0)
         self.assertGreater(cache_info.hits, 0)
+
+    def test_catalog_question_caches_repeated_search_and_token_checks(self) -> None:
+        catalog_questions_module._catalog_search_texts.cache_clear()
+        catalog_questions_module._contains_catalog_token.cache_clear()
+
+        first = catalog_questions_module.is_skill_catalog_question("what OMH workflows are available?")
+        second = catalog_questions_module.is_skill_catalog_question("what OMH workflows are available?")
+        search_cache = catalog_questions_module._catalog_search_texts.cache_info()
+        token_cache = catalog_questions_module._contains_catalog_token.cache_info()
+
+        self.assertTrue(first)
+        self.assertEqual(first, second)
+        self.assertEqual(search_cache.misses, 1)
+        self.assertGreaterEqual(search_cache.hits, 1)
+        self.assertGreater(token_cache.misses, 0)
+        self.assertGreater(token_cache.hits, 0)
 
     def test_catalog_capability_summary_cache_is_reused_without_payload_poisoning(self) -> None:
         contract_module._catalog_capability_summary_cached.cache_clear()

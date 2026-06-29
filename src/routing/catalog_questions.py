@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import unicodedata
 
 
@@ -484,6 +485,7 @@ def is_file_or_text_lookup_question(message: str) -> bool:
     return _is_file_or_text_search_question(_catalog_search_texts(lowered))
 
 
+@lru_cache(maxsize=4096)
 def _catalog_search_texts(lowered: str) -> tuple[str, ...]:
     folded = "".join(
         character for character in unicodedata.normalize("NFKD", lowered) if not unicodedata.combining(character)
@@ -560,5 +562,6 @@ def _is_operator_action_question(search_texts: tuple[str, ...]) -> bool:
     )
 
 
+@lru_cache(maxsize=16384)
 def _contains_catalog_token(search_texts: tuple[str, ...], tokens: tuple[str, ...]) -> bool:
     return any(token in text for text in search_texts for token in tokens)
