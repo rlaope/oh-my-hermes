@@ -778,6 +778,36 @@ class ChatRouterTests(unittest.TestCase):
                 "research-department",
                 "research-department",
             ),
+            (
+                "what can OMH do for research brief?",
+                "research-brief",
+                "business-research",
+            ),
+            (
+                "what can OMH do for GitHub event ops?",
+                "github-event-ops",
+                "github-event-ops",
+            ),
+            (
+                "what can OMH do for coding agents?",
+                "executor-runtime-readiness",
+                "executor-runtime-readiness",
+            ),
+            (
+                "what can OMH do for reliability review?",
+                "reliability-review",
+                "reliability-review",
+            ),
+            (
+                "what can OMH do for deploy and monitor?",
+                "deploy-and-monitor",
+                "app-delivery-loop",
+            ),
+            (
+                "what can OMH do for CTO loop?",
+                "cto-loop",
+                "app-delivery-loop",
+            ),
         )
 
         for message, skill, harness in cases:
