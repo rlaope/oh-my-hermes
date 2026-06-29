@@ -940,6 +940,8 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("verification", explanation["not_evidence_yet"])
         self.assertIn("feedback-triage", explanation["recommended_reply"])
         self.assertIn("triage feedback", explanation["recommended_reply"])
+        self.assertIn("not evidence of completed feedback triage", explanation["recommended_reply"])
+        self.assertNotIn("not completed feedback triage evidence", explanation["recommended_reply"])
         self.assertEqual(explanation["primary_action_label"], "Open feedback-triage")
         self.assertIn("do not claim completed feedback triage", explanation["primary_action_hint"])
 
@@ -957,7 +959,9 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(explanation["next_action"], "accept_or_revise_plan")
         self.assertEqual(explanation["route_next_action"], "present_plan")
         self.assertIn("accept or revise plan", explanation["recommended_reply"])
+        self.assertIn("not evidence of plan acceptance", explanation["recommended_reply"])
         self.assertIn("present plan", explanation["route_recommended_reply"])
+        self.assertIn("not evidence of execution", explanation["route_recommended_reply"])
         self.assertIn("do not claim plan acceptance", explanation["primary_action_hint"])
         self.assertIn("do not claim execution", explanation["route_primary_action_hint"])
 

@@ -917,6 +917,8 @@ class ChatRouterTests(unittest.TestCase):
                 for label in expected_labels:
                     self.assertIn(label, not_evidence_yet)
                 self.assertNotIn("completion claim without observed evidence", not_evidence_yet)
+                self.assertIn(f"not evidence of {expected_labels[0]}", public["route_explanation"]["recommended_reply"])
+                self.assertNotIn(f"not {expected_labels[0]} evidence", public["route_explanation"]["recommended_reply"])
 
     def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
         for phrase in ("plan", "team", "ask"):
@@ -1833,6 +1835,8 @@ selected_workflow=ultraprocess
         self.assertIn("connector invocation", explanation["not_evidence_yet"])
         self.assertIn("toolbelt-readiness", explanation["recommended_reply"])
         self.assertIn("prepare toolbelt readiness", explanation["recommended_reply"])
+        self.assertIn("not evidence of execution", explanation["recommended_reply"])
+        self.assertNotIn("not execution evidence", explanation["recommended_reply"])
         self.assertEqual(explanation["primary_action_label"], "Open toolbelt-readiness")
         self.assertIn("do not claim", explanation["primary_action_hint"])
         self.assertIn("execution", explanation["primary_action_hint"])
