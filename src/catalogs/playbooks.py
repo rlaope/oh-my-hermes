@@ -495,6 +495,7 @@ _PLAYBOOKS = (
             "product strategy",
             "strategy memo",
             "strategy brief",
+            "strategy report",
             "data search",
             "market evidence",
             "source scan",
@@ -506,6 +507,11 @@ _PLAYBOOKS = (
             "회의 아젠다",
             "다음 전략",
             "전략 정리",
+            "전략 보고서",
+            "전략 리포트",
+            "전략 브리프",
+            "전략 메모",
+            "조사해서 전략 보고서",
         ),
         intent_tags=(
             "research brief",
@@ -2111,7 +2117,25 @@ _SURFACE_PLAYBOOKS = (
         "Executor runtime readiness",
         "Compare Codex, Claude Code, Hermes coding, and oh-my runtimes by tools, missing capabilities, credentials, and handoff mode.",
         "Use before selecting an executor or runtime for coding or tool-backed work.",
-        ("codex", "claude code", "runtime", "executor", "missing tools", "handoff mode", "omx", "omc", "omo", "코덱스", "클로드"),
+        (
+            "codex",
+            "claude code",
+            "runtime",
+            "executor",
+            "missing tools",
+            "handoff mode",
+            "open codex session",
+            "open claude code session",
+            "codex 작업 세션 열어",
+            "코덱스 작업 세션 열어",
+            "claude code 작업 세션 열어",
+            "클로드 코드 작업 세션 열어",
+            "omx",
+            "omc",
+            "omo",
+            "코덱스",
+            "클로드",
+        ),
         owner="executor-runtime-readiness",
         contract="executor_runtime_readiness/v1",
         pipeline=("scope_task", "compare_runtimes", "select_handoff_mode", "record_dispatch"),
@@ -2200,9 +2224,18 @@ _SURFACE_PLAYBOOKS = (
             "릴리즈 노트 이미지로",
             "릴리즈 노트 이미지로 만들어줘",
             "릴리즈 노트 카드",
+            "릴리즈 업데이트 발표 카드",
+            "릴리즈 업데이트를 발표 카드로",
+            "릴리즈 업데이트를 발표 카드로 만들어줘",
             "업데이트 요약 이미지로",
             "업데이트 요약 이미지로 만들어줘",
             "업데이트 요약 카드",
+            "발표 카드",
+            "카드뉴스",
+            "카드 뉴스",
+            "인스타 카드뉴스",
+            "인스타 카드뉴스처럼",
+            "요약을 인스타 카드뉴스처럼",
         ),
         owner="img-summary",
         contract="visual_prompt_card/v1",
@@ -2265,11 +2298,18 @@ _SURFACE_PLAYBOOKS = (
             "claude code session",
             "codex 작업이 진행중인지",
             "codex 작업이 어디까지",
+            "codex 진행상황",
             "확인하고 지금 어떤 상태인지",
             "작업이 진행중",
             "진행중인지",
             "어떤 상태",
             "코덱스 진행",
+            "코덱스가 지금 어디까지",
+            "코덱스 지금 어디까지",
+            "코덱스 진행상황",
+            "코덱스 상태",
+            "claude code가 지금 어디까지",
+            "클로드 코드가 지금 어디까지",
             "코딩 세션",
             "세션 상태",
         ),
@@ -2340,6 +2380,11 @@ _SURFACE_PLAYBOOKS = (
             "워크플로우 다음엔 더 잘하게 개선해줘",
             "다음 실행에서 더 잘",
             "다음 워크플로우에 반영",
+            "다음부터 이 작업 더 잘하게",
+            "다음부터 이 작업 더 잘하게 기억",
+            "다음부터 더 잘하게 기억",
+            "다음부터 이런 작업 더 잘하게",
+            "이 작업 더 잘하게 기억",
             "스킬 개선",
             "라우팅 개선",
             "회귀 케이스",
@@ -2384,10 +2429,17 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
 @lru_cache(maxsize=512)
 def _recommend_playbooks_cached(task: str, limit: int) -> dict[str, object]:
     routing_text = prepare_routing_text(task)
+    normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(routing_text.scoring_text)
     query_terms = _terms(routing_text.scoring_text)
     scored = [
-        _score_playbook(profile, query_tokens, query_terms, routing_text.locale_matches)
+        _score_playbook(
+            profile,
+            query_tokens,
+            query_terms,
+            routing_text.locale_matches,
+            normalized_query=normalized_query,
+        )
         for profile in _playbook_scoring_profiles()
     ]
     scored.sort(key=lambda item: (-int(item["score"]), str(item["id"])))
@@ -2436,15 +2488,22 @@ def _score_playbook(
     query_tokens: set[str],
     query_terms: set[str],
     locale_matches: tuple[str, ...] = (),
+    *,
+    normalized_query: str = "",
 ) -> dict[str, object]:
     playbook = profile.playbook
     score = 0
     matched: set[str] = set()
 
     for keyword in profile.keyword_terms:
-        if _matches_term_tokens(keyword.tokens, query_terms):
+        term_matched = _matches_term_tokens(keyword.tokens, query_terms)
+        phrase_matched = _matches_specific_phrase(keyword.label, normalized_query)
+        if term_matched:
             score += 5
             matched.add(f"keyword:{keyword.label}")
+        if phrase_matched:
+            score += 5 if term_matched else 10
+            matched.add(f"phrase:{keyword.label}")
 
     for token in sorted(query_tokens & profile.intent_tokens):
         score += 2
@@ -2513,6 +2572,17 @@ def _matches_term(term: str, query_terms: set[str]) -> bool:
 
 def _matches_term_tokens(term_tokens: tuple[str, ...], query_terms: set[str]) -> bool:
     return bool(term_tokens) and query_terms.issuperset(term_tokens)
+
+
+def _matches_specific_phrase(label: str, normalized_query: str) -> bool:
+    if len(label.strip()) < 4:
+        return False
+    normalized_label = normalized_phrase(label)
+    if len(normalized_label) < 6:
+        return False
+    if " " not in normalized_label and normalized_label.isascii():
+        return False
+    return normalized_label in normalized_query
 
 
 @lru_cache(maxsize=1)
