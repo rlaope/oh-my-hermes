@@ -489,7 +489,10 @@ def product_readiness_report(
     parity = build_parity_matrix()
     grounded_score = build_grounded_score_demo()
     chat_cards = build_chat_card_coverage_demo()
-    route_hints = build_route_hint_alignment_demo()
+    route_hints = build_route_hint_alignment_demo(
+        grounded_score=grounded_score,
+        chat_card_coverage=chat_cards,
+    )
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
 
     checklist_items = checklist.get("items", [])
@@ -1439,7 +1442,10 @@ def release_evidence_bundle(
     use_cases = use_case_readiness(resolved_paths)
     grounded_score = build_grounded_score_demo()
     chat_cards = build_chat_card_coverage_demo()
-    route_hints = build_route_hint_alignment_demo()
+    route_hints = build_route_hint_alignment_demo(
+        grounded_score=grounded_score,
+        chat_card_coverage=chat_cards,
+    )
     parity = build_parity_matrix()
     local_store_status = _release_local_store_status(use_cases)
     required_status = {

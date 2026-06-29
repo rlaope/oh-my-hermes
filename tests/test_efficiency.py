@@ -307,6 +307,53 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(scenario_row["score"], 10)
         self.assertEqual(scenario_row["observed"]["skill"], "synthetic-workflow")
 
+    def test_route_hint_alignment_reuses_precomputed_quality_routes(self) -> None:
+        alignment_case = RouteHintAlignmentCase(
+            "grounded_score",
+            "synthetic-grounded",
+            "Synthetic precomputed route reuse",
+            "synthetic message with precomputed route",
+            "synthetic-workflow",
+        )
+        grounded_payload = {
+            "scenarios": [
+                {
+                    "id": "synthetic-grounded",
+                    "observed": {
+                        "skill": "synthetic-workflow",
+                        "route_action": "dispatch",
+                        "next_action": "synthetic_next_action",
+                    },
+                }
+            ]
+        }
+        fake_route_hint = {
+            "status": "hinted",
+            "primary_workflow": "synthetic-workflow",
+            "primary_next_action": "synthetic_next_action",
+            "hints": [{"workflow_context_card": {"id": "intent_to_plan"}}],
+            "claim_boundary": "Synthetic hints are not workflow execution evidence.",
+        }
+
+        with (
+            patch.object(route_hint_alignment_module, "route_hint_alignment_cases", return_value=(alignment_case,)),
+            patch.object(
+                route_hint_alignment_module,
+                "build_chat_interaction_payload",
+                side_effect=AssertionError("precomputed routes should avoid rebuilding interaction payloads"),
+            ),
+            patch.object(route_hint_alignment_module, "awareness_route_hint", return_value=fake_route_hint),
+        ):
+            payload = route_hint_alignment_module.build_route_hint_alignment_demo(
+                source="discord",
+                grounded_score=grounded_payload,
+            )
+
+        self.assertTrue(payload["summary"]["all_aligned"])
+        self.assertEqual(payload["summary"]["aligned_count"], 1)
+        self.assertEqual(payload["cases"][0]["observed"]["route_workflow"], "synthetic-workflow")
+        self.assertEqual(payload["cases"][0]["observed"]["route_confidence"], "precomputed")
+
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
         standalone_items = standalone_skill_capability_items()
