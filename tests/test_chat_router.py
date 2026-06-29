@@ -751,6 +751,44 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("Catalog question", decision["reason"])
 
+    def test_specific_capability_questions_route_to_the_named_workflow_card(self) -> None:
+        cases = (
+            (
+                "what can OMH do for workflow learning?",
+                "workflow-learning",
+                "workflow-learning",
+            ),
+            (
+                "what can OMH do for Discord gateway routing?",
+                "gateway-intent-card",
+                "gateway-intent-card",
+            ),
+            (
+                "route this Telegram message into a workflow card",
+                "gateway-intent-card",
+                "gateway-intent-card",
+            ),
+            (
+                "what coding agents can OMH use?",
+                "executor-runtime-readiness",
+                "executor-runtime-readiness",
+            ),
+            (
+                "what can OMH do for research department?",
+                "research-department",
+                "research-department",
+            ),
+        )
+
+        for message, skill, harness in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertEqual(decision["selected_harness"], harness)
+                self.assertEqual(decision["confidence"], "high")
+
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (
             "이 논문 PDF 아주 쉽게 설명해줘",
