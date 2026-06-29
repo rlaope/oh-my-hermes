@@ -209,6 +209,19 @@ class ChatRouterTests(unittest.TestCase):
             "can you explain Python virtualenv",
             "summarize this paragraph in Korean",
             "what is OAuth in simple terms?",
+            "what is a loop in Python?",
+            "파이썬 loop가 뭐야?",
+            "what is the strategy pattern?",
+            "strategy pattern 설명해줘",
+            "what is product triage?",
+            "what is a release note?",
+            "what is a research brief?",
+            "research brief가 뭐야?",
+            "what is an image summary?",
+            "what is a memory leak?",
+            "memory leak 설명해줘",
+            "what is source control?",
+            "source control이 뭐야?",
         ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
@@ -230,11 +243,26 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(paper["action"], "dispatch")
         self.assertEqual(paper["selected_skill"], "paper-learning")
 
+        catalog = route_chat_message("what OMH workflows are available?", source="discord")
+        self.assertEqual(catalog["action"], "dispatch")
+        self.assertEqual(catalog["selected_skill"], "oh-my-hermes")
+        self.assertEqual(catalog["recommendations"][0]["next_action"], "choose_skill")
+
+        safe_feature = route_chat_message("how can I safely add a feature to this repo?", source="discord")
+        self.assertEqual(safe_feature["action"], "dispatch")
+        self.assertEqual(safe_feature["selected_skill"], "ralplan")
+
     def test_plain_direct_answer_uses_fast_path_without_full_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()
         chat_router_impl._public_chat_route_payload_cached.cache_clear()
 
-        for message in ("just explain Python virtualenv", "how do I create a virtualenv in Python?"):
+        for message in (
+            "just explain Python virtualenv",
+            "how do I create a virtualenv in Python?",
+            "what is a loop in Python?",
+            "strategy pattern 설명해줘",
+            "what is source control?",
+        ):
             with self.subTest(message=message), mock.patch.object(
                 chat_router_impl,
                 "recommend_skills",

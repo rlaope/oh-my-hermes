@@ -98,6 +98,34 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_directly",
         "direct_answer",
     ),
+    RoutingPrecisionCase(
+        "python-loop-concept",
+        "Python loop concept stays direct",
+        "what is a loop in Python?",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "strategy-pattern-concept",
+        "Strategy pattern concept stays direct",
+        "strategy pattern 설명해줘",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "memory-leak-concept",
+        "Memory leak concept stays direct",
+        "memory leak 설명해줘",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "source-control-concept",
+        "Source control concept stays direct",
+        "what is source control?",
+        "answer_directly",
+        "direct_answer",
+    ),
 )
 
 
