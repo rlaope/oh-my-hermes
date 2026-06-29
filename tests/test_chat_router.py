@@ -948,6 +948,7 @@ class ChatRouterTests(unittest.TestCase):
 
     def test_specific_capability_phrase_patterns_are_compiled_once(self) -> None:
         chat_router_impl._specific_capability_phrase_map.cache_clear()
+        chat_router_impl._specific_capability_named_hits.cache_clear()
         try:
             with mock.patch.object(
                 chat_router_impl,
@@ -968,6 +969,7 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(compile_phrase.call_count, first_call_count)
         finally:
             chat_router_impl._specific_capability_phrase_map.cache_clear()
+            chat_router_impl._specific_capability_named_hits.cache_clear()
 
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (

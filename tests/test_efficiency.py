@@ -630,6 +630,34 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(search_cache.misses, 1)
         self.assertGreater(token_cache.misses, 0)
 
+    def test_specific_capability_hits_cache_repeated_catalog_checks(self) -> None:
+        chat_module._specific_capability_named_hits.cache_clear()
+        chat_module._specific_capability_exact_id_hit.cache_clear()
+        chat_module._is_broad_capability_catalog_question.cache_clear()
+
+        first_hits = chat_module._specific_capability_named_hits("what can OMH do for paper-learning?")
+        second_hits = chat_module._specific_capability_named_hits("what can OMH do for paper-learning?")
+        first_exact = chat_module._specific_capability_exact_id_hit("what can OMH do for paper-learning?")
+        second_exact = chat_module._specific_capability_exact_id_hit("what can OMH do for paper-learning?")
+        first_broad = chat_module._is_broad_capability_catalog_question("paper-learning / web-research")
+        second_broad = chat_module._is_broad_capability_catalog_question("paper-learning / web-research")
+        hits_cache = chat_module._specific_capability_named_hits.cache_info()
+        exact_cache = chat_module._specific_capability_exact_id_hit.cache_info()
+        broad_cache = chat_module._is_broad_capability_catalog_question.cache_info()
+
+        self.assertEqual(first_hits, second_hits)
+        self.assertIn("paper-learning", second_hits)
+        self.assertEqual(first_exact, "paper-learning")
+        self.assertEqual(first_exact, second_exact)
+        self.assertTrue(first_broad)
+        self.assertEqual(first_broad, second_broad)
+        self.assertEqual(hits_cache.misses, 2)
+        self.assertGreaterEqual(hits_cache.hits, 1)
+        self.assertEqual(exact_cache.misses, 1)
+        self.assertGreaterEqual(exact_cache.hits, 1)
+        self.assertEqual(broad_cache.misses, 1)
+        self.assertGreaterEqual(broad_cache.hits, 1)
+
     def test_file_lookup_question_cache_reuses_repeated_lookup_checks(self) -> None:
         catalog_questions_module.is_file_or_text_lookup_question.cache_clear()
         catalog_questions_module._catalog_search_texts.cache_clear()

@@ -1020,6 +1020,7 @@ def _is_eligible_specific_capability_recommendation(recommendation: dict[str, ob
     return bool(next_action and next_action != "clarify_or_route")
 
 
+@lru_cache(maxsize=2048)
 def _is_broad_capability_catalog_question(message: str) -> bool:
     text = message.strip().lower()
     if any(phrase in text for phrase in _BROAD_CAPABILITY_CATALOG_PHRASES):
@@ -1061,6 +1062,7 @@ def _specific_capability_phrase_map() -> tuple[_SpecificCapabilityPhrase, ...]:
     return tuple(entries)
 
 
+@lru_cache(maxsize=2048)
 def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
     text = message.strip().lower()
     matches: list[tuple[int, int, int, str]] = []
@@ -1079,6 +1081,7 @@ def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
     return tuple(selected)
 
 
+@lru_cache(maxsize=2048)
 def _specific_capability_exact_id_hit(message: str) -> str | None:
     text = message.strip().lower()
     hits: list[str] = []
