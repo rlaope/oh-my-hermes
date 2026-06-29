@@ -2957,6 +2957,18 @@ def _feedback_before_coding_guard_applies(
 def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _WORKFLOW_LEARNING_PHRASES):
         return True
+    capability_terms = bool({"learning", "trace", "eval", "regression", "patch"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        (
+            "workflow learning",
+            "workflow trace",
+            "skill patch",
+            "routing regression",
+            "route regression",
+        ),
+    )
+    if _omh_capability_question(normalized_query) and capability_terms:
+        return True
     learning = bool({"learn", "learning", "학습"} & query_tokens)
     workflow_or_skill = bool({"workflow", "run", "trace", "skill", "routing", "route", "워크플로우", "스킬", "라우팅"} & query_tokens)
     future_improvement = bool({"improve", "improvement", "next", "future", "regression", "개선", "회귀"} & query_tokens)
@@ -3207,7 +3219,7 @@ def _paper_learning_guard_applies(
             return False
     if _contains_phrase(normalized_query, _PAPER_LEARNING_PHRASES):
         return True
-    paper_context = bool(_PAPER_LEARNING_PAPER_TOKENS & query_tokens) or _contains_phrase(
+    paper_context = bool((_PAPER_LEARNING_PAPER_TOKENS - {"research"}) & query_tokens) or _contains_phrase(
         normalized_query,
         ("research paper", "arxiv paper", "paper pdf", "pdf paper", "논문 pdf"),
     )
@@ -3311,6 +3323,9 @@ def _explicit_material_export_requested(normalized_query: str, query_tokens: set
 def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if is_explicit_one_off_request(normalized_query, query_tokens):
         return False
+    explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
+    if _omh_capability_question(normalized_query) and explicit_research_ops:
+        return True
     research_infra_setup = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_SETUP_PHRASES)
     if research_infra_setup:
         research_context = bool(
@@ -3374,7 +3389,6 @@ def _research_department_guard_applies(normalized_query: str, query_tokens: set[
         normalized_query,
         ("collect news synthesize", "collect, synthesize", "collect and brief", "synthesize and brief"),
     )
-    explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
     return recurring and (research or collect_synthesize_brief) and (
         support or specific_research_domain or explicit_research_ops or collect_synthesize_brief
     )
@@ -3842,6 +3856,8 @@ def _gateway_intent_guard_applies(normalized_query: str, query_tokens: set[str])
     platform = bool({"discord", "slack", "telegram", "whatsapp", "signal", "gateway", "platform"} & query_tokens)
     policy = bool(
         {
+            "route",
+            "routing",
             "thread",
             "delivery",
             "silent",
@@ -3861,6 +3877,8 @@ def _gateway_intent_guard_applies(normalized_query: str, query_tokens: set[str])
         {
             "message",
             "messages",
+            "workflow",
+            "card",
             "thread",
             "attachment",
             "file",
@@ -3874,8 +3892,24 @@ def _gateway_intent_guard_applies(normalized_query: str, query_tokens: set[str])
         & query_tokens
     ) or _contains_phrase(
         normalized_query,
-        ("file attachment", "sent an attachment", "update the thread", "thread quietly", "voice note"),
+        (
+            "file attachment",
+            "sent an attachment",
+            "update the thread",
+            "thread quietly",
+            "voice note",
+            "workflow card",
+            "gateway routing",
+            "route this telegram message",
+            "route this discord message",
+            "route this slack message",
+        ),
     )
+    if _omh_capability_question(normalized_query) and platform and (
+        {"gateway", "routing", "route"} & query_tokens
+        or _contains_phrase(normalized_query, ("gateway routing", "message routing", "platform routing"))
+    ):
+        return True
     return platform and policy and gateway_context
 
 
@@ -4088,6 +4122,20 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
         return True
     if _executor_readiness_check_requested(normalized_query, query_tokens):
         return True
+    if _contains_phrase(
+        normalized_query,
+        (
+            "what coding agents can omh use",
+            "which coding agents can omh use",
+            "what coding agent can omh use",
+            "which coding agent can omh use",
+            "what executors can omh use",
+            "which executors can omh use",
+            "what runtimes can omh use",
+            "which runtimes can omh use",
+        ),
+    ):
+        return True
     runtime_intent = bool(_EXECUTOR_RUNTIME_READINESS_TOKENS & query_tokens) or _contains_phrase(
         normalized_query,
         ("runtime", "executor", "handoff", "런타임", "실행", "위임", "넘길", "넘길지"),
@@ -4240,6 +4288,8 @@ def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str])
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _is_short_visual_summary_request(normalized_query):
         return True
+    if _gateway_intent_guard_applies(normalized_query, query_tokens):
+        return False
     explicit_visual_phrase = _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
     if explicit_visual_phrase:
         return True

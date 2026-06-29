@@ -3247,6 +3247,30 @@ class CliTests(unittest.TestCase):
                 "prepare_source_finder_plan",
                 "guard:source_finder",
             ),
+            (
+                "what can OMH do for workflow learning?",
+                "workflow-learning",
+                "audit_learning_readiness",
+                "guard:workflow_learning",
+            ),
+            (
+                "what can OMH do for Discord gateway routing?",
+                "gateway-intent-card",
+                "prepare_gateway_intent_card",
+                "guard:gateway_intent",
+            ),
+            (
+                "what coding agents can OMH use?",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "what can OMH do for research department?",
+                "research-department",
+                "prepare_research_department_plan",
+                "guard:research_department",
+            ),
         )
 
         for message, skill, next_action, guard_label in cases:
@@ -4586,6 +4610,10 @@ class CliTests(unittest.TestCase):
             ("what can OMH do for PDF papers?", "paper-learning", "paper_learning", "prepare_paper_learning"),
             ("what can OMH do for source finding?", "source-finder", "source_finder", "prepare_source_finder_plan"),
             ("what can OMH do for datasets?", "source-finder", "source_finder", "prepare_source_finder_plan"),
+            ("what can OMH do for workflow learning?", "workflow-learning", "workflow_learning", "audit_learning_readiness"),
+            ("what can OMH do for Discord gateway routing?", "gateway-intent-card", "gateway_intent", "prepare_gateway_intent_card"),
+            ("what coding agents can OMH use?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("what can OMH do for research department?", "research-department", "research_department", "prepare_research_department_plan"),
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ops_review", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "strategy_brief", "prepare_strategy_brief"),

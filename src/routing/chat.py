@@ -42,6 +42,7 @@ _SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset(
         "deep-interview",
         "executor-runtime-readiness",
         "feedback-triage",
+        "gateway-intent-card",
         "github-event-ops",
         "img-summary",
         "idea-to-deploy",
@@ -121,6 +122,22 @@ _GENERIC_CATALOG_LISTING_MARKERS = (
     "목록",
     "리스트",
     "할 수 있는",
+)
+_SPECIFIC_CAPABILITY_ALIAS_PHRASES = (
+    "workflow learning",
+    "workflow trace",
+    "skill patch",
+    "routing regression",
+    "route regression",
+    "research department",
+    "research ops",
+    "gateway routing",
+    "message routing",
+    "platform routing",
+    "coding agents",
+    "coding agent",
+    "executors",
+    "runtimes",
 )
 _DIRECT_ANSWER_STARTERS = (
     "what ",
@@ -565,6 +582,8 @@ def _generic_omh_catalog_question(message: str) -> bool:
         return False
     named_hits = sum(1 for skill in _SPECIFIC_CAPABILITY_CATALOG_SKILLS if skill in text)
     if named_hits:
+        return False
+    if any(phrase in text for phrase in _SPECIFIC_CAPABILITY_ALIAS_PHRASES):
         return False
     has_collection = any(marker in text for marker in _GENERIC_CATALOG_COLLECTION_MARKERS)
     has_listing_intent = any(marker in text for marker in _GENERIC_CATALOG_LISTING_MARKERS)
