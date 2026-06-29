@@ -110,6 +110,8 @@ _GENERIC_CATALOG_LISTING_MARKERS = (
     "available",
     "installed",
     "do you have",
+    "can omh do",
+    "can oh-my-hermes do",
     "list",
     "show",
     "menu",

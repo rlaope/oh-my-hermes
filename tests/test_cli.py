@@ -4492,20 +4492,26 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("more action(s) in --json", stdout)
 
     def test_chat_interact_summary_renders_catalog_picker_without_shell_json(self) -> None:
-        status, stdout, stderr = run_cli(
-            ["chat", "interact", "--source", "discord", "--summary", "what OMH workflows are available?"],
-            output_json=False,
-        )
+        for message in (
+            "what OMH workflows are available?",
+            "what workflows can OMH do?",
+            "show me the OMH commands",
+        ):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(
+                    ["chat", "interact", "--source", "discord", "--summary", message],
+                    output_json=False,
+                )
 
-        self.assertEqual(stderr, "")
-        self.assertEqual(status, 0)
-        self.assertIn("OMH chat interaction", stdout)
-        self.assertIn("Workflow: oh-my-hermes", stdout)
-        self.assertIn("Next action: choose_skill", stdout)
-        self.assertIn("[omh] oh-my-hermes - Here are the OMH workflows.", stdout)
-        self.assertIn("- choose_skill: Choose workflow (enabled)", stdout)
-        self.assertIn("- search_skills: Search workflows (enabled)", stdout)
-        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                self.assertIn("OMH chat interaction", stdout)
+                self.assertIn("Workflow: oh-my-hermes", stdout)
+                self.assertIn("Next action: choose_skill", stdout)
+                self.assertIn("[omh] oh-my-hermes - Here are the OMH workflows.", stdout)
+                self.assertIn("- choose_skill: Choose workflow (enabled)", stdout)
+                self.assertIn("- search_skills: Search workflows (enabled)", stdout)
+                self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
     def test_chat_interact_rejects_conflicting_output_modes(self) -> None:
         status, stdout, stderr = run_cli(
@@ -4648,6 +4654,10 @@ class CliTests(unittest.TestCase):
             "OMH로 할 수 있는 workflow가 뭐야?",
             "skill들은 뭐 있어?",
             "what OMH workflows are available?",
+            "what workflows can OMH do?",
+            "what skills can OMH do?",
+            "show me the OMH commands",
+            "show me OMH workflows",
             "¿Qué comandos de OMH están disponibles?",
             "Quelles commandes OMH sont disponibles ?",
             "Welche OMH Workflows gibt es?",
