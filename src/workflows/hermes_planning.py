@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
 import json
 import re
@@ -72,21 +73,29 @@ class HermesPlan:
     stop_condition: str
 
     def to_dict(self) -> dict[str, object]:
-        data = asdict(self)
-        for key in (
-            "clarified_assumptions",
-            "goals",
-            "non_goals",
-            "decision_drivers",
-            "options",
-            "rejection_rationale",
-            "risks",
-            "mitigations",
-            "acceptance_criteria",
-            "verification_plan",
-        ):
-            data[key] = list(data[key])
-        return data
+        return {
+            "status": self.status,
+            "task_statement": self.task_statement,
+            "recommended_workflow": self.recommended_workflow,
+            "recommended_harness": self.recommended_harness,
+            "planning_mode": self.planning_mode,
+            "clarified_assumptions": list(self.clarified_assumptions),
+            "goals": list(self.goals),
+            "non_goals": list(self.non_goals),
+            "decision_drivers": list(self.decision_drivers),
+            "options": [_clone_jsonish(option) for option in self.options],
+            "chosen_direction": self.chosen_direction,
+            "rejection_rationale": list(self.rejection_rationale),
+            "risks": list(self.risks),
+            "mitigations": list(self.mitigations),
+            "acceptance_criteria": list(self.acceptance_criteria),
+            "verification_plan": list(self.verification_plan),
+            "execution_handoff": self.execution_handoff,
+            "review_gate": dict(self.review_gate),
+            "quality_gate": _clone_jsonish(self.quality_gate),
+            "deep_interview": _clone_jsonish(self.deep_interview),
+            "stop_condition": self.stop_condition,
+        }
 
 
 def build_hermes_plan_payload(
@@ -107,10 +116,30 @@ def build_hermes_plan_payload(
     if limit < 1:
         raise ValueError("hermes plan --limit must be at least 1")
 
+    metadata_items = tuple(sorted((key, value) for key, value in (source_metadata or {}).items() if value))
+    return _clone_jsonish(
+        _build_hermes_plan_payload_cached(
+            task,
+            source,
+            limit,
+            executor_target,
+            metadata_items,
+        )
+    )
+
+
+@lru_cache(maxsize=2048)
+def _build_hermes_plan_payload_cached(
+    task: str,
+    source: str,
+    limit: int,
+    executor_target: str,
+    metadata_items: tuple[tuple[str, str], ...],
+) -> dict[str, object]:
     recommendations = _compact_recommendations(recommend_skills(task, limit=max(limit, 5))[:limit])
     top = recommendations[0] if recommendations else {"skill": "oh-my-hermes", "score": 0, "confidence": "low"}
     plan = _plan_for(task, top)
-    metadata = {key: value for key, value in (source_metadata or {}).items() if value}
+    metadata = dict(metadata_items)
     payload: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "source": source,
@@ -126,6 +155,16 @@ def build_hermes_plan_payload(
     if metadata:
         payload["source_metadata"] = metadata
     return payload
+
+
+def _clone_jsonish(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _clone_jsonish(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clone_jsonish(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_jsonish(item) for item in value)
+    return value
 
 
 def build_hermes_plan_event_payload(

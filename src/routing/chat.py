@@ -258,6 +258,34 @@ def route_chat_message(
     return _clone_jsonish(_route_chat_message_cached(message, source, limit, min_confidence))
 
 
+def public_chat_route_payload(
+    message: str,
+    *,
+    source: str = "generic",
+    limit: int = 3,
+    min_confidence: str = "high",
+    include_message: bool = False,
+) -> dict[str, object]:
+    message = message.strip()
+    if not message:
+        raise ValueError("chat route requires a message")
+    if source not in CHAT_SOURCES:
+        raise ValueError(f"unsupported chat source: {source}")
+    if limit < 1:
+        raise ValueError("chat route --limit must be at least 1")
+    if min_confidence not in CONFIDENCE_LEVELS:
+        raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
+    return _clone_jsonish(
+        _public_chat_route_payload_cached(
+            message,
+            source,
+            limit,
+            min_confidence,
+            include_message,
+        )
+    )
+
+
 @lru_cache(maxsize=2048)
 def _route_chat_message_cached(
     message: str,
@@ -438,6 +466,20 @@ def _route_chat_message_cached(
         recommendations=recommendations,
     )
     return decision.to_dict()
+
+
+@lru_cache(maxsize=2048)
+def _public_chat_route_payload_cached(
+    message: str,
+    source: str,
+    limit: int,
+    min_confidence: str,
+    include_message: bool,
+) -> dict[str, object]:
+    return public_route_payload(
+        _route_chat_message_cached(message, source, limit, min_confidence),
+        include_message=include_message,
+    )
 
 
 def _clone_jsonish(value: Any) -> Any:
