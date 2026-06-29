@@ -607,6 +607,7 @@ def normalized_phrase(value: str) -> str:
     return _fold_for_match(value)
 
 
+@lru_cache(maxsize=8192)
 def _fold_for_match(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     decomposed = unicodedata.normalize("NFKD", normalized)
