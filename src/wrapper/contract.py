@@ -7,7 +7,7 @@ from typing import Any
 from ..context_safety import compact_progress_events
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
-from ..routing.chat import public_route_payload, route_chat_message, route_explanation_payload
+from ..routing.chat import public_chat_route_payload, route_explanation_payload
 from ..routing.missed_route import is_missed_route_feedback
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
 from ..capabilities.families import capability_family_cards
@@ -1354,10 +1354,15 @@ def build_chat_interaction_payload(
 
     message = extract_message_text(event_or_message)
     metadata = _source_metadata(event_or_message, source_metadata)
-    route = route_chat_message(message, source=source, limit=limit, min_confidence=min_confidence)
-    resolved_mode = _resolve_mode(mode, route, message=message)
+    route_payload = public_chat_route_payload(
+        message,
+        source=source,
+        limit=limit,
+        min_confidence=min_confidence,
+        include_message=include_message,
+    )
+    resolved_mode = _resolve_mode(mode, route_payload, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)
-    route_payload = public_route_payload(route, include_message=include_message)
     if _is_generic_skill_catalog_route(message, route_payload):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
@@ -1446,7 +1451,7 @@ def build_chat_interaction_payload(
         base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
         return _finish_interaction(base, target_notice)
 
-    if resolved_mode == "clarify" or route["action"] != "dispatch":
+    if resolved_mode == "clarify" or route_payload["action"] != "dispatch":
         base["chat_response"] = build_chat_response_from_route(
             route_payload,
             thread_key=str(base["thread_key"]),
