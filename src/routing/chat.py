@@ -164,6 +164,8 @@ _GENERIC_CATALOG_LISTING_MARKERS = (
     "do you have",
     "can omh do",
     "can oh-my-hermes do",
+    "explain",
+    "describe",
     "list",
     "show",
     "menu",
@@ -201,6 +203,11 @@ _DIRECT_ANSWER_STARTERS = (
     "explain ",
     "describe ",
     "tell me ",
+)
+_DIRECT_ANSWER_SOFT_PREFIXES = (
+    "just ",
+    "can you ",
+    "could you ",
 )
 _DIRECT_ANSWER_HOW_TO_STARTERS = (
     "how ",
@@ -1166,15 +1173,23 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
     text = message.strip().lower()
     if not text:
         return False
-    if _is_plain_setup_how_to_question(text):
+    direct_text = _strip_direct_answer_soft_prefix(text)
+    if _is_plain_setup_how_to_question(direct_text):
         return True
-    if _contains_direct_answer_blocker(text):
+    if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
-    if any(text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
         return True
-    if any(text.startswith(starter) for starter in _DIRECT_ANSWER_STARTERS):
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_STARTERS):
         return True
-    return any(keyword in text for keyword in _DIRECT_ANSWER_KEYWORDS) and "?" in text
+    return any(keyword in direct_text for keyword in _DIRECT_ANSWER_KEYWORDS) and "?" in text
+
+
+def _strip_direct_answer_soft_prefix(text: str) -> str:
+    for prefix in _DIRECT_ANSWER_SOFT_PREFIXES:
+        if text.startswith(prefix):
+            return text[len(prefix) :].lstrip()
+    return text
 
 
 def _is_plain_setup_how_to_question(text: str) -> bool:
