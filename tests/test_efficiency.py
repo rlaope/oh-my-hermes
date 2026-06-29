@@ -455,6 +455,17 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_phrase_match_cache_reuses_repeated_recommendation_pairs(self) -> None:
+        recommend_module._phrase_match.cache_clear()
+
+        first = recommend_module.recommend_skills("risky refactor", limit=2)
+        second = recommend_module.recommend_skills("risky refactor", limit=2)
+        cache_info = recommend_module._phrase_match.cache_info()
+
+        self.assertEqual(first, second)
+        self.assertGreater(cache_info.misses, 0)
+        self.assertGreater(cache_info.hits, 0)
+
     def test_catalog_capability_summary_cache_is_reused_without_payload_poisoning(self) -> None:
         contract_module._catalog_capability_summary_cached.cache_clear()
 
