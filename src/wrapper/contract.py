@@ -4409,15 +4409,16 @@ def _as_dict_list(value: object) -> list[dict[str, object]]:
 
 def _clone_static_dict(value: dict[str, object]) -> dict[str, object]:
     cloned = _clone_static_payload(value)
-    return cloned if isinstance(cloned, dict) else {}
+    return cloned if type(cloned) is dict else {}
 
 
 def _clone_static_payload(value: object) -> object:
-    if isinstance(value, dict):
+    value_type = type(value)
+    if value_type is dict:
         return {key: _clone_static_payload(item) for key, item in value.items()}
-    if isinstance(value, list):
+    if value_type is list:
         return [_clone_static_payload(item) for item in value]
-    if isinstance(value, tuple):
+    if value_type is tuple:
         return tuple(_clone_static_payload(item) for item in value)
     return value
 
