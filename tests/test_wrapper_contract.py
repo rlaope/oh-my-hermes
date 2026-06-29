@@ -1903,6 +1903,12 @@ class WrapperContractTests(unittest.TestCase):
             ("does OMH support memory cleanup?", "memory-curation-review", "prepare_memory_curation_review"),
             ("does OMH support voice commands?", "voice-operator", "prepare_voice_operator_card"),
             ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops", "prepare_github_event_ops_card"),
+            ("what can OMH do for research brief?", "research-brief", "run_hermes_research"),
+            ("what can OMH do for GitHub event ops?", "github-event-ops", "prepare_github_event_ops_card"),
+            ("what can OMH do for coding agents?", "executor-runtime-readiness", "prepare_executor_runtime_readiness"),
+            ("what can OMH do for reliability review?", "reliability-review", "prepare_reliability_review"),
+            ("what can OMH do for deploy and monitor?", "deploy-and-monitor", "prepare_deploy_monitor_plan"),
+            ("what can OMH do for CTO loop?", "cto-loop", "run_cto_loop"),
         )
 
         for message, selected_workflow, next_action in cases:

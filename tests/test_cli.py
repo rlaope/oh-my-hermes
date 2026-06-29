@@ -3271,6 +3271,42 @@ class CliTests(unittest.TestCase):
                 "prepare_research_department_plan",
                 "guard:research_department",
             ),
+            (
+                "what can OMH do for research brief?",
+                "research-brief",
+                "run_hermes_research",
+                "guard:research_brief",
+            ),
+            (
+                "what can OMH do for GitHub event ops?",
+                "github-event-ops",
+                "prepare_github_event_ops_card",
+                "guard:github_event_ops",
+            ),
+            (
+                "what can OMH do for coding agents?",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "what can OMH do for reliability review?",
+                "reliability-review",
+                "prepare_reliability_review",
+                "trigger:reliability review",
+            ),
+            (
+                "what can OMH do for deploy and monitor?",
+                "deploy-and-monitor",
+                "prepare_deploy_monitor_plan",
+                "trigger:deploy and monitor",
+            ),
+            (
+                "what can OMH do for CTO loop?",
+                "cto-loop",
+                "run_cto_loop",
+                "guard:cto_loop",
+            ),
         )
 
         for message, skill, next_action, guard_label in cases:
@@ -4614,6 +4650,12 @@ class CliTests(unittest.TestCase):
             ("what can OMH do for Discord gateway routing?", "gateway-intent-card", "gateway_intent", "prepare_gateway_intent_card"),
             ("what coding agents can OMH use?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("what can OMH do for research department?", "research-department", "research_department", "prepare_research_department_plan"),
+            ("what can OMH do for research brief?", "research-brief", "web_research", "run_hermes_research"),
+            ("what can OMH do for GitHub event ops?", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
+            ("what can OMH do for coding agents?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("what can OMH do for reliability review?", "reliability-review", "reliability_review", "prepare_reliability_review"),
+            ("what can OMH do for deploy and monitor?", "deploy-and-monitor", "deploy_monitor_plan", "prepare_deploy_monitor_plan"),
+            ("what can OMH do for CTO loop?", "cto-loop", "cto_loop", "run_cto_loop"),
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ops_review", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "strategy_brief", "prepare_strategy_brief"),

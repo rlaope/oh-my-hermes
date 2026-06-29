@@ -1683,6 +1683,10 @@ _CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
     }
 )
 _GITHUB_EVENT_OPS_PHRASES = (
+    "github event ops",
+    "github events",
+    "github issue ops",
+    "github pr ops",
     "github issue to pr",
     "issue to pr",
     "issue into a pr",
@@ -3412,6 +3416,8 @@ def _source_finder_guard_applies(
         return False
     if _research_department_guard_applies(normalized_query, query_tokens):
         return False
+    if _github_event_ops_guard_applies(normalized_query, query_tokens):
+        return False
     if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
         return False
     if _contains_phrase(normalized_query, _SOURCE_FINDER_EXCLUSION_PHRASES):
@@ -4126,6 +4132,8 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
         normalized_query,
         (
             "what coding agents can omh use",
+            "what can omh do for coding agents",
+            "what can omh do for coding agent",
             "which coding agents can omh use",
             "what coding agent can omh use",
             "which coding agent can omh use",
