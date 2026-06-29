@@ -231,14 +231,21 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
 
     def test_generic_omh_catalog_question_uses_fast_catalog_route(self) -> None:
-        decision = route_chat_message("what OMH workflows are available?", source="discord")
+        for message in (
+            "what OMH workflows are available?",
+            "what workflows can OMH do?",
+            "show me the OMH commands",
+            "show me OMH workflows",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
 
-        self.assertEqual(decision["action"], "dispatch")
-        self.assertEqual(decision["selected_skill"], "oh-my-hermes")
-        self.assertFalse(decision["explicit"])
-        self.assertEqual(decision["recommendations"][0]["skill"], "oh-my-hermes")
-        self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
-        self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertFalse(decision["explicit"])
+                self.assertEqual(decision["recommendations"][0]["skill"], "oh-my-hermes")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+                self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
 
     def test_explicit_skill_invocation_wins_over_router_feedback_card(self) -> None:
         for message, skill in (
