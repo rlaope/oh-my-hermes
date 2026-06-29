@@ -269,6 +269,96 @@ _DIRECT_ANSWER_CONCEPT_KEYWORDS = (
     "virtual environment",
     "workflow",
 )
+_DIRECT_ANSWER_ACKNOWLEDGEMENTS = (
+    "thanks",
+    "thank you",
+    "thx",
+    "ok",
+    "okay",
+    "got it",
+    "고마워",
+    "감사합니다",
+    "감사",
+    "ㅇㅋ",
+    "오케이",
+    "좋아",
+)
+_DIRECT_ANSWER_CONTEXT_QUESTIONS = (
+    "what happened?",
+    "what happened",
+    "what should i do next?",
+    "what should i do next",
+    "what did i just ask?",
+    "what did i just ask",
+    "how should i proceed?",
+    "how should i proceed",
+    "무슨 일이야?",
+    "무슨 일이야",
+    "다음은 뭐야?",
+    "다음은 뭐야",
+    "내가 방금 뭐라고 했지?",
+    "내가 방금 뭐라고 했지",
+    "어떻게 해야 해?",
+    "어떻게 해야 해",
+)
+_DIRECT_ANSWER_ERROR_HELP_STARTERS = (
+    "command not found",
+    "permission denied",
+    "modulenotfounderror",
+    "module not found",
+    "look at this log",
+    "explain this log",
+    "explain this stack trace",
+    "please explain this stack trace",
+    "why is this failing",
+)
+_DIRECT_ANSWER_KOREAN_ERROR_HELP_SUBJECTS = (
+    "이 오류",
+    "이 에러",
+    "이 로그",
+    "이 스택트레이스",
+)
+_DIRECT_ANSWER_KOREAN_ERROR_HELP_ACTIONS = (
+    "왜",
+    "해결",
+    "방법",
+    "알려줘",
+    "봐줘",
+    "설명",
+)
+_DIRECT_ANSWER_ERROR_HELP_HARD_BLOCKERS = (
+    "pr",
+    "issue",
+    "github",
+    "ci",
+    "repo",
+    "repository",
+    "codebase",
+    "readme",
+    "file",
+    "files",
+    "deploy",
+    "release",
+    "workflow",
+    "workflows",
+    "skill",
+    "skills",
+    "paper",
+    "pdf",
+    "image",
+    "poster",
+    "이슈",
+    "레포",
+    "저장소",
+    "리드미",
+    "파일",
+    "배포",
+    "릴리즈",
+    "워크플로",
+    "스킬",
+    "논문",
+    "이미지",
+)
 _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
     "omh",
     "oh-my-hermes",
@@ -1503,9 +1593,13 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
     direct_text = _strip_direct_answer_soft_prefix(text)
     if _is_plain_setup_how_to_question(direct_text):
         return True
+    if _is_plain_conversational_turn(direct_text):
+        return True
     if _is_direct_answer_concept_question(text, direct_text):
         return True
     if _is_plain_text_transform_question(text, direct_text):
+        return True
+    if _is_plain_error_or_log_help_question(text, direct_text):
         return True
     if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
@@ -1521,9 +1615,13 @@ def _is_fast_plain_direct_answer_question(message: str) -> bool:
     direct_text = _strip_direct_answer_soft_prefix(text)
     if _is_plain_setup_how_to_question(direct_text):
         return True
+    if _is_plain_conversational_turn(direct_text):
+        return True
     if _is_direct_answer_concept_question(text, direct_text):
         return True
     if _is_plain_text_transform_question(text, direct_text):
+        return True
+    if _is_plain_error_or_log_help_question(text, direct_text):
         return True
     if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
@@ -1554,6 +1652,24 @@ def _is_plain_setup_how_to_question(text: str) -> bool:
     if _contains_marker(text, _DIRECT_ANSWER_HARD_BLOCKERS):
         return False
     return any(keyword in text for keyword in _DIRECT_ANSWER_SETUP_KEYWORDS)
+
+
+def _is_plain_conversational_turn(text: str) -> bool:
+    compact = text.strip(" \t\r\n.!?。！？")
+    return compact in _DIRECT_ANSWER_ACKNOWLEDGEMENTS or text in _DIRECT_ANSWER_CONTEXT_QUESTIONS
+
+
+def _is_plain_error_or_log_help_question(text: str, direct_text: str) -> bool:
+    if _contains_marker(text, _DIRECT_ANSWER_ERROR_HELP_HARD_BLOCKERS) or _contains_marker(
+        direct_text,
+        _DIRECT_ANSWER_ERROR_HELP_HARD_BLOCKERS,
+    ):
+        return False
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_ERROR_HELP_STARTERS):
+        return True
+    if any(subject in direct_text for subject in _DIRECT_ANSWER_KOREAN_ERROR_HELP_SUBJECTS):
+        return any(action in direct_text for action in _DIRECT_ANSWER_KOREAN_ERROR_HELP_ACTIONS)
+    return False
 
 
 def _is_plain_text_transform_question(text: str, direct_text: str) -> bool:
