@@ -775,6 +775,40 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_chat_interaction_catalog_cache_is_reused_without_large_payload_poisoning(self) -> None:
+        contract_module._build_chat_interaction_payload_cached.cache_clear()
+
+        first = contract_module.build_chat_interaction_payload(
+            "what OMH workflows are available?",
+            source="discord",
+        )
+        state = first["chat_response"]["state"]
+        state["skill_picker"]["options"][0]["payload"]["skill"] = "mutated"
+        state["skill_picker"]["groups"][0]["options"][0]["id"] = "mutated"
+        state["context_primer"]["workflow_context_cards"][0]["user_examples"][0] = "mutated"
+        state["capability_summary"]["lanes"][0]["representative_playbooks"][0]["first_stage"]["id"] = "mutated"
+        first["chat_response"]["actions"][0]["payload"]["options"][0]["payload"]["skill"] = "mutated"
+        first["chat_response"]["messenger_rendering"]["body_blocks"][0]["text"] = "mutated"
+
+        second = contract_module.build_chat_interaction_payload(
+            "what OMH workflows are available?",
+            source="discord",
+        )
+        second_state = second["chat_response"]["state"]
+        cache_info = contract_module._build_chat_interaction_payload_cached.cache_info()
+
+        self.assertNotEqual(second_state["skill_picker"]["options"][0]["payload"]["skill"], "mutated")
+        self.assertNotEqual(second_state["skill_picker"]["groups"][0]["options"][0]["id"], "mutated")
+        self.assertNotEqual(second_state["context_primer"]["workflow_context_cards"][0]["user_examples"][0], "mutated")
+        self.assertNotEqual(
+            second_state["capability_summary"]["lanes"][0]["representative_playbooks"][0]["first_stage"]["id"],
+            "mutated",
+        )
+        self.assertNotEqual(second["chat_response"]["actions"][0]["payload"]["options"][0]["payload"]["skill"], "mutated")
+        self.assertNotEqual(second["chat_response"]["messenger_rendering"]["body_blocks"][0]["text"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_chat_interaction_cache_skips_event_metadata_calls(self) -> None:
         contract_module._build_chat_interaction_payload_cached.cache_clear()
 
