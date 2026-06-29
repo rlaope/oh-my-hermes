@@ -509,6 +509,24 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_routing_phrase_presence_cache_reuses_guard_checks(self) -> None:
+        policy_module._contains_phrase.cache_clear()
+
+        first = policy_module._contains_phrase(
+            "this refactor feels risky",
+            policy_module._RISKY_REFACTOR_RISK_PHRASES,
+        )
+        second = policy_module._contains_phrase(
+            "this refactor feels risky",
+            policy_module._RISKY_REFACTOR_RISK_PHRASES,
+        )
+        cache_info = policy_module._contains_phrase.cache_info()
+
+        self.assertTrue(first)
+        self.assertEqual(first, second)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_normalized_phrase_cache_reuses_folded_text(self) -> None:
         localization_module._fold_for_match.cache_clear()
 
