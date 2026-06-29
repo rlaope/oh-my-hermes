@@ -32,6 +32,9 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
         self.assertEqual(payload["summary"]["routing_precision_catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["routing_precision_generic_ack_count"], 0)
+        self.assertEqual(payload["summary"]["routing_precision_intervention_cases"], 6)
+        self.assertEqual(payload["summary"]["routing_precision_intervention_passing_count"], 6)
+        self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
         self.assertEqual(hermes_ux_quality_errors(payload), [])
 
         gates = {gate["id"]: gate for gate in payload["gates"]}
@@ -62,6 +65,7 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertIn("generic ack 0", stdout)
         self.assertIn("route mismatches 0", stdout)
         self.assertIn("precision overroutes 0", stdout)
+        self.assertIn("missed interventions 0", stdout)
 
         status, stdout, stderr = run_cli(["demo", "hermes-ux-quality", "--json"], output_json=False)
 

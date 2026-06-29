@@ -135,6 +135,9 @@ def build_hermes_ux_quality_demo(
             "routing_precision_overroute_count": precision_summary.get("overroute_count", 0),
             "routing_precision_catalog_picker_count": precision_summary.get("catalog_picker_count", 0),
             "routing_precision_generic_ack_count": precision_summary.get("generic_ack_count", 0),
+            "routing_precision_intervention_cases": precision_summary.get("intervention_case_count", 0),
+            "routing_precision_intervention_passing_count": precision_summary.get("intervention_passing_count", 0),
+            "routing_precision_missed_intervention_count": precision_summary.get("missed_intervention_count", 0),
         },
         "user_story": [
             "Natural chat requests route to an OMH workflow instead of a vague generic answer.",
@@ -142,6 +145,7 @@ def build_hermes_ux_quality_demo(
             "Plugin/context awareness agrees with the router before generic tools are used.",
             "Catalog questions open an OMH picker without asking the user to approve shell commands.",
             "Plain help and file lookup questions stay out of OMH workflow routing when OMH is not needed.",
+            "Real OMH-shaped requests still route to the expected workflow, picker, or context brief.",
         ],
         "gates": gates,
         "claim_boundary": (
@@ -166,7 +170,8 @@ def format_hermes_ux_quality_summary(payload: Mapping[str, object]) -> str:
             f"generic ack {summary.get('chat_card_generic_ack_count', 0)}; "
             f"route mismatches {summary.get('route_hint_mismatch_count', 0)}; "
             f"context {summary.get('context_brief_passing_count', 0)}/{summary.get('context_brief_cases', 0)}; "
-            f"precision overroutes {summary.get('routing_precision_overroute_count', 0)}"
+            f"precision overroutes {summary.get('routing_precision_overroute_count', 0)}; "
+            f"missed interventions {summary.get('routing_precision_missed_intervention_count', 0)}"
         ),
         "",
         "What users feel:",
@@ -296,9 +301,11 @@ def _routing_precision_summary(payload: Mapping[str, object]) -> str:
     summary = _nested(payload, "summary")
     return (
         f"{summary.get('passing_count', 0)}/{summary.get('case_count', 0)} negative-control cases; "
+        f"{summary.get('intervention_passing_count', 0)}/{summary.get('intervention_case_count', 0)} interventions; "
         f"overroutes {summary.get('overroute_count', 0)}; "
         f"catalog pickers {summary.get('catalog_picker_count', 0)}; "
-        f"generic ack {summary.get('generic_ack_count', 0)}"
+        f"generic ack {summary.get('generic_ack_count', 0)}; "
+        f"missed interventions {summary.get('missed_intervention_count', 0)}"
     )
 
 
