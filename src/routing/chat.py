@@ -17,7 +17,7 @@ from .policy import (
     is_ambiguous_scores,
     meets_confidence_threshold,
 )
-from .recommend import recommend_skills
+from .recommend import recommendation_for_definition, recommend_skills
 from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
 from ..learning_candidate import build_learning_candidate_card
@@ -510,6 +510,54 @@ def _catalog_fast_path_decision(
 ) -> _CatalogFastPathResult:
     direct_picker = _direct_picker_alias(routing_message)
     catalog_question = False if direct_picker else is_skill_catalog_question(routing_message)
+    exact_skill = (
+        _specific_capability_exact_id_hit(routing_message)
+        if catalog_question and not _is_broad_capability_catalog_question(routing_message)
+        else None
+    )
+    if exact_skill is not None:
+        definition = _skill_definition_by_name(exact_skill)
+        recommendation = recommendation_for_definition(
+            definition,
+            message,
+            matched=("catalog_question", f"name:{exact_skill}"),
+            score=12,
+            why=f"Matched exact OMH capability `{exact_skill}` from catalog metadata.",
+        )
+        reason = (
+            f"Specific OMH capability question matched `{exact_skill}`; "
+            "show that workflow card instead of the generic workflow picker."
+        )
+        selected_harness = primary_harness_for_skill(exact_skill)
+        return _CatalogFastPathResult(
+            decision=ChatRouteDecision(
+                schema_version=1,
+                source=source,
+                action="dispatch",
+                selected_skill=exact_skill,
+                selected_harness=selected_harness,
+                candidate_skill=exact_skill,
+                candidate_harness=selected_harness,
+                confidence="high",
+                score=12,
+                threshold=min_confidence,
+                explicit=False,
+                ambiguous=False,
+                reason=reason,
+                clarification="",
+                routing_prompt=_routing_prompt("dispatch", exact_skill, exact_skill, reason, message),
+                task_card=None,
+                workflow_route_plan=build_workflow_route_plan(
+                    message,
+                    [recommendation],
+                    selected_skill=exact_skill,
+                    action="dispatch",
+                ),
+                learning_candidate_card=None,
+                recommendations=(recommendation,),
+            ),
+            catalog_question=catalog_question,
+        )
     catalog_picker = (
         not direct_picker
         and catalog_question
@@ -600,10 +648,15 @@ def _router_picker_recommendation(query: str, *, matched: tuple[str, ...], score
 
 @lru_cache(maxsize=1)
 def _router_skill_definition() -> SkillDefinition:
+    return _skill_definition_by_name(_ROUTER_SKILL)
+
+
+@lru_cache(maxsize=128)
+def _skill_definition_by_name(name: str) -> SkillDefinition:
     for definition in routable_definitions():
-        if definition.name == _ROUTER_SKILL:
+        if definition.name == name:
             return definition
-    raise RuntimeError("oh-my-hermes router skill definition is missing")
+    raise RuntimeError(f"{name} skill definition is missing")
 
 
 def _task_card_overrides_explicit_invocation(
@@ -851,6 +904,21 @@ def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
             selected.append(skill)
         selected_ranges.append((start, end))
     return tuple(selected)
+
+
+def _specific_capability_exact_id_hit(message: str) -> str | None:
+    text = message.strip().lower()
+    hits: list[str] = []
+    for phrase in _specific_capability_phrase_map():
+        if "-" not in phrase.phrase and "_" not in phrase.phrase:
+            continue
+        if phrase.phrase not in (phrase.skill, phrase.skill.replace("-", "_")):
+            continue
+        if not _specific_capability_phrase_matches(text, phrase):
+            continue
+        if phrase.skill not in hits:
+            hits.append(phrase.skill)
+    return hits[0] if len(hits) == 1 else None
 
 
 def _compile_specific_capability_phrase(phrase: str) -> re.Pattern[str]:

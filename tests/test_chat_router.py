@@ -835,6 +835,28 @@ class ChatRouterTests(unittest.TestCase):
                     self.assertEqual(decision["selected_skill"], skill)
                     self.assertEqual(decision["selected_harness"], primary_harness_for_skill(skill))
 
+    def test_exact_skill_id_capability_questions_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        with mock.patch.object(
+            chat_router_impl,
+            "recommend_skills",
+            side_effect=AssertionError("exact workflow-id capability questions should use the catalog fast path"),
+        ):
+            decision = route_chat_message("what can OMH do for paper-learning?", source="discord")
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "paper-learning")
+        self.assertEqual(decision["selected_harness"], "paper-learning")
+        self.assertEqual(decision["confidence"], "high")
+        self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_paper_learning")
+        self.assertEqual(
+            decision["recommendations"][0]["matched"],
+            ["catalog_question", "name:paper-learning"],
+        )
+        self.assertIn("exact OMH capability", decision["recommendations"][0]["why"])
+
     def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
         for phrase in ("plan", "team", "ask"):
             with self.subTest(phrase=phrase):
