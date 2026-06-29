@@ -11,6 +11,7 @@ load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_skill_templates
 from omh.routing import recommend as recommend_module
 from omh.skills import render as render_module
+from omh.wrapper import contract as contract_module
 from omh.release import (
     AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
     AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT,
@@ -426,6 +427,45 @@ class EfficiencyContractTests(unittest.TestCase):
         cache_info = recommend_module._prepared_routable_definitions.cache_info()
 
         self.assertNotEqual(second[0]["skill"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_catalog_capability_summary_cache_is_reused_without_payload_poisoning(self) -> None:
+        contract_module._catalog_capability_summary_cached.cache_clear()
+
+        first = contract_module._catalog_capability_summary()
+        first["lanes"][0]["id"] = "mutated"
+        second = contract_module._catalog_capability_summary()
+        cache_info = contract_module._catalog_capability_summary_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertNotEqual(second["lanes"][0]["id"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_context_primer_cache_is_reused_without_payload_poisoning(self) -> None:
+        contract_module._context_primer_state_cached.cache_clear()
+
+        first = contract_module._context_primer_state()
+        first["workflow_groups"][0]["id"] = "mutated"
+        second = contract_module._context_primer_state()
+        cache_info = contract_module._context_primer_state_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertNotEqual(second["workflow_groups"][0]["id"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_skill_picker_family_body_lines_cache_is_reused_without_list_poisoning(self) -> None:
+        contract_module._skill_picker_family_body_lines_cached.cache_clear()
+
+        first = contract_module._skill_picker_family_body_lines()
+        first[0] = "mutated"
+        second = contract_module._skill_picker_family_body_lines()
+        cache_info = contract_module._skill_picker_family_body_lines_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertNotEqual(second[0], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
