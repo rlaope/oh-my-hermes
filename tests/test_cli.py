@@ -2012,75 +2012,86 @@ class CliTests(unittest.TestCase):
         )
 
     def test_release_product_readiness_cli_summarizes_product_story(self) -> None:
-        status, stdout, stderr = run_cli(
-            ["release", "product-readiness", "--version", "v1.0.1", "--omh-command", "/tmp/omh"],
-            output_json=False,
-        )
+        with TemporaryDirectory() as tmp:
+            base = ["--omh-home", str(Path(tmp) / ".omh"), "--hermes-home", str(Path(tmp) / ".hermes")]
+            status, stdout, stderr = run_cli(
+                base + ["release", "product-readiness", "--version", "v1.0.1", "--omh-command", "/tmp/omh"],
+                output_json=False,
+            )
 
-        self.assertEqual(status, 0, stderr)
-        self.assertEqual(stderr, "")
-        self.assertIn("OMH product readiness for 1.0.1", stdout)
-        self.assertIn("Status: ready", stdout)
-        self.assertIn("Score: 100/100", stdout)
-        self.assertIn("skill_content: passed", stdout)
-        self.assertIn("use_cases: passed", stdout)
-        self.assertIn("grounded_score: passed", stdout)
-        self.assertIn("chat_card_coverage: passed", stdout)
-        self.assertIn("route_hint_alignment: passed", stdout)
-        self.assertIn("context_brief_coverage: passed", stdout)
-        self.assertIn("routing_precision: passed", stdout)
-        self.assertIn("hermes_ux_quality: passed", stdout)
-        self.assertIn("parity_contracts: passed", stdout)
-        self.assertIn("release_checklist: passed", stdout)
-        self.assertIn("Boundary:", stdout)
-        with self.assertRaises(json.JSONDecodeError):
-            json.loads(stdout)
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("OMH product readiness for 1.0.1", stdout)
+            self.assertIn("Status: ready", stdout)
+            self.assertIn("Score: 100/100", stdout)
+            self.assertIn("Warnings: 1", stdout)
+            self.assertIn("use_cases: passed", stdout)
+            self.assertIn("local artifact store not_written", stdout)
+            self.assertIn("local_artifact_store: not_written", stdout)
+            self.assertIn("cases artifact --all --write", stdout)
+            self.assertIn("skill_content: passed", stdout)
+            self.assertIn("grounded_score: passed", stdout)
+            self.assertIn("chat_card_coverage: passed", stdout)
+            self.assertIn("route_hint_alignment: passed", stdout)
+            self.assertIn("context_brief_coverage: passed", stdout)
+            self.assertIn("routing_precision: passed", stdout)
+            self.assertIn("hermes_ux_quality: passed", stdout)
+            self.assertIn("parity_contracts: passed", stdout)
+            self.assertIn("release_checklist: passed", stdout)
+            self.assertIn("Boundary:", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
 
-        status, stdout, stderr = run_cli(
-            ["release", "product-readiness", "--version", "1.0.1", "--json"],
-            output_json=False,
-        )
+            status, stdout, stderr = run_cli(
+                base + ["release", "product-readiness", "--version", "1.0.1", "--json"],
+                output_json=False,
+            )
 
-        self.assertEqual(status, 0, stderr)
-        self.assertEqual(stderr, "")
-        payload = json.loads(stdout)
-        self.assertEqual(payload["schema_version"], "omh_product_readiness/v1")
-        self.assertEqual(payload["status"], "ready")
-        self.assertEqual(payload["score"], 100)
-        self.assertEqual(payload["blocking_failures"], 0)
-        gates = {gate["id"]: gate for gate in payload["gates"]}
-        self.assertEqual(
-            set(gates),
-            {
-                "skill_content",
-                "use_cases",
-                "grounded_score",
-                "chat_card_coverage",
-                "route_hint_alignment",
-                "context_brief_coverage",
-                "routing_precision",
-                "hermes_ux_quality",
-                "parity_contracts",
-                "release_checklist",
-            },
-        )
-        self.assertEqual(gates["grounded_score"]["status"], "passed")
-        self.assertIn("28/28 scenarios at 10/10", gates["grounded_score"]["summary"])
-        self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
-        self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
-        self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
-        self.assertIn("53/53 route hints aligned", gates["route_hint_alignment"]["summary"])
-        self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
-        self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
-        self.assertEqual(gates["routing_precision"]["status"], "passed")
-        self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
-        self.assertIn("19/19 interventions", gates["routing_precision"]["summary"])
-        self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
-        self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
-        self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
-        self.assertIn("5/5 UX gates passing", gates["hermes_ux_quality"]["summary"])
-        self.assertEqual(gates["parity_contracts"]["status"], "passed")
-        self.assertIn("not run the release checklist", payload["boundary"])
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_product_readiness/v1")
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["score"], 100)
+            self.assertEqual(payload["blocking_failures"], 0)
+            self.assertEqual(payload["local_artifact_store"], "not_written")
+            self.assertIn("local_artifact_store: not_written", payload["warnings"])
+            gates = {gate["id"]: gate for gate in payload["gates"]}
+            self.assertEqual(
+                set(gates),
+                {
+                    "skill_content",
+                    "use_cases",
+                    "grounded_score",
+                    "chat_card_coverage",
+                    "route_hint_alignment",
+                    "context_brief_coverage",
+                    "routing_precision",
+                    "hermes_ux_quality",
+                    "parity_contracts",
+                    "release_checklist",
+                },
+            )
+            self.assertEqual(gates["use_cases"]["status"], "passed")
+            self.assertIn("local artifact store not_written", gates["use_cases"]["summary"])
+            self.assertEqual(gates["use_cases"]["warnings"], ["local_artifact_store: not_written"])
+            self.assertEqual(gates["grounded_score"]["status"], "passed")
+            self.assertIn("28/28 scenarios at 10/10", gates["grounded_score"]["summary"])
+            self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
+            self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
+            self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
+            self.assertIn("53/53 route hints aligned", gates["route_hint_alignment"]["summary"])
+            self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
+            self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
+            self.assertEqual(gates["routing_precision"]["status"], "passed")
+            self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
+            self.assertIn("19/19 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
+            self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
+            self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
+            self.assertIn("5/5 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertEqual(gates["parity_contracts"]["status"], "passed")
+            self.assertIn("not run the release checklist", payload["boundary"])
 
         status, stdout, stderr = run_cli(["release", "skill-content-smoke"], output_json=False)
 

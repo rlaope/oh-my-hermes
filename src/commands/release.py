@@ -123,7 +123,11 @@ def cmd_release_skill_content_smoke(args: argparse.Namespace) -> int:
 
 def cmd_release_product_readiness(args: argparse.Namespace) -> int:
     try:
-        payload = product_readiness_report(version=args.version or __version__, omh_command=args.omh_command)
+        payload = product_readiness_report(
+            version=args.version or __version__,
+            omh_command=args.omh_command,
+            paths=_paths(args),
+        )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     if _wants_json(args):

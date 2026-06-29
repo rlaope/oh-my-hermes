@@ -538,13 +538,16 @@ def product_readiness_report(
     *,
     version: str = __version__,
     omh_command: str = "omh",
+    paths: OmhPaths | None = None,
 ) -> dict[str, object]:
     release_version = _normalize_release_version(version)
+    resolved_paths = paths or OmhPaths(omh_home=Path("~/.omh").expanduser(), hermes_home=Path("~/.hermes").expanduser())
     evidence = _build_release_quality_evidence(release_version=release_version, omh_command=omh_command)
     return _product_readiness_report_from_evidence(
         release_version=release_version,
         omh_command=omh_command,
         evidence=evidence,
+        paths=resolved_paths,
     )
 
 
@@ -585,6 +588,7 @@ def _product_readiness_report_from_evidence(
     release_version: str,
     omh_command: str,
     evidence: ReleaseQualityEvidence,
+    paths: OmhPaths,
 ) -> dict[str, object]:
     omh_display = _shell_word(omh_command)
     skill_content = evidence.skill_content
@@ -596,6 +600,10 @@ def _product_readiness_report_from_evidence(
     routing_precision = evidence.routing_precision
     hermes_ux = evidence.hermes_ux
     checklist = evidence.checklist
+    use_case_readiness_payload = use_case_readiness(paths)
+    use_case_readiness_failures = _blocking_gate_messages(use_case_readiness_payload)
+    use_case_readiness_warnings = _warning_gate_messages(use_case_readiness_payload)
+    local_store_status = _release_local_store_status(use_case_readiness_payload)
 
     checklist_items = checklist.get("items", [])
     checklist_ids = {
@@ -664,17 +672,18 @@ def _product_readiness_report_from_evidence(
         _product_readiness_gate(
             "use_cases",
             "G1-G10 application use cases",
-            "passed" if skill_content.get("use_case_readiness_blocking_failures") == 0 else "failed",
+            "passed" if use_case_readiness_payload.get("blocking_failures") == 0 else "failed",
             True,
             (
-                f"score {skill_content.get('use_case_readiness_score')}/100; "
-                f"blocking {skill_content.get('use_case_readiness_blocking_failures')}; "
-                f"warnings {skill_content.get('use_case_readiness_warning_count')}"
+                f"score {use_case_readiness_payload.get('score')}/100; "
+                f"blocking {use_case_readiness_payload.get('blocking_failures')}; "
+                f"warnings {use_case_readiness_payload.get('warning_count')}; "
+                f"local artifact store {local_store_status}"
             ),
             "omh cases readiness --json",
-            _string_list(skill_content.get("use_case_readiness_failures")),
-            _string_list(skill_content.get("use_case_readiness_warnings")),
-            str(skill_content.get("use_case_readiness_boundary", "")),
+            use_case_readiness_failures,
+            use_case_readiness_warnings,
+            str(use_case_readiness_payload.get("boundary", "")),
         ),
         _product_readiness_gate(
             "grounded_score",
@@ -796,7 +805,12 @@ def _product_readiness_report_from_evidence(
         ),
     ]
     blocking_failures = [gate for gate in gates if gate["blocking"] and gate["status"] != "passed"]
-    warning_count = sum(len(gate.get("warnings", [])) for gate in gates)
+    warnings = [
+        str(warning)
+        for gate in gates
+        for warning in gate.get("warnings", [])
+        if warning
+    ]
     return {
         "schema_version": PRODUCT_READINESS_SCHEMA,
         "status": "ready" if not blocking_failures else "needs_attention",
@@ -805,9 +819,11 @@ def _product_readiness_report_from_evidence(
         "observed": True,
         "version": release_version,
         "blocking_failures": len(blocking_failures),
-        "warning_count": warning_count,
+        "warning_count": len(warnings),
+        "warnings": warnings,
+        "local_artifact_store": local_store_status,
         "gates": gates,
-        "next_actions": _product_readiness_next_actions(blocking_failures, warning_count),
+        "next_actions": _product_readiness_next_actions(blocking_failures, warnings),
         "boundary": (
             "Product readiness proves deterministic local OMH package and product contracts only. "
             "It does not run the release checklist, mutate Hermes, prove live Hermes chat selection, "
@@ -1605,7 +1621,7 @@ def _string_list(value: object) -> list[str]:
     return [str(item) for item in value]
 
 
-def _product_readiness_next_actions(blocking_failures: Sequence[Mapping[str, object]], warning_count: int) -> list[str]:
+def _product_readiness_next_actions(blocking_failures: Sequence[Mapping[str, object]], warnings: Sequence[str]) -> list[str]:
     if blocking_failures:
         return [
             "Fix blocking product readiness gates, then rerun `omh release product-readiness --json`.",
@@ -1617,7 +1633,9 @@ def _product_readiness_next_actions(blocking_failures: Sequence[Mapping[str, obj
         "Run one live Hermes tap smoke from the target profile before treating Hermes runtime visibility as observed.",
         "Use `omh release product-readiness --json` when a wrapper or release note needs the full machine-readable payload.",
     ]
-    if warning_count:
+    if any(warning.startswith("local_artifact_store:") for warning in warnings):
+        actions.insert(0, "Optional: write local use-case artifacts with `omh cases artifact --all --write --json`.")
+    elif warnings:
         actions.insert(0, "Review non-blocking warnings; they should be acknowledged but do not block local product readiness.")
     return actions
 
@@ -1637,6 +1655,7 @@ def release_evidence_bundle(
         release_version=release_version,
         omh_command=omh_command,
         evidence=quality_evidence,
+        paths=resolved_paths,
     )
     skill_content = quality_evidence.skill_content
     use_cases = use_case_readiness(resolved_paths)
