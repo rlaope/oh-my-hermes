@@ -515,6 +515,11 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     if limit < 1:
         raise ValueError("recommend --limit must be at least 1")
 
+    return [recommendation.to_dict() for recommendation in _recommend_skills_cached(query, limit, apply_guardrails)]
+
+
+@lru_cache(maxsize=2048)
+def _recommend_skills_cached(query: str, limit: int, apply_guardrails: bool) -> tuple[Recommendation, ...]:
     routing_text = prepare_routing_text(_strip_path_like_fragments(query))
     normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
@@ -541,12 +546,12 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
             matches = [recommendation for recommendation in matches if recommendation.skill != "img-summary"]
             if not matches:
                 matches = _fallback_recommendations(definitions, query)
-                return [recommendation.to_dict() for recommendation in matches[:limit]]
+                return tuple(matches[:limit])
     if not matches:
         matches = _fallback_recommendations(definitions, query)
-        return [recommendation.to_dict() for recommendation in matches[:limit]]
+        return tuple(matches[:limit])
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
-    return [recommendation.to_dict() for recommendation in matches[:limit]]
+    return tuple(matches[:limit])
 
 
 @lru_cache(maxsize=1)

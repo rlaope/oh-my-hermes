@@ -423,9 +423,11 @@ class EfficiencyContractTests(unittest.TestCase):
 
     def test_recommendation_metadata_cache_is_reused_without_payload_poisoning(self) -> None:
         recommend_module._prepared_routable_definitions.cache_clear()
+        recommend_module._recommend_skills_cached.cache_clear()
 
         first = recommend_module.recommend_skills("risky refactor", limit=2)
         first[0]["skill"] = "mutated"
+        recommend_module._recommend_skills_cached.cache_clear()
         second = recommend_module.recommend_skills("risky refactor", limit=2)
         cache_info = recommend_module._prepared_routable_definitions.cache_info()
 
@@ -433,10 +435,26 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
-    def test_routing_guard_cache_is_reused_for_repeated_recommendations(self) -> None:
-        policy_module._active_routing_guard_rules_cached.cache_clear()
+    def test_recommendation_result_cache_is_reused_without_payload_poisoning(self) -> None:
+        recommend_module._recommend_skills_cached.cache_clear()
 
         first = recommend_module.recommend_skills("risky refactor", limit=2)
+        first[0]["skill"] = "mutated"
+        first[0]["matched"].append("mutated")
+        second = recommend_module.recommend_skills("risky refactor", limit=2)
+        cache_info = recommend_module._recommend_skills_cached.cache_info()
+
+        self.assertNotEqual(second[0]["skill"], "mutated")
+        self.assertNotIn("mutated", second[0]["matched"])
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_routing_guard_cache_is_reused_for_repeated_recommendations(self) -> None:
+        policy_module._active_routing_guard_rules_cached.cache_clear()
+        recommend_module._recommend_skills_cached.cache_clear()
+
+        first = recommend_module.recommend_skills("risky refactor", limit=2)
+        recommend_module._recommend_skills_cached.cache_clear()
         second = recommend_module.recommend_skills("risky refactor", limit=2)
         cache_info = policy_module._active_routing_guard_rules_cached.cache_info()
 
@@ -484,8 +502,10 @@ class EfficiencyContractTests(unittest.TestCase):
 
     def test_phrase_match_cache_reuses_repeated_recommendation_pairs(self) -> None:
         recommend_module._phrase_match.cache_clear()
+        recommend_module._recommend_skills_cached.cache_clear()
 
         first = recommend_module.recommend_skills("risky refactor", limit=2)
+        recommend_module._recommend_skills_cached.cache_clear()
         second = recommend_module.recommend_skills("risky refactor", limit=2)
         cache_info = recommend_module._phrase_match.cache_info()
 
