@@ -29,6 +29,7 @@ from omh.release import (
     STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT,
     STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT,
 )
+from omh.capabilities import families as families_module
 from omh.capabilities.skills import skill_capabilities
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh import awareness as awareness_module
@@ -846,6 +847,40 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIsNot(first, second)
         self.assertNotEqual(second["workflow_groups"][0]["id"], "mutated")
         self.assertNotEqual(second["workflow_context_cards"][0]["user_examples"][0], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_capability_family_projection_cache_is_reused_without_payload_poisoning(self) -> None:
+        families_module._capability_family_projection_cached.cache_clear()
+
+        first = families_module.capability_family_projection()
+        first["families"][0]["id"] = "mutated"
+        first["families"][0]["primary_workflows"][0] = "mutated"
+        workflow_key = next(iter(first["workflow_to_family"]))
+        first["workflow_to_family"][workflow_key] = "mutated"
+        first["family_order"][0] = "mutated"
+
+        second = families_module.capability_family_projection()
+        cache_info = families_module._capability_family_projection_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertNotEqual(second["families"][0]["id"], "mutated")
+        self.assertNotEqual(second["families"][0]["primary_workflows"][0], "mutated")
+        self.assertNotEqual(second["workflow_to_family"][workflow_key], "mutated")
+        self.assertNotEqual(second["family_order"][0], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_capability_family_cards_cache_is_reused_without_payload_poisoning(self) -> None:
+        families_module._capability_family_projection_cached.cache_clear()
+
+        first = families_module.capability_family_cards()
+        first[0]["primary_workflows"][0] = "mutated"
+        second = families_module.capability_family_cards()
+        cache_info = families_module._capability_family_projection_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertNotEqual(second[0]["primary_workflows"][0], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
