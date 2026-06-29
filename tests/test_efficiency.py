@@ -1149,9 +1149,10 @@ class EfficiencyContractTests(unittest.TestCase):
         route_plan_module._build_workflow_route_plan_cached.cache_clear()
         route_plan_module._routable_definition_names.cache_clear()
 
-        recommendations = recommend_module.recommend_skills("risky refactor", limit=10)
+        message = "risky refactor with implementation and review"
+        recommendations = recommend_module.recommend_skills(message, limit=10)
         first = route_plan_module.build_workflow_route_plan(
-            "risky refactor",
+            message,
             recommendations,
             selected_skill="ralplan",
             action="dispatch",
@@ -1162,7 +1163,7 @@ class EfficiencyContractTests(unittest.TestCase):
         first["steps"][0]["matched"].append("mutated")
 
         second = route_plan_module.build_workflow_route_plan(
-            "risky refactor",
+            message,
             recommendations,
             selected_skill="ralplan",
             action="dispatch",

@@ -1726,6 +1726,16 @@ selected_workflow=ultraprocess
         self.assertIn("routing guidance only", route_plan["claim_boundary"])
         self.assertTrue(all(step["status"] == "prepared_not_observed" for step in route_plan["steps"]))
 
+    def test_route_plan_does_not_treat_prepare_as_pr_delivery_signal(self) -> None:
+        decision = route_chat_message("prepare source notes for a research brief", source="discord", limit=8)
+        public_payload = public_route_payload(decision)
+        route_plan = public_payload.get("workflow_route_plan")
+
+        self.assertEqual(decision["selected_skill"], "research-brief")
+        if route_plan is not None:
+            self.assertNotIn("deliver", route_plan["stages"])
+            self.assertNotIn("ultraprocess", [step["skill"] for step in route_plan["steps"]])
+
     def test_product_bug_route_plan_triages_before_coding_and_review(self) -> None:
         decision = route_chat_message(
             "결제 실패 이슈가 자주 나와. 재현 계획 세우고 codex로 고쳐서 리뷰까지 추적해줘",
