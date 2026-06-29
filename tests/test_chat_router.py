@@ -205,6 +205,8 @@ class ChatRouterTests(unittest.TestCase):
         for message in (
             "how do I create a virtualenv in Python?",
             "how to create a Python virtual environment?",
+            "just explain Python virtualenv",
+            "can you explain Python virtualenv",
             "summarize this paragraph in Korean",
             "what is OAuth in simple terms?",
         ):
@@ -217,6 +219,16 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["confidence"], "low")
                 self.assertIn("answer directly", decision["reason"])
                 self.assertIn("Answer directly in the current chat", decision["clarification"])
+
+    def test_soft_prefix_direct_answer_keeps_workflow_blockers(self) -> None:
+        decision = route_chat_message("just explain OMH workflows", source="discord")
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+        self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+
+        paper = route_chat_message("can you explain this paper at expert level without shortening it", source="discord")
+        self.assertEqual(paper["action"], "dispatch")
+        self.assertEqual(paper["selected_skill"], "paper-learning")
 
     def test_below_threshold_chat_clarifies_before_dispatch(self) -> None:
         decision = route_chat_message("architecture", min_confidence="high")

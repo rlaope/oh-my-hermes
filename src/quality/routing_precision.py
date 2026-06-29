@@ -78,6 +78,13 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "direct_answer",
     ),
     RoutingPrecisionCase(
+        "soft-prefix-python-help",
+        "Soft-prefix Python explanation stays direct",
+        "just explain Python virtualenv",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
         "paragraph-summary",
         "Small text transform stays direct",
         "summarize this paragraph in Korean",

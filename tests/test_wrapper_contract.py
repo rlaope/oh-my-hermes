@@ -1514,6 +1514,8 @@ class WrapperContractTests(unittest.TestCase):
     def test_plain_how_to_and_text_transform_use_direct_answer_card(self) -> None:
         for message in (
             "how do I create a virtualenv in Python?",
+            "just explain Python virtualenv",
+            "can you explain Python virtualenv",
             "summarize this paragraph in Korean",
             "what is OAuth in simple terms?",
         ):
