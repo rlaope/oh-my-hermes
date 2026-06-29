@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from functools import lru_cache
 import hashlib
 from typing import Any
 
@@ -4177,6 +4179,11 @@ def _skill_picker_body(*, catalog_question: bool) -> str:
 
 
 def _skill_picker_family_body_lines() -> list[str]:
+    return list(_skill_picker_family_body_lines_cached())
+
+
+@lru_cache(maxsize=1)
+def _skill_picker_family_body_lines_cached() -> tuple[str, ...]:
     lines = []
     for family in capability_family_cards():
         workflows = _as_string_list(family.get("primary_workflows", []))[:4]
@@ -4185,7 +4192,7 @@ def _skill_picker_family_body_lines() -> list[str]:
         if executor_choices:
             workflow_text = f"{workflow_text}; executors: {', '.join(executor_choices)}"
         lines.append(f"- {family.get('label', '')}: {workflow_text}.")
-    return lines
+    return tuple(lines)
 
 
 def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
@@ -4305,6 +4312,11 @@ def _compact_picker_option(option: dict[str, object]) -> dict[str, object]:
 
 
 def _context_primer_state() -> dict[str, object]:
+    return deepcopy(_context_primer_state_cached())
+
+
+@lru_cache(maxsize=1)
+def _context_primer_state_cached() -> dict[str, object]:
     installed = {definition.name for definition in installable_skill_definitions()}
     groups = []
     for group in _CONTEXT_PRIMER_GROUPS:
@@ -4335,6 +4347,11 @@ def _context_primer_state() -> dict[str, object]:
 
 
 def _catalog_capability_summary() -> dict[str, object]:
+    return deepcopy(_catalog_capability_summary_cached())
+
+
+@lru_cache(maxsize=1)
+def _catalog_capability_summary_cached() -> dict[str, object]:
     from ..capabilities.registry import capability_summary
 
     summary = capability_summary()
