@@ -1511,6 +1511,28 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("answer:file_lookup", actions)
                 self.assertTrue(actions["answer:file_lookup"]["enabled"])
 
+    def test_plain_how_to_and_text_transform_use_direct_answer_card(self) -> None:
+        for message in (
+            "how do I create a virtualenv in Python?",
+            "summarize this paragraph in Korean",
+            "what is OAuth in simple terms?",
+        ):
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["mode"], "clarify")
+                self.assertEqual(payload["route"]["action"], "fallback")
+                self.assertEqual(payload["next_action"], "answer_directly")
+                response = payload["chat_response"]
+                self.assertEqual(response["kind"], "clarification")
+                self.assertEqual(response["plain_headline"], "This does not need an OMH workflow.")
+                self.assertEqual(response["state"]["lookup_kind"], "direct_answer")
+                self.assertIn("Answer directly in the current chat", response["body"])
+                self.assertIn("No OMH workflow", response["claim_boundary"])
+                actions = {action["id"]: action for action in response["actions"]}
+                self.assertIn("answer:direct", actions)
+                self.assertTrue(actions["answer:direct"]["enabled"])
+
     def test_interaction_route_explanation_matches_special_route_overrides(self) -> None:
         payload = build_chat_interaction_payload("What is OMH and how should I use it?", source="discord")
 
