@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from functools import lru_cache
 import hashlib
 import re
@@ -1613,7 +1612,51 @@ def awareness_context_matches_message(message: str) -> bool:
 
 def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, object]:
     """Return bounded message-specific workflow hints without exposing raw text."""
-    return deepcopy(_awareness_route_hint_cached(message, max(max_hints, 0)))
+    return _copy_awareness_route_hint_payload(_awareness_route_hint_cached(message, max(max_hints, 0)))
+
+
+def _copy_awareness_route_hint_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Copy the bounded route-hint shape without paying for generic deepcopy."""
+    copied = dict(payload)
+    for key in ("mentioned_workflows", "mentioned_runtime_terms", "adjacent_workflows", "not_executed"):
+        values = payload.get(key, [])
+        copied[key] = list(values) if isinstance(values, list | tuple) else []
+
+    hints = payload.get("hints", [])
+    copied["hints"] = [
+        _copy_route_hint_item(hint) if isinstance(hint, dict) else hint
+        for hint in (hints if isinstance(hints, list) else [])
+    ]
+
+    privacy = payload.get("privacy")
+    if isinstance(privacy, dict):
+        copied_privacy = dict(privacy)
+        stored_fields = privacy.get("stored_fields", [])
+        copied_privacy["stored_fields"] = (
+            list(stored_fields) if isinstance(stored_fields, list | tuple) else []
+        )
+        copied["privacy"] = copied_privacy
+    return copied
+
+
+def _copy_route_hint_item(hint: dict[str, object]) -> dict[str, object]:
+    copied = dict(hint)
+    for key in ("matched_cues", "adjacent_workflows", "not_evidence_yet"):
+        values = hint.get(key, [])
+        copied[key] = list(values) if isinstance(values, list | tuple) else []
+    context_card = hint.get("workflow_context_card")
+    copied["workflow_context_card"] = (
+        _copy_workflow_context_card(context_card) if isinstance(context_card, dict) else context_card
+    )
+    return copied
+
+
+def _copy_workflow_context_card(card: dict[str, object]) -> dict[str, object]:
+    copied = dict(card)
+    for key in ("representative_workflows", "user_examples", "not_evidence_until_observed"):
+        values = card.get(key, [])
+        copied[key] = list(values) if isinstance(values, list | tuple) else []
+    return copied
 
 
 @lru_cache(maxsize=512)

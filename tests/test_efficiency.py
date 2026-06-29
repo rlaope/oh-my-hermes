@@ -241,6 +241,8 @@ class EfficiencyContractTests(unittest.TestCase):
         first = awareness_route_hint("show token cost latency run history for this automation loop")
         first["status"] = "mutated"
         first["hints"][0]["workflow"] = "mutated"
+        first["hints"][0]["workflow_context_card"]["representative_workflows"][0] = "mutated"
+        first["privacy"]["stored_fields"][0] = "mutated"
 
         second = awareness_route_hint("show token cost latency run history for this automation loop")
         cache_info = awareness_module._awareness_route_hint_cached.cache_info()
@@ -248,6 +250,11 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(second["status"], "hinted")
         self.assertEqual(second["primary_workflow"], "ops-observability-card")
         self.assertEqual(second["hints"][0]["workflow"], "ops-observability-card")
+        self.assertNotEqual(
+            second["hints"][0]["workflow_context_card"]["representative_workflows"][0],
+            "mutated",
+        )
+        self.assertNotEqual(second["privacy"]["stored_fields"][0], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
