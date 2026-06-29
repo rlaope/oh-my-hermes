@@ -483,11 +483,12 @@ def _public_chat_route_payload_cached(
 
 
 def _clone_jsonish(value: Any) -> Any:
-    if isinstance(value, dict):
+    value_type = type(value)
+    if value_type is dict:
         return {key: _clone_jsonish(item) for key, item in value.items()}
-    if isinstance(value, list):
+    if value_type is list:
         return [_clone_jsonish(item) for item in value]
-    if isinstance(value, tuple):
+    if value_type is tuple:
         return tuple(_clone_jsonish(item) for item in value)
     return value
 

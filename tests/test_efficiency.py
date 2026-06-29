@@ -621,6 +621,58 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_chat_interaction_reuses_executor_target_hint_cache(self) -> None:
+        contract_module._executor_target_from_message.cache_clear()
+
+        first, first_resolution = contract_module._resolve_delegate_executor_target(
+            "choose",
+            None,
+            message="open this in Codex and prepare the coding handoff",
+        )
+        second, second_resolution = contract_module._resolve_delegate_executor_target(
+            "choose",
+            None,
+            message="open this in Codex and prepare the coding handoff",
+        )
+        cache_info = contract_module._executor_target_from_message.cache_info()
+
+        self.assertEqual(first, "codex")
+        self.assertEqual(second, "codex")
+        self.assertEqual(first_resolution["source"], "message_mention")
+        self.assertEqual(second_resolution["resolved_executor_target"], "codex")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_messenger_safe_body_cache_is_reused_without_transform_poisoning(self) -> None:
+        contract_module._messenger_safe_body_cached.cache_clear()
+        body = "| Field | Value |\n| --- | --- |\n| Status | Ready |"
+
+        first_body, first_transforms = contract_module._messenger_safe_body(body)
+        first_transforms.append("mutated")
+        second_body, second_transforms = contract_module._messenger_safe_body(body)
+        cache_info = contract_module._messenger_safe_body_cached.cache_info()
+
+        self.assertEqual(first_body, second_body)
+        self.assertIn("markdown_table_to_bullets", second_transforms)
+        self.assertNotIn("mutated", second_transforms)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_messenger_body_blocks_cache_is_reused_without_payload_poisoning(self) -> None:
+        contract_module._messenger_body_blocks_cached.cache_clear()
+        body = "Intro\n\n- first\n1. second"
+
+        first = contract_module._messenger_body_blocks(body)
+        first[0]["text"] = "mutated"
+        second = contract_module._messenger_body_blocks(body)
+        cache_info = contract_module._messenger_body_blocks_cached.cache_info()
+
+        self.assertNotEqual(second[0]["text"], "mutated")
+        self.assertEqual(second[1]["type"], "bullet")
+        self.assertEqual(second[2]["type"], "numbered")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_hermes_plan_payload_cache_is_reused_without_payload_poisoning(self) -> None:
         hermes_planning_module._build_hermes_plan_payload_cached.cache_clear()
 

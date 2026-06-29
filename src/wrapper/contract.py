@@ -1551,6 +1551,7 @@ def _resolve_delegate_executor_target(executor_target: str, paths: OmhPaths | No
     }
 
 
+@lru_cache(maxsize=4096)
 def _executor_target_from_message(message: str) -> str:
     lowered = f" {message.lower()} "
     for target, hints in _MESSAGE_EXECUTOR_HINTS:
@@ -4800,9 +4801,15 @@ def _render_body_blocks(body: str, *, render_profile: str) -> list[dict[str, obj
 
 
 def _messenger_safe_body(body: str) -> tuple[str, list[str]]:
+    safe_body, transforms = _messenger_safe_body_cached(body)
+    return safe_body, list(transforms)
+
+
+@lru_cache(maxsize=4096)
+def _messenger_safe_body_cached(body: str) -> tuple[str, tuple[str, ...]]:
     lines = body.splitlines()
     if not lines:
-        return body, []
+        return body, ()
     output: list[str] = []
     transforms: list[str] = []
     index = 0
@@ -4833,7 +4840,7 @@ def _messenger_safe_body(body: str) -> tuple[str, list[str]]:
             output.append("")
         output.extend(converted)
         transforms.append("markdown_table_to_bullets")
-    return "\n".join(output), sorted(set(transforms))
+    return "\n".join(output), tuple(sorted(set(transforms)))
 
 
 def _is_code_fence_line(line: str) -> bool:
@@ -4957,32 +4964,40 @@ def _unescape_table_pipes(value: str) -> str:
 
 
 def _messenger_body_blocks(body: str) -> list[dict[str, object]]:
-    blocks: list[dict[str, object]] = []
+    return [
+        {"type": block_type, "text": text}
+        for block_type, text in _messenger_body_blocks_cached(body)
+    ]
+
+
+@lru_cache(maxsize=4096)
+def _messenger_body_blocks_cached(body: str) -> tuple[tuple[str, str], ...]:
+    blocks: list[tuple[str, str]] = []
     current: list[str] = []
     for line in body.splitlines():
         stripped = line.strip()
         if not stripped:
             if current:
-                blocks.append({"type": "paragraph", "text": " ".join(current)})
+                blocks.append(("paragraph", " ".join(current)))
                 current = []
             continue
         if stripped.startswith(("- ", "* ")):
             if current:
-                blocks.append({"type": "paragraph", "text": " ".join(current)})
+                blocks.append(("paragraph", " ".join(current)))
                 current = []
-            blocks.append({"type": "bullet", "text": stripped[2:].strip()})
+            blocks.append(("bullet", stripped[2:].strip()))
             continue
         numbered_text = _numbered_list_text(stripped)
         if numbered_text:
             if current:
-                blocks.append({"type": "paragraph", "text": " ".join(current)})
+                blocks.append(("paragraph", " ".join(current)))
                 current = []
-            blocks.append({"type": "numbered", "text": numbered_text})
+            blocks.append(("numbered", numbered_text))
             continue
         current.append(stripped)
     if current:
-        blocks.append({"type": "paragraph", "text": " ".join(current)})
-    return blocks
+        blocks.append(("paragraph", " ".join(current)))
+    return tuple(blocks)
 
 
 def _rich_markdown_body_blocks(body: str) -> list[dict[str, object]]:
@@ -5061,6 +5076,7 @@ def _numbered_list_text(stripped: str) -> str:
     return rest
 
 
+@lru_cache(maxsize=4096)
 def _short_text(value: str, *, limit: int) -> str:
     text = " ".join(value.split())
     if len(text) <= limit:
