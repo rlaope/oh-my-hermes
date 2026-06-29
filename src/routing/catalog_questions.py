@@ -323,6 +323,16 @@ _OPERATOR_ACTION_MARKERS = (
     "검증",
     "확인",
 )
+_COMMAND_ERROR_MARKERS = (
+    "command not found",
+    "permission denied",
+    "modulenotfounderror",
+    "module not found",
+    "no such file or directory",
+    "명령어를 찾을 수",
+    "명령을 찾을 수",
+    "권한 거부",
+)
 _FILE_OR_TEXT_MARKERS = (
     "file",
     "files",
@@ -478,6 +488,8 @@ def is_skill_catalog_question(message: str) -> bool:
     if not lowered:
         return False
     search_texts = _catalog_search_texts(lowered)
+    if _contains_catalog_token(search_texts, _COMMAND_ERROR_MARKERS):
+        return False
     if _is_operator_command_question(search_texts):
         return False
     if _is_operator_action_question(search_texts):
