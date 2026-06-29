@@ -518,6 +518,34 @@ def recommend_skills(query: str, *, limit: int = 5, apply_guardrails: bool = Tru
     return [recommendation.to_dict() for recommendation in _recommend_skills_cached(query, limit, apply_guardrails)]
 
 
+def recommendation_for_definition(
+    definition: SkillDefinition,
+    query: str,
+    *,
+    matched: tuple[str, ...],
+    score: int,
+    why: str | None = None,
+) -> dict[str, object]:
+    policy = _policy_for(definition)
+    matched_tuple = tuple(sorted(matched))
+    return Recommendation(
+        skill=definition.name,
+        description=definition.description,
+        category=definition.category,
+        phase=definition.phase,
+        hermes_role=definition.hermes_role,
+        handoff_policy=definition.handoff_policy,
+        score=score,
+        confidence=_confidence(score),
+        matched=matched_tuple,
+        why=why or _why(matched_tuple),
+        next_action=policy.next_action,
+        evidence_boundary=policy.evidence_boundary,
+        wrapper_guidance=policy.wrapper_guidance,
+        suggested_prompt=_suggested_prompt(definition.name, query),
+    ).to_dict()
+
+
 @lru_cache(maxsize=2048)
 def _recommend_skills_cached(query: str, limit: int, apply_guardrails: bool) -> tuple[Recommendation, ...]:
     routing_text = prepare_routing_text(_strip_path_like_fragments(query))

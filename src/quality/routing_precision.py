@@ -134,7 +134,7 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase(
         "exact-ops-review-capability",
         "Exact operations workflow questions open ops review",
-        "what can OMH do for ops review?",
+        "what can OMH do for ops-review?",
         "dispatch",
         "ops-review",
         "prepare_ops_review",
