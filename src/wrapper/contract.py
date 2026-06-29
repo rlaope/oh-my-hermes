@@ -1405,7 +1405,401 @@ def _can_use_chat_interaction_cache(
 
 
 def _copy_chat_interaction_payload(payload: dict[str, object]) -> dict[str, object]:
-    return _clone_static_dict(payload)
+    copied = dict(payload)
+    handled = {
+        "source_metadata",
+        "overclaim_guard",
+        "route",
+        "executor_resolution",
+        "chat_response",
+    }
+
+    source_metadata = copied.get("source_metadata")
+    if isinstance(source_metadata, dict):
+        copied["source_metadata"] = dict(source_metadata)
+
+    overclaim_guard = copied.get("overclaim_guard")
+    if isinstance(overclaim_guard, list):
+        copied["overclaim_guard"] = list(overclaim_guard)
+
+    route = copied.get("route")
+    if isinstance(route, dict):
+        copied["route"] = _copy_chat_interaction_route(route)
+
+    executor_resolution = copied.get("executor_resolution")
+    if isinstance(executor_resolution, dict):
+        copied["executor_resolution"] = dict(executor_resolution)
+
+    response = copied.get("chat_response")
+    if isinstance(response, dict):
+        copied["chat_response"] = _copy_chat_response_payload(response)
+
+    for key, value in list(copied.items()):
+        if key in handled:
+            continue
+        if isinstance(value, dict):
+            copied[key] = _clone_static_dict(value)
+        elif isinstance(value, list):
+            copied[key] = _clone_static_payload(value)
+    return copied
+
+
+def _copy_chat_interaction_route(route: dict[str, object]) -> dict[str, object]:
+    copied = dict(route)
+    recommendations = route.get("recommendations")
+    copied["recommendations"] = _copy_recommendation_list(recommendations)
+
+    route_explanation = route.get("route_explanation")
+    if isinstance(route_explanation, dict):
+        copied["route_explanation"] = _copy_workflow_explanation_like(route_explanation)
+
+    workflow_route_plan = route.get("workflow_route_plan")
+    if isinstance(workflow_route_plan, dict):
+        copied["workflow_route_plan"] = _copy_workflow_route_plan_payload(workflow_route_plan)
+
+    for key in ("task_card", "learning_candidate_card"):
+        value = route.get(key)
+        if isinstance(value, dict):
+            copied[key] = _clone_static_dict(value)
+    return copied
+
+
+def _copy_chat_response_payload(response: dict[str, object]) -> dict[str, object]:
+    copied = dict(response)
+    state = response.get("state")
+    if isinstance(state, dict):
+        copied["state"] = _copy_chat_response_state(state)
+
+    usage_trace = response.get("usage_trace")
+    if isinstance(usage_trace, dict):
+        copied["usage_trace"] = dict(usage_trace)
+
+    messenger_rendering = response.get("messenger_rendering")
+    if isinstance(messenger_rendering, dict):
+        copied["messenger_rendering"] = _copy_messenger_rendering_payload(messenger_rendering)
+
+    actions = response.get("actions")
+    if isinstance(actions, list):
+        copied["actions"] = _copy_action_list(actions)
+
+    status_card = response.get("status_card")
+    if isinstance(status_card, dict):
+        copied["status_card"] = _clone_static_dict(status_card)
+    return copied
+
+
+def _copy_chat_response_state(state: dict[str, object]) -> dict[str, object]:
+    copied = dict(state)
+
+    for key in (
+        "direct_invocation_aliases",
+        "evidence_not_observed",
+        "recommended_flow",
+        "next_steps",
+        "missing_evidence",
+    ):
+        value = state.get(key)
+        if isinstance(value, list):
+            copied[key] = list(value)
+
+    for key in ("executor_resolution", "source_metadata"):
+        value = state.get(key)
+        if isinstance(value, dict):
+            copied[key] = dict(value)
+
+    workflow_explanation = state.get("workflow_explanation")
+    if isinstance(workflow_explanation, dict):
+        copied["workflow_explanation"] = _copy_workflow_explanation_like(workflow_explanation)
+
+    context_primer = state.get("context_primer")
+    if isinstance(context_primer, dict):
+        copied["context_primer"] = _copy_context_primer_payload(context_primer)
+
+    skill_picker = state.get("skill_picker")
+    if isinstance(skill_picker, dict):
+        copied["skill_picker"] = _copy_skill_picker_payload(skill_picker)
+
+    capability_summary = state.get("capability_summary")
+    if isinstance(capability_summary, dict):
+        copied["capability_summary"] = _copy_catalog_capability_summary_payload(capability_summary)
+
+    for key, value in list(copied.items()):
+        if key in {
+            "direct_invocation_aliases",
+            "evidence_not_observed",
+            "recommended_flow",
+            "next_steps",
+            "missing_evidence",
+            "executor_resolution",
+            "source_metadata",
+            "workflow_explanation",
+            "context_primer",
+            "skill_picker",
+            "capability_summary",
+        }:
+            continue
+        if isinstance(value, dict):
+            copied[key] = _clone_static_dict(value)
+        elif isinstance(value, list):
+            copied[key] = _clone_static_payload(value)
+    return copied
+
+
+def _copy_recommendation_list(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        recommendation = dict(item)
+        matched = recommendation.get("matched")
+        recommendation["matched"] = list(matched) if isinstance(matched, list) else []
+        copied.append(recommendation)
+    return copied
+
+
+def _copy_workflow_explanation_like(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    not_evidence_yet = value.get("not_evidence_yet")
+    copied["not_evidence_yet"] = list(not_evidence_yet) if isinstance(not_evidence_yet, list) else []
+    context_card = value.get("workflow_context_card")
+    if isinstance(context_card, dict):
+        copied["workflow_context_card"] = _copy_workflow_context_card(context_card)
+    return copied
+
+
+def _copy_workflow_route_plan_payload(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    steps = value.get("steps")
+    copied["steps"] = [_copy_route_plan_step(item) for item in steps if isinstance(item, dict)] if isinstance(steps, list) else []
+    stages = value.get("stages")
+    copied["stages"] = list(stages) if isinstance(stages, list) else []
+    return copied
+
+
+def _copy_route_plan_step(step: dict[str, object]) -> dict[str, object]:
+    copied = dict(step)
+    matched = step.get("matched")
+    if isinstance(matched, list):
+        copied["matched"] = list(matched)
+    return copied
+
+
+def _copy_action_list(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        action = dict(item)
+        payload = action.get("payload")
+        if isinstance(payload, dict):
+            action["payload"] = _copy_action_payload(payload)
+        copied.append(action)
+    return copied
+
+
+def _copy_action_payload(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    handled = {"options", "featured_options", "capability_families", "groups", "input_schema"}
+    if "options" in copied:
+        copied["options"] = _copy_picker_options(value.get("options"))
+    if "featured_options" in copied:
+        copied["featured_options"] = _copy_compact_picker_options(value.get("featured_options"))
+    if "capability_families" in copied:
+        copied["capability_families"] = _copy_family_cards(value.get("capability_families"))
+    if "groups" in copied:
+        copied["groups"] = _copy_picker_groups(value.get("groups"))
+    input_schema = value.get("input_schema")
+    if isinstance(input_schema, dict):
+        copied["input_schema"] = dict(input_schema)
+    for key, item in list(copied.items()):
+        if key in handled:
+            continue
+        if isinstance(item, dict):
+            copied[key] = _clone_static_dict(item)
+        elif isinstance(item, list):
+            copied[key] = _clone_static_payload(item)
+    return copied
+
+
+def _copy_skill_picker_payload(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    copied["options"] = _copy_picker_options(value.get("options"))
+    copied["featured_options"] = _copy_compact_picker_options(value.get("featured_options"))
+    copied["capability_families"] = _copy_family_cards(value.get("capability_families"))
+    copied["groups"] = _copy_picker_groups(value.get("groups"))
+    rendering_hints = value.get("rendering_hints")
+    if isinstance(rendering_hints, dict):
+        copied["rendering_hints"] = dict(rendering_hints)
+    return copied
+
+
+def _copy_picker_options(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        option = dict(item)
+        payload = option.get("payload")
+        if isinstance(payload, dict):
+            option["payload"] = dict(payload)
+        copied.append(option)
+    return copied
+
+
+def _copy_compact_picker_options(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _copy_picker_groups(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        group = dict(item)
+        option_ids = group.get("option_ids")
+        if isinstance(option_ids, list):
+            group["option_ids"] = list(option_ids)
+        group["options"] = _copy_compact_picker_options(group.get("options"))
+        copied.append(group)
+    return copied
+
+
+def _copy_context_primer_payload(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    copied["capability_families"] = _copy_family_cards(value.get("capability_families"))
+    copied["workflow_groups"] = _copy_workflow_groups(value.get("workflow_groups"))
+    copied["workflow_context_cards"] = _copy_workflow_context_cards(value.get("workflow_context_cards"))
+    return copied
+
+
+def _copy_catalog_capability_summary_payload(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    copied["capability_families"] = _copy_family_cards(value.get("capability_families"))
+    copied["lanes"] = _copy_capability_lanes(value.get("lanes"))
+    copied["workflow_context_cards"] = _copy_workflow_context_cards(value.get("workflow_context_cards"))
+    for key in ("direct_response_guidance", "evidence_boundary"):
+        items = value.get(key)
+        if isinstance(items, list):
+            copied[key] = list(items)
+    return copied
+
+
+def _copy_family_cards(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        card = dict(item)
+        primary_workflows = card.get("primary_workflows")
+        if isinstance(primary_workflows, list):
+            card["primary_workflows"] = list(primary_workflows)
+        executor_choices = card.get("executor_choices")
+        if isinstance(executor_choices, list):
+            card["executor_choices"] = list(executor_choices)
+        copied.append(card)
+    return copied
+
+
+def _copy_workflow_groups(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        group = dict(item)
+        workflows = group.get("workflows")
+        if isinstance(workflows, (list, tuple)):
+            group["workflows"] = tuple(workflows)
+        copied.append(group)
+    return copied
+
+
+def _copy_workflow_context_cards(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [_copy_workflow_context_card(item) for item in value if isinstance(item, dict)]
+
+
+def _copy_workflow_context_card(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    for key in ("representative_workflows", "user_examples", "not_evidence_until_observed"):
+        items = value.get(key)
+        if isinstance(items, list):
+            copied[key] = list(items)
+    return copied
+
+
+def _copy_capability_lanes(value: object) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    if not isinstance(value, list):
+        return copied
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        lane = dict(item)
+        for key in ("primary_skills", "wrapper_actions", "examples"):
+            items = lane.get(key)
+            if isinstance(items, list):
+                lane[key] = list(items)
+        playbooks = lane.get("representative_playbooks")
+        if isinstance(playbooks, list):
+            lane["representative_playbooks"] = _copy_representative_playbooks(playbooks)
+        copied.append(lane)
+    return copied
+
+
+def _copy_representative_playbooks(value: list[object]) -> list[dict[str, object]]:
+    copied: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        playbook = dict(item)
+        first_stage = playbook.get("first_stage")
+        if isinstance(first_stage, dict):
+            playbook["first_stage"] = dict(first_stage)
+        copied.append(playbook)
+    return copied
+
+
+def _copy_messenger_rendering_payload(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    for key in ("body_blocks", "fallback_body_blocks"):
+        blocks = value.get(key)
+        if isinstance(blocks, list):
+            copied[key] = [dict(block) for block in blocks if isinstance(block, dict)]
+    for key in (
+        "preferred_blocks",
+        "avoid_blocks",
+        "transforms_applied",
+        "fallback_transforms_applied",
+    ):
+        items = value.get(key)
+        if isinstance(items, list):
+            copied[key] = list(items)
+    chunking = value.get("chunking")
+    if isinstance(chunking, dict):
+        copied["chunking"] = dict(chunking)
+        split_on = chunking.get("split_on")
+        if isinstance(split_on, list):
+            copied["chunking"]["split_on"] = list(split_on)
+    for key in ("prefix_policy", "platform_hints"):
+        item = value.get(key)
+        if isinstance(item, dict):
+            copied[key] = dict(item)
+    return copied
 
 
 @lru_cache(maxsize=2048)
