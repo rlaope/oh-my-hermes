@@ -456,6 +456,32 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_routing_token_cache_reuses_terms_without_payload_poisoning(self) -> None:
+        localization_module._routing_terms_cached.cache_clear()
+        localization_module._routing_tokens_cached.cache_clear()
+
+        first_terms = localization_module.routing_terms("Risky refactor with code-review")
+        first_terms.add("mutated")
+        second_terms = localization_module.routing_terms("Risky refactor with code-review")
+
+        self.assertIn("risky", second_terms)
+        self.assertIn("code-review", second_terms)
+        self.assertNotIn("mutated", second_terms)
+        terms_cache = localization_module._routing_terms_cached.cache_info()
+        self.assertEqual(terms_cache.misses, 1)
+        self.assertGreaterEqual(terms_cache.hits, 1)
+
+        first_tokens = localization_module.routing_tokens("Risky refactor with code-review", stopwords=set())
+        first_tokens.add("mutated")
+        second_tokens = localization_module.routing_tokens("Risky refactor with code-review", stopwords=set())
+        tokens_cache = localization_module._routing_tokens_cached.cache_info()
+
+        self.assertIn("risky", second_tokens)
+        self.assertIn("code-review", second_tokens)
+        self.assertNotIn("mutated", second_tokens)
+        self.assertEqual(tokens_cache.misses, 1)
+        self.assertGreaterEqual(tokens_cache.hits, 1)
+
     def test_phrase_match_cache_reuses_repeated_recommendation_pairs(self) -> None:
         recommend_module._phrase_match.cache_clear()
 

@@ -583,16 +583,26 @@ def _folded_alias_phrases() -> tuple[tuple[LocaleAlias, tuple[str, ...]], ...]:
 
 
 def routing_tokens(value: str, *, stopwords: set[str] | None = None) -> set[str]:
-    stopwords = _STOPWORDS if stopwords is None else stopwords
+    stopword_key = frozenset(_STOPWORDS if stopwords is None else stopwords)
+    return set(_routing_tokens_cached(value, stopword_key))
+
+
+@lru_cache(maxsize=8192)
+def _routing_tokens_cached(value: str, stopwords: frozenset[str]) -> frozenset[str]:
     tokens: set[str] = set()
     for raw_token in routing_terms(value):
         for token in (raw_token, *raw_token.split("-")):
             if len(token) >= 3 and token not in stopwords:
                 tokens.add(token)
-    return tokens
+    return frozenset(tokens)
 
 
 def routing_terms(value: str) -> set[str]:
+    return set(_routing_terms_cached(value))
+
+
+@lru_cache(maxsize=8192)
+def _routing_terms_cached(value: str) -> frozenset[str]:
     folded = _fold_for_match(value)
     terms: set[str] = set()
     for raw_token in _TOKEN_RE.findall(folded):
@@ -600,7 +610,7 @@ def routing_terms(value: str) -> set[str]:
         if token:
             terms.add(token)
             terms.update(part for part in token.split("-") if part)
-    return terms
+    return frozenset(terms)
 
 
 def normalized_phrase(value: str) -> str:
