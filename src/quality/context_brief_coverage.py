@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-import json
+from typing import Any
 
 from ..context import build_context_brief
 from ..ingress import CHAT_SOURCES
@@ -167,7 +167,6 @@ def _evaluate_context_brief_case(case: ContextBriefCoverageCase, *, source: str)
     catalog_question = _nested(brief, "catalog_question")
     first_hint = _first_dict(route_hint.get("hints"))
     prompt_context = str(brief.get("prompt_context") or "")
-    serialized = json.dumps(brief, sort_keys=True, ensure_ascii=False)
     observed = {
         "schema_version": brief.get("schema_version"),
         "source": brief.get("source"),
@@ -187,7 +186,7 @@ def _evaluate_context_brief_case(case: ContextBriefCoverageCase, *, source: str)
         "prompt_context_has_route_hint": "[OMH Route Hint]" in prompt_context,
         "raw_prompt_stored": _nested(brief, "message").get("raw_prompt_stored"),
         "raw_prompt_echoed": _nested(brief, "message").get("raw_prompt_echoed"),
-        "sensitive_token_leaked": bool(case.sensitive_token and case.sensitive_token in serialized),
+        "sensitive_token_leaked": _context_brief_text_contains(brief, case.sensitive_token),
         "claim_boundary": brief.get("claim_boundary"),
     }
     issues: list[str] = []
@@ -252,6 +251,29 @@ def _evaluate_context_brief_case(case: ContextBriefCoverageCase, *, source: str)
         "observed": observed,
         "issues": issues,
     }
+
+
+def _context_brief_text_contains(brief: dict[str, object], needle: str) -> bool:
+    if not needle:
+        return False
+    checked_surfaces = (
+        brief.get("prompt_context"),
+        brief.get("route_hint"),
+        brief.get("tool_hints"),
+        brief.get("workflow_context_cards"),
+        brief.get("normal_response_contract"),
+    )
+    return any(_nested_text_contains(surface, needle) for surface in checked_surfaces)
+
+
+def _nested_text_contains(value: Any, needle: str) -> bool:
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, dict):
+        return any(_nested_text_contains(item, needle) for item in value.values())
+    if isinstance(value, list):
+        return any(_nested_text_contains(item, needle) for item in value)
+    return False
 
 
 def _nested(payload: dict[str, object], key: str) -> dict[str, object]:

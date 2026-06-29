@@ -408,7 +408,7 @@ def public_chat_route_payload(
         raise ValueError("chat route --limit must be at least 1")
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
-    return _clone_jsonish(
+    return _copy_public_route_payload(
         _public_chat_route_payload_cached(
             message,
             source,
@@ -624,6 +624,54 @@ def _clone_jsonish(value: Any) -> Any:
     if value_type is tuple:
         return tuple(_clone_jsonish(item) for item in value)
     return value
+
+
+def _copy_public_route_payload(payload: dict[str, object]) -> dict[str, object]:
+    route = dict(payload)
+    route["recommendations"] = _copy_public_recommendations(route.get("recommendations", []))
+    route_explanation = route.get("route_explanation")
+    if isinstance(route_explanation, dict):
+        route["route_explanation"] = _copy_route_explanation(route_explanation)
+    workflow_route_plan = route.get("workflow_route_plan")
+    if isinstance(workflow_route_plan, dict):
+        route["workflow_route_plan"] = _copy_workflow_route_plan(workflow_route_plan)
+    task_card = route.get("task_card")
+    if isinstance(task_card, dict):
+        route["task_card"] = _clone_jsonish(task_card)
+    learning_candidate_card = route.get("learning_candidate_card")
+    if isinstance(learning_candidate_card, dict):
+        route["learning_candidate_card"] = _clone_jsonish(learning_candidate_card)
+    return route
+
+
+def _copy_public_recommendations(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    copied: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        recommendation = dict(item)
+        matched = recommendation.get("matched")
+        recommendation["matched"] = list(matched) if isinstance(matched, list) else []
+        copied.append(recommendation)
+    return copied
+
+
+def _copy_route_explanation(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    not_evidence_yet = value.get("not_evidence_yet")
+    copied["not_evidence_yet"] = list(not_evidence_yet) if isinstance(not_evidence_yet, list) else []
+    return copied
+
+
+def _copy_workflow_route_plan(value: dict[str, object]) -> dict[str, object]:
+    copied = dict(value)
+    steps = value.get("steps")
+    copied["steps"] = [dict(item) for item in steps if isinstance(item, dict)] if isinstance(steps, list) else []
+    stages = value.get("stages")
+    copied["stages"] = list(stages) if isinstance(stages, list) else []
+    return copied
 
 
 def _has_explicit_invocation_prefix(message: str) -> bool:

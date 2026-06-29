@@ -57,12 +57,24 @@ from omh.skills.catalog import (
     retained_delegation_skill_names,
 )
 from omh.quality import grounded_score as grounded_score_module
+from omh.quality import context_brief_coverage as context_brief_coverage_module
+from omh.quality import routing_precision as routing_precision_module
 from omh.quality import route_hint_alignment as route_hint_alignment_module
 from omh.quality.grounded_score import GroundedScenario
 from omh.quality.route_hint_alignment import RouteHintAlignmentCase
 
 
 class EfficiencyContractTests(unittest.TestCase):
+    def test_quality_leakage_checks_avoid_full_payload_json_serialization(self) -> None:
+        with patch.object(json, "dumps", side_effect=AssertionError("quality demos should scan payloads directly")):
+            context_payload = context_brief_coverage_module.build_context_brief_coverage_demo(source="discord")
+            precision_payload = routing_precision_module.build_routing_precision_demo(source="discord")
+
+        self.assertTrue(all(row["passed"] for row in context_payload["cases"]))
+        self.assertTrue(precision_payload["summary"]["all_passing"])
+        self.assertTrue(all(row["passed"] for row in precision_payload["cases"]))
+        self.assertTrue(all(row["passed"] for row in precision_payload["intervention_cases"]))
+
     def test_memory_schema_guidance_is_scoped_to_handoff_sensitive_skills(self) -> None:
         templates = {template.name: template.content for template in builtin_skill_templates()}
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -660,7 +672,10 @@ class EfficiencyContractTests(unittest.TestCase):
         )
         first["selected_skill"] = "mutated"
         first["recommendations"][0]["skill"] = "mutated"
+        first["recommendations"][0]["matched"].append("mutated")
         first["route_explanation"]["selected_workflow"] = "mutated"
+        first["route_explanation"]["not_evidence_yet"].append("mutated")
+        first["workflow_route_plan"]["steps"][0]["skill"] = "mutated"
 
         second = chat_module.public_chat_route_payload(
             "risky refactor with implementation and review",
@@ -670,7 +685,10 @@ class EfficiencyContractTests(unittest.TestCase):
 
         self.assertNotEqual(second["selected_skill"], "mutated")
         self.assertNotEqual(second["recommendations"][0]["skill"], "mutated")
+        self.assertNotIn("mutated", second["recommendations"][0]["matched"])
         self.assertNotEqual(second["route_explanation"]["selected_workflow"], "mutated")
+        self.assertNotIn("mutated", second["route_explanation"]["not_evidence_yet"])
+        self.assertNotEqual(second["workflow_route_plan"]["steps"][0]["skill"], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
