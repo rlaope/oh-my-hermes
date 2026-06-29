@@ -357,6 +357,13 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
             f"{summary.get('chat_card_coverage_passing')}/{summary.get('chat_card_coverage_total')} "
             f"(generic ack {summary.get('chat_card_generic_ack_count')})"
         )
+    if "context_brief_coverage_passing" in summary or "context_brief_coverage_total" in summary:
+        print(
+            "  Context brief coverage: "
+            f"{summary.get('context_brief_coverage_passing')}/{summary.get('context_brief_coverage_total')} "
+            f"(route hints {summary.get('context_brief_route_hint_count')}, "
+            f"catalog hints {summary.get('context_brief_catalog_question_count')})"
+        )
     print(f"  Local artifact store: {summary.get('local_artifact_store')}")
     print("")
     blocking = payload.get("blocking_failures", [])

@@ -43,6 +43,7 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("grounded_score", items)
         self.assertIn("chat_card_coverage", items)
         self.assertIn("route_hint_alignment", items)
+        self.assertIn("context_brief_coverage", items)
         self.assertIn("product_readiness", items)
         self.assertIn("release_evidence_bundle", items)
         self.assertIn("live_tap_smoke", items)
@@ -93,6 +94,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("primary plugin awareness hint", items["route_hint_alignment"]["evidence_required"])
         self.assertIn("deterministic local router/hint agreement", items["route_hint_alignment"]["proof_boundary"])
         self.assertIn("does not prove live Hermes chat rendering", items["route_hint_alignment"]["proof_boundary"])
+        self.assertEqual(items["context_brief_coverage"]["command"], "uv run python -m omh.cli demo context-brief-coverage --json")
+        self.assertIn("route hint or picker hint", items["context_brief_coverage"]["evidence_required"])
+        self.assertIn("deterministic local Hermes-facing context", items["context_brief_coverage"]["proof_boundary"])
+        self.assertIn("does not prove live Hermes chat rendering", items["context_brief_coverage"]["proof_boundary"])
         self.assertEqual(items["product_readiness"]["command"], "/tmp/omh release product-readiness --version 1.0.0 --json")
         self.assertIn("skill-content", items["product_readiness"]["evidence_required"])
         self.assertIn("grounded score", items["product_readiness"]["evidence_required"])
@@ -254,6 +259,7 @@ class ReleaseSmokeTests(unittest.TestCase):
                 "grounded_score",
                 "chat_card_coverage",
                 "route_hint_alignment",
+                "context_brief_coverage",
                 "parity_contracts",
                 "release_checklist",
             },
@@ -276,6 +282,12 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("mismatches 0", gates["route_hint_alignment"]["summary"])
         self.assertEqual(gates["route_hint_alignment"]["command"], "omh demo route-hint-alignment --json")
         self.assertIn("deterministic local agreement", gates["route_hint_alignment"]["proof_boundary"])
+        self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
+        self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
+        self.assertIn("route hints 7", gates["context_brief_coverage"]["summary"])
+        self.assertIn("catalog picker hints 1", gates["context_brief_coverage"]["summary"])
+        self.assertEqual(gates["context_brief_coverage"]["command"], "omh demo context-brief-coverage --json")
+        self.assertIn("deterministic local OMH mental-model", gates["context_brief_coverage"]["proof_boundary"])
         self.assertEqual(gates["parity_contracts"]["status"], "passed")
         self.assertEqual(gates["release_checklist"]["status"], "passed")
         self.assertIn(
@@ -308,14 +320,20 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["route_hint_alignment_total"], 53)
             self.assertEqual(payload["summary"]["route_hint_missing_count"], 0)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
+            self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 8)
+            self.assertEqual(payload["summary"]["context_brief_coverage_total"], 8)
+            self.assertEqual(payload["summary"]["context_brief_route_hint_count"], 7)
+            self.assertEqual(payload["summary"]["context_brief_catalog_question_count"], 1)
             self.assertEqual(payload["evidence"]["product_readiness"]["schema_version"], "omh_product_readiness/v1")
             self.assertEqual(payload["evidence"]["release_checklist"]["schema_version"], "release_readiness_checklist/v1")
             self.assertEqual(payload["evidence"]["grounded_score"]["schema_version"], "grounded_score_evaluation/v1")
             self.assertEqual(payload["evidence"]["chat_card_coverage"]["schema_version"], "chat_card_coverage/v1")
             self.assertEqual(payload["evidence"]["route_hint_alignment"]["schema_version"], "route_hint_alignment/v1")
+            self.assertEqual(payload["evidence"]["context_brief_coverage"]["schema_version"], "context_brief_coverage/v1")
             self.assertIn("grounded_score_ready", payload["claims"])
             self.assertIn("chat_card_coverage_ready", payload["claims"])
             self.assertIn("route_hint_alignment_ready", payload["claims"])
+            self.assertIn("context_brief_coverage_ready", payload["claims"])
             self.assertIn("executor_dispatch", payload["not_evidence_for"])
 
             written = release_evidence_bundle(version="v1.0.1", omh_command="/tmp/omh command", paths=paths, write=True)
