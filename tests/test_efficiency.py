@@ -31,6 +31,7 @@ from omh.release import (
 )
 from omh.capabilities.skills import skill_capabilities
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
+from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.awareness import (
     awareness_context_matches_message,
     awareness_generic_tool_checkpoint_payload,
@@ -233,6 +234,22 @@ class EfficiencyContractTests(unittest.TestCase):
 
                 self.assertEqual(route_hint["primary_workflow"], workflow)
                 self.assertEqual(route_hint["primary_next_action"], next_action)
+
+    def test_awareness_route_hint_cache_is_reused_without_payload_poisoning(self) -> None:
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
+        first = awareness_route_hint("show token cost latency run history for this automation loop")
+        first["status"] = "mutated"
+        first["hints"][0]["workflow"] = "mutated"
+
+        second = awareness_route_hint("show token cost latency run history for this automation loop")
+        cache_info = awareness_module._awareness_route_hint_cached.cache_info()
+
+        self.assertEqual(second["status"], "hinted")
+        self.assertEqual(second["primary_workflow"], "ops-observability-card")
+        self.assertEqual(second["hints"][0]["workflow"], "ops-observability-card")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
 
     def test_quality_demos_reuse_interaction_route(self) -> None:
         alignment_case = RouteHintAlignmentCase(
