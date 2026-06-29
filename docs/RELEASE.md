@@ -353,6 +353,18 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke runtime validate --run "$run_id"
 python3 -m omh.cli --omh-home /tmp/omh-smoke runtime export --redacted
 ```
 
+Source-checkout console smoke:
+
+```sh
+uv run --no-editable omh recommend "risky refactor" --limit 1 --json
+```
+
+Use `uv run python -m omh.cli ...` for fast module-level development checks.
+Use `uv run --no-editable omh ...` when the release question is whether the
+packaged `omh` console script imports and runs from a source checkout. This
+check is local command importability only; it is not Hermes chat visibility,
+plugin load, executor dispatch, review, CI, merge, or delivery evidence.
+
 ## Release Notes Must Include
 
 - Release version and channel.
@@ -360,6 +372,7 @@ python3 -m omh.cli --omh-home /tmp/omh-smoke runtime export --redacted
 - Update path tested.
 - Workflow docs generation status.
 - Harness catalog validation status.
+- Source-checkout console script smoke status.
 - Runtime validation status.
 - Workflow learning review queue status when workflow-learning contracts changed.
 - Capability probe status.
