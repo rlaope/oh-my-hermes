@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
+import re
 from typing import Any
 
 from ..goal_loop import explicit_loop_invocation_signal
@@ -32,41 +33,14 @@ DIRECT_ANSWER_REASON = (
 ROUTE_EXPLANATION_SCHEMA_VERSION = "route_explanation/v1"
 _ROUTER_SKILL = "oh-my-hermes"
 _SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE = 6
-_SPECIFIC_CAPABILITY_CATALOG_SKILLS = frozenset(
+_SPECIFIC_CAPABILITY_EXCLUDED_SKILLS = frozenset(
     {
-        "agent-board",
-        "agent-ops-review",
-        "automation-blueprint",
-        "code-review",
-        "cto-loop",
-        "deep-interview",
-        "deliverable-package",
-        "deploy-and-monitor",
-        "executor-runtime-readiness",
-        "feedback-triage",
-        "gateway-intent-card",
-        "github-event-ops",
-        "img-summary",
-        "idea-to-deploy",
-        "loop",
-        "materials-package",
-        "memory-curation-review",
-        "operating-rhythm",
-        "ops-observability-card",
-        "paper-learning",
-        "ralplan",
-        "reliability-review",
-        "report-package",
-        "research-brief",
-        "research-department",
-        "source-finder",
-        "strategy-brief",
-        "toolbelt-readiness",
-        "ultragoal",
-        "ultraprocess",
-        "voice-operator",
-        "web-research",
-        "workflow-learning",
+        _ROUTER_SKILL,
+        "ask",
+        "cancel",
+        "plan",
+        "skill",
+        "team",
     }
 )
 _BROAD_CAPABILITY_CATALOG_PHRASES = (
@@ -133,13 +107,7 @@ _SPECIFIC_CAPABILITY_ALIAS_PHRASES = (
     "skill patch",
     "routing regression",
     "route regression",
-    "research brief",
-    "research department",
     "research ops",
-    "github event ops",
-    "github events",
-    "github issue ops",
-    "github pr ops",
     "gateway routing",
     "message routing",
     "platform routing",
@@ -147,9 +115,6 @@ _SPECIFIC_CAPABILITY_ALIAS_PHRASES = (
     "coding agent",
     "executors",
     "runtimes",
-    "reliability review",
-    "deploy and monitor",
-    "cto loop",
 )
 _DIRECT_ANSWER_STARTERS = (
     "what ",
@@ -347,7 +312,7 @@ def _route_chat_message_cached(
         full_recommendations = _prioritize_recommendation(full_recommendations, task_card_recommendation(task_card))
     catalog_question = fast_catalog_decision.catalog_question
     specific_catalog_match = (
-        _specific_capability_catalog_match(full_recommendations)
+        _specific_capability_catalog_match(full_recommendations, routing_message)
         if catalog_question and not _is_broad_capability_catalog_question(routing_message)
         else None
     )
@@ -592,7 +557,7 @@ def _generic_omh_catalog_question(message: str) -> bool:
         return True
     if not any(marker in text for marker in ("omh", "oh-my-hermes", "oh my hermes")):
         return False
-    named_hits = sum(1 for skill in _SPECIFIC_CAPABILITY_CATALOG_SKILLS if skill in text)
+    named_hits = len(_specific_capability_named_hits(text))
     if named_hits:
         return False
     if any(phrase in text for phrase in _SPECIFIC_CAPABILITY_ALIAS_PHRASES):
@@ -787,23 +752,39 @@ def _meets_threshold(confidence: str, threshold: str) -> bool:
     return meets_confidence_threshold(confidence, threshold)
 
 
-def _specific_capability_catalog_match(recommendations: list[dict[str, object]]) -> dict[str, object] | None:
+def _specific_capability_catalog_match(
+    recommendations: list[dict[str, object]],
+    message: str,
+) -> dict[str, object] | None:
+    named_hits = set(_specific_capability_named_hits(message))
     for recommendation in recommendations:
         skill = str(recommendation.get("skill", ""))
-        if skill == _ROUTER_SKILL or skill not in _SPECIFIC_CAPABILITY_CATALOG_SKILLS:
+        if skill not in named_hits:
             continue
-        if _int_value(recommendation.get("score", 0)) < _SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE:
+        if not _is_eligible_specific_capability_recommendation(recommendation):
             continue
-        confidence = str(recommendation.get("confidence", "low"))
-        if not _meets_threshold(confidence, "high"):
+        return recommendation
+
+    for recommendation in recommendations:
+        skill = str(recommendation.get("skill", ""))
+        if skill not in _specific_capability_catalog_skills():
+            continue
+        if not _is_eligible_specific_capability_recommendation(recommendation):
             continue
         matched = _string_list(recommendation.get("matched", []))
-        next_action = str(recommendation.get("next_action", ""))
-        if not next_action or next_action == "clarify_or_route":
-            continue
         if any(item.startswith("guard:") for item in matched) or any(item.startswith("trigger:") for item in matched):
             return recommendation
     return None
+
+
+def _is_eligible_specific_capability_recommendation(recommendation: dict[str, object]) -> bool:
+    if _int_value(recommendation.get("score", 0)) < _SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE:
+        return False
+    confidence = str(recommendation.get("confidence", "low"))
+    if not _meets_threshold(confidence, "high"):
+        return False
+    next_action = str(recommendation.get("next_action", ""))
+    return bool(next_action and next_action != "clarify_or_route")
 
 
 def _is_broad_capability_catalog_question(message: str) -> bool:
@@ -814,8 +795,58 @@ def _is_broad_capability_catalog_question(message: str) -> bool:
         topic_hits = sum(1 for token in _BROAD_CAPABILITY_TOPIC_TOKENS if token in text)
         if topic_hits >= 2:
             return True
-    named_hits = sum(1 for skill in _SPECIFIC_CAPABILITY_CATALOG_SKILLS if skill in text)
+    named_hits = len(_specific_capability_named_hits(text))
     return named_hits >= 2
+
+
+@lru_cache(maxsize=1)
+def _specific_capability_catalog_skills() -> frozenset[str]:
+    return frozenset(
+        definition.name
+        for definition in routable_definitions()
+        if definition.name not in _SPECIFIC_CAPABILITY_EXCLUDED_SKILLS
+    )
+
+
+@lru_cache(maxsize=1)
+def _specific_capability_phrase_map() -> tuple[tuple[str, tuple[str, ...]], ...]:
+    entries: list[tuple[str, tuple[str, ...]]] = []
+    for skill in sorted(_specific_capability_catalog_skills()):
+        variants = {
+            skill,
+            skill.replace("-", " "),
+            skill.replace("-", "_"),
+        }
+        entries.append((skill, tuple(sorted(variants))))
+    return tuple(entries)
+
+
+def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
+    text = message.strip().lower()
+    matches: list[tuple[int, int, int, str]] = []
+    for skill, phrases in _specific_capability_phrase_map():
+        for phrase in phrases:
+            for start, end in _specific_capability_phrase_matches(text, phrase):
+                matches.append((start, end, len(phrase), skill))
+
+    selected: list[str] = []
+    selected_ranges: list[tuple[int, int]] = []
+    for start, end, _length, skill in sorted(matches, key=lambda item: (-(item[1] - item[0]), item[0], item[3])):
+        if any(start < selected_end and end > selected_start for selected_start, selected_end in selected_ranges):
+            continue
+        if skill not in selected:
+            selected.append(skill)
+        selected_ranges.append((start, end))
+    return tuple(selected)
+
+
+def _specific_capability_phrase_matches(text: str, phrase: str) -> tuple[tuple[int, int], ...]:
+    if not phrase:
+        return ()
+    boundary = r"(?<![a-z0-9_])"
+    end_boundary = r"(?![a-z0-9_])"
+    pattern = re.compile(f"{boundary}{re.escape(phrase)}{end_boundary}")
+    return tuple((match.start(), match.end()) for match in pattern.finditer(text))
 
 
 def _prioritize_recommendation(

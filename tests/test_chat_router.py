@@ -819,6 +819,37 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["selected_harness"], harness)
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_exact_skill_id_capability_questions_use_catalog_metadata(self) -> None:
+        skills = (
+            "meeting-brief",
+            "ops-review",
+            "best-practice-research",
+            "ultraqa",
+            "performance-goal",
+            "autoresearch-goal",
+            "wiki",
+            "ralph",
+        )
+
+        for skill in skills:
+            for phrase in (skill, skill.replace("-", " ")):
+                with self.subTest(phrase=phrase):
+                    decision = route_chat_message(f"what can OMH do for {phrase}?", source="discord")
+
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["selected_skill"], skill)
+                    self.assertEqual(decision["selected_harness"], primary_harness_for_skill(skill))
+                    self.assertIn("Specific OMH capability question", decision["reason"])
+
+    def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
+        for phrase in ("plan", "team", "ask"):
+            with self.subTest(phrase=phrase):
+                decision = route_chat_message(f"what can OMH do for {phrase}?", source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertIn("Catalog question", decision["reason"])
+
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (
             "이 논문 PDF 아주 쉽게 설명해줘",
