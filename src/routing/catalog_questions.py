@@ -322,6 +322,42 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
+_REPO_LOOKUP_CONTEXT_MARKERS = (
+    "repo",
+    "repository",
+    "project",
+    "codebase",
+    "workspace",
+    "checkout",
+    "working tree",
+    "working-tree",
+    "저장소",
+    "레포",
+    "프로젝트",
+    "코드베이스",
+    "작업공간",
+)
+_SOURCE_ACQUISITION_CONTEXT_MARKERS = (
+    "github",
+    "oss",
+    "open source",
+    "repo 찾아",
+    "repo find",
+    "repositories",
+    "dataset",
+    "datasets",
+    "paper",
+    "papers",
+    "presentation",
+    "presentations",
+    "compare",
+    "comparison",
+    "비교",
+    "자료",
+    "데이터셋",
+    "논문",
+    "발표",
+)
 _WORKFLOW_REVIEW_INTENT_MARKERS = (
     "claim",
     "claims",
@@ -464,6 +500,12 @@ def _is_operator_command_question(search_texts: tuple[str, ...]) -> bool:
 def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
     if _contains_catalog_token(search_texts, _WORKFLOW_REVIEW_INTENT_MARKERS):
         return False
+    if _contains_catalog_token(search_texts, _SOURCE_ACQUISITION_CONTEXT_MARKERS):
+        return False
+    if _contains_catalog_token(search_texts, _FILE_OR_TEXT_MARKERS) and _contains_catalog_token(
+        search_texts, _REPO_LOOKUP_CONTEXT_MARKERS
+    ):
+        return True
     if _contains_catalog_token(search_texts, _PATH_REFERENCE_MARKERS):
         if _contains_file_lookup_action(search_texts):
             return True

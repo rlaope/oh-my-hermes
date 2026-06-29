@@ -7,6 +7,7 @@ from .chat_card_coverage import build_chat_card_coverage_demo
 from .context_brief_coverage import build_context_brief_coverage_demo
 from .grounded_score import build_grounded_score_demo
 from .route_hint_alignment import build_route_hint_alignment_demo
+from .routing_precision import build_routing_precision_demo, routing_precision_errors
 
 
 HERMES_UX_QUALITY_SCHEMA_VERSION = "hermes_ux_quality/v1"
@@ -19,6 +20,7 @@ def build_hermes_ux_quality_demo(
     chat_card_coverage: Mapping[str, object] | None = None,
     route_hint_alignment: Mapping[str, object] | None = None,
     context_brief_coverage: Mapping[str, object] | None = None,
+    routing_precision: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported demo source: {source}")
@@ -41,6 +43,11 @@ def build_hermes_ux_quality_demo(
         dict(context_brief_coverage)
         if context_brief_coverage is not None
         else build_context_brief_coverage_demo(source=source)
+    )
+    precision = (
+        dict(routing_precision)
+        if routing_precision is not None
+        else build_routing_precision_demo(source=source)
     )
 
     gates = [
@@ -84,6 +91,16 @@ def build_hermes_ux_quality_demo(
             errors=_context_brief_errors(context_briefs),
             claim_boundary=str(context_briefs.get("claim_boundary", "")),
         ),
+        _gate(
+            gate_id="routing_precision",
+            title="Over-intervention guard",
+            status="passed" if _routing_precision_ready(precision) else "failed",
+            summary=_routing_precision_summary(precision),
+            user_value="Ordinary questions stay as direct answers or file lookups instead of opening OMH workflow cards.",
+            command="omh demo routing-precision --json",
+            errors=routing_precision_errors(precision),
+            claim_boundary=str(precision.get("claim_boundary", "")),
+        ),
     ]
     passing_count = sum(1 for gate in gates if gate["status"] == "passed")
     total = len(gates)
@@ -92,6 +109,7 @@ def build_hermes_ux_quality_demo(
     chat_summary = _nested(chat_cards, "summary")
     route_summary = _nested(route_hints, "summary")
     context_summary = _nested(context_briefs, "summary")
+    precision_summary = _nested(precision, "summary")
     return {
         "schema_version": HERMES_UX_QUALITY_SCHEMA_VERSION,
         "source": source,
@@ -112,12 +130,18 @@ def build_hermes_ux_quality_demo(
             "context_brief_passing_count": context_summary.get("passing_count", 0),
             "context_brief_route_hint_count": context_summary.get("route_hint_count", 0),
             "context_brief_catalog_question_count": context_summary.get("catalog_question_count", 0),
+            "routing_precision_cases": precision_summary.get("case_count", 0),
+            "routing_precision_passing_count": precision_summary.get("passing_count", 0),
+            "routing_precision_overroute_count": precision_summary.get("overroute_count", 0),
+            "routing_precision_catalog_picker_count": precision_summary.get("catalog_picker_count", 0),
+            "routing_precision_generic_ack_count": precision_summary.get("generic_ack_count", 0),
         },
         "user_story": [
             "Natural chat requests route to an OMH workflow instead of a vague generic answer.",
             "Hermes can render workflow-specific next actions and evidence boundaries.",
             "Plugin/context awareness agrees with the router before generic tools are used.",
             "Catalog questions open an OMH picker without asking the user to approve shell commands.",
+            "Plain help and file lookup questions stay out of OMH workflow routing when OMH is not needed.",
         ],
         "gates": gates,
         "claim_boundary": (
@@ -141,7 +165,8 @@ def format_hermes_ux_quality_summary(payload: Mapping[str, object]) -> str:
             f"routing avg {summary.get('grounded_score_average', 0)}; "
             f"generic ack {summary.get('chat_card_generic_ack_count', 0)}; "
             f"route mismatches {summary.get('route_hint_mismatch_count', 0)}; "
-            f"context {summary.get('context_brief_passing_count', 0)}/{summary.get('context_brief_cases', 0)}"
+            f"context {summary.get('context_brief_passing_count', 0)}/{summary.get('context_brief_cases', 0)}; "
+            f"precision overroutes {summary.get('routing_precision_overroute_count', 0)}"
         ),
         "",
         "What users feel:",
@@ -230,6 +255,10 @@ def _context_briefs_ready(payload: Mapping[str, object]) -> bool:
     )
 
 
+def _routing_precision_ready(payload: Mapping[str, object]) -> bool:
+    return not routing_precision_errors(payload)
+
+
 def _grounded_summary(payload: Mapping[str, object]) -> str:
     summary = _nested(payload, "summary")
     return (
@@ -260,6 +289,16 @@ def _context_brief_summary(payload: Mapping[str, object]) -> str:
         f"{summary.get('passing_count', 0)}/{summary.get('case_count', 0)} context brief cases passing; "
         f"route hints {summary.get('route_hint_count', 0)}; "
         f"catalog picker hints {summary.get('catalog_question_count', 0)}"
+    )
+
+
+def _routing_precision_summary(payload: Mapping[str, object]) -> str:
+    summary = _nested(payload, "summary")
+    return (
+        f"{summary.get('passing_count', 0)}/{summary.get('case_count', 0)} negative-control cases; "
+        f"overroutes {summary.get('overroute_count', 0)}; "
+        f"catalog pickers {summary.get('catalog_picker_count', 0)}; "
+        f"generic ack {summary.get('generic_ack_count', 0)}"
     )
 
 
