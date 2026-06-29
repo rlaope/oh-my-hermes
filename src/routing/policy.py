@@ -2574,6 +2574,14 @@ def active_routing_guard_rules(
 ) -> tuple[RoutingGuardRule, ...]:
     if explicit_skill:
         return ()
+    return _active_routing_guard_rules_cached(normalized_query, frozenset(query_tokens))
+
+
+@lru_cache(maxsize=512)
+def _active_routing_guard_rules_cached(
+    normalized_query: str,
+    query_tokens: frozenset[str],
+) -> tuple[RoutingGuardRule, ...]:
     rules: list[RoutingGuardRule] = []
     if _risky_refactor_guard_applies(normalized_query, query_tokens):
         rules.append(RISKY_REFACTOR_GUARD)
