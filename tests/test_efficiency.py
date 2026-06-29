@@ -31,6 +31,8 @@ from omh.release import (
 )
 from omh.capabilities import families as families_module
 from omh.capabilities.skills import skill_capabilities
+from omh.coding import executor_readiness as executor_readiness_module
+from omh.coding import executors as executors_module
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.awareness import (
@@ -729,6 +731,55 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(first_resolution["source"], "message_mention")
         self.assertEqual(second_resolution["resolved_executor_target"], "codex")
         self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_executor_label_map_cache_is_reused(self) -> None:
+        executors_module._executor_label_map.cache_clear()
+
+        first = executors_module.executor_label("codex")
+        second = executors_module.executor_label("codex")
+        cache_info = executors_module._executor_label_map.cache_info()
+
+        self.assertEqual(first, "Codex")
+        self.assertEqual(first, second)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_executor_readiness_contract_cache_is_reused_without_payload_poisoning(self) -> None:
+        executor_readiness_module._executor_readiness_contract_cached.cache_clear()
+
+        first = executor_readiness_module.executor_readiness_contract("codex")
+        first["probe"]["args"][0] = "mutated"
+        first["probe"]["captures"][0] = "mutated"
+        first["fallback_policy"]["suggested_actions"][0] = "mutated"
+        first["not_evidence"][0] = "mutated"
+
+        second = executor_readiness_module.executor_readiness_contract("codex")
+        cache_info = executor_readiness_module._executor_readiness_contract_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertEqual(second["probe"]["args"], ["--version"])
+        self.assertEqual(second["probe"]["captures"][0], "available")
+        self.assertEqual(second["fallback_policy"]["suggested_actions"][0], "choose_executor")
+        self.assertEqual(second["not_evidence"][0], "executor dispatch")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_executor_readiness_selection_cache_is_reused_without_profile_poisoning(self) -> None:
+        executor_readiness_module._executor_readiness_contract_cached.cache_clear()
+
+        first = executor_readiness_module.executor_readiness_for_selection(None, choice_required=True)
+        first["profiles"][0]["profile"] = "mutated"
+        first["profiles"][0]["probe"]["command"] = "mutated"
+
+        second = executor_readiness_module.executor_readiness_for_selection(None, choice_required=True)
+        cache_info = executor_readiness_module._executor_readiness_contract_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertEqual(second["status"], "choice_required")
+        self.assertEqual(second["profiles"][0]["profile"], "codex")
+        self.assertEqual(second["profiles"][0]["probe"]["command"], "codex")
+        self.assertGreaterEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
     def test_messenger_safe_body_cache_is_reused_without_transform_poisoning(self) -> None:

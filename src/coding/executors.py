@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 
 EXECUTOR_HANDOFF_SCHEMA_VERSION = "coding_executor_handoff/v1"
@@ -336,8 +337,12 @@ def public_executor_options() -> list[dict[str, object]]:
 
 
 def executor_label(profile: str | None) -> str:
-    labels = {str(option["profile"]): str(option["label"]) for option in public_executor_options()}
-    return labels.get(profile or "", "Unselected executor")
+    return _executor_label_map().get(profile or "", "Unselected executor")
+
+
+@lru_cache(maxsize=1)
+def _executor_label_map() -> dict[str, str]:
+    return {str(option["profile"]): str(option["label"]) for option in public_executor_options()}
 
 
 def prompt_invocation_for_profile(profile: str) -> dict[str, str]:

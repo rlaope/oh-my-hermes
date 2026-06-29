@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from functools import lru_cache
 from typing import Any
 
 from ..executors import EXECUTOR_PROFILES, executor_label
@@ -23,6 +24,11 @@ _COMMANDS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 def executor_readiness_contract(profile: str | None) -> dict[str, object]:
     normalized = _normalize_profile(profile)
+    return _copy_executor_readiness_payload(_executor_readiness_contract_cached(normalized))
+
+
+@lru_cache(maxsize=16)
+def _executor_readiness_contract_cached(normalized: str) -> dict[str, object]:
     if normalized == "choose":
         return {
             "schema_version": EXECUTOR_READINESS_SCHEMA_VERSION,
@@ -78,6 +84,32 @@ def executor_readiness_contract(profile: str | None) -> dict[str, object]:
         ],
         "claim_boundary": "Readiness is not dispatch, execution, verification, review, CI, or merge evidence; it only checks whether the selected executor path appears available.",
     }
+
+
+def _copy_executor_readiness_payload(payload: dict[str, object]) -> dict[str, object]:
+    copied = dict(payload)
+    probe = copied.get("probe")
+    if isinstance(probe, dict):
+        copied_probe = dict(probe)
+        copied_probe["args"] = _copy_list(probe.get("args", []))
+        copied_probe["captures"] = _copy_list(probe.get("captures", []))
+        copied["probe"] = copied_probe
+    fallback_policy = copied.get("fallback_policy")
+    if isinstance(fallback_policy, dict):
+        copied_policy = dict(fallback_policy)
+        if "suggested_actions" in copied_policy:
+            copied_policy["suggested_actions"] = _copy_list(copied_policy.get("suggested_actions", []))
+        copied["fallback_policy"] = copied_policy
+    if "not_evidence" in copied:
+        copied["not_evidence"] = _copy_list(copied.get("not_evidence", []))
+    profiles = copied.get("profiles")
+    if isinstance(profiles, list):
+        copied["profiles"] = [
+            _copy_executor_readiness_payload(profile)
+            for profile in profiles
+            if isinstance(profile, dict)
+        ]
+    return copied
 
 
 def executor_readiness_for_selection(
@@ -219,6 +251,12 @@ def _normalize_profile(profile: str | None) -> str:
     if value not in EXECUTOR_READINESS_PROFILES:
         raise ValueError(f"unsupported executor readiness profile: {value}")
     return value
+
+
+def _copy_list(value: object) -> list[object]:
+    if not isinstance(value, list):
+        return []
+    return list(value)
 
 
 def _read_state(paths: OmhPaths) -> tuple[dict[str, Any], str]:
