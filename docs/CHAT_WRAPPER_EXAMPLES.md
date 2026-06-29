@@ -27,6 +27,7 @@ uv run python -m omh.cli chat native-command --source telegram
 uv run python -m omh.cli demo orchestration
 uv run python -m omh.cli demo orchestration --executor hermes
 uv run python -m omh.cli demo chat-card-coverage --summary
+uv run python -m omh.cli demo route-hint-alignment --summary
 ```
 
 The first command renders the fixture event in
@@ -295,6 +296,17 @@ do not need to parse prose before opening generic tool surfaces. The `--summary`
 form prints the same status, primary workflow, next action, matched cues, hint
 details, checkpoint, and evidence boundary for operator QA. Adapters should
 continue to consume the default JSON payload.
+
+Release QA should also run:
+
+```sh
+omh demo route-hint-alignment --summary
+```
+
+That gate compares the public chat router, chat-card payload, and plugin
+awareness hint over the grounded operator and chat-card scenario corpus. It
+catches cases where Hermes would route to the right OMH workflow but the
+injected route hint says `no_hint` or names a different workflow.
 
 The current OMH-first map is:
 

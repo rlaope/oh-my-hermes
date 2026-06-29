@@ -650,14 +650,23 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
             wrapper-contract coverage.
           </p>
           <p>
+            Check the Hermes-awareness side with
+            <code>omh demo route-hint-alignment --summary</code>. It confirms
+            that every grounded-score and chat-card scenario also produces a
+            primary <code>omh_route_hint/v1</code> workflow matching the router
+            choice, so wrappers do not receive a correct route but a misleading
+            plugin hint.
+          </p>
+          <p>
             Check the full public story with <code>omh cases readiness --json</code>.
             It rolls catalog, demo cards, prepared artifacts, replay fixtures,
             and optional local artifact-store state into one readiness card.
           </p>
           <p>
             Before a release, run <code>omh release product-readiness --version 1.0.1 --json</code>.
-            It combines skill content, G1-G10 readiness, parity contracts, and release
-            checklist shape without claiming live Hermes chat or executor evidence.
+            It combines skill content, G1-G10 readiness, grounded routing score,
+            chat-card coverage, route-hint alignment, parity contracts, and
+            release checklist shape without claiming live Hermes chat or executor evidence.
           </p>
           <p>
             To attach local deterministic proof to a release PR or note, run
@@ -755,7 +764,8 @@ omh harness list
 omh harness inspect planning
 omh harness validate
 omh demo grounded-score --summary
-omh demo chat-card-coverage --summary</code>
+omh demo chat-card-coverage --summary
+omh demo route-hint-alignment --summary</code>
           </div>
         </section>
 
