@@ -498,6 +498,17 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_recommendation_ranking_cache_is_reused_across_limits(self) -> None:
+        recommend_module._recommend_skills_cached.cache_clear()
+
+        first = recommend_module.recommend_skills("risky refactor", limit=2)
+        second = recommend_module.recommend_skills("risky refactor", limit=8)
+        cache_info = recommend_module._recommend_skills_cached.cache_info()
+
+        self.assertEqual([item["skill"] for item in first], [item["skill"] for item in second[:2]])
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_routing_guard_cache_is_reused_for_repeated_recommendations(self) -> None:
         policy_module._active_routing_guard_rules_cached.cache_clear()
         recommend_module._recommend_skills_cached.cache_clear()
