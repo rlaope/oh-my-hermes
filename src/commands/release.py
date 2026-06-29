@@ -368,9 +368,13 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
         print(
             "  Routing precision: "
             f"{summary.get('routing_precision_passing')}/{summary.get('routing_precision_total')} "
+            f"negative controls, "
+            f"{summary.get('routing_precision_intervention_passing')}/"
+            f"{summary.get('routing_precision_intervention_total')} interventions "
             f"(overroutes {summary.get('routing_precision_overroute_count')}, "
             f"catalog pickers {summary.get('routing_precision_catalog_picker_count')}, "
-            f"generic ack {summary.get('routing_precision_generic_ack_count')})"
+            f"generic ack {summary.get('routing_precision_generic_ack_count')}, "
+            f"missed interventions {summary.get('routing_precision_missed_intervention_count')})"
         )
     if "hermes_ux_quality_score" in summary:
         print(

@@ -180,8 +180,10 @@ boundary. It is local context-contract evidence only: it does not prove live
 Hermes chat rendering, plugin load, generic tool invocation, source retrieval,
 image generation, executor dispatch, review, CI, merge, or delivery.
 
-The routing precision gate checks negative-control prompts where OMH should not
-open a workflow:
+The routing precision gate checks both sides of the router boundary:
+negative-control prompts where OMH should not open a workflow, and expected
+intervention prompts where OMH should route to a workflow, picker, or bounded
+context brief:
 
 ```sh
 omh demo routing-precision --json
@@ -189,10 +191,12 @@ omh demo routing-precision --json
 
 It should report ordinary file lookup and general-help prompts as direct file
 lookup or direct chat answers with overroute count `0`, catalog picker count
-`0`, and generic acknowledgement count `0`. This catches regressions where OMH
-feels pushy by opening workflow cards for questions such as "what files are in
-this repo?" or "what does Python list comprehension mean?" It is local
-over-intervention guard evidence only: it does not prove live Hermes chat
+`0`, and generic acknowledgement count `0`. It should also report OMH-shaped
+requests with missed intervention count `0`, including safe feature planning,
+source acquisition, image-card preparation, feedback triage, workflow catalog
+opening, and OMH usage context. This catches regressions where OMH feels pushy
+for ordinary questions or too passive for requests that should use OMH. It is
+local routing-boundary evidence only: it does not prove live Hermes chat
 rendering, source retrieval, file inspection, executor dispatch, review, CI,
 merge, or plugin loading.
 
@@ -206,7 +210,8 @@ omh demo hermes-ux-quality --json
 It should report all UX gates passing: grounded natural-language routing,
 dedicated wrapper cards with generic acknowledgements at zero, route hints
 aligned with the router, first-turn context briefs with catalog picker coverage,
-and negative-control prompts that stay out of OMH workflows. It is local
+negative-control prompts that stay out of OMH workflows, and expected
+intervention prompts that still enter the right workflow surface. It is local
 UX-contract evidence only: it does not prove live Hermes chat rendering, plugin
 load, platform delivery, generic tool invocation, executor dispatch, review, CI,
 merge, or delivery.

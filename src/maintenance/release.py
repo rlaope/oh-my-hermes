@@ -281,13 +281,13 @@ def release_readiness_checklist(
         ),
         ReleaseChecklistItem(
             "routing_precision",
-            "Check routing precision negative controls",
+            "Check routing precision boundaries",
             "uv run python -m omh.cli demo routing-precision --json",
             "contract-quality",
             True,
             False,
-            "Routing precision reports ordinary direct-answer and file-lookup prompts with overroute count 0, catalog picker count 0, and generic ack count 0.",
-            "Routing precision proves deterministic local over-intervention guards only; it does not prove live Hermes chat rendering, platform delivery, source retrieval, file inspection, executor work, review, CI, merge, or plugin-load evidence.",
+            "Routing precision reports ordinary direct-answer and file-lookup prompts with overroute count 0, plus expected OMH prompts with missed intervention count 0.",
+            "Routing precision proves deterministic local over-intervention and missed-intervention guards only; it does not prove live Hermes chat rendering, platform delivery, source retrieval, file inspection, executor work, review, CI, merge, or plugin-load evidence.",
         ),
         ReleaseChecklistItem(
             "hermes_ux_quality",
@@ -673,14 +673,18 @@ def product_readiness_report(
         ),
         _product_readiness_gate(
             "routing_precision",
-            "Routing precision negative controls",
+            "Routing precision boundaries",
             "passed" if not routing_precision_gate_errors else "failed",
             True,
             (
                 f"{routing_precision_summary.get('passing_count', 0)}/{routing_precision_summary.get('case_count', 0)} "
-                f"negative-control cases; overroutes {routing_precision_summary.get('overroute_count', 0)}; "
+                f"negative-control cases; "
+                f"{routing_precision_summary.get('intervention_passing_count', 0)}/"
+                f"{routing_precision_summary.get('intervention_case_count', 0)} interventions; "
+                f"overroutes {routing_precision_summary.get('overroute_count', 0)}; "
                 f"catalog pickers {routing_precision_summary.get('catalog_picker_count', 0)}; "
-                f"generic ack {routing_precision_summary.get('generic_ack_count', 0)}"
+                f"generic ack {routing_precision_summary.get('generic_ack_count', 0)}; "
+                f"missed interventions {routing_precision_summary.get('missed_intervention_count', 0)}"
             ),
             "omh demo routing-precision --json",
             routing_precision_gate_errors,
@@ -1660,6 +1664,9 @@ def release_evidence_bundle(
             "routing_precision_overroute_count": routing_precision_summary.get("overroute_count"),
             "routing_precision_catalog_picker_count": routing_precision_summary.get("catalog_picker_count"),
             "routing_precision_generic_ack_count": routing_precision_summary.get("generic_ack_count"),
+            "routing_precision_intervention_passing": routing_precision_summary.get("intervention_passing_count"),
+            "routing_precision_intervention_total": routing_precision_summary.get("intervention_case_count"),
+            "routing_precision_missed_intervention_count": routing_precision_summary.get("missed_intervention_count"),
             "hermes_ux_quality_score": hermes_ux.get("score"),
             "hermes_ux_quality_passing_gates": hermes_ux_summary.get("passing_gate_count"),
             "hermes_ux_quality_total_gates": hermes_ux_summary.get("gate_count"),

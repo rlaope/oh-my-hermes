@@ -16,13 +16,21 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertTrue(payload["summary"]["all_passing"])
         self.assertEqual(payload["summary"]["case_count"], 5)
         self.assertEqual(payload["summary"]["passing_count"], 5)
+        self.assertEqual(payload["summary"]["negative_case_count"], 5)
+        self.assertEqual(payload["summary"]["negative_passing_count"], 5)
         self.assertEqual(payload["summary"]["direct_answer_count"], 3)
         self.assertEqual(payload["summary"]["file_lookup_count"], 2)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 6)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 6)
+        self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
+        self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
+        self.assertEqual(payload["summary"]["total_case_count"], 11)
+        self.assertEqual(payload["summary"]["total_passing_count"], 11)
         self.assertEqual(routing_precision_errors(payload), [])
-        self.assertIn("over-intervention guards", payload["claim_boundary"])
+        self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
         cases = {case["id"]: case for case in payload["cases"]}
         self.assertEqual(cases["repo-file-list"]["observed"]["next_action"], "answer_file_lookup")
@@ -33,6 +41,17 @@ class RoutingPrecisionTests(unittest.TestCase):
             self.assertEqual(case["observed"]["route_action"], "fallback")
             self.assertEqual(case["observed"]["route_workflow"], "oh-my-hermes")
 
+        interventions = {case["id"]: case for case in payload["intervention_cases"]}
+        self.assertEqual(interventions["safe-feature-plan"]["observed"]["route_workflow"], "ralplan")
+        self.assertEqual(interventions["source-acquisition"]["observed"]["route_workflow"], "source-finder")
+        self.assertEqual(interventions["visual-summary"]["observed"]["route_workflow"], "img-summary")
+        self.assertEqual(interventions["feedback-triage"]["observed"]["route_workflow"], "feedback-triage")
+        self.assertEqual(interventions["catalog-picker"]["observed"]["response_kind"], "skill_picker")
+        self.assertEqual(interventions["omh-risky-refactor-context"]["observed"]["response_kind"], "context_brief")
+        for case in interventions.values():
+            self.assertTrue(case["passed"])
+            self.assertNotEqual(case["observed"]["response_kind"], "ack")
+
     def test_routing_precision_cli_outputs_summary_and_json(self) -> None:
         status, stdout, stderr = run_cli(["demo", "routing-precision", "--summary"], output_json=False)
 
@@ -40,9 +59,11 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("5/5 negative-control cases passing", stdout)
+        self.assertIn("Interventions: 6/6 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)
+        self.assertIn("missed interventions: 0", stdout)
 
         status, stdout, stderr = run_cli(["demo", "routing-precision", "--json"], output_json=False)
 
@@ -51,6 +72,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "routing_precision/v1")
         self.assertTrue(payload["summary"]["all_passing"])
+        self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
 
 
 if __name__ == "__main__":

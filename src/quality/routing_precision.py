@@ -21,6 +21,17 @@ class RoutingPrecisionCase:
     expected_lookup_kind: str
 
 
+@dataclass(frozen=True)
+class RoutingInterventionCase:
+    id: str
+    title: str
+    message: str
+    expected_route_action: str
+    expected_workflow: str
+    expected_next_action: str
+    expected_response_kind: str
+
+
 # Negative-control corpus. These are ordinary chat turns where OMH should stay
 # helpful but should not hijack the answer into workflow selection, catalog
 # pickers, coding handoffs, or generic workflow acknowledgements.
@@ -63,28 +74,111 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
 )
 
 
+# Positive-intervention corpus. These are real OMH-shaped turns where the router
+# should still step in after the direct-answer fallback was added.
+ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
+    RoutingInterventionCase(
+        "safe-feature-plan",
+        "Safe feature work routes to planning",
+        "how can I safely add a feature to this repo?",
+        "dispatch",
+        "ralplan",
+        "present_plan",
+        "plan",
+    ),
+    RoutingInterventionCase(
+        "source-acquisition",
+        "Source acquisition routes to source finder",
+        "github oss repo 찾아서 비교해줘",
+        "dispatch",
+        "source-finder",
+        "prepare_source_finder_plan",
+        "source_finder",
+    ),
+    RoutingInterventionCase(
+        "visual-summary",
+        "Image-card requests route to img-summary",
+        "make an image card for this PR",
+        "dispatch",
+        "img-summary",
+        "prepare_visual_prompt_card",
+        "img_summary",
+    ),
+    RoutingInterventionCase(
+        "feedback-triage",
+        "Product feedback routes to triage",
+        "payment failures keep coming up from customer feedback",
+        "dispatch",
+        "feedback-triage",
+        "triage_feedback",
+        "feedback_triage",
+    ),
+    RoutingInterventionCase(
+        "catalog-picker",
+        "Workflow inventory opens the OMH picker",
+        "what OMH workflows are available?",
+        "dispatch",
+        "oh-my-hermes",
+        "choose_skill",
+        "skill_picker",
+    ),
+    RoutingInterventionCase(
+        "omh-risky-refactor-context",
+        "OMH usage help opens a bounded context brief",
+        "how do I use OMH for a risky refactor?",
+        "dispatch",
+        "oh-my-hermes",
+        "show_context_brief",
+        "context_brief",
+    ),
+)
+
+
 def build_routing_precision_demo(*, source: str = "discord") -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported demo source: {source}")
     rows = [_evaluate_precision_case(case, source=source) for case in ROUTING_PRECISION_CASES]
+    intervention_rows = [
+        _evaluate_intervention_case(case, source=source)
+        for case in ROUTING_INTERVENTION_CASES
+    ]
     passing_count = sum(1 for row in rows if bool(row["passed"]))
+    intervention_passing_count = sum(1 for row in intervention_rows if bool(row["passed"]))
     direct_count = sum(1 for row in rows if _nested(row, "observed").get("next_action") == "answer_directly")
     file_lookup_count = sum(1 for row in rows if _nested(row, "observed").get("next_action") == "answer_file_lookup")
     overroute_count = sum(1 for row in rows if bool(_nested(row, "observed").get("overrouted")))
     catalog_picker_count = sum(1 for row in rows if bool(_nested(row, "observed").get("catalog_picker_opened")))
     generic_ack_count = sum(1 for row in rows if _nested(row, "observed").get("response_kind") == "ack")
+    missed_intervention_count = sum(1 for row in intervention_rows if not bool(row["passed"]))
+    intervention_generic_ack_count = sum(
+        1 for row in intervention_rows if _nested(row, "observed").get("response_kind") == "ack"
+    )
+    all_passing = (
+        bool(rows)
+        and bool(intervention_rows)
+        and passing_count == len(rows)
+        and intervention_passing_count == len(intervention_rows)
+    )
     return {
         "schema_version": ROUTING_PRECISION_SCHEMA_VERSION,
         "source": source,
         "summary": {
             "case_count": len(rows),
             "passing_count": passing_count,
+            "negative_case_count": len(rows),
+            "negative_passing_count": passing_count,
             "direct_answer_count": direct_count,
             "file_lookup_count": file_lookup_count,
             "overroute_count": overroute_count,
             "catalog_picker_count": catalog_picker_count,
             "generic_ack_count": generic_ack_count,
-            "all_passing": bool(rows) and passing_count == len(rows),
+            "intervention_case_count": len(intervention_rows),
+            "intervention_passing_count": intervention_passing_count,
+            "missed_intervention_count": missed_intervention_count,
+            "intervention_generic_ack_count": intervention_generic_ack_count,
+            "total_case_count": len(rows) + len(intervention_rows),
+            "total_passing_count": passing_count + intervention_passing_count,
+            "all_passing": all_passing,
         },
         "check_basis": [
             "Ordinary file and text lookup requests stay in answer_file_lookup.",
@@ -92,11 +186,14 @@ def build_routing_precision_demo(*, source: str = "discord") -> dict[str, object
             "Negative-control prompts do not open the OMH workflow picker.",
             "Negative-control prompts do not produce generic workflow acknowledgements.",
             "Negative-control prompts do not expose coding handoff or executor actions.",
-            "This gate checks deterministic local precision only; it does not prove live Hermes rendering or execution.",
+            "Expected OMH requests still route to their workflow, picker, or context brief.",
+            "Expected OMH requests do not collapse into generic acknowledgement cards.",
+            "This gate checks deterministic local routing boundaries only; it does not prove live Hermes rendering or execution.",
         ],
         "cases": rows,
+        "intervention_cases": intervention_rows,
         "claim_boundary": (
-            "Routing precision proves deterministic local over-intervention guards only. "
+            "Routing precision proves deterministic local over-intervention and missed-intervention guards only. "
             "It does not prove live Hermes chat rendering, platform delivery, source retrieval, file inspection, "
             "executor dispatch, implementation, verification, review, CI, merge, or plugin-load evidence."
         ),
@@ -106,19 +203,24 @@ def build_routing_precision_demo(*, source: str = "discord") -> dict[str, object
 def format_routing_precision_summary(payload: Mapping[str, object]) -> str:
     summary = _nested(payload, "summary")
     rows = _mapping_rows(payload.get("cases"))
+    intervention_rows = _mapping_rows(payload.get("intervention_cases"))
     total = int(summary.get("case_count", len(rows)) or 0)
     passing = int(summary.get("passing_count", 0) or 0)
+    intervention_total = int(summary.get("intervention_case_count", len(intervention_rows)) or 0)
+    intervention_passing = int(summary.get("intervention_passing_count", 0) or 0)
     all_passing = bool(summary.get("all_passing", False))
     lines = [
         "OMH routing precision",
         f"Source: {payload.get('source', 'unknown')}",
         f"Result: {passing}/{total} negative-control cases passing" + (" (all passing)" if all_passing else ""),
+        f"Interventions: {intervention_passing}/{intervention_total} expected workflow cases passing",
         (
             f"Direct answers: {summary.get('direct_answer_count', 0)}; "
             f"file lookups: {summary.get('file_lookup_count', 0)}; "
             f"overroutes: {summary.get('overroute_count', 0)}; "
             f"catalog pickers: {summary.get('catalog_picker_count', 0)}; "
-            f"generic ack: {summary.get('generic_ack_count', 0)}"
+            f"generic ack: {summary.get('generic_ack_count', 0)}; "
+            f"missed interventions: {summary.get('missed_intervention_count', 0)}"
         ),
         "",
         "What this proves:",
@@ -133,7 +235,16 @@ def format_routing_precision_summary(payload: Mapping[str, object]) -> str:
             f"- {row.get('title', 'Untitled precision case')}: {status}; "
             f"{observed.get('route_action', 'unknown')} -> {observed.get('next_action', 'unknown')}"
         )
-    failed = [row for row in rows if not row.get("passed")]
+    if intervention_rows:
+        lines.extend(["", "Intervention rollup:"])
+        for row in intervention_rows:
+            observed = _nested(row, "observed")
+            status = "ok" if row.get("passed") else "needs attention"
+            lines.append(
+                f"- {row.get('title', 'Untitled intervention case')}: {status}; "
+                f"{observed.get('route_workflow', 'unknown')} -> {observed.get('next_action', 'unknown')}"
+            )
+    failed = [row for row in rows + intervention_rows if not row.get("passed")]
     if failed:
         lines.extend(["", "Failures:"])
         for row in failed:
@@ -161,15 +272,28 @@ def routing_precision_errors(payload: Mapping[str, object]) -> list[str]:
         errors.append(f"catalog_picker_count: {summary.get('catalog_picker_count')}")
     if int(summary.get("generic_ack_count", 0) or 0):
         errors.append(f"generic_ack_count: {summary.get('generic_ack_count')}")
+    if int(summary.get("missed_intervention_count", 0) or 0):
+        errors.append(f"missed_intervention_count: {summary.get('missed_intervention_count')}")
+    if int(summary.get("intervention_generic_ack_count", 0) or 0):
+        errors.append(f"intervention_generic_ack_count: {summary.get('intervention_generic_ack_count')}")
     cases = payload.get("cases")
     if not isinstance(cases, Sequence) or isinstance(cases, (str, bytes)):
         errors.append("cases_not_sequence")
+        return errors
+    intervention_cases = payload.get("intervention_cases")
+    if not isinstance(intervention_cases, Sequence) or isinstance(intervention_cases, (str, bytes)):
+        errors.append("intervention_cases_not_sequence")
         return errors
     for case in cases:
         if not isinstance(case, Mapping) or bool(case.get("passed")):
             continue
         case_id = str(case.get("id") or "unknown")
         errors.append(f"{case_id}: {', '.join(_string_items(case.get('issues'))) or 'unknown precision failure'}")
+    for case in intervention_cases:
+        if not isinstance(case, Mapping) or bool(case.get("passed")):
+            continue
+        case_id = str(case.get("id") or "unknown")
+        errors.append(f"{case_id}: {', '.join(_string_items(case.get('issues'))) or 'unknown intervention failure'}")
     return errors
 
 
@@ -247,6 +371,70 @@ def _evaluate_precision_case(case: RoutingPrecisionCase, *, source: str) -> dict
             "route_action": "fallback",
             "next_action": case.expected_next_action,
             "lookup_kind": case.expected_lookup_kind,
+        },
+        "observed": observed,
+        "issues": issues,
+    }
+
+
+def _evaluate_intervention_case(case: RoutingInterventionCase, *, source: str) -> dict[str, object]:
+    interaction = build_chat_interaction_payload(case.message, source=source)
+    response = _nested(interaction, "chat_response")
+    route = _nested(interaction, "route")
+    response_state = _nested(response, "state")
+    actions = _mapping_rows(response.get("actions"))
+    action_ids = [str(action.get("id", "")) for action in actions]
+    serialized = json.dumps(interaction, sort_keys=True, ensure_ascii=False)
+    observed = {
+        "schema_version": interaction.get("schema_version"),
+        "source": interaction.get("source"),
+        "mode": interaction.get("mode"),
+        "route_action": route.get("action"),
+        "route_workflow": route.get("selected_skill"),
+        "route_confidence": route.get("confidence"),
+        "route_reason": route.get("reason"),
+        "next_action": interaction.get("next_action"),
+        "response_kind": response.get("kind"),
+        "plain_headline": response.get("plain_headline"),
+        "lookup_kind": response_state.get("lookup_kind"),
+        "catalog_picker_opened": response.get("kind") == "skill_picker" or bool(response_state.get("skill_picker")),
+        "catalog_question": bool(response_state.get("catalog_question")),
+        "capability_summary_opened": bool(response_state.get("capability_summary")),
+        "handoff_action_count": sum(1 for action_id in action_ids if _is_handoff_action(action_id)),
+        "raw_message_echoed": case.message in serialized,
+        "claim_boundary": response.get("claim_boundary"),
+    }
+
+    issues: list[str] = []
+    if observed["schema_version"] != "chat_interaction/v1":
+        issues.append(f"unexpected schema {observed['schema_version']}")
+    if observed["source"] != source:
+        issues.append(f"unexpected source {observed['source']}")
+    if observed["route_action"] != case.expected_route_action:
+        issues.append(f"expected route action {case.expected_route_action}, observed {observed['route_action']}")
+    if observed["route_workflow"] != case.expected_workflow:
+        issues.append(f"expected workflow {case.expected_workflow}, observed {observed['route_workflow']}")
+    if observed["next_action"] != case.expected_next_action:
+        issues.append(f"expected next action {case.expected_next_action}, observed {observed['next_action']}")
+    if observed["response_kind"] != case.expected_response_kind:
+        issues.append(f"expected response kind {case.expected_response_kind}, observed {observed['response_kind']}")
+    if observed["response_kind"] == "ack":
+        issues.append("generic acknowledgement replaced expected workflow surface")
+    if observed["raw_message_echoed"]:
+        issues.append("raw message echoed in machine payload")
+    if not str(observed["claim_boundary"] or ""):
+        issues.append("missing claim boundary")
+
+    return {
+        "id": case.id,
+        "title": case.title,
+        "message_sha256": hashlib.sha256(case.message.encode("utf-8")).hexdigest(),
+        "passed": not issues,
+        "expected": {
+            "route_action": case.expected_route_action,
+            "workflow": case.expected_workflow,
+            "next_action": case.expected_next_action,
+            "response_kind": case.expected_response_kind,
         },
         "observed": observed,
         "issues": issues,
