@@ -26,6 +26,9 @@ from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routabl
 FILE_LOOKUP_REASON = (
     "File or text lookup request; answer directly or ask for the target file instead of dispatching to a workflow keyword."
 )
+DIRECT_ANSWER_REASON = (
+    "Plain user question; answer directly in chat instead of opening an OMH workflow or picker."
+)
 ROUTE_EXPLANATION_SCHEMA_VERSION = "route_explanation/v1"
 _ROUTER_SKILL = "oh-my-hermes"
 _SPECIFIC_CAPABILITY_CATALOG_MIN_SCORE = 6
@@ -116,6 +119,68 @@ _GENERIC_CATALOG_LISTING_MARKERS = (
     "목록",
     "리스트",
     "할 수 있는",
+)
+_DIRECT_ANSWER_STARTERS = (
+    "what ",
+    "what's ",
+    "whats ",
+    "how ",
+    "how do ",
+    "how can ",
+    "why ",
+    "please explain",
+    "explain ",
+    "describe ",
+    "tell me ",
+)
+_DIRECT_ANSWER_KEYWORDS = (
+    "python",
+    "list comprehension",
+    "path",
+    "zsh",
+    "bash",
+    "shell",
+    "stack trace",
+    "error",
+    "means",
+    "mean",
+    "concept",
+)
+_DIRECT_ANSWER_BLOCKERS = (
+    "omh",
+    "oh-my-hermes",
+    "oh my hermes",
+    "hermes",
+    "workflow",
+    "workflows",
+    "skill",
+    "skills",
+    "codex",
+    "claude",
+    "pr",
+    "issue",
+    "repo",
+    "repository",
+    "codebase",
+    "implement",
+    "fix",
+    "build",
+    "create",
+    "generate",
+    "research",
+    "paper",
+    "pdf",
+    "image",
+    "poster",
+    "summary card",
+    "회의",
+    "요약",
+    "논문",
+    "이미지",
+    "기능",
+    "스킬",
+    "워크플로",
+    "헤르메스",
 )
 
 
@@ -228,6 +293,10 @@ def route_chat_message(
     ambiguous = _is_ambiguous(full_recommendations)
     explicit_loop_signal = _explicit_loop_signal(routing_message, full_recommendations)
     file_or_text_lookup = is_file_or_text_lookup_question(routing_message)
+    direct_answer = _is_plain_direct_answer_question(
+        routing_message,
+        candidate_score=candidate_score,
+    )
 
     if explicit_skill and not task_card_overrides_explicit:
         selected_skill = explicit_skill
@@ -269,6 +338,15 @@ def route_chat_message(
         candidate_confidence = "low"
         action = "fallback"
         reason = FILE_LOOKUP_REASON
+        ambiguous = False
+    elif direct_answer:
+        selected_skill = _ROUTER_SKILL
+        candidate_skill = selected_skill
+        candidate_harness = primary_harness_for_skill(candidate_skill)
+        candidate_score = 0
+        candidate_confidence = "low"
+        action = "fallback"
+        reason = DIRECT_ANSWER_REASON
         ambiguous = False
     elif explicit_loop_signal:
         selected_skill = "loop"
@@ -658,6 +736,8 @@ def _clarification(action: str, candidate_skill: str, candidate_confidence: str,
     if action == "fallback":
         if _is_file_lookup_reason(reason):
             return "Answer this as a file or text lookup, or ask for the target file/path if it is missing."
+        if _is_direct_answer_reason(reason):
+            return "Answer directly in the current chat; do not open an OMH workflow unless the user asks for one."
         return "Ask which workflow or outcome the user wants before choosing a specialist skill."
     return f"Ask whether to use `{candidate_skill}`; confidence was {candidate_confidence}, below threshold {threshold}."
 
@@ -677,11 +757,41 @@ def _routing_instruction(action: str, selected_skill: str, candidate_skill: str,
         return f"Use the `oh-my-hermes` router before dispatching to `{candidate_skill}`."
     if _is_file_lookup_reason(reason):
         return "Answer this as a file or text lookup; do not dispatch to a workflow keyword unless the user explicitly asks."
+    if _is_direct_answer_reason(reason):
+        return "Answer directly in chat; do not open an OMH workflow, picker, or coding handoff."
     return "Use the `oh-my-hermes` router and ask one concise clarification question."
 
 
 def _is_file_lookup_reason(reason: str) -> bool:
     return reason == FILE_LOOKUP_REASON
+
+
+def _is_direct_answer_reason(reason: str) -> bool:
+    return reason == DIRECT_ANSWER_REASON
+
+
+def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> bool:
+    if candidate_score > 4:
+        return False
+    text = message.strip().lower()
+    if not text:
+        return False
+    if _contains_direct_answer_blocker(text):
+        return False
+    if any(text.startswith(starter) for starter in _DIRECT_ANSWER_STARTERS):
+        return True
+    return any(keyword in text for keyword in _DIRECT_ANSWER_KEYWORDS) and "?" in text
+
+
+def _contains_direct_answer_blocker(text: str) -> bool:
+    word_text = f" {' '.join(''.join(character if character.isalnum() else ' ' for character in text).split())} "
+    for marker in _DIRECT_ANSWER_BLOCKERS:
+        if marker.isascii() and marker.replace("-", "").replace(" ", "").isalnum():
+            if f" {marker} " in word_text:
+                return True
+        elif marker in text:
+            return True
+    return False
 
 
 def _compact_recommendations(recommendations: object) -> list[dict[str, object]]:
@@ -727,6 +837,8 @@ def _route_next_action(route: dict[str, object], recommendation: dict[str, objec
         return str(recommendation.get("next_action") or "dispatch_to_workflow")
     if action == "fallback" and _is_file_lookup_reason(str(route.get("reason", ""))):
         return "answer_file_lookup"
+    if action == "fallback" and _is_direct_answer_reason(str(route.get("reason", ""))):
+        return "answer_directly"
     if action == "clarify":
         return "answer_clarification"
     return "ask_one_clarification"
@@ -735,6 +847,8 @@ def _route_next_action(route: dict[str, object], recommendation: dict[str, objec
 def _route_claim_boundary(route: dict[str, object], recommendation: dict[str, object]) -> str:
     if _is_file_lookup_reason(str(route.get("reason", ""))):
         return "No OMH workflow, execution, or file inspection has started."
+    if _is_direct_answer_reason(str(route.get("reason", ""))):
+        return "No OMH workflow, picker, handoff, execution, or file inspection has started."
     boundary = str(recommendation.get("evidence_boundary", "")).strip()
     if boundary:
         return boundary
@@ -777,6 +891,8 @@ def _route_explanation_headline(action: str, selected: str, next_action: str) ->
         return "Ask one question before choosing a workflow."
     if next_action == "answer_file_lookup":
         return "Answer as a file or text lookup."
+    if next_action == "answer_directly":
+        return "Answer directly in chat."
     return "Keep this in the router until the target is clear."
 
 
@@ -787,6 +903,8 @@ def _route_explanation_summary(action: str, selected: str, next_action: str, why
         return f"The router needs one clarification before dispatch. Best candidate: `{selected}`."
     if next_action == "answer_file_lookup":
         return f"Answer directly as a file or text lookup; do not dispatch a workflow. Reason: {why}"
+    if next_action == "answer_directly":
+        return f"Answer directly without opening an OMH workflow. Reason: {why}"
     return f"The router should not dispatch yet. Reason: {why}"
 
 
@@ -804,6 +922,8 @@ def _route_recommended_reply(
         return "I need one clarification before choosing a workflow; no plan or execution has started."
     if next_action_label == "answer file lookup":
         return "I will answer this as a file or text lookup; no file inspection or workflow execution has started."
+    if next_action_label == "answer directly":
+        return "I will answer directly in chat; no OMH workflow, handoff, or execution has started."
     return "I will keep this in the router until the target is clear; no workflow or execution has started."
 
 
@@ -814,6 +934,8 @@ def _route_primary_action_label(action: str, selected: str, next_action_label: s
         return "Answer clarification"
     if next_action_label == "answer file lookup":
         return "Answer file lookup"
+    if next_action_label == "answer directly":
+        return "Answer directly"
     return "Clarify request"
 
 
@@ -829,6 +951,8 @@ def _route_primary_action_hint(
         return f"Route to `{selected}` and run `{next_action_label}`{suffix}."
     if action == "clarify":
         return "Ask one blocking question, then reroute with the answer."
+    if next_action_label == "answer directly":
+        return "Answer in the current chat without opening a workflow, picker, or handoff."
     return "Answer directly or ask for the missing target before dispatching a workflow."
 
 

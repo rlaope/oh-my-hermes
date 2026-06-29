@@ -15,8 +15,8 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["source"], "discord")
         self.assertEqual(payload["status"], "passed")
         self.assertEqual(payload["score"], 100)
-        self.assertEqual(payload["summary"]["gate_count"], 4)
-        self.assertEqual(payload["summary"]["passing_gate_count"], 4)
+        self.assertEqual(payload["summary"]["gate_count"], 5)
+        self.assertEqual(payload["summary"]["passing_gate_count"], 5)
         self.assertEqual(payload["summary"]["grounded_score_scenarios"], 28)
         self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
         self.assertEqual(payload["summary"]["chat_card_cases"], 25)
@@ -27,6 +27,11 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
         self.assertEqual(payload["summary"]["context_brief_cases"], 8)
         self.assertEqual(payload["summary"]["context_brief_passing_count"], 8)
+        self.assertEqual(payload["summary"]["routing_precision_cases"], 5)
+        self.assertEqual(payload["summary"]["routing_precision_passing_count"], 5)
+        self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
+        self.assertEqual(payload["summary"]["routing_precision_catalog_picker_count"], 0)
+        self.assertEqual(payload["summary"]["routing_precision_generic_ack_count"], 0)
         self.assertEqual(hermes_ux_quality_errors(payload), [])
 
         gates = {gate["id"]: gate for gate in payload["gates"]}
@@ -37,11 +42,13 @@ class HermesUxQualityTests(unittest.TestCase):
                 "chat_card_coverage",
                 "route_hint_alignment",
                 "context_brief_coverage",
+                "routing_precision",
             },
         )
         self.assertIn("generic acknowledgement", gates["chat_card_coverage"]["user_value"])
         self.assertIn("before generic tools", gates["route_hint_alignment"]["user_value"])
         self.assertIn("raw prompt leakage", gates["context_brief_coverage"]["user_value"])
+        self.assertIn("Ordinary questions", gates["routing_precision"]["user_value"])
         self.assertIn("does not prove live Hermes chat rendering", payload["claim_boundary"])
 
     def test_hermes_ux_quality_cli_outputs_summary_and_json(self) -> None:
@@ -51,9 +58,10 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH Hermes UX quality", stdout)
         self.assertIn("Status: passed (100/100)", stdout)
-        self.assertIn("Gates: 4/4", stdout)
+        self.assertIn("Gates: 5/5", stdout)
         self.assertIn("generic ack 0", stdout)
         self.assertIn("route mismatches 0", stdout)
+        self.assertIn("precision overroutes 0", stdout)
 
         status, stdout, stderr = run_cli(["demo", "hermes-ux-quality", "--json"], output_json=False)
 

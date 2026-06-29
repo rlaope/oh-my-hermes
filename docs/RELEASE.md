@@ -66,6 +66,7 @@ python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli cases replay --json
 python3 -m omh.cli cases readiness --json
+python3 -m omh.cli demo routing-precision --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
@@ -179,8 +180,24 @@ boundary. It is local context-contract evidence only: it does not prove live
 Hermes chat rendering, plugin load, generic tool invocation, source retrieval,
 image generation, executor dispatch, review, CI, merge, or delivery.
 
+The routing precision gate checks negative-control prompts where OMH should not
+open a workflow:
+
+```sh
+omh demo routing-precision --json
+```
+
+It should report ordinary file lookup and general-help prompts as direct file
+lookup or direct chat answers with overroute count `0`, catalog picker count
+`0`, and generic acknowledgement count `0`. This catches regressions where OMH
+feels pushy by opening workflow cards for questions such as "what files are in
+this repo?" or "what does Python list comprehension mean?" It is local
+over-intervention guard evidence only: it does not prove live Hermes chat
+rendering, source retrieval, file inspection, executor dispatch, review, CI,
+merge, or plugin loading.
+
 The Hermes UX quality rollup checks the chat-first user experience across the
-routing, card, hint, and context rails:
+routing, card, hint, context, and precision rails:
 
 ```sh
 omh demo hermes-ux-quality --json
@@ -188,10 +205,11 @@ omh demo hermes-ux-quality --json
 
 It should report all UX gates passing: grounded natural-language routing,
 dedicated wrapper cards with generic acknowledgements at zero, route hints
-aligned with the router, and first-turn context briefs with catalog picker
-coverage. It is local UX-contract evidence only: it does not prove live Hermes
-chat rendering, plugin load, platform delivery, generic tool invocation,
-executor dispatch, review, CI, merge, or delivery.
+aligned with the router, first-turn context briefs with catalog picker coverage,
+and negative-control prompts that stay out of OMH workflows. It is local
+UX-contract evidence only: it does not prove live Hermes chat rendering, plugin
+load, platform delivery, generic tool invocation, executor dispatch, review, CI,
+merge, or delivery.
 
 The product readiness rollup sits one level above use cases:
 
@@ -201,12 +219,11 @@ omh release product-readiness --version 1.0.1 --json
 
 It checks the generated skill content, G1-G10 readiness, grounded routing score,
 wrapper chat-card coverage, route-hint alignment, context-brief coverage,
-Hermes UX quality, parity matrix, and release checklist shape in one
-operator-readable card. It is useful for release notes and maintainer handoff,
-but it is still local
-deterministic evidence only: it does not run the checklist, mutate Hermes,
-dispatch executors, review code, pass CI, merge, deliver messages, or spend
-provider budget.
+routing precision, Hermes UX quality, parity matrix, and release checklist
+shape in one operator-readable card. It is useful for release notes and
+maintainer handoff, but it is still local deterministic evidence only: it does
+not run the checklist, mutate Hermes, dispatch executors, review code, pass CI,
+merge, deliver messages, or spend provider budget.
 
 When the local release story is ready, write an attachable evidence bundle:
 
@@ -217,10 +234,10 @@ omh release evidence-bundle --version 1.0.1 --write --json
 The bundle writes `omh_release_evidence_bundle/v1` under
 `.omh/runtime/release-evidence/` with the checklist, product readiness,
 skill-content smoke, use-case readiness, grounded score, chat-card coverage,
-route-hint alignment, context-brief coverage, Hermes UX quality, and parity
-snapshots. It is useful for release PRs and notes, but it is still local
-deterministic evidence only; live Hermes smoke, CI, review, merge, delivery, and
-GitHub release publication must be observed separately.
+route-hint alignment, context-brief coverage, routing precision, Hermes UX
+quality, and parity snapshots. It is useful for release PRs and notes, but it is
+still local deterministic evidence only; live Hermes smoke, CI, review, merge,
+delivery, and GitHub release publication must be observed separately.
 
 ## Hermes CLI Install Smoke
 

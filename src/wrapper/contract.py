@@ -2551,6 +2551,29 @@ def build_chat_response_from_route(
                 "routing_instruction": decision.get("routing_instruction", ""),
             },
         )
+    if action == "fallback" and _is_direct_answer_fallback(decision):
+        return _chat_response(
+            kind="clarification",
+            headline="This does not need an OMH workflow.",
+            body=str(
+                decision.get("clarification")
+                or "Answer directly in the current chat; do not open an OMH workflow unless the user asks for one."
+            ),
+            phase="clarifying",
+            next_action="answer_directly",
+            thread_key=thread_key,
+            actions=[
+                _action("answer:direct", "Answer directly", "primary"),
+                _action("cancel", "Cancel", "secondary"),
+            ],
+            claim_boundary="No OMH workflow, picker, handoff, execution, or file inspection has started.",
+            extra_state={
+                "route_action": action,
+                "confidence": decision.get("confidence", "low"),
+                "lookup_kind": "direct_answer",
+                "routing_instruction": decision.get("routing_instruction", ""),
+            },
+        )
     return _chat_response(
         kind="clarification",
         headline="I need to understand the goal before routing this.",
@@ -2570,6 +2593,14 @@ def _is_file_lookup_fallback(decision: dict[str, object]) -> bool:
         for key in ("reason", "clarification", "routing_instruction")
     ).lower()
     return "file or text lookup" in text or "file/text lookup" in text
+
+
+def _is_direct_answer_fallback(decision: dict[str, object]) -> bool:
+    text = " ".join(
+        str(decision.get(key, "") or "")
+        for key in ("reason", "clarification", "routing_instruction")
+    ).lower()
+    return "answer directly" in text and "omh workflow" in text
 
 
 def _route_task_card(decision: dict[str, object]) -> dict[str, object]:
