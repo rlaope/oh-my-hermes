@@ -598,20 +598,37 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertGreater(cache_info.hits, 0)
 
     def test_catalog_question_caches_repeated_search_and_token_checks(self) -> None:
+        catalog_questions_module.is_skill_catalog_question.cache_clear()
         catalog_questions_module._catalog_search_texts.cache_clear()
         catalog_questions_module._contains_catalog_token.cache_clear()
 
         first = catalog_questions_module.is_skill_catalog_question("what OMH workflows are available?")
         second = catalog_questions_module.is_skill_catalog_question("what OMH workflows are available?")
+        question_cache = catalog_questions_module.is_skill_catalog_question.cache_info()
         search_cache = catalog_questions_module._catalog_search_texts.cache_info()
         token_cache = catalog_questions_module._contains_catalog_token.cache_info()
 
         self.assertTrue(first)
         self.assertEqual(first, second)
+        self.assertEqual(question_cache.misses, 1)
+        self.assertGreaterEqual(question_cache.hits, 1)
         self.assertEqual(search_cache.misses, 1)
-        self.assertGreaterEqual(search_cache.hits, 1)
         self.assertGreater(token_cache.misses, 0)
-        self.assertGreater(token_cache.hits, 0)
+
+    def test_file_lookup_question_cache_reuses_repeated_lookup_checks(self) -> None:
+        catalog_questions_module.is_file_or_text_lookup_question.cache_clear()
+        catalog_questions_module._catalog_search_texts.cache_clear()
+
+        first = catalog_questions_module.is_file_or_text_lookup_question("find the README file")
+        second = catalog_questions_module.is_file_or_text_lookup_question("find the README file")
+        lookup_cache = catalog_questions_module.is_file_or_text_lookup_question.cache_info()
+        search_cache = catalog_questions_module._catalog_search_texts.cache_info()
+
+        self.assertTrue(first)
+        self.assertEqual(first, second)
+        self.assertEqual(lookup_cache.misses, 1)
+        self.assertGreaterEqual(lookup_cache.hits, 1)
+        self.assertEqual(search_cache.misses, 1)
 
     def test_chat_route_decision_cache_is_reused_without_payload_poisoning(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
