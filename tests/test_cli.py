@@ -2074,7 +2074,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
         self.assertEqual(gates["routing_precision"]["status"], "passed")
         self.assertIn("5/5 negative-control cases", gates["routing_precision"]["summary"])
-        self.assertIn("6/6 interventions", gates["routing_precision"]["summary"])
+        self.assertIn("9/9 interventions", gates["routing_precision"]["summary"])
         self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
         self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
         self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2116,7 +2116,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 8/8 (route hints 7, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 5/5 negative controls, 6/6 interventions "
+                "Routing precision: 5/5 negative controls, 9/9 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2147,8 +2147,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_passing"], 5)
             self.assertEqual(payload["summary"]["routing_precision_total"], 5)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 6)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 6)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 9)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 9)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
