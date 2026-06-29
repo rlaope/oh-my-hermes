@@ -17,6 +17,7 @@ from omh.routing import policy as policy_module
 from omh.routing import route_plan as route_plan_module
 from omh.skills import render as render_module
 from omh.workflows import hermes_planning as hermes_planning_module
+from omh.workflows import learning_candidate as learning_candidate_module
 from omh.wrapper import contract as contract_module
 from omh.release import (
     AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
@@ -570,6 +571,35 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertNotEqual(second["selected_skill"], "mutated")
         self.assertNotEqual(second["recommendations"][0]["skill"], "mutated")
         self.assertNotEqual(second["route_explanation"]["selected_workflow"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_learning_candidate_detection_cache_reuses_negative_messages(self) -> None:
+        learning_candidate_module._detect_learning_signal_cached.cache_clear()
+
+        first = learning_candidate_module.detect_learning_signal("risky refactor with implementation and review")
+        second = learning_candidate_module.detect_learning_signal("risky refactor with implementation and review")
+        cache_info = learning_candidate_module._detect_learning_signal_cached.cache_info()
+
+        self.assertIsNone(first)
+        self.assertIsNone(second)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_learning_candidate_detection_cache_is_reused_without_payload_poisoning(self) -> None:
+        learning_candidate_module._detect_learning_signal_cached.cache_clear()
+
+        first = learning_candidate_module.detect_learning_signal("learn this: always run the focused tests first")
+        self.assertIsNotNone(first)
+        assert first is not None
+        first["matched"] = "mutated"
+
+        second = learning_candidate_module.detect_learning_signal("learn this: always run the focused tests first")
+        cache_info = learning_candidate_module._detect_learning_signal_cached.cache_info()
+
+        self.assertIsNotNone(second)
+        assert second is not None
+        self.assertEqual(second["matched"], "learn this")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 

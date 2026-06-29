@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from functools import lru_cache
 import re
 from typing import Any, Iterable
 
@@ -303,12 +304,17 @@ def build_learning_candidate_scope(
 
 
 def detect_learning_signal(message: str) -> dict[str, object] | None:
+    return _copy_learning_signal(_detect_learning_signal_cached(message))
+
+
+@lru_cache(maxsize=4096)
+def _detect_learning_signal_cached(message: str) -> dict[str, object] | None:
     normalized = _fold(message)
     workflow_learning_context = "workflow learning" in normalized or "learn from this workflow" in normalized
-    if workflow_learning_context and not any(_fold(phrase) in normalized for phrase in _BRIDGE_FORCING_SIGNALS):
+    if workflow_learning_context and not any(phrase in normalized for phrase in _folded_bridge_forcing_signals()):
         return None
-    for phrase in _EXPLICIT_LEARN_SIGNALS:
-        if _fold(phrase) in normalized:
+    for phrase, folded_phrase in _folded_explicit_learn_signals():
+        if folded_phrase in normalized:
             signal_type = "skill_request" if phrase in _SKILL_FORCING_SIGNALS else "explicit_learn_request"
             if phrase in {"next time", "from now on", "다음부터", "다음부터 이렇게", "앞으로는"}:
                 signal_type = "user_correction"
@@ -320,6 +326,20 @@ def detect_learning_signal(message: str) -> dict[str, object] | None:
                 "source": "user_message",
             }
     return None
+
+
+def _copy_learning_signal(signal: dict[str, object] | None) -> dict[str, object] | None:
+    return dict(signal) if signal else None
+
+
+@lru_cache(maxsize=1)
+def _folded_bridge_forcing_signals() -> tuple[str, ...]:
+    return tuple(_fold(phrase) for phrase in _BRIDGE_FORCING_SIGNALS)
+
+
+@lru_cache(maxsize=1)
+def _folded_explicit_learn_signals() -> tuple[tuple[str, str], ...]:
+    return tuple((phrase, _fold(phrase)) for phrase in _EXPLICIT_LEARN_SIGNALS)
 
 
 def classify_learning_persistence_target(
@@ -486,6 +506,7 @@ def _contains_any(text: str, needles: Iterable[str]) -> bool:
     return any(needle and needle in text for needle in needles)
 
 
+@lru_cache(maxsize=8192)
 def _fold(text: str) -> str:
     return " ".join(text.strip().lower().split())
 
