@@ -4456,7 +4456,10 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("target is clear", explanation["recommended_reply"])
         self.assertIn("file inspection", explanation["not_evidence_yet"])
         self.assertNotIn("review", explanation["not_evidence_yet"])
-        self.assertNotEqual(route["recommendations"][0]["skill"], route["selected_skill"])
+        self.assertEqual(route["recommendations"][0]["skill"], route["selected_skill"])
+        self.assertEqual(route["recommendations"][0]["matched"], ["file_lookup_fast_path"])
+        self.assertEqual(route["recommendations"][0]["next_action"], "answer_file_lookup")
+        self.assertNotIn("workflow_route_plan", route)
 
     def test_chat_interact_file_lookup_fallback_uses_lookup_card(self) -> None:
         status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "README", "파일", "찾아줘"])
