@@ -230,6 +230,31 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(paper["action"], "dispatch")
         self.assertEqual(paper["selected_skill"], "paper-learning")
 
+    def test_plain_direct_answer_uses_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        for message in ("just explain Python virtualenv", "how do I create a virtualenv in Python?"):
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("plain direct answers should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("plain direct answers should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "fallback")
+            self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+            self.assertEqual(decision["confidence"], "low")
+            self.assertIn("answer directly", decision["reason"])
+            self.assertEqual(decision["recommendations"][0]["matched"], ["direct_answer_fast_path"])
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], "answer_directly")
+            self.assertNotIn("workflow_route_plan", public)
+
     def test_below_threshold_chat_clarifies_before_dispatch(self) -> None:
         decision = route_chat_message("architecture", min_confidence="high")
 

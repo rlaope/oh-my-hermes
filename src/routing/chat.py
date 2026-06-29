@@ -442,6 +442,14 @@ def _route_chat_message_cached(
     )
     if fast_catalog_decision.decision is not None:
         return fast_catalog_decision.decision.to_dict()
+    fast_direct_answer_decision = _direct_answer_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_direct_answer_decision is not None:
+        return fast_direct_answer_decision.to_dict()
 
     definitions = routable_definitions()
     full_recommendations = recommend_skills(routing_message, limit=len(definitions))
@@ -784,6 +792,62 @@ def _catalog_fast_path_decision(
 def _direct_picker_alias(message: str) -> bool:
     compact = message.strip().lower().strip(" \t\r\n.!?,;:")
     return compact in _DIRECT_PICKER_ALIASES
+
+
+def _direct_answer_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if not _is_fast_plain_direct_answer_question(routing_message):
+        return None
+    selected_harness = primary_harness_for_skill(_ROUTER_SKILL)
+    reason = DIRECT_ANSWER_REASON
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="fallback",
+        selected_skill=_ROUTER_SKILL,
+        selected_harness=selected_harness,
+        candidate_skill=_ROUTER_SKILL,
+        candidate_harness=selected_harness,
+        confidence="low",
+        score=0,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification=_clarification("fallback", _ROUTER_SKILL, "low", min_confidence, reason),
+        routing_prompt=_routing_prompt("fallback", _ROUTER_SKILL, _ROUTER_SKILL, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(_router_direct_answer_recommendation(message),),
+    )
+
+
+def _router_direct_answer_recommendation(query: str) -> dict[str, object]:
+    definition = _router_skill_definition()
+    return {
+        "skill": definition.name,
+        "description": definition.description,
+        "category": definition.category,
+        "phase": definition.phase,
+        "hermes_role": definition.hermes_role,
+        "handoff_policy": definition.handoff_policy,
+        "score": 0,
+        "confidence": "low",
+        "matched": ["direct_answer_fast_path"],
+        "why": DIRECT_ANSWER_REASON,
+        "next_action": "answer_directly",
+        "evidence_boundary": "No OMH workflow, picker, handoff, execution, or file inspection has started.",
+        "wrapper_guidance": "Answer in the current chat; do not open an OMH workflow, picker, or coding handoff.",
+        "suggested_prompt": query,
+    }
 
 
 def _generic_omh_catalog_question(message: str) -> bool:
@@ -1183,6 +1247,31 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
     if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_STARTERS):
         return True
     return any(keyword in direct_text for keyword in _DIRECT_ANSWER_KEYWORDS) and "?" in text
+
+
+def _is_fast_plain_direct_answer_question(message: str) -> bool:
+    text = message.strip().lower()
+    if not text:
+        return False
+    direct_text = _strip_direct_answer_soft_prefix(text)
+    if _is_plain_setup_how_to_question(direct_text):
+        return True
+    if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
+        return False
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
+        return True
+    if not any(
+        direct_text.startswith(starter)
+        for starter in (
+            "please explain",
+            "explain ",
+            "describe ",
+            "tell me ",
+        )
+    ):
+        return False
+    keywords = _DIRECT_ANSWER_KEYWORDS + _DIRECT_ANSWER_SETUP_KEYWORDS
+    return any(keyword in direct_text for keyword in keywords)
 
 
 def _strip_direct_answer_soft_prefix(text: str) -> str:
