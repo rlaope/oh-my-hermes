@@ -14,6 +14,7 @@ from omh.skill_pack import builtin_definitions, builtin_skill_templates
 from omh.routing import chat as chat_module
 from omh.routing import catalog_questions as catalog_questions_module
 from omh.routing import localization as localization_module
+from omh.routing import missed_route as missed_route_module
 from omh.routing import recommend as recommend_module
 from omh.routing import policy as policy_module
 from omh.routing import route_plan as route_plan_module
@@ -526,6 +527,29 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_missed_route_phrase_cache_reuses_feedback_checks(self) -> None:
+        missed_route_module._contains_phrase.cache_clear()
+        missed_route_module._contains_compact_phrase.cache_clear()
+
+        first = missed_route_module.is_missed_route_feedback("missed route: OMH was not used")
+        second = missed_route_module.is_missed_route_feedback("missed route: OMH was not used")
+        phrase_cache = missed_route_module._contains_phrase.cache_info()
+
+        self.assertTrue(first)
+        self.assertEqual(first, second)
+        self.assertEqual(phrase_cache.misses, 1)
+        self.assertGreaterEqual(phrase_cache.hits, 1)
+
+        missed_route_module._contains_compact_phrase.cache_clear()
+        first_compact = missed_route_module.is_missed_route_feedback("라우팅 누락 기록해줘")
+        second_compact = missed_route_module.is_missed_route_feedback("라우팅 누락 기록해줘")
+        compact_cache = missed_route_module._contains_compact_phrase.cache_info()
+
+        self.assertTrue(first_compact)
+        self.assertEqual(first_compact, second_compact)
+        self.assertEqual(compact_cache.misses, 1)
+        self.assertGreaterEqual(compact_cache.hits, 1)
 
     def test_normalized_phrase_cache_reuses_folded_text(self) -> None:
         localization_module._fold_for_match.cache_clear()
