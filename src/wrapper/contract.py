@@ -1355,6 +1355,96 @@ def build_chat_interaction_payload(
         raise ValueError("chat interact --limit must be at least 1")
 
     message = extract_message_text(event_or_message)
+    if _can_use_chat_interaction_cache(
+        event_or_message,
+        include_message=include_message,
+        source_metadata=source_metadata,
+        target_notice=target_notice,
+        paths=paths,
+    ):
+        return _copy_chat_interaction_payload(
+            _build_chat_interaction_payload_cached(
+                message,
+                source,
+                mode,
+                limit,
+                min_confidence,
+                executor_target,
+            )
+        )
+
+    return _build_chat_interaction_payload_uncached(
+        event_or_message,
+        source=source,
+        mode=mode,
+        limit=limit,
+        min_confidence=min_confidence,
+        include_message=include_message,
+        executor_target=executor_target,
+        source_metadata=source_metadata,
+        target_notice=target_notice,
+        paths=paths,
+    )
+
+
+def _can_use_chat_interaction_cache(
+    event_or_message: dict[str, Any] | str,
+    *,
+    include_message: bool,
+    source_metadata: dict[str, str] | None,
+    target_notice: dict[str, object] | None,
+    paths: OmhPaths | None,
+) -> bool:
+    return (
+        isinstance(event_or_message, str)
+        and not include_message
+        and source_metadata is None
+        and target_notice is None
+        and paths is None
+    )
+
+
+def _copy_chat_interaction_payload(payload: dict[str, object]) -> dict[str, object]:
+    return _clone_static_dict(payload)
+
+
+@lru_cache(maxsize=2048)
+def _build_chat_interaction_payload_cached(
+    message: str,
+    source: str,
+    mode: str,
+    limit: int,
+    min_confidence: str,
+    executor_target: str,
+) -> dict[str, object]:
+    return _build_chat_interaction_payload_uncached(
+        message,
+        source=source,
+        mode=mode,
+        limit=limit,
+        min_confidence=min_confidence,
+        include_message=False,
+        executor_target=executor_target,
+        source_metadata=None,
+        target_notice=None,
+        paths=None,
+    )
+
+
+def _build_chat_interaction_payload_uncached(
+    event_or_message: dict[str, Any] | str,
+    *,
+    source: str,
+    mode: str,
+    limit: int,
+    min_confidence: str,
+    include_message: bool,
+    executor_target: str,
+    source_metadata: dict[str, str] | None,
+    target_notice: dict[str, object] | None,
+    paths: OmhPaths | None,
+) -> dict[str, object]:
+    message = extract_message_text(event_or_message)
     metadata = _source_metadata(event_or_message, source_metadata)
     route_payload = public_chat_route_payload(
         message,

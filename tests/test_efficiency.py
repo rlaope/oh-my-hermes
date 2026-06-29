@@ -734,20 +734,60 @@ class EfficiencyContractTests(unittest.TestCase):
     def test_chat_interaction_uses_public_route_projection_cache(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         chat_module._public_chat_route_payload_cached.cache_clear()
+        contract_module._build_chat_interaction_payload_cached.cache_clear()
 
         first = contract_module.build_chat_interaction_payload(
             "risky refactor with implementation and review",
             source="discord",
+            source_metadata={"source_event_id": "evt-1"},
         )
         second = contract_module.build_chat_interaction_payload(
             "risky refactor with implementation and review",
             source="discord",
+            source_metadata={"source_event_id": "evt-1"},
         )
         cache_info = chat_module._public_chat_route_payload_cached.cache_info()
 
         self.assertEqual(first["route"]["selected_skill"], second["route"]["selected_skill"])
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_chat_interaction_cache_is_reused_without_payload_poisoning(self) -> None:
+        contract_module._build_chat_interaction_payload_cached.cache_clear()
+
+        first = contract_module.build_chat_interaction_payload(
+            "risky refactor with implementation and review",
+            source="discord",
+        )
+        first["route"]["selected_skill"] = "mutated"
+        first["chat_response"]["state"]["workflow_explanation"]["why_this_workflow"] = "mutated"
+        first["chat_response"]["actions"][0]["label"] = "mutated"
+
+        second = contract_module.build_chat_interaction_payload(
+            "risky refactor with implementation and review",
+            source="discord",
+        )
+        cache_info = contract_module._build_chat_interaction_payload_cached.cache_info()
+
+        self.assertNotEqual(second["route"]["selected_skill"], "mutated")
+        self.assertNotEqual(second["chat_response"]["state"]["workflow_explanation"]["why_this_workflow"], "mutated")
+        self.assertNotEqual(second["chat_response"]["actions"][0]["label"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_chat_interaction_cache_skips_event_metadata_calls(self) -> None:
+        contract_module._build_chat_interaction_payload_cached.cache_clear()
+
+        payload = contract_module.build_chat_interaction_payload(
+            "risky refactor with implementation and review",
+            source="discord",
+            source_metadata={"source_event_id": "evt-123", "channel_ref": "chan-1"},
+        )
+        cache_info = contract_module._build_chat_interaction_payload_cached.cache_info()
+
+        self.assertIn("evt-123", payload["thread_key"])
+        self.assertEqual(cache_info.misses, 0)
+        self.assertEqual(cache_info.hits, 0)
 
     def test_wrapper_intent_classifiers_cache_repeated_messages(self) -> None:
         classifier_cases = (
