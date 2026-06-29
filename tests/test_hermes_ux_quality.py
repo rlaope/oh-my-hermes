@@ -32,8 +32,8 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
         self.assertEqual(payload["summary"]["routing_precision_catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["routing_precision_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["routing_precision_intervention_cases"], 6)
-        self.assertEqual(payload["summary"]["routing_precision_intervention_passing_count"], 6)
+        self.assertEqual(payload["summary"]["routing_precision_intervention_cases"], 9)
+        self.assertEqual(payload["summary"]["routing_precision_intervention_passing_count"], 9)
         self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
         self.assertEqual(hermes_ux_quality_errors(payload), [])
 
