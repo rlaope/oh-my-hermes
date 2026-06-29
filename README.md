@@ -232,10 +232,15 @@ in [Release](docs/RELEASE.md). For a quick local sanity check from a source
 checkout:
 
 ```sh
-python3 -m unittest discover -s tests
-python3 -m compileall src
-python3 -m omh.cli docs workflows --check
+PYTHONPATH=tests uv run python -m unittest discover -s tests -v
+uv run python -m compileall -q src tests
+uv run python -m omh.cli docs workflows --check
+uv run --no-editable omh recommend "risky refactor" --limit 1 --json
 ```
+
+The final command intentionally uses `uv run --no-editable` so the source
+checkout proves the packaged `omh` console script can import and run. Normal
+users should use the installed `omh` command printed by the curl installer.
 
 OMH 1.0.1 is a quality-gated stable baseline. Richer profile activation probes
 and more artifact-backed wrapper examples are tracked in the roadmap and

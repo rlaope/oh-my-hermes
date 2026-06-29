@@ -70,6 +70,13 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("wheel_setup_dry_run", items)
         self.assertIn("setup --dry-run --channel stable --version 1.0.0", items["wheel_setup_dry_run"]["command"])
         self.assertIn("release install-smoke --live", items["installer_smoke"]["command"])
+        self.assertEqual(
+            items["source_checkout_command_smoke"]["command"],
+            'uv run --no-editable omh recommend "risky refactor" --limit 1 --json',
+        )
+        self.assertIn("console script", items["source_checkout_command_smoke"]["evidence_required"])
+        self.assertIn("console-script importability", items["source_checkout_command_smoke"]["proof_boundary"])
+        self.assertIn("does not prove Hermes chat visibility", items["source_checkout_command_smoke"]["proof_boundary"])
         self.assertEqual(items["use_case_demo_cards"]["command"], "uv run python -m omh.cli cases demo --all --json")
         self.assertIn("G1-G10", items["use_case_demo_cards"]["evidence_required"])
         self.assertIn("wrapper-renderable projections", items["use_case_demo_cards"]["proof_boundary"])

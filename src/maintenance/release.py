@@ -213,6 +213,16 @@ def release_readiness_checklist(
             "Harness validation proves local schemas and metadata, not runtime execution.",
         ),
         ReleaseChecklistItem(
+            "source_checkout_command_smoke",
+            "Check source-checkout console command importability",
+            'uv run --no-editable omh recommend "risky refactor" --limit 1 --json',
+            "local-quality",
+            True,
+            False,
+            "The source checkout can build/install the package non-editably and run the `omh` console script.",
+            "This proves console-script importability for the local checkout only; it does not prove Hermes chat visibility, plugin load, executor work, review, CI, merge, or delivery.",
+        ),
+        ReleaseChecklistItem(
             "use_case_demo_cards",
             "Check G1-G10 use-case demo cards",
             "uv run python -m omh.cli cases demo --all --json",
