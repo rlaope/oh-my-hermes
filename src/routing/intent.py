@@ -270,6 +270,7 @@ class OmhQualityIntent:
         )
 
 
+@lru_cache(maxsize=4096)
 def classify_workflow_intent(message: str) -> WorkflowIntent:
     """Classify whether workflow vocabulary is a reference or execution intent."""
     normalized = normalized_phrase(message)
@@ -463,6 +464,7 @@ _CUSTOMER_FEEDBACK_CUES = (
 )
 
 
+@lru_cache(maxsize=4096)
 def classify_omh_quality_intent(message: str) -> OmhQualityIntent:
     """Classify deterministic OMH self-improvement loop intent.
 
@@ -683,6 +685,7 @@ def _without_diagnostic_status_lines(normalized: str) -> str:
     return "\n".join(kept)
 
 
+@lru_cache(maxsize=4096)
 def scrub_diagnostic_status_text(message: str) -> str:
     """Remove pasted/generated OMH status fragments while preserving user text."""
     normalized = normalized_phrase(message)

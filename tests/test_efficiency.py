@@ -13,6 +13,7 @@ load_local_package()
 from omh.skill_pack import builtin_definitions, builtin_skill_templates
 from omh.routing import chat as chat_module
 from omh.routing import catalog_questions as catalog_questions_module
+from omh.routing import intent as intent_module
 from omh.routing import localization as localization_module
 from omh.routing import missed_route as missed_route_module
 from omh.routing import recommend as recommend_module
@@ -550,6 +551,44 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(first_compact, second_compact)
         self.assertEqual(compact_cache.misses, 1)
         self.assertGreaterEqual(compact_cache.hits, 1)
+
+    def test_intent_classifier_cache_reuses_repeated_workflow_checks(self) -> None:
+        intent_module.classify_workflow_intent.cache_clear()
+
+        message = "OMH route: `$ultraprocess` ≠ ejecutar; Codex handoff token only."
+        first = intent_module.classify_workflow_intent(message)
+        second = intent_module.classify_workflow_intent(message)
+        cache_info = intent_module.classify_workflow_intent.cache_info()
+
+        self.assertIs(first, second)
+        self.assertEqual(first.intent_class, "meta_discussion")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_omh_quality_classifier_cache_reuses_repeated_quality_checks(self) -> None:
+        intent_module.classify_omh_quality_intent.cache_clear()
+
+        first = intent_module.classify_omh_quality_intent("Improve OMH routing quality and handoff reliability")
+        second = intent_module.classify_omh_quality_intent("Improve OMH routing quality and handoff reliability")
+        cache_info = intent_module.classify_omh_quality_intent.cache_info()
+
+        self.assertIs(first, second)
+        self.assertTrue(second.applies)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_diagnostic_status_scrub_cache_reuses_repeated_status_text(self) -> None:
+        intent_module.scrub_diagnostic_status_text.cache_clear()
+
+        status_text = "[omh] selected_workflow=ultraprocess | status=prepared\nWhy did OMH route this wrong?"
+        first = intent_module.scrub_diagnostic_status_text(status_text)
+        second = intent_module.scrub_diagnostic_status_text(status_text)
+        cache_info = intent_module.scrub_diagnostic_status_text.cache_info()
+
+        self.assertEqual(first, second)
+        self.assertIn("why did omh route this wrong", second)
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
 
     def test_normalized_phrase_cache_reuses_folded_text(self) -> None:
         localization_module._fold_for_match.cache_clear()
