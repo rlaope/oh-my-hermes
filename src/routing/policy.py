@@ -3248,6 +3248,11 @@ def _paper_learning_guard_applies(
         normalized_query,
         ("find papers", "search papers", "latest papers", "current papers", "논문 찾아", "최신 논문"),
     )
+    capability_question = _omh_capability_question(normalized_query) and not _source_acquisition_capability_context(
+        normalized_query, query_tokens
+    )
+    if capability_question and paper_context and not search_only:
+        return True
     return (paper_context or supplied_pdf_context) and explanation_context and not search_only
 
 
@@ -3419,7 +3424,82 @@ def _source_finder_guard_applies(
             "소스 후보",
         ),
     )
+    if _omh_capability_question(normalized_query) and _source_acquisition_capability_context(
+        normalized_query, query_tokens
+    ):
+        return True
     return action and (source_kind or acquisition_noun or multiple_source_kinds)
+
+
+def _omh_capability_question(normalized_query: str) -> bool:
+    return _contains_phrase(
+        normalized_query,
+        (
+            "what can omh do",
+            "what can oh-my-hermes do",
+            "what can i do with omh",
+            "how can omh help",
+            "how can oh-my-hermes help",
+            "can omh help",
+            "can oh-my-hermes help",
+            "omh가 뭐",
+            "omh는 뭐",
+            "omh로 뭐",
+            "omh로 무엇",
+            "omh가 어떻게",
+            "omh는 어떻게",
+        ),
+    )
+
+
+def _source_acquisition_capability_context(normalized_query: str, query_tokens: set[str]) -> bool:
+    if {
+        "dataset",
+        "datasets",
+        "github",
+        "repo",
+        "repos",
+        "repository",
+        "repositories",
+        "oss",
+        "source",
+        "sources",
+        "link",
+        "links",
+        "candidate",
+        "candidates",
+        "데이터셋",
+        "깃허브",
+        "저장소",
+        "레포",
+        "소스",
+        "출처",
+        "링크",
+        "후보",
+    } & query_tokens:
+        return True
+    return _contains_phrase(
+        normalized_query,
+        (
+            "source finding",
+            "source finder",
+            "source acquisition",
+            "source candidate",
+            "source candidates",
+            "source material",
+            "source materials",
+            "find sources",
+            "finding sources",
+            "dataset search",
+            "repo search",
+            "github repos",
+            "github repositories",
+            "출처 찾",
+            "자료 찾",
+            "소스 찾",
+            "데이터셋 찾",
+        ),
+    )
 
 
 def is_explicit_one_off_request(normalized_query: str, query_tokens: set[str]) -> bool:
