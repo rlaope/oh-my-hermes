@@ -155,6 +155,13 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "direct_answer",
     ),
     RoutingPrecisionCase(
+        "korean-error-slang",
+        "Korean short error slang stays direct",
+        "이 오류 뭐임",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
         "korean-log-review",
         "Korean log review stays direct",
         "이 로그 봐줘",
@@ -387,6 +394,24 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "paper-learning",
         "prepare_paper_learning",
         "paper_learning",
+    ),
+    RoutingInterventionCase(
+        "short-korean-paper-learning",
+        "Short Korean paper explanation opens paper learning",
+        "논문 쉽게 설명해줘",
+        "dispatch",
+        "paper-learning",
+        "prepare_paper_learning",
+        "paper_learning",
+    ),
+    RoutingInterventionCase(
+        "korean-agent-status-slang",
+        "Korean short status slang opens agent ops review",
+        "뭔일임?",
+        "dispatch",
+        "agent-ops-review",
+        "show_agent_ops_review",
+        "agent_ops_review",
     ),
     RoutingInterventionCase(
         "loopable-project",
