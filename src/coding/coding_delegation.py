@@ -146,6 +146,35 @@ _LOCAL_CAPABILITY_EXAMPLES = {
         "MCP tools",
     ],
 }
+_CODING_STATUS_AGENT_TERMS = (
+    "codex",
+    "claude code",
+    "coding agent",
+    "coding-agent",
+    "hermes coding",
+    "코덱스",
+    "클로드 코드",
+    "클로드",
+    "코딩 에이전트",
+    "코딩-agent",
+)
+_CODING_STATUS_REQUEST_TERMS = (
+    "progress",
+    "status",
+    "session",
+    "where",
+    "how far",
+    "running",
+    "done",
+    "completed",
+    "진행",
+    "진행상황",
+    "상태",
+    "세션",
+    "어디까지",
+    "완료",
+    "끝났",
+)
 
 
 @dataclass(frozen=True)
@@ -415,6 +444,8 @@ def _intent_for(message: str, workflow: str, score: int) -> str:
     if score == 0:
         return "unknown"
     lowered = message.lower()
+    if _coding_status_request_applies(lowered, workflow):
+        return "coding"
     if workflow in _CATALOG_INTENT_RETAINED_WORKFLOWS:
         if _has_any(lowered, coding_terms_for_intent("coding")):
             return "coding"
@@ -423,6 +454,12 @@ def _intent_for(message: str, workflow: str, score: int) -> str:
         if workflow in coding_skills_for_intent(intent) or _has_any(lowered, coding_terms_for_intent(intent)):
             return intent
     return coding_intent_for_skill(workflow)
+
+
+def _coding_status_request_applies(lowered: str, workflow: str) -> bool:
+    if workflow != "ultraprocess":
+        return False
+    return _has_any(lowered, _CODING_STATUS_AGENT_TERMS) and _has_any(lowered, _CODING_STATUS_REQUEST_TERMS)
 
 
 def _action_for(intent: str, score: int, workflow: str) -> str:

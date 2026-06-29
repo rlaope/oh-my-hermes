@@ -1862,6 +1862,12 @@ def _build_chat_interaction_payload_uncached(
         selected_harness=str(route_payload.get("selected_harness", "")),
         thread_key=str(base["thread_key"]),
     )
+    if (
+        learning_candidate_card
+        and route_payload.get("selected_skill") == "workflow-learning"
+        and learning_candidate_card.get("recommended_workflow") != "workflow-learning"
+    ):
+        learning_candidate_card = None
     if learning_candidate_card:
         base["learning_candidate_card"] = learning_candidate_card
         route_payload["learning_candidate_card"] = learning_candidate_card

@@ -968,6 +968,12 @@ def _route_chat_message_cached(
         selected_workflow=selected_skill,
         selected_harness=selected_harness,
     )
+    if (
+        learning_candidate_card
+        and selected_skill == "workflow-learning"
+        and learning_candidate_card.get("recommended_workflow") != "workflow-learning"
+    ):
+        learning_candidate_card = None
     if learning_candidate_card:
         selected_skill = str(learning_candidate_card.get("recommended_workflow", selected_skill))
         selected_harness = primary_harness_for_skill(selected_skill)
