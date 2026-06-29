@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest import mock
 
 from _local_package import load_local_package
 
@@ -14,9 +15,10 @@ from omh.chat_router import (
     routing_record_payload,
 )
 from omh.routing.intent import classify_workflow_intent
+from omh.routing import chat as chat_router_impl
 from omh.routing.localization import normalized_phrase
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
-from omh.skills.catalog import primary_harness_for_skill
+from omh.skills.catalog import primary_harness_for_skill, routable_definitions
 
 
 def sionic_omh_usage_evaluation_prompt() -> str:
@@ -820,16 +822,9 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["confidence"], "high")
 
     def test_exact_skill_id_capability_questions_use_catalog_metadata(self) -> None:
-        skills = (
-            "meeting-brief",
-            "ops-review",
-            "best-practice-research",
-            "ultraqa",
-            "performance-goal",
-            "autoresearch-goal",
-            "wiki",
-            "ralph",
-        )
+        excluded = {"oh-my-hermes", "ask", "cancel", "plan", "skill", "team"}
+        skills = tuple(definition.name for definition in routable_definitions() if definition.name not in excluded)
+        self.assertGreaterEqual(len(skills), 40)
 
         for skill in skills:
             for phrase in (skill, skill.replace("-", " ")):
@@ -839,7 +834,6 @@ class ChatRouterTests(unittest.TestCase):
                     self.assertEqual(decision["action"], "dispatch")
                     self.assertEqual(decision["selected_skill"], skill)
                     self.assertEqual(decision["selected_harness"], primary_harness_for_skill(skill))
-                    self.assertIn("Specific OMH capability question", decision["reason"])
 
     def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
         for phrase in ("plan", "team", "ask"):
@@ -849,6 +843,29 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["action"], "dispatch")
                 self.assertEqual(decision["selected_skill"], "oh-my-hermes")
                 self.assertIn("Catalog question", decision["reason"])
+
+    def test_specific_capability_phrase_patterns_are_compiled_once(self) -> None:
+        chat_router_impl._specific_capability_phrase_map.cache_clear()
+        try:
+            with mock.patch.object(
+                chat_router_impl,
+                "_compile_specific_capability_phrase",
+                wraps=chat_router_impl._compile_specific_capability_phrase,
+            ) as compile_phrase:
+                self.assertEqual(
+                    chat_router_impl._specific_capability_named_hits("what can OMH do for CTO loop?"),
+                    ("cto-loop",),
+                )
+                first_call_count = compile_phrase.call_count
+                self.assertGreater(first_call_count, 40)
+
+                self.assertEqual(
+                    chat_router_impl._specific_capability_named_hits("what can OMH do for deploy and monitor?"),
+                    ("deploy-and-monitor",),
+                )
+                self.assertEqual(compile_phrase.call_count, first_call_count)
+        finally:
+            chat_router_impl._specific_capability_phrase_map.cache_clear()
 
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (

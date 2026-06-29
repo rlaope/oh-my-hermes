@@ -181,6 +181,13 @@ _DIRECT_ANSWER_BLOCKERS = (
 
 
 @dataclass(frozen=True)
+class _SpecificCapabilityPhrase:
+    skill: str
+    phrase: str
+    pattern: re.Pattern[str]
+
+
+@dataclass(frozen=True)
 class ChatRouteDecision:
     schema_version: int
     source: str
@@ -809,25 +816,31 @@ def _specific_capability_catalog_skills() -> frozenset[str]:
 
 
 @lru_cache(maxsize=1)
-def _specific_capability_phrase_map() -> tuple[tuple[str, tuple[str, ...]], ...]:
-    entries: list[tuple[str, tuple[str, ...]]] = []
+def _specific_capability_phrase_map() -> tuple[_SpecificCapabilityPhrase, ...]:
+    entries: list[_SpecificCapabilityPhrase] = []
     for skill in sorted(_specific_capability_catalog_skills()):
         variants = {
             skill,
             skill.replace("-", " "),
             skill.replace("-", "_"),
         }
-        entries.append((skill, tuple(sorted(variants))))
+        for phrase in sorted(variants):
+            entries.append(
+                _SpecificCapabilityPhrase(
+                    skill=skill,
+                    phrase=phrase,
+                    pattern=_compile_specific_capability_phrase(phrase),
+                )
+            )
     return tuple(entries)
 
 
 def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
     text = message.strip().lower()
     matches: list[tuple[int, int, int, str]] = []
-    for skill, phrases in _specific_capability_phrase_map():
-        for phrase in phrases:
-            for start, end in _specific_capability_phrase_matches(text, phrase):
-                matches.append((start, end, len(phrase), skill))
+    for phrase in _specific_capability_phrase_map():
+        for start, end in _specific_capability_phrase_matches(text, phrase):
+            matches.append((start, end, len(phrase.phrase), phrase.skill))
 
     selected: list[str] = []
     selected_ranges: list[tuple[int, int]] = []
@@ -840,13 +853,19 @@ def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
     return tuple(selected)
 
 
-def _specific_capability_phrase_matches(text: str, phrase: str) -> tuple[tuple[int, int], ...]:
-    if not phrase:
-        return ()
+def _compile_specific_capability_phrase(phrase: str) -> re.Pattern[str]:
     boundary = r"(?<![a-z0-9_])"
     end_boundary = r"(?![a-z0-9_])"
-    pattern = re.compile(f"{boundary}{re.escape(phrase)}{end_boundary}")
-    return tuple((match.start(), match.end()) for match in pattern.finditer(text))
+    return re.compile(f"{boundary}{re.escape(phrase)}{end_boundary}")
+
+
+def _specific_capability_phrase_matches(
+    text: str,
+    phrase: _SpecificCapabilityPhrase,
+) -> tuple[tuple[int, int], ...]:
+    if not phrase.phrase:
+        return ()
+    return tuple((match.start(), match.end()) for match in phrase.pattern.finditer(text))
 
 
 def _prioritize_recommendation(
