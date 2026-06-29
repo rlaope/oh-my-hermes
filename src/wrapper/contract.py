@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from functools import lru_cache
 import hashlib
 from typing import Any
@@ -4196,6 +4195,14 @@ def _skill_picker_family_body_lines_cached() -> tuple[str, ...]:
 
 
 def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
+    state = _clone_static_dict(_skill_picker_static_state_cached())
+    state["trigger"] = _first_token(message)
+    state["source"] = source
+    return state
+
+
+@lru_cache(maxsize=1)
+def _skill_picker_static_state_cached() -> dict[str, object]:
     installed = {definition.name: definition for definition in installable_skill_definitions()}
     options = []
     for skill_id, label, description, direct_invocation in _SKILL_PICKER_ENTRIES:
@@ -4226,8 +4233,8 @@ def _skill_picker_state(message: str, *, source: str) -> dict[str, object]:
     family_cards = _skill_picker_family_cards(options)
     return {
         "schema_version": SKILL_PICKER_SCHEMA_VERSION,
-        "trigger": _first_token(message),
-        "source": source,
+        "trigger": "",
+        "source": "",
         "selection_mode": "single_select",
         "options": options,
         "featured_options": featured_options,
@@ -4312,7 +4319,7 @@ def _compact_picker_option(option: dict[str, object]) -> dict[str, object]:
 
 
 def _context_primer_state() -> dict[str, object]:
-    return deepcopy(_context_primer_state_cached())
+    return _clone_static_dict(_context_primer_state_cached())
 
 
 @lru_cache(maxsize=1)
@@ -4347,7 +4354,7 @@ def _context_primer_state_cached() -> dict[str, object]:
 
 
 def _catalog_capability_summary() -> dict[str, object]:
-    return deepcopy(_catalog_capability_summary_cached())
+    return _clone_static_dict(_catalog_capability_summary_cached())
 
 
 @lru_cache(maxsize=1)
@@ -4392,6 +4399,21 @@ def _as_dict_list(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _clone_static_dict(value: dict[str, object]) -> dict[str, object]:
+    cloned = _clone_static_payload(value)
+    return cloned if isinstance(cloned, dict) else {}
+
+
+def _clone_static_payload(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _clone_static_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clone_static_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_static_payload(item) for item in value)
+    return value
 
 
 def _as_string_list(value: object) -> list[str]:

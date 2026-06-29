@@ -471,11 +471,13 @@ class EfficiencyContractTests(unittest.TestCase):
 
         first = contract_module._catalog_capability_summary()
         first["lanes"][0]["id"] = "mutated"
+        first["workflow_context_cards"][0]["user_examples"][0] = "mutated"
         second = contract_module._catalog_capability_summary()
         cache_info = contract_module._catalog_capability_summary_cached.cache_info()
 
         self.assertIsNot(first, second)
         self.assertNotEqual(second["lanes"][0]["id"], "mutated")
+        self.assertNotEqual(second["workflow_context_cards"][0]["user_examples"][0], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
@@ -484,11 +486,30 @@ class EfficiencyContractTests(unittest.TestCase):
 
         first = contract_module._context_primer_state()
         first["workflow_groups"][0]["id"] = "mutated"
+        first["workflow_context_cards"][0]["user_examples"][0] = "mutated"
         second = contract_module._context_primer_state()
         cache_info = contract_module._context_primer_state_cached.cache_info()
 
         self.assertIsNot(first, second)
         self.assertNotEqual(second["workflow_groups"][0]["id"], "mutated")
+        self.assertNotEqual(second["workflow_context_cards"][0]["user_examples"][0], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_skill_picker_static_state_cache_preserves_dynamic_fields_without_payload_poisoning(self) -> None:
+        contract_module._skill_picker_static_state_cached.cache_clear()
+
+        first = contract_module._skill_picker_state("./omh", source="discord")
+        first["options"][0]["id"] = "mutated"
+        second = contract_module._skill_picker_state("/omh", source="slack")
+        cache_info = contract_module._skill_picker_static_state_cached.cache_info()
+
+        self.assertIsNot(first, second)
+        self.assertEqual(first["trigger"], "./omh")
+        self.assertEqual(first["source"], "discord")
+        self.assertEqual(second["trigger"], "/omh")
+        self.assertEqual(second["source"], "slack")
+        self.assertNotEqual(second["options"][0]["id"], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
