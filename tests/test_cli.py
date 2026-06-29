@@ -3221,6 +3221,46 @@ class CliTests(unittest.TestCase):
                 self.assertIn(locale_match, top["matched"])
                 self.assertNotEqual(top["confidence"], "low")
 
+    def test_recommend_routes_paper_and_source_capability_questions(self) -> None:
+        cases = (
+            (
+                "what can OMH do for papers?",
+                "paper-learning",
+                "prepare_paper_learning",
+                "guard:paper_learning",
+            ),
+            (
+                "what can OMH do for PDF papers?",
+                "paper-learning",
+                "prepare_paper_learning",
+                "guard:paper_learning",
+            ),
+            (
+                "what can OMH do for source finding?",
+                "source-finder",
+                "prepare_source_finder_plan",
+                "guard:source_finder",
+            ),
+            (
+                "what can OMH do for datasets?",
+                "source-finder",
+                "prepare_source_finder_plan",
+                "guard:source_finder",
+            ),
+        )
+
+        for message, skill, next_action, guard_label in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                top = json.loads(stdout)["recommendations"][0]
+                self.assertEqual(top["skill"], skill)
+                self.assertEqual(top["confidence"], "high")
+                self.assertEqual(top["next_action"], next_action)
+                self.assertIn(guard_label, top["matched"])
+
     def test_recommend_dangerous_refactor_routes_to_reviewed_plan_first(self) -> None:
         cases = (
             "이거 위험한 리팩터링 같아",
@@ -4543,6 +4583,9 @@ class CliTests(unittest.TestCase):
             ("고객사 프로젝트별 요구사항 정리, 조사, 구현 handoff, QA, 리뷰, 릴리즈 보고 운영 템플릿이 필요해", "plan", "plan", "present_plan"),
             ("논문 PDF 이해하고 싶어", "paper-learning", "paper_learning", "prepare_paper_learning"),
             ("이 PDF 쉽게 설명해줘", "paper-learning", "paper_learning", "prepare_paper_learning"),
+            ("what can OMH do for PDF papers?", "paper-learning", "paper_learning", "prepare_paper_learning"),
+            ("what can OMH do for source finding?", "source-finder", "source_finder", "prepare_source_finder_plan"),
+            ("what can OMH do for datasets?", "source-finder", "source_finder", "prepare_source_finder_plan"),
             ("결제 실패 피드백을 모아서 회의 주제와 다음 전략을 정리해줘", "feedback-triage", "feedback_triage", "triage_feedback"),
             ("prepare weekly ops review from customer feedback and release risks", "ops-review", "ops_review", "prepare_ops_review"),
             ("we need a competitor market scan and strategy memo for next week's leadership meeting", "strategy-brief", "strategy_brief", "prepare_strategy_brief"),
