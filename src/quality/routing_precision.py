@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-import json
 from typing import Mapping, Sequence
 
 from ..ingress import CHAT_SOURCES
@@ -388,7 +387,6 @@ def _evaluate_precision_case(case: RoutingPrecisionCase, *, source: str) -> dict
     response_state = _nested(response, "state")
     actions = _mapping_rows(response.get("actions"))
     action_ids = [str(action.get("id", "")) for action in actions]
-    serialized = json.dumps(interaction, sort_keys=True, ensure_ascii=False)
     observed = {
         "schema_version": interaction.get("schema_version"),
         "source": interaction.get("source"),
@@ -406,7 +404,7 @@ def _evaluate_precision_case(case: RoutingPrecisionCase, *, source: str) -> dict
         "capability_summary_opened": bool(response_state.get("capability_summary")),
         "workflow_card_opened": response.get("kind") not in {"clarification", "skill_picker"},
         "handoff_action_count": sum(1 for action_id in action_ids if _is_handoff_action(action_id)),
-        "raw_message_echoed": case.message in serialized,
+        "raw_message_echoed": _interaction_visible_text_contains(interaction, case.message),
         "claim_boundary": response.get("claim_boundary"),
     }
     observed["overrouted"] = (
@@ -468,7 +466,6 @@ def _evaluate_intervention_case(case: RoutingInterventionCase, *, source: str) -
     response_state = _nested(response, "state")
     actions = _mapping_rows(response.get("actions"))
     action_ids = [str(action.get("id", "")) for action in actions]
-    serialized = json.dumps(interaction, sort_keys=True, ensure_ascii=False)
     observed = {
         "schema_version": interaction.get("schema_version"),
         "source": interaction.get("source"),
@@ -485,7 +482,7 @@ def _evaluate_intervention_case(case: RoutingInterventionCase, *, source: str) -
         "catalog_question": bool(response_state.get("catalog_question")),
         "capability_summary_opened": bool(response_state.get("capability_summary")),
         "handoff_action_count": sum(1 for action_id in action_ids if _is_handoff_action(action_id)),
-        "raw_message_echoed": case.message in serialized,
+        "raw_message_echoed": _interaction_visible_text_contains(interaction, case.message),
         "claim_boundary": response.get("claim_boundary"),
     }
 
@@ -528,6 +525,34 @@ def _evaluate_intervention_case(case: RoutingInterventionCase, *, source: str) -
 def _is_handoff_action(action_id: str) -> bool:
     text = action_id.lower()
     return any(marker in text for marker in ("handoff", "executor", "codex", "claude", "dispatch"))
+
+
+def _interaction_visible_text_contains(interaction: dict[str, object], needle: str) -> bool:
+    if not needle:
+        return False
+    response = _nested(interaction, "chat_response")
+    route = _nested(interaction, "route")
+    response_state = _nested(response, "state")
+    route_explanation = _nested(route, "route_explanation")
+    text_fields: list[object] = [
+        route.get("routing_prompt"),
+        route.get("routing_instruction"),
+        route.get("routing_prompt_template"),
+        route.get("reason"),
+        route.get("clarification"),
+        route_explanation.get("recommended_reply"),
+        route_explanation.get("primary_action_hint"),
+        route_explanation.get("headline"),
+        route_explanation.get("summary"),
+        response.get("headline"),
+        response.get("plain_headline"),
+        response.get("body"),
+        response.get("claim_boundary"),
+        response_state.get("workflow_explanation_reason"),
+    ]
+    for action in _mapping_rows(response.get("actions")):
+        text_fields.extend((action.get("label"), action.get("hint")))
+    return any(needle in str(value) for value in text_fields if value)
 
 
 def _nested(payload: object, key: str) -> dict[str, object]:
