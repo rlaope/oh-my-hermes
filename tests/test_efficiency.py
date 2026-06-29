@@ -728,6 +728,27 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
 
+    def test_wrapper_intent_classifiers_cache_repeated_messages(self) -> None:
+        classifier_cases = (
+            (contract_module._is_omh_intro_question, "What is OMH and how should I use it?"),
+            (contract_module._is_omh_quickstart_question, "OMH setup is done, what next?"),
+            (contract_module._is_omh_status_question, "show OMH status"),
+            (contract_module._is_command_preview_invocation, "./om"),
+        )
+
+        for classifier, message in classifier_cases:
+            with self.subTest(classifier=classifier.__name__):
+                classifier.cache_clear()
+
+                first = classifier(message)
+                second = classifier(message)
+                cache_info = classifier.cache_info()
+
+                self.assertTrue(first)
+                self.assertEqual(first, second)
+                self.assertEqual(cache_info.misses, 1)
+                self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_chat_interaction_reuses_executor_target_hint_cache(self) -> None:
         contract_module._executor_target_from_message.cache_clear()
 

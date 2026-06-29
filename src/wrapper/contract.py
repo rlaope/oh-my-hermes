@@ -3786,6 +3786,7 @@ def _omh_intro_route_payload(route_payload: dict[str, object]) -> dict[str, obje
     return updated
 
 
+@lru_cache(maxsize=4096)
 def _is_omh_intro_question(message: str) -> bool:
     text = message.strip().lower()
     if not text:
@@ -3848,6 +3849,7 @@ def _is_omh_intro_question(message: str) -> bool:
     return any(marker in text for marker in intro_markers)
 
 
+@lru_cache(maxsize=4096)
 def _is_omh_quickstart_question(message: str) -> bool:
     text = message.strip().lower()
     if not text:
@@ -3882,6 +3884,7 @@ def _is_omh_quickstart_question(message: str) -> bool:
     return any(marker in text for marker in quickstart_markers)
 
 
+@lru_cache(maxsize=4096)
 def _is_omh_status_question(message: str) -> bool:
     text = message.strip().lower()
     if not text:
@@ -4017,6 +4020,7 @@ def _is_skill_picker_invocation(message: str) -> bool:
     return rest in _SKILL_PICKER_HELP_TOKENS
 
 
+@lru_cache(maxsize=4096)
 def _is_command_preview_invocation(message: str) -> bool:
     token = _first_token(message).lower()
     if not token:
