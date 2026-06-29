@@ -1945,6 +1945,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("demo grounded-score --json", items["grounded_score"]["command"])
         self.assertIn("demo chat-card-coverage --json", items["chat_card_coverage"]["command"])
         self.assertIn("demo route-hint-alignment --json", items["route_hint_alignment"]["command"])
+        self.assertIn("demo context-brief-coverage --json", items["context_brief_coverage"]["command"])
         self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
         self.assertIn("release evidence-bundle --version 1.0.0 --write --json", items["release_evidence_bundle"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
@@ -2024,6 +2025,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("grounded_score: passed", stdout)
         self.assertIn("chat_card_coverage: passed", stdout)
         self.assertIn("route_hint_alignment: passed", stdout)
+        self.assertIn("context_brief_coverage: passed", stdout)
         self.assertIn("parity_contracts: passed", stdout)
         self.assertIn("release_checklist: passed", stdout)
         self.assertIn("Boundary:", stdout)
@@ -2051,6 +2053,7 @@ class CliTests(unittest.TestCase):
                 "grounded_score",
                 "chat_card_coverage",
                 "route_hint_alignment",
+                "context_brief_coverage",
                 "parity_contracts",
                 "release_checklist",
             },
@@ -2061,6 +2064,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
         self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
         self.assertIn("53/53 route hints aligned", gates["route_hint_alignment"]["summary"])
+        self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
+        self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
         self.assertEqual(gates["parity_contracts"]["status"], "passed")
         self.assertIn("not run the release checklist", payload["boundary"])
 
@@ -2096,6 +2101,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Written: no", stdout)
             self.assertIn("Grounded score: 28/28 (avg 10.0)", stdout)
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
+            self.assertIn("Context brief coverage: 8/8 (route hints 7, catalog hints 1)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
 
@@ -2117,6 +2123,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
             self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 53)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
+            self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 8)
+            self.assertEqual(payload["summary"]["context_brief_coverage_total"], 8)
             self.assertIn("local_artifact_store: not_written", payload["warnings"])
             self.assertTrue(Path(payload["artifact_path"]).exists())
             self.assertTrue((omh_home / "runtime" / "release-evidence" / "index.json").exists())
