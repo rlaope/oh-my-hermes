@@ -1,6 +1,13 @@
 # oh-my-hermes
 
 <p align="center">
+  <a href="https://github.com/rlaope/oh-my-hermes"><img alt="GitHub" src="https://img.shields.io/badge/github-rlaope%2Foh--my--hermes-181717?logo=github"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="Status" src="https://img.shields.io/badge/status-1.0.1%20stable-blue">
+</p>
+
+<p align="center">
   <img src="assets/hermes-agent-hero.png" alt="Oh My Hermes" width="720">
 </p>
 
@@ -10,23 +17,10 @@
   <em>Chat-first skills, workflow contracts, status cards, and handoffs that fit existing Hermes setups without breaking them.</em>
 </p>
 
-<p align="center">
-  <a href="https://github.com/rlaope/oh-my-hermes"><img alt="GitHub" src="https://img.shields.io/badge/github-rlaope%2Foh--my--hermes-181717?logo=github"></a>
-  <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Status" src="https://img.shields.io/badge/status-1.0.1%20stable-blue">
-</p>
-
-Most people skip the docs. **oh-my-hermes** is built for that reality: install
-it, keep working in [Hermes](https://github.com/NousResearch/hermes-agent), and
-let the added skills, contracts, and status cards make the next action obvious
-without replacing your existing setup.
-
-The product is not "more CLI commands." The `omh` command is setup, repair,
-doctor, verifier, and wrapper/backend infrastructure. For
-[Hermes](https://github.com/NousResearch/hermes-agent) wrappers and routers,
-that CLI contract is a first-class backend surface; for normal users, the main
-experience is still chat:
+**oh-my-hermes** is built for that reality: install it, keep working in
+[Hermes](https://github.com/NousResearch/hermes-agent), and let the added
+skills, contracts, and status cards make the next action obvious without
+replacing your existing setup.
 
 ```text
 user says a natural-language request in Hermes
@@ -55,6 +49,7 @@ user says a natural-language request in Hermes
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
+
 omh doctor
 ```
 
@@ -97,9 +92,7 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   <img src="assets/omh-skill-magic-promo.png" alt="Friren Agent controlling OMH workflow skills with magic" width="920">
 </p>
 
-The full skill catalog is larger. These 7 are the representative modes to
-understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
-[Capabilities](docs/CAPABILITIES.md).
+---
 
 <!-- Surface family anchors: Plan and decide; Learn and gather; Create materials and visuals; Delegate coding and ship; Operate and observe. -->
 
@@ -124,29 +117,52 @@ understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
   workflows into traces, evals, review queues, regression cases, and patch
   proposals.
 
-+41 more built-in skills are included for operations, research, materials,
+**+41** more built-in skills are included for operations, research, materials,
 review, release, and workflow-support lanes.
+
+The full skill catalog is larger. These 7 are the representative modes to
+understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
+[Capabilities](docs/CAPABILITIES.md).
 
 <br>
 
 ## What You Get
 
-| Surface | What it means in practice |
-| --- | --- |
-| Skill pack | Hermes gets workflows like `loop`, `ralplan`, `source-finder`, `web-research`, `paper-learning`, `materials-package`, `img-summary`, and `ultraprocess`. |
-| Setup and repair | `omh setup`, `omh doctor`, `omh update`, and `omh uninstall` keep the local install understandable. |
-| Chat workflow picker | Hermes can answer "what can OMH do?" without making the user approve shell commands. |
-| OMH context brief | Hermes or a wrapper can fetch a compact OMH mental model, generic-tool checkpoint, and route hint before falling back to ordinary chat/tools. |
-| Catalog-aware list | `omh list` groups installed workflows by lane, and `omh list --json` includes descriptions, routing hints, examples, and evidence boundaries for wrappers or operators. |
-| Route hint cards | Wrappers can preview the nearest OMH workflow with `chat_route_hint/v1`, and operators can inspect the same hint with `omh chat route-hint --summary`. |
-| Deterministic demos | `omh demo orchestration` shows the local recommend -> chat -> plan -> handoff -> status path; `--executor` can demonstrate Codex, Claude Code, or Hermes paths without treating prepared handoffs as execution. |
-| Plugin runtime evidence | Hosts or wrappers can record plugin load/use with `omh plugin observe-host`, and plugin tools/hooks can self-record the same metadata when the host passes observation context; active-ready and historical events stay separate from install smoke. |
-| Coding agent paths | Hermes can prepare work for Codex, Claude Code, Hermes itself, or another runtime without pretending the work already ran. |
-| Workspace isolation | Hermes can show whether the current workspace is ok, recommend or require a worktree, use `omh worktree prepare` to create one, and use `omh worktree bind` to render open/attach/record actions for the selected coding agent. |
-| Agent ops review | Hermes can explain quality gates, blockers, next actions, and throughput levers for AI-agent work without turning a prepared handoff into evidence. |
-| Evidence-aware status | Plans, handoffs, dispatch, results, verification, review, CI, and merge readiness stay visibly separate. |
-| Workflow learning | Hermes can show learning-readiness and improvement-review cards for workflow attempts, including missed OMH routes: metadata-only trace, deterministic eval, human review queue, non-applying patch proposal, regression case, audit, and export bundle. |
-| Request flow | Hermes chooses a lightweight role flow per request: direct answer, research, product ops, coding handoff, or review gate. |
+**Ready-to-use workflow skills**
+
+- Installable Hermes skills for interview, planning, durable goals, loops,
+  research, coding handoff prep, review, release, materials, and operations.
+- Each skill carries trigger guidance, completion gates, recovery notes, and
+  evidence boundaries so Hermes can pick the next useful step instead of
+  guessing from keywords.
+
+**Profiles and role surfaces**
+
+- Operator, researcher, planner, handoff, review, and status roles give Hermes a
+  stable way to explain who owns the next action.
+- Profile packs keep chat, wrapper, and coding-agent behavior aligned without
+  making one executor the hidden default.
+
+**Subagent and executor handoffs**
+
+- Coding-heavy work can be prepared for Codex, Claude Code, Hermes runtime, or
+  another selected executor while preserving the prepared-vs-observed boundary.
+- Worktree and session helpers make it easier to open, attach, record, and
+  review subagent work without mixing unrelated repo state.
+
+**Evidence-aware operation**
+
+- Status cards separate plan, handoff, dispatch, result, verification, review,
+  CI, and merge-readiness evidence.
+- Runtime and plugin observations stay metadata-only by default, so reports can
+  be useful without leaking raw prompts, platform events, or logs.
+
+**Learning loop**
+
+- Missed routes, weak workflows, quality gaps, and regression cases can become
+  workflow-learning traces, review queues, and patch proposals.
+- The product improves through observed outcomes, not by pretending every
+  prepared handoff already executed.
 
 <br>
 
