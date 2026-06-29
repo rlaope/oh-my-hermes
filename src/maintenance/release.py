@@ -34,6 +34,7 @@ from ..parity import build_parity_matrix
 from ..quality.chat_card_coverage import build_chat_card_coverage_demo
 from ..quality.context_brief_coverage import build_context_brief_coverage_demo
 from ..quality.grounded_score import build_grounded_score_demo
+from ..quality.hermes_ux_quality import build_hermes_ux_quality_demo, hermes_ux_quality_errors
 from ..quality.route_hint_alignment import build_route_hint_alignment_demo
 from ..release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from ..skill_pack import builtin_skill_templates
@@ -278,13 +279,23 @@ def release_readiness_checklist(
             "Context brief coverage proves deterministic local Hermes-facing context only; it does not prove live Hermes chat rendering, plugin load, platform delivery, generic tool invocation, executor work, review, CI, merge, or delivery.",
         ),
         ReleaseChecklistItem(
+            "hermes_ux_quality",
+            "Check Hermes-facing UX quality rollup",
+            "uv run python -m omh.cli demo hermes-ux-quality --json",
+            "contract-quality",
+            True,
+            False,
+            "Hermes UX quality reports routing score, dedicated chat-card coverage, route-hint alignment, and context-brief coverage as passing in one user-facing rollup.",
+            "Hermes UX quality proves deterministic local routing, card, hint, and context contracts only; it does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, executor work, review, CI, merge, or delivery.",
+        ),
+        ReleaseChecklistItem(
             "product_readiness",
             "Check product readiness rollup",
             f"{omh_display} release product-readiness --version {release_version} --json",
             "contract-quality",
             True,
             False,
-            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, context brief coverage, parity, and release checklist gates as passing.",
+            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, context brief coverage, Hermes UX quality, parity, and release checklist gates as passing.",
             "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
@@ -294,7 +305,7 @@ def release_readiness_checklist(
             "evidence-packaging",
             True,
             False,
-            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, grounded score, chat card coverage, route hint alignment, context brief coverage, and parity snapshots.",
+            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, grounded score, chat card coverage, route hint alignment, context brief coverage, Hermes UX quality, and parity snapshots.",
             "The evidence bundle packages local deterministic evidence only; it is not live Hermes runtime use, connector execution, executor dispatch, review, CI, merge, delivery, or release publication evidence.",
         ),
         ReleaseChecklistItem(
@@ -505,6 +516,12 @@ def product_readiness_report(
         chat_card_coverage=chat_cards,
     )
     context_briefs = build_context_brief_coverage_demo()
+    hermes_ux = build_hermes_ux_quality_demo(
+        grounded_score=grounded_score,
+        chat_card_coverage=chat_cards,
+        route_hint_alignment=route_hints,
+        context_brief_coverage=context_briefs,
+    )
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
 
     checklist_items = checklist.get("items", [])
@@ -523,6 +540,7 @@ def product_readiness_report(
         "chat_card_coverage",
         "route_hint_alignment",
         "context_brief_coverage",
+        "hermes_ux_quality",
         "product_readiness",
         "release_evidence_bundle",
         "installed_command_smoke",
@@ -547,6 +565,8 @@ def product_readiness_report(
         context_briefs.get("summary", {}) if isinstance(context_briefs.get("summary"), Mapping) else {}
     )
     context_brief_errors = _context_brief_coverage_errors(context_briefs)
+    hermes_ux_summary = hermes_ux.get("summary", {}) if isinstance(hermes_ux.get("summary"), Mapping) else {}
+    hermes_ux_errors = hermes_ux_quality_errors(hermes_ux)
     gates = [
         _product_readiness_gate(
             "skill_content",
@@ -632,6 +652,24 @@ def product_readiness_report(
             context_brief_errors,
             [],
             str(context_briefs.get("claim_boundary", "")),
+        ),
+        _product_readiness_gate(
+            "hermes_ux_quality",
+            "Hermes-facing UX quality",
+            "passed" if not hermes_ux_errors else "failed",
+            True,
+            (
+                f"{hermes_ux_summary.get('passing_gate_count', 0)}/{hermes_ux_summary.get('gate_count', 0)} "
+                f"UX gates passing; routing avg {hermes_ux_summary.get('grounded_score_average', 0)}; "
+                f"generic ack {hermes_ux_summary.get('chat_card_generic_ack_count', 0)}; "
+                f"route mismatches {hermes_ux_summary.get('route_hint_mismatch_count', 0)}; "
+                f"context {hermes_ux_summary.get('context_brief_passing_count', 0)}/"
+                f"{hermes_ux_summary.get('context_brief_cases', 0)}"
+            ),
+            "omh demo hermes-ux-quality --json",
+            hermes_ux_errors,
+            [],
+            str(hermes_ux.get("claim_boundary", "")),
         ),
         _product_readiness_gate(
             "parity_contracts",
@@ -1506,6 +1544,12 @@ def release_evidence_bundle(
         chat_card_coverage=chat_cards,
     )
     context_briefs = build_context_brief_coverage_demo()
+    hermes_ux = build_hermes_ux_quality_demo(
+        grounded_score=grounded_score,
+        chat_card_coverage=chat_cards,
+        route_hint_alignment=route_hints,
+        context_brief_coverage=context_briefs,
+    )
     parity = build_parity_matrix()
     local_store_status = _release_local_store_status(use_cases)
     required_status = {
@@ -1517,6 +1561,7 @@ def release_evidence_bundle(
         "chat_card_coverage": "passed" if _chat_card_coverage_ready(chat_cards) else "failed",
         "route_hint_alignment": "passed" if _route_hint_alignment_ready(route_hints) else "failed",
         "context_brief_coverage": "passed" if _context_brief_coverage_ready(context_briefs) else "failed",
+        "hermes_ux_quality": "passed" if not hermes_ux_quality_errors(hermes_ux) else "failed",
         "parity_contracts": "passed" if _parity_contracts_ready(parity) else "failed",
     }
     blocking_failures = [
@@ -1533,6 +1578,7 @@ def release_evidence_bundle(
     context_brief_summary = (
         context_briefs.get("summary", {}) if isinstance(context_briefs.get("summary"), Mapping) else {}
     )
+    hermes_ux_summary = hermes_ux.get("summary", {}) if isinstance(hermes_ux.get("summary"), Mapping) else {}
     payload: dict[str, object] = {
         "schema_version": RELEASE_EVIDENCE_BUNDLE_SCHEMA,
         "mode": "live",
@@ -1569,6 +1615,9 @@ def release_evidence_bundle(
             "context_brief_coverage_total": context_brief_summary.get("case_count"),
             "context_brief_route_hint_count": context_brief_summary.get("route_hint_count"),
             "context_brief_catalog_question_count": context_brief_summary.get("catalog_question_count"),
+            "hermes_ux_quality_score": hermes_ux.get("score"),
+            "hermes_ux_quality_passing_gates": hermes_ux_summary.get("passing_gate_count"),
+            "hermes_ux_quality_total_gates": hermes_ux_summary.get("gate_count"),
             "local_artifact_store": local_store_status,
             "parity_available": (parity.get("summary") or {}).get("available")
             if isinstance(parity.get("summary"), Mapping)
@@ -1586,6 +1635,7 @@ def release_evidence_bundle(
             "chat_card_coverage": chat_cards,
             "route_hint_alignment": route_hints,
             "context_brief_coverage": context_briefs,
+            "hermes_ux_quality": hermes_ux,
             "parity_contracts": parity,
         },
         "claims": [
@@ -1598,6 +1648,7 @@ def release_evidence_bundle(
             "chat_card_coverage_ready",
             "route_hint_alignment_ready",
             "context_brief_coverage_ready",
+            "hermes_ux_quality_ready",
             "parity_contract_matrix_ready",
         ],
         "not_evidence_for": [

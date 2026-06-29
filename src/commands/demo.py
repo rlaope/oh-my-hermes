@@ -10,6 +10,7 @@ from ..quality.context_brief_coverage import (
     build_context_brief_coverage_demo,
     format_context_brief_coverage_summary,
 )
+from ..quality.hermes_ux_quality import build_hermes_ux_quality_demo, format_hermes_ux_quality_summary
 from ..quality.route_hint_alignment import build_route_hint_alignment_demo, format_route_hint_alignment_summary
 from ..ingress import CHAT_SOURCES
 from ..installer import OmhError
@@ -80,6 +81,18 @@ def cmd_demo_context_brief_coverage(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_demo_hermes_ux_quality(args: argparse.Namespace) -> int:
+    try:
+        payload = build_hermes_ux_quality_demo(source=args.source)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if args.summary:
+        print(format_hermes_ux_quality_summary(payload))
+    else:
+        _print_json(payload)
+    return 0
+
+
 def _add_demo_commands(sub) -> None:
     demo = sub.add_parser("demo", help="Print deterministic demo artifacts for OMH orchestration examples.")
     demo_sub = demo.add_subparsers(dest="demo_command", required=True)
@@ -127,3 +140,10 @@ def _add_demo_commands(sub) -> None:
     context_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
     context_output.add_argument("--summary", action="store_true", help="Print a compact human-readable context brief coverage summary.")
     context_brief_coverage.set_defaults(func=cmd_demo_context_brief_coverage)
+
+    hermes_ux_quality = demo_sub.add_parser("hermes-ux-quality")
+    hermes_ux_quality.add_argument("--source", choices=CHAT_SOURCES, default="discord")
+    ux_output = hermes_ux_quality.add_mutually_exclusive_group()
+    ux_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
+    ux_output.add_argument("--summary", action="store_true", help="Print a compact human-readable Hermes UX quality summary.")
+    hermes_ux_quality.set_defaults(func=cmd_demo_hermes_ux_quality)
