@@ -384,18 +384,97 @@ _DIRECT_ANSWER_HARD_BLOCKERS = (
     "summary card",
 )
 _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS = (
+    "summarize this",
+    "summarise this",
     "summarize this paragraph",
     "summarise this paragraph",
     "summarize the paragraph",
     "summarise the paragraph",
+    "translate this",
     "translate this paragraph",
     "rewrite this paragraph",
     "rephrase this paragraph",
     "summarize this sentence",
     "summarise this sentence",
     "translate this sentence",
+    "rewrite this",
     "rewrite this sentence",
+    "rephrase this",
     "rephrase this sentence",
+    "proofread this",
+    "fix grammar in this",
+    "make this more natural",
+)
+_DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_SUBJECTS = (
+    "이 문장",
+    "이 문단",
+    "이 글",
+    "이 텍스트",
+    "아래 문장",
+    "아래 문단",
+    "아래 글",
+    "아래 텍스트",
+)
+_DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_ACTIONS = (
+    "번역",
+    "요약",
+    "고쳐",
+    "고쳐줘",
+    "다듬",
+    "자연스럽",
+    "맞춤법",
+    "문법",
+    "교정",
+)
+_DIRECT_ANSWER_TEXT_TRANSFORM_HARD_BLOCKERS = (
+    "omh",
+    "oh-my-hermes",
+    "oh my hermes",
+    "hermes",
+    "workflow",
+    "workflows",
+    "skill",
+    "skills",
+    "codex",
+    "claude",
+    "pr",
+    "issue",
+    "repo",
+    "repository",
+    "codebase",
+    "readme",
+    "file",
+    "files",
+    "docs/",
+    "src/",
+    "tests/",
+    "research",
+    "paper",
+    "pdf",
+    "image",
+    "poster",
+    "summary card",
+    "visual card",
+    "meeting",
+    "meeting notes",
+    "transcript",
+    "release",
+    "이슈",
+    "레포",
+    "저장소",
+    "리드미",
+    "파일",
+    "자료",
+    "논문",
+    "이미지",
+    "사진",
+    "카드",
+    "회의",
+    "회의록",
+    "릴리즈",
+    "헤르메스",
+    "워크플로",
+    "스킬",
 )
 _DIRECT_ANSWER_BLOCKERS = (
     "omh",
@@ -1426,10 +1505,10 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
         return True
     if _is_direct_answer_concept_question(text, direct_text):
         return True
+    if _is_plain_text_transform_question(text, direct_text):
+        return True
     if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
-    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
-        return True
     if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_STARTERS):
         return True
     return any(keyword in direct_text for keyword in _DIRECT_ANSWER_KEYWORDS) and "?" in text
@@ -1444,10 +1523,10 @@ def _is_fast_plain_direct_answer_question(message: str) -> bool:
         return True
     if _is_direct_answer_concept_question(text, direct_text):
         return True
+    if _is_plain_text_transform_question(text, direct_text):
+        return True
     if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
-    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
-        return True
     if not any(
         direct_text.startswith(starter)
         for starter in (
@@ -1475,6 +1554,19 @@ def _is_plain_setup_how_to_question(text: str) -> bool:
     if _contains_marker(text, _DIRECT_ANSWER_HARD_BLOCKERS):
         return False
     return any(keyword in text for keyword in _DIRECT_ANSWER_SETUP_KEYWORDS)
+
+
+def _is_plain_text_transform_question(text: str, direct_text: str) -> bool:
+    if _contains_marker(text, _DIRECT_ANSWER_TEXT_TRANSFORM_HARD_BLOCKERS) or _contains_marker(
+        direct_text,
+        _DIRECT_ANSWER_TEXT_TRANSFORM_HARD_BLOCKERS,
+    ):
+        return False
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
+        return True
+    if any(subject in direct_text for subject in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_SUBJECTS):
+        return any(action in direct_text for action in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_ACTIONS)
+    return False
 
 
 def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:

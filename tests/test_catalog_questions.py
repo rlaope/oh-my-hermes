@@ -72,11 +72,13 @@ class CatalogQuestionTests(unittest.TestCase):
             "explain what OMH does in this README section",
             "search docs/WORKFLOWS.md for loop",
             "show img-summary in README.md",
+            "README 요약해줘",
             "how can Hermes help my team?",
             "list commands in this file",
             "show workflows mentioned in docs/WORKFLOWS.md",
             "which files mention skill routing?",
             "list files that mention command injection",
+            "이 파일 요약해줘",
             "이 파일에서 command injection 언급 목록 찾아줘",
             "이 파일에서 기능 목록 찾아줘",
             "이 경로에서 workflow 언급 찾아줘",
@@ -87,6 +89,11 @@ class CatalogQuestionTests(unittest.TestCase):
         for message in cases:
             with self.subTest(message=message):
                 self.assertFalse(is_skill_catalog_question(message))
+
+    def test_short_file_summary_requests_are_file_lookup_questions(self) -> None:
+        for message in ("README 요약해줘", "이 파일 요약해줘"):
+            with self.subTest(message=message):
+                self.assertTrue(is_file_or_text_lookup_question(message))
 
     def test_release_claim_review_is_not_file_lookup_fallback(self) -> None:
         message = "릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘"
