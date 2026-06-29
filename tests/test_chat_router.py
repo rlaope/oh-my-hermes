@@ -1645,6 +1645,31 @@ selected_workflow=ultraprocess
                 self.assertIn("file inspection", explanation["not_evidence_yet"])
                 self.assertNotIn("review", explanation["not_evidence_yet"])
 
+    def test_file_lookup_uses_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        for message in ("search docs/WORKFLOWS.md for loop", "README 파일 찾아줘"):
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("file lookup should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("file lookup should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "fallback")
+            self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+            self.assertEqual(decision["confidence"], "low")
+            self.assertIn("File or text lookup", decision["reason"])
+            self.assertEqual(decision["recommendations"][0]["matched"], ["file_lookup_fast_path"])
+            public_payload = public_route_payload(decision)
+            self.assertEqual(public_payload["route_explanation"]["next_action"], "answer_file_lookup")
+            self.assertNotIn("workflow_route_plan", public_payload)
+
     def test_korean_file_lookup_does_not_steal_readme_edit_requests(self) -> None:
         lookup = route_chat_message("README 파일 찾아줘", source="discord")
         edit = route_chat_message("README 제목 수정해줘", source="discord")
