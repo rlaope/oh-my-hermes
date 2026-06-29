@@ -98,6 +98,12 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "이 워크플로우 다음엔 더 잘하게 개선해줘",
+                "workflow-learning",
+                "audit_learning_readiness",
+                None,
+            ),
+            (
                 "웹서치해서 최신 자료 정리해줘",
                 "web-research",
                 "gather_source_backed_evidence",
@@ -954,6 +960,8 @@ class ChatRouterTests(unittest.TestCase):
             "회의록을 사람들한테 공유할 세로 이미지로 만들어줘",
             "PR 요약 포스터 만들어줘",
             "PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘",
+            "릴리즈 노트 이미지로 만들어줘",
+            "업데이트 요약 이미지로 만들어줘",
             "Create an image summary card from these notes.",
             "make a poster explaining cron automation",
             "make an image explaining the cron feature",
