@@ -1178,25 +1178,47 @@ def _not_evidence_from_boundary(boundary: str) -> list[str]:
         return items
     items: list[str] = []
     for marker, label in (
-        ("plan acceptance", "plan acceptance"),
-        ("dispatch", "executor/runtime dispatch"),
-        ("execution", "execution"),
-        ("implementation", "implementation"),
-        ("image", "image generation"),
-        ("file", "file generation/export"),
+        ("full pdf extraction", "full PDF extraction"),
+        ("figure ocr", "figure OCR"),
+        ("external citation checking", "external citation checking"),
+        ("citation checking", "external citation checking"),
+        ("math validation", "math validation"),
+        ("code reproduction", "code reproduction"),
+        ("paper claims", "paper claim verification"),
+        ("generated image", "image generation"),
+        ("image generation", "image generation"),
+        ("visual qa", "visual QA"),
+        ("file export", "file export"),
+        ("file generation", "file generation/export"),
+        ("file extraction", "file extraction"),
+        ("web search", "web search"),
+        ("source retrieval", "source retrieval"),
+        ("sources were fetched", "source retrieval"),
+        ("repository clone", "repository clone"),
         ("download", "download"),
-        ("search", "source retrieval"),
-        ("api", "API access"),
-        ("credential", "credential validation"),
-        ("connector", "connector invocation"),
-        ("delivery", "delivery"),
-        ("attachment", "attachment"),
-        ("review", "review"),
-        ("verification", "verification"),
-        ("ci", "CI"),
-        ("merge", "merge"),
+        ("file hash verification", "file hash verification"),
+        ("license verification", "license verification"),
+        ("source correctness verification", "source correctness verification"),
     ):
         if marker in text and label not in items:
+            items.append(label)
+    peer_review_free_text = text.replace("peer review", "")
+    for pattern, label in (
+        (r"\bplan acceptance\b", "plan acceptance"),
+        (r"\bdispatch(?:ed)?\b", "executor/runtime dispatch"),
+        (r"\bexecution\b", "execution"),
+        (r"\bimplementation\b", "implementation"),
+        (r"\bapi\b", "API access"),
+        (r"\bcredential\b", "credential validation"),
+        (r"\bconnector\b", "connector invocation"),
+        (r"\bdelivery\b", "delivery"),
+        (r"\battachment\b", "attachment"),
+        (r"\breview\b", "review"),
+        (r"\bverification\b", "verification"),
+        (r"\bci\b", "CI"),
+        (r"\bmerge(?:-readiness)?\b", "merge"),
+    ):
+        if re.search(pattern, peer_review_free_text) and label not in items:
             items.append(label)
     if items:
         return items

@@ -860,7 +860,13 @@ class ChatRouterTests(unittest.TestCase):
             ["catalog_question", "name:paper-learning"],
         )
         self.assertIn("exact OMH capability", decision["recommendations"][0]["why"])
-        self.assertNotIn("workflow_route_plan", public_route_payload(decision))
+        public = public_route_payload(decision)
+        self.assertNotIn("workflow_route_plan", public)
+        explanation = public["route_explanation"]
+        self.assertIn("full PDF extraction", explanation["not_evidence_yet"])
+        self.assertIn("external citation checking", explanation["not_evidence_yet"])
+        self.assertNotIn("review", explanation["not_evidence_yet"])
+        self.assertNotIn("CI", explanation["not_evidence_yet"])
 
     def test_generic_short_operator_skill_names_do_not_hijack_catalog_picker(self) -> None:
         for phrase in ("plan", "team", "ask"):
