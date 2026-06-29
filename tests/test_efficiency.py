@@ -1179,6 +1179,22 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(definition_names_cache.misses, 1)
         self.assertGreaterEqual(definition_names_cache.hits, 0)
 
+    def test_workflow_route_plan_signature_reads_recommendation_dicts(self) -> None:
+        recommendations = (
+            {"skill": "ralplan", "score": 10, "confidence": "high", "matched": ["risk", "plan"]},
+            "ignored",
+            {"skill": "", "score": 9, "confidence": "high", "matched": ["ignored"]},
+            {"skill": "code-review", "score": 7, "confidence": "medium", "matched": ("review",)},
+        )
+
+        self.assertEqual(
+            route_plan_module._recommendation_signature(recommendations),
+            (
+                ("ralplan", 10, "high", ("risk", "plan")),
+                ("code-review", 7, "medium", ()),
+            ),
+        )
+
     def test_catalog_capability_summary_cache_is_reused_without_payload_poisoning(self) -> None:
         contract_module._catalog_capability_summary_cached.cache_clear()
 
