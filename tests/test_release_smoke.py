@@ -98,6 +98,10 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("route hint or picker hint", items["context_brief_coverage"]["evidence_required"])
         self.assertIn("deterministic local Hermes-facing context", items["context_brief_coverage"]["proof_boundary"])
         self.assertIn("does not prove live Hermes chat rendering", items["context_brief_coverage"]["proof_boundary"])
+        self.assertEqual(items["hermes_ux_quality"]["command"], "uv run python -m omh.cli demo hermes-ux-quality --json")
+        self.assertIn("routing score", items["hermes_ux_quality"]["evidence_required"])
+        self.assertIn("deterministic local routing, card, hint, and context contracts", items["hermes_ux_quality"]["proof_boundary"])
+        self.assertIn("does not prove live Hermes chat rendering", items["hermes_ux_quality"]["proof_boundary"])
         self.assertEqual(items["product_readiness"]["command"], "/tmp/omh release product-readiness --version 1.0.0 --json")
         self.assertIn("skill-content", items["product_readiness"]["evidence_required"])
         self.assertIn("grounded score", items["product_readiness"]["evidence_required"])
@@ -260,6 +264,7 @@ class ReleaseSmokeTests(unittest.TestCase):
                 "chat_card_coverage",
                 "route_hint_alignment",
                 "context_brief_coverage",
+                "hermes_ux_quality",
                 "parity_contracts",
                 "release_checklist",
             },
@@ -288,6 +293,13 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("catalog picker hints 1", gates["context_brief_coverage"]["summary"])
         self.assertEqual(gates["context_brief_coverage"]["command"], "omh demo context-brief-coverage --json")
         self.assertIn("deterministic local OMH mental-model", gates["context_brief_coverage"]["proof_boundary"])
+        self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
+        self.assertIn("4/4 UX gates passing", gates["hermes_ux_quality"]["summary"])
+        self.assertIn("routing avg 10.0", gates["hermes_ux_quality"]["summary"])
+        self.assertIn("generic ack 0", gates["hermes_ux_quality"]["summary"])
+        self.assertIn("context 8/8", gates["hermes_ux_quality"]["summary"])
+        self.assertEqual(gates["hermes_ux_quality"]["command"], "omh demo hermes-ux-quality --json")
+        self.assertIn("deterministic local routing", gates["hermes_ux_quality"]["proof_boundary"])
         self.assertEqual(gates["parity_contracts"]["status"], "passed")
         self.assertEqual(gates["release_checklist"]["status"], "passed")
         self.assertIn(
@@ -324,16 +336,21 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 8)
             self.assertEqual(payload["summary"]["context_brief_route_hint_count"], 7)
             self.assertEqual(payload["summary"]["context_brief_catalog_question_count"], 1)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 4)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 4)
             self.assertEqual(payload["evidence"]["product_readiness"]["schema_version"], "omh_product_readiness/v1")
             self.assertEqual(payload["evidence"]["release_checklist"]["schema_version"], "release_readiness_checklist/v1")
             self.assertEqual(payload["evidence"]["grounded_score"]["schema_version"], "grounded_score_evaluation/v1")
             self.assertEqual(payload["evidence"]["chat_card_coverage"]["schema_version"], "chat_card_coverage/v1")
             self.assertEqual(payload["evidence"]["route_hint_alignment"]["schema_version"], "route_hint_alignment/v1")
             self.assertEqual(payload["evidence"]["context_brief_coverage"]["schema_version"], "context_brief_coverage/v1")
+            self.assertEqual(payload["evidence"]["hermes_ux_quality"]["schema_version"], "hermes_ux_quality/v1")
             self.assertIn("grounded_score_ready", payload["claims"])
             self.assertIn("chat_card_coverage_ready", payload["claims"])
             self.assertIn("route_hint_alignment_ready", payload["claims"])
             self.assertIn("context_brief_coverage_ready", payload["claims"])
+            self.assertIn("hermes_ux_quality_ready", payload["claims"])
             self.assertIn("executor_dispatch", payload["not_evidence_for"])
 
             written = release_evidence_bundle(version="v1.0.1", omh_command="/tmp/omh command", paths=paths, write=True)

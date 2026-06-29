@@ -364,6 +364,12 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
             f"(route hints {summary.get('context_brief_route_hint_count')}, "
             f"catalog hints {summary.get('context_brief_catalog_question_count')})"
         )
+    if "hermes_ux_quality_score" in summary:
+        print(
+            "  Hermes UX quality: "
+            f"{summary.get('hermes_ux_quality_score')}/100 "
+            f"({summary.get('hermes_ux_quality_passing_gates')}/{summary.get('hermes_ux_quality_total_gates')} gates)"
+        )
     print(f"  Local artifact store: {summary.get('local_artifact_store')}")
     print("")
     blocking = payload.get("blocking_failures", [])
