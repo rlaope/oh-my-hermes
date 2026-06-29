@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from copy import deepcopy
+from functools import lru_cache
 from typing import Iterable, cast
 
 from ..plugin_bundle.omh.awareness import awareness_lane_examples, awareness_primer_payload
@@ -137,12 +137,19 @@ _WORKFLOW_FAMILY_OVERRIDES = {
 
 def capability_family_projection(available_workflows: Iterable[str] | None = None) -> dict[str, object]:
     """Return the user-facing OMH capability-family projection."""
+    return _copy_capability_family_projection(
+        _capability_family_projection_cached(_available_workflows_key(available_workflows))
+    )
+
+
+@lru_cache(maxsize=128)
+def _capability_family_projection_cached(available_key: tuple[str, ...] | None) -> dict[str, object]:
     awareness = awareness_primer_payload()
     lane_by_id = {
         str(lane.get("id")): lane
         for lane in _dict_list(awareness.get("lanes", []))
     }
-    available = _available_workflows(available_workflows)
+    available = _available_workflows_from_key(available_key)
     families = [
         _family_payload(definition, lane_by_id, available)
         for definition in _FAMILY_DEFINITIONS
@@ -166,7 +173,8 @@ def capability_family_projection(available_workflows: Iterable[str] | None = Non
 
 def capability_family_cards(available_workflows: Iterable[str] | None = None) -> list[dict[str, object]]:
     """Return compact cards for picker, quickstart, and README-like surfaces."""
-    return deepcopy(_dict_list(capability_family_projection(available_workflows).get("families", [])))
+    projection = _capability_family_projection_cached(_available_workflows_key(available_workflows))
+    return _copy_family_cards(_dict_list(projection.get("families", [])))
 
 
 def family_for_workflow(workflow: str, available_workflows: Iterable[str] | None = None) -> dict[str, object]:
@@ -174,7 +182,7 @@ def family_for_workflow(workflow: str, available_workflows: Iterable[str] | None
     key = str(workflow or "").strip()
     if not key:
         return {}
-    projection = capability_family_projection(available_workflows)
+    projection = _capability_family_projection_cached(_available_workflows_key(available_workflows))
     workflow_to_family = _string_mapping(projection.get("workflow_to_family", {}))
     family_id = workflow_to_family.get(key)
     if not family_id:
@@ -183,7 +191,7 @@ def family_for_workflow(workflow: str, available_workflows: Iterable[str] | None
         return {}
     for family in _dict_list(projection.get("families", [])):
         if family.get("id") == family_id:
-            return deepcopy(family)
+            return _copy_family_payload(family)
     return {}
 
 
@@ -197,6 +205,44 @@ def _available_workflows(available_workflows: Iterable[str] | None) -> set[str]:
     if available_workflows is None:
         return set(installable_skill_names()) | CONCEPTUAL_WORKFLOW_SURFACES | {"oh-my-hermes"}
     return {str(item) for item in available_workflows if str(item)} | CONCEPTUAL_WORKFLOW_SURFACES | {"oh-my-hermes"}
+
+
+def _available_workflows_key(available_workflows: Iterable[str] | None) -> tuple[str, ...] | None:
+    if available_workflows is None:
+        return None
+    return tuple(sorted({str(item) for item in available_workflows if str(item)}))
+
+
+def _available_workflows_from_key(available_key: tuple[str, ...] | None) -> set[str]:
+    if available_key is None:
+        return _available_workflows(None)
+    return set(available_key) | CONCEPTUAL_WORKFLOW_SURFACES | {"oh-my-hermes"}
+
+
+def _copy_capability_family_projection(payload: dict[str, object]) -> dict[str, object]:
+    copied = dict(payload)
+    copied["families"] = _copy_family_cards(_dict_list(payload.get("families", [])))
+    copied["workflow_to_family"] = _string_mapping(payload.get("workflow_to_family", {}))
+    copied["family_order"] = _string_list(payload.get("family_order", []))
+    return copied
+
+
+def _copy_family_cards(families: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [_copy_family_payload(family) for family in families]
+
+
+def _copy_family_payload(family: dict[str, object]) -> dict[str, object]:
+    copied = dict(family)
+    for key in (
+        "source_lanes",
+        "primary_workflows",
+        "not_evidence_until_observed",
+        "source_examples",
+        "executor_choices",
+    ):
+        if key in copied:
+            copied[key] = _string_list(copied.get(key, []))
+    return copied
 
 
 def _family_payload(
