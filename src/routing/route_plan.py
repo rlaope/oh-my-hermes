@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -360,19 +361,17 @@ def compact_workflow_route_plan(value: object) -> dict[str, object] | None:
     }
 
 
-def _recommendation_list(recommendations: object) -> list[dict[str, object]]:
+def _iter_recommendation_dicts(recommendations: object) -> Iterator[dict[str, object]]:
     if not isinstance(recommendations, (list, tuple)):
-        return []
-    items: list[dict[str, object]] = []
+        return
     for item in recommendations:
         if isinstance(item, dict):
-            items.append(dict(item))
-    return items
+            yield item
 
 
 def _recommendation_signature(recommendations: object) -> tuple[tuple[str, int, str, tuple[str, ...]], ...]:
     signature: list[tuple[str, int, str, tuple[str, ...]]] = []
-    for item in _recommendation_list(recommendations):
+    for item in _iter_recommendation_dicts(recommendations):
         skill = str(item.get("skill", ""))
         if not skill:
             continue
