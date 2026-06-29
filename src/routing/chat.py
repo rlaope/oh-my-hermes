@@ -217,6 +217,83 @@ _DIRECT_ANSWER_HOW_TO_STARTERS = (
     "how can i ",
     "how to ",
 )
+_DIRECT_ANSWER_CONCEPT_STARTERS = (
+    "what is ",
+    "what's ",
+    "whats ",
+    "what are ",
+    "what does ",
+    "define ",
+    "meaning of ",
+    "explain what ",
+    "explain the concept of ",
+)
+_DIRECT_ANSWER_CONCEPT_EXPLAIN_STARTERS = (
+    "explain ",
+    "describe ",
+    "tell me about ",
+)
+_DIRECT_ANSWER_KOREAN_CONCEPT_MARKERS = (
+    "뭐야",
+    "무엇",
+    "무슨 뜻",
+    "뜻이 뭐",
+)
+_DIRECT_ANSWER_KOREAN_EXPLAIN_MARKERS = (
+    "설명해",
+    "설명해줘",
+    "설명해 줘",
+)
+_DIRECT_ANSWER_CONCEPT_KEYWORDS = (
+    "agent",
+    "api",
+    "error",
+    "handoff",
+    "image summary",
+    "llm",
+    "loop",
+    "mcp",
+    "memory leak",
+    "oauth",
+    "paper abstract",
+    "pattern",
+    "python",
+    "release note",
+    "research brief",
+    "source control",
+    "stack trace",
+    "strategy",
+    "triage",
+    "venv",
+    "virtualenv",
+    "virtual environment",
+    "workflow",
+)
+_DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
+    "omh",
+    "oh-my-hermes",
+    "oh my hermes",
+    "hermes",
+    "codex",
+    "claude",
+    "repo",
+    "repository",
+    "codebase",
+    "pr",
+    "issue",
+    "status",
+    "current",
+    "going on",
+    "working on",
+    "this paper",
+    "this pdf",
+    "attached paper",
+    "attached pdf",
+    "이 논문",
+    "이 pdf",
+    "첨부",
+    "헤르메스",
+)
 _DIRECT_ANSWER_KEYWORDS = (
     "python",
     "list comprehension",
@@ -1306,6 +1383,8 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
     direct_text = _strip_direct_answer_soft_prefix(text)
     if _is_plain_setup_how_to_question(direct_text):
         return True
+    if _is_direct_answer_concept_question(text, direct_text):
+        return True
     if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
     if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS):
@@ -1321,6 +1400,8 @@ def _is_fast_plain_direct_answer_question(message: str) -> bool:
         return False
     direct_text = _strip_direct_answer_soft_prefix(text)
     if _is_plain_setup_how_to_question(direct_text):
+        return True
+    if _is_direct_answer_concept_question(text, direct_text):
         return True
     if _contains_direct_answer_blocker(text) or _contains_direct_answer_blocker(direct_text):
         return False
@@ -1353,6 +1434,38 @@ def _is_plain_setup_how_to_question(text: str) -> bool:
     if _contains_marker(text, _DIRECT_ANSWER_HARD_BLOCKERS):
         return False
     return any(keyword in text for keyword in _DIRECT_ANSWER_SETUP_KEYWORDS)
+
+
+def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
+    if _contains_marker(text, _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS) or _contains_marker(
+        direct_text, _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS
+    ):
+        return False
+    has_concept_keyword = _contains_concept_keyword(direct_text)
+    if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_STARTERS):
+        return has_concept_keyword
+    if any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_CONCEPT_MARKERS):
+        return has_concept_keyword
+    if has_concept_keyword and any(
+        direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_EXPLAIN_STARTERS
+    ):
+        return True
+    if has_concept_keyword and any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_EXPLAIN_MARKERS):
+        return True
+    return False
+
+
+def _contains_concept_keyword(text: str) -> bool:
+    for marker in _DIRECT_ANSWER_CONCEPT_KEYWORDS:
+        if not marker.isascii():
+            if marker in text:
+                return True
+            continue
+        parts = marker.split()
+        pattern = r"(?<![A-Za-z0-9])" + r"\s+".join(re.escape(part) for part in parts) + r"(?![A-Za-z0-9])"
+        if re.search(pattern, text):
+            return True
+    return False
 
 
 def _contains_direct_answer_blocker(text: str) -> bool:
