@@ -5,7 +5,6 @@ import hashlib
 
 from ..ingress import CHAT_SOURCES
 from ..plugin_bundle.omh.awareness import awareness_route_hint
-from ..routing.chat import route_chat_message
 from ..wrapper.contract import build_chat_interaction_payload
 from .chat_card_coverage import CHAT_CARD_COVERAGE_CASES
 from .grounded_score import GROUNDED_SCENARIOS
@@ -126,8 +125,8 @@ def format_route_hint_alignment_summary(payload: dict[str, object]) -> str:
 
 
 def _evaluate_alignment_case(case: RouteHintAlignmentCase, *, source: str) -> dict[str, object]:
-    route = route_chat_message(case.message, source=source)
     interaction = build_chat_interaction_payload(case.message, source=source)
+    route = _nested(interaction, "route")
     hint = awareness_route_hint(case.message)
     hint_context_card = _nested(_first_dict(hint.get("hints")), "workflow_context_card")
     observed = {

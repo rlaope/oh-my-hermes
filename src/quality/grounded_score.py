@@ -6,7 +6,6 @@ import hashlib
 from ..catalogs.playbooks import recommend_playbooks
 from ..coding_delegation import build_coding_delegation_payload
 from ..ingress import CHAT_SOURCES
-from ..routing.chat import route_chat_message
 from ..wrapper.contract import build_chat_interaction_payload
 
 
@@ -421,8 +420,8 @@ def format_grounded_score_summary(payload: dict[str, object]) -> str:
 
 
 def _evaluate_grounded_scenario(scenario: GroundedScenario, *, source: str) -> dict[str, object]:
-    route = route_chat_message(scenario.message, source=source)
     interaction = build_chat_interaction_payload(scenario.message, source=source)
+    route = _nested(interaction, "route")
     delegation = build_coding_delegation_payload(
         scenario.message,
         source=source,
