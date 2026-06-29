@@ -279,21 +279,62 @@ _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
     "repo",
     "repository",
     "codebase",
+    "readme",
+    "file",
+    "files",
+    "docs/",
+    "src/",
+    "tests/",
     "pr",
     "issue",
     "status",
     "current",
     "going on",
     "working on",
+    "poster",
+    "summary card",
+    "as image",
+    "as an image",
+    "into image",
+    "into an image",
+    "image card",
+    "visual card",
+    "pdf",
+    "ppt",
+    "implement",
+    "build",
+    "fix",
+    "add",
+    "create",
+    "generate",
+    "review",
+    "deploy",
     "this paper",
     "this pdf",
+    "this code",
     "attached paper",
     "attached pdf",
     "이 논문",
     "이 pdf",
+    "이 코드",
     "첨부",
+    "상태",
+    "진행",
+    "작업",
+    "이슈",
+    "레포",
+    "저장소",
+    "파일",
+    "리드미",
+    "이미지로",
+    "사진으로",
+    "카드로",
+    "시각화해",
+    "시각화해서",
     "헤르메스",
 )
+_DIRECT_ANSWER_GENERIC_CONCEPT_MAX_WORDS = 8
+_DIRECT_ANSWER_GENERIC_KOREAN_CONCEPT_MAX_CHARS = 48
 _DIRECT_ANSWER_KEYWORDS = (
     "python",
     "list comprehension",
@@ -1443,16 +1484,38 @@ def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
         return False
     has_concept_keyword = _contains_concept_keyword(direct_text)
     if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_STARTERS):
-        return has_concept_keyword
+        return has_concept_keyword or _is_short_generic_concept_question(direct_text)
     if any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_CONCEPT_MARKERS):
-        return has_concept_keyword
+        return has_concept_keyword or _is_short_generic_korean_concept_question(direct_text)
     if has_concept_keyword and any(
         direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_EXPLAIN_STARTERS
     ):
         return True
-    if has_concept_keyword and any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_EXPLAIN_MARKERS):
-        return True
+    if any(marker in direct_text for marker in _DIRECT_ANSWER_KOREAN_EXPLAIN_MARKERS):
+        return has_concept_keyword or _is_short_generic_korean_concept_question(direct_text)
     return False
+
+
+def _is_short_generic_concept_question(text: str) -> bool:
+    tail = text
+    for starter in _DIRECT_ANSWER_CONCEPT_STARTERS:
+        if text.startswith(starter):
+            tail = text[len(starter) :]
+            break
+    tail = tail.strip(" \t\r\n.!?")
+    if not tail:
+        return False
+    words = _word_tokens(tail)
+    return 1 <= len(words) <= _DIRECT_ANSWER_GENERIC_CONCEPT_MAX_WORDS
+
+
+def _is_short_generic_korean_concept_question(text: str) -> bool:
+    compact = text.strip(" \t\r\n.!?")
+    if not compact:
+        return False
+    if not any("\uac00" <= character <= "\ud7a3" for character in compact):
+        return False
+    return len(compact) <= _DIRECT_ANSWER_GENERIC_KOREAN_CONCEPT_MAX_CHARS
 
 
 def _contains_concept_keyword(text: str) -> bool:
@@ -1466,6 +1529,11 @@ def _contains_concept_keyword(text: str) -> bool:
         if re.search(pattern, text):
             return True
     return False
+
+
+def _word_tokens(text: str) -> tuple[str, ...]:
+    cleaned = "".join(character if character.isalnum() else " " for character in text)
+    return tuple(cleaned.split())
 
 
 def _contains_direct_answer_blocker(text: str) -> bool:

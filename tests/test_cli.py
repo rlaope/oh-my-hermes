@@ -2073,7 +2073,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
         self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
         self.assertEqual(gates["routing_precision"]["status"], "passed")
-        self.assertIn("13/13 negative-control cases", gates["routing_precision"]["summary"])
+        self.assertIn("17/17 negative-control cases", gates["routing_precision"]["summary"])
         self.assertIn("13/13 interventions", gates["routing_precision"]["summary"])
         self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
         self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
@@ -2116,7 +2116,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 8/8 (route hints 7, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 13/13 negative controls, 13/13 interventions "
+                "Routing precision: 17/17 negative controls, 13/13 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2144,8 +2144,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 8)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 8)
-            self.assertEqual(payload["summary"]["routing_precision_passing"], 13)
-            self.assertEqual(payload["summary"]["routing_precision_total"], 13)
+            self.assertEqual(payload["summary"]["routing_precision_passing"], 17)
+            self.assertEqual(payload["summary"]["routing_precision_total"], 17)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
             self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 13)
             self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 13)

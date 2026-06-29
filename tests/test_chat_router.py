@@ -222,6 +222,12 @@ class ChatRouterTests(unittest.TestCase):
             "memory leak 설명해줘",
             "what is source control?",
             "source control이 뭐야?",
+            "what is Kubernetes?",
+            "what is Docker Compose?",
+            "what is GraphQL?",
+            "GraphQL 설명해줘",
+            "쿠버네티스가 뭐야?",
+            "이 에러 무슨 뜻이야?",
         ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
@@ -252,6 +258,22 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(safe_feature["action"], "dispatch")
         self.assertEqual(safe_feature["selected_skill"], "ralplan")
 
+        for message in (
+            "what is the current PR status?",
+            "what are you working on?",
+            "what is in README?",
+            "what is the best way to implement auth?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                public = public_route_payload(decision)
+
+                self.assertNotEqual(public["route_explanation"]["next_action"], "answer_directly")
+                self.assertNotEqual(
+                    decision["recommendations"][0].get("matched") if decision.get("recommendations") else None,
+                    ["direct_answer_fast_path"],
+                )
+
     def test_plain_direct_answer_uses_fast_path_without_full_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()
         chat_router_impl._public_chat_route_payload_cached.cache_clear()
@@ -262,6 +284,10 @@ class ChatRouterTests(unittest.TestCase):
             "what is a loop in Python?",
             "strategy pattern 설명해줘",
             "what is source control?",
+            "what is Kubernetes?",
+            "GraphQL 설명해줘",
+            "쿠버네티스가 뭐야?",
+            "이 에러 무슨 뜻이야?",
         ):
             with self.subTest(message=message), mock.patch.object(
                 chat_router_impl,

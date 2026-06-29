@@ -126,6 +126,34 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_directly",
         "direct_answer",
     ),
+    RoutingPrecisionCase(
+        "kubernetes-concept",
+        "Generic Kubernetes concept stays direct",
+        "what is Kubernetes?",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "graphql-korean-explanation",
+        "Mixed-language GraphQL explanation stays direct",
+        "GraphQL 설명해줘",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "kubernetes-korean-concept",
+        "Korean Kubernetes concept stays direct",
+        "쿠버네티스가 뭐야?",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "korean-error-meaning",
+        "Korean error meaning question stays direct",
+        "이 에러 무슨 뜻이야?",
+        "answer_directly",
+        "direct_answer",
+    ),
 )
 
 
