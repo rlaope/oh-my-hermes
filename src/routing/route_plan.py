@@ -241,6 +241,12 @@ def _build_workflow_route_plan_cached(
         score = _int_value(item.get("score", 0))
         if score < 4 and stage not in signal_stages:
             continue
+        if (
+            stage == "deliver"
+            and stage not in signal_stages
+            and _SKILL_STAGE.get(selected_skill) != "deliver"
+        ):
+            continue
         if stage == "learn" and stage not in signal_stages:
             continue
         step = _step_from_recommendation(stage, item)
@@ -463,12 +469,24 @@ def _stages_from_signals(normalized: str, tokens: set[str]) -> tuple[str, ...]:
     stages: list[str] = []
     for stage in _STAGE_ORDER:
         signal_options = _STAGE_SIGNAL_OPTIONS.get(stage, ())
-        if any(phrase in normalized for phrase, _is_token_candidate in signal_options):
+        if any(
+            _token_signal_matches(phrase, tokens)
+            for phrase, is_token_candidate in signal_options
+            if is_token_candidate
+        ):
             stages.append(stage)
             continue
-        if any(phrase in tokens for phrase, is_token_candidate in signal_options if is_token_candidate):
+        if any(phrase in normalized for phrase, is_token_candidate in signal_options if not is_token_candidate):
             stages.append(stage)
     return tuple(stages)
+
+
+def _token_signal_matches(phrase: str, tokens: set[str]) -> bool:
+    if phrase in tokens:
+        return True
+    if phrase.isascii() and len(phrase) <= 2:
+        return False
+    return any(token.startswith(phrase) for token in tokens)
 
 
 def _fallback_skill_for_stage(
