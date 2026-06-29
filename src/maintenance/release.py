@@ -33,6 +33,7 @@ from ..plugin_bundle.omh.tools.capability_tool import (
 from ..parity import build_parity_matrix
 from ..quality.chat_card_coverage import build_chat_card_coverage_demo
 from ..quality.grounded_score import build_grounded_score_demo
+from ..quality.route_hint_alignment import build_route_hint_alignment_demo
 from ..release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
 from ..skill_pack import builtin_skill_templates
 from ..skills.catalog import builtin_definitions
@@ -256,13 +257,23 @@ def release_readiness_checklist(
             "Chat card coverage proves deterministic local wrapper-card contracts only; it does not prove live Hermes chat rendering, platform delivery, executor work, review, CI, merge, or plugin-load evidence.",
         ),
         ReleaseChecklistItem(
+            "route_hint_alignment",
+            "Check route and awareness hint alignment",
+            "uv run python -m omh.cli demo route-hint-alignment --json",
+            "contract-quality",
+            True,
+            False,
+            "Route hint alignment reports every representative grounded-score and chat-card scenario with a primary plugin awareness hint that matches the selected workflow.",
+            "Route hint alignment proves deterministic local router/hint agreement only; it does not prove live Hermes chat rendering, platform delivery, executor work, review, CI, merge, or plugin-load evidence.",
+        ),
+        ReleaseChecklistItem(
             "product_readiness",
             "Check product readiness rollup",
             f"{omh_display} release product-readiness --version {release_version} --json",
             "contract-quality",
             True,
             False,
-            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, parity, and release checklist gates as passing.",
+            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, parity, and release checklist gates as passing.",
             "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
@@ -272,7 +283,7 @@ def release_readiness_checklist(
             "evidence-packaging",
             True,
             False,
-            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, grounded score, chat card coverage, and parity snapshots.",
+            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, grounded score, chat card coverage, route hint alignment, and parity snapshots.",
             "The evidence bundle packages local deterministic evidence only; it is not live Hermes runtime use, connector execution, executor dispatch, review, CI, merge, delivery, or release publication evidence.",
         ),
         ReleaseChecklistItem(
@@ -478,6 +489,7 @@ def product_readiness_report(
     parity = build_parity_matrix()
     grounded_score = build_grounded_score_demo()
     chat_cards = build_chat_card_coverage_demo()
+    route_hints = build_route_hint_alignment_demo()
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
 
     checklist_items = checklist.get("items", [])
@@ -494,6 +506,7 @@ def product_readiness_report(
         "use_case_readiness",
         "grounded_score",
         "chat_card_coverage",
+        "route_hint_alignment",
         "product_readiness",
         "release_evidence_bundle",
         "installed_command_smoke",
@@ -512,6 +525,8 @@ def product_readiness_report(
     grounded_score_errors = _grounded_score_errors(grounded_score)
     chat_card_summary = chat_cards.get("summary", {}) if isinstance(chat_cards.get("summary"), Mapping) else {}
     chat_card_errors = _chat_card_coverage_errors(chat_cards)
+    route_hint_summary = route_hints.get("summary", {}) if isinstance(route_hints.get("summary"), Mapping) else {}
+    route_hint_errors = _route_hint_alignment_errors(route_hints)
     gates = [
         _product_readiness_gate(
             "skill_content",
@@ -567,6 +582,21 @@ def product_readiness_report(
             chat_card_errors,
             [],
             str(chat_cards.get("claim_boundary", "")),
+        ),
+        _product_readiness_gate(
+            "route_hint_alignment",
+            "Route and awareness hint alignment",
+            "passed" if not route_hint_errors else "failed",
+            True,
+            (
+                f"{route_hint_summary.get('aligned_count', 0)}/{route_hint_summary.get('case_count', 0)} "
+                f"route hints aligned; missing {route_hint_summary.get('missing_hint_count', 0)}; "
+                f"mismatches {route_hint_summary.get('mismatch_count', 0)}"
+            ),
+            "omh demo route-hint-alignment --json",
+            route_hint_errors,
+            [],
+            str(route_hints.get("claim_boundary", "")),
         ),
         _product_readiness_gate(
             "parity_contracts",
@@ -1237,6 +1267,10 @@ def _grounded_score_ready(payload: Mapping[str, object]) -> bool:
     return not _grounded_score_errors(payload)
 
 
+def _route_hint_alignment_ready(payload: Mapping[str, object]) -> bool:
+    return not _route_hint_alignment_errors(payload)
+
+
 def _grounded_score_summary_text(payload: Mapping[str, object]) -> str:
     summary = payload.get("summary")
     if not isinstance(summary, Mapping):
@@ -1306,6 +1340,31 @@ def _chat_card_coverage_errors(payload: Mapping[str, object]) -> list[str]:
         else:
             issue_text = "unknown issue"
         errors.append(f"{case_id}: {issue_text}")
+    return errors
+
+
+def _route_hint_alignment_errors(payload: Mapping[str, object]) -> list[str]:
+    errors: list[str] = []
+    summary = payload.get("summary")
+    if not isinstance(summary, Mapping):
+        return ["summary_missing"]
+    if not bool(summary.get("all_aligned")):
+        errors.append("not_all_route_hints_aligned")
+    if int(summary.get("missing_hint_count", 0) or 0):
+        errors.append(f"missing_hint_count: {summary.get('missing_hint_count')}")
+    if int(summary.get("mismatch_count", 0) or 0):
+        errors.append(f"mismatch_count: {summary.get('mismatch_count')}")
+    cases = payload.get("cases")
+    if not isinstance(cases, Sequence) or isinstance(cases, (str, bytes)):
+        errors.append("cases_not_sequence")
+        return errors
+    for case in cases:
+        if not isinstance(case, Mapping) or bool(case.get("aligned")):
+            continue
+        errors.append(
+            f"{case.get('corpus', 'unknown')}:{case.get('id', 'unknown')}: "
+            f"{', '.join(_string_list(case.get('issues'))) or 'unknown alignment failure'}"
+        )
     return errors
 
 
@@ -1380,6 +1439,7 @@ def release_evidence_bundle(
     use_cases = use_case_readiness(resolved_paths)
     grounded_score = build_grounded_score_demo()
     chat_cards = build_chat_card_coverage_demo()
+    route_hints = build_route_hint_alignment_demo()
     parity = build_parity_matrix()
     local_store_status = _release_local_store_status(use_cases)
     required_status = {
@@ -1389,6 +1449,7 @@ def release_evidence_bundle(
         "use_case_readiness": "passed" if use_cases.get("blocking_failures") == 0 else "failed",
         "grounded_score": "passed" if _grounded_score_ready(grounded_score) else "failed",
         "chat_card_coverage": "passed" if _chat_card_coverage_ready(chat_cards) else "failed",
+        "route_hint_alignment": "passed" if _route_hint_alignment_ready(route_hints) else "failed",
         "parity_contracts": "passed" if _parity_contracts_ready(parity) else "failed",
     }
     blocking_failures = [
@@ -1401,6 +1462,7 @@ def release_evidence_bundle(
         warnings.append(f"local_artifact_store: {local_store_status}")
     grounded_score_summary = grounded_score.get("summary", {}) if isinstance(grounded_score.get("summary"), Mapping) else {}
     chat_card_summary = chat_cards.get("summary", {}) if isinstance(chat_cards.get("summary"), Mapping) else {}
+    route_hint_summary = route_hints.get("summary", {}) if isinstance(route_hints.get("summary"), Mapping) else {}
     payload: dict[str, object] = {
         "schema_version": RELEASE_EVIDENCE_BUNDLE_SCHEMA,
         "mode": "live",
@@ -1429,6 +1491,10 @@ def release_evidence_bundle(
             "chat_card_coverage_passing": chat_card_summary.get("passing_count"),
             "chat_card_coverage_total": chat_card_summary.get("case_count"),
             "chat_card_generic_ack_count": chat_card_summary.get("generic_ack_count"),
+            "route_hint_alignment_aligned": route_hint_summary.get("aligned_count"),
+            "route_hint_alignment_total": route_hint_summary.get("case_count"),
+            "route_hint_missing_count": route_hint_summary.get("missing_hint_count"),
+            "route_hint_mismatch_count": route_hint_summary.get("mismatch_count"),
             "local_artifact_store": local_store_status,
             "parity_available": (parity.get("summary") or {}).get("available")
             if isinstance(parity.get("summary"), Mapping)
@@ -1444,6 +1510,7 @@ def release_evidence_bundle(
             "use_case_readiness": use_cases,
             "grounded_score": grounded_score,
             "chat_card_coverage": chat_cards,
+            "route_hint_alignment": route_hints,
             "parity_contracts": parity,
         },
         "claims": [
@@ -1454,6 +1521,7 @@ def release_evidence_bundle(
             "g1_to_g10_use_case_readiness_ready",
             "grounded_score_ready",
             "chat_card_coverage_ready",
+            "route_hint_alignment_ready",
             "parity_contract_matrix_ready",
         ],
         "not_evidence_for": [

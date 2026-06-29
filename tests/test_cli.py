@@ -1944,6 +1944,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("cases readiness --json", items["use_case_readiness"]["command"])
         self.assertIn("demo grounded-score --json", items["grounded_score"]["command"])
         self.assertIn("demo chat-card-coverage --json", items["chat_card_coverage"]["command"])
+        self.assertIn("demo route-hint-alignment --json", items["route_hint_alignment"]["command"])
         self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
         self.assertIn("release evidence-bundle --version 1.0.0 --write --json", items["release_evidence_bundle"]["command"])
         self.assertIn("skill-content-smoke", items["skill_content_smoke"]["command"])
@@ -2022,6 +2023,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("use_cases: passed", stdout)
         self.assertIn("grounded_score: passed", stdout)
         self.assertIn("chat_card_coverage: passed", stdout)
+        self.assertIn("route_hint_alignment: passed", stdout)
         self.assertIn("parity_contracts: passed", stdout)
         self.assertIn("release_checklist: passed", stdout)
         self.assertIn("Boundary:", stdout)
@@ -2043,12 +2045,22 @@ class CliTests(unittest.TestCase):
         gates = {gate["id"]: gate for gate in payload["gates"]}
         self.assertEqual(
             set(gates),
-            {"skill_content", "use_cases", "grounded_score", "chat_card_coverage", "parity_contracts", "release_checklist"},
+            {
+                "skill_content",
+                "use_cases",
+                "grounded_score",
+                "chat_card_coverage",
+                "route_hint_alignment",
+                "parity_contracts",
+                "release_checklist",
+            },
         )
         self.assertEqual(gates["grounded_score"]["status"], "passed")
         self.assertIn("28/28 scenarios at 10/10", gates["grounded_score"]["summary"])
         self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
         self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
+        self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
+        self.assertIn("53/53 route hints aligned", gates["route_hint_alignment"]["summary"])
         self.assertEqual(gates["parity_contracts"]["status"], "passed")
         self.assertIn("not run the release checklist", payload["boundary"])
 
@@ -2103,6 +2115,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
             self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
+            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 53)
+            self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertIn("local_artifact_store: not_written", payload["warnings"])
             self.assertTrue(Path(payload["artifact_path"]).exists())
             self.assertTrue((omh_home / "runtime" / "release-evidence" / "index.json").exists())
@@ -5580,6 +5594,65 @@ class CliTests(unittest.TestCase):
             stdout,
         )
         self.assertIn("Boundary: This is deterministic local wrapper-card coverage", stdout)
+        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+
+    def test_demo_route_hint_alignment_keeps_router_and_awareness_hints_in_sync(self) -> None:
+        status, stdout, stderr = run_cli(["demo", "route-hint-alignment"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "route_hint_alignment/v1")
+        self.assertEqual(payload["summary"]["case_count"], 53)
+        self.assertEqual(payload["summary"]["hinted_count"], 53)
+        self.assertEqual(payload["summary"]["aligned_count"], 53)
+        self.assertEqual(payload["summary"]["missing_hint_count"], 0)
+        self.assertEqual(payload["summary"]["mismatch_count"], 0)
+        self.assertTrue(payload["summary"]["all_aligned"])
+        self.assertIn("not prove live Hermes chat rendering", payload["claim_boundary"])
+        failed = [case["id"] for case in payload["cases"] if not case["aligned"]]
+        self.assertEqual(failed, [])
+        cases = {(case["corpus"], case["id"]): case for case in payload["cases"]}
+        self.assertEqual(
+            cases[("grounded_score", "ai-agent-product-qa")]["observed"]["hint_workflow"],
+            "ultraqa",
+        )
+        self.assertEqual(
+            cases[("grounded_score", "release-gate-review")]["observed"]["hint_workflow"],
+            "code-review",
+        )
+        self.assertEqual(
+            cases[("chat_card_coverage", "executor-runtime-readiness")]["observed"]["hint_workflow"],
+            "executor-runtime-readiness",
+        )
+        self.assertEqual(
+            cases[("chat_card_coverage", "agent-ops-review")]["observed"]["hint_workflow"],
+            "agent-ops-review",
+        )
+
+        status, stdout, stderr = run_cli(["demo", "route-hint-alignment", "--json"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        explicit_payload = json.loads(stdout)
+        self.assertEqual(explicit_payload["schema_version"], "route_hint_alignment/v1")
+        self.assertEqual(explicit_payload["summary"]["case_count"], 53)
+
+    def test_demo_route_hint_alignment_summary_is_human_readable(self) -> None:
+        status, stdout, stderr = run_cli(["demo", "route-hint-alignment", "--summary"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH route hint alignment", stdout)
+        self.assertIn("Result: 53/53 route hints aligned (all passing)", stdout)
+        self.assertIn("Hints present: 53/53; missing hints: 0; mismatches: 0", stdout)
+        self.assertIn(
+            "AI agent product QA: ok; route=ultraqa hint=ultraqa hint_action=dispatch_to_workflow",
+            stdout,
+        )
+        self.assertIn("Boundary: Route hint alignment proves deterministic local agreement", stdout)
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
     def test_coding_delegate_include_message_expands_prompt_for_non_logging_wrappers(self) -> None:

@@ -526,6 +526,8 @@ omh playbook recommend "<message>" --limit 1
 omh coding delegate --executor codex --source discord "<message>"
 omh demo grounded-score --summary
 omh demo grounded-score --json
+omh demo route-hint-alignment --summary
+omh demo route-hint-alignment --json
 ```
 
 The purpose of the matrix is to keep Hermes users command-agnostic while giving
@@ -542,6 +544,13 @@ the same evidence boundary while keeping default `chat route` output as JSON.
 `omh demo grounded-score --json` prints the full machine-readable payload.
 The default `omh demo grounded-score` output remains JSON for wrapper
 compatibility.
+
+`omh demo route-hint-alignment --summary` checks the same public routing story
+from the Hermes-awareness side: every grounded-score and chat-card scenario must
+produce a primary `omh_route_hint/v1` workflow that matches the router-selected
+workflow. This catches the user-visible failure mode where Hermes routes the
+chat correctly but the plugin hint nudges the wrapper toward the wrong workflow
+or returns `no_hint`.
 
 `omh demo grounded-score` is a deterministic contract-compliance demo over 28
 representative messages. The score is 10/10 only when the expected chat route,
