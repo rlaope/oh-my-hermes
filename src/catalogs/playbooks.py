@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from ..routing.localization import normalized_phrase, prepare_routing_text, routing_terms, routing_tokens
 
@@ -93,6 +94,20 @@ class Playbook:
             }
         )
         return payload
+
+
+@dataclass(frozen=True)
+class _ScoringTerm:
+    label: str
+    tokens: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _PlaybookScoringProfile:
+    playbook: Playbook
+    keyword_terms: tuple[_ScoringTerm, ...]
+    intent_tokens: frozenset[str]
+    intent_tag_terms: tuple[_ScoringTerm, ...]
 
 
 _COMMON_NOT_EVIDENCE = (
@@ -2350,9 +2365,11 @@ def recommend_playbooks(query: str, *, limit: int = 3) -> dict[str, object]:
     if not task:
         raise ValueError("playbook recommend requires a task description")
     routing_text = prepare_routing_text(task)
+    query_tokens = _tokens(routing_text.scoring_text)
+    query_terms = _terms(routing_text.scoring_text)
     scored = [
-        _score_playbook(playbook, routing_text.scoring_text, routing_text.locale_matches)
-        for playbook in _all_playbooks()
+        _score_playbook(profile, query_tokens, query_terms, routing_text.locale_matches)
+        for profile in _playbook_scoring_profiles()
     ]
     scored.sort(key=lambda item: (-int(item["score"]), str(item["id"])))
     matches = [item for item in scored if int(item["score"]) > 0] or [_fallback_playbook(task)]
@@ -2370,28 +2387,29 @@ def _playbook_by_id(playbook_id: str) -> Playbook:
     raise KeyError(playbook_id)
 
 
-def _score_playbook(playbook: Playbook, query: str, locale_matches: tuple[str, ...] = ()) -> dict[str, object]:
-    query_tokens = _tokens(query)
-    query_terms = _terms(query)
+def _score_playbook(
+    profile: _PlaybookScoringProfile,
+    query_tokens: set[str],
+    query_terms: set[str],
+    locale_matches: tuple[str, ...] = (),
+) -> dict[str, object]:
+    playbook = profile.playbook
     score = 0
     matched: set[str] = set()
 
-    for keyword in playbook.keywords:
-        normalized_keyword = keyword.lower()
-        if _matches_term(normalized_keyword, query_terms):
+    for keyword in profile.keyword_terms:
+        if _matches_term_tokens(keyword.tokens, query_terms):
             score += 5
-            matched.add(f"keyword:{normalized_keyword}")
+            matched.add(f"keyword:{keyword.label}")
 
-    intent_tokens = _tokens(" ".join((playbook.id, *playbook.intent_tags)))
-    for token in sorted(query_tokens & intent_tokens):
+    for token in sorted(query_tokens & profile.intent_tokens):
         score += 2
         matched.add(f"intent:{token}")
 
-    for intent_tag in playbook.intent_tags:
-        normalized_intent = intent_tag.lower()
-        if _matches_term(normalized_intent, query_terms):
+    for intent_tag in profile.intent_tag_terms:
+        if _matches_term_tokens(intent_tag.tokens, query_terms):
             score += 3
-            matched.add(f"intent-tag:{normalized_intent}")
+            matched.add(f"intent-tag:{intent_tag.label}")
 
     if "coding" in query_tokens or "code" in query_tokens or "implement" in query_tokens:
         if playbook.delegated_to_executor:
@@ -2438,18 +2456,52 @@ def _recommendation_payload(playbook: Playbook, *, score: int, matched: tuple[st
 
 
 def _tokens(value: str) -> set[str]:
-    return routing_tokens(value, stopwords=_STOPWORDS)
+    return set(_tokens_cached(value))
 
 
 def _terms(value: str) -> set[str]:
-    return routing_terms(value)
+    return set(_terms_cached(value))
 
 
 def _matches_term(term: str, query_terms: set[str]) -> bool:
-    term_tokens = tuple(_terms(normalized_phrase(term)))
-    if not term_tokens:
-        return False
-    return all(token in query_terms for token in term_tokens)
+    return _matches_term_tokens(_normalized_term_tokens(term), query_terms)
+
+
+def _matches_term_tokens(term_tokens: tuple[str, ...], query_terms: set[str]) -> bool:
+    return bool(term_tokens) and query_terms.issuperset(term_tokens)
+
+
+@lru_cache(maxsize=1)
+def _playbook_scoring_profiles() -> tuple[_PlaybookScoringProfile, ...]:
+    return tuple(_build_scoring_profile(playbook) for playbook in _all_playbooks())
+
+
+def _build_scoring_profile(playbook: Playbook) -> _PlaybookScoringProfile:
+    return _PlaybookScoringProfile(
+        playbook=playbook,
+        keyword_terms=tuple(_scoring_term(keyword.lower()) for keyword in playbook.keywords),
+        intent_tokens=_tokens_cached(" ".join((playbook.id, *playbook.intent_tags))),
+        intent_tag_terms=tuple(_scoring_term(intent_tag.lower()) for intent_tag in playbook.intent_tags),
+    )
+
+
+def _scoring_term(label: str) -> _ScoringTerm:
+    return _ScoringTerm(label=label, tokens=_normalized_term_tokens(label))
+
+
+@lru_cache(maxsize=512)
+def _tokens_cached(value: str) -> frozenset[str]:
+    return frozenset(routing_tokens(value, stopwords=_STOPWORDS))
+
+
+@lru_cache(maxsize=1024)
+def _terms_cached(value: str) -> frozenset[str]:
+    return frozenset(routing_terms(value))
+
+
+@lru_cache(maxsize=1024)
+def _normalized_term_tokens(term: str) -> tuple[str, ...]:
+    return tuple(_terms_cached(normalized_phrase(term)))
 
 
 def _confidence(score: int) -> str:

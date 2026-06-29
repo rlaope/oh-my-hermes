@@ -15,6 +15,7 @@ from omh.routing import localization as localization_module
 from omh.routing import recommend as recommend_module
 from omh.routing import policy as policy_module
 from omh.routing import route_plan as route_plan_module
+from omh.catalogs import playbooks as playbooks_module
 from omh.skills import render as render_module
 from omh.workflows import hermes_planning as hermes_planning_module
 from omh.workflows import learning_candidate as learning_candidate_module
@@ -503,6 +504,50 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertNotIn("mutated", second_tokens)
         self.assertEqual(tokens_cache.misses, 1)
         self.assertGreaterEqual(tokens_cache.hits, 1)
+
+    def test_playbook_token_cache_reuses_static_terms_without_payload_poisoning(self) -> None:
+        playbooks_module._playbook_scoring_profiles.cache_clear()
+        playbooks_module._tokens_cached.cache_clear()
+        playbooks_module._terms_cached.cache_clear()
+        playbooks_module._normalized_term_tokens.cache_clear()
+
+        first_terms = playbooks_module._terms("Risky refactor with code-review")
+        first_terms.add("mutated")
+        second_terms = playbooks_module._terms("Risky refactor with code-review")
+
+        self.assertIn("risky", second_terms)
+        self.assertIn("code-review", second_terms)
+        self.assertNotIn("mutated", second_terms)
+        terms_cache = playbooks_module._terms_cached.cache_info()
+        self.assertEqual(terms_cache.misses, 1)
+        self.assertGreaterEqual(terms_cache.hits, 1)
+
+        first_tokens = playbooks_module._tokens("Risky refactor with code-review")
+        first_tokens.add("mutated")
+        second_tokens = playbooks_module._tokens("Risky refactor with code-review")
+        tokens_cache = playbooks_module._tokens_cached.cache_info()
+
+        self.assertIn("risky", second_tokens)
+        self.assertIn("code-review", second_tokens)
+        self.assertNotIn("mutated", second_tokens)
+        self.assertEqual(tokens_cache.misses, 1)
+        self.assertGreaterEqual(tokens_cache.hits, 1)
+
+    def test_playbook_recommendation_reuses_cached_term_tokens(self) -> None:
+        playbooks_module._playbook_scoring_profiles.cache_clear()
+        playbooks_module._tokens_cached.cache_clear()
+        playbooks_module._terms_cached.cache_clear()
+        playbooks_module._normalized_term_tokens.cache_clear()
+
+        first = playbooks_module.recommend_playbooks("risky refactor", limit=2)
+        second = playbooks_module.recommend_playbooks("risky refactor", limit=2)
+        profile_cache = playbooks_module._playbook_scoring_profiles.cache_info()
+        term_cache = playbooks_module._normalized_term_tokens.cache_info()
+
+        self.assertEqual(first, second)
+        self.assertEqual(profile_cache.misses, 1)
+        self.assertGreaterEqual(profile_cache.hits, 1)
+        self.assertGreater(term_cache.misses, 0)
 
     def test_phrase_match_cache_reuses_repeated_recommendation_pairs(self) -> None:
         recommend_module._phrase_match.cache_clear()
