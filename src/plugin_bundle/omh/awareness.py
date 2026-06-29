@@ -351,6 +351,11 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             routing_context=routing_context,
         )
 
+try:  # Keep route hints aligned with router locale phrase packs when available.
+    from ...routing.localization import prepare_routing_text as _prepare_routing_text
+except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+    _prepare_routing_text = None
+
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
 OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION = "omh_generic_tool_checkpoint/v1"
@@ -738,6 +743,18 @@ _ROUTE_HINT_RULES = (
             "shareable visual",
             "generate image",
             "image summary",
+            "haz una imagen",
+            "hacer una imagen",
+            "crea una imagen",
+            "imagen que explique",
+            "imagen explicando",
+            "infografía",
+            "infografia",
+            "erstelle ein bild",
+            "mach ein bild",
+            "bild das",
+            "bild, das",
+            "infografik",
             "이미지",
             "사진",
             "사진처럼",
@@ -749,10 +766,23 @@ _ROUTE_HINT_RULES = (
             "요약 카드",
             "공유용 카드",
             "画像",
+            "画像を作って",
+            "画像で説明",
+            "説明する画像",
+            "要約画像",
+            "图片",
+            "圖像",
+            "图像",
+            "説明圖片",
+            "说明图片",
+            "摘要图片",
+            "摘要圖片",
+            "信息图",
+            "資訊圖",
             "海报",
             "海報",
         ),
-        "tokens": ("image", "infographic", "poster", "visual"),
+        "tokens": ("image", "infographic", "poster", "visual", "imagen", "bild", "infografik"),
         "adjacent_workflows": ("materials-package", "report-package"),
     },
     {
@@ -846,8 +876,43 @@ _ROUTE_HINT_RULES = (
             "레포 찾아",
             "저장소 찾아",
         ),
-        "tokens": ("dataset", "datasets", "presentation", "presentations"),
+        "tokens": ("dataset", "datasets"),
         "adjacent_workflows": ("web-research", "paper-learning", "research-department", "materials-package"),
+    },
+    {
+        "id": "materials_package",
+        "workflow": "materials-package",
+        "lane": "materials_and_visuals",
+        "next_action": "prepare_material_package",
+        "reason": "The user is asking Hermes to prepare, convert, package, or QA files such as PDFs, decks, spreadsheets, docs, or upload-ready materials.",
+        "fallback_action": "confirm_target_format_and_generator",
+        "phrases": (
+            "materials package",
+            "material package",
+            "file package",
+            "pdf to ppt",
+            "pdf into ppt",
+            "pdf to presentation",
+            "pdf into presentation",
+            "convert pdf to presentation",
+            "turn pdf into presentation",
+            "convert pdf to deck",
+            "pdf and excel file",
+            "convierte este pdf",
+            "pdf en una presentación",
+            "pdf en una presentacion",
+            "transforme ce pdf",
+            "pdf en présentation",
+            "pdf en presentation",
+            "pdf und excel datei",
+            "pdf를 ppt",
+            "pdf를 ppt로",
+            "ppt 만들어",
+            "엑셀 파일",
+            "자료 패키지",
+        ),
+        "tokens": ("ppt", "pptx", "spreadsheet", "excel", "xlsx", "deck", "slides", "presentacion", "datei"),
+        "adjacent_workflows": ("report-package", "deliverable-package", "paper-learning", "img-summary"),
     },
     {
         "id": "paper_learning",
@@ -983,9 +1048,15 @@ def awareness_context_matches_message(message: str) -> bool:
 def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, object]:
     """Return bounded message-specific workflow hints without exposing raw text."""
     normalized = unicodedata.normalize("NFKC", message).casefold()
+    routing_text = _localized_routing_text(message)
+    localized_normalized = unicodedata.normalize("NFKC", routing_text).casefold()
     diagnostic_status = _diagnostic_status_context(normalized)
     diagnostic_eval = _prefers_diagnostic_workflow_learning_hint(message, classify_workflow_intent(message))
-    routing_normalized = normalized if diagnostic_eval or not diagnostic_status else _without_diagnostic_status_lines(normalized)
+    routing_normalized = (
+        localized_normalized
+        if diagnostic_eval or not diagnostic_status
+        else _without_diagnostic_status_lines(localized_normalized)
+    )
     tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", routing_normalized))
     hint_limit = max(max_hints, 0)
     intent = classify_workflow_intent(message)
@@ -1066,6 +1137,15 @@ def awareness_route_hint(message: str, *, max_hints: int = 2) -> dict[str, objec
             "tool invocation, generated output, verification, review, CI, merge, or proof that routing was correct."
         ),
     }
+
+
+def _localized_routing_text(message: str) -> str:
+    if _prepare_routing_text is None:
+        return message
+    try:
+        return str(_prepare_routing_text(message).scoring_text or message)
+    except Exception:  # pragma: no cover - defensive for standalone plugin hosts.
+        return message
 
 
 def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
