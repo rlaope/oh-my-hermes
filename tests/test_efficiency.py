@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
 from _local_package import load_local_package
 
@@ -39,6 +40,10 @@ from omh.skills.catalog import (
     memory_context_policy_for_skill,
     retained_delegation_skill_names,
 )
+from omh.quality import grounded_score as grounded_score_module
+from omh.quality import route_hint_alignment as route_hint_alignment_module
+from omh.quality.grounded_score import GroundedScenario
+from omh.quality.route_hint_alignment import RouteHintAlignmentCase
 
 
 class EfficiencyContractTests(unittest.TestCase):
@@ -219,6 +224,88 @@ class EfficiencyContractTests(unittest.TestCase):
 
                 self.assertEqual(route_hint["primary_workflow"], workflow)
                 self.assertEqual(route_hint["primary_next_action"], next_action)
+
+    def test_quality_demos_reuse_interaction_route(self) -> None:
+        alignment_case = RouteHintAlignmentCase(
+            "synthetic",
+            "synthetic-route",
+            "Synthetic route reuse",
+            "synthetic message that should not hit the real router",
+            "synthetic-workflow",
+        )
+        fake_interaction = {
+            "route": {
+                "selected_skill": "synthetic-workflow",
+                "action": "dispatch",
+                "confidence": "high",
+                "score": 11,
+                "explicit": True,
+            },
+            "next_action": "synthetic_next_action",
+            "chat_response": {
+                "kind": "synthetic_card",
+                "claim_boundary": "Synthetic boundary.",
+            },
+        }
+        fake_route_hint = {
+            "status": "hinted",
+            "primary_workflow": "synthetic-workflow",
+            "primary_next_action": "synthetic_next_action",
+            "hints": [{"workflow_context_card": {"id": "intent_to_plan"}}],
+            "claim_boundary": "Synthetic hints are not workflow execution evidence.",
+        }
+
+        with (
+            patch.object(
+                route_hint_alignment_module,
+                "build_chat_interaction_payload",
+                return_value=fake_interaction,
+            ),
+            patch.object(
+                route_hint_alignment_module,
+                "awareness_route_hint",
+                return_value=fake_route_hint,
+            ),
+        ):
+            row = route_hint_alignment_module._evaluate_alignment_case(alignment_case, source="discord")
+
+        self.assertTrue(row["aligned"])
+        self.assertEqual(row["observed"]["route_workflow"], "synthetic-workflow")
+        self.assertEqual(row["observed"]["hint_workflow"], "synthetic-workflow")
+
+        grounded_scenario = GroundedScenario(
+            "synthetic-grounded",
+            "Synthetic grounded route reuse",
+            "synthetic grounded message that should not hit the real router",
+            "synthetic-workflow",
+            "synthetic_card",
+            "synthetic_next_action",
+            "fallback",
+            False,
+            invocation_mode="direct_skill",
+        )
+        fake_delegation = {
+            "delegation": {
+                "action": "fallback",
+                "recommended_workflow": "synthetic-workflow",
+            }
+        }
+        with (
+            patch.object(
+                grounded_score_module,
+                "build_chat_interaction_payload",
+                return_value=fake_interaction,
+            ),
+            patch.object(
+                grounded_score_module,
+                "build_coding_delegation_payload",
+                return_value=fake_delegation,
+            ),
+        ):
+            scenario_row = grounded_score_module._evaluate_grounded_scenario(grounded_scenario, source="discord")
+
+        self.assertEqual(scenario_row["score"], 10)
+        self.assertEqual(scenario_row["observed"]["skill"], "synthetic-workflow")
 
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
