@@ -1197,7 +1197,7 @@ def _route_recommended_reply(
 ) -> str:
     if action == "dispatch":
         not_evidence = _first_not_evidence(not_evidence_yet)
-        suffix = f" This is still not {not_evidence} evidence." if not_evidence else " This is routing guidance, not execution evidence."
+        suffix = f" This is still not evidence of {not_evidence}." if not_evidence else " This is routing guidance, not execution evidence."
         return f"I will use `{selected}` first and start with {next_action_label}.{suffix}"
     if action == "clarify":
         return "I need one clarification before choosing a workflow; no plan or execution has started."

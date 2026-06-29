@@ -4580,7 +4580,7 @@ def _workflow_explanation_reason(state: dict[str, object], *, workflow: str, lab
 def _workflow_recommended_reply(workflow: str, label: str, next_action_label: str, not_evidence_yet: list[str]) -> str:
     name = workflow or label
     not_evidence = _first_not_evidence_item(not_evidence_yet)
-    suffix = f" This is still not {not_evidence} evidence." if not_evidence else " This is guidance, not execution evidence."
+    suffix = f" This is still not evidence of {not_evidence}." if not_evidence else " This is guidance, not execution evidence."
     return f"I will use `{name}` and start with {next_action_label}.{suffix}"
 
 
