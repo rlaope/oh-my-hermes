@@ -236,6 +236,7 @@ class ChatRouterTests(unittest.TestCase):
             "내가 방금 뭐라고 했지?",
             "이 오류 왜 나?",
             "이 에러 해결방법 알려줘",
+            "이 오류 뭐임",
             "command not found: omh",
             "comando no encontrado: omh",
             "commande introuvable: omh",
@@ -353,6 +354,7 @@ class ChatRouterTests(unittest.TestCase):
             "what happened?",
             "what did I just ask?",
             "이 오류 왜 나?",
+            "이 오류 뭐임",
             "이 로그 봐줘",
             "command not found: omh",
             "gracias",
@@ -842,6 +844,11 @@ class ChatRouterTests(unittest.TestCase):
                 f"trigger:{normalized_phrase('무슨일이노')}",
             ),
             (
+                "뭔일임?",
+                "agent-ops-review",
+                f"trigger:{normalized_phrase('뭔일임')}",
+            ),
+            (
                 "지금 뭐 하고 있어?",
                 "agent-ops-review",
                 f"trigger:{normalized_phrase('지금 뭐 하고 있어')}",
@@ -1160,6 +1167,7 @@ class ChatRouterTests(unittest.TestCase):
 
     def test_paper_learning_routes_paper_explanation_without_stealing_related_lanes(self) -> None:
         explanation_cases = (
+            "논문 쉽게 설명해줘",
             "이 논문 PDF 아주 쉽게 설명해줘",
             "이 PDF 쉽게 설명해줘",
             "Explain this arXiv paper at expert level without dropping details",

@@ -65,7 +65,7 @@ Bad example:
 
 Use when Hermes should explain AI-agent work: quality gates, progress, blockers, next actions, and throughput.
 
-    Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `codex progress`, `codex status`, `coding agent status`, `where is codex`, `research coding review status`, `what's going on`, `what are you working on`, `今何してる`, `现在在做什么`, `qué está pasando`, `qu'est-ce qui se passe`, `was ist los`, `ai agent manager`, `third-party manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `무슨일이노`, `지금 뭐 하고 있어`, `리서치 코딩 리뷰`
+    Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `codex progress`, `codex status`, `coding agent status`, `where is codex`, `research coding review status`, `what's going on`, `what are you working on`, `今何してる`, `现在在做什么`, `qué está pasando`, `qu'est-ce qui se passe`, `was ist los`, `ai agent manager`, `third-party manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `작업 생산량`, `처리량`, `품질 퀄리티`, `작업 품질`, `진행상황`, `무슨일이노`, `뭔일임`, `지금 뭐 하고 있어`, `리서치 코딩 리뷰`
 
 ## Catalog Metadata
 

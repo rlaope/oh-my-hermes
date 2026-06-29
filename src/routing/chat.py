@@ -367,6 +367,10 @@ _DIRECT_ANSWER_KOREAN_ERROR_HELP_ACTIONS = (
     "알려줘",
     "봐줘",
     "설명",
+    "뭐임",
+    "뭔데",
+    "무슨",
+    "뜻",
 )
 _DIRECT_ANSWER_ERROR_HELP_HARD_BLOCKERS = (
     "pr",
@@ -449,6 +453,7 @@ _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
     "attached pdf",
     "論文",
     "论文",
+    "논문",
     "이 논문",
     "이 pdf",
     "이 코드",
