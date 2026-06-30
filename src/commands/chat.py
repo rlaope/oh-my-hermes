@@ -249,6 +249,18 @@ def _action_label_with_id(action: str, label: str = "") -> str:
     return f"{resolved_label} (`{normalized}`)"
 
 
+_ROUTE_ACTION_LABELS = {
+    "clarify": "asking one clarification",
+    "dispatch": "routing to a workflow",
+    "fallback": "answering without a workflow",
+}
+
+
+def _route_action_label_with_id(action: str) -> str:
+    normalized = action.strip()
+    return _action_label_with_id(normalized, _ROUTE_ACTION_LABELS.get(normalized, ""))
+
+
 def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
     response = _as_mapping(payload.get("chat_response"))
     route = _as_mapping(payload.get("route"))
@@ -263,10 +275,17 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
         "unknown",
     )
     next_action = _text(payload.get("next_action") or state.get("next_action") or route.get("action"), "unknown")
+    next_action_label_text = _text(
+        payload.get("next_action_label")
+        or state.get("next_action_label")
+        or _as_mapping(state.get("workflow_explanation")).get("route_next_action_label")
+        or route_explanation.get("next_action_label"),
+        next_action_label(next_action) if next_action != "unknown" else "",
+    )
     print("OMH chat interaction")
     print(f"Source: {source}")
     print(f"Workflow: {selected_workflow}")
-    print(f"Next action: {next_action}")
+    print(f"Next action: {_action_label_with_id(next_action, next_action_label_text)}")
 
     headline = _text(response.get("headline") or response.get("plain_headline"))
     body = _text(response.get("body") or response.get("plain_body"))
@@ -326,13 +345,17 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
     confidence = _text(route.get("confidence") or route_explanation.get("confidence"), "unknown")
     score = _text(route.get("score") or route_explanation.get("score"), "0")
     next_action = _text(route_explanation.get("next_action") or _first_recommendation_value(route, "next_action"), "unknown")
+    next_action_label_text = _text(
+        route_explanation.get("next_action_label"),
+        next_action_label(next_action) if next_action != "unknown" else "",
+    )
 
     print("OMH chat route")
     print(f"Source: {source}")
     print(f"Workflow: {selected_workflow}")
     print(f"Harness: {selected_harness}")
-    print(f"Action: {action}")
-    print(f"Next action: {next_action}")
+    print(f"Action: {_route_action_label_with_id(action)}")
+    print(f"Next action: {_action_label_with_id(next_action, next_action_label_text)}")
     print(f"Confidence: {confidence} (score {score})")
 
     why = _text(route_explanation.get("why_this_workflow") or route.get("reason"))
@@ -360,9 +383,10 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
         for item in recommendations[:5]:
             skill = _text(item.get("skill"), "unknown")
             item_next = _text(item.get("next_action"), "unknown")
+            item_next_label = _text(item.get("next_action_label"), next_action_label(item_next))
             item_confidence = _text(item.get("confidence"), "unknown")
             item_score = _text(item.get("score"), "0")
-            print(f"- {skill}: {item_next} ({item_confidence}, score {item_score})")
+            print(f"- {skill}: {_action_label_with_id(item_next, item_next_label)} ({item_confidence}, score {item_score})")
 
     route_plan = _as_mapping(route.get("workflow_route_plan"))
     steps = [item for item in _as_list(route_plan.get("steps")) if isinstance(item, dict)]
