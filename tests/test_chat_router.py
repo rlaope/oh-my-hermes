@@ -1571,6 +1571,12 @@ class ChatRouterTests(unittest.TestCase):
                 "prepare_toolbelt_readiness",
                 "guard:toolbelt_readiness",
             ),
+            (
+                "이미지 생성 연결체가 없으면 어떤걸로 연결할지 물어봐줘",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                "guard:toolbelt_readiness",
+            ),
             ("FAL_KEY 없으면 어떻게 해?", "toolbelt-readiness", "prepare_toolbelt_readiness", "guard:toolbelt_readiness"),
             (
                 "메모리 점검해줘",

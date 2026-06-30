@@ -447,6 +447,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "img_summary",
     ),
     RoutingInterventionCase(
+        "korean-image-generator-connector-readiness",
+        "Korean missing image-generator connector requests route to toolbelt readiness",
+        "이미지 생성 연결체가 없으면 어떤걸로 연결할지 물어봐줘",
+        "dispatch",
+        "toolbelt-readiness",
+        "prepare_toolbelt_readiness",
+        "toolbelt_readiness",
+    ),
+    RoutingInterventionCase(
         "korean-hermes-coding-team-only",
         "Korean Hermes-only coding team requests prepare runtime handoff",
         "Hermes만으로 코딩팀처럼 작업하고 싶어",

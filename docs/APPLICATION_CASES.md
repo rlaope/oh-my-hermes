@@ -553,7 +553,7 @@ chat correctly but the plugin hint nudges the wrapper toward the wrong workflow
 or returns `no_hint`.
 
 `omh demo grounded-score` is a deterministic contract-compliance demo over the
-current 49-scenario operator corpus. The score is 10/10 only when the expected
+current 50-scenario operator corpus. The score is 10/10 only when the expected
 chat route, response kind, next action, playbook confidence, and
 coding-delegation evidence boundary all match. It does not award points for
 unobserved execution, review, CI, or merge work. The matrix below is a snapshot
@@ -591,6 +591,7 @@ table should change with them.
 | Korean meeting image summary | `회의록을 보기 좋은 세로 이미지로 요약해줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean release-note image summary | `릴리즈 노트 이미지로 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean OMH loop feature image summary | `OMH 루프 기능 소개 이미지 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
+| Korean image-generator connector readiness | `이미지 생성 연결체가 없으면 어떤걸로 연결할지 물어봐줘` | `toolbelt-readiness` / `toolbelt_readiness` | `toolbelt-readiness` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean release update announcement card | `릴리즈 업데이트를 발표 카드로 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean Instagram card-news summary | `요약을 인스타 카드뉴스처럼 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Research department ops | `I need a weekly leadership brief from support tickets, competitor news, and release risks` | `research-department` / `research_department` | `weekly-ops-review` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
