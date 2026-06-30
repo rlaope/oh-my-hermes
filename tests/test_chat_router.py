@@ -1961,6 +1961,7 @@ selected_workflow=ultraprocess
             "every morning competitor research then prepare a PR",
             "codex로 이 기능 구현 맡겨줘",
             "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
+            "코덱스로 이 이슈 PR 만들 수 있게 작업 시작해줘",
             "$ultraprocess로 이 repo 변경을 PR-ready까지 준비해줘",
             "Can OMH do one full research plan implementation review cycle?",
         )

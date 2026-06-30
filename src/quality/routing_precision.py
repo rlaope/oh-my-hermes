@@ -478,6 +478,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "handoff",
     ),
     RoutingInterventionCase(
+        "korean-codex-issue-pr-start",
+        "Korean Codex issue-to-PR start requests open ultraprocess",
+        "코덱스로 이 이슈 PR 만들 수 있게 작업 시작해줘",
+        "dispatch",
+        "ultraprocess",
+        "show_coding_handoff_status",
+        "handoff",
+    ),
+    RoutingInterventionCase(
         "scheduled-research-blueprint",
         "Scheduled research requests open automation blueprint",
         "make a daily competitor research digest blueprint every morning",

@@ -100,6 +100,22 @@ _OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
     ),
     RouteHintAlignmentCase(
         "operator_regression",
+        "codex-issue-pr-tracking-korean",
+        "Korean Codex issue-to-PR tracking handoff",
+        "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
+        "ultraprocess",
+        "show_coding_handoff_status",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "codex-issue-pr-start-korean",
+        "Korean Codex issue-to-PR start handoff",
+        "코덱스로 이 이슈 PR 만들 수 있게 작업 시작해줘",
+        "ultraprocess",
+        "show_coding_handoff_status",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
         "open-in-codex-button-korean",
         "Open in Codex button request",
         "Open in Codex 버튼 어디 있어?",

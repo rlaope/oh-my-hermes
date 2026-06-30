@@ -1791,6 +1791,13 @@ class WrapperContractTests(unittest.TestCase):
                 "show_coding_handoff_status",
                 "Show coding status",
             ),
+            (
+                "코덱스로 이 이슈 PR 만들 수 있게 작업 시작해줘",
+                "show_coding_handoff_status",
+                False,
+                "show_coding_handoff_status",
+                "Show coding status",
+            ),
         )
 
         for message, next_action, choice_required, primary_action, primary_label in cases:

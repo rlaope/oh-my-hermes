@@ -2281,6 +2281,16 @@ _CODING_HANDOFF_PHRASES = (
     "진행상태 추적",
     "진행 상태 추적",
 )
+_CODING_HANDOFF_CONTROL_PHRASES = (
+    "start the work",
+    "start work",
+    "start the task",
+    "start task",
+    "작업 시작",
+    "작업 시작해",
+    "작업 시작해줘",
+    "작업 시작하게",
+)
 _SCHEDULED_OPS_PHRASES = (
     "automation blueprint",
     "scheduled ops blueprint",
@@ -4026,7 +4036,10 @@ def _coding_handoff_status_guard_applies(
         ("claude code", "coding agent", "코딩 에이전트"),
     )
     work = bool(_CODING_HANDOFF_WORK_TOKENS & query_tokens)
-    control = bool(_CODING_HANDOFF_CONTROL_TOKENS & query_tokens)
+    control = bool(_CODING_HANDOFF_CONTROL_TOKENS & query_tokens) or _contains_phrase(
+        normalized_query,
+        _CODING_HANDOFF_CONTROL_PHRASES,
+    )
     return explicit_phrase or (executor and work and control)
 
 
