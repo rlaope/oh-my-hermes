@@ -1930,6 +1930,11 @@ def _localized_routing_text(message: str) -> str:
 def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
     """Return compact hook text for message-specific workflow hints."""
     payload = awareness_route_hint(message, max_hints=max_hints)
+    return awareness_route_hint_context_from_payload(payload)
+
+
+def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str:
+    """Return compact hook text from an already-built route hint payload."""
     if payload.get("status") != "hinted":
         return ""
     adjacent_summary = ", ".join(str(item) for item in payload.get("adjacent_workflows", []))
@@ -1949,7 +1954,7 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
         lines.append(f"adjacent_workflows={adjacent_summary}.")
     if not_executed_summary:
         lines.append(f"not_executed={not_executed_summary}.")
-    for hint in payload["hints"]:
+    for hint in payload.get("hints", []):
         if not isinstance(hint, dict):
             continue
         adjacent = ", ".join(str(item) for item in hint.get("adjacent_workflows", []))
@@ -1973,7 +1978,7 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
         not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", [])[:4])
         if not_evidence:
             lines.append(f"  not_evidence_yet={not_evidence}.")
-    lines.append("Boundary: " + str(payload["claim_boundary"]))
+    lines.append("Boundary: " + str(payload.get("claim_boundary", "")))
     return "\n".join(lines)
 
 
