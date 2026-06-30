@@ -465,6 +465,7 @@ class ChatRouterTests(unittest.TestCase):
     def test_plain_text_transform_keeps_workflow_blockers(self) -> None:
         cases = (
             ("회의록 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
+            ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary", "prepare_visual_prompt_card"),
             ("PR 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
             ("논문 요약해줘", "paper-learning", "prepare_paper_learning"),
             ("이 PDF 요약해줘", "materials-package", "prepare_material_package"),
@@ -774,6 +775,10 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "Let Hermes itself code this with workers and worktrees.",
+                "team",
+            ),
+            (
+                "Hermes만으로 코딩팀처럼 작업하고 싶어",
                 "team",
             ),
             (

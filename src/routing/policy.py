@@ -718,6 +718,16 @@ _VISUAL_SUMMARY_PHRASES = (
     "make an image explaining the cron feature",
     "make a visual summary of this pr",
     "visual summary of this pr",
+    "이미지 생성",
+    "이미지 생성해줘",
+    "이미지 만들어",
+    "이미지로 요약",
+    "이미지 카드",
+    "요약 이미지",
+    "요약 카드",
+    "세로 카드",
+    "회의록 이미지",
+    "회의록 세로 카드",
     "picture card",
     "meeting notes picture card",
     "pr reviewer image card",
@@ -4296,9 +4306,29 @@ def _gateway_intent_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _hermes_coding_team_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    hermes_owner = _contains_phrase(normalized_query, ("hermes itself", "hermes coding", "hermes-owned coding", "헤르메스가 코딩"))
-    coding = bool({"code", "coding", "implement", "implementation", "refactor", "fix"} & query_tokens)
-    team_runtime = bool({"worker", "workers", "worktree", "worktrees", "team", "swarm", "parallel"} & query_tokens)
+    hermes_owner = _contains_phrase(
+        normalized_query,
+        (
+            "hermes itself",
+            "hermes coding",
+            "hermes-owned coding",
+            "hermes only",
+            "hermes만으로",
+            "hermes 만으로",
+            "헤르메스가 코딩",
+            "헤르메스만으로",
+            "헤르메스 만으로",
+            "헤르메스가 직접",
+        ),
+    )
+    coding = bool({"code", "coding", "implement", "implementation", "refactor", "fix"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("코딩", "구현", "개발"),
+    )
+    team_runtime = bool({"worker", "workers", "worktree", "worktrees", "team", "swarm", "parallel"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("coding team", "코딩팀", "코딩 팀", "팀처럼", "팀으로", "팀 모드", "팀 작업"),
+    )
     return hermes_owner and coding and team_runtime
 
 
