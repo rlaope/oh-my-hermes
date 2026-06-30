@@ -35,8 +35,8 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["routing_precision_intervention_cases"], 92)
         self.assertEqual(payload["summary"]["routing_precision_intervention_passing_count"], 92)
         self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
-        self.assertEqual(payload["summary"]["localized_chat_copy_cases"], 7)
-        self.assertEqual(payload["summary"]["localized_chat_copy_passing_count"], 7)
+        self.assertEqual(payload["summary"]["localized_chat_copy_cases"], 8)
+        self.assertEqual(payload["summary"]["localized_chat_copy_passing_count"], 8)
         self.assertEqual(payload["summary"]["localized_chat_copy_locale_count"], 6)
         self.assertEqual(hermes_ux_quality_errors(payload), [])
 
@@ -71,7 +71,7 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertIn("route mismatches 0", stdout)
         self.assertIn("precision overroutes 0", stdout)
         self.assertIn("missed interventions 0", stdout)
-        self.assertIn("localized 7/7", stdout)
+        self.assertIn("localized 8/8", stdout)
 
         status, stdout, stderr = run_cli(["demo", "hermes-ux-quality", "--json"], output_json=False)
 

@@ -102,6 +102,17 @@ LOCALIZED_CHAT_COPY_CASES: tuple[LocalizedChatCopyCase, ...] = (
         headline_marker="공유용 이미지 카드",
         body_markers=("이미지 안 문구", "연결된 이미지 생성 도구", "말하지 않고"),
     ),
+    LocalizedChatCopyCase(
+        id="agent-ops-status-ko",
+        title="Korean agent ops status",
+        message="무슨일이노",
+        expected_locale="ko",
+        expected_kind="agent_ops_review",
+        expected_next_action="refresh_agent_ops_status",
+        headline_marker="지금 상황",
+        body_markers=("관리자 관점", "shell 명령", "관측된 증거"),
+        forbidden_body_markers=("Progress, blockers",),
+    ),
 )
 
 

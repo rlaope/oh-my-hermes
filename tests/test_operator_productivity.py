@@ -148,20 +148,24 @@ class OperatorProductivityTests(unittest.TestCase):
         self.assertNotIn("omh list", json.dumps(payload))
 
     def test_chat_interact_renders_status_refresh_for_short_status_questions(self) -> None:
-        for message in (
-            "작업상황 브리핑해줘",
-            "status update please",
-            "今何してる？",
-        ):
-            with self.subTest(message=message):
-                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+        cases = (
+            ("작업상황 브리핑해줘", "지금 상황", "관리자 관점"),
+            ("무슨일이노", "지금 상황", "shell 명령"),
+            ("status update please", "Progress, blockers, and throughput", "quality gates"),
+            ("今何してる？", "現在の状況", "workflow 状態"),
+        )
+        for message in cases:
+            with self.subTest(message=message[0]):
+                prompt, headline_marker, body_marker = message
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", prompt])
 
                 self.assertEqual(status, 0, stderr)
                 payload = json.loads(stdout)
                 self.assertEqual(payload["route"]["selected_skill"], "agent-ops-review")
                 self.assertEqual(payload["chat_response"]["kind"], "agent_ops_review")
                 self.assertEqual(payload["next_action"], "refresh_agent_ops_status")
-                self.assertIn("Progress, blockers, and throughput", payload["chat_response"]["headline"])
+                self.assertIn(headline_marker, payload["chat_response"]["headline"])
+                self.assertIn(body_marker, payload["chat_response"]["body"])
 
     def test_catalog_installs_agent_ops_review_and_maps_harness(self) -> None:
         self.assertIn("agent-ops-review", installable_skill_names())

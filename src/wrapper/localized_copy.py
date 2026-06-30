@@ -262,6 +262,57 @@ _CARD_COPY: dict[str, dict[str, ChatCopy]] = {
             ),
         ),
     },
+    "agent_ops_review": {
+        "en": ChatCopy(
+            headline="Progress, blockers, and throughput need a manager view.",
+            body=(
+                "I will show quality gates, current gaps, blockers, next actions, and throughput levers "
+                "without asking the user to approve shell catalog commands."
+            ),
+        ),
+        "ko": ChatCopy(
+            headline="지금 상황을 한눈에 볼 수 있게 정리하겠습니다.",
+            body=(
+                "현재 workflow 상태, 막힌 지점, 다음 행동, 품질 게이트, 처리량을 관리자 관점으로 보여드리겠습니다. "
+                "`omh list` 같은 shell 명령 승인을 먼저 요구하지 않고, 실행·검증·CI·머지는 관측된 증거가 있을 때만 완료로 말합니다."
+            ),
+        ),
+        "ja": ChatCopy(
+            headline="現在の状況をひと目で分かる形に整理します。",
+            body=(
+                "workflow 状態、ブロッカー、次の action、品質ゲート、throughput を管理者視点で表示します。"
+                "shell command の承認を先に求めず、実行、検証、CI、merge は観測された証拠がある時だけ完了扱いします。"
+            ),
+        ),
+        "zh": ChatCopy(
+            headline="我会把当前进展整理成一张状态视图。",
+            body=(
+                "我会从管理视角展示 workflow 状态、阻塞点、下一步、质量 gate 和吞吐量。"
+                "不会先要求批准 shell command；执行、验证、CI 和 merge 只有在有观测证据时才会说成完成。"
+            ),
+        ),
+        "es": ChatCopy(
+            headline="Puedo ordenar el estado actual en una vista clara.",
+            body=(
+                "Mostraré estado del workflow, bloqueos, siguiente acción, quality gates y throughput desde una vista de operador. "
+                "No pediré aprobar un shell command primero; ejecución, verificación, CI y merge solo cuentan como hechos con evidencia observada."
+            ),
+        ),
+        "fr": ChatCopy(
+            headline="Je peux résumer l'état actuel dans une vue claire.",
+            body=(
+                "Je montre l'état du workflow, les blocages, la prochaine action, les quality gates et le throughput côté opérateur. "
+                "Je ne demande pas d'abord une validation de shell command; exécution, vérification, CI et merge ne sont confirmés qu'avec preuve observée."
+            ),
+        ),
+        "de": ChatCopy(
+            headline="Ich kann den aktuellen Stand übersichtlich darstellen.",
+            body=(
+                "Ich zeige workflow-Status, Blocker, nächste Aktion, Quality Gates und Durchsatz aus Operator-Sicht. "
+                "Ich verlange nicht zuerst eine shell command Freigabe; Ausführung, Verifikation, CI und Merge gelten nur mit beobachteter Evidenz."
+            ),
+        ),
+    },
     "workflow_learning_missed_route": {
         "en": ChatCopy(
             headline="I can record this missed OMH route.",
