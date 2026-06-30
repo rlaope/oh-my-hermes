@@ -1032,6 +1032,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("PPT 만들어줘", "materials-package"),
             ("codex로 열어줘", "executor-runtime-readiness"),
             ("codex로 지금 작업 열어줘", "executor-runtime-readiness"),
+            ("claude code로 지금 작업 열어줘", "executor-runtime-readiness"),
             ("github oss repo 찾아서 비교해줘", "source-finder"),
             ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
@@ -1132,6 +1133,7 @@ class EfficiencyContractTests(unittest.TestCase):
         chat_module._route_chat_message_cached.cache_clear()
         cases = (
             "현재 작업상황 보고해줘",
+            "지금 진행중인 작업 알려줘",
             "작업상황 보고해줘",
             "what are you working on?",
         )
