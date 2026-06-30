@@ -288,14 +288,14 @@ can call the transport-free backend preview:
 
 ```sh
 omh chat route-hint --source discord "make an image explaining the cron feature"
-omh chat route-hint --source discord --summary "make an image explaining the cron feature"
+omh chat route-hint --source discord --json "make an image explaining the cron feature"
 ```
 
 The preview payload also includes `generic_tool_checkpoint.routes`, so adapters
-do not need to parse prose before opening generic tool surfaces. The `--summary`
-form prints the same status, primary workflow, next action, matched cues, hint
-details, checkpoint, and evidence boundary for operator QA. Adapters should
-continue to consume the default JSON payload.
+do not need to parse prose before opening generic tool surfaces. The default
+terminal form prints status, primary workflow, next action, matched cues, hint
+details, checkpoint, and evidence boundary for operator QA. Adapters should pass
+`--json` for the complete machine-readable payload.
 
 Release QA should also run:
 

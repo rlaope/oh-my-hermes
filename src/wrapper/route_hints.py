@@ -178,7 +178,7 @@ def _response_for_hint(
                 "id": "route_for_me",
                 "label": "Route for me",
                 "enabled": True,
-                "backend_command": "omh chat interact",
+                "backend_command": "omh chat interact --json",
             },
         ]
         if workflow_submit_text != "./omh":
@@ -213,7 +213,7 @@ def _response_for_hint(
                 "id": "clarify",
                 "label": "Clarify",
                 "enabled": True,
-                "backend_command": "omh chat interact --mode clarify",
+                "backend_command": "omh chat interact --mode clarify --json",
             },
         ]
         render_kind = "no_route_hint"
@@ -267,7 +267,7 @@ def _next_backend_commands(primary_hint: dict[str, object]) -> list[dict[str, ob
     commands = [
         {
             "id": "route_for_me",
-            "command": "omh chat interact --source <source> <message>",
+            "command": "omh chat interact --source <source> --json <message>",
             "purpose": "Build the full wrapper interaction envelope from the same event.",
         },
     ]
@@ -275,15 +275,15 @@ def _next_backend_commands(primary_hint: dict[str, object]) -> list[dict[str, ob
         commands.append(
             {
                 "id": "open_picker",
-                "command": "omh chat interact --source <source> ./omh",
+                "command": "omh chat interact --source <source> --json ./omh",
                 "purpose": "Open the compact OMH workflow picker.",
             }
         )
     if workflow:
         workflow_command = (
-            "omh chat interact --source <source> ./omh"
+            "omh chat interact --source <source> --json ./omh"
             if workflow == "oh-my-hermes"
-            else f"omh chat interact --source <source> ./{workflow} <message>"
+            else f"omh chat interact --source <source> --json ./{workflow} <message>"
         )
         commands.insert(
             0,

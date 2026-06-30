@@ -92,8 +92,10 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
         payload["runtime"] = {"run": run, "routing": routing}
     if bool(getattr(args, "summary", False)):
         _print_chat_route_summary(payload)
-    else:
+    elif _wants_json(args):
         _print_json(payload)
+    else:
+        _print_chat_route_summary(payload)
     return 0
 
 
@@ -152,8 +154,10 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if bool(getattr(args, "summary", False)):
         _print_chat_interaction_summary(payload)
-    else:
+    elif _wants_json(args):
         _print_json(payload)
+    else:
+        _print_chat_interaction_summary(payload)
     return 0
 
 
@@ -949,12 +953,12 @@ def _add_chat_commands(sub) -> None:
     route.add_argument(
         "--summary",
         action="store_true",
-        help="Print a compact human-readable route summary instead of the default JSON payload.",
+        help="Print a compact human-readable route summary. This is the default.",
     )
     route.add_argument(
         "--json",
         action="store_true",
-        help="Print the full machine-readable JSON route payload. This is the default.",
+        help="Print the full machine-readable JSON route payload.",
     )
     route.set_defaults(func=cmd_chat_route)
 
@@ -1036,12 +1040,12 @@ def _add_chat_commands(sub) -> None:
     interact.add_argument(
         "--summary",
         action="store_true",
-        help="Print a compact human-readable operator summary instead of the default JSON envelope.",
+        help="Print a compact human-readable operator summary. This is the default.",
     )
     interact.add_argument(
         "--json",
         action="store_true",
-        help="Print the full machine-readable JSON envelope. This is the default.",
+        help="Print the full machine-readable JSON envelope.",
     )
     _add_render_profile_option(interact)
     _add_target_metadata_options(interact)

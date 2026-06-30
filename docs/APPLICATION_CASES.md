@@ -521,7 +521,7 @@ with:
 
 ```sh
 omh chat interact --source discord "<message>"
-omh chat interact --source discord --summary "<message>"
+omh chat interact --source discord --json "<message>"
 omh playbook recommend "<message>" --limit 1
 omh coding delegate --executor codex --source discord "<message>"
 omh demo grounded-score --summary
@@ -533,12 +533,12 @@ omh demo route-hint-alignment --json
 The purpose of the matrix is to keep Hermes users command-agnostic while giving
 wrapper operators a concrete contract result to render.
 
-`omh chat interact --summary` prints a compact operator-readable view of the
-same wrapper response, actions, evidence gaps, and claim boundary. The default
-`omh chat interact` output remains JSON for adapter compatibility.
-When only the lower-level router needs inspection, `omh chat route --summary`
-prints why the workflow was selected, the next action, route-plan steps, and
-the same evidence boundary while keeping default `chat route` output as JSON.
+`omh chat interact` prints a compact operator-readable view of the same wrapper
+response, actions, evidence gaps, and claim boundary. Adapters should pass
+`--json` when they need the complete machine-readable envelope. When only the
+lower-level router needs inspection, `omh chat route` prints why the workflow
+was selected, the next action, route-plan steps, and the same evidence boundary;
+use `omh chat route --json` for adapter payloads.
 
 `omh demo grounded-score --summary` prints a compact operator-readable rollup;
 `omh demo grounded-score --json` prints the full machine-readable payload.
