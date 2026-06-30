@@ -218,9 +218,13 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertTrue(awareness_context_matches_message("현재 hermes가 기억하는 맥락을 점검하고 피드백 받아줘"))
         self.assertTrue(awareness_context_matches_message("作成して、PRの要約画像"))
         self.assertTrue(awareness_context_matches_message("生成一张发布说明海报"))
+        self.assertTrue(awareness_context_matches_message("haz una imagen que explique la función cron"))
+        self.assertTrue(awareness_context_matches_message("trouve le dépôt GitHub et le PDF public"))
+        self.assertTrue(awareness_context_matches_message("erkläre dieses Paper einfach"))
         self.assertTrue(awareness_context_matches_message("make a PR summary card for reviewers"))
         self.assertTrue(awareness_context_matches_message("what is the coding handoff status?"))
         self.assertFalse(awareness_context_matches_message("prepare a sandwich"))
+        self.assertFalse(awareness_context_matches_message("gracias"))
         self.assertFalse(awareness_context_matches_message(""))
 
         doctor_hint = awareness_route_hint("update 했는데 잘 된거야?")
