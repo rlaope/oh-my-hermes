@@ -22,6 +22,7 @@ class RouteHintAlignmentCase:
     title: str
     message: str
     expected_workflow: str
+    expected_next_action: str
 
 
 def route_hint_alignment_cases() -> tuple[RouteHintAlignmentCase, ...]:
@@ -33,6 +34,7 @@ def route_hint_alignment_cases() -> tuple[RouteHintAlignmentCase, ...]:
                 scenario.title,
                 scenario.message,
                 scenario.expected_skill,
+                scenario.expected_next_action,
             )
             for scenario in GROUNDED_SCENARIOS
         ]
@@ -43,6 +45,7 @@ def route_hint_alignment_cases() -> tuple[RouteHintAlignmentCase, ...]:
                 case.title,
                 case.message,
                 case.expected_skill,
+                case.expected_next_action,
             )
             for case in CHAT_CARD_COVERAGE_CASES
         ]
@@ -84,6 +87,7 @@ def build_route_hint_alignment_demo(
         },
         "check_basis": [
             "The chat router selects the expected workflow for each representative operator message.",
+            "The chat router and plugin awareness hint agree on the expected next user-facing action.",
             "The plugin awareness route hint returns a primary workflow instead of no_hint.",
             "The primary hint workflow matches the chat router and the expected public workflow.",
             "The hint carries a workflow context card and advisory-only claim boundary.",
@@ -121,11 +125,20 @@ def format_route_hint_alignment_summary(payload: dict[str, object]) -> str:
     for row in rows:
         observed = _nested(row, "observed")
         status = "ok" if row.get("aligned") else "needs attention"
+        route_next_action = str(observed.get("route_next_action", "unknown"))
+        hint_next_action = str(observed.get("hint_next_action", "unknown"))
+        if route_next_action == hint_next_action:
+            next_action_text = f"next={next_action_label(hint_next_action)}"
+        else:
+            next_action_text = (
+                f"route_next={next_action_label(route_next_action)} "
+                f"hint_next={next_action_label(hint_next_action)}"
+            )
         lines.append(
             f"- {row.get('title', 'Untitled route')}: {status}; "
             f"route={observed.get('route_workflow', 'unknown')} "
             f"hint={observed.get('hint_workflow', 'unknown')} "
-            f"next={next_action_label(str(observed.get('hint_next_action', 'unknown')))}"
+            f"{next_action_text}"
         )
     failed = [row for row in rows if not row.get("aligned")]
     if failed:
@@ -172,12 +185,18 @@ def _evaluate_alignment_case(
     issues: list[str] = []
     if observed["route_workflow"] != case.expected_workflow:
         issues.append(f"expected route workflow {case.expected_workflow}, observed {observed['route_workflow']}")
+    if observed["route_next_action"] != case.expected_next_action:
+        issues.append(f"expected route next action {case.expected_next_action}, observed {observed['route_next_action']}")
     if observed["hint_status"] != "hinted":
         issues.append("missing awareness route hint")
     if observed["hint_workflow"] != case.expected_workflow:
         issues.append(f"expected hint workflow {case.expected_workflow}, observed {observed['hint_workflow'] or 'none'}")
+    if observed["hint_next_action"] != case.expected_next_action:
+        issues.append(f"expected hint next action {case.expected_next_action}, observed {observed['hint_next_action'] or 'none'}")
     if observed["hint_workflow"] != observed["route_workflow"]:
         issues.append(f"route/hint mismatch: {observed['route_workflow']} != {observed['hint_workflow']}")
+    if observed["hint_next_action"] != observed["route_next_action"]:
+        issues.append(f"route/hint next-action mismatch: {observed['route_next_action']} != {observed['hint_next_action']}")
     if not observed["hint_context_card"]:
         issues.append("missing hint workflow context card")
     if "not workflow execution" not in str(observed["hint_claim_boundary"] or ""):
@@ -188,7 +207,7 @@ def _evaluate_alignment_case(
         "title": case.title,
         "message_sha256": hashlib.sha256(case.message.encode("utf-8")).hexdigest(),
         "aligned": not issues,
-        "expected": {"workflow": case.expected_workflow},
+        "expected": {"workflow": case.expected_workflow, "next_action": case.expected_next_action},
         "observed": observed,
         "issues": issues,
     }

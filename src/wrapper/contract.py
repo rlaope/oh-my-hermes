@@ -74,6 +74,7 @@ VISIBLE_ACTIONS = (
     "open_executor_session",
     "attach_executor_session",
     "refresh_executor_status",
+    "show_coding_handoff_status",
     "record_executor_completed",
     "record_executor_blocked",
     "record_executor_failed",
@@ -2100,6 +2101,8 @@ def _attach_coding_owner_handoff(
 
 def _delegation_next_action(delegation: dict[str, object]) -> str:
     action = str(_nested(delegation, "delegation").get("action", "fallback"))
+    if action == "delegate" and _delegation_is_coding_status_request(delegation):
+        return "show_coding_handoff_status"
     if action == "delegate" and delegation.get("executor_handoff"):
         return "send_to_executor"
     if action == "delegate" and delegation.get("runtime_handoff"):
@@ -2609,6 +2612,46 @@ def build_chat_response_from_route(
                         "connector I/O",
                     ],
                     "runtime_tick_contract": "After start, wrappers may call the loop tick backend with deterministic queue shape to prepare the next queued worktree/subagent/connector step without claiming observation.",
+                },
+            )
+        if selected == "ultraprocess" and _route_is_coding_status_request(decision):
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or "Coding-agent status is observed only after runtime evidence is recorded."
+            body = (
+                "I can show the coding-agent status card and explain which handoff, dispatch, result, verification, review, CI, "
+                "or merge evidence is still missing. If no executor session is attached yet, I will not invent progress."
+            )
+            return _chat_response(
+                kind="handoff",
+                headline="I can show the coding-agent status for this work.",
+                body=body,
+                phase="handoff_status",
+                next_action="show_coding_handoff_status",
+                thread_key=thread_key,
+                actions=[
+                    _action("show_coding_handoff_status", "Show coding status", "primary"),
+                    _action("attach_executor_session", "Attach executor session", "secondary", enabled=False),
+                    _action("choose_executor", "Choose coding agent", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "coding_status_request": True,
+                    "handoff_status": "prepared_not_observed",
+                    "evidence_not_observed": [
+                        "executor/runtime dispatch",
+                        "executor session attachment",
+                        "implementation result",
+                        "verification",
+                        "review",
+                        "CI",
+                        "merge readiness",
+                        "merge",
+                    ],
                 },
             )
         if selected == "ultraprocess" or policy_next_action == "start_ultraprocess":
@@ -3363,9 +3406,17 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         executor = str(handoff.get("selected_executor_profile") or handoff.get("executor_target") or "executor")
         label = executor_label(executor)
         status_request = _delegation_is_coding_status_request(delegation_payload)
-        actions = [
-            _action("send_to_executor", _open_coding_agent_label(executor), "primary", payload={"selected_executor_profile": executor})
-        ]
+        actions = []
+        if status_request:
+            actions.append(_action("show_coding_handoff_status", "Show coding status", "primary"))
+        actions.append(
+            _action(
+                "send_to_executor",
+                _open_coding_agent_label(executor),
+                "secondary" if status_request else "primary",
+                payload={"selected_executor_profile": executor},
+            )
+        )
         if executor == "codex":
             actions.append(_action("send_to_codex", "Open in Codex", "secondary", payload={"compatibility_alias": True}))
         if status_request:
@@ -3396,7 +3447,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 else f"I can open {label} with this prepared handoff, but I will not claim implementation until coding-agent evidence is observed."
             ),
             phase="handoff_prepared",
-            next_action="send_to_executor",
+            next_action="show_coding_handoff_status" if status_request else "send_to_executor",
             thread_key=thread_key,
             actions=actions,
             claim_boundary="Prepared handoff is not execution evidence.",
@@ -3422,11 +3473,21 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         selected = str(prompt_handoff.get("selected_executor_profile") or "executor")
         label = executor_label(selected)
         status_request = _delegation_is_coding_status_request(delegation_payload)
-        actions = [
-            _action("show_prompt_handoff", f"Show {label} prompt", "primary", payload={"selected_executor_profile": selected}),
-            _action("copy_prompt_handoff", f"Copy {label} prompt", "secondary", payload={"selected_executor_profile": selected}),
-            _action("choose_executor", "Change coding agent", "secondary"),
-        ]
+        actions = []
+        if status_request:
+            actions.append(_action("show_coding_handoff_status", "Show coding status", "primary"))
+        actions.extend(
+            [
+                _action(
+                    "show_prompt_handoff",
+                    f"Show {label} prompt",
+                    "secondary" if status_request else "primary",
+                    payload={"selected_executor_profile": selected},
+                ),
+                _action("copy_prompt_handoff", f"Copy {label} prompt", "secondary", payload={"selected_executor_profile": selected}),
+            ]
+        )
+        actions.append(_action("choose_executor", "Change coding agent", "secondary"))
         if status_request:
             actions.append(
                 _action(
@@ -3455,7 +3516,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 else f"I prepared a copyable {selected} prompt. This is not dispatch, execution, review, CI, or merge evidence."
             ),
             phase="prompt_handoff_prepared",
-            next_action="show_prompt_handoff",
+            next_action="show_coding_handoff_status" if status_request else "show_prompt_handoff",
             thread_key=thread_key,
             actions=actions,
             claim_boundary="Prompt handoff is prepared only; OMH has not dispatched it to an executor.",
@@ -3481,6 +3542,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         selected = str(runtime_handoff.get("selected_executor_profile") or "runtime")
         runtime_profile = _nested(runtime_handoff, "runtime_profile")
         runtime_label = str(runtime_profile.get("label") or executor_label(selected))
+        status_request = _delegation_is_coding_status_request(delegation_payload)
         primary_action = "start_hermes_coding" if selected == "hermes" else "start_runtime"
         primary_label = "Start Hermes coding" if selected == "hermes" else "Start runtime"
         extra_actions = (
@@ -3501,10 +3563,16 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
             headline="A runtime handoff is ready.",
             body=body,
             phase="runtime_handoff_prepared",
-            next_action="show_runtime_handoff",
+            next_action="show_coding_handoff_status" if status_request else "show_runtime_handoff",
             thread_key=thread_key,
             actions=[
-                _action("show_runtime_handoff", "Show runtime", "primary", payload={"selected_executor_profile": selected}),
+                *([_action("show_coding_handoff_status", "Show coding status", "primary")] if status_request else []),
+                _action(
+                    "show_runtime_handoff",
+                    "Show runtime",
+                    "secondary" if status_request else "primary",
+                    payload={"selected_executor_profile": selected},
+                ),
                 *extra_actions,
                 _action(primary_action, primary_label, "primary", enabled=False, payload={"selected_executor_profile": selected}),
                 _action("prepare_worktree", "Prepare worktree", "secondary", enabled=False, payload={"selected_executor_profile": selected}),
@@ -3537,6 +3605,7 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
                 ),
                 "executor_readiness": delegation_payload.get("executor_readiness", {}),
                 "executor_resolution": executor_resolution,
+                "coding_status_request": status_request,
             },
         )
     if action == "delegate" and _nested(delegation_payload, "executor_selection").get("choice_required"):

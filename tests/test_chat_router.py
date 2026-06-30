@@ -106,7 +106,7 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "웹서치해서 최신 자료 정리해줘",
                 "web-research",
-                "gather_source_backed_evidence",
+                "run_hermes_research",
                 None,
             ),
             (
@@ -130,13 +130,13 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "./loop star-worthy OSS 만들기",
                 "loop",
-                "assess_loopability",
+                "start_loop_cycle",
                 None,
             ),
             (
                 "Use OMH ultraprocess for: improve README and open PR",
                 "ultraprocess",
-                "prepare_one_cycle_delivery",
+                "choose_executor",
                 None,
             ),
         )

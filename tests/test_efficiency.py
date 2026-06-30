@@ -285,6 +285,7 @@ class EfficiencyContractTests(unittest.TestCase):
             "Synthetic route reuse",
             "synthetic message that should not hit the real router",
             "synthetic-workflow",
+            "synthetic_next_action",
         )
         fake_interaction = {
             "route": {
@@ -367,6 +368,7 @@ class EfficiencyContractTests(unittest.TestCase):
             "Synthetic precomputed route reuse",
             "synthetic message with precomputed route",
             "synthetic-workflow",
+            "synthetic_next_action",
         )
         grounded_payload = {
             "scenarios": [

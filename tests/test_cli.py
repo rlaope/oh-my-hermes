@@ -282,7 +282,7 @@ class CliTests(unittest.TestCase):
                 payload = json.loads(stdout)
                 route_hint = payload["route_hint"]
                 self.assertEqual(route_hint["primary_workflow"], "feedback-triage")
-                self.assertEqual(route_hint["primary_next_action"], "classify_signal_and_prepare_investigation")
+                self.assertEqual(route_hint["primary_next_action"], "triage_feedback")
                 self.assertIn("selected=feedback-triage", payload["prompt_context"])
 
     def test_chat_interact_routes_workflow_learning_to_audit_actions(self) -> None:
@@ -4952,8 +4952,8 @@ class CliTests(unittest.TestCase):
             ("PPT 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("이 회의록을 발표자료로 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "materials_package", "prepare_material_package"),
-            ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "send_to_executor"),
-            ("지금 PR 머지 준비 됐는지 알려줘", "ultraprocess", "process", "start_ultraprocess"),
+            ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
+            ("지금 PR 머지 준비 됐는지 알려줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("今何してる？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("现在在做什么？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("qué está pasando?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
@@ -4968,7 +4968,7 @@ class CliTests(unittest.TestCase):
             ("claude code 연결돼 있어?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("I want to use codex as my coding agent", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("코딩 에이전트 codex로 바꾸고 싶어", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
-            ("how do I see the current Codex session?", "ultraprocess", "handoff", "send_to_executor"),
+            ("how do I see the current Codex session?", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("릴리즈 준비 상태 점검해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             ("실제 사용자처럼 QA 시나리오 돌려줘", "ultraqa", "qa_review", "dispatch_to_workflow"),
             ("루프 비용이랑 지연시간 상태 보여줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
