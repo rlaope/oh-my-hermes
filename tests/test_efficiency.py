@@ -949,6 +949,34 @@ class EfficiencyContractTests(unittest.TestCase):
                         )
                     )
 
+    def test_feedback_triage_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            "결제 실패 이슈가 자주 나와",
+            "Payment failures keep coming up.",
+            "Users say checkout is broken.",
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("feedback-triage fast path should skip scoring"),
+        ), patch.object(
+            chat_module,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("feedback-triage fast path should not build route plans"),
+        ):
+            for message in cases:
+                chat_module._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], "feedback-triage")
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertIn("feedback_triage_fast_path", decision["recommendations"][0]["matched"])
+                    self.assertIsNone(decision["workflow_route_plan"])
+
     def test_single_workflow_operator_fast_paths_skip_route_plan_build(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         cases = (
