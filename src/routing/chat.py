@@ -2203,6 +2203,12 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "find public presentations",
             "find arxiv link",
             "find arxiv paper",
+            "paper pdf 찾아",
+            "paper pdf를 찾아",
+            "paper pdf 찾아서",
+            "pdf 자료 찾아",
+            "public pdf sources",
+            "find public pdf",
             "arxiv link",
             "github oss repo",
             "github repos and public presentations",
@@ -2257,6 +2263,61 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         ),
         "operator_surface_fast_path:performance",
         "Clear performance-improvement request; prepare the measured performance goal without scoring every workflow.",
+    ),
+    (
+        "doctor",
+        (
+            "did update work",
+            "update worked",
+            "update version unchanged",
+            "version unchanged after update",
+            "omh update worked",
+            "omh update 했는데 잘",
+            "update 했는데 잘",
+            "update 했는데 버전",
+            "업데이트 했는데 잘",
+            "업데이트했는데 잘",
+            "업데이트 했는데 버전",
+            "업데이트했는데 버전",
+        ),
+        "operator_surface_fast_path:doctor",
+        "Clear OMH setup/update health question; run diagnostics without scoring every workflow.",
+    ),
+    (
+        "github-event-ops",
+        (
+            "pr opened ci failed",
+            "pr opened and ci failed",
+            "ci failed on pr",
+            "ci failed on my pr",
+            "pr opened review failed",
+            "github pr ci failed",
+            "pr 열렸는데 ci 실패",
+            "pr이 열렸는데 ci 실패",
+            "ci 실패했어 정리",
+            "ci 실패 원인",
+            "pr ci 실패",
+        ),
+        "operator_surface_fast_path:github_event",
+        "Clear PR/CI event request; prepare GitHub event ops without scoring every workflow.",
+    ),
+    (
+        "memory-curation-review",
+        (
+            "hermes remembers incorrectly",
+            "hermes remembered incorrectly",
+            "hermes is remembering wrong",
+            "hermes remembers this wrong",
+            "hermes memory is wrong",
+            "hermes가 내 기억을 잘못",
+            "헤르메스가 내 기억을 잘못",
+            "hermes가 기억을 잘못",
+            "헤르메스가 기억을 잘못",
+            "내 메모리 뭐가 저장",
+            "내 기억 뭐가 저장",
+        ),
+        "operator_surface_fast_path:memory",
+        "Clear Hermes memory-context review request; prepare memory curation without scoring every workflow.",
     ),
     (
         "executor-runtime-readiness",
@@ -2459,6 +2520,12 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:img_summary",)
     if skill == "paper-learning":
         return ("guard:paper_learning",)
+    if skill == "doctor":
+        return ("guard:doctor_health", "guard_fast_path:doctor_health_before_skill_catalog")
+    if skill == "github-event-ops":
+        return ("guard:github_event_ops",)
+    if skill == "memory-curation-review":
+        return ("guard:memory_curation", "guard_fast_path:memory_curation_before_generic_clarification")
     if skill == "executor-runtime-readiness":
         return ("guard:executor_runtime_readiness",)
     if skill != "ralplan":
@@ -2516,6 +2583,12 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:source_request"
     if marker == "operator_surface_fast_path:delivery":
         return "phrase:delivery_request"
+    if marker == "operator_surface_fast_path:doctor":
+        return "phrase:doctor_health"
+    if marker == "operator_surface_fast_path:github_event":
+        return "phrase:github_event"
+    if marker == "operator_surface_fast_path:memory":
+        return "phrase:memory_curation"
     if marker == "operator_surface_fast_path:executor":
         return "phrase:executor_request"
     if marker == "operator_surface_fast_path:materials":
