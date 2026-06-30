@@ -28,6 +28,7 @@ uv run python -m omh.cli demo orchestration
 uv run python -m omh.cli demo orchestration --executor hermes
 uv run python -m omh.cli demo chat-card-coverage --summary
 uv run python -m omh.cli demo route-hint-alignment --summary
+uv run python -m omh.cli demo localized-chat-copy --summary
 ```
 
 The first command renders the fixture event in
@@ -385,6 +386,17 @@ dedicated card kinds instead of generic `ack`, and verifies next action, primary
 action availability, claim boundary copy, and not-yet-observed evidence. It is
 wrapper-contract coverage only; it does not prove live Hermes chat rendering,
 platform delivery, executor work, review, CI, or merge.
+
+For common non-English operator prompts, wrappers can also run:
+
+```sh
+omh demo localized-chat-copy --summary
+```
+
+That gate verifies local card framing, expected card kind, and next action for
+Japanese, Chinese, Spanish, French, German, and Korean fixtures without calling a
+translation API. It remains local copy-contract coverage only; live messenger
+rendering and translation quality still require separate evidence.
 
 ```text
 Hermes Agent  BOT

@@ -6,6 +6,7 @@ from ..ingress import CHAT_SOURCES
 from .chat_card_coverage import build_chat_card_coverage_demo
 from .context_brief_coverage import build_context_brief_coverage_demo
 from .grounded_score import build_grounded_score_demo
+from .localized_chat_copy import build_localized_chat_copy_demo, localized_chat_copy_errors
 from .route_hint_alignment import build_route_hint_alignment_demo
 from .routing_precision import build_routing_precision_demo, routing_precision_errors
 
@@ -21,6 +22,7 @@ def build_hermes_ux_quality_demo(
     route_hint_alignment: Mapping[str, object] | None = None,
     context_brief_coverage: Mapping[str, object] | None = None,
     routing_precision: Mapping[str, object] | None = None,
+    localized_chat_copy: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported demo source: {source}")
@@ -48,6 +50,11 @@ def build_hermes_ux_quality_demo(
         dict(routing_precision)
         if routing_precision is not None
         else build_routing_precision_demo(source=source)
+    )
+    localized_copy = (
+        dict(localized_chat_copy)
+        if localized_chat_copy is not None
+        else build_localized_chat_copy_demo(source=source)
     )
 
     gates = [
@@ -101,6 +108,16 @@ def build_hermes_ux_quality_demo(
             errors=routing_precision_errors(precision),
             claim_boundary=str(precision.get("claim_boundary", "")),
         ),
+        _gate(
+            gate_id="localized_chat_copy",
+            title="Localized chat-card framing",
+            status="passed" if _localized_copy_ready(localized_copy) else "failed",
+            summary=_localized_copy_summary(localized_copy),
+            user_value="Common non-English operator prompts get local card framing without translation APIs or route drift.",
+            command="omh demo localized-chat-copy --json",
+            errors=localized_chat_copy_errors(localized_copy),
+            claim_boundary=str(localized_copy.get("claim_boundary", "")),
+        ),
     ]
     passing_count = sum(1 for gate in gates if gate["status"] == "passed")
     total = len(gates)
@@ -110,6 +127,7 @@ def build_hermes_ux_quality_demo(
     route_summary = _nested(route_hints, "summary")
     context_summary = _nested(context_briefs, "summary")
     precision_summary = _nested(precision, "summary")
+    localized_summary = _nested(localized_copy, "summary")
     return {
         "schema_version": HERMES_UX_QUALITY_SCHEMA_VERSION,
         "source": source,
@@ -138,6 +156,9 @@ def build_hermes_ux_quality_demo(
             "routing_precision_intervention_cases": precision_summary.get("intervention_case_count", 0),
             "routing_precision_intervention_passing_count": precision_summary.get("intervention_passing_count", 0),
             "routing_precision_missed_intervention_count": precision_summary.get("missed_intervention_count", 0),
+            "localized_chat_copy_cases": localized_summary.get("case_count", 0),
+            "localized_chat_copy_passing_count": localized_summary.get("passing_count", 0),
+            "localized_chat_copy_locale_count": localized_summary.get("locale_count", 0),
         },
         "user_story": [
             "Natural chat requests route to an OMH workflow instead of a vague generic answer.",
@@ -145,11 +166,13 @@ def build_hermes_ux_quality_demo(
             "Plugin/context awareness agrees with the router before generic tools are used.",
             "Catalog questions open an OMH picker without asking the user to approve shell commands.",
             "Plain help and file lookup questions stay out of OMH workflow routing when OMH is not needed.",
+            "Common non-English operator prompts get local card framing without external translation.",
             "Real OMH-shaped requests still route to the expected workflow, picker, or context brief.",
         ],
         "gates": gates,
         "claim_boundary": (
-            "Hermes UX quality proves deterministic local routing, card, hint, and context contracts only. "
+            "Hermes UX quality proves deterministic local routing, card, hint, context, precision, "
+            "and localized-copy contracts only. "
             "It does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, "
             "source retrieval, image generation, executor dispatch, implementation, verification, review, CI, merge, "
             "or delivery."
@@ -171,7 +194,8 @@ def format_hermes_ux_quality_summary(payload: Mapping[str, object]) -> str:
             f"route mismatches {summary.get('route_hint_mismatch_count', 0)}; "
             f"context {summary.get('context_brief_passing_count', 0)}/{summary.get('context_brief_cases', 0)}; "
             f"precision overroutes {summary.get('routing_precision_overroute_count', 0)}; "
-            f"missed interventions {summary.get('routing_precision_missed_intervention_count', 0)}"
+            f"missed interventions {summary.get('routing_precision_missed_intervention_count', 0)}; "
+            f"localized {summary.get('localized_chat_copy_passing_count', 0)}/{summary.get('localized_chat_copy_cases', 0)}"
         ),
         "",
         "What users feel:",
@@ -264,6 +288,10 @@ def _routing_precision_ready(payload: Mapping[str, object]) -> bool:
     return not routing_precision_errors(payload)
 
 
+def _localized_copy_ready(payload: Mapping[str, object]) -> bool:
+    return not localized_chat_copy_errors(payload)
+
+
 def _grounded_summary(payload: Mapping[str, object]) -> str:
     summary = _nested(payload, "summary")
     return (
@@ -306,6 +334,14 @@ def _routing_precision_summary(payload: Mapping[str, object]) -> str:
         f"catalog pickers {summary.get('catalog_picker_count', 0)}; "
         f"generic ack {summary.get('generic_ack_count', 0)}; "
         f"missed interventions {summary.get('missed_intervention_count', 0)}"
+    )
+
+
+def _localized_copy_summary(payload: Mapping[str, object]) -> str:
+    summary = _nested(payload, "summary")
+    return (
+        f"{summary.get('passing_count', 0)}/{summary.get('case_count', 0)} localized card cases; "
+        f"locales {summary.get('locale_count', 0)}"
     )
 
 

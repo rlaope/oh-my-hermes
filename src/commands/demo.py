@@ -11,6 +11,10 @@ from ..quality.context_brief_coverage import (
     format_context_brief_coverage_summary,
 )
 from ..quality.hermes_ux_quality import build_hermes_ux_quality_demo, format_hermes_ux_quality_summary
+from ..quality.localized_chat_copy import (
+    build_localized_chat_copy_demo,
+    format_localized_chat_copy_summary,
+)
 from ..quality.route_hint_alignment import build_route_hint_alignment_demo, format_route_hint_alignment_summary
 from ..quality.routing_precision import build_routing_precision_demo, format_routing_precision_summary
 from ..ingress import CHAT_SOURCES
@@ -25,10 +29,12 @@ DEMO_EPILOG = """Demo lanes:
   route-hint-alignment    Checks plugin/router route hints agree before Hermes speaks.
   context-brief-coverage  Checks compact OMH context briefs keep the right workflow visible.
   routing-precision       Guards against over-routing simple requests and missing OMH interventions.
+  localized-chat-copy     Verifies common non-English prompts keep local Hermes card framing.
   hermes-ux-quality       Runs the combined user-feel gate across routing, cards, hints, and context.
 
 Recommended operator checks:
   omh demo hermes-ux-quality --summary
+  omh demo localized-chat-copy --summary
   omh demo routing-precision --summary
   omh demo orchestration "I want to safely add a feature to this repo"
 
@@ -109,6 +115,18 @@ def cmd_demo_routing_precision(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if args.summary:
         print(format_routing_precision_summary(payload))
+    else:
+        _print_json(payload)
+    return 0
+
+
+def cmd_demo_localized_chat_copy(args: argparse.Namespace) -> int:
+    try:
+        payload = build_localized_chat_copy_demo(source=args.source)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if args.summary:
+        print(format_localized_chat_copy_summary(payload))
     else:
         _print_json(payload)
     return 0
@@ -213,6 +231,20 @@ def _add_demo_commands(sub) -> None:
     precision_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
     precision_output.add_argument("--summary", action="store_true", help="Print a compact human-readable routing precision summary.")
     routing_precision.set_defaults(func=cmd_demo_routing_precision)
+
+    localized_chat_copy = demo_sub.add_parser(
+        "localized-chat-copy",
+        help="Verify non-English prompts keep local Hermes card framing.",
+        description=(
+            "Check common non-English operator prompts for expected locale, workflow card kind, "
+            "next action, and local framing without calling a translation API."
+        ),
+    )
+    localized_chat_copy.add_argument("--source", choices=CHAT_SOURCES, default="discord")
+    localized_output = localized_chat_copy.add_mutually_exclusive_group()
+    localized_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
+    localized_output.add_argument("--summary", action="store_true", help="Print a compact human-readable localized copy summary.")
+    localized_chat_copy.set_defaults(func=cmd_demo_localized_chat_copy)
 
     hermes_ux_quality = demo_sub.add_parser(
         "hermes-ux-quality",

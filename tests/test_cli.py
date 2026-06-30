@@ -104,9 +104,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("orchestration           Shows recommend -> chat -> plan -> handoff -> status", stdout)
         self.assertIn("grounded-score          Scores representative real-world prompts", stdout)
         self.assertIn("routing-precision       Guards against over-routing simple requests", stdout)
+        self.assertIn("localized-chat-copy     Verifies common non-English prompts", stdout)
         self.assertIn("hermes-ux-quality       Runs the combined user-feel gate", stdout)
         self.assertIn("Recommended operator checks:", stdout)
         self.assertIn("omh demo hermes-ux-quality --summary", stdout)
+        self.assertIn("omh demo localized-chat-copy --summary", stdout)
         self.assertIn("Boundary:", stdout)
         self.assertIn("They do not call Hermes", stdout)
         self.assertIn("dispatch a coding agent", stdout)
@@ -2161,6 +2163,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("demo route-hint-alignment --json", items["route_hint_alignment"]["command"])
         self.assertIn("demo context-brief-coverage --json", items["context_brief_coverage"]["command"])
         self.assertIn("demo routing-precision --json", items["routing_precision"]["command"])
+        self.assertIn("demo localized-chat-copy --json", items["localized_chat_copy"]["command"])
         self.assertIn("demo hermes-ux-quality --json", items["hermes_ux_quality"]["command"])
         self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
         self.assertIn("release evidence-bundle --version 1.0.0 --write --json", items["release_evidence_bundle"]["command"])
@@ -2249,6 +2252,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("route_hint_alignment: passed", stdout)
             self.assertIn("context_brief_coverage: passed", stdout)
             self.assertIn("routing_precision: passed", stdout)
+            self.assertIn("localized_chat_copy: passed", stdout)
             self.assertIn("hermes_ux_quality: passed", stdout)
             self.assertIn("parity_contracts: passed", stdout)
             self.assertIn("release_checklist: passed", stdout)
@@ -2281,6 +2285,7 @@ class CliTests(unittest.TestCase):
                     "route_hint_alignment",
                     "context_brief_coverage",
                     "routing_precision",
+                    "localized_chat_copy",
                     "hermes_ux_quality",
                     "parity_contracts",
                     "release_checklist",
@@ -2302,8 +2307,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("92/92 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
+            self.assertEqual(gates["localized_chat_copy"]["status"], "passed")
+            self.assertIn("7/7 localized card cases", gates["localized_chat_copy"]["summary"])
+            self.assertIn("locales 6", gates["localized_chat_copy"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
-            self.assertIn("5/5 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("6/6 UX gates passing", gates["hermes_ux_quality"]["summary"])
             self.assertEqual(gates["parity_contracts"]["status"], "passed")
             self.assertIn("not run the release checklist", payload["boundary"])
 
@@ -2345,7 +2353,8 @@ class CliTests(unittest.TestCase):
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
-            self.assertIn("Hermes UX quality: 100/100 (5/5 gates)", stdout)
+            self.assertIn("Localized chat copy: 7/7 (locales 6)", stdout)
+            self.assertIn("Hermes UX quality: 100/100 (6/6 gates)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
 
@@ -2375,9 +2384,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 92)
             self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 92)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
+            self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 7)
+            self.assertEqual(payload["summary"]["localized_chat_copy_total"], 7)
+            self.assertEqual(payload["summary"]["localized_chat_copy_locale_count"], 6)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
-            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
-            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 5)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 6)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 6)
             self.assertIn("local_artifact_store: not_written", payload["warnings"])
             self.assertTrue(Path(payload["artifact_path"]).exists())
             self.assertTrue((omh_home / "runtime" / "release-evidence" / "index.json").exists())

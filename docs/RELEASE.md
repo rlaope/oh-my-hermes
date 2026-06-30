@@ -200,8 +200,22 @@ local routing-boundary evidence only: it does not prove live Hermes chat
 rendering, source retrieval, file inspection, executor dispatch, review, CI,
 merge, or plugin loading.
 
+The localized chat-copy gate checks common non-English operator prompts:
+
+```sh
+omh demo localized-chat-copy --json
+```
+
+It should report every localized card case passing across the supported local
+copy fixtures. This catches regressions where a Japanese, Chinese, Spanish,
+French, German, or Korean user prompt still routes correctly but falls back to
+English framing, loses the expected card kind, or changes the next action. It is
+local copy-contract evidence only: it does not prove live Hermes chat rendering,
+translation quality, platform delivery, source retrieval, executor dispatch,
+review, CI, merge, or plugin loading.
+
 The Hermes UX quality rollup checks the chat-first user experience across the
-routing, card, hint, context, and precision rails:
+routing, card, hint, context, precision, and localized-copy rails:
 
 ```sh
 omh demo hermes-ux-quality --json
@@ -210,11 +224,12 @@ omh demo hermes-ux-quality --json
 It should report all UX gates passing: grounded natural-language routing,
 dedicated wrapper cards with generic acknowledgements at zero, route hints
 aligned with the router, first-turn context briefs with catalog picker coverage,
-negative-control prompts that stay out of OMH workflows, and expected
-intervention prompts that still enter the right workflow surface. It is local
-UX-contract evidence only: it does not prove live Hermes chat rendering, plugin
-load, platform delivery, generic tool invocation, executor dispatch, review, CI,
-merge, or delivery.
+negative-control prompts that stay out of OMH workflows, expected intervention
+prompts that still enter the right workflow surface, and common non-English
+operator prompts that keep local card framing. It is local UX-contract evidence
+only: it does not prove live Hermes chat rendering, plugin load, platform
+delivery, generic tool invocation, executor dispatch, review, CI, merge, or
+delivery.
 
 The product readiness rollup sits one level above use cases:
 

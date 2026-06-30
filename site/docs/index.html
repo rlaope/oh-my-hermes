@@ -650,6 +650,13 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
             wrapper-contract coverage.
           </p>
           <p>
+            Guard common non-English chat framing with
+            <code>omh demo localized-chat-copy --summary</code>. It checks local
+            card copy, card kind, and next action for Japanese, Chinese,
+            Spanish, French, German, and Korean fixtures without using a
+            translation service.
+          </p>
+          <p>
             Check the Hermes-awareness side with
             <code>omh demo route-hint-alignment --summary</code>. It confirms
             that every grounded-score and chat-card scenario also produces a
@@ -766,7 +773,9 @@ omh harness inspect planning
 omh harness validate
 omh demo grounded-score --summary
 omh demo chat-card-coverage --summary
-omh demo route-hint-alignment --summary</code>
+omh demo route-hint-alignment --summary
+omh demo localized-chat-copy --summary
+omh demo hermes-ux-quality --summary</code>
           </div>
         </section>
 
