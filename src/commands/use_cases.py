@@ -18,7 +18,7 @@ from ..use_cases import (
     write_all_use_case_artifacts,
     write_use_case_artifact,
 )
-from .common import _action_label_with_id, _paths, _print_json, _wants_json
+from .common import _action_label, _action_label_with_id, _paths, _print_json, _wants_json
 
 
 def cmd_cases_list(args: argparse.Namespace) -> int:
@@ -421,7 +421,7 @@ def _print_cases_recommend_summary(payload: dict[str, object]) -> None:
         )
         next_action = str(case.get("next_action", "")).strip()
         if next_action:
-            print(f"   Next action: {_action_label_with_id(next_action)}")
+            print(f"   Next action: {_action_label(next_action)}")
         print(f"   Boundary: {case.get('evidence_boundary')}")
     print("Boundary")
     print("  A use-case recommendation is routing guidance, not accepted work or observed evidence.")
