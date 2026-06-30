@@ -1258,6 +1258,8 @@ class WrapperContractTests(unittest.TestCase):
                 "what should I do next with OMH setup?",
                 "omh 상태랑 다음 액션 알려줘",
                 "OMH 설치됐는데 이제 뭐해?",
+                "설치 후 첫 실행이 헷갈려",
+                "처음 설치한 사람이 뭘 해야 하는지 모르겠어",
                 "is OMH installed correctly?",
             ):
                 with self.subTest(message=message):

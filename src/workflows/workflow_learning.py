@@ -96,10 +96,10 @@ def build_trace_from_chat_interaction(
     explanation = _object(state.get("workflow_explanation"))
     usage_trace = _object(chat_response.get("usage_trace"))
     selected_workflow = _first_nonempty(
+        route.get("selected_skill"),
         explanation.get("selected_workflow"),
         usage_trace.get("selected_workflow"),
         state.get("selected_workflow"),
-        route.get("selected_skill"),
         "unknown",
     )
     selected_harness = _first_nonempty(

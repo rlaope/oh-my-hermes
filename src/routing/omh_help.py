@@ -88,7 +88,41 @@ def is_omh_quickstart_question(message: str) -> bool:
     text = message.strip().lower()
     if not text:
         return False
-    if not any(marker in text for marker in _OMH_MARKERS):
+    has_omh_marker = any(marker in text for marker in _OMH_MARKERS)
+    install_first_use_context = any(
+        marker in text
+        for marker in (
+            "after setup",
+            "after install",
+            "first run",
+            "first use",
+            "install",
+            "setup",
+            "설치",
+            "셋업",
+            "세팅",
+        )
+    ) and any(
+        marker in text
+        for marker in (
+            "what next",
+            "what should i do next",
+            "what do i do next",
+            "first run",
+            "first use",
+            "confusing",
+            "confused",
+            "처음",
+            "첫 실행",
+            "첫 사용",
+            "이제 뭐",
+            "뭘 해야",
+            "뭐 해야",
+            "헷갈",
+            "모르겠",
+        )
+    )
+    if not has_omh_marker and not install_first_use_context:
         return False
     troubleshooting_markers = (
         "does not show",
@@ -126,10 +160,16 @@ def is_omh_quickstart_question(message: str) -> bool:
         "setup next",
         "next step",
         "처음",
+        "첫 실행",
+        "첫 사용",
         "퀵스타트",
         "다음 액션",
         "다음 단계",
         "이제 뭐",
+        "뭘 해야",
+        "뭐 해야",
+        "헷갈",
+        "모르겠",
         "설치됐",
         "설치 되었",
         "설치 완료",

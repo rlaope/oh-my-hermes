@@ -14,6 +14,9 @@ class MissedRouteDetectionTests(unittest.TestCase):
             "회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어",
             "Hermes skipped OMH for my image request",
             "Hermes was not aware of OMH for the research request",
+            "디스코드에서 OMH가 자꾸 일반 답변으로 빠져",
+            "프리렌이 omh 기능을 모르는 것 같아",
+            "agent가 omh context를 못 보는 것 같아",
         )
 
         for message in cases:
@@ -26,6 +29,8 @@ class MissedRouteDetectionTests(unittest.TestCase):
             "wrong workflow, expected OMH",
             "이번 요청에서 왜 OMH를 안 썼는지 학습해줘",
             "라우팅 누락 기록해줘",
+            "라우터가 잘못 고른 것 같아",
+            "일반 답변으로 빠져",
         )
 
         for message in cases:
