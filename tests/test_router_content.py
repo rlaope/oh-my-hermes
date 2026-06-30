@@ -10,6 +10,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.routing import recommend as recommend_module
+from omh.routing import chat as chat_module
 from omh.capabilities.orchestration import orchestration_patterns
 from omh.wrapper.contract import VISIBLE_ACTIONS
 from omh.roles import role_definitions, role_file_markdown, roles_reference_markdown
@@ -354,6 +355,23 @@ class RouterContentTests(unittest.TestCase):
             source = inspect.getsource(helper)
             self.assertIn("_policy_for", source)
             self.assertNotIn("if definition.category", source)
+
+    def test_route_next_action_labels_cover_recommendation_policies(self) -> None:
+        policies = (
+            *recommend_module._SKILL_POLICIES.values(),
+            *recommend_module._CATEGORY_POLICIES.values(),
+            *recommend_module._HERMES_ROLE_POLICIES.values(),
+            recommend_module._DEFAULT_POLICY,
+        )
+        actions = sorted({policy.next_action for policy in policies})
+
+        missing = [
+            action
+            for action in actions
+            if chat_module._route_next_action_label(action) == action.replace("_", " ")
+        ]
+
+        self.assertEqual(missing, [])
 
     def test_repo_root_tap_skills_match_generated_templates(self) -> None:
         templates = {template.name: template for template in builtin_skill_templates()}

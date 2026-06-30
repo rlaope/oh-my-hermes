@@ -476,6 +476,18 @@ class ChatRouterTests(unittest.TestCase):
                 public = public_route_payload(decision)
                 self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
 
+    def test_natural_picker_request_uses_catalog_route(self) -> None:
+        for message in ("open the OMH picker", "show the OMH menu", "open OMH workflow picker"):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                public = public_route_payload(decision)
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+                self.assertEqual(public["route_explanation"]["next_action_label"], "opening the workflow picker")
+                self.assertIn("start by opening the workflow picker", public["route_explanation"]["recommended_reply"])
+
     def test_generic_omh_catalog_question_uses_fast_catalog_route(self) -> None:
         for message in (
             "what OMH workflows are available?",
@@ -2132,6 +2144,17 @@ selected_workflow=ultraprocess
         self.assertIn("execution", explanation["primary_action_hint"])
         self.assertIn("why / next / not-yet-evidence", explanation["rendering_hint"])
         self.assertNotIn(message, json.dumps(explanation, ensure_ascii=False))
+
+    def test_loop_route_explanation_uses_human_action_copy(self) -> None:
+        decision = route_chat_message("run a loop to improve first-run experience", source="discord")
+        public = public_route_payload(decision)
+        explanation = public["route_explanation"]
+
+        self.assertEqual(decision["selected_skill"], "loop")
+        self.assertEqual(explanation["next_action"], "assess_loopability")
+        self.assertEqual(explanation["next_action_label"], "checking whether the goal is loopable")
+        self.assertIn("start by checking whether the goal is loopable", explanation["recommended_reply"])
+        self.assertNotIn("start by assess loopability", explanation["recommended_reply"])
 
 
 if __name__ == "__main__":
