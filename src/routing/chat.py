@@ -974,6 +974,14 @@ def _route_chat_message_cached(
     )
     if fast_omh_help_decision is not None:
         return fast_omh_help_decision.to_dict()
+    fast_maintenance_task_decision = _maintenance_task_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_maintenance_task_decision is not None:
+        return fast_maintenance_task_decision.to_dict()
     fast_catalog_decision = _catalog_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1396,6 +1404,66 @@ def _router_help_recommendation(
         "next_action": next_action,
         "evidence_boundary": evidence_boundary,
         "wrapper_guidance": wrapper_guidance,
+        "suggested_prompt": query,
+    }
+
+
+def _maintenance_task_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    task_card = classify_task(routing_message)
+    if not task_card or task_card.get("task_type") != "omh_cli_maintenance":
+        return None
+    selected_skill = str(task_card.get("selected_workflow_rail", _ROUTER_SKILL))
+    selected_harness = primary_harness_for_skill(selected_skill)
+    recommendation = _task_card_fast_path_recommendation(task_card, message)
+    reason = str(
+        task_card.get(
+            "routing_reason",
+            "Matched a short OMH CLI maintenance command; route as operator maintenance before scoring workflows.",
+        )
+    )
+    score = _int_value(task_card.get("score", 12))
+    confidence = str(task_card.get("confidence", "high"))
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence=confidence,
+        score=score,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=task_card,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _task_card_fast_path_recommendation(task_card: dict[str, object], query: str) -> dict[str, object]:
+    selected_skill = str(task_card.get("selected_workflow_rail", _ROUTER_SKILL))
+    definition = _skill_definition_by_name(selected_skill)
+    recommendation = task_card_recommendation(task_card)
+    return {
+        "skill": definition.name,
+        "description": definition.description,
+        "category": definition.category,
+        "phase": definition.phase,
+        "hermes_role": definition.hermes_role,
+        "handoff_policy": definition.handoff_policy,
+        **recommendation,
         "suggested_prompt": query,
     }
 

@@ -110,6 +110,7 @@ _MAINTENANCE_COMMAND_ALIASES = {
     "update": ("update", "upgrade", "refresh", "업데이트", "업뎃", "갱신"),
     "setup": ("setup", "set up", "셋업", "설정"),
     "doctor": ("doctor", "health", "diagnose", "닥터", "진단", "헬스"),
+    "uninstall": ("uninstall", "remove", "purge", "삭제", "제거", "언인스톨"),
     "install": ("install", "설치"),
     "list": ("list", "목록", "리스트"),
 }

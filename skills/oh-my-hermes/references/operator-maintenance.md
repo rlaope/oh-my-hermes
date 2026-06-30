@@ -4,7 +4,7 @@ Short OMH maintenance commands are operator commands, not workflow or coding req
 
 ## Top Priority Guard
 
-Exact or near-exact requests such as `omh update`, `omh setup`, `omh doctor`, `omh install`, `omh list`, `omh 업데이트해줘`, `omh 닥터 돌려줘`, and `omh 셋업해줘` route as `operator_maintenance_command` with task type `omh_cli_maintenance`.
+Exact or near-exact requests such as `omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, and `omh 셋업해줘` route as `operator_maintenance_command` with task type `omh_cli_maintenance`.
 
 They outrank stale coding context, router-design feedback, runtime portability, migration, and workflow implementation signals unless the user explicitly asks for code changes.
 

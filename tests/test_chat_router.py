@@ -1660,10 +1660,12 @@ class ChatRouterTests(unittest.TestCase):
             ("omh update", "update", "oh-my-hermes"),
             ("omh setup", "setup", "oh-my-hermes"),
             ("omh doctor", "doctor", "doctor"),
+            ("omh uninstall", "uninstall", "oh-my-hermes"),
             ("omh install", "install", "oh-my-hermes"),
             ("omh list", "list", "oh-my-hermes"),
             ("omh 업데이트해줘", "update", "oh-my-hermes"),
             ("omh 닥터 돌려줘", "doctor", "doctor"),
+            ("omh 삭제해줘", "uninstall", "oh-my-hermes"),
             ("omh 셋업해줘", "setup", "oh-my-hermes"),
             ("./omh update", "update", "oh-my-hermes"),
         )
@@ -1709,6 +1711,43 @@ class ChatRouterTests(unittest.TestCase):
                     <= set(task_card["risk_domains"])
                 )
                 self.assertIn("Hermes restart or plugin reload", task_card["evidence_boundary"]["not_observed"])
+
+    def test_short_omh_maintenance_commands_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        cases = (
+            ("omh update", "run_omh_update"),
+            ("omh setup", "run_omh_setup"),
+            ("omh doctor", "run_omh_doctor"),
+            ("omh uninstall", "run_omh_uninstall"),
+            ("omh install", "run_omh_install"),
+            ("omh list", "run_omh_list"),
+            ("omh 업데이트해줘", "run_omh_update"),
+            ("omh 닥터 돌려줘", "run_omh_doctor"),
+            ("omh 삭제해줘", "run_omh_uninstall"),
+            ("omh 셋업해줘", "run_omh_setup"),
+            ("./omh update", "run_omh_update"),
+        )
+
+        for message, next_action in cases:
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("short OMH maintenance commands should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("short OMH maintenance commands should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["task_card"]["task_type"], "omh_cli_maintenance")
+            self.assertEqual(decision["recommendations"][0]["matched"], ["task_card:omh_cli_maintenance", "operator_maintenance_command"])
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], next_action)
+            self.assertNotIn("workflow_route_plan", public)
 
     def test_omh_maintenance_guard_does_not_swallow_code_change_request(self) -> None:
         decision = route_chat_message("fix the omh update router implementation", source="discord")
