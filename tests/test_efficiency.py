@@ -66,7 +66,7 @@ from omh.quality import context_brief_coverage as context_brief_coverage_module
 from omh.quality import routing_precision as routing_precision_module
 from omh.quality import route_hint_alignment as route_hint_alignment_module
 from omh.quality.grounded_score import GroundedScenario
-from omh.quality.route_hint_alignment import RouteHintAlignmentCase
+from omh.quality.route_hint_alignment import RouteHintAlignmentCase, route_hint_alignment_cases
 
 
 class EfficiencyContractTests(unittest.TestCase):
@@ -225,6 +225,10 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertTrue(awareness_context_matches_message("what is the coding handoff status?"))
         self.assertFalse(awareness_context_matches_message("prepare a sandwich"))
         self.assertFalse(awareness_context_matches_message("gracias"))
+        self.assertFalse(awareness_context_matches_message("what is Discord?"))
+        self.assertFalse(awareness_context_matches_message("what is QA?"))
+        self.assertFalse(awareness_context_matches_message("what is onboarding?"))
+        self.assertFalse(awareness_context_matches_message("what is refactoring?"))
         self.assertFalse(awareness_context_matches_message(""))
 
         doctor_hint = awareness_route_hint("update 했는데 잘 된거야?")
@@ -272,6 +276,15 @@ class EfficiencyContractTests(unittest.TestCase):
 
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_mid_session_awareness_detector_covers_route_hint_alignment_corpus(self) -> None:
+        misses = [
+            case.id
+            for case in route_hint_alignment_cases()
+            if not awareness_context_matches_message(case.message)
+        ]
+
+        self.assertEqual(misses, [])
 
     def test_awareness_route_hint_cache_is_reused_without_payload_poisoning(self) -> None:
         awareness_module._awareness_route_hint_cached.cache_clear()
@@ -367,6 +380,25 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIsNone(payload)
         self.assertEqual(cache_info.misses, 0)
         self.assertEqual(cache_info.hits, 0)
+
+    def test_pre_llm_call_generic_mid_session_skips_route_hint_cache(self) -> None:
+        awareness_module._awareness_context_matches_message_cached.cache_clear()
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
+        with TemporaryDirectory() as temp_dir:
+            payload = pre_llm_call(
+                omh_home=temp_dir,
+                hermes_home=temp_dir,
+                user_message="tell me a short joke",
+                is_first_turn=False,
+            )
+        matcher_cache = awareness_module._awareness_context_matches_message_cached.cache_info()
+        route_hint_cache = awareness_module._awareness_route_hint_cached.cache_info()
+
+        self.assertIsNone(payload)
+        self.assertEqual(matcher_cache.misses, 1)
+        self.assertEqual(route_hint_cache.misses, 0)
+        self.assertEqual(route_hint_cache.hits, 0)
 
     def test_quality_demos_reuse_interaction_route(self) -> None:
         alignment_case = RouteHintAlignmentCase(

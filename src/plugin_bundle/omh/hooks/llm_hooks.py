@@ -33,12 +33,15 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     include_awareness = kwargs.get("include_omh_awareness", True) is not False
     route_hint_context = ""
     route_hint_payload: dict[str, object] | None = None
+    message_matches_awareness = False
     if include_awareness:
-        route_hint_payload = awareness_route_hint(user_message)
-        route_hint_context = awareness_route_hint_context_from_payload(route_hint_payload)
+        message_matches_awareness = is_first_turn or awareness_context_matches_message(user_message)
+        if message_matches_awareness:
+            route_hint_payload = awareness_route_hint(user_message)
+            route_hint_context = awareness_route_hint_context_from_payload(route_hint_payload)
     should_include_awareness = (
         include_awareness
-        and (is_first_turn or bool(route_hint_context) or awareness_context_matches_message(user_message))
+        and (is_first_turn or bool(route_hint_context) or message_matches_awareness)
     )
     if should_include_awareness:
         context_parts.append(awareness_primer_context())
