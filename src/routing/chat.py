@@ -1404,6 +1404,22 @@ def _agent_ops_status_fast_path_match(message: str) -> str | None:
 
 _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
     (
+        "ralplan",
+        (
+            "safely add a feature",
+            "safe feature work",
+            "add a feature safely",
+            "risky refactor",
+            "risky refactoring",
+            "안전하게 기능 추가",
+            "안전하게 기능을 추가",
+            "위험한 리팩터링",
+            "위험한 리팩토링",
+        ),
+        "operator_surface_fast_path:planning",
+        "Clear safe-change or risky-refactor request; prepare a reviewed plan before implementation or cleanup.",
+    ),
+    (
         "img-summary",
         (
             "make a thumbnail",
@@ -1461,14 +1477,32 @@ def _operator_surface_fast_path_decision(
     if match is None:
         return None
     selected_skill, phrase, marker, reason = match
+    if selected_skill == "ralplan" and _is_fast_plain_direct_answer_question(routing_message):
+        return None
     selected_harness = primary_harness_for_skill(selected_skill)
     definition = _skill_definition_by_name(selected_skill)
+    extra_markers = _operator_surface_extra_markers(selected_skill, phrase)
+    matched = (marker, *extra_markers, _operator_surface_phrase_marker(marker, phrase))
+    score = _operator_surface_score(selected_skill, extra_markers)
+    why = _operator_surface_reason(reason, extra_markers)
     recommendation = recommendation_for_definition(
         definition,
         message,
-        matched=(marker, f"phrase:{phrase}"),
-        score=13,
-        why=reason,
+        matched=matched,
+        score=score,
+        why=why,
+    )
+    route_plan_recommendations = _operator_surface_route_plan_recommendations(
+        recommendation,
+        selected_skill=selected_skill,
+        extra_markers=extra_markers,
+        message=message,
+    )
+    workflow_route_plan = build_workflow_route_plan(
+        message,
+        route_plan_recommendations,
+        selected_skill=selected_skill,
+        action="dispatch",
     )
     return ChatRouteDecision(
         schema_version=1,
@@ -1479,15 +1513,15 @@ def _operator_surface_fast_path_decision(
         candidate_skill=selected_skill,
         candidate_harness=selected_harness,
         confidence="high",
-        score=13,
+        score=score,
         threshold=min_confidence,
         explicit=False,
         ambiguous=False,
-        reason=reason,
+        reason=why,
         clarification="",
-        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, why, message),
         task_card=None,
-        workflow_route_plan=None,
+        workflow_route_plan=workflow_route_plan,
         learning_candidate_card=None,
         recommendations=(recommendation,),
     )
@@ -1511,6 +1545,79 @@ def _operator_surface_fast_path_patterns() -> tuple[tuple[str, str, str, str, st
             if normalized_phrase:
                 patterns.append((skill, phrase, normalized_phrase, _fast_path_compact(normalized_phrase), marker, reason))
     return tuple(patterns)
+
+
+def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
+    if skill != "ralplan":
+        return ()
+    normalized = _fast_path_text(phrase)
+    if any(marker in normalized for marker in ("safe", "safely", "안전")):
+        markers = ["guard:safe_feature_change"]
+        if "안전" in normalized:
+            markers.append("locale:ko:safe_feature")
+        return tuple(markers)
+    if any(marker in normalized for marker in ("risk", "risky", "위험")):
+        return ("guard:risky_refactor_before_cleanup",)
+    return ()
+
+
+def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
+    if marker == "operator_surface_fast_path:planning":
+        normalized = _fast_path_text(phrase)
+        if any(value in normalized for value in ("risk", "risky", "위험")):
+            return "phrase:planning_risk"
+        return "phrase:planning_safe_change"
+    if marker == "operator_surface_fast_path:visual":
+        return "phrase:visual_request"
+    if marker == "operator_surface_fast_path:source":
+        return "phrase:source_request"
+    if marker == "operator_surface_fast_path:automation":
+        return "phrase:automation_request"
+    return "phrase:operator_surface"
+
+
+def _operator_surface_score(skill: str, extra_markers: tuple[str, ...]) -> int:
+    if skill == "ralplan" and "guard:safe_feature_change" in extra_markers:
+        return 32
+    if skill == "ralplan" and "guard:risky_refactor_before_cleanup" in extra_markers:
+        return 32
+    return 13
+
+
+def _operator_surface_reason(default_reason: str, extra_markers: tuple[str, ...]) -> str:
+    if "guard:safe_feature_change" in extra_markers:
+        return "Matched safe feature-change language; prepare a reviewed plan before executor handoff."
+    if "guard:risky_refactor_before_cleanup" in extra_markers:
+        return "Matched guard/trigger metadata; risky code-change requests should get a reviewed plan before cleanup."
+    return default_reason
+
+
+def _operator_surface_route_plan_recommendations(
+    recommendation: dict[str, object],
+    *,
+    selected_skill: str,
+    extra_markers: tuple[str, ...],
+    message: str,
+) -> tuple[dict[str, object], ...]:
+    if selected_skill == "ralplan" and "guard:safe_feature_change" in extra_markers:
+        return (
+            recommendation_for_definition(
+                _skill_definition_by_name("feedback-triage"),
+                message,
+                matched=("route_plan:triage",),
+                score=5,
+                why="Classify supplied feedback or bug signals before turning them into implementation work.",
+            ),
+            recommendation,
+            recommendation_for_definition(
+                _skill_definition_by_name("ultraprocess"),
+                message,
+                matched=("route_plan:deliver",),
+                score=5,
+                why="Prepare one bounded implementation or executor handoff path after planning context exists.",
+            ),
+        )
+    return (recommendation,)
 
 
 def _fast_path_text(value: str) -> str:
