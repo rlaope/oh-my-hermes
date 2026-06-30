@@ -280,6 +280,10 @@ _AGENT_OPS_STATUS_FAST_PATH_EXACT_PHRASES = (
     "what is going on rn",
     "what are you working on",
     "what was i working on",
+    "what is the current pr status",
+    "what is current pr status",
+    "current pr status",
+    "pr status update",
     "show session status",
     "show me the session status",
     "where are we",
@@ -321,6 +325,10 @@ _AGENT_OPS_STATUS_FAST_PATH_COMPACT_PHRASES = (
     "현재작업뭐야",
     "현재세션상태",
     "세션상태보여줘",
+    "pr상태알려줘",
+    "현재pr상태",
+    "pr진행상황",
+    "pr어디까지됐어",
     "내가뭘하고있었는지알려줘",
     "뭘하고있었는지알려줘",
     "현재진행상황",
@@ -2091,6 +2099,8 @@ def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
     stripped = direct_text.strip(" \t\r\n.!?¿¡。！？")
     if any(stripped.startswith(marker) for marker in _DIRECT_ANSWER_MULTILINGUAL_CONTEXT_QUESTIONS):
         return False
+    if _is_what_means_concept_question(direct_text):
+        return True
     has_concept_keyword = _contains_concept_keyword(direct_text)
     if any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_CONCEPT_STARTERS):
         return has_concept_keyword or _is_short_generic_concept_question(direct_text)
@@ -2110,6 +2120,20 @@ def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
         return has_concept_keyword or _is_short_generic_korean_concept_question(direct_text)
     if any(marker in direct_text for marker in _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS):
         return _is_short_generic_multilingual_concept_question(direct_text)
+    return False
+
+
+def _is_what_means_concept_question(text: str) -> bool:
+    stripped = text.strip(" \t\r\n.!?¿¡。！？")
+    if not stripped.startswith("what "):
+        return False
+    for suffix in (" means", " mean"):
+        if stripped.endswith(suffix):
+            subject = stripped[len("what ") : -len(suffix)].strip(" \t\r\n.!?¿¡。！？")
+            if not subject:
+                return False
+            words = _word_tokens(subject)
+            return 1 <= len(words) <= _DIRECT_ANSWER_GENERIC_CONCEPT_MAX_WORDS
     return False
 
 
