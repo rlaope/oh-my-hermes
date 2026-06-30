@@ -23,12 +23,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 67)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 67)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 70)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 70)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 108)
-        self.assertEqual(payload["summary"]["total_passing_count"], 108)
+        self.assertEqual(payload["summary"]["total_case_count"], 111)
+        self.assertEqual(payload["summary"]["total_passing_count"], 111)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -82,6 +82,7 @@ class RoutingPrecisionTests(unittest.TestCase):
             "prepare_ops_observability_card",
         )
         self.assertEqual(interventions["korean-update-version-unchanged"]["observed"]["route_workflow"], "doctor")
+        self.assertEqual(interventions["korean-update-health-uncertain"]["observed"]["route_workflow"], "doctor")
         self.assertEqual(interventions["korean-first-run-confusing"]["observed"]["response_kind"], "quickstart")
         self.assertEqual(
             interventions["korean-agent-cannot-see-omh-context"]["observed"]["next_action"],
@@ -125,6 +126,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(interventions["omh-risky-refactor-context"]["observed"]["response_kind"], "context_brief")
         self.assertEqual(interventions["exact-ops-review-capability"]["observed"]["route_workflow"], "ops-review")
         self.assertEqual(interventions["exact-github-event-capability"]["observed"]["route_workflow"], "github-event-ops")
+        self.assertEqual(interventions["korean-pr-open-ci-failed"]["observed"]["route_workflow"], "github-event-ops")
         self.assertEqual(interventions["exact-paper-learning-capability"]["observed"]["route_workflow"], "paper-learning")
         self.assertEqual(interventions["short-korean-paper-learning"]["observed"]["route_workflow"], "paper-learning")
         self.assertEqual(interventions["korean-agent-status-slang"]["observed"]["route_workflow"], "agent-ops-review")
@@ -211,6 +213,14 @@ class RoutingPrecisionTests(unittest.TestCase):
             interventions["korean-memory-stored-context"]["observed"]["next_action"],
             "prepare_memory_curation_review",
         )
+        self.assertEqual(
+            interventions["korean-hermes-wrong-memory"]["observed"]["route_workflow"],
+            "memory-curation-review",
+        )
+        self.assertEqual(
+            interventions["korean-hermes-wrong-memory"]["observed"]["next_action"],
+            "prepare_memory_curation_review",
+        )
         self.assertEqual(interventions["workflow-learning"]["observed"]["route_workflow"], "workflow-learning")
         self.assertEqual(
             interventions["korean-workflow-trace-skill-improvement"]["observed"]["route_workflow"],
@@ -251,7 +261,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("41/41 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 67/67 expected workflow cases passing", stdout)
+        self.assertIn("Interventions: 70/70 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)

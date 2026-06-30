@@ -142,6 +142,24 @@ _MAINTENANCE_EXPLANATION_CUES = (
     "어떻게",
     "왜",
 )
+_MAINTENANCE_HEALTH_QUESTION_CUES = (
+    "did update work",
+    "update worked",
+    "update ok",
+    "version unchanged",
+    "same version",
+    "was update applied",
+    "잘 된",
+    "잘된",
+    "잘 됐",
+    "잘됐",
+    "됐는지",
+    "되었는지",
+    "제대로",
+    "반영",
+    "버전",
+    "확인",
+)
 _MAINTENANCE_CODE_CHANGE_CUES = (
     "implement",
     "implementation",
@@ -347,6 +365,8 @@ def _maintenance_alias_hit(
 def _is_near_exact_maintenance_request(normalized: str, compact: str, tokens: set[str]) -> bool:
     if _phrase_hit(_MAINTENANCE_CODE_CHANGE_CUES, normalized, compact):
         return False
+    if _is_update_health_question(normalized, compact):
+        return False
     explain_hit = _phrase_hit(_MAINTENANCE_EXPLANATION_CUES, normalized, compact)
     run_hit = _phrase_hit(_MAINTENANCE_RUN_CUES, normalized, compact)
     exact_hit = compact in _maintenance_exact_compact_requests()
@@ -358,6 +378,14 @@ def _is_near_exact_maintenance_request(normalized: str, compact: str, tokens: se
     if run_hit and len(meaningful) <= 8:
         return True
     return normalized.lstrip("`'\"“”‘’ ").startswith(("omh", "./omh", "/omh")) and len(meaningful) <= 4
+
+
+def _is_update_health_question(normalized: str, compact: str) -> bool:
+    return _phrase_hit(("update", "업데이트", "업뎃", "갱신"), normalized, compact) and _phrase_hit(
+        _MAINTENANCE_HEALTH_QUESTION_CUES,
+        normalized,
+        compact,
+    )
 
 
 def _is_runtime_portability(normalized: str, compact: str, tokens: set[str]) -> bool:
