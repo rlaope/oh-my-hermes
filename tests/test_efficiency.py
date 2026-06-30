@@ -961,6 +961,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("github oss repo 찾아서 비교해줘", "source-finder"),
             ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
+            ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning"),
         )
 
         with patch.object(
@@ -1065,6 +1066,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("자료 찾아줘", "web-research", "operator_surface_fast_path:research"),
             ("성능 최적화해줘", "performance-goal", "operator_surface_fast_path:performance"),
             ("리드미 개선해줘", "ultraprocess", "operator_surface_fast_path:delivery"),
+            ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning", "workflow_learning_fast_path"),
         )
 
         with patch.object(
