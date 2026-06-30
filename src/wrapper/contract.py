@@ -52,6 +52,11 @@ RENDER_PROFILE_LIMITED_MARKDOWN = "limited_markdown"
 RENDER_PROFILE_RICH_MARKDOWN = "rich_markdown"
 RENDER_PROFILES = (RENDER_PROFILE_LIMITED_MARKDOWN, RENDER_PROFILE_RICH_MARKDOWN)
 _LIMITED_MARKDOWN_SOURCES = frozenset({"discord", "slack", "telegram"})
+
+
+def _prefers_korean_copy(message: str) -> bool:
+    return any("\uac00" <= char <= "\ud7a3" for char in message)
+
 INTERACTION_MODES = ("auto", "route", "plan", "delegate")
 VISIBLE_ACTIONS = (
     "answer:clarify",
@@ -2415,6 +2420,7 @@ def build_chat_response_from_route(
     include_message: bool = False,
 ) -> dict[str, object]:
     action = str(decision.get("action", "fallback"))
+    korean_copy = _prefers_korean_copy(message)
     if _is_command_preview_invocation(message):
         return _command_preview_response(decision, thread_key=thread_key, message=message)
     if (
@@ -2760,14 +2766,25 @@ def build_chat_response_from_route(
             )
         if selected == "img-summary" or policy_next_action == "prepare_visual_prompt_card":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A prepared image-card brief is not generated image evidence."
+            headline = (
+                "공유용 이미지 카드 초안을 준비할 수 있습니다."
+                if korean_copy
+                else "I can prepare a shareable image card for this."
+            )
             body = (
-                "I will turn the source into a shareable image-card brief: audience, layout, on-image copy, "
-                "generation prompt, negative prompt, and a quick QA checklist. If no image tool is connected, "
-                "I will ask which tool to use instead of pretending an image was generated."
+                "원본 내용을 청중, 레이아웃, 이미지 안 문구, 생성 프롬프트, 네거티브 프롬프트, "
+                "간단한 QA 체크리스트로 정리하겠습니다. 연결된 이미지 생성 도구가 없으면 생성했다고 "
+                "말하지 않고 어떤 도구를 쓸지 먼저 고릅니다."
+                if korean_copy
+                else (
+                    "I will turn the source into a shareable image-card brief: audience, layout, on-image copy, "
+                    "generation prompt, negative prompt, and a quick QA checklist. If no image tool is connected, "
+                    "I will ask which tool to use instead of pretending an image was generated."
+                )
             )
             return _chat_response(
                 kind="img_summary",
-                headline="I can prepare a shareable image card for this.",
+                headline=headline,
                 body=body,
                 phase="visual_prompt_prepared",
                 next_action="prepare_visual_prompt_card",
@@ -2811,14 +2828,25 @@ def build_chat_response_from_route(
             )
         if selected == "paper-learning" or policy_next_action == "prepare_paper_learning":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A paper-learning card is not paper validation evidence."
+            headline = (
+                "논문을 원하는 난이도로 풀어 설명할 수 있습니다."
+                if korean_copy
+                else "I can explain this paper with the right depth."
+            )
             body = (
-                "I will prepare a paper-learning card: explanation level, source/PDF state, section coverage, "
-                "key claims, figures or equations to revisit, and a coverage ledger. I will not claim full extraction, "
-                "citation checking, math validation, reproduction, or peer review until those are observed."
+                "paper-learning 카드로 설명 수준, PDF/출처 상태, 섹션별 커버리지, 핵심 주장, "
+                "다시 봐야 할 그림/수식, 누락 범위를 정리하겠습니다. 전문 추출, 인용 검증, "
+                "수학 검증, 재현, 피어 리뷰는 관측되기 전까지 완료됐다고 말하지 않습니다."
+                if korean_copy
+                else (
+                    "I will prepare a paper-learning card: explanation level, source/PDF state, section coverage, "
+                    "key claims, figures or equations to revisit, and a coverage ledger. I will not claim full extraction, "
+                    "citation checking, math validation, reproduction, or peer review until those are observed."
+                )
             )
             return _chat_response(
                 kind="paper_learning",
-                headline="I can explain this paper with the right depth.",
+                headline=headline,
                 body=body,
                 phase="paper_learning_prepared",
                 next_action="prepare_paper_learning",
@@ -2860,14 +2888,25 @@ def build_chat_response_from_route(
             )
         if selected == "source-finder" or policy_next_action == "prepare_source_finder_plan":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A source-finder plan is not source retrieval evidence."
+            headline = (
+                "자료 탐색을 출처 확보 계획으로 정리할 수 있습니다."
+                if korean_copy
+                else "I can turn this into a source acquisition plan."
+            )
             body = (
-                "I will prepare a source-finder plan: typed candidate categories, search/acquisition status, "
-                "missing provenance, license or access checks, and the best downstream workflow. I will not claim "
-                "web search, download, clone, extraction, verification, or downstream processing until observed."
+                "source-finder 계획으로 논문, 링크, 데이터셋, 저장소, 발표자료 같은 후보 범주와 "
+                "탐색/확보 상태, 출처·라이선스 확인, 다음에 넘길 workflow를 정리하겠습니다. "
+                "실제 웹 검색, 다운로드, 클론, 추출, 검증, 후속 처리는 관측되기 전까지 완료됐다고 말하지 않습니다."
+                if korean_copy
+                else (
+                    "I will prepare a source-finder plan: typed candidate categories, search/acquisition status, "
+                    "missing provenance, license or access checks, and the best downstream workflow. I will not claim "
+                    "web search, download, clone, extraction, verification, or downstream processing until observed."
+                )
             )
             return _chat_response(
                 kind="source_finder",
-                headline="I can turn this into a source acquisition plan.",
+                headline=headline,
                 body=body,
                 phase="source_finder_prepared",
                 next_action="prepare_source_finder_plan",
@@ -2910,14 +2949,24 @@ def build_chat_response_from_route(
             )
         if selected == "web-research" or policy_next_action == "run_hermes_research":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A web research card is not source retrieval evidence."
+            headline = (
+                "최신 근거 조사를 Hermes 연구 흐름으로 정리할 수 있습니다."
+                if korean_copy
+                else "I can gather source-backed current evidence for this."
+            )
             body = (
-                "I will keep this as Hermes-side research: define the source boundaries, freshness window, source diversity, "
-                "citation confidence, and retrieval gaps before turning findings into a plan, report, or coding handoff. "
-                "I will not claim sources were fetched or verified until observed."
+                "조사 범위, 최신성 기준, 출처 다양성, 인용 신뢰도, 검색 공백을 먼저 잡고 그 다음 "
+                "계획, 리포트, 코딩 handoff로 넘기겠습니다. 실제 출처 수집이나 검증은 관측되기 전까지 완료됐다고 말하지 않습니다."
+                if korean_copy
+                else (
+                    "I will keep this as Hermes-side research: define the source boundaries, freshness window, source diversity, "
+                    "citation confidence, and retrieval gaps before turning findings into a plan, report, or coding handoff. "
+                    "I will not claim sources were fetched or verified until observed."
+                )
             )
             return _chat_response(
                 kind="web_research",
-                headline="I can gather source-backed current evidence for this.",
+                headline=headline,
                 body=body,
                 phase="web_research_prepared",
                 next_action="run_hermes_research",
@@ -3041,24 +3090,41 @@ def build_chat_response_from_route(
             missed_route_feedback = _is_missed_route_feedback(message)
             primary_learning_action = "record_missed_route" if missed_route_feedback else "audit_learning_readiness"
             headline = (
-                "I can record this missed OMH route."
+                "놓친 OMH 라우팅을 학습 후보로 기록할 수 있습니다."
+                if korean_copy and missed_route_feedback
+                else "I can record this missed OMH route."
                 if missed_route_feedback
-                else "I can inspect this workflow for learning readiness."
+                else (
+                    "이 workflow가 개선 가능한지 점검할 수 있습니다."
+                    if korean_copy
+                    else "I can inspect this workflow for learning readiness."
+                )
             )
             evidence_boundary = str(policy.get("evidence_boundary", "")) or (
                 "Workflow learning records are process-review evidence only; they are not automatic improvement evidence."
             )
             if missed_route_feedback:
                 body = (
-                    "I will treat this as missed-route feedback: record a metadata-only trace, create a reviewable "
-                    "missed-route bundle, add or request a minimized regression fixture, and keep any routing or skill "
-                    "change behind human review."
+                    "이 요청을 missed-route 피드백으로 다루겠습니다. 원문을 그대로 저장하지 않고 "
+                    "메타데이터 trace와 리뷰 가능한 bundle을 만들고, 최소 회귀 케이스를 추가하거나 요청합니다. "
+                    "라우팅/스킬 변경은 사람 리뷰 뒤에만 반영합니다."
+                    if korean_copy
+                    else (
+                        "I will treat this as missed-route feedback: record a metadata-only trace, create a reviewable "
+                        "missed-route bundle, add or request a minimized regression fixture, and keep any routing or skill "
+                        "change behind human review."
+                    )
                 )
             else:
                 body = (
-                    "I will turn the workflow attempt into learning material without storing raw prompts: "
-                    "record the trace, run deterministic evals, add a regression case, audit readiness, "
-                    "and export a redacted review bundle when useful. Any skill or routing improvement still needs human review."
+                    "workflow 실행을 학습 재료로 정리하겠습니다. raw prompt를 저장하지 않고 trace, deterministic eval, "
+                    "회귀 케이스, readiness audit, redacted review bundle을 만들며, 스킬이나 라우팅 개선은 여전히 사람 리뷰가 필요합니다."
+                    if korean_copy
+                    else (
+                        "I will turn the workflow attempt into learning material without storing raw prompts: "
+                        "record the trace, run deterministic evals, add a regression case, audit readiness, "
+                        "and export a redacted review bundle when useful. Any skill or routing improvement still needs human review."
+                    )
                 )
             return _chat_response(
                 kind="workflow_learning",
@@ -3161,10 +3227,14 @@ def build_chat_response_from_route(
             },
         )
     if action == "clarify":
-        body = str(decision.get("clarification") or "Please confirm the intended workflow before I continue.")
+        body = (
+            "라우팅 전에 목표를 조금 더 확인해야 합니다. 원하는 결과, 입력 자료, 멈춰야 할 기준을 한 문장으로 알려주세요."
+            if korean_copy
+            else str(decision.get("clarification") or "Please confirm the intended workflow before I continue.")
+        )
         return _chat_response(
             kind="clarification",
-            headline="I need one clarification before routing this.",
+            headline="라우팅 전에 한 가지 확인이 필요합니다." if korean_copy else "I need one clarification before routing this.",
             body=body,
             phase="clarifying",
             next_action="answer_clarification",
@@ -3174,13 +3244,18 @@ def build_chat_response_from_route(
             extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
         )
     if action == "fallback" and _is_file_lookup_fallback(decision):
-        return _chat_response(
-            kind="clarification",
-            headline="This looks like a file or text lookup.",
-            body=str(
+        body = (
+            "파일/텍스트 확인으로 바로 답하거나, 대상 파일·경로가 없으면 먼저 물어보세요. OMH workflow 실행은 시작하지 않습니다."
+            if korean_copy
+            else str(
                 decision.get("clarification")
                 or "Answer this as a file or text lookup, or ask for the target file/path if it is missing."
-            ),
+            )
+        )
+        return _chat_response(
+            kind="clarification",
+            headline="파일이나 텍스트 확인 요청으로 보입니다." if korean_copy else "This looks like a file or text lookup.",
+            body=body,
             phase="clarifying",
             next_action="answer_file_lookup",
             thread_key=thread_key,
@@ -3197,13 +3272,18 @@ def build_chat_response_from_route(
             },
         )
     if action == "fallback" and _is_direct_answer_fallback(decision):
-        return _chat_response(
-            kind="clarification",
-            headline="This does not need an OMH workflow.",
-            body=str(
+        body = (
+            "현재 채팅에서 바로 답하세요. 사용자가 직접 요청하지 않는 한 OMH workflow, picker, coding handoff를 열지 않습니다."
+            if korean_copy
+            else str(
                 decision.get("clarification")
                 or "Answer directly in the current chat; do not open an OMH workflow unless the user asks for one."
-            ),
+            )
+        )
+        return _chat_response(
+            kind="clarification",
+            headline="이건 OMH workflow 없이 바로 답하면 됩니다." if korean_copy else "This does not need an OMH workflow.",
+            body=body,
             phase="clarifying",
             next_action="answer_directly",
             thread_key=thread_key,
@@ -3221,8 +3301,12 @@ def build_chat_response_from_route(
         )
     return _chat_response(
         kind="clarification",
-        headline="I need to understand the goal before routing this.",
-        body="Tell me the outcome you want, and I will choose the right workflow.",
+        headline="라우팅 전에 목표를 조금 더 알아야 합니다." if korean_copy else "I need to understand the goal before routing this.",
+        body=(
+            "원하는 결과를 한 문장으로 알려주면, 그에 맞는 workflow를 고르겠습니다."
+            if korean_copy
+            else "Tell me the outcome you want, and I will choose the right workflow."
+        ),
         phase="clarifying",
         next_action="answer_clarification",
         thread_key=thread_key,
@@ -4781,6 +4865,7 @@ def _command_preview_prefix(token: str) -> str:
 def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
     catalog_question = _is_skill_catalog_question(message) and not _is_skill_picker_invocation(message)
+    korean_copy = _prefers_korean_copy(message)
     primer = _context_primer_state()
     extra_state = {
         "route_action": decision.get("action", "dispatch"),
@@ -4795,8 +4880,16 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
         extra_state["capability_summary"] = _catalog_capability_summary()
     return _chat_response(
         kind="skill_picker",
-        headline="Here are the OMH workflows." if catalog_question else "Choose an OMH workflow.",
-        body=_skill_picker_body(catalog_question=catalog_question),
+        headline=(
+            "OMH workflow 목록입니다."
+            if korean_copy and catalog_question
+            else "OMH workflow를 바로 고를 수 있습니다."
+            if korean_copy
+            else "Here are the OMH workflows."
+            if catalog_question
+            else "Choose an OMH workflow."
+        ),
+        body=_skill_picker_body(catalog_question=catalog_question, korean_copy=korean_copy),
         phase="skill_selection",
         next_action="choose_skill",
         thread_key=thread_key,
@@ -4822,9 +4915,35 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
     )
 
 
-def _skill_picker_body(*, catalog_question: bool) -> str:
+def _skill_picker_body(*, catalog_question: bool, korean_copy: bool = False) -> str:
     family_heading = "Capability families:" if catalog_question else "Families:"
     family_lines = _skill_picker_family_body_lines()
+    if korean_copy and catalog_question:
+        return "\n".join(
+            [
+                "`omh list` 같은 shell 명령 승인을 받지 않아도 됩니다. OMH는 계획, 운영, 자료/이미지, 코딩 위임, loop, 상태 확인 workflow를 Hermes 채팅 안에서 고를 수 있게 해줍니다.",
+                "",
+                "먼저 이렇게 시작하세요:",
+                "- Route for me: 요청을 그대로 보내면 Hermes가 안전한 workflow를 고릅니다.",
+                "- Choose workflow: OMH capability family에서 직접 고릅니다.",
+                "- Search workflows: 하고 싶은 일이 분명할 때 맞는 skill을 찾습니다.",
+                "",
+                family_heading,
+                *family_lines,
+            ]
+        )
+    if korean_copy:
+        return "\n".join(
+            [
+                "시작 방식을 고르세요. 잘 모르겠으면 Route for me를 고르면 Hermes가 요청에서 가장 안전한 다음 workflow를 고릅니다.",
+                "",
+                "추천 시작점:",
+                "- Route for me: 요청을 붙여 넣고 Hermes가 workflow를 고르게 합니다.",
+                "",
+                family_heading,
+                *family_lines,
+            ]
+        )
     if catalog_question:
         return "\n".join(
             [
