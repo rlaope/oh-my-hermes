@@ -601,7 +601,7 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     focused.append(_coding_agent_segment(runtime, executor))
     evidence_state = str(runtime.get("evidence_state", "unknown") or "unknown")
     if preset == "full" and evidence_state not in {"idle", "unknown"}:
-        focused.append(f"evidence:{evidence_state}")
+        focused.append(f"evidence:{_evidence_display_status(evidence_state)}")
     return focused
 
 
@@ -612,6 +612,19 @@ def _plugin_display_status(plugin: dict[str, Any]) -> str:
         "stale": "update-needed",
     }
     return labels.get(status, status)
+
+
+def _evidence_display_status(state: str) -> str:
+    labels = {
+        "prepared_not_observed": "prepared",
+        "dispatch_observed": "dispatched",
+        "execution_observed": "executed",
+        "verification_observed": "verified",
+        "review_observed": "reviewed",
+        "ci_observed": "ci-pass",
+        "merge_observed": "merged",
+    }
+    return labels.get(state, state.replace("_", "-"))
 
 
 def _coding_agent_segment(runtime: dict[str, Any], executor: dict[str, Any]) -> str:
@@ -643,6 +656,8 @@ def _activity_label(runtime: dict[str, Any]) -> str:
 
 def _coding_agent_state(runtime: dict[str, Any]) -> str:
     if not str(runtime.get("latest_run_id", "")):
+        return "idle"
+    if not str(runtime.get("executor_target", "")).strip():
         return "idle"
     return str(runtime.get("phase", "unknown") or "unknown")
 
