@@ -4649,6 +4649,46 @@ class CliTests(unittest.TestCase):
             payload["wrapper_contract"]["next_backend_commands"][0]["command"],
             "omh chat interact --source <source> ./omh",
         )
+        self.assertEqual(
+            [command["id"] for command in payload["wrapper_contract"]["next_backend_commands"]],
+            ["open_workflow", "route_for_me"],
+        )
+
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--summary", "what OMH workflows are available?"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Status: hinted", stdout)
+        self.assertIn("Workflow: oh-my-hermes", stdout)
+        self.assertIn("Next action: opening the workflow picker", stdout)
+        self.assertIn("[omh] workflow picker is ready.", stdout)
+        self.assertIn("instead of asking for shell approval", stdout)
+        self.assertIn("matched: catalog_question", stdout)
+        self.assertIn("- Open omh - enabled", stdout)
+        self.assertEqual(stdout.count("- Open omh - enabled"), 1)
+
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--json", "what OMH workflows are available?"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertTrue(payload["route_hint"]["catalog_question"])
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "oh-my-hermes")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "choose_skill")
+        self.assertEqual(
+            [action["id"] for action in payload["chat_response"]["actions"]],
+            ["open_workflow", "route_for_me"],
+        )
+        self.assertEqual(
+            [command["id"] for command in payload["wrapper_contract"]["next_backend_commands"]],
+            ["open_workflow", "route_for_me"],
+        )
 
     def test_chat_route_hint_summary_renders_no_hint_without_unknown_workflow(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "slack", "--summary", "zzzzzz"], output_json=False)
