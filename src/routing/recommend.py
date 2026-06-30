@@ -79,6 +79,17 @@ _COMMAND_TRIGGER_PATTERNS = {
     phrase: re.compile(rf"(?<![\w./-]){re.escape(phrase)}(?![\w./-])")
     for phrase in _COMMAND_TRIGGER_PHRASES
 }
+_RISKY_REFACTOR_GUARD_ID = "risky_refactor_before_cleanup"
+_RISKY_REFACTOR_FOLLOWUP_ONLY_SKILLS = frozenset({"ai-slop-cleaner"})
+_RISKY_REFACTOR_FOLLOWUP_SCORE_CAP = 7
+_RISKY_REFACTOR_FOLLOWUP_MATCHED = "guard:risky_refactor_followup_after_plan"
+_RISKY_REFACTOR_FOLLOWUP_WHY = (
+    "Follow-up only: use cleanup after a reviewed plan locks scope, risks, and verification."
+)
+_RISKY_REFACTOR_FOLLOWUP_GUIDANCE_PREFIX = (
+    "Treat this as a follow-up only after an accepted reviewed plan; do not present cleanup "
+    "as the first action for risk-marked refactoring language. "
+)
 
 
 @dataclass(frozen=True)
@@ -574,6 +585,7 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
             matches,
             guards=guards,
         )
+        matches = _apply_guardrail_followup_boundaries(matches, guards)
         visual_guard_active = any(guard.id == "img_summary_before_materials_or_delivery" for guard in guards)
         if explicit_skill != "img-summary" and not visual_guard_active:
             matches = [recommendation for recommendation in matches if recommendation.skill != "img-summary"]
@@ -781,6 +793,32 @@ def _apply_guard_rules_to_recommendation(
                 why=guard.why,
             )
     return updated
+
+
+def _apply_guardrail_followup_boundaries(
+    recommendations: list[Recommendation],
+    guards: tuple[RoutingGuardRule, ...],
+) -> list[Recommendation]:
+    guard_ids = {guard.id for guard in guards}
+    if _RISKY_REFACTOR_GUARD_ID not in guard_ids:
+        return recommendations
+
+    return [_risky_refactor_followup_boundary(recommendation) for recommendation in recommendations]
+
+
+def _risky_refactor_followup_boundary(recommendation: Recommendation) -> Recommendation:
+    if recommendation.skill not in _RISKY_REFACTOR_FOLLOWUP_ONLY_SKILLS:
+        return recommendation
+
+    score = min(recommendation.score, _RISKY_REFACTOR_FOLLOWUP_SCORE_CAP)
+    return replace(
+        recommendation,
+        score=score,
+        confidence=_confidence(score),
+        matched=tuple(sorted({*recommendation.matched, _RISKY_REFACTOR_FOLLOWUP_MATCHED})),
+        why=_RISKY_REFACTOR_FOLLOWUP_WHY,
+        wrapper_guidance=_RISKY_REFACTOR_FOLLOWUP_GUIDANCE_PREFIX + recommendation.wrapper_guidance,
+    )
 
 
 def _tokens(value: str) -> set[str]:

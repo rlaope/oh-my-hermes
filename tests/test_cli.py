@@ -3290,6 +3290,28 @@ class CliTests(unittest.TestCase):
         cleanup = next(recommendation for recommendation in recommendations if recommendation["skill"] == "ai-slop-cleaner")
         self.assertEqual(cleanup["hermes_role"], "handoff-guide")
         self.assertIn("selected coding runtime", cleanup["handoff_policy"])
+        self.assertEqual(cleanup["confidence"], "medium")
+        self.assertLess(cleanup["score"], 8)
+        self.assertIn("guard:risky_refactor_followup_after_plan", cleanup["matched"])
+        self.assertIn("Follow-up only", cleanup["why"])
+        self.assertIn("after an accepted reviewed plan", cleanup["wrapper_guidance"])
+
+    def test_recommend_concrete_cleanup_refactor_still_uses_cleanup_workflow(self) -> None:
+        status, stdout, stderr = run_cli(
+            [
+                "recommend",
+                "remove duplicated router branches and lock behavior with regression tests before refactoring",
+                "--limit",
+                "3",
+            ]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertEqual(recommendations[0]["skill"], "ai-slop-cleaner")
+        self.assertEqual(recommendations[0]["confidence"], "high")
+        self.assertNotIn("guard:risky_refactor_followup_after_plan", recommendations[0]["matched"])
 
     def test_recommend_implementation_plan_includes_planning_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "implementation", "plan", "with", "review"])
