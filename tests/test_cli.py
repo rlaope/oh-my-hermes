@@ -4236,7 +4236,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Top recommendations:", stdout)
         self.assertIn("- ralplan: preparing a reviewed plan (`present_plan`) (high, score 32)", stdout)
         self.assertIn("Route plan:", stdout)
-        self.assertIn("- 1. triage: feedback-triage (prepared_not_observed)", stdout)
+        self.assertIn("- 1. triage: feedback-triage - prepared, not observed (`prepared_not_observed`)", stdout)
         self.assertIn("Boundary:", stdout)
         self.assertIn("A recommendation or draft plan is not execution evidence.", stdout)
         self.assertIn("Use --json for the full machine-readable route payload.", stdout)

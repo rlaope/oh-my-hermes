@@ -255,10 +255,31 @@ _ROUTE_ACTION_LABELS = {
     "fallback": "answering without a workflow",
 }
 
+_SUMMARY_STATUS_LABELS = {
+    "prepared_not_observed": "prepared, not observed",
+    "not_observed": "not observed",
+    "observed": "observed",
+    "blocked": "blocked",
+    "completed": "completed",
+    "failed": "failed",
+    "passed": "passed",
+    "pending": "pending",
+}
+
 
 def _route_action_label_with_id(action: str) -> str:
     normalized = action.strip()
     return _action_label_with_id(normalized, _ROUTE_ACTION_LABELS.get(normalized, ""))
+
+
+def _status_label_with_id(status: str) -> str:
+    normalized = status.strip()
+    if not normalized:
+        return ""
+    label = _SUMMARY_STATUS_LABELS.get(normalized, normalized.replace("_", " "))
+    if label == normalized:
+        return normalized
+    return f"{label} (`{normalized}`)"
 
 
 def _format_summary_action(action: dict[str, object]) -> str:
@@ -403,7 +424,7 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
             stage = _text(step.get("stage"), "stage")
             skill = _text(step.get("skill"), "workflow")
             status = _text(step.get("status"), "prepared_not_observed")
-            print(f"- {order}. {stage}: {skill} ({status})")
+            print(f"- {order}. {stage}: {skill} - {_status_label_with_id(status)}")
 
     not_evidence = [_text(item) for item in _as_list(route_explanation.get("not_evidence_yet")) if _text(item)]
     if not_evidence:
