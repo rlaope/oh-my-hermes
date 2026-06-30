@@ -508,7 +508,7 @@ class Recommendation:
             "score": self.score,
             "confidence": self.confidence,
             "matched": list(self.matched),
-            "why": self.why,
+            "why": _humanize_recommendation_reason(self.why),
             "next_action": self.next_action,
             "evidence_boundary": self.evidence_boundary,
             "wrapper_guidance": self.wrapper_guidance,
@@ -818,7 +818,51 @@ def _why(matched: tuple[str, ...]) -> str:
     if not matched:
         return _FALLBACK_WHY
     sources = sorted({item.split(":", 1)[0] for item in matched})
-    return f"Matched {'/'.join(sources)} metadata for this task."
+    labels = [_match_source_label(source) for source in sources]
+    return f"Matched {_human_join(labels)} for this task."
+
+
+def _humanize_recommendation_reason(reason: str) -> str:
+    text = reason.strip()
+    guard_prefix = "Matched guard/trigger metadata; "
+    if text.startswith(guard_prefix):
+        return _capitalize_sentence(text[len(guard_prefix) :])
+    if text == "Matched trigger metadata for this task.":
+        return "Matched workflow trigger language for this task."
+    if text == "Matched metadata metadata for this task.":
+        return "Matched catalog keywords for this task."
+    return text
+
+
+def _capitalize_sentence(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return text
+    return text[:1].upper() + text[1:]
+
+
+def _match_source_label(source: str) -> str:
+    return {
+        "category": "workflow category",
+        "description": "catalog description",
+        "locale": "deterministic multilingual hint",
+        "metadata": "catalog keywords",
+        "name": "workflow name",
+        "phase": "workflow phase",
+        "trigger": "workflow trigger language",
+        "use_when": "catalog use-when guidance",
+    }.get(source, source.replace("_", " "))
+
+
+def _human_join(items: list[str]) -> str:
+    unique_items = list(dict.fromkeys(item for item in items if item))
+    if not unique_items:
+        return "catalog signals"
+    if len(unique_items) == 1:
+        return unique_items[0]
+    if len(unique_items) == 2:
+        return f"{unique_items[0]} and {unique_items[1]}"
+    return f"{', '.join(unique_items[:-1])}, and {unique_items[-1]}"
 
 
 def _suggested_prompt(skill: str, query: str) -> str:
