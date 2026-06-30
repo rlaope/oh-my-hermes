@@ -378,6 +378,7 @@ class ChatRouterTests(unittest.TestCase):
 
         for message in (
             "just explain Python virtualenv",
+            "what Python list comprehension means?",
             "how do I create a virtualenv in Python?",
             "what is a loop in Python?",
             "strategy pattern 설명해줘",
@@ -448,6 +449,8 @@ class ChatRouterTests(unittest.TestCase):
             "what are you doing now",
             "show session status",
             "what is going on rn",
+            "what is the current PR status?",
+            "PR 상태 알려줘",
             "status update please",
             "今何してる？",
             "现在在做什么？",
