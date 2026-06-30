@@ -460,6 +460,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "loop",
     ),
     RoutingInterventionCase(
+        "korean-first-success-loopable-project",
+        "Korean first-success improvement requests open loop",
+        "설치 후 첫 성공까지 막히는 부분을 계속 개선해줘",
+        "dispatch",
+        "loop",
+        "choose_permission_profile",
+        "loop",
+    ),
+    RoutingInterventionCase(
         "one-cycle-delivery",
         "One-cycle delivery requests open ultraprocess",
         "turn this vague request into one cycle: research, plan, implement, review, and docs sync",

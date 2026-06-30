@@ -158,6 +158,12 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "설치 후 첫 성공까지 막히는 부분을 계속 개선해줘",
+                "loop",
+                "choose_permission_profile",
+                None,
+            ),
+            (
                 "./loop star-worthy OSS 만들기",
                 "loop",
                 "start_loop_cycle",
@@ -810,6 +816,11 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             (
                 "I need a 10k-star OSS loop to improve first-run experience",
+                "loop",
+                "guard:loop_goal",
+            ),
+            (
+                "설치 후 첫 성공까지 막히는 부분을 계속 개선해줘",
                 "loop",
                 "guard:loop_goal",
             ),
