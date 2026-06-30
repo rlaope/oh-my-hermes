@@ -1145,7 +1145,13 @@ _WORKFLOW_LEARNING_PHRASES = (
     "execution trace skill improvement",
     "execution trace improvement proposal",
     "workflow trace skill improvement",
+    "workflow trace 보고",
+    "workflow trace 보고 다음에",
+    "workflow trace 보고 다음에 스킬",
+    "workflow trace 보고 다음에 스킬 고칠",
     "skill improvement proposal",
+    "trace 보고 다음에 스킬",
+    "trace 보고 스킬 개선",
     "next time do this task better",
     "workflow should learn",
     "workflow went wrong",
@@ -1164,6 +1170,9 @@ _WORKFLOW_LEARNING_PHRASES = (
     "이번 실행 trace로 skill 개선 제안",
     "이번 실행 트레이스",
     "이번 실행 트레이스로 스킬 개선",
+    "트레이스 보고 다음에 스킬",
+    "트레이스 보고 스킬 개선",
+    "실행 기록 보고 다음에 스킬",
     "이번 워크플로우 학습",
     "워크플로우 개선",
     "워크플로우를 개선",
@@ -3163,6 +3172,7 @@ def _direct_coding_task_guard_applies(
             "수정",
             "추가",
             "구현",
+            "개선",
             "삭제",
             "제거",
             "변경",
@@ -3192,12 +3202,20 @@ def _direct_coding_task_guard_applies(
             "router",
             "setting",
             "settings",
+            "setup",
             "style",
             "test",
             "tests",
+            "log",
+            "logs",
+            "output",
+            "ux",
             "title",
             "toggle",
             "variable",
+            "로그",
+            "출력",
+            "테스트",
         }
         & query_tokens
     ) or _contains_phrase(
@@ -3209,6 +3227,13 @@ def _direct_coding_task_guard_applies(
             "navbar",
             "readme title",
             "rename this variable",
+            "setup log",
+            "setup logs",
+            "setup output",
+            "setup ux",
+            "test passes",
+            "tests pass",
+            "until tests pass",
             "login bug",
             "버튼 색",
             "버그 고쳐",
@@ -3217,6 +3242,13 @@ def _direct_coding_task_guard_applies(
             "readme 제목",
             "리드미 제목",
             "변수명",
+            "setup 로그",
+            "setup 출력",
+            "셋업 로그",
+            "셋업 출력",
+            "테스트 통과",
+            "통과할때까지",
+            "통과할 때까지",
         ),
     )
     if not concrete_surface:
@@ -4749,6 +4781,22 @@ def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[s
     if _doctor_health_guard_applies(normalized_query, query_tokens):
         return False
     if _adversarial_qa_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(
+        normalized_query,
+        (
+            "setup log",
+            "setup logs",
+            "setup output",
+            "setup ux",
+            "setup 로그",
+            "setup 출력",
+            "셋업 로그",
+            "셋업 출력",
+            "로그가 너무 어렵",
+            "출력이 너무 어렵",
+        ),
+    ) and _contains_phrase(normalized_query, ("improve", "fix", "개선", "고쳐", "수정")):
         return False
     if _contains_phrase(normalized_query, _TOOLBELT_READINESS_PHRASES):
         return True
