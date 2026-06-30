@@ -175,6 +175,7 @@ VISIBLE_ACTIONS = (
     "prepare_voice_operator_card",
     "prepare_toolbelt_readiness",
     "prepare_ops_observability_card",
+    "prepare_quality_performance_and_usability_review",
     "refresh_status",
     "prepare_agent_ops_review",
     "show_agent_ops_review",
@@ -565,6 +566,10 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_voice_operator_card": ("prepare_voice_operator_card", "Open voice card"),
     "prepare_toolbelt_readiness": ("prepare_toolbelt_readiness", "Check toolbelt"),
     "prepare_ops_observability_card": ("prepare_ops_observability_card", "Open observability"),
+    "prepare_quality_performance_and_usability_review": (
+        "prepare_quality_performance_and_usability_review",
+        "Review performance",
+    ),
     "refresh_status": ("refresh_status", "Refresh status"),
 }
 

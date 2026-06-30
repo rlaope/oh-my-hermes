@@ -199,6 +199,23 @@ _MISSED_WORKFLOW_MARKERS = (
     "놓쳤",
     "빠졌",
 )
+_WORKFLOW_LEARNING_FEEDBACK_MARKERS = (
+    "workflow trace",
+    "execution trace",
+    "trace 보고",
+    "트레이스 보고",
+    "실행 기록 보고",
+    "스킬 고칠",
+    "스킬 고쳐",
+    "스킬 개선",
+    "skill improvement",
+    "skill 개선",
+    "라우팅 회귀",
+    "회귀 케이스",
+    "다음에 스킬",
+    "다음에는 스킬",
+    "다음부터 스킬",
+)
 _NAMED_WORKFLOW_MARKERS = (
     "deep-interview",
     "ralplan",
@@ -533,6 +550,8 @@ def is_skill_catalog_question(message: str) -> bool:
         return False
     if _is_missed_workflow_feedback(search_texts):
         return False
+    if _is_workflow_learning_feedback(search_texts):
+        return False
     if _contains_catalog_token(search_texts, _EXPLICIT_OMH_CAPABILITY_PHRASES):
         return True
     if _is_named_workflow_catalog_question(search_texts):
@@ -635,6 +654,10 @@ def _is_missed_workflow_feedback(search_texts: tuple[str, ...]) -> bool:
     return _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS) and _contains_catalog_token(
         search_texts, _MISSED_WORKFLOW_MARKERS
     )
+
+
+def _is_workflow_learning_feedback(search_texts: tuple[str, ...]) -> bool:
+    return _contains_catalog_token(search_texts, _WORKFLOW_LEARNING_FEEDBACK_MARKERS)
 
 
 def _is_operator_action_question(search_texts: tuple[str, ...]) -> bool:

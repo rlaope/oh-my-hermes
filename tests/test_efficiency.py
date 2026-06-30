@@ -994,6 +994,8 @@ class EfficiencyContractTests(unittest.TestCase):
             "what skills are available?",
             "show workflows",
             "omh 뭐 할 수 있어?",
+            "omh에서 쓸 수 있는 워크플로 알려줘",
+            "omh에서 쓸 수 있는 기능 알려줘",
             "omh 스킬 뭐있어?",
             "스킬들은 뭐있어?",
         )
@@ -1023,6 +1025,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("codex 작업 어디까지 됐어?", "ultraprocess", "guard:coding_progress_status"),
             ("이미지 생성 툴 연결 안됐으면 뭐 써?", "toolbelt-readiness", "guard:toolbelt_readiness"),
             ("메모리 점검해줘", "memory-curation-review", "guard:memory_curation"),
+            ("업데이트 됐는지 확인해줘", "doctor", "guard:doctor_health"),
         )
 
         with patch.object(
@@ -1049,6 +1052,39 @@ class EfficiencyContractTests(unittest.TestCase):
                             for marker in decision["recommendations"][0]["matched"]
                         )
                     )
+
+    def test_natural_single_workflow_operator_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            ("이미지 요약 카드 만들어줘", "img-summary", "operator_surface_fast_path:visual"),
+            ("릴리즈 노트 이미지 만들어줘", "img-summary", "operator_surface_fast_path:visual"),
+            ("이 PDF 쉽게 요약해줘", "paper-learning", "operator_surface_fast_path:paper"),
+            ("paper pdf expert explanation please", "paper-learning", "operator_surface_fast_path:paper"),
+            ("회의록 정리해줘", "operating-rhythm", "operator_surface_fast_path:operating"),
+            ("논문 링크 찾아줘", "source-finder", "operator_surface_fast_path:source"),
+            ("자료 찾아줘", "web-research", "operator_surface_fast_path:research"),
+            ("성능 최적화해줘", "performance-goal", "operator_surface_fast_path:performance"),
+            ("리드미 개선해줘", "ultraprocess", "operator_surface_fast_path:delivery"),
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("natural single-workflow fast paths should skip scoring"),
+        ), patch.object(
+            chat_module,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("natural single-workflow fast paths should not build route plans"),
+        ):
+            for message, expected_skill, expected_marker in cases:
+                chat_module._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], expected_skill)
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertIn(expected_marker, decision["recommendations"][0]["matched"])
 
     def test_specific_capability_catalog_fast_paths_skip_full_recommendation_scan(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
