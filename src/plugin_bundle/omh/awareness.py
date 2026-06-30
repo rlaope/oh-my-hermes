@@ -352,10 +352,20 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             routing_context=routing_context,
         )
 
+try:  # File-loaded plugin bundles should still use package classifiers when OMH is installed.
+    from omh.routing.intent import META_OR_FEEDBACK_INTENTS, classify_omh_quality_intent, classify_workflow_intent
+except ImportError:  # pragma: no cover - standalone plugin hosts keep the fallback above.
+    pass
+
 try:  # Keep route hints aligned with router locale phrase packs when available.
     from ...routing.localization import prepare_routing_text as _prepare_routing_text
 except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
     _prepare_routing_text = None
+
+try:  # File-loaded plugin bundles can still reuse OMH locale phrase packs.
+    from omh.routing.localization import prepare_routing_text as _prepare_routing_text
+except ImportError:  # pragma: no cover - standalone plugin hosts keep the fallback above.
+    pass
 
 try:  # Prefer the package copy table, but keep copied plugin bundles standalone.
     from ...routing.action_copy import next_action_label as _next_action_label
@@ -364,10 +374,18 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
     def _next_action_label(action: str) -> str:
         return action.strip().replace("_", " ")
 
+try:  # File-loaded plugin bundles should keep the nicer action copy when OMH is installed.
+    from omh.routing.action_copy import next_action_label as _next_action_label
+except ImportError:  # pragma: no cover - standalone plugin hosts keep the fallback above.
+    pass
+
 try:  # Keep loop route hints aligned with the deterministic loopability assessor.
-    from ...loopability import assess_loopability as _assess_loopability
+    from omh.loopability import assess_loopability as _assess_loopability
 except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
-    _assess_loopability = None
+    try:
+        from ...loopability import assess_loopability as _assess_loopability
+    except ImportError:
+        _assess_loopability = None
 
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
