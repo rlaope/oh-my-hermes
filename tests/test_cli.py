@@ -2291,12 +2291,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
             self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
             self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
-            self.assertIn("117/117 route hints aligned", gates["route_hint_alignment"]["summary"])
+            self.assertIn("123/123 route hints aligned", gates["route_hint_alignment"]["summary"])
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
             self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("40/40 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("46/46 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2338,7 +2338,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 39/39 negative controls, 40/40 interventions "
+                "Routing precision: 39/39 negative controls, 46/46 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2362,15 +2362,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
             self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
-            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 117)
+            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 123)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
             self.assertEqual(payload["summary"]["routing_precision_passing"], 39)
             self.assertEqual(payload["summary"]["routing_precision_total"], 39)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 40)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 40)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 46)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 46)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
@@ -6252,9 +6252,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(payload["summary"]["case_count"], 117)
-        self.assertEqual(payload["summary"]["hinted_count"], 117)
-        self.assertEqual(payload["summary"]["aligned_count"], 117)
+        self.assertEqual(payload["summary"]["case_count"], 123)
+        self.assertEqual(payload["summary"]["hinted_count"], 123)
+        self.assertEqual(payload["summary"]["aligned_count"], 123)
         self.assertEqual(payload["summary"]["missing_hint_count"], 0)
         self.assertEqual(payload["summary"]["mismatch_count"], 0)
         self.assertTrue(payload["summary"]["all_aligned"])
@@ -6285,7 +6285,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         explicit_payload = json.loads(stdout)
         self.assertEqual(explicit_payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(explicit_payload["summary"]["case_count"], 117)
+        self.assertEqual(explicit_payload["summary"]["case_count"], 123)
 
     def test_demo_route_hint_alignment_summary_is_human_readable(self) -> None:
         status, stdout, stderr = run_cli(["demo", "route-hint-alignment", "--summary"])
@@ -6295,8 +6295,8 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH route hint alignment", stdout)
-        self.assertIn("Result: 117/117 route hints aligned (all passing)", stdout)
-        self.assertIn("Hints present: 117/117; missing hints: 0; mismatches: 0", stdout)
+        self.assertIn("Result: 123/123 route hints aligned (all passing)", stdout)
+        self.assertIn("Hints present: 123/123; missing hints: 0; mismatches: 0", stdout)
         self.assertIn(
             "AI agent product QA: ok; "
             "route=ultraqa hint=ultraqa next=opening the selected workflow",
