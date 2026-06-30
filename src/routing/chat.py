@@ -13,11 +13,13 @@ from ..loopability import assess_loopability
 from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
 from .action_copy import next_action_label as _route_next_action_label
 from .intent import scrub_diagnostic_status_text
+from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
 from .omh_help import is_omh_intro_question, is_omh_quickstart_question, is_omh_status_question
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
+    active_routing_guard_rules,
     explicit_skill_invocation as explicit_skill_name,
     is_ambiguous_scores,
     meets_confidence_threshold,
@@ -77,7 +79,50 @@ _BROAD_CAPABILITY_TOPIC_TOKENS = frozenset(
         "스킬",
     }
 )
-_DIRECT_PICKER_ALIASES = frozenset(("./omh", "/omh", "./skills", "/skills"))
+_DIRECT_PICKER_ALIASES = frozenset(("./", "./o", "./om", "./omh", "/o", "/om", "/omh", "./skills", "/skills"))
+_GUARDED_OPERATOR_FAST_PATH_IDS = frozenset(
+    {
+        "coding_handoff_status_before_clarify",
+        "coding_progress_status_before_clarify",
+        "doctor_health_before_skill_catalog",
+        "executor_runtime_readiness_before_generic_advice",
+        "memory_curation_before_generic_clarification",
+        "toolbelt_readiness_before_generic_or_visual_fallback",
+    }
+)
+_GUARDED_OPERATOR_FAST_PATH_PRIORITY = (
+    "executor_runtime_readiness_before_generic_advice",
+    "coding_handoff_status_before_clarify",
+    "coding_progress_status_before_clarify",
+    "doctor_health_before_skill_catalog",
+    "toolbelt_readiness_before_generic_or_visual_fallback",
+    "memory_curation_before_generic_clarification",
+)
+_GUARDED_OPERATOR_META_BLOCKERS = (
+    "developer note",
+    "developer test",
+    "not asking to",
+    "only vocabulary",
+    "vocabulary",
+    "route:",
+    "routing",
+    "router",
+    "setup test",
+    "test:",
+    "라우팅",
+    "라우터",
+    "용어",
+    "오해",
+    "테스트",
+    "요구사항은 없어",
+)
+_LEARNING_CANDIDATE_FAST_PATH_BLOCKERS = (
+    "learn this",
+    "make a skill from this",
+    "from now on",
+    "기억해:",
+    "기억해",
+)
 _BOUNDARY_MARKER_LABELS: tuple[tuple[str, str], ...] = (
     ("meeting happened", "meeting occurrence"),
     ("meeting, scrum, sprint, retro", "meeting/scrum/sprint/retro occurrence"),
@@ -178,7 +223,10 @@ _GENERIC_CATALOG_LISTING_MARKERS = (
     "show",
     "menu",
     "picker",
+    "뭐있어",
     "뭐 있어",
+    "뭐가있어",
+    "뭐가 있어",
     "무엇이 있어",
     "목록",
     "리스트",
@@ -265,6 +313,19 @@ _SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "coding agent",
             "executors",
             "runtimes",
+        ),
+    ),
+    (
+        "img-summary",
+        (
+            "image generation",
+            "image generation features",
+            "image generation support",
+            "image tool support",
+            "visual generation",
+            "visual card support",
+            "summary image",
+            "image cards",
         ),
     ),
 )
@@ -1022,6 +1083,14 @@ def _route_chat_message_cached(
     )
     if fast_operator_surface_decision is not None:
         return fast_operator_surface_decision.to_dict()
+    fast_guarded_operator_decision = _guarded_operator_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_guarded_operator_decision is not None:
+        return fast_guarded_operator_decision.to_dict()
     fast_direct_answer_decision = _direct_answer_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1622,7 +1691,7 @@ def _catalog_fast_path_decision(
 
 
 def _direct_picker_alias(message: str) -> bool:
-    compact = message.strip().lower().strip(" \t\r\n.!?,;:")
+    compact = message.strip().lower().strip(" \t\r\n!?,;:")
     return compact in _DIRECT_PICKER_ALIASES
 
 
@@ -2233,6 +2302,123 @@ def _operator_surface_route_plan_recommendations(
             ),
         )
     return (recommendation,)
+
+
+def _guarded_operator_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if explicit_skill_invocation(routing_message):
+        return None
+    if is_skill_catalog_question(routing_message):
+        return None
+    if _guarded_operator_fast_path_blocked(routing_message):
+        return None
+    if classify_task(message):
+        return None
+    routing_text = prepare_routing_text(routing_message)
+    normalized_query = normalized_phrase(routing_text.scoring_text)
+    query_tokens = routing_tokens(normalized_query)
+    guards = active_routing_guard_rules(normalized_query, query_tokens)
+    first_fast_guard_index = _first_guarded_operator_fast_path_index(guards)
+    if first_fast_guard_index is None:
+        return None
+    if any(guard.id not in _GUARDED_OPERATOR_FAST_PATH_IDS for guard in guards[:first_fast_guard_index]):
+        return None
+    guard = _preferred_guarded_operator_fast_path_guard(guards, routing_message)
+    if guard is None or not guard.preferred_skills:
+        return None
+    selected_skill = guard.preferred_skills[0]
+    definition = _skill_definition_by_name(selected_skill)
+    selected_harness = primary_harness_for_skill(selected_skill)
+    matched = (guard.matched_label, f"guard_fast_path:{guard.id}")
+    score = max(13, guard.score_boost)
+    recommendation = recommendation_for_definition(
+        definition,
+        message,
+        matched=matched,
+        score=score,
+        why=guard.why,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=score,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=guard.why,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, guard.why, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+    return None
+
+
+def _preferred_guarded_operator_fast_path_guard(guards: tuple[Any, ...], message: str) -> Any | None:
+    guard_by_id = {guard.id: guard for guard in guards if guard.id in _GUARDED_OPERATOR_FAST_PATH_IDS}
+    handoff_guard = guard_by_id.get("coding_handoff_status_before_clarify")
+    progress_guard = guard_by_id.get("coding_progress_status_before_clarify")
+    if handoff_guard is not None and progress_guard is not None and _guarded_operator_handoff_status_request(message):
+        return handoff_guard
+    for guard in guards:
+        if guard.id in _GUARDED_OPERATOR_FAST_PATH_IDS and guard.preferred_skills:
+            return guard
+    for guard_id in _GUARDED_OPERATOR_FAST_PATH_PRIORITY:
+        guard = guard_by_id.get(guard_id)
+        if guard is not None and guard.preferred_skills:
+            return guard
+    return None
+
+
+def _guarded_operator_handoff_status_request(message: str) -> bool:
+    text = _fast_path_text(message)
+    if "handoff" not in text and "위임" not in text:
+        return False
+    status_markers = (
+        "status",
+        "progress",
+        "current",
+        "what did",
+        "do so far",
+        "evidence",
+        "done",
+        "상태",
+        "진행",
+        "어디까지",
+        "근거",
+        "증거",
+        "완료",
+    )
+    return any(marker in text for marker in status_markers)
+
+
+def _guarded_operator_fast_path_blocked(message: str) -> bool:
+    text = _fast_path_text(message)
+    if any(blocker in text for blocker in _GUARDED_OPERATOR_META_BLOCKERS):
+        return True
+    return any(blocker in text for blocker in _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS)
+
+
+def _first_guarded_operator_fast_path_index(guards: tuple[Any, ...]) -> int | None:
+    for index, guard in enumerate(guards):
+        if getattr(guard, "id", "") in _GUARDED_OPERATOR_FAST_PATH_IDS:
+            return index
+    return None
 
 
 def _fast_path_text(value: str) -> str:

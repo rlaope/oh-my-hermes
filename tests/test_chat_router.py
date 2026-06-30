@@ -631,7 +631,7 @@ class ChatRouterTests(unittest.TestCase):
             self.assertEqual(public["route_explanation"]["next_action"], next_action)
 
     def test_direct_picker_alias_uses_fast_catalog_route(self) -> None:
-        for message in ("./omh", "/omh", "./skills", "/skills"):
+        for message in ("./", "./o", "./om", "./omh", "/omh", "./skills", "/skills"):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
 
@@ -1385,6 +1385,8 @@ class ChatRouterTests(unittest.TestCase):
             "what skills are available?",
             "show workflows",
             "omh 뭐 할 수 있어?",
+            "omh 스킬 뭐있어?",
+            "스킬들은 뭐있어?",
         ):
             with self.subTest(message=message), mock.patch.object(
                 chat_router_impl,
@@ -1406,6 +1408,64 @@ class ChatRouterTests(unittest.TestCase):
             public = public_route_payload(decision)
             self.assertNotIn("workflow_route_plan", public)
             self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
+
+    def test_guarded_operator_questions_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+        cases = (
+            ("setup 잘 됐어?", "doctor", "run_local_operator_check", "guard:doctor_health"),
+            ("update 잘 됐어?", "doctor", "run_local_operator_check", "guard:doctor_health"),
+            (
+                "codex 연결돼 있어?",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "내 코딩 에이전트 연결 상태 확인해줘",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            ("codex 작업 어디까지 됐어?", "ultraprocess", "start_ultraprocess", "guard:coding_progress_status"),
+            ("지금 PR 머지 준비 됐어?", "ultraprocess", "start_ultraprocess", "guard:coding_progress_status"),
+            (
+                "이미지 생성 툴 연결 안됐으면 뭐 써?",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                "guard:toolbelt_readiness",
+            ),
+            ("FAL_KEY 없으면 어떻게 해?", "toolbelt-readiness", "prepare_toolbelt_readiness", "guard:toolbelt_readiness"),
+            (
+                "메모리 점검해줘",
+                "memory-curation-review",
+                "prepare_memory_curation_review",
+                "guard:memory_curation",
+            ),
+        )
+
+        for message, expected_skill, expected_action, expected_marker in cases:
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("guarded operator questions should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("guarded operator questions should render a card, not a route plan"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], expected_skill)
+            self.assertEqual(decision["confidence"], "high")
+            self.assertEqual(decision["recommendations"][0]["next_action"], expected_action)
+            self.assertIn(expected_marker, decision["recommendations"][0]["matched"])
+            self.assertTrue(
+                any(str(marker).startswith("guard_fast_path:") for marker in decision["recommendations"][0]["matched"])
+            )
+            public = public_route_payload(decision)
+            self.assertNotIn("workflow_route_plan", public)
 
     def test_exact_capability_cards_use_concrete_not_evidence_labels(self) -> None:
         cases = {
