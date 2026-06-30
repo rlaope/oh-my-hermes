@@ -23,12 +23,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 29)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 29)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 35)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 35)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 68)
-        self.assertEqual(payload["summary"]["total_passing_count"], 68)
+        self.assertEqual(payload["summary"]["total_case_count"], 74)
+        self.assertEqual(payload["summary"]["total_passing_count"], 74)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -77,6 +77,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         interventions = {case["id"]: case for case in payload["intervention_cases"]}
         self.assertEqual(interventions["safe-feature-plan"]["observed"]["route_workflow"], "ralplan")
         self.assertEqual(interventions["source-acquisition"]["observed"]["route_workflow"], "source-finder")
+        self.assertEqual(interventions["korean-source-dataset-github"]["observed"]["route_workflow"], "source-finder")
         self.assertEqual(interventions["visual-summary"]["observed"]["route_workflow"], "img-summary")
         self.assertEqual(interventions["korean-meeting-vertical-image-card"]["observed"]["route_workflow"], "img-summary")
         self.assertEqual(
@@ -91,6 +92,16 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(interventions["korean-pretty-meeting-image-card"]["observed"]["route_workflow"], "img-summary")
         self.assertEqual(
             interventions["korean-pretty-meeting-image-card"]["observed"]["next_action"],
+            "prepare_visual_prompt_card",
+        )
+        self.assertEqual(interventions["korean-github-pr-reviewer-image-card"]["observed"]["route_workflow"], "img-summary")
+        self.assertEqual(
+            interventions["korean-github-pr-reviewer-image-card"]["observed"]["next_action"],
+            "prepare_visual_prompt_card",
+        )
+        self.assertEqual(interventions["korean-release-announcement-card"]["observed"]["route_workflow"], "img-summary")
+        self.assertEqual(
+            interventions["korean-release-announcement-card"]["observed"]["next_action"],
             "prepare_visual_prompt_card",
         )
         self.assertEqual(interventions["korean-hermes-coding-team-only"]["observed"]["route_workflow"], "team")
@@ -147,11 +158,35 @@ class RoutingPrecisionTests(unittest.TestCase):
             "prepare_executor_runtime_readiness",
         )
         self.assertEqual(
+            interventions["claude-code-open-this-work-korean"]["observed"]["route_workflow"],
+            "executor-runtime-readiness",
+        )
+        self.assertEqual(
+            interventions["claude-code-open-this-work-korean"]["observed"]["next_action"],
+            "prepare_executor_runtime_readiness",
+        )
+        self.assertEqual(
+            interventions["hermes-direct-coding-owner-korean"]["observed"]["route_workflow"],
+            "executor-runtime-readiness",
+        )
+        self.assertEqual(
+            interventions["hermes-direct-coding-owner-korean"]["observed"]["next_action"],
+            "prepare_executor_runtime_readiness",
+        )
+        self.assertEqual(
             interventions["korean-memory-pile-cleanup"]["observed"]["route_workflow"],
             "memory-curation-review",
         )
         self.assertEqual(
             interventions["korean-memory-pile-cleanup"]["observed"]["next_action"],
+            "prepare_memory_curation_review",
+        )
+        self.assertEqual(
+            interventions["korean-memory-stored-context"]["observed"]["route_workflow"],
+            "memory-curation-review",
+        )
+        self.assertEqual(
+            interventions["korean-memory-stored-context"]["observed"]["next_action"],
             "prepare_memory_curation_review",
         )
         self.assertEqual(interventions["workflow-learning"]["observed"]["route_workflow"], "workflow-learning")
@@ -166,7 +201,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("39/39 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 29/29 expected workflow cases passing", stdout)
+        self.assertIn("Interventions: 35/35 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)
