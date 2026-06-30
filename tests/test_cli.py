@@ -34,6 +34,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("If `omh` is not found", stdout)
         self.assertIn("If this screen appears after `omh uninstall`", stdout)
         self.assertIn("omh --help", stdout)
+        self.assertIn("omh --version", stdout)
+
+    def test_root_version_flag_prints_installed_command_version(self) -> None:
+        status, stdout, stderr = run_cli(["--version"], output_json=False)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(stderr, "")
+        self.assertRegex(stdout.strip(), r"^omh \d+\.\d+\.\d+$")
 
     def test_root_help_explains_command_lanes(self) -> None:
         help_text = build_parser().format_help()

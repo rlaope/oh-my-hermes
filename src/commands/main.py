@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from ..version import __version__
 from ..installer import OmhError
 from .capabilities import (
     _add_capabilities_commands,
@@ -270,6 +271,7 @@ Start:
   omh doctor             Check local OMH health and registration
   omh quickstart         Show what to do next in Hermes
   omh update             Refresh managed skills and update metadata
+  omh --version          Print the installed command version
 
 First five minutes:
   1. Run `omh setup` and accept the recommended choices.
@@ -315,8 +317,12 @@ Run `omh --help` for the full command list."""
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv in (["--version"], ["-V"]):
+        print(f"omh {__version__}")
+        return 0
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
     if not getattr(args, "command", None):
         _print_welcome()
         return 0
