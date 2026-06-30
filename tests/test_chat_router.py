@@ -1279,6 +1279,11 @@ class ChatRouterTests(unittest.TestCase):
                 "guard:coding_progress_status",
             ),
             (
+                "코덱스가 지금 뭐하고있는지 알려줘",
+                "ultraprocess",
+                "guard:coding_progress_status",
+            ),
+            (
                 "Obsidian 말고 markdown folder에 리서치 결과 저장하고 싶어",
                 "research-department",
                 "guard:research_department",
@@ -1313,6 +1318,7 @@ class ChatRouterTests(unittest.TestCase):
             "make a visual one-pager for this release",
             "릴리즈 노트 썸네일로 만들어줘",
             "썸네일 만들어줘",
+            "OMH 루프 기능 소개 이미지 만들어줘",
             "作成して、PRの要約画像",
             "生成一张发布说明海报",
             "make a workflow learning image card",
@@ -1557,8 +1563,8 @@ class ChatRouterTests(unittest.TestCase):
                 "prepare_executor_runtime_readiness",
                 "guard:executor_runtime_readiness",
             ),
-            ("codex 작업 어디까지 됐어?", "ultraprocess", "start_ultraprocess", "guard:coding_progress_status"),
-            ("지금 PR 머지 준비 됐어?", "ultraprocess", "start_ultraprocess", "guard:coding_progress_status"),
+            ("codex 작업 어디까지 됐어?", "ultraprocess", "show_coding_handoff_status", "guard:coding_progress_status"),
+            ("지금 PR 머지 준비 됐어?", "ultraprocess", "show_coding_handoff_status", "guard:coding_progress_status"),
             (
                 "이미지 생성 툴 연결 안됐으면 뭐 써?",
                 "toolbelt-readiness",

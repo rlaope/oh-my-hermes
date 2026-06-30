@@ -30,6 +30,31 @@ def is_omh_intro_question(message: str) -> bool:
         )
     ):
         return False
+    visual_output_markers = (
+        "image",
+        "photo",
+        "picture",
+        "poster",
+        "thumbnail",
+        "infographic",
+        "visual",
+        "card",
+        "이미지",
+        "사진",
+        "그림",
+        "포스터",
+        "썸네일",
+        "인포그래픽",
+        "카드",
+        "画像",
+        "写真",
+        "海报",
+        "图片",
+        "圖片",
+        "图",
+    )
+    if any(marker in text for marker in visual_output_markers):
+        return False
     catalog_only_markers = (
         "available",
         "workflow",
