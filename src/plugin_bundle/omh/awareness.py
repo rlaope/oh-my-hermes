@@ -1409,6 +1409,14 @@ _ROUTE_HINT_RULES = (
             "이미지 생성 연결체",
             "이미지 생성 커넥터",
             "이미지 생성 도구",
+            "이미지 도구 연결",
+            "이미지 도구 연결 안",
+            "이미지 도구 연결 안돼",
+            "이미지 도구 연결 안 됐",
+            "gpt image 연결",
+            "gpt image 연결 안",
+            "gpt 이미지 연결",
+            "gpt 이미지 연결 안",
             "어떤걸로 연결",
             "어떤 걸로 연결",
             "이미지 생성이 막",
@@ -2101,6 +2109,8 @@ _ROUTE_HINT_RULES = (
             "find source candidates",
             "find paper pdf",
             "find arxiv link",
+            "find arxiv paper link",
+            "find paper link",
             "paper pdf link",
             "arxiv link",
             "pdf link",
@@ -2118,6 +2128,8 @@ _ROUTE_HINT_RULES = (
             "github repo 찾아줘",
             "arxiv 링크",
             "arxiv 링크 찾아",
+            "arxiv 논문 링크",
+            "arxiv 논문 링크 찾아",
             "github oss",
             "github oss repo",
             "github oss repos",
@@ -2126,13 +2138,25 @@ _ROUTE_HINT_RULES = (
             "자료 후보",
             "출처 후보",
             "소스 후보",
+            "논문 pdf 찾아",
+            "논문 pdf 찾아서",
+            "논문 pdf 어디서 찾아",
+            "논문 링크 찾아",
+            "논문 링크 찾아서",
             "논문 pdf 링크",
+            "논문 pdf 링크 찾아",
             "pdf 링크",
+            "pdf 찾아",
+            "pdf 찾아서",
             "데이터셋 링크",
             "공개 데이터셋",
             "공개된 프레젠테이션 자료",
             "공개 프레젠테이션 자료",
+            "공개 발표자료 찾아",
+            "공개 발표자료 찾아서",
             "프레젠테이션 자료",
+            "발표자료 찾아",
+            "발표자료 찾아서",
             "깃허브 oss",
             "오픈소스 저장소",
             "레포 찾아",
@@ -3216,6 +3240,57 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
             "dangerous refactoring",
             "위험한 리팩터링",
             "위험한 리팩토링",
+        )
+    ):
+        return True
+    if rule_id == "paper_learning" and any(
+        phrase in text
+        for phrase in (
+            "find paper",
+            "find arxiv",
+            "paper link",
+            "arxiv link",
+            "논문 pdf 찾아",
+            "논문 링크 찾아",
+            "논문 pdf 링크",
+            "arxiv 논문 링크",
+            "arxiv 링크 찾아",
+            "어디서 찾아",
+        )
+    ):
+        return True
+    if rule_id == "materials_package" and any(
+        phrase in text
+        for phrase in (
+            "find public presentation",
+            "public presentation",
+            "public presentations",
+            "공개 발표자료 찾아",
+            "공개 발표자료 찾아서",
+            "발표자료 찾아",
+            "발표자료 찾아서",
+        )
+    ):
+        return True
+    if rule_id == "visual_summary" and any(
+        phrase in text
+        for phrase in (
+            "image tool not connected",
+            "image generation tool is missing",
+            "image generation failed",
+            "image generator connector",
+            "which image generator",
+            "이미지 도구 연결",
+            "이미지 도구 연결 안",
+            "이미지 생성 도구",
+            "이미지 생성 연결",
+            "이미지 생성 커넥터",
+            "gpt image 연결",
+            "gpt image 연결 안",
+            "gpt 이미지 연결",
+            "gpt 이미지 연결 안",
+            "어떤걸로 연결",
+            "어떤 걸로 연결",
         )
     ):
         return True

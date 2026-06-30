@@ -3172,10 +3172,10 @@ def explicit_skill_invocation(message: str, names: set[str]) -> str | None:
     }:
         candidate = words[2]
         if candidate in names:
-            return candidate
+            return None if _explicit_skill_candidate_is_negated(stripped, candidate) else candidate
         alias = _EXPLICIT_SKILL_ALIASES.get(candidate)
         if alias in names:
-            return alias
+            return None if _explicit_skill_candidate_is_negated(stripped, candidate, alias) else alias
     first = stripped.split(maxsplit=1)[0].strip(":,").lower()
     used_prefix = False
     for prefix in sorted(EXPLICIT_INVOCATION_PREFIXES, key=len, reverse=True):
@@ -3184,15 +3184,45 @@ def explicit_skill_invocation(message: str, names: set[str]) -> str | None:
             used_prefix = True
             break
     if first in names:
-        return first
+        return None if _explicit_skill_candidate_is_negated(stripped, first) else first
     alias = _EXPLICIT_SKILL_ALIASES.get(first)
     if alias in names:
-        return alias
+        return None if _explicit_skill_candidate_is_negated(stripped, first, alias) else alias
     if used_prefix:
         alias = _PREFIXED_SKILL_ALIASES.get(first)
         if alias in names:
-            return alias
+            return None if _explicit_skill_candidate_is_negated(stripped, first, alias) else alias
     return None
+
+
+def _explicit_skill_candidate_is_negated(message: str, *candidates: str) -> bool:
+    normalized_message = normalized_phrase(message)
+    for candidate in candidates:
+        normalized_candidate = normalized_phrase(candidate)
+        if not normalized_candidate or normalized_candidate not in normalized_message:
+            continue
+        if _contains_phrase(
+            normalized_message,
+            (
+                f"{normalized_candidate} 말고",
+                f"{normalized_candidate}은 말고",
+                f"{normalized_candidate}는 말고",
+                f"{normalized_candidate}이 아니라",
+                f"{normalized_candidate}가 아니라",
+                f"{normalized_candidate} 아니라",
+                f"{normalized_candidate} 아니고",
+                f"{normalized_candidate} 대신",
+                f"not {normalized_candidate}",
+                f"without {normalized_candidate}",
+                f"instead of {normalized_candidate}",
+                f"other than {normalized_candidate}",
+                f"except {normalized_candidate}",
+                f"do not use {normalized_candidate}",
+                f"don't use {normalized_candidate}",
+            ),
+        ):
+            return True
+    return False
 
 
 def active_routing_guard_rules(
