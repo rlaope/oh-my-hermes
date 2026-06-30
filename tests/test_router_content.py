@@ -24,6 +24,7 @@ from omh.skill_pack import (
 )
 from omh.playbooks import inspect_playbook, list_playbooks
 from omh.plugin_bundle.omh.awareness import ROUTER_KEYWORD_SKILLS, router_keyword_summary
+from omh.quality.grounded_score import GROUNDED_SCENARIOS
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
     SkillDefinition,
@@ -1636,6 +1637,18 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh_use_case_demo_card/v1", text)
         self.assertIn("examples/use-cases/g1-g10-demo-cards.json", text)
         self.assertIn("10/10", text)
+        self.assertNotIn("over 28 representative messages", text)
+        matrix_start = text.index("| Scenario | User message tested | Chat route | Playbook | Coding handoff behavior | Score |")
+        matrix_end = text.index("\n\nUser-facing effect:", matrix_start)
+        matrix_rows = [
+            line
+            for line in text[matrix_start:matrix_end].splitlines()
+            if line.startswith("| ") and not line.startswith("| ---")
+        ][1:]
+        self.assertEqual(len(matrix_rows), len(GROUNDED_SCENARIOS))
+        for scenario in GROUNDED_SCENARIOS:
+            self.assertIn(f"| {scenario.title} |", text)
+            self.assertIn(f"`{scenario.message}`", text)
         self.assertIn("$ultraprocess research the repo", text)
         self.assertIn("feedback-triage", text)
         self.assertIn("prepare weekly ops review from customer feedback and release risks", text)
