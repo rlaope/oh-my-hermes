@@ -4364,8 +4364,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Source: discord", stdout)
         self.assertIn("Workflow: ralplan", stdout)
         self.assertIn("Harness: planning", stdout)
-        self.assertIn("Action: routing to a workflow (`dispatch`)", stdout)
-        self.assertIn("Next action: preparing a reviewed plan (`present_plan`)", stdout)
+        self.assertIn("Action: routing to a workflow", stdout)
+        self.assertIn("Next action: preparing a reviewed plan", stdout)
+        self.assertNotIn("(`dispatch`)", stdout)
+        self.assertNotIn("(`present_plan`)", stdout)
         self.assertIn("Confidence: high (score 32)", stdout)
         self.assertIn("Why:", stdout)
         self.assertIn("Matched safe feature-change language", stdout)
@@ -4374,9 +4376,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Action hint:", stdout)
         self.assertIn("Route to `ralplan` and start by preparing a reviewed plan", stdout)
         self.assertIn("Top recommendations:", stdout)
-        self.assertIn("- ralplan: preparing a reviewed plan (`present_plan`) (high, score 32)", stdout)
+        self.assertIn("- ralplan: preparing a reviewed plan (high, score 32)", stdout)
         self.assertIn("Route plan:", stdout)
-        self.assertIn("- 1. triage: feedback-triage - prepared, not observed (`prepared_not_observed`)", stdout)
+        self.assertIn("- 1. triage: feedback-triage - prepared, not observed", stdout)
+        self.assertNotIn("(`prepared_not_observed`)", stdout)
         self.assertIn("Boundary:", stdout)
         self.assertIn("A recommendation or draft plan is not execution evidence.", stdout)
         self.assertIn("Use --json for the full machine-readable route payload.", stdout)
@@ -4404,7 +4407,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
             self.assertIn("Workflow: feedback-triage", stdout)
-            self.assertIn("Next action: triaging the feedback signal (`triage_feedback`)", stdout)
+            self.assertIn("Next action: triaging the feedback signal", stdout)
+            self.assertNotIn("(`triage_feedback`)", stdout)
             self.assertIn("Runtime record:", stdout)
             self.assertIn("run_id: ", stdout)
             self.assertIn("status: recorded metadata only", stdout)
@@ -4522,22 +4526,23 @@ class CliTests(unittest.TestCase):
         self.assertIn("Source: discord", stdout)
         self.assertIn("Status: hinted", stdout)
         self.assertIn("Workflow: img-summary", stdout)
-        self.assertIn("Next action: preparing an image prompt card (`prepare_visual_prompt_card`)", stdout)
+        self.assertIn("Next action: preparing an image prompt card", stdout)
+        self.assertNotIn("(`prepare_visual_prompt_card`)", stdout)
         self.assertIn("Hints: 2", stdout)
         self.assertIn("Matched cues: image", stdout)
         self.assertIn("Adjacent workflows: materials-package, report-package, research-department", stdout)
         self.assertIn("[omh] img-summary looks relevant.", stdout)
         self.assertIn("Hint details:", stdout)
-        self.assertIn("- img-summary: preparing an image prompt card (`prepare_visual_prompt_card`) (materials_and_visuals)", stdout)
+        self.assertIn("- img-summary: preparing an image prompt card (materials_and_visuals)", stdout)
         self.assertIn("  matched: image", stdout)
         self.assertIn(
-            "- automation-blueprint: preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`) "
-            "(automation_and_status)",
+            "- automation-blueprint: preparing a scheduled-ops blueprint (automation_and_status)",
             stdout,
         )
         self.assertIn("  matched: cron", stdout)
         self.assertIn("Actions:", stdout)
-        self.assertIn("- Open img-summary (`open_workflow`) - enabled", stdout)
+        self.assertIn("- Open img-summary - enabled", stdout)
+        self.assertNotIn("(`open_workflow`)", stdout)
         self.assertIn("Checkpoint:", stdout)
         self.assertIn("Before generic tools, check OMH prep/status/learning", stdout)
         self.assertIn("Not evidence yet:", stdout)
@@ -4570,8 +4575,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Status: hinted", stdout)
         self.assertIn("Workflow: loop", stdout)
-        self.assertIn("Next action: checking whether the goal is loopable (`assess_loopability`)", stdout)
-        self.assertIn("- loop: checking whether the goal is loopable (`assess_loopability`) (intent_to_plan)", stdout)
+        self.assertIn("Next action: checking whether the goal is loopable", stdout)
+        self.assertIn("- loop: checking whether the goal is loopable (intent_to_plan)", stdout)
+        self.assertNotIn("(`assess_loopability`)", stdout)
 
         status, stdout, stderr = run_cli(
             ["chat", "route-hint", "--source", "discord", "--summary", "open the OMH picker"],
@@ -4582,9 +4588,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Status: hinted", stdout)
         self.assertIn("Workflow: oh-my-hermes", stdout)
-        self.assertIn("Next action: opening the workflow picker (`choose_skill`)", stdout)
-        self.assertIn("- oh-my-hermes: opening the workflow picker (`choose_skill`) (intent_to_plan)", stdout)
-        self.assertIn("- Open omh (`open_workflow`) - enabled", stdout)
+        self.assertIn("Next action: opening the workflow picker", stdout)
+        self.assertIn("- oh-my-hermes: opening the workflow picker (intent_to_plan)", stdout)
+        self.assertIn("- Open omh - enabled", stdout)
+        self.assertEqual(stdout.count("- Open omh - enabled"), 1)
+        self.assertNotIn("(`choose_skill`)", stdout)
 
         status, stdout, stderr = run_cli(
             ["chat", "route-hint", "--source", "discord", "--json", "open the OMH picker"],
@@ -4609,12 +4617,13 @@ class CliTests(unittest.TestCase):
         self.assertIn("Source: slack", stdout)
         self.assertIn("Status: no_hint", stdout)
         self.assertIn("Workflow: none", stdout)
-        self.assertIn("Next action: opening the picker or asking one clarification (`open_picker_or_clarify`)", stdout)
+        self.assertIn("Next action: opening the picker or asking one clarification", stdout)
+        self.assertNotIn("(`open_picker_or_clarify`)", stdout)
         self.assertIn("Hints: 0", stdout)
         self.assertNotIn("Workflow: unknown", stdout)
         self.assertIn("[omh] no strong workflow hint yet.", stdout)
-        self.assertIn("- Open omh (`open_picker`) - enabled", stdout)
-        self.assertIn("- Clarify (`clarify`) - enabled", stdout)
+        self.assertIn("- Open omh - enabled", stdout)
+        self.assertIn("- Clarify - enabled", stdout)
 
     def test_chat_route_hint_can_emit_manual_prompt_context(self) -> None:
         status, stdout, stderr = run_cli(
@@ -4638,9 +4647,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Workflow: workflow-learning", stdout)
         self.assertIn(
-            "Next action: recording a missed-route improvement candidate (`record_missed_route`)",
+            "Next action: recording a missed-route improvement candidate",
             stdout,
         )
+        self.assertNotIn("(`record_missed_route`)", stdout)
         self.assertIn("Prompt context: included", stdout)
 
     def test_chat_route_hint_rejects_conflicting_output_modes(self) -> None:
