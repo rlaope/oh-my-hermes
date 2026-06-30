@@ -117,6 +117,58 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertEqual(current["row_id"], executors[0]["id"])
             self.assertEqual(current["run_id"], executors[0]["evidence"]["run_id"])
 
+    def test_menubar_status_defaults_to_human_readable_output(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            self.assertEqual(run_cli(["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup"])[0], 0)
+            self.assertEqual(
+                run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "--hermes-home",
+                        str(hermes_home),
+                        "coding",
+                        "delegate",
+                        "--record",
+                        "--executor",
+                        "codex",
+                        "implement safe status feature without overclaiming",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "menubar", "status"],
+                output_json=False,
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertTrue(stdout.startswith("OMH menu bar status\n"))
+            self.assertIn("Summary\n", stdout)
+            self.assertIn("Agent Status\n", stdout)
+            self.assertIn("Coding Agent\n", stdout)
+            self.assertIn("Evidence\n", stdout)
+            self.assertIn("Coding agent: Codex", stdout)
+            self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "menubar", "status", "--json"],
+                output_json=False,
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "menubar_status/v1")
+            self.assertEqual(payload["settings"]["coding_handoff"]["label"], "Coding agent: Codex")
+
     def test_process_overlay_applies_pid_status_and_model_only_when_fresh(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

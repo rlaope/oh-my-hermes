@@ -147,28 +147,35 @@ remain distinguishable.
 If the target Hermes runtime requires a separate plugin enable command, follow
 that runtime's plugin enable/reload step.
 
-For native menu bar or status-widget integrations, use the platform-neutral
-view model:
+For a quick terminal check of the native menu bar/status-widget surface, use the
+human-readable summary:
 
 ```sh
 omh menubar status
 ```
 
-`omh menubar status` itself emits `menubar_status/v1` JSON with separate
-`hermes_agents` and `external_coding_executors` sections, friendly labels such
-as `OMH connection: Ready`, `Hermes targets: 2`, `Coding agent: Codex`, and
-`Open mode: Ask before opening Codex`, plus source/model icon IDs with tooltip
-text. It also includes `display.menu_cards`, a compact Agent Status/Coding
-Agent/Evidence card model for native menu bar surfaces. The Agent Status card is
-a small `Agent | PID | Status` list. Codex and other coding tools are external
-executors, not Hermes agents. Without an explicit process overlay or local
-process observation, the payload reports configured/prepared state only and
-shows PID as not observed.
+It prints Summary, Agent Status, Coding Agent, Evidence, and Observation
+sections instead of a raw JSON blob. For native menu bar, status-widget, wrapper,
+or automation integrations, use the platform-neutral view model:
+
+```sh
+omh menubar status --json
+```
+
+The `menubar_status/v1` JSON has separate `hermes_agents` and
+`external_coding_executors` sections, friendly labels such as `OMH connection:
+Ready`, `Hermes targets: 2`, `Coding agent: Codex`, and `Open mode: Ask before
+opening Codex`, plus source/model icon IDs with tooltip text. It also includes
+`display.menu_cards`, a compact Agent Status/Coding Agent/Evidence card model
+for native menu bar surfaces. The Agent Status card is a small `Agent | PID |
+Status` list. Codex and other coding tools are external executors, not Hermes
+agents. Without an explicit process overlay or local process observation, the
+payload reports configured/prepared state only and shows PID as not observed.
 
 On macOS, a normal user-scope `omh setup` also attempts to build and start the
 small OMH menu bar helper when `swiftc` is available. The helper lives under
 `~/.omh/menubar`, is started with a user LaunchAgent, and refreshes the same
-`omh menubar status --observe-local-processes` payload. The visible menu is
+`omh menubar status --observe-local-processes --json` payload. The visible menu is
 intentionally grouped as Agent Status, Coding Agent, and Evidence sections
 instead of a raw text list, and it shows process/PID detail only when a fresh
 overlay or explicit local observation saw that process. Use explicit commands
