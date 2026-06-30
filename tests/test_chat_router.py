@@ -92,6 +92,18 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "Claude Code session status 알려줘",
+                "ultraprocess",
+                "show_coding_handoff_status",
+                None,
+            ),
+            (
+                "setup이 잘 됐는지 확인해줘",
+                "doctor",
+                "run_local_operator_check",
+                None,
+            ),
+            (
                 "이미지 생성 요청에서 OMH 안 썼어. 다음엔 img-summary 쓰게 기록해줘",
                 "workflow-learning",
                 "record_missed_route",
@@ -122,9 +134,27 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "dangerous refactor before release",
+                "ralplan",
+                "present_plan",
+                None,
+            ),
+            (
                 "이 이슈 PR로 만들 수 있게 정리해줘",
                 "ralplan",
                 "present_plan",
+                None,
+            ),
+            (
+                "find datasets and github repos for agent memory",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
+                "100k star OSS 만들기 위해 first-run friction 줄여줘",
+                "loop",
+                "assess_loopability",
                 None,
             ),
             (

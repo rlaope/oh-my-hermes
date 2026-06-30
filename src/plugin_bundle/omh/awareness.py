@@ -684,6 +684,8 @@ _ROUTE_HINT_RULES = (
         "fallback_action": "ask_for_source_kind_scope_or_downstream_intent",
         "phrases": (
             "find papers datasets github repos and public presentations",
+            "find datasets and github repos",
+            "datasets and github repos",
             "papers datasets github repos",
             "public presentations about",
             "source candidates",
@@ -1231,7 +1233,7 @@ _ROUTE_HINT_RULES = (
         "id": "doctor_health",
         "workflow": "doctor",
         "lane": "automation_and_status",
-        "next_action": "check_install_or_setup_health",
+        "next_action": "run_local_operator_check",
         "reason": "The user is asking whether OMH install, setup, update, or skill registration health looks correct.",
         "fallback_action": "run_doctor_or_show_next_repair_step",
         "phrases": (
@@ -1255,7 +1257,16 @@ _ROUTE_HINT_RULES = (
             "setup에서 위아래키",
             "위아래키 누르면 느려",
             "설치 잘 됐",
+            "설정 잘 됐",
+            "설정 잘됐",
+            "세팅 잘 됐",
+            "세팅 잘됐",
             "setup 잘 됐",
+            "setup 잘됐",
+            "setup이 잘 됐",
+            "setup이 잘됐",
+            "setup 됐는지",
+            "setup 확인",
         ),
         "tokens": ("doctor",),
         "adjacent_workflows": ("agent-ops-review", "toolbelt-readiness"),
@@ -1298,6 +1309,8 @@ _ROUTE_HINT_RULES = (
             "codex progress",
             "codex status",
             "claude code status",
+            "claude code session status",
+            "claude session status",
             "is codex done",
             "did the coding agent finish",
             "코딩 작업 어디까지",
@@ -1313,7 +1326,15 @@ _ROUTE_HINT_RULES = (
             "코덱스 진행상황",
             "코덱스 상태",
             "claude code가 지금 어디까지",
+            "claude code 작업 어디까지",
+            "claude code 작업이 어디까지",
+            "claude code 진행상황",
+            "claude code 상태",
             "클로드 코드가 지금 어디까지",
+            "클로드 코드 작업 어디까지",
+            "클로드 코드 작업이 어디까지",
+            "클로드 코드 진행상황",
+            "클로드 코드 세션 상태",
             "codex 작업이 진행중인지",
             "코덱스 작업이 진행중인지",
             "PR 머지 준비",
@@ -1406,6 +1427,12 @@ _ROUTE_HINT_RULES = (
             "loopability",
             "star-worthy",
             "star worthy",
+            "100k star",
+            "10k star",
+            "star oss",
+            "star급",
+            "스타급",
+            "스타 oss",
             "north star",
             "루프",
         ),
@@ -1853,6 +1880,8 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             if _rule_suppressed_by_omh_quality_intent(rule, omh_quality_intent):
                 continue
             if _rule_suppressed_by_reference_intent(rule, intent):
+                continue
+            if _rule_suppressed_by_context(rule, routing_normalized):
                 continue
             phrase_matches = [phrase for phrase in rule["phrases"] if phrase in routing_normalized]
             token_matches = [token for token in rule["tokens"] if token in tokens]
@@ -2505,6 +2534,23 @@ def _rule_suppressed_by_reference_intent(rule: dict[str, object], intent: object
 
 def _rule_suppressed_by_omh_quality_intent(rule: dict[str, object], intent: object) -> bool:
     return bool(getattr(intent, "applies", False)) and str(rule.get("id", "")) == "customer_signal"
+
+
+def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
+    rule_id = str(rule.get("id", ""))
+    if rule_id == "release_gate_review" and any(
+        phrase in text
+        for phrase in (
+            "risky refactor",
+            "risky refactoring",
+            "dangerous refactor",
+            "dangerous refactoring",
+            "위험한 리팩터링",
+            "위험한 리팩토링",
+        )
+    ):
+        return True
+    return False
 
 
 def _unique_strings(values: object) -> list[str]:

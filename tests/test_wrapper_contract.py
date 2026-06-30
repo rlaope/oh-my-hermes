@@ -1756,6 +1756,20 @@ class WrapperContractTests(unittest.TestCase):
         loopback = build_chat_interaction_payload("loopback interface on OMH is broken", source="discord")
         self.assertNotEqual(loopback["next_action"], "start_loop_cycle")
 
+    def test_loopable_north_star_stays_loop_before_coding_handoff(self) -> None:
+        payload = build_chat_interaction_payload("100k star OSS 만들기 위해 first-run friction 줄여줘", source="discord")
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["route"]["selected_skill"], "loop")
+        self.assertEqual(payload["next_action"], "choose_permission_profile")
+        self.assertEqual(payload["chat_response"]["kind"], "loop")
+        self.assertNotIn("delegation", payload)
+        self.assertEqual(payload["chat_response"]["state"]["loopability_assessment"]["loopability"], "loopable")
+        actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
+        self.assertIn("choose_permission_profile", actions)
+        self.assertIn("start_loop", actions)
+        self.assertTrue(actions["start_loop"]["enabled"])
+
     def test_ultraprocess_interaction_exposes_process_actions(self) -> None:
         cases = (
             (
