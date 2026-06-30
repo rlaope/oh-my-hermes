@@ -10,7 +10,11 @@ from typing import Any
 from ..goal_loop import explicit_loop_invocation_signal
 from ..ingress import CHAT_SOURCES, extract_message_text
 from ..loopability import assess_loopability
-from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
+from .catalog_questions import (
+    is_file_or_text_lookup_question,
+    is_native_entrypoint_question,
+    is_skill_catalog_question,
+)
 from .action_copy import next_action_label as _route_next_action_label
 from .intent import scrub_diagnostic_status_text
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
@@ -1852,15 +1856,34 @@ def _catalog_fast_path_decision(
     if not direct_picker and not catalog_picker:
         return _CatalogFastPathResult(decision=None, catalog_question=catalog_question)
 
-    matched = ("direct_picker_alias",) if direct_picker else ("catalog_question",)
+    native_entrypoint_question = is_native_entrypoint_question(routing_message)
+    native_next_action = (
+        _native_entrypoint_next_action(routing_message)
+        if native_entrypoint_question and not direct_picker
+        else ""
+    )
+    matched = (
+        ("direct_picker_alias",)
+        if direct_picker
+        else ("native_entrypoint_question",)
+        if native_entrypoint_question
+        else ("catalog_question",)
+    )
     score = 12 if direct_picker else 11
     reason = (
         "Direct OMH picker alias; show the workflow picker without scoring every workflow."
         if direct_picker
+        else "Native OMH entrypoint question; show the command preview or workflow picker without scoring every workflow."
+        if native_entrypoint_question
         else "Catalog question; show the OMH workflow picker instead of asking for shell command approval."
     )
     selected_harness = primary_harness_for_skill(_ROUTER_SKILL)
-    recommendation = _router_picker_recommendation(message, matched=matched, score=score)
+    recommendation = _router_picker_recommendation(
+        message,
+        matched=matched,
+        score=score,
+        next_action=native_next_action or "choose_skill",
+    )
     return _CatalogFastPathResult(
         decision=ChatRouteDecision(
             schema_version=1,
@@ -3145,6 +3168,8 @@ def _router_direct_answer_recommendation(query: str) -> dict[str, object]:
 
 def _generic_omh_catalog_question(message: str) -> bool:
     text = message.strip().lower()
+    if is_native_entrypoint_question(message):
+        return True
     if _is_broad_capability_catalog_question(text):
         return True
     has_omh_context = any(marker in text for marker in ("omh", "oh-my-hermes", "oh my hermes"))
@@ -3182,8 +3207,26 @@ def _is_specific_capability_question_shape(text: str) -> bool:
     )
 
 
-def _router_picker_recommendation(query: str, *, matched: tuple[str, ...], score: int) -> dict[str, object]:
+def _native_entrypoint_next_action(message: str) -> str:
+    normalized = unicodedata.normalize("NFKC", message).casefold()
+    if any(marker in normalized for marker in ("./", "preview", "autocomplete", "미리보기", "자동완성", "안 떠", "안떠", "안 보", "안보")):
+        return "show_command_preview"
+    return "choose_skill"
+
+
+def _router_picker_recommendation(
+    query: str,
+    *,
+    matched: tuple[str, ...],
+    score: int,
+    next_action: str = "choose_skill",
+) -> dict[str, object]:
     definition = _router_skill_definition()
+    wrapper_guidance = (
+        "Render the OMH command preview or fallback Open omh card in chat; do not ask the user to approve `omh list` for catalog discovery."
+        if next_action == "show_command_preview"
+        else "Render the OMH workflow picker in chat; do not ask the user to approve `omh list` for catalog discovery."
+    )
     return {
         "skill": definition.name,
         "description": definition.description,
@@ -3195,13 +3238,11 @@ def _router_picker_recommendation(query: str, *, matched: tuple[str, ...], score
         "confidence": "high",
         "matched": list(matched),
         "why": "Matched the OMH workflow picker entry point.",
-        "next_action": "choose_skill",
+        "next_action": next_action,
         "evidence_boundary": (
             "Skill picker routing is not plan acceptance, dispatch, execution, review, CI, or verification evidence."
         ),
-        "wrapper_guidance": (
-            "Render the OMH workflow picker in chat; do not ask the user to approve `omh list` for catalog discovery."
-        ),
+        "wrapper_guidance": wrapper_guidance,
         "suggested_prompt": f"Use oh-my-hermes for: {query}",
     }
 

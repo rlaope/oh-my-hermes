@@ -1048,6 +1048,8 @@ class EfficiencyContractTests(unittest.TestCase):
             ("매일 아침 리서치 요약을 보내게 준비해줘", "automation-blueprint"),
             ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board"),
             ("multiple Hermes agents target topology 어떻게 관리해?", "agent-board"),
+            ("슬랙에서 /omh 치면 뭐가 떠야해?", "oh-my-hermes"),
+            ("./ 쳤는데 omh가 안 떠", "oh-my-hermes"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning"),
         )
 
@@ -1204,6 +1206,8 @@ class EfficiencyContractTests(unittest.TestCase):
             ),
             ("merge할때도 프리렌 author로 머지해", "ultraprocess", "operator_surface_fast_path:delivery"),
             ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board", "operator_surface_fast_path:agent_board"),
+            ("슬랙에서 /omh 치면 뭐가 떠야해?", "oh-my-hermes", "native_entrypoint_question"),
+            ("./ 쳤는데 omh가 안 떠", "oh-my-hermes", "native_entrypoint_question"),
             ("리드미 개선해줘", "ultraprocess", "operator_surface_fast_path:delivery"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning", "workflow_learning_fast_path"),
         )

@@ -695,7 +695,12 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
 
     def test_natural_picker_request_uses_catalog_route(self) -> None:
-        for message in ("open the OMH picker", "show the OMH menu", "open OMH workflow picker"):
+        for message in (
+            "open the OMH picker",
+            "show the OMH menu",
+            "open OMH workflow picker",
+            "슬랙에서 /omh 치면 뭐가 떠야해?",
+        ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
                 public = public_route_payload(decision)
@@ -705,6 +710,30 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
                 self.assertEqual(public["route_explanation"]["next_action_label"], "opening the workflow picker")
                 self.assertIn("start by opening the workflow picker", public["route_explanation"]["recommended_reply"])
+
+    def test_native_command_preview_questions_skip_full_recommendation_scoring(self) -> None:
+        for message in (
+            "./ 쳤는데 omh가 안 떠",
+            "discord에서 ./ 입력하면 omh 미리보기 떠야해?",
+            "why does the OMH command preview not show in Slack?",
+        ):
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("native entrypoint questions should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("native entrypoint questions should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+            self.assertEqual(decision["recommendations"][0]["matched"], ["native_entrypoint_question"])
+            self.assertEqual(decision["recommendations"][0]["next_action"], "show_command_preview")
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], "show_command_preview")
 
     def test_generic_omh_catalog_question_uses_fast_catalog_route(self) -> None:
         for message in (

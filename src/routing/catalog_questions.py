@@ -120,6 +120,76 @@ _EXPLICIT_CATALOG_PHRASES = (
     "목록",
     "리스트",
 )
+_NATIVE_ENTRYPOINT_QUESTION_MARKERS = (
+    "/omh",
+    "./omh",
+    "./",
+    "slash command",
+    "slash commands",
+    "command preview",
+    "autocomplete",
+    "native command",
+    "open omh",
+    "open omh card",
+    "discord command",
+    "slack command",
+    "telegram command",
+    "messenger command",
+    "messenger-native",
+    "input box",
+    "입력창",
+    "미리보기",
+    "자동완성",
+    "슬래시 커맨드",
+    "슬래시 명령",
+    "명령 미리보기",
+    "메신저 명령",
+    "디스코드 명령",
+    "슬랙 명령",
+    "텔레그램 명령",
+)
+_NATIVE_ENTRYPOINT_SURFACE_MARKERS = (
+    "discord",
+    "slack",
+    "telegram",
+    "messenger",
+    "wrapper",
+    "chat",
+    "hermes tui",
+    "디스코드",
+    "슬랙",
+    "텔레그램",
+    "메신저",
+    "채팅",
+    "헤르메스 tui",
+)
+_NATIVE_ENTRYPOINT_STATE_MARKERS = (
+    "show",
+    "shown",
+    "appear",
+    "appears",
+    "visible",
+    "not showing",
+    "does not show",
+    "doesn't show",
+    "not appear",
+    "missing",
+    "register",
+    "registration",
+    "menu",
+    "picker",
+    "preview",
+    "떠",
+    "뜬",
+    "보여",
+    "보임",
+    "안 떠",
+    "안떠",
+    "안 보",
+    "안보",
+    "등록",
+    "메뉴",
+)
 _EXPLICIT_OMH_CAPABILITY_PHRASES = (
     "what can omh do",
     "what can oh-my-hermes do",
@@ -552,6 +622,8 @@ def is_skill_catalog_question(message: str) -> bool:
         return False
     if _is_workflow_learning_feedback(search_texts):
         return False
+    if is_native_entrypoint_question(message):
+        return True
     if _contains_catalog_token(search_texts, _EXPLICIT_OMH_CAPABILITY_PHRASES):
         return True
     if _is_named_workflow_catalog_question(search_texts):
@@ -658,6 +730,20 @@ def _is_missed_workflow_feedback(search_texts: tuple[str, ...]) -> bool:
 
 def _is_workflow_learning_feedback(search_texts: tuple[str, ...]) -> bool:
     return _contains_catalog_token(search_texts, _WORKFLOW_LEARNING_FEEDBACK_MARKERS)
+
+
+@lru_cache(maxsize=4096)
+def is_native_entrypoint_question(message: str) -> bool:
+    lowered = message.strip().lower()
+    if not lowered:
+        return False
+    search_texts = _catalog_search_texts(lowered)
+    if not _contains_catalog_token(search_texts, _NATIVE_ENTRYPOINT_QUESTION_MARKERS):
+        return False
+    has_omh_context = _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS)
+    has_surface_context = _contains_catalog_token(search_texts, _NATIVE_ENTRYPOINT_SURFACE_MARKERS)
+    has_state_context = _contains_catalog_token(search_texts, _NATIVE_ENTRYPOINT_STATE_MARKERS)
+    return has_omh_context or (has_surface_context and has_state_context)
 
 
 def _is_operator_action_question(search_texts: tuple[str, ...]) -> bool:
