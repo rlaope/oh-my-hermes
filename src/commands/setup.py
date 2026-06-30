@@ -51,7 +51,7 @@ from ..team_profiles import (
     list_team_profile_packs,
     operating_model_ids,
 )
-from .common import _action_label, _action_label_with_id, _paths, _print_json, _wants_json
+from .common import _action_label, _paths, _print_json, _wants_json
 from .language import LANGUAGE_CODES, language_from_env, language_options, normalize_language, tr
 
 INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh"

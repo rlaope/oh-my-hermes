@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import hashlib
 
 from ..ingress import CHAT_SOURCES
-from ..routing.action_copy import next_action_label_with_id
+from ..routing.action_copy import next_action_label
 from ..wrapper.contract import build_chat_interaction_payload
 
 
@@ -280,7 +280,7 @@ def format_chat_card_coverage_summary(payload: dict[str, object]) -> str:
     for row in rows:
         observed = _nested(row, "observed")
         status = "ok" if row.get("passed") else "needs attention"
-        next_action = next_action_label_with_id(str(observed.get("next_action", "unknown")))
+        next_action = next_action_label(str(observed.get("next_action", "unknown")))
         lines.append(
             f"- {row.get('title', 'Untitled card')}: {status}; "
             f"{observed.get('workflow', 'unknown')} -> {next_action}; card={observed.get('kind', 'unknown')}"

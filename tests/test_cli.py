@@ -90,9 +90,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH context brief", stdout)
         self.assertIn(
-            "Route hint: img-summary -> preparing an image prompt card (`prepare_visual_prompt_card`)",
+            "Route hint: img-summary -> preparing an image prompt card",
             stdout,
         )
+        self.assertNotIn("(`prepare_visual_prompt_card`)", stdout)
         self.assertIn("Workflow lanes", stdout)
         self.assertIn("Generic tool checkpoint", stdout)
         self.assertIn("Do not skip OMH merely because a generic tool", stdout)
@@ -105,9 +106,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         self.assertIn(
-            "Catalog question: opening the workflow picker (`show_workflow_picker`) via omh_capabilities",
+            "Catalog question: opening the workflow picker via omh_capabilities",
             stdout,
         )
+        self.assertNotIn("(`show_workflow_picker`)", stdout)
 
         status, stdout, stderr = run_cli(
             [
@@ -1171,9 +1173,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(demo["wrapper_card"]["status"], "prepared_not_observed")
         self.assertIn("prepared_not_observed", demo["chat_surface"]["status_line"])
         self.assertIn(
-            "Route: automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`).",
+            "Route: automation-blueprint -> preparing a scheduled-ops blueprint.",
             demo["chat_surface"]["body_lines"],
         )
+        self.assertNotIn("(`prepare_scheduled_ops_blueprint`)", json.dumps(demo["chat_surface"]))
         self.assertEqual(demo["actions"][0]["id"], "prepare_scheduled_ops_blueprint")
         self.assertEqual(demo["actions"][0]["label"], "Prepare a scheduled-ops blueprint")
         self.assertEqual(demo["actions"][0]["kind"], "hermes_prompt")
@@ -1187,9 +1190,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         self.assertIn(
-            "automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`)",
+            "automation-blueprint -> preparing a scheduled-ops blueprint",
             stdout,
         )
+        self.assertNotIn("(`prepare_scheduled_ops_blueprint`)", stdout)
         self.assertNotIn("automation-blueprint -> prepare_scheduled_ops_blueprint (", stdout)
 
         status, stdout, stderr = run_cli(["cases", "demo", "--all", "--json"], output_json=False)
@@ -6039,9 +6043,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Result: 47/47 scenarios at 10/10 (all passing)", stdout)
         self.assertIn(
             "Startup SaaS product triage: 10/10 ok; "
-            "feedback-triage -> triaging the feedback signal (`triage_feedback`); handoff_absent",
+            "feedback-triage -> triaging the feedback signal; handoff_absent",
             stdout,
         )
+        self.assertNotIn("(`triage_feedback`)", stdout)
         self.assertIn("Boundary: This is deterministic local contract-compliance evaluation", stdout)
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
@@ -6081,10 +6086,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("Generic ack responses: 0", stdout)
         self.assertIn(
             "Scheduled ops blueprint: ok; "
-            "automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`); "
+            "automation-blueprint -> preparing a scheduled-ops blueprint; "
             "card=automation_blueprint",
             stdout,
         )
+        self.assertNotIn("(`prepare_scheduled_ops_blueprint`)", stdout)
         self.assertIn("Boundary: This is deterministic local wrapper-card coverage", stdout)
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
@@ -6142,9 +6148,10 @@ class CliTests(unittest.TestCase):
         self.assertIn("Hints present: 72/72; missing hints: 0; mismatches: 0", stdout)
         self.assertIn(
             "AI agent product QA: ok; "
-            "route=ultraqa hint=ultraqa next=opening the selected workflow (`dispatch_to_workflow`)",
+            "route=ultraqa hint=ultraqa next=opening the selected workflow",
             stdout,
         )
+        self.assertNotIn("(`dispatch_to_workflow`)", stdout)
         self.assertIn("Boundary: Route hint alignment proves deterministic local agreement", stdout)
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
