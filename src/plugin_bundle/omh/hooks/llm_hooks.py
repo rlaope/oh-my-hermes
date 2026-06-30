@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from ..awareness import awareness_context_matches_message, awareness_primer_context, awareness_route_hint_context
+from ..awareness import (
+    awareness_context_matches_message,
+    awareness_primer_context,
+    awareness_route_hint,
+    awareness_route_hint_context_from_payload,
+)
 from ..context_brief import build_context_brief
 from ..host_observation import observe_plugin_hook_call
 from ..omh_roles import extract_role_marker, role_context_payload
@@ -25,15 +30,24 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     payload: dict[str, object] = {}
     user_message = str(kwargs.get("user_message", "") or "")
     is_first_turn = bool(kwargs.get("is_first_turn", False))
-    route_hint_context = awareness_route_hint_context(user_message)
-    should_include_awareness = is_first_turn or bool(route_hint_context) or awareness_context_matches_message(user_message)
-    if kwargs.get("include_omh_awareness", True) is not False and should_include_awareness:
+    include_awareness = kwargs.get("include_omh_awareness", True) is not False
+    route_hint_context = ""
+    route_hint_payload: dict[str, object] | None = None
+    if include_awareness:
+        route_hint_payload = awareness_route_hint(user_message)
+        route_hint_context = awareness_route_hint_context_from_payload(route_hint_payload)
+    should_include_awareness = (
+        include_awareness
+        and (is_first_turn or bool(route_hint_context) or awareness_context_matches_message(user_message))
+    )
+    if should_include_awareness:
         context_parts.append(awareness_primer_context())
         payload["omh_context_brief"] = build_context_brief(
             user_message,
             source=str(kwargs.get("source") or kwargs.get("host") or "pre_llm_call"),
             max_hints=2,
             include_prompt_context=False,
+            route_hint_payload=route_hint_payload,
         )
         if route_hint_context:
             context_parts.append(route_hint_context)

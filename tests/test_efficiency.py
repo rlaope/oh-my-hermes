@@ -40,6 +40,7 @@ from omh.capabilities.skills import skill_capabilities
 from omh.coding import executor_readiness as executor_readiness_module
 from omh.coding import executors as executors_module
 from omh.context import build_context_brief
+from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.awareness import (
@@ -310,6 +311,46 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(payload["route_hint"]["primary_next_action"], "show_coding_handoff_status")
         self.assertIn("next_action=show_coding_handoff_status", payload["prompt_context"])
         self.assertEqual(cache_info.misses, 1)
+        self.assertEqual(cache_info.hits, 0)
+
+    def test_pre_llm_call_reuses_route_hint_payload_for_context_brief(self) -> None:
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
+        with TemporaryDirectory() as temp_dir:
+            payload = pre_llm_call(
+                omh_home=temp_dir,
+                hermes_home=temp_dir,
+                user_message="Codex 작업이 어디까지 진행됐는지 알려줘",
+                is_first_turn=False,
+            )
+        cache_info = awareness_module._awareness_route_hint_cached.cache_info()
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["omh_context_brief"]["route_hint"]["primary_workflow"], "ultraprocess")
+        self.assertEqual(
+            payload["omh_context_brief"]["route_hint"]["primary_next_action"],
+            "show_coding_handoff_status",
+        )
+        self.assertIn("next_action=show_coding_handoff_status", payload["context"])
+        self.assertEqual(cache_info.misses, 1)
+        self.assertEqual(cache_info.hits, 0)
+
+    def test_pre_llm_call_suppressed_awareness_skips_route_hint_cache(self) -> None:
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
+        with TemporaryDirectory() as temp_dir:
+            payload = pre_llm_call(
+                omh_home=temp_dir,
+                hermes_home=temp_dir,
+                user_message="make an image explaining the cron feature",
+                is_first_turn=False,
+                include_omh_awareness=False,
+            )
+        cache_info = awareness_module._awareness_route_hint_cached.cache_info()
+
+        self.assertIsNone(payload)
+        self.assertEqual(cache_info.misses, 0)
         self.assertEqual(cache_info.hits, 0)
 
     def test_quality_demos_reuse_interaction_route(self) -> None:

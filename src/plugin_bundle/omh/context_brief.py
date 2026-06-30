@@ -19,12 +19,18 @@ def build_context_brief(
     source: str = "generic",
     max_hints: int = 2,
     include_prompt_context: bool = False,
+    route_hint_payload: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build bounded Hermes-facing OMH operating context."""
     text = str(message or "")
     limit = bounded_context_hint_limit(max_hints, default=2)
     primer = awareness_primer_payload()
-    route_hint = awareness_route_hint(text, max_hints=limit) if text.strip() else awareness_route_hint("", max_hints=0)
+    if route_hint_payload is not None:
+        route_hint = route_hint_payload
+    elif text.strip():
+        route_hint = awareness_route_hint(text, max_hints=limit)
+    else:
+        route_hint = awareness_route_hint("", max_hints=0)
     payload: dict[str, object] = {
         "schema_version": OMH_CONTEXT_BRIEF_SCHEMA_VERSION,
         "source": source,
