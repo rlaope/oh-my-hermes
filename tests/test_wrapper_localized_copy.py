@@ -37,6 +37,7 @@ class WrapperLocalizedCopyTests(unittest.TestCase):
             ("paper_learning", "fr", "paper-learning card"),
             ("source_finder", "zh", "source-finder plan"),
             ("web_research", "es", "research"),
+            ("agent_ops_review", "ko", "관리자 관점"),
             ("workflow_learning_missed_route", "de", "missed-route feedback"),
             ("file_lookup", "ko", "파일/텍스트 확인"),
         )

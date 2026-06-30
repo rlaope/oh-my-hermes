@@ -13,8 +13,8 @@ class LocalizedChatCopyTests(unittest.TestCase):
 
         self.assertEqual(payload["schema_version"], "localized_chat_copy/v1")
         self.assertEqual(payload["source"], "discord")
-        self.assertEqual(payload["summary"]["case_count"], 7)
-        self.assertEqual(payload["summary"]["passing_count"], 7)
+        self.assertEqual(payload["summary"]["case_count"], 8)
+        self.assertEqual(payload["summary"]["passing_count"], 8)
         self.assertEqual(payload["summary"]["locale_count"], 6)
         self.assertTrue(payload["summary"]["all_passing"])
         self.assertEqual(localized_chat_copy_errors(payload), [])
@@ -24,6 +24,8 @@ class LocalizedChatCopyTests(unittest.TestCase):
         self.assertEqual(cases["catalog-picker-zh"]["observed"]["kind"], "skill_picker")
         self.assertEqual(cases["source-finder-fr"]["observed"]["next_action"], "prepare_source_finder_plan")
         self.assertEqual(cases["img-summary-ko"]["observed"]["kind"], "img_summary")
+        self.assertEqual(cases["agent-ops-status-ko"]["observed"]["kind"], "agent_ops_review")
+        self.assertEqual(cases["agent-ops-status-ko"]["observed"]["next_action"], "refresh_agent_ops_status")
 
     def test_localized_chat_copy_cli_outputs_summary_and_json(self) -> None:
         status, stdout, stderr = run_cli(["demo", "localized-chat-copy", "--summary"], output_json=False)
@@ -33,10 +35,11 @@ class LocalizedChatCopyTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH localized chat copy", stdout)
-        self.assertIn("Result: 7/7 localized card cases passing", stdout)
+        self.assertIn("Result: 8/8 localized card cases passing", stdout)
         self.assertIn("Locales: 6", stdout)
         self.assertIn("Japanese catalog picker: ok", stdout)
         self.assertIn("Korean image summary: ok", stdout)
+        self.assertIn("Korean agent ops status: ok", stdout)
 
         status, stdout, stderr = run_cli(["demo", "localized-chat-copy", "--json"], output_json=False)
 
@@ -44,7 +47,7 @@ class LocalizedChatCopyTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "localized_chat_copy/v1")
-        self.assertEqual(payload["summary"]["passing_count"], 7)
+        self.assertEqual(payload["summary"]["passing_count"], 8)
 
 
 if __name__ == "__main__":

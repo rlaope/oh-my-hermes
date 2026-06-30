@@ -2308,7 +2308,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["localized_chat_copy"]["status"], "passed")
-            self.assertIn("7/7 localized card cases", gates["localized_chat_copy"]["summary"])
+            self.assertIn("8/8 localized card cases", gates["localized_chat_copy"]["summary"])
             self.assertIn("locales 6", gates["localized_chat_copy"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
             self.assertIn("6/6 UX gates passing", gates["hermes_ux_quality"]["summary"])
@@ -2353,7 +2353,7 @@ class CliTests(unittest.TestCase):
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
-            self.assertIn("Localized chat copy: 7/7 (locales 6)", stdout)
+            self.assertIn("Localized chat copy: 8/8 (locales 6)", stdout)
             self.assertIn("Hermes UX quality: 100/100 (6/6 gates)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
@@ -2384,8 +2384,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 92)
             self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 92)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
-            self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 7)
-            self.assertEqual(payload["summary"]["localized_chat_copy_total"], 7)
+            self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 8)
+            self.assertEqual(payload["summary"]["localized_chat_copy_total"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_locale_count"], 6)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 6)

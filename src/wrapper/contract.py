@@ -2996,13 +2996,12 @@ def build_chat_response_from_route(
                 source=str(decision.get("source", "generic")),
             )
             status_card = card["status_card"]
+            copy = chat_copy("agent_ops_review", locale=copy_locale)
+            headline = copy.headline if localized_copy else str(status_card.get("headline", copy.headline))
             return _chat_response(
                 kind="agent_ops_review",
-                headline=str(status_card.get("headline", "I can prepare an agent ops review for this.")),
-                body=(
-                    "I will show quality gates, current gaps, blockers, next actions, and throughput levers "
-                    "without asking the user to approve shell catalog commands."
-                ),
+                headline=headline,
+                body=copy.body,
                 phase="agent_ops_review_prepared",
                 next_action=str(card.get("next_action", "show_agent_ops_review")),
                 thread_key=thread_key,
