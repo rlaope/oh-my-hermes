@@ -2015,6 +2015,8 @@ def _selected_recommendation(route: dict[str, object]) -> dict[str, object]:
 def _route_next_action(route: dict[str, object], recommendation: dict[str, object]) -> str:
     action = str(route.get("action", "fallback"))
     if action == "dispatch":
+        if str(route.get("selected_skill", "")) == "ultraprocess" and _route_is_coding_status_request(route):
+            return "show_coding_handoff_status"
         return str(recommendation.get("next_action") or "dispatch_to_workflow")
     if action == "fallback" and _is_file_lookup_reason(str(route.get("reason", ""))):
         return "answer_file_lookup"
@@ -2023,6 +2025,22 @@ def _route_next_action(route: dict[str, object], recommendation: dict[str, objec
     if action == "clarify":
         return "answer_clarification"
     return "ask_one_clarification"
+
+
+def _route_is_coding_status_request(route: dict[str, object]) -> bool:
+    reason = str(route.get("reason", "")).lower()
+    if "coding progress questions" in reason or "progress/status" in reason:
+        return True
+    recommendations = route.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        return False
+    for recommendation in recommendations:
+        if not isinstance(recommendation, dict):
+            continue
+        matched = {str(item) for item in recommendation.get("matched", []) if str(item)}
+        if {"guard:coding_progress_status", "guard:coding_handoff_status"} & matched:
+            return True
+    return False
 
 
 def _route_claim_boundary(route: dict[str, object], recommendation: dict[str, object]) -> str:
