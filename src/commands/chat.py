@@ -249,6 +249,14 @@ def _action_label_with_id(action: str, label: str = "") -> str:
     return f"{resolved_label} (`{normalized}`)"
 
 
+def _action_label_without_id(action: str, label: str = "") -> str:
+    normalized = action.strip()
+    if not normalized:
+        return ""
+    resolved_label = label.strip() or next_action_label(normalized)
+    return resolved_label or normalized
+
+
 _ROUTE_ACTION_LABELS = {
     "clarify": "asking one clarification",
     "dispatch": "routing to a workflow",
@@ -282,12 +290,14 @@ def _status_label_with_id(status: str) -> str:
     return f"{label} (`{normalized}`)"
 
 
-def _format_summary_action(action: dict[str, object]) -> str:
+def _format_summary_action(action: dict[str, object], *, include_id: bool = True) -> str:
     action_id = _text(action.get("id"), "action")
     label = _text(action.get("label"), action_id)
     enabled = bool(action.get("enabled", True))
     state_label = "enabled" if enabled else "disabled"
-    label_with_id = _action_label_with_id(action_id, label)
+    label_with_id = (
+        _action_label_with_id(action_id, label) if include_id else _action_label_without_id(action_id, label)
+    )
     return f"- {label_with_id} - {state_label}"
 
 
@@ -315,7 +325,7 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
     print("OMH chat interaction")
     print(f"Source: {source}")
     print(f"Workflow: {selected_workflow}")
-    print(f"Next action: {_action_label_with_id(next_action, next_action_label_text)}")
+    print(f"Next action: {_action_label_without_id(next_action, next_action_label_text)}")
 
     headline = _text(response.get("headline") or response.get("plain_headline"))
     body = _text(response.get("body") or response.get("plain_body"))
@@ -332,7 +342,7 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
         print("Actions:")
         action_limit = 12
         for action in actions[:action_limit]:
-            print(_format_summary_action(action))
+            print(_format_summary_action(action, include_id=False))
         if len(actions) > action_limit:
             print(f"- ... {len(actions) - action_limit} more action(s) in --json")
 
