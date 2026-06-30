@@ -23,12 +23,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 26)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 26)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 29)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 29)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 65)
-        self.assertEqual(payload["summary"]["total_passing_count"], 65)
+        self.assertEqual(payload["summary"]["total_case_count"], 68)
+        self.assertEqual(payload["summary"]["total_passing_count"], 68)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -88,6 +88,11 @@ class RoutingPrecisionTests(unittest.TestCase):
             interventions["korean-photo-meeting-vertical-image-card"]["observed"]["next_action"],
             "prepare_visual_prompt_card",
         )
+        self.assertEqual(interventions["korean-pretty-meeting-image-card"]["observed"]["route_workflow"], "img-summary")
+        self.assertEqual(
+            interventions["korean-pretty-meeting-image-card"]["observed"]["next_action"],
+            "prepare_visual_prompt_card",
+        )
         self.assertEqual(interventions["korean-hermes-coding-team-only"]["observed"]["route_workflow"], "team")
         self.assertEqual(
             interventions["korean-hermes-coding-team-only"]["observed"]["next_action"],
@@ -133,6 +138,22 @@ class RoutingPrecisionTests(unittest.TestCase):
             interventions["korean-morning-market-research"]["observed"]["next_action"],
             "prepare_research_department_plan",
         )
+        self.assertEqual(
+            interventions["korean-codex-start-current-task"]["observed"]["route_workflow"],
+            "executor-runtime-readiness",
+        )
+        self.assertEqual(
+            interventions["korean-codex-start-current-task"]["observed"]["next_action"],
+            "prepare_executor_runtime_readiness",
+        )
+        self.assertEqual(
+            interventions["korean-memory-pile-cleanup"]["observed"]["route_workflow"],
+            "memory-curation-review",
+        )
+        self.assertEqual(
+            interventions["korean-memory-pile-cleanup"]["observed"]["next_action"],
+            "prepare_memory_curation_review",
+        )
         self.assertEqual(interventions["workflow-learning"]["observed"]["route_workflow"], "workflow-learning")
         for case in interventions.values():
             self.assertTrue(case["passed"])
@@ -145,7 +166,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("39/39 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 26/26 expected workflow cases passing", stdout)
+        self.assertIn("Interventions: 29/29 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)
