@@ -555,6 +555,20 @@ _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS = (
     "시각화해서",
     "헤르메스",
 )
+_DIRECT_ANSWER_BLOCKED_TERM_CONCEPTS = (
+    "repo",
+    "repository",
+    "git repo",
+    "git repository",
+    "github repo",
+    "github repository",
+    "pr",
+    "pull request",
+    "github pr",
+    "github pull request",
+    "issue",
+    "github issue",
+)
 _DIRECT_ANSWER_GENERIC_CONCEPT_MAX_WORDS = 8
 _DIRECT_ANSWER_GENERIC_KOREAN_CONCEPT_MAX_CHARS = 48
 _DIRECT_ANSWER_KEYWORDS = (
@@ -1438,9 +1452,18 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
     (
         "source-finder",
         (
+            "find papers datasets",
+            "find papers datasets github",
+            "find public presentations",
             "find arxiv link",
             "find arxiv paper",
             "arxiv link",
+            "github oss repo",
+            "github repos and public presentations",
+            "자료 출처 찾아",
+            "데이터셋이랑 깃허브",
+            "공개 데이터셋 찾아",
+            "논문 pdf 링크 찾아",
             "arxiv 링크 찾아",
             "arxiv 링크 찾아서",
         ),
@@ -2199,6 +2222,8 @@ def _is_plain_text_transform_question(text: str, direct_text: str) -> bool:
 
 
 def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
+    if _is_blocked_term_definition_question(direct_text):
+        return True
     if _contains_marker(text, _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS) or _contains_marker(
         direct_text, _DIRECT_ANSWER_CONCEPT_HARD_BLOCKERS
     ):
@@ -2228,6 +2253,20 @@ def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:
     if any(marker in direct_text for marker in _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS):
         return _is_short_generic_multilingual_concept_question(direct_text)
     return False
+
+
+def _is_blocked_term_definition_question(text: str) -> bool:
+    tail = ""
+    stripped = text.strip(" \t\r\n.!?¿¡。！？")
+    for starter in _DIRECT_ANSWER_CONCEPT_STARTERS:
+        if stripped.startswith(starter):
+            tail = stripped[len(starter) :]
+            break
+    if not tail:
+        return False
+    tail = re.sub(r"^(?:a|an|the)\s+", "", tail.strip(" \t\r\n.!?¿¡。！？"))
+    tail = re.sub(r"\s+(?:in simple terms|simply|exactly)$", "", tail).strip()
+    return tail in _DIRECT_ANSWER_BLOCKED_TERM_CONCEPTS
 
 
 def _is_what_means_concept_question(text: str) -> bool:

@@ -320,6 +320,8 @@ class ChatRouterTests(unittest.TestCase):
             "memory leak 설명해줘",
             "what is source control?",
             "source control이 뭐야?",
+            "what is GitHub repo?",
+            "what is a pull request?",
             "what is Kubernetes?",
             "what is Docker Compose?",
             "what is GraphQL?",
@@ -383,6 +385,7 @@ class ChatRouterTests(unittest.TestCase):
             "what is a loop in Python?",
             "strategy pattern 설명해줘",
             "what is source control?",
+            "what is GitHub repo?",
             "what is Kubernetes?",
             "GraphQL 설명해줘",
             "쿠버네티스가 뭐야?",
@@ -1950,7 +1953,7 @@ selected_workflow=ultraprocess
         chat_router_impl._route_chat_message_cached.cache_clear()
         chat_router_impl._public_chat_route_payload_cached.cache_clear()
 
-        for message in ("search docs/WORKFLOWS.md for loop", "README 파일 찾아줘"):
+        for message in ("search docs/WORKFLOWS.md for loop", "README 파일 찾아줘", "what is in README?"):
             with self.subTest(message=message), mock.patch.object(
                 chat_router_impl,
                 "recommend_skills",
