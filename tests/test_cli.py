@@ -1003,29 +1003,34 @@ class CliTests(unittest.TestCase):
         cases = (
             (
                 ["recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo"],
-                "Next action: preparing a reviewed plan (`present_plan`)",
+                "Next action: preparing a reviewed plan",
+                "(`present_plan`)",
             ),
             (
                 ["recommend", "make", "an", "image", "explaining", "the", "cron", "feature"],
-                "Next action: preparing an image prompt card (`prepare_visual_prompt_card`)",
+                "Next action: preparing an image prompt card",
+                "(`prepare_visual_prompt_card`)",
             ),
             (
                 ["playbook", "recommend", "turn", "this", "issue", "into", "a", "PR"],
-                "Next action: scope event (`scope_event`)",
+                "Next action: scope event",
+                "(`scope_event`)",
             ),
             (
                 ["cases", "recommend", "daily", "competitor", "digest"],
-                "Next action: preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`)",
+                "Next action: preparing a scheduled-ops blueprint",
+                "(`prepare_scheduled_ops_blueprint`)",
             ),
         )
 
-        for args, expected in cases:
+        for args, expected, forbidden in cases:
             with self.subTest(args=args):
                 status, stdout, stderr = run_cli(args, output_json=False)
 
                 self.assertEqual(stderr, "")
                 self.assertEqual(status, 0)
                 self.assertIn(expected, stdout)
+                self.assertNotIn(forbidden, stdout)
 
     def test_playbook_recommendation_summary_uses_human_action_labels(self) -> None:
         status, stdout, stderr = run_cli(
@@ -1035,9 +1040,42 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
-        self.assertIn("Next action: scope event (`scope_event`)", stdout)
-        self.assertIn("Next action: recommending the playbook (`recommend`)", stdout)
+        self.assertIn("Next action: scope event", stdout)
+        self.assertIn("Next action: recommending the playbook", stdout)
+        self.assertNotIn("(`scope_event`)", stdout)
+        self.assertNotIn("(`recommend`)", stdout)
         self.assertNotIn("Next action: recommend\n", stdout)
+
+        status, stdout, stderr = run_cli(
+            ["playbook", "recommend", "turn", "this", "issue", "into", "a", "PR", "--json"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["recommendations"][0]["next_action"], "scope_event")
+
+    def test_recommendation_json_preserves_machine_action_ids(self) -> None:
+        cases = (
+            (
+                ["recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo", "--json"],
+                "present_plan",
+            ),
+            (
+                ["cases", "recommend", "daily", "competitor", "digest", "--json"],
+                "prepare_scheduled_ops_blueprint",
+            ),
+        )
+
+        for args, expected_next_action in cases:
+            with self.subTest(args=args):
+                status, stdout, stderr = run_cli(args, output_json=False)
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["recommendations"][0]["next_action"], expected_next_action)
 
     def test_recommendation_reasons_avoid_internal_metadata_copy(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"], output_json=False)
