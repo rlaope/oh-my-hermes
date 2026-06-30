@@ -46,6 +46,7 @@ _FALLBACK_SKILLS = ("oh-my-hermes", "plan", "deep-interview")
 _FALLBACK_WHY = "No strong catalog metadata match; start with general routing/planning guidance."
 _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
     {
+        "adversarial_qa_before_generic_help",
         "coding_progress_status_before_clarify",
         "deep_interview_before_generic_plan",
         "direct_coding_task_before_fallback",
@@ -56,6 +57,10 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         "hermes_coding_team_before_generic_clarification",
         "github_event_ops_before_generic_planning",
         "loop_goal_before_generic_clarification",
+        "materials_package_before_report_or_clarify",
+        "memory_curation_before_generic_clarification",
+        "ops_observability_before_generic_loop",
+        "release_claim_review_before_file_lookup",
         "safe_feature_change_before_generic_plan",
         "img_summary_before_materials_or_delivery",
         "paper_learning_before_materials_or_research_ops",

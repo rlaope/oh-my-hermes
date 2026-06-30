@@ -2118,6 +2118,8 @@ def _route_requires_coding_owner(route_payload: dict[str, object], route_respons
         return False
     selected = str(route_payload.get("selected_skill", "") or _nested(route_response, "state").get("selected_workflow", ""))
     policy_next_action = str(_nested(route_response, "state").get("policy_next_action", ""))
+    if _route_is_coding_status_request(route_payload) and not _executor_target_from_message(message):
+        return False
     if selected in _CODING_OWNER_WORKFLOWS:
         return True
     if policy_next_action in _CODING_OWNER_NEXT_ACTIONS:
