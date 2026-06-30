@@ -6,6 +6,7 @@ from typing import Mapping
 
 from ..ingress import CHAT_SOURCES
 from ..plugin_bundle.omh.awareness import awareness_route_hint
+from ..routing.action_copy import next_action_label_with_id
 from ..wrapper.contract import build_chat_interaction_payload
 from .chat_card_coverage import CHAT_CARD_COVERAGE_CASES
 from .grounded_score import GROUNDED_SCENARIOS
@@ -124,7 +125,7 @@ def format_route_hint_alignment_summary(payload: dict[str, object]) -> str:
             f"- {row.get('title', 'Untitled route')}: {status}; "
             f"route={observed.get('route_workflow', 'unknown')} "
             f"hint={observed.get('hint_workflow', 'unknown')} "
-            f"hint_action={observed.get('hint_next_action', 'unknown')}"
+            f"next={next_action_label_with_id(str(observed.get('hint_next_action', 'unknown')))}"
         )
     failed = [row for row in rows if not row.get("aligned")]
     if failed:

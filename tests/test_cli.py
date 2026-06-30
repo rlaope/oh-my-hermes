@@ -5893,7 +5893,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("OMH grounded score", stdout)
         self.assertIn("Result: 47/47 scenarios at 10/10 (all passing)", stdout)
         self.assertIn(
-            "Startup SaaS product triage: 10/10 ok; feedback-triage -> triage_feedback; handoff_absent",
+            "Startup SaaS product triage: 10/10 ok; "
+            "feedback-triage -> triaging the feedback signal (`triage_feedback`); handoff_absent",
             stdout,
         )
         self.assertIn("Boundary: This is deterministic local contract-compliance evaluation", stdout)
@@ -5934,7 +5935,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("Result: 25/25 workflow cards dedicated (all passing)", stdout)
         self.assertIn("Generic ack responses: 0", stdout)
         self.assertIn(
-            "Scheduled ops blueprint: ok; automation-blueprint -> automation_blueprint -> prepare_scheduled_ops_blueprint",
+            "Scheduled ops blueprint: ok; "
+            "automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`); "
+            "card=automation_blueprint",
             stdout,
         )
         self.assertIn("Boundary: This is deterministic local wrapper-card coverage", stdout)
@@ -5993,7 +5996,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("Result: 72/72 route hints aligned (all passing)", stdout)
         self.assertIn("Hints present: 72/72; missing hints: 0; mismatches: 0", stdout)
         self.assertIn(
-            "AI agent product QA: ok; route=ultraqa hint=ultraqa hint_action=dispatch_to_workflow",
+            "AI agent product QA: ok; "
+            "route=ultraqa hint=ultraqa next=opening the selected workflow (`dispatch_to_workflow`)",
             stdout,
         )
         self.assertIn("Boundary: Route hint alignment proves deterministic local agreement", stdout)
