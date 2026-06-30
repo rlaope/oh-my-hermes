@@ -2451,6 +2451,8 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             next_action = str(rule["next_action"])
             if workflow == "loop":
                 next_action = _loop_route_hint_next_action(message, next_action)
+            if rule["id"] == "coding_delivery":
+                next_action = _coding_delivery_route_hint_next_action(message, next_action)
             hints.append(
                 {
                     "id": str(rule["id"]),
@@ -2933,6 +2935,19 @@ def _loop_route_hint_next_action(message: str, default_action: str) -> str:
             return "record_external_wait"
         return "start_loop_cycle"
     return next_action or default_action
+
+
+def _coding_delivery_route_hint_next_action(message: str, default_action: str) -> str:
+    normalized = unicodedata.normalize("NFKC", message).casefold().strip()
+    compact = re.sub(r"[\s\?\!\.,;:~…？]+", "", normalized)
+    has_friren = "friren" in normalized or "프리렌" in normalized
+    has_authority_or_merge_context = any(
+        marker in normalized or marker in compact
+        for marker in ("author", "merge", "commit", "머지", "커밋")
+    )
+    if has_friren and has_authority_or_merge_context:
+        return "show_coding_handoff_status"
+    return default_action
 
 
 def _direct_workflow_invocation_hint(intent: object, routing_normalized: str, message: str) -> dict[str, object]:

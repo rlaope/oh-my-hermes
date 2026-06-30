@@ -1040,10 +1040,14 @@ class EfficiencyContractTests(unittest.TestCase):
             ("claude code로 새 세션 시작하게 해줘", "executor-runtime-readiness"),
             ("claude code 세션 연결해서 이어서 보게 해줘", "executor-runtime-readiness"),
             ("codex 세션 열고 방금 핸드오프 이어서 진행해줘", "executor-runtime-readiness"),
+            ("merge할때도 프리렌 author로 머지해", "ultraprocess"),
+            ("프리렌 author로 커밋하고 머지해", "ultraprocess"),
             ("github oss repo 찾아서 비교해줘", "source-finder"),
             ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
             ("매일 아침 리서치 요약을 보내게 준비해줘", "automation-blueprint"),
+            ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board"),
+            ("multiple Hermes agents target topology 어떻게 관리해?", "agent-board"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning"),
         )
 
@@ -1198,6 +1202,8 @@ class EfficiencyContractTests(unittest.TestCase):
                 "memory-curation-review",
                 "operator_surface_fast_path:memory",
             ),
+            ("merge할때도 프리렌 author로 머지해", "ultraprocess", "operator_surface_fast_path:delivery"),
+            ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board", "operator_surface_fast_path:agent_board"),
             ("리드미 개선해줘", "ultraprocess", "operator_surface_fast_path:delivery"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning", "workflow_learning_fast_path"),
         )
