@@ -1221,6 +1221,46 @@ class ChatRouterTests(unittest.TestCase):
         self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotIn("CI", explanation["not_evidence_yet"])
 
+    def test_specific_capability_alias_questions_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+        cases = (
+            ("what can OMH do for papers?", "paper-learning", "prepare_paper_learning"),
+            ("what can OMH do for PDF papers?", "paper-learning", "prepare_paper_learning"),
+            ("what can OMH do for source finding?", "source-finder", "prepare_source_finder_plan"),
+            ("what can OMH do for datasets?", "source-finder", "prepare_source_finder_plan"),
+            ("what can OMH do for GitHub repos?", "source-finder", "prepare_source_finder_plan"),
+            ("what can OMH do for workflow learning?", "workflow-learning", "audit_learning_readiness"),
+            ("what can OMH do for Discord gateway routing?", "gateway-intent-card", "prepare_gateway_intent_card"),
+            ("what can OMH do for coding agents?", "executor-runtime-readiness", "prepare_executor_runtime_readiness"),
+            ("what can OMH do for deploy and monitor?", "deploy-and-monitor", "prepare_deploy_monitor_plan"),
+            ("what can OMH do for CTO loop?", "cto-loop", "run_cto_loop"),
+        )
+
+        with mock.patch.object(
+            chat_router_impl,
+            "recommend_skills",
+            side_effect=AssertionError("specific capability aliases should use the catalog fast path"),
+        ), mock.patch.object(
+            chat_router_impl,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("specific capability aliases should render a card, not a route plan"),
+        ):
+            for message, expected_skill, expected_action in cases:
+                with self.subTest(message=message):
+                    decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], expected_skill)
+                self.assertEqual(decision["confidence"], "high")
+                self.assertEqual(decision["recommendations"][0]["next_action"], expected_action)
+                self.assertIn("catalog_question", decision["recommendations"][0]["matched"])
+                self.assertTrue(
+                    any(str(item).startswith(("alias:", "name:")) for item in decision["recommendations"][0]["matched"])
+                )
+                public = public_route_payload(decision)
+                self.assertNotIn("workflow_route_plan", public)
+
     def test_generic_catalog_questions_use_picker_fast_path_without_full_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()
         chat_router_impl._public_chat_route_payload_cached.cache_clear()

@@ -971,6 +971,36 @@ class EfficiencyContractTests(unittest.TestCase):
                     self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
                     self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
 
+    def test_specific_capability_catalog_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            ("what can OMH do for papers?", "paper-learning"),
+            ("what can OMH do for source finding?", "source-finder"),
+            ("what can OMH do for workflow learning?", "workflow-learning"),
+            ("what can OMH do for Discord gateway routing?", "gateway-intent-card"),
+            ("what can OMH do for coding agents?", "executor-runtime-readiness"),
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("specific catalog fast path should skip scoring"),
+        ):
+            for message, expected_skill in cases:
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], expected_skill)
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertIn("catalog_question", decision["recommendations"][0]["matched"])
+                    self.assertTrue(
+                        any(
+                            str(item).startswith(("alias:", "name:"))
+                            for item in decision["recommendations"][0]["matched"]
+                        )
+                    )
+
     def test_public_chat_route_payload_cache_is_reused_without_payload_poisoning(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         chat_module._public_chat_route_payload_cached.cache_clear()

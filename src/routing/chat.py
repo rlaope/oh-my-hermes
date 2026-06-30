@@ -213,6 +213,60 @@ _SPECIFIC_CAPABILITY_ALIAS_PHRASES = (
     "executors",
     "runtimes",
 )
+_SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "paper-learning",
+        (
+            "papers",
+            "paper pdf",
+            "paper pdfs",
+            "pdf papers",
+            "paper explanation",
+            "paper learning",
+        ),
+    ),
+    (
+        "source-finder",
+        (
+            "source finding",
+            "source acquisition",
+            "source candidates",
+            "datasets",
+            "dataset search",
+            "github repos",
+            "github repositories",
+            "github oss repos",
+            "public presentations",
+        ),
+    ),
+    (
+        "workflow-learning",
+        (
+            "workflow learning",
+            "learning trace",
+            "skill patch",
+            "routing regression",
+        ),
+    ),
+    (
+        "gateway-intent-card",
+        (
+            "discord gateway routing",
+            "gateway routing",
+            "message routing",
+            "platform routing",
+        ),
+    ),
+    (
+        "executor-runtime-readiness",
+        (
+            "coding agents",
+            "coding agent",
+            "executors",
+            "runtimes",
+        ),
+    ),
+)
 _DIRECT_ANSWER_STARTERS = (
     "what ",
     "what's ",
@@ -1224,41 +1278,26 @@ def _catalog_fast_path_decision(
         else None
     )
     if exact_skill is not None:
-        definition = _skill_definition_by_name(exact_skill)
-        recommendation = recommendation_for_definition(
-            definition,
-            message,
+        return _specific_capability_fast_path_result(
+            skill=exact_skill,
+            message=message,
+            source=source,
+            min_confidence=min_confidence,
             matched=("catalog_question", f"name:{exact_skill}"),
             score=12,
             why=f"Matched exact OMH capability `{exact_skill}` from catalog metadata.",
+            catalog_question=catalog_question,
         )
-        reason = (
-            f"Specific OMH capability question matched `{exact_skill}`; "
-            "show that workflow card instead of the generic workflow picker."
-        )
-        selected_harness = primary_harness_for_skill(exact_skill)
-        return _CatalogFastPathResult(
-            decision=ChatRouteDecision(
-                schema_version=1,
-                source=source,
-                action="dispatch",
-                selected_skill=exact_skill,
-                selected_harness=selected_harness,
-                candidate_skill=exact_skill,
-                candidate_harness=selected_harness,
-                confidence="high",
-                score=12,
-                threshold=min_confidence,
-                explicit=False,
-                ambiguous=False,
-                reason=reason,
-                clarification="",
-                routing_prompt=_routing_prompt("dispatch", exact_skill, exact_skill, reason, message),
-                task_card=None,
-                workflow_route_plan=None,
-                learning_candidate_card=None,
-                recommendations=(recommendation,),
-            ),
+    alias_skill, alias_label = _specific_capability_alias_hit(routing_message)
+    if catalog_question and alias_skill and not _is_broad_capability_catalog_question(routing_message):
+        return _specific_capability_fast_path_result(
+            skill=alias_skill,
+            message=message,
+            source=source,
+            min_confidence=min_confidence,
+            matched=("catalog_question", f"alias:{alias_label}"),
+            score=11,
+            why=f"Matched OMH capability alias `{alias_label}` from catalog metadata.",
             catalog_question=catalog_question,
         )
     catalog_picker = (
@@ -1307,6 +1346,56 @@ def _catalog_fast_path_decision(
 def _direct_picker_alias(message: str) -> bool:
     compact = message.strip().lower().strip(" \t\r\n.!?,;:")
     return compact in _DIRECT_PICKER_ALIASES
+
+
+def _specific_capability_fast_path_result(
+    *,
+    skill: str,
+    message: str,
+    source: str,
+    min_confidence: str,
+    matched: tuple[str, ...],
+    score: int,
+    why: str,
+    catalog_question: bool,
+) -> _CatalogFastPathResult:
+    definition = _skill_definition_by_name(skill)
+    recommendation = recommendation_for_definition(
+        definition,
+        message,
+        matched=matched,
+        score=score,
+        why=why,
+    )
+    reason = (
+        f"Specific OMH capability question matched `{skill}`; "
+        "show that workflow card instead of the generic workflow picker."
+    )
+    selected_harness = primary_harness_for_skill(skill)
+    return _CatalogFastPathResult(
+        decision=ChatRouteDecision(
+            schema_version=1,
+            source=source,
+            action="dispatch",
+            selected_skill=skill,
+            selected_harness=selected_harness,
+            candidate_skill=skill,
+            candidate_harness=selected_harness,
+            confidence="high",
+            score=score,
+            threshold=min_confidence,
+            explicit=False,
+            ambiguous=False,
+            reason=reason,
+            clarification="",
+            routing_prompt=_routing_prompt("dispatch", skill, skill, reason, message),
+            task_card=None,
+            workflow_route_plan=None,
+            learning_candidate_card=None,
+            recommendations=(recommendation,),
+        ),
+        catalog_question=catalog_question,
+    )
 
 
 def _file_lookup_fast_path_decision(
@@ -2078,6 +2167,48 @@ def _specific_capability_named_hits(message: str) -> tuple[str, ...]:
             selected.append(skill)
         selected_ranges.append((start, end))
     return tuple(selected)
+
+
+@lru_cache(maxsize=2048)
+def _specific_capability_alias_hit(message: str) -> tuple[str, str]:
+    text = message.strip().lower()
+    if not _is_specific_capability_question_shape(text):
+        return ("", "")
+    named_hits = _specific_capability_named_hits(text)
+    if len(named_hits) == 1:
+        return (named_hits[0], named_hits[0])
+
+    hits: list[tuple[int, int, int, str, str]] = []
+    for phrase in _specific_capability_alias_phrase_map():
+        for start, end in _specific_capability_phrase_matches(text, phrase):
+            hits.append((start, end, len(phrase.phrase), phrase.skill, phrase.phrase))
+    if not hits:
+        return ("", "")
+
+    ordered = sorted(hits, key=lambda item: (-(item[2]), item[0], item[3]))
+    first_skill = ordered[0][3]
+    first_alias = ordered[0][4]
+    if any(
+        skill != first_skill and start == ordered[0][0] and end == ordered[0][1]
+        for start, end, _size, skill, _alias in ordered[1:]
+    ):
+        return ("", "")
+    return (first_skill, first_alias)
+
+
+@lru_cache(maxsize=1)
+def _specific_capability_alias_phrase_map() -> tuple[_SpecificCapabilityPhrase, ...]:
+    entries: list[_SpecificCapabilityPhrase] = []
+    for skill, aliases in _SPECIFIC_CAPABILITY_FAST_ALIASES:
+        for alias in aliases:
+            entries.append(
+                _SpecificCapabilityPhrase(
+                    skill=skill,
+                    phrase=alias,
+                    pattern=_compile_specific_capability_phrase(alias),
+                )
+            )
+    return tuple(entries)
 
 
 @lru_cache(maxsize=2048)
