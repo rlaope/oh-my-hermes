@@ -406,7 +406,9 @@ omh doctor</code>
               Discord, Slack, hosted chat, and Hermes-native plugin surfaces
               can consume local envelopes instead of guessing what a workflow
               means. The UI can show actions, disabled gates, and evidence
-              labels from the same state.
+              labels from the same state. Adapter metadata can still carry
+              <code>harness_progress/v1</code> when a wrapper needs the raw
+              contract.
             </p>
           </div>
           <div class="wrapper-card" role="region" aria-label="Wrapper response example">
@@ -416,9 +418,9 @@ omh doctor</code>
             </div>
             <div class="route-lens">
               <span>playbook: request-to-handoff</span>
-              <span>next: present_plan</span>
-              <span>state: prepared_not_observed</span>
-              <span>progress: harness_progress/v1</span>
+              <span>next: show safe plan</span>
+              <span>state: prepared, not run</span>
+              <span>progress: tracked</span>
             </div>
             <h3>Present the safe plan first.</h3>
             <p>

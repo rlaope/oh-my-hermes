@@ -89,8 +89,55 @@ class HudCliTests(unittest.TestCase):
             self.assertNotIn("skills:", payload["display"]["line"])
             self.assertNotIn("executor:", payload["display"]["line"])
             self.assertNotIn("handoff:", payload["display"]["line"])
-            self.assertIn("evidence:prepared_not_observed", payload["display"]["line"])
+            self.assertIn("evidence:prepared", payload["display"]["line"])
+            self.assertNotIn("evidence:prepared_not_observed", payload["display"]["line"])
             self.assertIn("Prepared handoffs are not execution", payload["evidence_boundary"])
+
+    def test_hud_does_not_treat_non_coding_runtime_as_busy_coding_agent(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            run_dir = omh_home / "runtime" / "runs" / "20260630T000000Z-loop"
+            run_dir.mkdir(parents=True)
+            (run_dir / "run.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "20260630T000000Z-loop",
+                        "skill": "loop",
+                        "phase": "runtime",
+                        "observation_status": "unknown",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "delegation.json").write_text(
+                json.dumps({"observed": True, "result": "completed"}),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "hud",
+                    "--json",
+                    "--preset",
+                    "full",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["runtime"]["workflow"], "loop")
+            self.assertEqual(payload["runtime"]["evidence_state"], "execution_observed")
+            self.assertIn("coding-agent:idle(ask)", payload["display"]["line"])
+            self.assertIn("evidence:executed", payload["display"]["line"])
+            self.assertNotIn("coding-agent:runtime(ask)", payload["display"]["line"])
 
     def test_hud_marks_older_plugin_bundle_as_stale(self) -> None:
         with TemporaryDirectory() as tmp:
