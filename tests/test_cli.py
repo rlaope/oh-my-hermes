@@ -1027,6 +1027,28 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 self.assertIn(expected, stdout)
 
+    def test_recommendation_reasons_avoid_internal_metadata_copy(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "risky", "refactor"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Why: Risky code-change requests should get a reviewed plan before cleanup.", stdout)
+        self.assertIn("Why: Matched workflow trigger language for this task.", stdout)
+        self.assertIn("Why: Matched catalog keywords for this task.", stdout)
+        self.assertNotIn("metadata metadata", stdout)
+        self.assertNotIn("Matched guard/trigger metadata", stdout)
+
+        status, stdout, stderr = run_cli(["recommend", "risky", "refactor", "--json"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        reasons = [str(item.get("why", "")) for item in payload["recommendations"]]
+        self.assertIn("Risky code-change requests should get a reviewed plan before cleanup.", reasons)
+        self.assertIn("Matched catalog keywords for this task.", reasons)
+        self.assertFalse(any("metadata metadata" in reason for reason in reasons))
+        self.assertFalse(any("Matched guard/trigger metadata" in reason for reason in reasons))
+
     def test_cases_catalog_exposes_g1_to_g10_and_recommends_real_situations(self) -> None:
         status, stdout, stderr = run_cli(["cases", "list", "--json"], output_json=False)
 
