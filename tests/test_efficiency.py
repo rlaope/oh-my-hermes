@@ -24,6 +24,7 @@ from omh.skills import render as render_module
 from omh.workflows import hermes_planning as hermes_planning_module
 from omh.workflows import learning_candidate as learning_candidate_module
 from omh.wrapper import contract as contract_module
+from omh.wrapper.route_hints import build_chat_route_hint_payload
 from omh.paths import OmhPaths
 from omh.release import (
     AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT,
@@ -283,6 +284,22 @@ class EfficiencyContractTests(unittest.TestCase):
         awareness_module._awareness_route_hint_cached.cache_clear()
 
         payload = build_context_brief(
+            "Codex 작업이 어디까지 진행됐는지 알려줘",
+            source="discord",
+            include_prompt_context=True,
+        )
+        cache_info = awareness_module._awareness_route_hint_cached.cache_info()
+
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "ultraprocess")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "show_coding_handoff_status")
+        self.assertIn("next_action=show_coding_handoff_status", payload["prompt_context"])
+        self.assertEqual(cache_info.misses, 1)
+        self.assertEqual(cache_info.hits, 0)
+
+    def test_chat_route_hint_prompt_context_reuses_route_hint_payload(self) -> None:
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
+        payload = build_chat_route_hint_payload(
             "Codex 작업이 어디까지 진행됐는지 알려줘",
             source="discord",
             include_prompt_context=True,

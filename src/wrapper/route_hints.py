@@ -3,7 +3,7 @@ from __future__ import annotations
 from ..plugin_bundle.omh.awareness import (
     awareness_generic_tool_checkpoint_payload,
     awareness_route_hint,
-    awareness_route_hint_context,
+    awareness_route_hint_context_from_payload,
 )
 from ..routing.action_copy import next_action_label
 
@@ -58,7 +58,7 @@ def build_chat_route_hint_payload(
         "claim_boundary": str(route_hint.get("claim_boundary") or ""),
     }
     if include_prompt_context:
-        payload["prompt_context"] = awareness_route_hint_context(message, max_hints=max_hints)
+        payload["prompt_context"] = awareness_route_hint_context_from_payload(route_hint)
         payload["prompt_context_boundary"] = (
             "Prompt context is for Hermes routing guidance only; it is not workflow execution or observed evidence."
         )
