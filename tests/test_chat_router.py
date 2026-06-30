@@ -1221,6 +1221,37 @@ class ChatRouterTests(unittest.TestCase):
         self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotIn("CI", explanation["not_evidence_yet"])
 
+    def test_generic_catalog_questions_use_picker_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        for message in (
+            "what workflows are available?",
+            "what skills are available?",
+            "show workflows",
+            "omh 뭐 할 수 있어?",
+        ):
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("generic catalog questions should use the picker fast path"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("generic catalog picker should not build a route plan"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+            self.assertEqual(decision["selected_harness"], primary_harness_for_skill("oh-my-hermes"))
+            self.assertEqual(decision["confidence"], "high")
+            self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+            self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
+            public = public_route_payload(decision)
+            self.assertNotIn("workflow_route_plan", public)
+            self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
+
     def test_exact_capability_cards_use_concrete_not_evidence_labels(self) -> None:
         cases = {
             "meeting-brief": (
