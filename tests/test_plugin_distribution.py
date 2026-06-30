@@ -613,6 +613,20 @@ class PluginDistributionTests(unittest.TestCase):
                 json.dumps(mid_session_visual_context["omh_context_brief"], sort_keys=True),
             )
 
+            loop_route_context = ctx.hooks["pre_llm_call"](
+                omh_home=str(root / ".empty-omh"),
+                user_message="Make this a 100k-star OSS",
+                is_first_turn=False,
+            )
+            self.assertIsNotNone(loop_route_context)
+            loop_route_hint = loop_route_context["omh_context_brief"]["route_hint"]
+            self.assertEqual(loop_route_hint["primary_workflow"], "loop")
+            self.assertEqual(loop_route_hint["primary_next_action"], "reframe_north_star")
+            self.assertIn("selected=loop", loop_route_context["context"])
+            self.assertIn("next_action=reframe_north_star", loop_route_context["context"])
+            self.assertNotIn("next_action=assess_loopability", loop_route_context["context"])
+            self.assertNotIn("Make this a 100k-star OSS", loop_route_context["context"])
+
             mid_session_generic_context = ctx.hooks["pre_llm_call"](
                 omh_home=str(root / ".empty-omh"),
                 user_message="tell me a short joke",
