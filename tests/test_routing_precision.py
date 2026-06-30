@@ -23,12 +23,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 79)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 79)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 80)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 80)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 120)
-        self.assertEqual(payload["summary"]["total_passing_count"], 120)
+        self.assertEqual(payload["summary"]["total_case_count"], 121)
+        self.assertEqual(payload["summary"]["total_passing_count"], 121)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -120,6 +120,14 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(
             interventions["korean-omh-loop-feature-image"]["observed"]["next_action"],
             "prepare_visual_prompt_card",
+        )
+        self.assertEqual(
+            interventions["korean-image-generator-connector-readiness"]["observed"]["route_workflow"],
+            "toolbelt-readiness",
+        )
+        self.assertEqual(
+            interventions["korean-image-generator-connector-readiness"]["observed"]["next_action"],
+            "prepare_toolbelt_readiness",
         )
         self.assertEqual(interventions["korean-hermes-coding-team-only"]["observed"]["route_workflow"], "team")
         self.assertEqual(
@@ -274,7 +282,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("41/41 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 79/79 expected workflow cases passing", stdout)
+        self.assertIn("Interventions: 80/80 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)

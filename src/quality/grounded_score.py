@@ -350,6 +350,17 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         expected_playbook="img-summary",
     ),
     GroundedScenario(
+        "korean-image-generator-connector-readiness",
+        "Korean image-generator connector readiness",
+        "이미지 생성 연결체가 없으면 어떤걸로 연결할지 물어봐줘",
+        "toolbelt-readiness",
+        "toolbelt_readiness",
+        "prepare_toolbelt_readiness",
+        "clarify",
+        False,
+        expected_playbook="toolbelt-readiness",
+    ),
+    GroundedScenario(
         "korean-release-update-announcement-card",
         "Korean release update announcement card",
         "릴리즈 업데이트를 발표 카드로 만들어줘",

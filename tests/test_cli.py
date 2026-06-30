@@ -2287,16 +2287,16 @@ class CliTests(unittest.TestCase):
             self.assertIn("local artifact store not_written", gates["use_cases"]["summary"])
             self.assertEqual(gates["use_cases"]["warnings"], ["local_artifact_store: not_written"])
             self.assertEqual(gates["grounded_score"]["status"], "passed")
-            self.assertIn("49/49 scenarios at 10/10", gates["grounded_score"]["summary"])
+            self.assertIn("50/50 scenarios at 10/10", gates["grounded_score"]["summary"])
             self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
             self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
             self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
-            self.assertIn("131/131 route hints aligned", gates["route_hint_alignment"]["summary"])
+            self.assertIn("132/132 route hints aligned", gates["route_hint_alignment"]["summary"])
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
             self.assertIn("41/41 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("79/79 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("80/80 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2334,11 +2334,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH release evidence bundle for 1.0.1", stdout)
             self.assertIn("Status: ready", stdout)
             self.assertIn("Written: no", stdout)
-            self.assertIn("Grounded score: 49/49 (avg 10.0)", stdout)
+            self.assertIn("Grounded score: 50/50 (avg 10.0)", stdout)
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 41/41 negative controls, 79/79 interventions "
+                "Routing precision: 41/41 negative controls, 80/80 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2358,19 +2358,19 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["status"], "ready")
             self.assertTrue(payload["written"])
             self.assertEqual(payload["summary"]["product_readiness_status"], "ready")
-            self.assertEqual(payload["summary"]["grounded_score_perfect"], 49)
+            self.assertEqual(payload["summary"]["grounded_score_perfect"], 50)
             self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
             self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
-            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 131)
+            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 132)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
             self.assertEqual(payload["summary"]["routing_precision_passing"], 41)
             self.assertEqual(payload["summary"]["routing_precision_total"], 41)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 79)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 79)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 80)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 80)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
@@ -3908,6 +3908,12 @@ class CliTests(unittest.TestCase):
             ),
             (
                 "이미지 도구가 연결 안 됐으면 GPT image tool로 어떻게 설정해?",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                "guard:toolbelt_readiness",
+            ),
+            (
+                "이미지 생성 연결체가 없으면 어떤걸로 연결할지 물어봐줘",
                 "toolbelt-readiness",
                 "prepare_toolbelt_readiness",
                 "guard:toolbelt_readiness",
@@ -6114,7 +6120,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(payload["summary"]["scenario_count"], 49)
+        self.assertEqual(payload["summary"]["scenario_count"], 50)
         self.assertTrue(payload["summary"]["all_10"])
         self.assertEqual(payload["summary"]["minimum_score"], 10)
         self.assertEqual(payload["summary"]["maximum_score"], 10)
@@ -6155,6 +6161,7 @@ class CliTests(unittest.TestCase):
                 "korean-meeting-image-summary",
                 "korean-release-note-image-summary",
                 "korean-omh-loop-feature-image-summary",
+                "korean-image-generator-connector-readiness",
                 "korean-release-update-announcement-card",
                 "korean-instagram-card-news-summary",
                 "research-department-ops",
@@ -6189,6 +6196,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(direct["korean-meeting-image-summary"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["korean-release-note-image-summary"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["korean-omh-loop-feature-image-summary"]["observed"]["playbook"]["id"], "img-summary")
+        self.assertEqual(
+            direct["korean-image-generator-connector-readiness"]["observed"]["playbook"]["id"],
+            "toolbelt-readiness",
+        )
         self.assertEqual(direct["korean-release-update-announcement-card"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["korean-instagram-card-news-summary"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(
@@ -6225,7 +6236,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         explicit_payload = json.loads(stdout)
         self.assertEqual(explicit_payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(explicit_payload["summary"]["scenario_count"], 49)
+        self.assertEqual(explicit_payload["summary"]["scenario_count"], 50)
 
     def test_demo_grounded_score_summary_is_human_readable(self) -> None:
         status, stdout, stderr = run_cli(["demo", "grounded-score", "--summary"])
@@ -6235,7 +6246,7 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH grounded score", stdout)
-        self.assertIn("Result: 49/49 scenarios at 10/10 (all passing)", stdout)
+        self.assertIn("Result: 50/50 scenarios at 10/10 (all passing)", stdout)
         self.assertIn(
             "Startup SaaS product triage: 10/10 ok; "
             "feedback-triage -> triaging the feedback signal; handoff_absent",
@@ -6296,9 +6307,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(payload["summary"]["case_count"], 131)
-        self.assertEqual(payload["summary"]["hinted_count"], 131)
-        self.assertEqual(payload["summary"]["aligned_count"], 131)
+        self.assertEqual(payload["summary"]["case_count"], 132)
+        self.assertEqual(payload["summary"]["hinted_count"], 132)
+        self.assertEqual(payload["summary"]["aligned_count"], 132)
         self.assertEqual(payload["summary"]["missing_hint_count"], 0)
         self.assertEqual(payload["summary"]["mismatch_count"], 0)
         self.assertTrue(payload["summary"]["all_aligned"])
@@ -6329,7 +6340,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         explicit_payload = json.loads(stdout)
         self.assertEqual(explicit_payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(explicit_payload["summary"]["case_count"], 131)
+        self.assertEqual(explicit_payload["summary"]["case_count"], 132)
 
     def test_demo_route_hint_alignment_summary_is_human_readable(self) -> None:
         status, stdout, stderr = run_cli(["demo", "route-hint-alignment", "--summary"])
@@ -6339,8 +6350,8 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH route hint alignment", stdout)
-        self.assertIn("Result: 131/131 route hints aligned (all passing)", stdout)
-        self.assertIn("Hints present: 131/131; missing hints: 0; mismatches: 0", stdout)
+        self.assertIn("Result: 132/132 route hints aligned (all passing)", stdout)
+        self.assertIn("Hints present: 132/132; missing hints: 0; mismatches: 0", stdout)
         self.assertIn(
             "AI agent product QA: ok; "
             "route=ultraqa hint=ultraqa next=opening the selected workflow",
