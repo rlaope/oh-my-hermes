@@ -602,8 +602,12 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["state"]["primary_learning_action"], "record_missed_route")
                 self.assertEqual(actions["record_missed_route"]["style"], "primary")
                 self.assertEqual(actions["audit_learning_readiness"]["style"], "secondary")
-                self.assertIn("missed-route feedback", response["body"])
-                self.assertIn("human review", response["body"])
+                if any("\uac00" <= char <= "\ud7a3" for char in message):
+                    self.assertIn("missed-route 피드백", response["body"])
+                    self.assertIn("사람 리뷰", response["body"])
+                else:
+                    self.assertIn("missed-route feedback", response["body"])
+                    self.assertIn("human review", response["body"])
                 self.assertIn("automatic skill patch", response["state"]["evidence_not_observed"])
                 self.assertNotIn(message, serialized)
 
@@ -713,9 +717,9 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("citation verification", explanation["not_evidence_yet"])
         self.assertNotIn("implementation", explanation["not_evidence_yet"])
         self.assertTrue(response["headline"].startswith("[omh] web-research - "))
-        self.assertEqual(response["plain_headline"], "I can gather source-backed current evidence for this.")
-        self.assertIn("source boundaries", response["body"])
-        self.assertIn("citation confidence", response["body"])
+        self.assertEqual(response["plain_headline"], "최신 근거 조사를 Hermes 연구 흐름으로 정리할 수 있습니다.")
+        self.assertIn("조사 범위", response["body"])
+        self.assertIn("인용 신뢰도", response["body"])
         actions = {action["id"]: action for action in response["actions"]}
         self.assertTrue(actions["run_hermes_research"]["enabled"])
         self.assertTrue(actions["record_source_observation"]["enabled"])
@@ -1408,9 +1412,14 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], "choose_skill")
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
-                self.assertIn("shell command", payload["chat_response"]["body"])
-                self.assertIn("planning, ops, deliverables, coding handoffs, loops, and status", payload["chat_response"]["body"])
-                self.assertIn("Start here:", payload["chat_response"]["body"])
+                if any("\uac00" <= char <= "\ud7a3" for char in message):
+                    self.assertIn("shell 명령 승인을 받지 않아도", payload["chat_response"]["body"])
+                    self.assertIn("계획, 운영, 자료/이미지, 코딩 위임", payload["chat_response"]["body"])
+                    self.assertIn("먼저 이렇게 시작하세요:", payload["chat_response"]["body"])
+                else:
+                    self.assertIn("shell command", payload["chat_response"]["body"])
+                    self.assertIn("planning, ops, deliverables, coding handoffs, loops, and status", payload["chat_response"]["body"])
+                    self.assertIn("Start here:", payload["chat_response"]["body"])
                 self.assertIn("Capability families:", payload["chat_response"]["body"])
                 self.assertIn("Route for me:", payload["chat_response"]["body"])
                 rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
@@ -1543,7 +1552,10 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], "answer_file_lookup")
                 response = payload["chat_response"]
                 self.assertEqual(response["kind"], "clarification")
-                self.assertIn("file or text lookup", response["body"])
+                if any("\uac00" <= char <= "\ud7a3" for char in message):
+                    self.assertIn("파일/텍스트 확인", response["body"])
+                else:
+                    self.assertIn("file or text lookup", response["body"])
                 self.assertIn("file or text lookup", response["state"]["routing_instruction"])
                 self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
                 explanation = response["state"]["workflow_explanation"]
@@ -1909,8 +1921,13 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["mode"], "route")
                 self.assertEqual(payload["next_action"], "prepare_visual_prompt_card")
                 self.assertEqual(payload["chat_response"]["kind"], "img_summary")
-                self.assertIn("shareable image-card brief", payload["chat_response"]["body"])
-                self.assertIn("If no image tool is connected", payload["chat_response"]["body"])
+                if any("\uac00" <= char <= "\ud7a3" for char in message):
+                    self.assertIn("공유용 이미지 카드", payload["chat_response"]["plain_headline"])
+                    self.assertIn("이미지 안 문구", payload["chat_response"]["body"])
+                    self.assertIn("연결된 이미지 생성 도구", payload["chat_response"]["body"])
+                else:
+                    self.assertIn("shareable image-card brief", payload["chat_response"]["body"])
+                    self.assertIn("If no image tool is connected", payload["chat_response"]["body"])
                 self.assertNotIn("visual_prompt_card/v1", payload["chat_response"]["body"])
                 self.assertNotIn("image_generation_capability/v1", payload["chat_response"]["body"])
                 self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "img-summary")
@@ -1988,6 +2005,72 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("web search", explanation["not_evidence_yet"])
         self.assertNotIn("review", explanation["not_evidence_yet"])
         self.assertNotIn("CI", explanation["not_evidence_yet"])
+
+    def test_korean_operator_cards_use_korean_copy_without_changing_actions(self) -> None:
+        cases = (
+            (
+                "회의록을 세로 이미지 카드로 만들어줘",
+                "img_summary",
+                "prepare_visual_prompt_card",
+                "show_visual_prompt_card",
+                "공유용 이미지 카드",
+                "이미지 안 문구",
+            ),
+            (
+                "첨부한 pdf 논문을 전문가급으로 설명해줘",
+                "paper_learning",
+                "prepare_paper_learning",
+                "choose_explanation_level",
+                "논문을 원하는 난이도",
+                "섹션별 커버리지",
+            ),
+            (
+                "이 깃허브 프로젝트랑 비슷한 오픈소스 찾아서 비교해줘",
+                "source_finder",
+                "prepare_source_finder_plan",
+                "show_source_candidates",
+                "자료 탐색",
+                "데이터셋",
+            ),
+            (
+                "이미지 생성 요청을 했는데 우리 omh기능을 안썼어",
+                "workflow_learning",
+                "record_missed_route",
+                "record_missed_route",
+                "놓친 OMH 라우팅",
+                "missed-route 피드백",
+            ),
+            (
+                "OMH가 어떤 스킬 있는지 알려줘",
+                "skill_picker",
+                "choose_skill",
+                "choose_skill",
+                "OMH workflow 목록",
+                "shell 명령 승인을 받지 않아도",
+            ),
+            (
+                "README 파일 찾아줘",
+                "clarification",
+                "answer_file_lookup",
+                "answer:file_lookup",
+                "파일이나 텍스트",
+                "OMH workflow 실행은 시작하지 않습니다",
+            ),
+        )
+
+        for message, kind, next_action, action_id, headline_text, body_text in cases:
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+
+                self.assertEqual(payload["next_action"], next_action)
+                response = payload["chat_response"]
+                self.assertEqual(response["kind"], kind)
+                self.assertIn(headline_text, response["plain_headline"])
+                self.assertIn(body_text, response["body"])
+                actions = {action["id"]: action for action in response["actions"]}
+                self.assertIn(action_id, actions)
+                self.assertEqual(response["schema_version"], "chat_response/v1")
+                self.assertIn("claim_boundary", response)
 
     def test_generic_catalog_question_still_uses_picker(self) -> None:
         payload = build_chat_interaction_payload("OMH 기능 뭐 있어?", source="discord")

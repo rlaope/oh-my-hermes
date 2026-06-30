@@ -4877,7 +4877,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["next_action"], "answer_file_lookup")
         response = payload["chat_response"]
         self.assertEqual(response["kind"], "clarification")
-        self.assertIn("file or text lookup", response["body"])
+        self.assertIn("파일/텍스트 확인", response["body"])
         self.assertEqual(response["state"]["lookup_kind"], "file_or_text")
         explanation = response["state"]["workflow_explanation"]
         self.assertIn("I will answer this as a file or text lookup", explanation["route_recommended_reply"])
@@ -5248,8 +5248,12 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], "choose_skill")
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
-                self.assertIn("shell command", payload["chat_response"]["body"])
-                self.assertIn("Start here:", payload["chat_response"]["body"])
+                if any("\uac00" <= char <= "\ud7a3" for char in message):
+                    self.assertIn("shell 명령 승인을 받지 않아도", payload["chat_response"]["body"])
+                    self.assertIn("먼저 이렇게 시작하세요:", payload["chat_response"]["body"])
+                else:
+                    self.assertIn("shell command", payload["chat_response"]["body"])
+                    self.assertIn("Start here:", payload["chat_response"]["body"])
                 self.assertIn("Capability families:", payload["chat_response"]["body"])
                 self.assertIn("Route for me:", payload["chat_response"]["body"])
                 rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
