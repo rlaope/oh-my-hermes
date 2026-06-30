@@ -600,6 +600,11 @@ class ChatRouterTests(unittest.TestCase):
                 "research-department",
             ),
             (
+                "아침마다 시장 리서치 요약해줘",
+                "research-department",
+                "research-department",
+            ),
+            (
                 "Can OMH make an automation blueprint for a daily research digest?",
                 "automation-blueprint",
                 "scheduled-ops-blueprint",
@@ -751,6 +756,10 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "Every morning collect AI agent news, synthesize it, and brief me.",
+                "research-department",
+            ),
+            (
+                "아침마다 시장 리서치 요약해줘",
                 "research-department",
             ),
             (

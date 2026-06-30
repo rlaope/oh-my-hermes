@@ -148,6 +148,14 @@ _OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
     ),
     RouteHintAlignmentCase(
         "operator_regression",
+        "research-department-morning-market-research-korean",
+        "Korean morning market research loop",
+        "아침마다 시장 리서치 요약해줘",
+        "research-department",
+        "prepare_research_department_plan",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
         "research-department-knowledge-store-korean",
         "Korean research knowledge-store setup",
         "NotebookLM이랑 지식저장소 연결해서 리서치 요약하고 싶어",
