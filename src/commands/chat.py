@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -239,14 +240,11 @@ def _text(value: object, default: str = "") -> str:
     return text or default
 
 
-def _action_label_with_id(action: str, label: str = "") -> str:
-    normalized = action.strip()
-    if not normalized:
-        return ""
-    resolved_label = label.strip() or next_action_label(normalized)
-    if not resolved_label or resolved_label == normalized:
-        return normalized
-    return f"{resolved_label} (`{normalized}`)"
+_INLINE_INTERNAL_ID_RE = re.compile(r"\s\(`[-A-Za-z0-9_:]+`\)")
+
+
+def _summary_text(value: object, default: str = "") -> str:
+    return _INLINE_INTERNAL_ID_RE.sub("", _text(value, default))
 
 
 def _action_label_without_id(action: str, label: str = "") -> str:
@@ -275,29 +273,24 @@ _SUMMARY_STATUS_LABELS = {
 }
 
 
-def _route_action_label_with_id(action: str) -> str:
+def _route_action_label_without_id(action: str) -> str:
     normalized = action.strip()
-    return _action_label_with_id(normalized, _ROUTE_ACTION_LABELS.get(normalized, ""))
+    return _action_label_without_id(normalized, _ROUTE_ACTION_LABELS.get(normalized, ""))
 
 
-def _status_label_with_id(status: str) -> str:
+def _status_label_without_id(status: str) -> str:
     normalized = status.strip()
     if not normalized:
         return ""
-    label = _SUMMARY_STATUS_LABELS.get(normalized, normalized.replace("_", " "))
-    if label == normalized:
-        return normalized
-    return f"{label} (`{normalized}`)"
+    return _SUMMARY_STATUS_LABELS.get(normalized, normalized.replace("_", " ")) or normalized
 
 
-def _format_summary_action(action: dict[str, object], *, include_id: bool = True) -> str:
+def _format_summary_action(action: dict[str, object]) -> str:
     action_id = _text(action.get("id"), "action")
     label = _text(action.get("label"), action_id)
     enabled = bool(action.get("enabled", True))
     state_label = "enabled" if enabled else "disabled"
-    label_with_id = (
-        _action_label_with_id(action_id, label) if include_id else _action_label_without_id(action_id, label)
-    )
+    label_with_id = _action_label_without_id(action_id, label)
     return f"- {label_with_id} - {state_label}"
 
 
@@ -327,8 +320,8 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
     print(f"Workflow: {selected_workflow}")
     print(f"Next action: {_action_label_without_id(next_action, next_action_label_text)}")
 
-    headline = _text(response.get("headline") or response.get("plain_headline"))
-    body = _text(response.get("body") or response.get("plain_body"))
+    headline = _summary_text(response.get("headline") or response.get("plain_headline"))
+    body = _summary_text(response.get("body") or response.get("plain_body"))
     if headline or body:
         print()
         if headline:
@@ -342,7 +335,7 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
         print("Actions:")
         action_limit = 12
         for action in actions[:action_limit]:
-            print(_format_summary_action(action, include_id=False))
+            print(_format_summary_action(action))
         if len(actions) > action_limit:
             print(f"- ... {len(actions) - action_limit} more action(s) in --json")
 
@@ -390,23 +383,23 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
     print(f"Source: {source}")
     print(f"Workflow: {selected_workflow}")
     print(f"Harness: {selected_harness}")
-    print(f"Action: {_route_action_label_with_id(action)}")
-    print(f"Next action: {_action_label_with_id(next_action, next_action_label_text)}")
+    print(f"Action: {_route_action_label_without_id(action)}")
+    print(f"Next action: {_action_label_without_id(next_action, next_action_label_text)}")
     print(f"Confidence: {confidence} (score {score})")
 
-    why = _text(route_explanation.get("why_this_workflow") or route.get("reason"))
+    why = _summary_text(route_explanation.get("why_this_workflow") or route.get("reason"))
     if why:
         print()
         print("Why:")
         print(f"  {why}")
 
-    recommended_reply = _text(route_explanation.get("recommended_reply"))
+    recommended_reply = _summary_text(route_explanation.get("recommended_reply"))
     if recommended_reply:
         print()
         print("Reply:")
         print(f"  {recommended_reply}")
 
-    primary_action_hint = _text(route_explanation.get("primary_action_hint"))
+    primary_action_hint = _summary_text(route_explanation.get("primary_action_hint"))
     if primary_action_hint:
         print()
         print("Action hint:")
@@ -422,7 +415,7 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
             item_next_label = _text(item.get("next_action_label"), next_action_label(item_next))
             item_confidence = _text(item.get("confidence"), "unknown")
             item_score = _text(item.get("score"), "0")
-            print(f"- {skill}: {_action_label_with_id(item_next, item_next_label)} ({item_confidence}, score {item_score})")
+            print(f"- {skill}: {_action_label_without_id(item_next, item_next_label)} ({item_confidence}, score {item_score})")
 
     route_plan = _as_mapping(route.get("workflow_route_plan"))
     steps = [item for item in _as_list(route_plan.get("steps")) if isinstance(item, dict)]
@@ -434,7 +427,7 @@ def _print_chat_route_summary(payload: dict[str, object]) -> None:
             stage = _text(step.get("stage"), "stage")
             skill = _text(step.get("skill"), "workflow")
             status = _text(step.get("status"), "prepared_not_observed")
-            print(f"- {order}. {stage}: {skill} - {_status_label_with_id(status)}")
+            print(f"- {order}. {stage}: {skill} - {_status_label_without_id(status)}")
 
     not_evidence = [_text(item) for item in _as_list(route_explanation.get("not_evidence_yet")) if _text(item)]
     if not_evidence:
@@ -495,7 +488,7 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
     print(f"Source: {source}")
     print(f"Status: {status}")
     print(f"Workflow: {selected_workflow}")
-    print(f"Next action: {_action_label_with_id(next_action, next_action_label_text)}")
+    print(f"Next action: {_action_label_without_id(next_action, next_action_label_text)}")
     print(f"Hints: {hint_count}")
 
     matched_cues = _text_items(_as_list(primary_hint.get("matched_cues")))
@@ -507,8 +500,8 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
     if adjacent_workflows:
         print(f"Adjacent workflows: {_join_text_items(adjacent_workflows)}")
 
-    headline = _text(response.get("headline"))
-    body = _text(response.get("body"))
+    headline = _summary_text(response.get("headline"))
+    body = _summary_text(response.get("body"))
     if headline or body:
         print()
         if headline:
@@ -524,8 +517,8 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
             lane = _text(hint.get("lane"), "unknown")
             action = _text(hint.get("next_action"), "unknown")
             action_label = _text(hint.get("next_action_label"), next_action_label(action))
-            reason = _text(hint.get("reason"))
-            print(f"- {workflow}: {_action_label_with_id(action, action_label)} ({lane})")
+            reason = _summary_text(hint.get("reason"))
+            print(f"- {workflow}: {_action_label_without_id(action, action_label)} ({lane})")
             hint_cues = _text_items(_as_list(hint.get("matched_cues")))
             if hint_cues:
                 print(f"  matched: {_join_text_items(hint_cues)}")
@@ -536,11 +529,18 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
     if actions:
         print()
         print("Actions:")
-        for action in actions[:6]:
-            print(_format_summary_action(action))
+        printed_rows: set[str] = set()
+        for action in actions:
+            row = _format_summary_action(action)
+            if row in printed_rows:
+                continue
+            printed_rows.add(row)
+            print(row)
+            if len(printed_rows) >= 6:
+                break
 
     checkpoint = _as_mapping(payload.get("generic_tool_checkpoint"))
-    checkpoint_body = _text(checkpoint.get("body"))
+    checkpoint_body = _summary_text(checkpoint.get("body"))
     if checkpoint_body:
         print()
         print("Checkpoint:")
@@ -566,7 +566,7 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
         print()
         print("Prompt context: included")
 
-    boundary = _text(payload.get("claim_boundary") or response.get("claim_boundary") or route_hint.get("claim_boundary"))
+    boundary = _summary_text(payload.get("claim_boundary") or response.get("claim_boundary") or route_hint.get("claim_boundary"))
     if boundary:
         print()
         print("Boundary:")
