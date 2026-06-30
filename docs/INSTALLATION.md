@@ -420,7 +420,12 @@ surfaces such as `omh recommend`, `omh playbook recommend`, and
 Chinese, Spanish, French, and German operator requests. The layer expands known
 phrases into canonical routing signals, includes `locale:<code>:<label>` in the
 matched evidence for scored recommendations, and never calls external
-translation services.
+translation services. Renderable chat cards also use a small local copy catalog
+for common English, Korean, Japanese, Chinese, Spanish, French, and German
+operator-facing frames such as the skill picker, source finder, paper learning,
+web research, image summary, and workflow-learning missed-route cards. If a
+phrase or card locale is not covered, OMH falls back to the normal English
+clarify or planning path instead of pretending to translate.
 
 From the user's point of view, the intended final state matches the Hermes tap
 path: Hermes can discover OMH skills and the user talks to Hermes. `omh setup`
@@ -867,6 +872,9 @@ Before calling the bot integration ready, verify these points:
   `feedback-triage`, French safe-feature requests route to a plan surface, and
   Spanish, French, or German issue-to-PR requests route to `github-event-ops`
   without claiming machine translation happened.
+- Common non-English card frames should use the local wrapper copy catalog when
+  available, while keeping contract terms such as `Route for me`,
+  `source-finder plan`, and evidence boundaries visible for adapters.
 - The rendered `chat_response` does not expose `omh`, argv arrays, or shell
   command text to the end user.
 - Clarification and fallback interactions do not expose `send_to_executor` or

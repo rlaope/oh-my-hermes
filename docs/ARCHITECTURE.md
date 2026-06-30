@@ -285,6 +285,10 @@ returns `dispatch`, `clarify`, or `fallback` decisions from local catalog data.
 non-English operator requests. It preserves the raw message, adds only canonical
 scoring hints, and makes locale-match metadata available to scored
 recommendations without calling translation services.
+`wrapper/localized_copy.py` owns the separate human-facing chat copy catalog for
+common localized card frames. It can mirror the user's language for supported
+operator-facing cards, but it does not translate raw prompts, change routing
+scores, or turn prepared states into observed evidence.
 `routing/policy.py` owns shared confidence and ambiguity policy, and
 `routing/recommend.py` owns local catalog recommendation scoring.
 
