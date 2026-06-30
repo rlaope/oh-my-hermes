@@ -10,6 +10,11 @@ from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_tex
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_chat_route_payload, route_explanation_payload
 from ..routing.missed_route import is_missed_route_feedback
+from ..routing.omh_help import (
+    is_omh_intro_question as _is_omh_intro_question,
+    is_omh_quickstart_question as _is_omh_quickstart_question,
+    is_omh_status_question as _is_omh_status_question,
+)
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
 from ..capabilities.families import capability_family_cards
 from ..context import build_context_brief
@@ -4520,157 +4525,6 @@ def _omh_intro_route_payload(route_payload: dict[str, object]) -> dict[str, obje
     )
     updated["route_explanation"] = route_explanation_payload(updated)
     return updated
-
-
-@lru_cache(maxsize=4096)
-def _is_omh_intro_question(message: str) -> bool:
-    text = message.strip().lower()
-    if not text:
-        return False
-    omh_markers = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
-    if not any(marker in text for marker in omh_markers):
-        return False
-    if any(marker in text for marker in ("status", "doctor", "health", "install", "setup", "next", "상태", "설치", "셋업", "세팅", "다음")):
-        return False
-    catalog_only_markers = (
-        "available",
-        "workflow",
-        "workflows",
-        "skill",
-        "skills",
-        "workflows available",
-        "skills available",
-        "commands available",
-        "deep-interview",
-        "ralplan",
-        "ultragoal",
-        "loop",
-        "ultraprocess",
-        "list",
-        "menu",
-        "picker",
-        "명령어",
-        "스킬",
-        "워크플로",
-        "워크플로우",
-        "有哪些",
-        "可用",
-        "使える",
-    )
-    if any(marker in text for marker in catalog_only_markers):
-        return False
-    intro_markers = (
-        "what is",
-        "what are you",
-        "how do i use",
-        "how should i use",
-        "how to use",
-        "how does",
-        "explain",
-        "overview",
-        "getting started",
-        "mental model",
-        "뭐야",
-        "무엇이야",
-        "어떻게 써",
-        "어떻게 사용",
-        "사용법",
-        "소개",
-        "설명",
-        "何ですか",
-        "使い方",
-        "是什么",
-        "怎么用",
-    )
-    return any(marker in text for marker in intro_markers)
-
-
-@lru_cache(maxsize=4096)
-def _is_omh_quickstart_question(message: str) -> bool:
-    text = message.strip().lower()
-    if not text:
-        return False
-    omh_markers = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
-    if not any(marker in text for marker in omh_markers):
-        return False
-    quickstart_markers = (
-        "quickstart",
-        "getting started",
-        "first use",
-        "what next",
-        "what should i do next",
-        "what do i do next",
-        "next action",
-        "after setup",
-        "after install",
-        "installed correctly",
-        "setup next",
-        "next step",
-        "처음",
-        "퀵스타트",
-        "다음 액션",
-        "다음 단계",
-        "이제 뭐",
-        "설치됐",
-        "설치 되었",
-        "설치 완료",
-        "셋업",
-        "세팅",
-    )
-    return any(marker in text for marker in quickstart_markers)
-
-
-@lru_cache(maxsize=4096)
-def _is_omh_status_question(message: str) -> bool:
-    text = message.strip().lower()
-    if not text:
-        return False
-    omh_markers = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
-    if not any(marker in text for marker in omh_markers):
-        return False
-    catalog_markers = (
-        "what can",
-        "what does",
-        "available",
-        "workflows",
-        "skills",
-        "commands",
-        "뭐 할",
-        "뭘 도와",
-        "명령어",
-        "스킬",
-        "워크플로",
-    )
-    if any(marker in text for marker in catalog_markers) and not any(
-        marker in text
-        for marker in ("status", "health", "doctor", "setup", "install", "installed", "next", "상태", "다음", "설치", "셋업", "세팅", "정상", "진단")
-    ):
-        return False
-    status_markers = (
-        "status",
-        "health",
-        "doctor",
-        "diagnose",
-        "installed",
-        "installation",
-        "setup",
-        "set up",
-        "next action",
-        "what next",
-        "what should i do next",
-        "what do i do next",
-        "상태",
-        "다음",
-        "액션",
-        "설치",
-        "셋업",
-        "세팅",
-        "정상",
-        "확인",
-        "헬스",
-        "진단",
-    )
-    return any(marker in text for marker in status_markers)
 
 
 def _roadmap_next_actions(roadmap: dict[str, Any], *, limit: int) -> list[dict[str, object]]:
