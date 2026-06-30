@@ -1159,12 +1159,28 @@ _WORKFLOW_LEARNING_PHRASES = (
     "왜 omh 안썼",
     "안 썼는데 다음엔",
     "안 썼는데 다음에는",
+    "안 쓴 것 같은데 다음엔",
+    "안 쓴 것 같은데 다음에는",
+    "안 쓴 것 같아",
+    "안 쓴 것 같아 다음엔",
+    "안 쓴 것 같아 다음에는",
+    "안 쓰고 그냥 답했어",
     "안썼는데 다음엔",
     "안썼는데 다음에는",
+    "안쓴것같은데다음엔",
+    "안쓴것같은데다음에는",
+    "안쓴것같아",
+    "안쓴것같아다음엔",
+    "안쓴것같아다음에는",
+    "안쓰고그냥답했어",
+    "다음엔 쓰게 해줘",
+    "다음에는 쓰게 해줘",
     "다음엔 쓰게 고쳐",
     "다음에는 쓰게 고쳐",
     "다음엔 쓰게 개선",
     "다음에는 쓰게 개선",
+    "다음엔 보내줘",
+    "다음에는 보내줘",
     "omh 안썼는지 개선",
     "왜 omh 안썼는지 개선",
     "omh 안 썼는지 학습",
@@ -2900,6 +2916,7 @@ def _active_routing_guard_rules_cached(
     )
     paper_learning_applies = (
         not delivery_cycle_applies
+        and not workflow_learning_applies
         and _paper_learning_guard_applies(
             normalized_query,
             query_tokens,

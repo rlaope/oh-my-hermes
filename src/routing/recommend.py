@@ -6,6 +6,7 @@ import re
 
 from ..skills.catalog import SkillDefinition, routable_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .missed_route import is_missed_route_feedback
 from .policy import (
     RoutingGuardRule,
     active_routing_guard_rules,
@@ -570,6 +571,8 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
     prepared_definitions = _prepared_routable_definitions()
     definitions = [prepared.definition for prepared in prepared_definitions]
     explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
+    if explicit_skill and is_missed_route_feedback(normalized_query):
+        explicit_skill = None
     scored = []
     for prepared in prepared_definitions:
         recommendation = _score_definition(prepared, normalized_query, query_tokens, query, routing_text.locale_matches)

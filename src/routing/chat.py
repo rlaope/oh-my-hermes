@@ -13,6 +13,7 @@ from ..loopability import assess_loopability
 from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
 from .action_copy import next_action_label as _route_next_action_label
 from .intent import scrub_diagnostic_status_text
+from .missed_route import is_missed_route_feedback
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
@@ -858,9 +859,11 @@ def _route_chat_message_cached(
 
     definitions = routable_definitions()
     full_recommendations = recommend_skills(routing_message, limit=len(definitions))
-    explicit_skill = explicit_skill_invocation(routing_message, definitions)
-    task_card = classify_task(message)
     explicit_prefix = _has_explicit_invocation_prefix(routing_message)
+    explicit_skill = explicit_skill_invocation(routing_message, definitions)
+    if explicit_skill and not explicit_prefix and is_missed_route_feedback(routing_message):
+        explicit_skill = None
+    task_card = classify_task(message)
     task_card_overrides_explicit = _task_card_overrides_explicit_invocation(
         task_card,
         explicit_prefix=explicit_prefix,
