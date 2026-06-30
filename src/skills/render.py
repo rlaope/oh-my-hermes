@@ -290,6 +290,11 @@ def _router_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
         ),
         SkillReferenceTemplate(
             "oh-my-hermes",
+            "references/coding-handoff-progress-reporting.md",
+            _router_coding_handoff_progress_reference(),
+        ),
+        SkillReferenceTemplate(
+            "oh-my-hermes",
             "references/operator-maintenance.md",
             _router_operator_maintenance_reference(),
         ),
@@ -438,6 +443,49 @@ Maintenance commands should prefer compact human summaries for chat/operator flo
 """.rstrip() + "\n"
 
 
+def _router_coding_handoff_progress_reference() -> str:
+    return """# OMH Coding Handoff Progress Reporting
+
+Use this reference when coding work is delegated, attached to an executor
+session, or running in the background.
+
+## Active Narration
+
+Hermes must remain an active status narrator after it prepares or observes a
+coding handoff. Immediately report the observed executor handle when available:
+process/session id, PID, branch or PR target, and the prepared-vs-observed
+boundary. Do not silently wait for a final result after saying an executor is
+running.
+
+## Progress Cadence
+
+For long-running executor work, use an event-triggered status loop or bounded
+watchdog when the wrapper exposes one, and remove it when work completes. Each
+update should separate:
+
+- prepared handoff
+- dispatch or attached session
+- running process
+- changed files or affected area
+- tests/checks started, passed, failed, or still missing
+- commit, push, PR, CI, review, and merge evidence
+
+## Completion Verification
+
+After completion, verify the executor self-report against local git status/log,
+remote branch SHA, PR metadata, and required checks before claiming anything
+landed. If a PR was already merged before follow-up commits landed, open or
+prepare a follow-up PR instead of implying the merged PR contains the new fix.
+
+## Boundary
+
+Progress narration is not execution proof by itself. Only observed runtime
+events, git state, PR metadata, checks, review records, and merge records can
+satisfy their matching evidence states. Revert or follow-up commits still need
+the repository's DCO and commit trailers when required.
+""".rstrip() + "\n"
+
+
 def _router_evidence_boundaries_reference() -> str:
     return f"""# OMH Evidence Boundaries
 
@@ -551,6 +599,7 @@ Load these only when exact detail matters:
 - `references/workflow-registry.md` for full workflow triggers and role registry.
 - `references/harness-registry.md` for representative harnesses and priority.
 - `references/wrapper-routing.md` for backend/plugin/chat/coding delegation contracts.
+- `references/coding-handoff-progress-reporting.md` for active progress cadence, background executor watchdogs, PR head/merge verification, and memory/context collision pitfalls.
 - `references/evidence-boundaries.md` for prepared-vs-observed, target topology, memory, and compatibility rules.
 
 ## Recovery
@@ -558,6 +607,7 @@ Load these only when exact detail matters:
 - If exact route detail matters, load `references/workflow-registry.md` or the specific workflow skill before answering.
 - If harness behavior matters, load `references/harness-registry.md`.
 - If wrapper/backend behavior matters, load `references/wrapper-routing.md`.
+- If delegated coding work is running or being reported, load `references/coding-handoff-progress-reporting.md`.
 - If maintenance command behavior matters, load `references/operator-maintenance.md`.
 - If evidence or target topology is disputed, load `references/evidence-boundaries.md`.
 - If the right skill was not loaded, call `skills_list` or `skill_view`.

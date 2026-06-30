@@ -112,6 +112,7 @@ Load these only when exact detail matters:
 - `references/workflow-registry.md` for full workflow triggers and role registry.
 - `references/harness-registry.md` for representative harnesses and priority.
 - `references/wrapper-routing.md` for backend/plugin/chat/coding delegation contracts.
+- `references/coding-handoff-progress-reporting.md` for active progress cadence, background executor watchdogs, PR head/merge verification, and memory/context collision pitfalls.
 - `references/evidence-boundaries.md` for prepared-vs-observed, target topology, memory, and compatibility rules.
 
 ## Recovery
@@ -119,6 +120,7 @@ Load these only when exact detail matters:
 - If exact route detail matters, load `references/workflow-registry.md` or the specific workflow skill before answering.
 - If harness behavior matters, load `references/harness-registry.md`.
 - If wrapper/backend behavior matters, load `references/wrapper-routing.md`.
+- If delegated coding work is running or being reported, load `references/coding-handoff-progress-reporting.md`.
 - If maintenance command behavior matters, load `references/operator-maintenance.md`.
 - If evidence or target topology is disputed, load `references/evidence-boundaries.md`.
 - If the right skill was not loaded, call `skills_list` or `skill_view`.

@@ -89,6 +89,7 @@ class RouterContentTests(unittest.TestCase):
         }
         workflow_registry = references["oh-my-hermes/references/workflow-registry.md"]
         wrapper_routing = references["oh-my-hermes/references/wrapper-routing.md"]
+        progress_reporting = references["oh-my-hermes/references/coding-handoff-progress-reporting.md"]
         maintenance = references["oh-my-hermes/references/operator-maintenance.md"]
         evidence = references["oh-my-hermes/references/evidence-boundaries.md"]
 
@@ -113,6 +114,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh chat native-command --source discord", router.content)
         self.assertIn("omh_command_fallback_card/v1", router.content)
         self.assertIn("`./omh`, `/omh`, `./skills`, or `/skills`", router.content)
+        self.assertIn("coding-handoff-progress-reporting.md", router.content)
+        self.assertIn("Active Narration", progress_reporting)
+        self.assertIn("observed executor handle", progress_reporting)
+        self.assertIn("PR metadata", progress_reporting)
+        self.assertIn("merge records", progress_reporting)
         self.assertIn("Keep real skill names unchanged", router.content)
         self.assertIn("chat_response.state.skill_picker.options", router.content)
         self.assertIn("Do not make the user approve `omh list`", router.content)
@@ -820,6 +826,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Cross-skill context", skills["ultragoal"].content)
         self.assertIn("Every generated workflow skill", skills["ultragoal"].content)
         self.assertIn("Prepared OMH routing", skills["ultragoal"].content)
+        self.assertIn("Long-running or background executor milestones report observed handles", skills["ultragoal"].content)
+        self.assertIn("PR head SHA", skills["ultragoal"].content)
         self.assertIn("omh_target_topology/v1", skills["ultragoal"].content)
         self.assertIn("active_agent_count", skills["ultragoal"].content)
         self.assertIn("omh runtime record --skill ultragoal --harness goal-execution --status started", skills["ultragoal"].content)
