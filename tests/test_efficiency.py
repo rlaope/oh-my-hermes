@@ -949,6 +949,44 @@ class EfficiencyContractTests(unittest.TestCase):
                         )
                     )
 
+    def test_single_workflow_operator_fast_paths_skip_route_plan_build(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            ("risky refactor", "ralplan"),
+            ("논문 요약해줘", "paper-learning"),
+            ("웹서치해서 최신 자료 정리해줘", "web-research"),
+            ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary"),
+            ("PPT 만들어줘", "materials-package"),
+            ("codex로 열어줘", "executor-runtime-readiness"),
+            ("github oss repo 찾아서 비교해줘", "source-finder"),
+            ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
+            ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
+        )
+
+        with patch.object(
+            chat_module,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("single-workflow fast paths should not build route plans"),
+        ):
+            for message, expected_skill in cases:
+                chat_module._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], expected_skill)
+                    self.assertIsNone(decision["workflow_route_plan"])
+
+    def test_safe_feature_operator_fast_path_keeps_route_plan_when_visible(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        original_build_route_plan = chat_module.build_workflow_route_plan
+
+        with patch.object(chat_module, "build_workflow_route_plan", wraps=original_build_route_plan) as build_route_plan:
+            decision = chat_module.route_chat_message("how can I safely add a feature to this repo?", source="discord")
+
+        self.assertEqual(decision["selected_skill"], "ralplan")
+        self.assertIsNotNone(decision["workflow_route_plan"])
+        self.assertEqual(build_route_plan.call_count, 1)
+
     def test_generic_catalog_fast_paths_skip_full_recommendation_scan(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         cases = (

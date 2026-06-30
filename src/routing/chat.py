@@ -2016,18 +2016,20 @@ def _operator_surface_fast_path_decision(
         score=score,
         why=why,
     )
-    route_plan_recommendations = _operator_surface_route_plan_recommendations(
-        recommendation,
-        selected_skill=selected_skill,
-        extra_markers=extra_markers,
-        message=message,
-    )
-    workflow_route_plan = build_workflow_route_plan(
-        message,
-        route_plan_recommendations,
-        selected_skill=selected_skill,
-        action="dispatch",
-    )
+    workflow_route_plan = None
+    if _operator_surface_needs_route_plan(selected_skill, extra_markers, routing_message):
+        route_plan_recommendations = _operator_surface_route_plan_recommendations(
+            recommendation,
+            selected_skill=selected_skill,
+            extra_markers=extra_markers,
+            message=message,
+        )
+        workflow_route_plan = build_workflow_route_plan(
+            message,
+            route_plan_recommendations,
+            selected_skill=selected_skill,
+            action="dispatch",
+        )
     return ChatRouteDecision(
         schema_version=1,
         source=source,
@@ -2159,6 +2161,50 @@ def _operator_surface_reason(default_reason: str, extra_markers: tuple[str, ...]
     if "guard:risky_refactor_before_cleanup" in extra_markers:
         return "Matched guard/trigger metadata; risky code-change requests should get a reviewed plan before cleanup."
     return default_reason
+
+
+def _operator_surface_needs_route_plan(selected_skill: str, extra_markers: tuple[str, ...], message: str) -> bool:
+    if selected_skill != "ralplan":
+        return False
+    if "guard:safe_feature_change" in extra_markers:
+        return True
+    if "guard:risky_refactor_before_cleanup" in extra_markers:
+        return _operator_surface_has_multi_stage_signals(message)
+    return False
+
+
+def _operator_surface_has_multi_stage_signals(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    signals = (
+        "implementation",
+        "implement",
+        "review",
+        "code review",
+        "docs",
+        "documentation",
+        "pull request",
+        "research",
+        "plan",
+        "조사",
+        "계획",
+        "구현",
+        "리뷰",
+        "문서",
+    )
+    return any(signal in normalized for signal in signals) or _operator_surface_has_pr_signal(normalized)
+
+
+def _operator_surface_has_pr_signal(normalized: str) -> bool:
+    return bool(re.search(r"(^|[^a-z0-9])pr([^a-z0-9]|$)", normalized)) or any(
+        phrase in normalized
+        for phrase in (
+            "pr까지",
+            "pr 까지",
+            "pr로",
+            "pr 로",
+            "pr 만들",
+        )
+    )
 
 
 def _operator_surface_route_plan_recommendations(
