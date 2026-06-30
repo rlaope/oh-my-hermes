@@ -657,6 +657,14 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
             translation service.
           </p>
           <p>
+            Guard perceived chat speed with
+            <code>omh demo router-fast-path --summary</code>. It checks that
+            common picker, status, file lookup, setup-health, coding-progress,
+            image-card, scheduled-ops, paper-learning, and source-finder turns
+            stay on explicit fast-path route markers instead of drifting into
+            full workflow scoring.
+          </p>
+          <p>
             Check the Hermes-awareness side with
             <code>omh demo route-hint-alignment --summary</code>. It confirms
             that every grounded-score and chat-card scenario also produces a
@@ -673,8 +681,9 @@ omh playbook recommend "every morning check competitor news and send a Slack dig
             Before a release, run <code>omh release product-readiness --version 1.0.1 --json</code>.
             It combines skill content, G1-G10 readiness, grounded routing score,
             chat-card coverage, route-hint alignment, routing precision,
-            Hermes UX quality, parity contracts, and release checklist shape
-            without claiming live Hermes chat or executor evidence.
+            localized copy, router fast-path quality, Hermes UX quality, parity
+            contracts, and release checklist shape without claiming live Hermes
+            chat or executor evidence.
           </p>
           <p>
             To attach local deterministic proof to a release PR or note, run
@@ -775,6 +784,7 @@ omh demo grounded-score --summary
 omh demo chat-card-coverage --summary
 omh demo route-hint-alignment --summary
 omh demo localized-chat-copy --summary
+omh demo router-fast-path --summary
 omh demo hermes-ux-quality --summary</code>
           </div>
         </section>
