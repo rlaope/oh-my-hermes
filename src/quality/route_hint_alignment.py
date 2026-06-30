@@ -25,6 +25,42 @@ class RouteHintAlignmentCase:
     expected_next_action: str
 
 
+_OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "claude-code-session-status",
+        "Claude Code session status",
+        "Claude Code session status 알려줘",
+        "ultraprocess",
+        "show_coding_handoff_status",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "setup-health-check",
+        "Setup health check",
+        "setup이 잘 됐는지 확인해줘",
+        "doctor",
+        "run_local_operator_check",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "dangerous-refactor-before-release",
+        "Dangerous refactor before release",
+        "dangerous refactor before release",
+        "ralplan",
+        "present_plan",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "dataset-github-source-finder",
+        "Dataset and GitHub source finding",
+        "find datasets and github repos for agent memory",
+        "source-finder",
+        "prepare_source_finder_plan",
+    ),
+)
+
+
 def route_hint_alignment_cases() -> tuple[RouteHintAlignmentCase, ...]:
     return tuple(
         [
@@ -49,6 +85,7 @@ def route_hint_alignment_cases() -> tuple[RouteHintAlignmentCase, ...]:
             )
             for case in CHAT_CARD_COVERAGE_CASES
         ]
+        + list(_OPERATOR_ROUTE_HINT_ALIGNMENT_CASES)
     )
 
 

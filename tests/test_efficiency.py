@@ -225,7 +225,7 @@ class EfficiencyContractTests(unittest.TestCase):
 
         doctor_hint = awareness_route_hint("update 했는데 잘 된거야?")
         self.assertEqual(doctor_hint["primary_workflow"], "doctor")
-        self.assertEqual(doctor_hint["primary_next_action"], "check_install_or_setup_health")
+        self.assertEqual(doctor_hint["primary_next_action"], "run_local_operator_check")
 
         source_finder_messages = (
             "논문 pdf 링크 찾아줘",

@@ -306,7 +306,7 @@ _CODING_OWNER_WORKFLOWS = frozenset(
         "ai-slop-cleaner",
     }
 )
-_CODING_OWNER_WHEN_CODE_SHAPED = frozenset({"code-review", "loop"})
+_CODING_OWNER_WHEN_CODE_SHAPED = frozenset({"code-review"})
 _STATUS_COPY = {
     "prepare_coding_delegation": (
         "handoff",
