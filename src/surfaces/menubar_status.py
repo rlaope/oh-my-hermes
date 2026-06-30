@@ -12,6 +12,7 @@ from ..hud import build_hud_payload
 from ..local_store import read_json_object
 from ..paths import OmhPaths
 from ..runtime.artifacts import summarize_delegated_coding_status
+from ..routing.action_copy import next_action_label
 from ..targets import read_target_registry_result
 
 
@@ -247,6 +248,7 @@ def _external_executor_row(status: dict[str, Any], executor_profile: str, coding
     evidence_state = str(prepared.get("status") or "unknown")
     execution_observed = bool(execution.get("observed", False))
     row_status = "observed" if execution_observed else "prepared" if prepared.get("available") else "not_observed"
+    evidence_next_action = str(status.get("next_action", "") or "")
     return {
         "kind": "external_coding_executor",
         "id": f"{executor_profile}:{status.get('run_id', '')}",
@@ -274,7 +276,8 @@ def _external_executor_row(status: dict[str, Any], executor_profile: str, coding
             "run_id": str(status.get("run_id", "") or ""),
             "prepared_available": bool(prepared.get("available", False)),
             "execution_observed": execution_observed,
-            "next_action": str(status.get("next_action", "") or ""),
+            "next_action": evidence_next_action,
+            "next_action_label": next_action_label(evidence_next_action),
         },
     }
 
@@ -528,7 +531,7 @@ def _coding_menu_rows(settings: dict[str, Any], current_executor_row: dict[str, 
         ]
         next_action = str(_dict(current_executor_row.get("evidence")).get("next_action", "") or "")
         if next_action:
-            rows.append(_menu_row("Next", _short_text(next_action, limit=48)))
+            rows.append(_menu_row("Next", _human_next_action(next_action)))
         return rows
     dispatch = _setting_value(settings, "send_mode", default="ask_before_dispatch")
     return [
@@ -566,8 +569,13 @@ def _evidence_next_action(current_executor_row: dict[str, Any]) -> str:
         evidence = _dict(current_executor_row.get("evidence"))
         next_action = str(evidence.get("next_action", "") or "")
         if next_action:
-            return _short_text(next_action, limit=48)
+            return _human_next_action(next_action)
     return "open Hermes or run omh doctor"
+
+
+def _human_next_action(next_action: str) -> str:
+    label = next_action_label(next_action)
+    return _short_text(label or next_action, limit=48)
 
 
 def _short_text(value: str, *, limit: int) -> str:

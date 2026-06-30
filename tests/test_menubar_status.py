@@ -74,6 +74,9 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertNotIn("4312", json.dumps(menu_cards))
             self.assertEqual(menu_cards[1]["rows"][0]["label"], "Agent")
             self.assertEqual(menu_cards[1]["rows"][0]["value"], "Codex")
+            self.assertEqual(menu_cards[1]["rows"][3]["label"], "Next")
+            self.assertEqual(menu_cards[1]["rows"][3]["value"], "dispatching to the selected coding agent")
+            self.assertNotIn("dispatch_to_executor", json.dumps(menu_cards))
 
             hermes_agents = payload["hermes_agents"]
             self.assertEqual(len(hermes_agents), 1)
@@ -102,6 +105,11 @@ class MenubarStatusTests(unittest.TestCase):
             self.assertTrue(executors[0]["handoff"]["dispatchable"])
             self.assertEqual(executors[0]["handoff"]["dispatch_policy"], "ask_before_dispatch")
             self.assertEqual(executors[0]["evidence"]["state"], "prepared_not_observed")
+            self.assertEqual(executors[0]["evidence"]["next_action"], "dispatch_to_executor")
+            self.assertEqual(
+                executors[0]["evidence"]["next_action_label"],
+                "dispatching to the selected coding agent",
+            )
             self.assertNotIn("Codex", [agent["name"] for agent in hermes_agents])
             current = payload["current_external_coding_executor"]
             self.assertTrue(current["selected"])
