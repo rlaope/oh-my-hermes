@@ -14,6 +14,7 @@ from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog
 from .action_copy import next_action_label as _route_next_action_label
 from .intent import scrub_diagnostic_status_text
 from .missed_route import is_missed_route_feedback
+from .omh_help import is_omh_intro_question, is_omh_quickstart_question, is_omh_status_question
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
@@ -965,6 +966,14 @@ def _route_chat_message_cached(
     min_confidence: str,
 ) -> dict[str, object]:
     routing_message = scrub_diagnostic_status_text(message)
+    fast_omh_help_decision = _omh_help_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_omh_help_decision is not None:
+        return fast_omh_help_decision.to_dict()
     fast_catalog_decision = _catalog_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1256,6 +1265,139 @@ def _copy_workflow_route_plan(value: dict[str, object]) -> dict[str, object]:
     stages = value.get("stages")
     copied["stages"] = list(stages) if isinstance(stages, list) else []
     return copied
+
+
+def _omh_help_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if explicit_skill_invocation(routing_message):
+        return None
+    if is_omh_quickstart_question(routing_message):
+        return _router_help_decision(
+            message,
+            source=source,
+            min_confidence=min_confidence,
+            matched=("omh_quickstart_question",),
+            next_action="show_quickstart",
+            reason="OMH first-use or post-setup question; show the quickstart card instead of drafting a plan.",
+            evidence_boundary=(
+                "Quickstart output is local setup and wrapper guidance only; it is not host plugin load, "
+                "executor work, review, CI, or merge evidence."
+            ),
+            wrapper_guidance="Render the OMH quickstart card with the smallest useful next action.",
+            score=12,
+        )
+    if is_omh_status_question(routing_message):
+        return _router_help_decision(
+            message,
+            source=source,
+            min_confidence=min_confidence,
+            matched=("omh_status_question",),
+            next_action="show_status",
+            reason="OMH status or next-action question; show probe-backed status instead of drafting a plan.",
+            evidence_boundary=(
+                "Status and roadmap output is local probe evidence only; it is not host plugin load, executor work, "
+                "review, CI, or merge evidence."
+            ),
+            wrapper_guidance="Render the OMH status card and only claim observed local probe results.",
+            score=12,
+        )
+    if is_omh_intro_question(routing_message):
+        return _router_help_decision(
+            message,
+            source=source,
+            min_confidence=min_confidence,
+            matched=("omh_intro_question",),
+            next_action="show_context_brief",
+            reason="OMH intro or usage question; show the compact Hermes-facing mental model before the full picker.",
+            evidence_boundary=(
+                "Context brief output is routing/help context only; it is not workflow execution, delivery, "
+                "verification, review, CI, or merge evidence."
+            ),
+            wrapper_guidance="Render the OMH context brief first, then offer the workflow picker or quickstart card.",
+            score=12,
+        )
+    return None
+
+
+def _router_help_decision(
+    message: str,
+    *,
+    source: str,
+    min_confidence: str,
+    matched: tuple[str, ...],
+    next_action: str,
+    reason: str,
+    evidence_boundary: str,
+    wrapper_guidance: str,
+    score: int,
+) -> ChatRouteDecision:
+    selected_harness = primary_harness_for_skill(_ROUTER_SKILL)
+    recommendation = _router_help_recommendation(
+        message,
+        matched=matched,
+        next_action=next_action,
+        reason=reason,
+        evidence_boundary=evidence_boundary,
+        wrapper_guidance=wrapper_guidance,
+        score=score,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=_ROUTER_SKILL,
+        selected_harness=selected_harness,
+        candidate_skill=_ROUTER_SKILL,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=score,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", _ROUTER_SKILL, _ROUTER_SKILL, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _router_help_recommendation(
+    query: str,
+    *,
+    matched: tuple[str, ...],
+    next_action: str,
+    reason: str,
+    evidence_boundary: str,
+    wrapper_guidance: str,
+    score: int,
+) -> dict[str, object]:
+    definition = _router_skill_definition()
+    return {
+        "skill": definition.name,
+        "description": definition.description,
+        "category": definition.category,
+        "phase": definition.phase,
+        "hermes_role": definition.hermes_role,
+        "handoff_policy": definition.handoff_policy,
+        "score": score,
+        "confidence": "high",
+        "matched": list(matched),
+        "why": reason,
+        "next_action": next_action,
+        "evidence_boundary": evidence_boundary,
+        "wrapper_guidance": wrapper_guidance,
+        "suggested_prompt": query,
+    }
 
 
 def _has_explicit_invocation_prefix(message: str) -> bool:

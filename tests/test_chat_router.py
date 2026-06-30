@@ -478,6 +478,56 @@ class ChatRouterTests(unittest.TestCase):
             self.assertEqual(public["route_explanation"]["next_action"], "prepare_agent_ops_review")
             self.assertNotIn("workflow_route_plan", public)
 
+    def test_omh_help_questions_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        cases = (
+            ("what is OMH?", "omh_intro_question", "show_context_brief"),
+            ("what is oh-my-hermes?", "omh_intro_question", "show_context_brief"),
+            ("how do I use OMH?", "omh_intro_question", "show_context_brief"),
+            ("how do I use OMH with Discord/Slack/Telegram?", "omh_intro_question", "show_context_brief"),
+            ("OMH 뭐야?", "omh_intro_question", "show_context_brief"),
+            ("OMH 어떻게 써?", "omh_intro_question", "show_context_brief"),
+            ("OMH 디스코드에서 어떻게 써?", "omh_intro_question", "show_context_brief"),
+            ("what is OMH status?", "omh_status_question", "show_status"),
+            ("show OMH status", "omh_status_question", "show_status"),
+            ("OMH 상태 보여줘", "omh_status_question", "show_status"),
+            ("what should I do next with OMH setup?", "omh_quickstart_question", "show_quickstart"),
+            ("OMH 설치됐는데 이제 뭐해?", "omh_quickstart_question", "show_quickstart"),
+        )
+
+        for message, matched, next_action in cases:
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("OMH help questions should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("OMH help questions should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+            self.assertEqual(decision["candidate_skill"], "oh-my-hermes")
+            self.assertEqual(decision["confidence"], "high")
+            self.assertEqual(decision["recommendations"][0]["matched"], [matched])
+            self.assertEqual(decision["recommendations"][0]["next_action"], next_action)
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], next_action)
+            self.assertNotIn("workflow_route_plan", public)
+
+    def test_omh_help_fast_path_preserves_catalog_picker_questions(self) -> None:
+        decision = route_chat_message("what does OMH do?", source="discord")
+        public = public_route_payload(decision)
+
+        self.assertEqual(decision["action"], "dispatch")
+        self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+        self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
+        self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
+
     def test_plain_text_transform_keeps_workflow_blockers(self) -> None:
         cases = (
             ("회의록 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
