@@ -1909,6 +1909,11 @@ def workflow_context_card_for_workflow(workflow: str) -> dict[str, object]:
 
 def awareness_context_matches_message(message: str) -> bool:
     """Return true when a non-first-turn message should refresh OMH context."""
+    return _awareness_context_matches_message_cached(message)
+
+
+@lru_cache(maxsize=512)
+def _awareness_context_matches_message_cached(message: str) -> bool:
     raw_text = unicodedata.normalize("NFKC", message).casefold()
     if not raw_text.strip():
         return False
