@@ -7,6 +7,7 @@ from typing import Any
 
 from ..local_store import atomic_write_json, ensure_dir, read_json_object, read_json_object_result, utc_now
 from ..paths import OmhPaths
+from ..routing.action_copy import next_action_label
 
 
 USE_CASE_CATALOG_SCHEMA_VERSION = "omh_use_case_catalog/v1"
@@ -968,6 +969,7 @@ def _public_case(case: UseCase) -> dict[str, Any]:
 
     payload = asdict(case)
     payload.update(skill_exposure_payload(case.primary_skill))
+    payload["next_action_label"] = _action_label(case.next_action)
     payload["proof_surfaces"] = list(case.proof_surfaces)
     payload["keywords"] = list(case.keywords)
     return payload
@@ -988,6 +990,7 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
             "install_visibility": exposure["install_visibility"],
             "compatibility_alias": exposure["compatibility_alias"],
             "next_action": case.next_action,
+            "next_action_label": _action_label(case.next_action),
         },
         "chat_surface": {
             "source": "hermes_agent_chat",
@@ -996,10 +999,10 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
             "headline": f"[omh] {case.title}",
             "body_lines": [
                 case.hermes_use_case,
-                f"Route: {case.primary_skill} -> {case.next_action}.",
+                f"Route: {case.primary_skill} -> {_action_label_with_id(case.next_action)}.",
                 case.user_value,
             ],
-            "status_line": f"prepared_not_observed | {case.primary_skill} | {case.next_action}",
+            "status_line": f"prepared_not_observed | {case.primary_skill} | {_action_label_with_id(case.next_action)}",
         },
         "wrapper_card": {
             "component": "omh_use_case_card",
@@ -1029,7 +1032,7 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
         "actions": [
             {
                 "id": case.next_action,
-                "label": _action_label(case.next_action),
+                "label": _action_button_label(case.next_action),
                 "kind": "hermes_prompt",
                 "style": "primary",
                 "value": case.hermes_chat_prompt,
@@ -1083,7 +1086,36 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
 
 
 def _action_label(action: str) -> str:
-    return action.replace("_", " ").capitalize()
+    return next_action_label(action)
+
+
+def _action_label_with_id(action: str) -> str:
+    normalized = action.strip()
+    if not normalized:
+        return ""
+    label = _action_label(normalized)
+    if not label or label == normalized:
+        return normalized
+    return f"{label} (`{normalized}`)"
+
+
+def _action_button_label(action: str) -> str:
+    label = _action_label(action)
+    replacements = (
+        ("preparing ", "Prepare "),
+        ("checking ", "Check "),
+        ("showing ", "Show "),
+        ("opening ", "Open "),
+        ("scoping ", "Scope "),
+        ("reviewing ", "Review "),
+        ("classifying ", "Classify "),
+        ("gathering ", "Gather "),
+        ("starting ", "Start "),
+    )
+    for prefix, replacement in replacements:
+        if label.startswith(prefix):
+            return replacement + label[len(prefix) :]
+    return label[:1].upper() + label[1:]
 
 
 def _artifact_operator_steps(case: UseCase) -> list[dict[str, str]]:

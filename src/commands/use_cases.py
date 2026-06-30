@@ -177,7 +177,7 @@ def _print_case_summary(case: dict[str, object]) -> None:
     print(f"  Compatibility alias: {case.get('compatibility_alias')}")
     print(f"  Playbook: {case.get('playbook')}")
     print(f"  Harness: {case.get('harness')}")
-    print(f"  Next action: {case.get('next_action')}")
+    print(f"  Next action: {_action_label_with_id(str(case.get('next_action', '')))}")
     print("Use it")
     print(f"  Hermes chat: {case.get('hermes_chat_prompt')}")
     print(f"  Compatibility alias: {case.get('direct_skill_invocation')}")
@@ -206,7 +206,7 @@ def _print_case_demo_summary(card: dict[str, object]) -> None:
     print(f"OMH use-case demo card: {card.get('goal')} - {card.get('title')}")
     print("Route")
     print(
-        f"  {route.get('primary_skill')} -> {route.get('next_action')} "
+        f"  {_route_summary(route)} "
         f"({route.get('exposure')}; playbook {route.get('playbook')}; harness {route.get('harness')})"
     )
     print("Hermes card")
@@ -237,7 +237,7 @@ def _print_cases_demo_collection_summary(payload: dict[str, object]) -> None:
         route = card.get("route", {})
         if not isinstance(route, dict):
             route = {}
-        print(f"  - {card.get('goal')}: {card.get('title')} ({route.get('primary_skill')} -> {route.get('next_action')})")
+        print(f"  - {card.get('goal')}: {card.get('title')} ({_route_summary(route)})")
     print("Boundary")
     print(f"  {payload.get('boundary')}")
     print("Next")
@@ -288,7 +288,7 @@ def _print_cases_artifact_summary(payload: dict[str, object]) -> None:
             route = artifact.get("route", {})
             if not isinstance(route, dict):
                 route = {}
-            print(f"  - {artifact.get('goal')}: {artifact.get('title')} ({route.get('primary_skill')} -> {route.get('next_action')})")
+            print(f"  - {artifact.get('goal')}: {artifact.get('title')} ({_route_summary(route)})")
         print("Boundary")
         print(f"  {payload.get('boundary')}")
         print("Next")
@@ -303,7 +303,7 @@ def _print_cases_artifact_summary(payload: dict[str, object]) -> None:
         evidence = {}
     print(f"OMH use-case artifact: {payload.get('goal')} - {payload.get('title')}")
     print("Route")
-    print(f"  {route.get('primary_skill')} -> {route.get('next_action')}")
+    print(f"  {_route_summary(route)}")
     print("Artifact")
     print(f"  ID: {payload.get('artifact_id')}")
     print(f"  Status: {payload.get('observation_status')}")
@@ -447,6 +447,16 @@ def _print_cases_validate_summary(payload: dict[str, object]) -> None:
     print("Boundary")
     print("  Validation proves catalog registration only, not external runtime execution.")
     print("  For machine-readable output, rerun with `--json`.")
+
+
+def _route_summary(route: dict[str, object]) -> str:
+    primary_skill = str(route.get("primary_skill", "")).strip()
+    next_action = str(route.get("next_action", "")).strip()
+    if not primary_skill and not next_action:
+        return ""
+    if not next_action:
+        return primary_skill
+    return f"{primary_skill} -> {_action_label_with_id(next_action, str(route.get('next_action_label', '')))}"
 
 
 def _add_cases_commands(sub) -> None:
