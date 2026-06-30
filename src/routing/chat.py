@@ -2269,6 +2269,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "데이터셋이랑 깃허브",
             "데이터셋 찾아",
             "깃허브 오픈소스 찾아",
+            "깃허브 오픈소스 저장소 찾아",
             "공개 데이터셋 찾아",
             "논문 링크 찾아",
             "논문 링크 찾아줘",
@@ -2278,6 +2279,8 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "깃허브 repo 소스 찾아",
             "깃허브 리포 소스 찾아",
             "깃허브 저장소 찾아",
+            "오픈소스 저장소 찾아",
+            "깃허브 저장소 찾아서",
             "github repo 소스 찾아",
             "github repository 소스 찾아",
         ),
@@ -3810,6 +3813,8 @@ def _is_plain_error_or_log_help_question(text: str, direct_text: str) -> bool:
 
 
 def _is_plain_text_transform_question(text: str, direct_text: str) -> bool:
+    if _is_single_word_translation_request(direct_text):
+        return True
     if _contains_marker(text, _DIRECT_ANSWER_TEXT_TRANSFORM_HARD_BLOCKERS) or _contains_marker(
         direct_text,
         _DIRECT_ANSWER_TEXT_TRANSFORM_HARD_BLOCKERS,
@@ -3820,6 +3825,12 @@ def _is_plain_text_transform_question(text: str, direct_text: str) -> bool:
     if any(subject in direct_text for subject in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_SUBJECTS):
         return any(action in direct_text for action in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_ACTIONS)
     return False
+
+
+def _is_single_word_translation_request(direct_text: str) -> bool:
+    if not any(marker in direct_text for marker in ("라는 단어", "라는 말")):
+        return False
+    return any(action in direct_text for action in ("번역", "한국어로", "영어로"))
 
 
 def _is_direct_answer_concept_question(text: str, direct_text: str) -> bool:

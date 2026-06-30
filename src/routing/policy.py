@@ -1564,6 +1564,8 @@ _TOOLBELT_READINESS_PHRASES = (
     "external tool missing",
     "image tool missing",
     "image tool not connected",
+    "tool not attached",
+    "image tool not attached",
     "image generation blocked",
     "image generation setup",
     "image generation connector",
@@ -1589,6 +1591,9 @@ _TOOLBELT_READINESS_PHRASES = (
     "키 없어서",
     "이미지 도구",
     "이미지 생성 도구",
+    "도구가 안 붙",
+    "도구 안 붙",
+    "이미지 도구가 안 붙",
     "이미지 생성이 막",
     "이미지 생성 막",
     "이미지 생성 연결",
@@ -4189,6 +4194,16 @@ def _source_finder_guard_applies(
     *,
     visual_summary_applies: bool | None = None,
 ) -> bool:
+    if _explicit_skill_candidate_is_negated(
+        normalized_query,
+        "source-finder",
+        "source finder",
+        "source-acquisition",
+        "source acquisition",
+        "source-intake",
+        "source intake",
+    ):
+        return False
     if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
     if _explicit_material_export_requested(normalized_query, query_tokens):
@@ -4239,6 +4254,16 @@ def _source_finder_guard_applies(
 
 
 def _source_finder_explicit_acquisition_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _explicit_skill_candidate_is_negated(
+        normalized_query,
+        "source-finder",
+        "source finder",
+        "source-acquisition",
+        "source acquisition",
+        "source-intake",
+        "source intake",
+    ):
+        return False
     if _contains_phrase(normalized_query, _SOURCE_FINDER_EXCLUSION_PHRASES):
         return False
     if _contains_phrase(normalized_query, _SOURCE_FINDER_PHRASES):
@@ -5191,6 +5216,7 @@ def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[s
             "missing",
             "not connected",
             "not configured",
+            "not attached",
             "blocked",
             "unavailable",
             "setup",
@@ -5203,6 +5229,7 @@ def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[s
             "막혀",
             "막히",
             "연결",
+            "안 붙",
             "설정",
             "고르",
         ),
