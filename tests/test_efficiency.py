@@ -1107,9 +1107,13 @@ class EfficiencyContractTests(unittest.TestCase):
             ("codex 연결돼 있어?", "executor-runtime-readiness", "guard:executor_runtime_readiness"),
             ("내 코딩 에이전트 연결 상태 확인해줘", "executor-runtime-readiness", "guard:executor_runtime_readiness"),
             ("codex 작업 어디까지 됐어?", "ultraprocess", "guard:coding_progress_status"),
+            ("codex 세션이 살아있는지 확인해줘", "ultraprocess", "guard:coding_progress_status"),
             ("이미지 생성 툴 연결 안됐으면 뭐 써?", "toolbelt-readiness", "guard:toolbelt_readiness"),
             ("메모리 점검해줘", "memory-curation-review", "guard:memory_curation"),
+            ("내 기억에 뭐 저장돼있는지 검토해줘", "memory-curation-review", "guard:memory_curation"),
             ("업데이트 됐는지 확인해줘", "doctor", "guard:doctor_health"),
+            ("설치가 제대로 됐는지 확인해줘", "doctor", "guard:doctor_health"),
+            ("setup 다시 해야 하는지 알려줘", "doctor", "guard:doctor_health"),
         )
 
         with patch.object(
@@ -1144,6 +1148,11 @@ class EfficiencyContractTests(unittest.TestCase):
             "지금 진행중인 작업 알려줘",
             "이번 작업 끝났는지 확인해줘",
             "현재 PR 리뷰 통과했어?",
+            "PR 머지됐는지 확인해줘",
+            "CI 통과했어?",
+            "이 기능 배포 준비됐어?",
+            "메뉴바 모니터 다시 켜줘",
+            "상단바 OMH 아이콘 안 보여",
             "작업상황 보고해줘",
             "what are you working on?",
         )

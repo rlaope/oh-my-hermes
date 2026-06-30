@@ -2942,6 +2942,52 @@ def build_chat_response_from_route(
                     ],
                 },
             )
+        if selected == "doctor" or policy_next_action == "run_local_operator_check":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or (
+                "A local operator check is health evidence only after the check runs; it is not Hermes reload, "
+                "plugin-load, executor dispatch, implementation, review, CI, or merge evidence."
+            )
+            body = (
+                "I will check the local OMH install path: command availability, managed workflows, runtime state, "
+                "Hermes registration, target detection, plugin surface, and the next repair step if something is stale. "
+                "This keeps setup/update questions in the operator health lane instead of asking for shell approval first."
+            )
+            return _chat_response(
+                kind="doctor_health",
+                headline="I can check whether OMH is installed and connected correctly.",
+                body=body,
+                phase="doctor_health_prepared",
+                next_action="run_local_operator_check",
+                thread_key=thread_key,
+                actions=[
+                    _action("run_local_operator_check", "Run local check", "primary"),
+                    _action("run_omh_doctor", "Run omh doctor", "secondary"),
+                    _action("run_omh_setup", "Repair setup", "secondary"),
+                    _action("run_omh_update", "Refresh workflows", "secondary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "doctor_health_card/v1",
+                    "local_operator_check": True,
+                    "evidence_not_observed": [
+                        "command availability",
+                        "workflow installation health",
+                        "Hermes registration reload",
+                        "plugin runtime load",
+                        "executor dispatch",
+                        "implementation",
+                        "review",
+                        "CI",
+                        "merge",
+                    ],
+                },
+            )
         if selected == "agent-ops-review" or policy_next_action == "prepare_agent_ops_review":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "An agent ops review card is not runtime evidence."
             card = build_agent_operator_productivity_card(
