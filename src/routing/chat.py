@@ -2240,6 +2240,16 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "코덱스로 이 이슈 pr",
             "코덱스로 이슈 pr",
             "코덱스로 이 이슈 pr 만들어",
+            "merge as friren",
+            "merge with friren author",
+            "friren author",
+            "friren author로",
+            "프리렌 author",
+            "프리렌 author로",
+            "프리렌 author로 머지",
+            "프리렌 author로 커밋",
+            "프리렌으로 머지",
+            "프리렌으로 커밋",
             "improve readme",
             "update readme",
             "readme improvement",
@@ -2423,6 +2433,25 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "operator_surface_fast_path:automation",
         "Clear automation request; prepare the scheduled-ops blueprint without scoring every workflow.",
     ),
+    (
+        "agent-board",
+        (
+            "multiple hermes agents",
+            "multiple hermes profiles",
+            "multi agent topology",
+            "target topology",
+            "agent topology",
+            "hermes agent 여러",
+            "헤르메스 agent 여러",
+            "헤르메스 에이전트 여러",
+            "에이전트가 한개가 아니라 여러개",
+            "에이전트가 한 개가 아니라 여러 개",
+            "agent가 한개가 아니라 여러개",
+            "agent가 한 개가 아니라 여러 개",
+        ),
+        "operator_surface_fast_path:agent_board",
+        "Clear multi-Hermes-agent topology request; prepare the board/status contract without scoring every workflow.",
+    ),
 )
 
 
@@ -2461,6 +2490,10 @@ def _operator_surface_fast_path_decision(
         score=score,
         why=why,
     )
+    route_next_action = ""
+    if "guard:merge_author_constraint" in extra_markers:
+        route_next_action = "show_coding_handoff_status"
+        recommendation = {**recommendation, "next_action": route_next_action}
     workflow_route_plan = None
     if _operator_surface_needs_route_plan(selected_skill, extra_markers, routing_message):
         route_plan_recommendations = _operator_surface_route_plan_recommendations(
@@ -2495,6 +2528,7 @@ def _operator_surface_fast_path_decision(
         workflow_route_plan=workflow_route_plan,
         learning_candidate_card=None,
         recommendations=(recommendation,),
+        route_next_action=route_next_action,
     )
 
 
@@ -2520,8 +2554,11 @@ def _operator_surface_fast_path_patterns() -> tuple[tuple[str, str, str, str, st
 
 def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
     normalized = _fast_path_text(phrase)
-    if skill == "ultraprocess" and any(marker in normalized for marker in ("codex", "코덱스")):
-        return ("guard:coding_handoff_status",)
+    if skill == "ultraprocess":
+        if any(marker in normalized for marker in ("codex", "코덱스")):
+            return ("guard:coding_handoff_status",)
+        if any(marker in normalized for marker in ("friren", "프리렌", "author", "merge", "머지", "커밋")):
+            return ("guard:coding_handoff_status", "guard:merge_author_constraint")
     if skill == "img-summary":
         return ("guard:img_summary",)
     if skill == "paper-learning":
@@ -2601,6 +2638,8 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:materials_request"
     if marker == "operator_surface_fast_path:automation":
         return "phrase:automation_request"
+    if marker == "operator_surface_fast_path:agent_board":
+        return "phrase:agent_topology_request"
     return "phrase:operator_surface"
 
 

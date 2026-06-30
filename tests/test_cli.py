@@ -5111,6 +5111,7 @@ class CliTests(unittest.TestCase):
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("지금 PR 머지 준비 됐는지 알려줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("이 PR 리뷰어 코멘트 반영됐는지 보고 머지 준비해줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
+            ("merge할때도 프리렌 author로 머지해", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("今何してる？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("现在在做什么？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("qué está pasando?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
@@ -5131,6 +5132,7 @@ class CliTests(unittest.TestCase):
             ("루프 비용이랑 지연시간 상태 보여줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
             ("설치 잘 됐어?", "doctor", "doctor_health", "run_local_operator_check"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "agent_board", "prepare_agent_board_card"),
+            ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board", "agent_board", "prepare_agent_board_card"),
             ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             (
                 "I want Hermes to learn from this workflow and improve the skill next time",

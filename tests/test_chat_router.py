@@ -98,6 +98,18 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "merge할때도 프리렌 author로 머지해",
+                "ultraprocess",
+                "show_coding_handoff_status",
+                None,
+            ),
+            (
+                "프리렌 author로 커밋하고 머지해",
+                "ultraprocess",
+                "show_coding_handoff_status",
+                None,
+            ),
+            (
                 "setup이 잘 됐는지 확인해줘",
                 "doctor",
                 "run_local_operator_check",
@@ -1640,6 +1652,18 @@ class ChatRouterTests(unittest.TestCase):
                 "operator_surface_fast_path:performance",
             ),
             ("리드미 개선해줘", "ultraprocess", "start_ultraprocess", "operator_surface_fast_path:delivery"),
+            (
+                "merge할때도 프리렌 author로 머지해",
+                "ultraprocess",
+                "show_coding_handoff_status",
+                "operator_surface_fast_path:delivery",
+            ),
+            (
+                "hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?",
+                "agent-board",
+                "prepare_agent_board_card",
+                "operator_surface_fast_path:agent_board",
+            ),
         )
 
         with mock.patch.object(
