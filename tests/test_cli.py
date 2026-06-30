@@ -4615,6 +4615,26 @@ class CliTests(unittest.TestCase):
             "preparing an image prompt card",
         )
 
+    def test_chat_route_hint_defaults_to_operator_summary_for_terminal_users(self) -> None:
+        message = "what OMH workflows are available?"
+        status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("OMH route hint", stdout)
+        self.assertIn("Workflow: oh-my-hermes", stdout)
+        self.assertIn("Next action: opening the workflow picker", stdout)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
+        status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "discord", message])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_route_hint/v1")
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "oh-my-hermes")
+
     def test_chat_route_hint_summary_covers_loop_and_picker_language(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "route-hint", "--source", "discord", "--summary", "run a loop to improve first-run experience"],

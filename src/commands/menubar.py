@@ -38,22 +38,22 @@ def cmd_menubar_install(args: argparse.Namespace) -> int:
         )
     except RuntimeError as exc:
         raise OmhError(str(exc)) from exc
-    _print_json(payload)
+    _print_menubar_app_payload(args, payload)
     return 0
 
 
 def cmd_menubar_start(args: argparse.Namespace) -> int:
-    _print_json(start_menubar_app(_paths(args)))
+    _print_menubar_app_payload(args, start_menubar_app(_paths(args)))
     return 0
 
 
 def cmd_menubar_stop(args: argparse.Namespace) -> int:
-    _print_json(stop_menubar_app(_paths(args)))
+    _print_menubar_app_payload(args, stop_menubar_app(_paths(args)))
     return 0
 
 
 def cmd_menubar_uninstall(args: argparse.Namespace) -> int:
-    _print_json(uninstall_menubar_app(_paths(args), dry_run=bool(args.dry_run)))
+    _print_menubar_app_payload(args, uninstall_menubar_app(_paths(args), dry_run=bool(args.dry_run)))
     return 0
 
 
@@ -77,16 +77,20 @@ def _add_menubar_commands(sub) -> None:
     install.add_argument("--dry-run", action="store_true")
     install.add_argument("--force", action="store_true")
     install.add_argument("--no-start", action="store_true", help="Install the helper without starting the LaunchAgent.")
+    install.add_argument("--json", action="store_true", help="Print the full menubar_app/v1 payload.")
     install.set_defaults(func=cmd_menubar_install)
 
     start = menubar_sub.add_parser("start", help="Start the installed OMH menu bar helper.")
+    start.add_argument("--json", action="store_true", help="Print the full menubar_app/v1 payload.")
     start.set_defaults(func=cmd_menubar_start)
 
     stop = menubar_sub.add_parser("stop", help="Stop the OMH menu bar helper LaunchAgent.")
+    stop.add_argument("--json", action="store_true", help="Print the full menubar_app/v1 payload.")
     stop.set_defaults(func=cmd_menubar_stop)
 
     uninstall = menubar_sub.add_parser("uninstall", help="Stop and remove the OMH menu bar helper.")
     uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--json", action="store_true", help="Print the full menubar_app/v1 payload.")
     uninstall.set_defaults(func=cmd_menubar_uninstall)
 
 
@@ -160,6 +164,52 @@ def _format_menubar_status(payload: Mapping[str, object]) -> str:
     return "\n".join(lines)
 
 
+def _print_menubar_app_payload(args: argparse.Namespace, payload: Mapping[str, object]) -> None:
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        print(_format_menubar_app_payload(payload))
+
+
+def _format_menubar_app_payload(payload: Mapping[str, object]) -> str:
+    operation = _text(payload.get("operation")) or "menubar"
+    status = _text(payload.get("status")) or "unknown"
+    message = _text(payload.get("message"))
+    lines = [f"OMH menu bar {operation}", "Summary", f"  Status: {status.replace('_', ' ')}"]
+    if message:
+        lines.append(f"  Message: {_single_line(message)}")
+
+    if _truthy(payload.get("started")):
+        lines.append("  Result: helper started")
+    if _truthy(payload.get("stopped")):
+        lines.append("  Result: helper stopped")
+
+    removed = [_text(item) for item in _as_sequence(payload.get("removed")) if _text(item)]
+    would_remove = [_text(item) for item in _as_sequence(payload.get("would_remove")) if _text(item)]
+    if removed:
+        lines.append(f"  Removed: {len(removed)} path(s)")
+    if would_remove:
+        lines.append(f"  Would remove: {len(would_remove)} path(s)")
+
+    launch_agent = _text(payload.get("launch_agent"))
+    if launch_agent:
+        lines.append(f"  LaunchAgent: {launch_agent}")
+
+    if status in {"missing", "failed", "installed_start_failed"}:
+        lines.extend(["", "Next"])
+        if status == "missing":
+            lines.append("  Run `omh menubar install` to install the helper.")
+        elif operation == "start":
+            lines.append("  Run `omh doctor`, then `omh menubar install --force` if the helper needs repair.")
+        elif operation == "stop":
+            lines.append("  The helper may already be stopped. Run `omh menubar status` to inspect the current view.")
+        else:
+            lines.append("  Run `omh doctor` for the local health report.")
+
+    lines.extend(["", "For machine-readable output, rerun with `--json`."])
+    return "\n".join(lines)
+
+
 def _as_mapping(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
 
@@ -170,6 +220,14 @@ def _as_sequence(value: object) -> Sequence[object]:
 
 def _text(value: object) -> str:
     return "" if value is None else str(value).strip()
+
+
+def _single_line(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _truthy(value: object) -> bool:
+    return bool(value) and str(value).lower() not in {"false", "0", "none", "null"}
 
 
 def _friendly_row_value(label: str, value: str) -> str:

@@ -83,6 +83,58 @@ class MenubarAppTests(unittest.TestCase):
             menubar_app_module._SWIFT_SOURCE,
         )
 
+    def test_menubar_start_defaults_to_human_readable_output(self) -> None:
+        payload = {
+            "schema_version": MENUBAR_APP_SCHEMA_VERSION,
+            "operation": "start",
+            "platform": "Darwin",
+            "label": "com.rlaope.omh.menubar",
+            "launch_agent": "/tmp/com.rlaope.omh.menubar.plist",
+            "started": True,
+            "status": "running",
+            "message": "OMH menu bar helper started.",
+        }
+        with patch("omh.commands.menubar.start_menubar_app", return_value=payload):
+            status, stdout, stderr = run_cli(["menubar", "start"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("OMH menu bar start", stdout)
+        self.assertIn("Status: running", stdout)
+        self.assertIn("Result: helper started", stdout)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
+        with patch("omh.commands.menubar.start_menubar_app", return_value=payload):
+            status, stdout, stderr = run_cli(["menubar", "start", "--json"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(stdout)["schema_version"], MENUBAR_APP_SCHEMA_VERSION)
+
+    def test_menubar_stop_failure_is_readable_without_json(self) -> None:
+        payload = {
+            "schema_version": MENUBAR_APP_SCHEMA_VERSION,
+            "operation": "stop",
+            "platform": "Darwin",
+            "label": "com.rlaope.omh.menubar",
+            "launch_agent": "/tmp/com.rlaope.omh.menubar.plist",
+            "stopped": False,
+            "status": "failed",
+            "message": "Boot-out failed: 5: Input/output error\nTry re-running the command as root for richer errors.",
+        }
+        with patch("omh.commands.menubar.stop_menubar_app", return_value=payload):
+            status, stdout, stderr = run_cli(["menubar", "stop"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("OMH menu bar stop", stdout)
+        self.assertIn("Status: failed", stdout)
+        self.assertIn("Boot-out failed: 5: Input/output error", stdout)
+        self.assertIn("Run `omh menubar status`", stdout)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+
     def test_custom_path_uninstall_does_not_touch_user_launch_agent(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

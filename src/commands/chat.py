@@ -40,7 +40,15 @@ from ..wrapper.sessions import (
     select_wrapper_session_executor,
     show_wrapper_session,
 )
-from .common import _chat_input_and_metadata, _chat_message, _explicit_source_metadata, _paths, _print_json, _resolved_executor
+from .common import (
+    _chat_input_and_metadata,
+    _chat_message,
+    _explicit_source_metadata,
+    _paths,
+    _print_json,
+    _resolved_executor,
+    _wants_json,
+)
 from .runtime import _validate_runtime_names
 
 
@@ -106,8 +114,10 @@ def cmd_chat_route_hint(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if bool(getattr(args, "summary", False)):
         _print_chat_route_hint_summary(payload)
-    else:
+    elif _wants_json(args):
         _print_json(payload)
+    else:
+        _print_chat_route_hint_summary(payload)
     return 0
 
 
@@ -977,12 +987,12 @@ def _add_chat_commands(sub) -> None:
     route_hint.add_argument(
         "--summary",
         action="store_true",
-        help="Print a compact human-readable route-hint summary instead of the default JSON payload.",
+        help="Print a compact human-readable route-hint summary. This is the default.",
     )
     route_hint.add_argument(
         "--json",
         action="store_true",
-        help="Print the full machine-readable JSON route-hint payload. This is the default.",
+        help="Print the full machine-readable JSON route-hint payload.",
     )
     route_hint.set_defaults(func=cmd_chat_route_hint)
 
