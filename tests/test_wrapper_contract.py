@@ -560,6 +560,9 @@ class WrapperContractTests(unittest.TestCase):
         messages = (
             "OMH 안 썼어",
             "Hermes did not use OMH for my image request; record this as workflow learning",
+            "내가 방금 부탁한 이미지 생성에 OMH를 안 쓴 것 같은데 다음엔 쓰게 해줘",
+            "paper-learning 안 쓰고 그냥 답했어. 다음엔 논문 요약엔 OMH 쓰게 해줘",
+            "방금 코딩 위임에 OMH 안 쓴 것 같아. 다음엔 ultraprocess로 보내줘",
             "missed route: Hermes skipped OMH for my image request",
             "missed route: OMH was not used",
         )

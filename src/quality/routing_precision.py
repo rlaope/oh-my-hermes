@@ -504,6 +504,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "audit_learning_readiness",
         "workflow_learning",
     ),
+    RoutingInterventionCase(
+        "missed-workflow-future-feedback",
+        "Future missed workflow feedback records a learning trace",
+        "내가 방금 부탁한 이미지 생성에 OMH를 안 쓴 것 같은데 다음엔 쓰게 해줘",
+        "dispatch",
+        "workflow-learning",
+        "record_missed_route",
+        "workflow_learning",
+    ),
 )
 
 
