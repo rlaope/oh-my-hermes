@@ -18,6 +18,7 @@ from omh.wrapper_contract import (
     build_status_card_from_status,
     messenger_rendering_contract,
 )
+from omh.wrapper.localized_copy import detect_copy_locale
 from omh.wrapper.native_commands import build_native_command_surface, render_native_command_response
 from omh.wrapper.route_hints import build_chat_route_hint_payload
 
@@ -1412,10 +1413,19 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], "choose_skill")
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
-                if any("\uac00" <= char <= "\ud7a3" for char in message):
-                    self.assertIn("shell 명령 승인을 받지 않아도", payload["chat_response"]["body"])
-                    self.assertIn("계획, 운영, 자료/이미지, 코딩 위임", payload["chat_response"]["body"])
-                    self.assertIn("먼저 이렇게 시작하세요:", payload["chat_response"]["body"])
+                copy_locale = detect_copy_locale(message)
+                localized_markers = {
+                    "ko": ("shell 명령 승인을 받지 않아도", "먼저 이렇게 시작하세요:"),
+                    "ja": ("shell command の承認なし", "まずここから:"),
+                    "zh": ("不需要先批准 shell command", "从这里开始:"),
+                    "es": ("No necesitas aprobar un shell command", "Empieza aquí:"),
+                    "fr": ("Pas besoin d'approuver un shell command", "Commencez ici:"),
+                    "de": ("Du musst keinen shell command freigeben", "Start hier:"),
+                }
+                if copy_locale in localized_markers:
+                    intro_marker, start_marker = localized_markers[copy_locale]
+                    self.assertIn(intro_marker, payload["chat_response"]["body"])
+                    self.assertIn(start_marker, payload["chat_response"]["body"])
                 else:
                     self.assertIn("shell command", payload["chat_response"]["body"])
                     self.assertIn("planning, ops, deliverables, coding handoffs, loops, and status", payload["chat_response"]["body"])

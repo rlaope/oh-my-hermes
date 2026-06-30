@@ -39,7 +39,8 @@ from .hermes_runtime import (
 )
 from .localized_copy import (
     chat_copy,
-    prefers_korean_copy,
+    detect_copy_locale,
+    is_localized_locale,
     skill_picker_body as localized_skill_picker_body,
     skill_picker_headline,
 )
@@ -2421,7 +2422,8 @@ def build_chat_response_from_route(
     include_message: bool = False,
 ) -> dict[str, object]:
     action = str(decision.get("action", "fallback"))
-    korean_copy = prefers_korean_copy(message)
+    copy_locale = detect_copy_locale(message)
+    localized_copy = is_localized_locale(copy_locale)
     if _is_command_preview_invocation(message):
         return _command_preview_response(decision, thread_key=thread_key, message=message)
     if (
@@ -2767,7 +2769,7 @@ def build_chat_response_from_route(
             )
         if selected == "img-summary" or policy_next_action == "prepare_visual_prompt_card":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A prepared image-card brief is not generated image evidence."
-            copy = chat_copy("img_summary", korean=korean_copy)
+            copy = chat_copy("img_summary", locale=copy_locale)
             return _chat_response(
                 kind="img_summary",
                 headline=copy.headline,
@@ -2814,7 +2816,7 @@ def build_chat_response_from_route(
             )
         if selected == "paper-learning" or policy_next_action == "prepare_paper_learning":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A paper-learning card is not paper validation evidence."
-            copy = chat_copy("paper_learning", korean=korean_copy)
+            copy = chat_copy("paper_learning", locale=copy_locale)
             return _chat_response(
                 kind="paper_learning",
                 headline=copy.headline,
@@ -2859,7 +2861,7 @@ def build_chat_response_from_route(
             )
         if selected == "source-finder" or policy_next_action == "prepare_source_finder_plan":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A source-finder plan is not source retrieval evidence."
-            copy = chat_copy("source_finder", korean=korean_copy)
+            copy = chat_copy("source_finder", locale=copy_locale)
             return _chat_response(
                 kind="source_finder",
                 headline=copy.headline,
@@ -2905,7 +2907,7 @@ def build_chat_response_from_route(
             )
         if selected == "web-research" or policy_next_action == "run_hermes_research":
             evidence_boundary = str(policy.get("evidence_boundary", "")) or "A web research card is not source retrieval evidence."
-            copy = chat_copy("web_research", korean=korean_copy)
+            copy = chat_copy("web_research", locale=copy_locale)
             return _chat_response(
                 kind="web_research",
                 headline=copy.headline,
@@ -3033,7 +3035,7 @@ def build_chat_response_from_route(
             primary_learning_action = "record_missed_route" if missed_route_feedback else "audit_learning_readiness"
             copy = chat_copy(
                 "workflow_learning_missed_route" if missed_route_feedback else "workflow_learning_readiness",
-                korean=korean_copy,
+                locale=copy_locale,
             )
             evidence_boundary = str(policy.get("evidence_boundary", "")) or (
                 "Workflow learning records are process-review evidence only; they are not automatic improvement evidence."
@@ -3139,8 +3141,8 @@ def build_chat_response_from_route(
             },
         )
     if action == "clarify":
-        copy = chat_copy("clarify", korean=korean_copy)
-        body = copy.body if korean_copy else str(decision.get("clarification") or copy.body)
+        copy = chat_copy("clarify", locale=copy_locale)
+        body = copy.body if localized_copy else str(decision.get("clarification") or copy.body)
         return _chat_response(
             kind="clarification",
             headline=copy.headline,
@@ -3153,8 +3155,8 @@ def build_chat_response_from_route(
             extra_state={"route_action": action, "confidence": decision.get("confidence", "low")},
         )
     if action == "fallback" and _is_file_lookup_fallback(decision):
-        copy = chat_copy("file_lookup", korean=korean_copy)
-        body = copy.body if korean_copy else str(decision.get("clarification") or copy.body)
+        copy = chat_copy("file_lookup", locale=copy_locale)
+        body = copy.body if localized_copy else str(decision.get("clarification") or copy.body)
         return _chat_response(
             kind="clarification",
             headline=copy.headline,
@@ -3175,8 +3177,8 @@ def build_chat_response_from_route(
             },
         )
     if action == "fallback" and _is_direct_answer_fallback(decision):
-        copy = chat_copy("direct_answer", korean=korean_copy)
-        body = copy.body if korean_copy else str(decision.get("clarification") or copy.body)
+        copy = chat_copy("direct_answer", locale=copy_locale)
+        body = copy.body if localized_copy else str(decision.get("clarification") or copy.body)
         return _chat_response(
             kind="clarification",
             headline=copy.headline,
@@ -3196,7 +3198,7 @@ def build_chat_response_from_route(
                 "routing_instruction": decision.get("routing_instruction", ""),
             },
         )
-    copy = chat_copy("generic_clarify", korean=korean_copy)
+    copy = chat_copy("generic_clarify", locale=copy_locale)
     return _chat_response(
         kind="clarification",
         headline=copy.headline,
@@ -4759,7 +4761,7 @@ def _command_preview_prefix(token: str) -> str:
 def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
     catalog_question = _is_skill_catalog_question(message) and not _is_skill_picker_invocation(message)
-    korean_copy = prefers_korean_copy(message)
+    copy_locale = detect_copy_locale(message)
     primer = _context_primer_state()
     extra_state = {
         "route_action": decision.get("action", "dispatch"),
@@ -4774,8 +4776,8 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
         extra_state["capability_summary"] = _catalog_capability_summary()
     return _chat_response(
         kind="skill_picker",
-        headline=skill_picker_headline(catalog_question=catalog_question, korean=korean_copy),
-        body=_skill_picker_body(catalog_question=catalog_question, korean_copy=korean_copy),
+        headline=skill_picker_headline(catalog_question=catalog_question, locale=copy_locale),
+        body=_skill_picker_body(catalog_question=catalog_question, copy_locale=copy_locale),
         phase="skill_selection",
         next_action="choose_skill",
         thread_key=thread_key,
@@ -4801,10 +4803,10 @@ def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "",
     )
 
 
-def _skill_picker_body(*, catalog_question: bool, korean_copy: bool = False) -> str:
+def _skill_picker_body(*, catalog_question: bool, copy_locale: str = "en") -> str:
     return localized_skill_picker_body(
         catalog_question=catalog_question,
-        korean=korean_copy,
+        locale=copy_locale,
         family_lines=_skill_picker_family_body_lines(),
     )
 

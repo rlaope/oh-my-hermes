@@ -20,6 +20,9 @@ from omh.config_adapter import external_dirs
 from omh.paths import resolve_paths
 from omh.routing.intent import classify_omh_quality_intent
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
+from omh.wrapper.localized_copy import detect_copy_locale
+
+
 class CliTests(unittest.TestCase):
     def test_no_arg_cli_shows_welcome_instead_of_error(self) -> None:
         status, stdout, stderr = run_cli([], output_json=False)
@@ -5248,9 +5251,19 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(payload["next_action"], "choose_skill")
                 self.assertEqual(payload["chat_response"]["kind"], "skill_picker")
                 self.assertTrue(payload["chat_response"]["state"]["catalog_question"])
-                if any("\uac00" <= char <= "\ud7a3" for char in message):
-                    self.assertIn("shell 명령 승인을 받지 않아도", payload["chat_response"]["body"])
-                    self.assertIn("먼저 이렇게 시작하세요:", payload["chat_response"]["body"])
+                copy_locale = detect_copy_locale(message)
+                localized_start_markers = {
+                    "ko": ("shell 명령 승인을 받지 않아도", "먼저 이렇게 시작하세요:"),
+                    "ja": ("shell command の承認なし", "まずここから:"),
+                    "zh": ("不需要先批准 shell command", "从这里开始:"),
+                    "es": ("No necesitas aprobar un shell command", "Empieza aquí:"),
+                    "fr": ("Pas besoin d'approuver un shell command", "Commencez ici:"),
+                    "de": ("Du musst keinen shell command freigeben", "Start hier:"),
+                }
+                if copy_locale in localized_start_markers:
+                    intro_marker, start_marker = localized_start_markers[copy_locale]
+                    self.assertIn(intro_marker, payload["chat_response"]["body"])
+                    self.assertIn(start_marker, payload["chat_response"]["body"])
                 else:
                     self.assertIn("shell command", payload["chat_response"]["body"])
                     self.assertIn("Start here:", payload["chat_response"]["body"])

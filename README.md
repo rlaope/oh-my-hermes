@@ -21,6 +21,9 @@
 [Hermes](https://github.com/NousResearch/hermes-agent), and let the added
 skills, contracts, and status cards make the next action obvious without
 replacing your existing setup.
+Common Japanese, Chinese, Spanish, French, German, Korean, and English operator
+requests stay local and deterministic: OMH can route them and frame the first
+chat card without calling a translation API.
 
 ```text
 user says a natural-language request in Hermes
