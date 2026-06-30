@@ -364,6 +364,11 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
     def _next_action_label(action: str) -> str:
         return action.strip().replace("_", " ")
 
+try:  # Keep loop route hints aligned with the deterministic loopability assessor.
+    from ...loopability import assess_loopability as _assess_loopability
+except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+    _assess_loopability = None
+
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
 OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION = "omh_generic_tool_checkpoint/v1"
@@ -1981,7 +1986,7 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             or (_prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies)
         ):
             hints.append(_workflow_vocabulary_reference_hint(intent))
-        direct_hint = _direct_workflow_invocation_hint(intent, routing_normalized)
+        direct_hint = _direct_workflow_invocation_hint(intent, routing_normalized, message)
         if len(hints) < hint_limit and direct_hint and not any(
             isinstance(hint, dict) and hint.get("workflow") == direct_hint.get("workflow") for hint in hints
         ):
@@ -2005,12 +2010,15 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             if workflow == "workflow-learning" and any(hint.get("workflow") == workflow for hint in hints):
                 continue
             context_card = workflow_context_card_for_workflow(workflow)
+            next_action = str(rule["next_action"])
+            if workflow == "loop":
+                next_action = _loop_route_hint_next_action(message, next_action)
             hints.append(
                 {
                     "id": str(rule["id"]),
                     "workflow": workflow,
                     "lane": str(rule["lane"]),
-                    "next_action": str(rule["next_action"]),
+                    "next_action": next_action,
                     "reason": str(rule["reason"]),
                     "fallback_action": str(rule["fallback_action"]),
                     "matched_cues": _bounded_matches(phrase_matches + token_matches),
@@ -2467,7 +2475,29 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
 }
 
 
-def _direct_workflow_invocation_hint(intent: object, routing_normalized: str) -> dict[str, object]:
+def _loop_route_hint_next_action(message: str, default_action: str) -> str:
+    if _assess_loopability is None:
+        return default_action
+    try:
+        assessment = _assess_loopability(message or "loop", expose_goal=False)
+    except Exception:  # pragma: no cover - route hints should not break standalone hosts.
+        return default_action
+    next_action = str(assessment.get("recommended_next_action") or "").strip()
+    normalized = unicodedata.normalize("NFKC", message).casefold().strip()
+    explicit_loop = bool(re.match(r"^(?:\./loop|/loop)(?:\b|$)", normalized))
+    loopability = str(assessment.get("loopability") or "").strip()
+    if explicit_loop:
+        if loopability == "needs_clarification":
+            return next_action or "ask_goal_boundary"
+        if loopability == "direct_task":
+            return "route_direct_task"
+        if loopability == "external_wait_only":
+            return "record_external_wait"
+        return "start_loop_cycle"
+    return next_action or default_action
+
+
+def _direct_workflow_invocation_hint(intent: object, routing_normalized: str, message: str) -> dict[str, object]:
     mentioned = [str(item) for item in getattr(intent, "mentioned_workflows", ()) if str(item)]
     if not mentioned:
         return {}
@@ -2478,11 +2508,14 @@ def _direct_workflow_invocation_hint(intent: object, routing_normalized: str) ->
     workflow = mentioned[0]
     context_card = workflow_context_card_for_workflow(workflow)
     lane = str(context_card.get("id") or _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW.get(workflow.casefold(), "intent_to_plan"))
+    next_action = _DIRECT_WORKFLOW_NEXT_ACTIONS.get(workflow, "route_to_downstream_workflow")
+    if workflow == "loop":
+        next_action = _loop_route_hint_next_action(message, next_action)
     return {
         "id": "direct_workflow_invocation",
         "workflow": workflow,
         "lane": lane,
-        "next_action": _DIRECT_WORKFLOW_NEXT_ACTIONS.get(workflow, "route_to_downstream_workflow"),
+        "next_action": next_action,
         "reason": "The user explicitly invoked an OMH workflow, so the hint should not be overridden by broad content keywords.",
         "fallback_action": "run_the_named_workflow_or_show_picker_if_unavailable",
         "matched_cues": ["direct workflow invocation"],

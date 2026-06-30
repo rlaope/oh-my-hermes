@@ -154,7 +154,7 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "100k star OSS 만들기 위해 first-run friction 줄여줘",
                 "loop",
-                "assess_loopability",
+                "choose_permission_profile",
                 None,
             ),
             (
