@@ -63,6 +63,8 @@ from omh.skills.catalog import (
 )
 from omh.quality import grounded_score as grounded_score_module
 from omh.quality import context_brief_coverage as context_brief_coverage_module
+from omh.quality import hermes_ux_quality as hermes_ux_quality_module
+from omh.quality import localized_chat_copy as localized_chat_copy_module
 from omh.quality import routing_precision as routing_precision_module
 from omh.quality import route_hint_alignment as route_hint_alignment_module
 from omh.quality.grounded_score import GroundedScenario
@@ -530,6 +532,141 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["aligned_count"], 1)
         self.assertEqual(payload["cases"][0]["observed"]["route_workflow"], "synthetic-workflow")
         self.assertEqual(payload["cases"][0]["observed"]["route_confidence"], "precomputed")
+
+    def test_localized_chat_copy_demo_cache_is_reused_without_payload_poisoning(self) -> None:
+        localized_chat_copy_module._build_localized_chat_copy_demo_cached.cache_clear()
+
+        first = localized_chat_copy_module.build_localized_chat_copy_demo(source="discord")
+        first["summary"]["case_count"] = "mutated"
+        first["cases"][0]["observed"]["locale"] = "mutated"
+
+        second = localized_chat_copy_module.build_localized_chat_copy_demo(source="discord")
+        cache_info = localized_chat_copy_module._build_localized_chat_copy_demo_cached.cache_info()
+
+        self.assertNotEqual(second["summary"]["case_count"], "mutated")
+        self.assertNotEqual(second["cases"][0]["observed"]["locale"], "mutated")
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_hermes_ux_quality_reuses_precomputed_gate_payloads(self) -> None:
+        grounded_payload = {
+            "summary": {
+                "all_10": True,
+                "scenario_count": 1,
+                "minimum_score": 10,
+                "average_score": 10,
+                "maximum_score": 10,
+            },
+            "scenarios": [],
+            "claim_boundary": "grounded boundary",
+        }
+        chat_card_payload = {
+            "summary": {
+                "all_passing": True,
+                "case_count": 1,
+                "passing_count": 1,
+                "generic_ack_count": 0,
+            },
+            "cases": [],
+            "claim_boundary": "chat card boundary",
+        }
+        route_hint_payload = {
+            "summary": {
+                "all_aligned": True,
+                "case_count": 1,
+                "aligned_count": 1,
+                "missing_hint_count": 0,
+                "mismatch_count": 0,
+            },
+            "cases": [],
+            "claim_boundary": "route hint boundary",
+        }
+        context_payload = {
+            "summary": {
+                "all_passing": True,
+                "case_count": 2,
+                "passing_count": 2,
+                "route_hint_count": 1,
+                "catalog_question_count": 1,
+            },
+            "cases": [],
+            "claim_boundary": "context boundary",
+        }
+        precision_payload = {
+            "schema_version": routing_precision_module.ROUTING_PRECISION_SCHEMA_VERSION,
+            "summary": {
+                "all_passing": True,
+                "case_count": 1,
+                "passing_count": 1,
+                "overroute_count": 0,
+                "catalog_picker_count": 0,
+                "generic_ack_count": 0,
+                "intervention_case_count": 1,
+                "intervention_passing_count": 1,
+                "missed_intervention_count": 0,
+                "intervention_generic_ack_count": 0,
+            },
+            "cases": [],
+            "intervention_cases": [],
+            "claim_boundary": "precision boundary",
+        }
+        localized_payload = {
+            "schema_version": localized_chat_copy_module.LOCALIZED_CHAT_COPY_SCHEMA_VERSION,
+            "summary": {
+                "all_passing": True,
+                "case_count": 1,
+                "passing_count": 1,
+                "locale_count": 1,
+            },
+            "cases": [],
+            "claim_boundary": "localized boundary",
+        }
+
+        with (
+            patch.object(
+                hermes_ux_quality_module,
+                "build_grounded_score_demo",
+                side_effect=AssertionError("precomputed grounded payload should be reused"),
+            ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_chat_card_coverage_demo",
+                side_effect=AssertionError("precomputed chat-card payload should be reused"),
+            ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_route_hint_alignment_demo",
+                side_effect=AssertionError("precomputed route-hint payload should be reused"),
+            ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_context_brief_coverage_demo",
+                side_effect=AssertionError("precomputed context payload should be reused"),
+            ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_routing_precision_demo",
+                side_effect=AssertionError("precomputed precision payload should be reused"),
+            ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_localized_chat_copy_demo",
+                side_effect=AssertionError("precomputed localized payload should be reused"),
+            ),
+        ):
+            payload = hermes_ux_quality_module.build_hermes_ux_quality_demo(
+                source="discord",
+                grounded_score=grounded_payload,
+                chat_card_coverage=chat_card_payload,
+                route_hint_alignment=route_hint_payload,
+                context_brief_coverage=context_payload,
+                routing_precision=precision_payload,
+                localized_chat_copy=localized_payload,
+            )
+
+        self.assertEqual(payload["status"], "passed")
+        self.assertEqual(payload["summary"]["passing_gate_count"], 6)
+        self.assertEqual(payload["summary"]["localized_chat_copy_passing_count"], 1)
 
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()

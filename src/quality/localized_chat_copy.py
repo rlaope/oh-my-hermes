@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 import hashlib
+from functools import lru_cache
 from typing import Mapping, Sequence
 
 from ..ingress import CHAT_SOURCES
@@ -106,6 +108,11 @@ LOCALIZED_CHAT_COPY_CASES: tuple[LocalizedChatCopyCase, ...] = (
 def build_localized_chat_copy_demo(*, source: str = "discord") -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported demo source: {source}")
+    return deepcopy(_build_localized_chat_copy_demo_cached(source))
+
+
+@lru_cache(maxsize=None)
+def _build_localized_chat_copy_demo_cached(source: str) -> dict[str, object]:
     rows = [_evaluate_case(case, source=source) for case in LOCALIZED_CHAT_COPY_CASES]
     passing_count = sum(1 for row in rows if bool(row["passed"]))
     return {
