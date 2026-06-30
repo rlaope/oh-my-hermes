@@ -2296,7 +2296,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
             self.assertIn("41/41 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("52/52 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("59/59 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2338,7 +2338,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 41/41 negative controls, 52/52 interventions "
+                "Routing precision: 41/41 negative controls, 59/59 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2369,8 +2369,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_passing"], 41)
             self.assertEqual(payload["summary"]["routing_precision_total"], 41)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 52)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 52)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 59)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 59)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
@@ -5126,7 +5126,7 @@ class CliTests(unittest.TestCase):
             ("릴리즈 준비 상태 점검해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             ("실제 사용자처럼 QA 시나리오 돌려줘", "ultraqa", "qa_review", "dispatch_to_workflow"),
             ("루프 비용이랑 지연시간 상태 보여줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
-            ("설치 잘 됐어?", "doctor", "ack", "run_local_operator_check"),
+            ("설치 잘 됐어?", "doctor", "doctor_health", "run_local_operator_check"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "agent_board", "prepare_agent_board_card"),
             ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             (
