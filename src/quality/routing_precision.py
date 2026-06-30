@@ -361,6 +361,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "img_summary",
     ),
     RoutingInterventionCase(
+        "korean-pretty-meeting-image-card",
+        "Korean pretty meeting image requests route to img-summary",
+        "회의록을 예쁜 이미지로 만들어줘",
+        "dispatch",
+        "img-summary",
+        "prepare_visual_prompt_card",
+        "img_summary",
+    ),
+    RoutingInterventionCase(
         "korean-hermes-coding-team-only",
         "Korean Hermes-only coding team requests prepare runtime handoff",
         "Hermes만으로 코딩팀처럼 작업하고 싶어",
@@ -514,6 +523,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "handoff",
     ),
     RoutingInterventionCase(
+        "korean-codex-start-current-task",
+        "Korean Codex current-task starts check executor readiness",
+        "코덱스로 이 작업 시작해줘",
+        "dispatch",
+        "executor-runtime-readiness",
+        "prepare_executor_runtime_readiness",
+        "executor_runtime_readiness",
+    ),
+    RoutingInterventionCase(
         "scheduled-research-blueprint",
         "Scheduled research requests open automation blueprint",
         "make a daily competitor research digest blueprint every morning",
@@ -530,6 +548,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "research-department",
         "prepare_research_department_plan",
         "research_department",
+    ),
+    RoutingInterventionCase(
+        "korean-memory-pile-cleanup",
+        "Korean accumulated memory cleanup opens memory curation",
+        "메모리가 너무 쌓였는데 정리해줘",
+        "dispatch",
+        "memory-curation-review",
+        "prepare_memory_curation_review",
+        "memory_curation",
     ),
     RoutingInterventionCase(
         "workflow-learning",

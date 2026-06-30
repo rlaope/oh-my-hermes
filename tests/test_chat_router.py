@@ -466,6 +466,7 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             ("회의록 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
             ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary", "prepare_visual_prompt_card"),
+            ("회의록을 예쁜 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
             ("PR 요약 이미지로 만들어줘", "img-summary", "prepare_visual_prompt_card"),
             ("논문 요약해줘", "paper-learning", "prepare_paper_learning"),
             ("이 PDF 요약해줘", "materials-package", "prepare_material_package"),
@@ -897,6 +898,16 @@ class ChatRouterTests(unittest.TestCase):
                 "claude code로 이어서 작업해줘",
                 "executor-runtime-readiness",
                 "guard:executor_runtime_readiness",
+            ),
+            (
+                "코덱스로 이 작업 시작해줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "메모리가 너무 쌓였는데 정리해줘",
+                "memory-curation-review",
+                "guard:memory_curation",
             ),
             (
                 "setup이 잘 됐는지 봐줘",
