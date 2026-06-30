@@ -58,6 +58,20 @@ CONTEXT_BRIEF_COVERAGE_CASES: tuple[ContextBriefCoverageCase, ...] = (
         "prepare_github_event_ops_card",
     ),
     ContextBriefCoverageCase(
+        "coding-progress-status",
+        "Coding progress status",
+        "Codex 작업이 어디까지 진행됐는지 알려줘",
+        "ultraprocess",
+        "show_coding_handoff_status",
+    ),
+    ContextBriefCoverageCase(
+        "merge-readiness-status",
+        "Merge readiness status",
+        "지금 PR 머지 준비 됐는지 알려줘",
+        "ultraprocess",
+        "show_coding_handoff_status",
+    ),
+    ContextBriefCoverageCase(
         "paper-learning",
         "Paper learning",
         "논문 PDF를 쉬운 수준으로 섹션별로 해설해줘",

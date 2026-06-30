@@ -14,9 +14,9 @@ class ContextBriefCoverageTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], "context_brief_coverage/v1")
         self.assertEqual(payload["source"], "discord")
         self.assertTrue(payload["summary"]["all_passing"])
-        self.assertEqual(payload["summary"]["case_count"], 8)
-        self.assertEqual(payload["summary"]["passing_count"], 8)
-        self.assertEqual(payload["summary"]["route_hint_count"], 7)
+        self.assertEqual(payload["summary"]["case_count"], 10)
+        self.assertEqual(payload["summary"]["passing_count"], 10)
+        self.assertEqual(payload["summary"]["route_hint_count"], 9)
         self.assertEqual(payload["summary"]["catalog_question_count"], 1)
         self.assertIn("metadata-only", payload["check_basis"][0])
         self.assertIn("does not prove live Hermes chat rendering", payload["claim_boundary"])
@@ -33,13 +33,18 @@ class ContextBriefCoverageTests(unittest.TestCase):
         self.assertEqual(catalog["observed"]["catalog_next_action"], "show_workflow_picker")
         self.assertEqual(catalog["observed"]["catalog_recommended_tool"], "omh_capabilities")
 
+        coding_status = cases["coding-progress-status"]
+        self.assertEqual(coding_status["observed"]["primary_workflow"], "ultraprocess")
+        self.assertEqual(coding_status["observed"]["primary_next_action"], "show_coding_handoff_status")
+        self.assertTrue(coding_status["observed"]["prompt_context_has_route_hint"])
+
     def test_context_brief_coverage_cli_outputs_summary_and_json(self) -> None:
         status, stdout, stderr = run_cli(["demo", "context-brief-coverage", "--summary"], output_json=False)
 
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         self.assertIn("OMH context brief coverage", stdout)
-        self.assertIn("8/8 context brief cases passing", stdout)
+        self.assertIn("10/10 context brief cases passing", stdout)
         self.assertIn("catalog picker hints: 1", stdout)
         self.assertIn(
             "Visual summary before generic image tools: ok; "

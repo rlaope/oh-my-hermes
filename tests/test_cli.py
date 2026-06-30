@@ -2265,7 +2265,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
             self.assertIn("72/72 route hints aligned", gates["route_hint_alignment"]["summary"])
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
-            self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
+            self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
             self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
             self.assertIn("19/19 interventions", gates["routing_precision"]["summary"])
@@ -2308,7 +2308,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Written: no", stdout)
             self.assertIn("Grounded score: 47/47 (avg 10.0)", stdout)
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
-            self.assertIn("Context brief coverage: 8/8 (route hints 7, catalog hints 1)", stdout)
+            self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
                 "Routing precision: 39/39 negative controls, 19/19 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
@@ -2336,8 +2336,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
             self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 72)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
-            self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 8)
-            self.assertEqual(payload["summary"]["context_brief_coverage_total"], 8)
+            self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
+            self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
             self.assertEqual(payload["summary"]["routing_precision_passing"], 39)
             self.assertEqual(payload["summary"]["routing_precision_total"], 39)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
