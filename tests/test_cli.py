@@ -1954,7 +1954,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["query"], "risky refactor")
 
-    def test_release_hermes_smoke_cli_defaults_to_plan_mode(self) -> None:
+    def test_release_hermes_smoke_defaults_to_human_plan_with_json_escape_hatch(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             omh_home = root / ".omh"
@@ -1971,7 +1971,41 @@ class CliTests(unittest.TestCase):
                     "setup",
                     "--omh-command",
                     "omh-dev",
-                ]
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertIn("OMH Hermes release smoke", stdout)
+            self.assertIn("Mode: plan; observed evidence: no", stdout)
+            self.assertIn("Status: ok", stdout)
+            self.assertIn("Install path: setup", stdout)
+            self.assertIn("Planned steps", stdout)
+            self.assertIn("omh-dev --omh-home", stdout)
+            self.assertIn("hermes skills list --enabled-only", stdout)
+            self.assertIn("Installed command", stdout)
+            self.assertIn("First-use status", stdout)
+            self.assertIn("Boundary:", stdout)
+            self.assertIn("For machine-readable output", stdout)
+            with self.assertRaises(json.JSONDecodeError):
+                json.loads(stdout)
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "release",
+                    "hermes-smoke",
+                    "--install-path",
+                    "setup",
+                    "--omh-command",
+                    "omh-dev",
+                    "--json",
+                ],
+                output_json=False,
             )
 
         self.assertEqual(stderr, "")
@@ -2353,6 +2387,7 @@ class CliTests(unittest.TestCase):
                     "--omh-command",
                     str(fake_omh),
                     "--include-command-smoke",
+                    "--json",
                 ]
             )
 
@@ -2390,6 +2425,7 @@ class CliTests(unittest.TestCase):
                     "--omh-command",
                     missing_command,
                     "--include-command-smoke",
+                    "--json",
                 ]
             )
 

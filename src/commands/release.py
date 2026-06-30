@@ -51,7 +51,10 @@ def cmd_release_hermes_smoke(args: argparse.Namespace) -> int:
             timeout_seconds=args.timeout,
             include_command_smoke=args.include_command_smoke,
         )
-        _print_json(payload)
+        if _wants_json(args):
+            _print_json(payload)
+        else:
+            _print_hermes_smoke_summary(payload)
         return 0 if payload["ok"] else 1
     installed_command_smoke = (
         run_installed_command_smoke(
@@ -72,7 +75,10 @@ def cmd_release_hermes_smoke(args: argparse.Namespace) -> int:
         hermes_home=args.hermes_home,
         installed_command_smoke=installed_command_smoke,
     )
-    _print_json(payload)
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_hermes_smoke_summary(payload)
     return 0 if payload["ok"] else 1
 
 
@@ -192,6 +198,7 @@ def _add_release_commands(sub) -> None:
         help="Also execute installed `omh --help` and installed setup-path plan rendering without mutating Hermes.",
     )
     smoke.add_argument("--timeout", type=int, default=30, help="Per-command timeout in seconds for --live or --include-command-smoke.")
+    smoke.add_argument("--json", action="store_true", help="Print the machine-readable Hermes smoke payload.")
     smoke.set_defaults(func=cmd_release_hermes_smoke)
 
     install_smoke = release_sub.add_parser(
@@ -285,6 +292,128 @@ def _print_release_checklist_summary(payload: dict[str, object]) -> None:
     print("")
     print(f"Next: {payload['recommended_next_action']}")
     print("For machine-readable output, rerun with `--json`.")
+
+
+def _print_hermes_smoke_summary(payload: dict[str, object]) -> None:
+    mode = str(payload.get("mode", "plan"))
+    observed = "yes" if payload.get("observed") else "no"
+    print("OMH Hermes release smoke")
+    print(f"Mode: {mode}; observed evidence: {observed}")
+    print(f"Status: {'ok' if payload.get('ok') else 'failed'}")
+    print(f"Install path: {payload.get('install_path')}")
+    print(f"Skill: {payload.get('skill')}")
+    if payload.get("tap"):
+        print(f"Tap: {payload.get('tap')}")
+    target = payload.get("target_binding", {})
+    if isinstance(target, dict):
+        print(f"OMH home: {target.get('omh_home')}")
+        print(f"Hermes home: {target.get('hermes_home')}")
+    print("")
+    _print_hermes_smoke_steps(payload)
+    _print_installed_command_smoke_section(payload.get("installed_command_smoke"))
+    _print_first_use_status_smoke_section(payload.get("first_use_status_smoke"))
+    print("Next")
+    print(f"  - {_hermes_smoke_summary_next(payload)}")
+    print("")
+    print(f"Boundary: {payload.get('proof_boundary')}")
+    print("For machine-readable output, rerun with `--json`.")
+
+
+def _print_hermes_smoke_steps(payload: dict[str, object]) -> None:
+    results = payload.get("results")
+    if isinstance(results, list) and results:
+        print("Observed steps")
+        for result in results:
+            if not isinstance(result, dict):
+                continue
+            status = "ok" if result.get("ok") else "failed"
+            print(f"  - {result.get('name')} [{result.get('phase')}; {status}; rc={result.get('returncode')}]")
+            command = result.get("command", [])
+            if isinstance(command, list):
+                print(f"    {_join_command(command)}")
+            stdout = str(result.get("stdout_excerpt", "") or "").strip()
+            stderr = str(result.get("stderr_excerpt", "") or "").strip()
+            if stdout:
+                print(f"    stdout: {_one_line(stdout)}")
+            if stderr:
+                print(f"    stderr: {_one_line(stderr)}")
+            boundary = str(result.get("proof_boundary", "") or "")
+            if boundary:
+                print(f"    Boundary: {boundary}")
+        print("")
+        return
+    print("Planned steps")
+    for step in payload.get("steps", []):
+        if not isinstance(step, dict):
+            continue
+        marker = "profile-mutating" if step.get("mutates_profile") else "local"
+        required = "required" if step.get("required", True) else "optional"
+        print(f"  - {step.get('name')} [{step.get('phase')}; {marker}; {required}]")
+        command = step.get("command", [])
+        if isinstance(command, list):
+            print(f"    {_join_command(command)}")
+        boundary = str(step.get("proof_boundary", "") or "")
+        if boundary:
+            print(f"    Boundary: {boundary}")
+    print("")
+
+
+def _print_installed_command_smoke_section(payload: object) -> None:
+    if not isinstance(payload, dict):
+        return
+    print("Installed command")
+    print(f"  Status: {'ok' if payload.get('ok') else 'failed'}")
+    print(f"  Mode: {payload.get('mode')}; observed: {'yes' if payload.get('observed') else 'no'}")
+    print(f"  Command: {payload.get('command_under_test')}")
+    failed_step = str(payload.get("failed_step", "") or "")
+    if failed_step:
+        print(f"  Failed step: {failed_step}")
+    path_check = payload.get("path_check")
+    if isinstance(path_check, dict):
+        resolved = path_check.get("resolved_path") or "not observed"
+        print(f"  PATH: {'ok' if path_check.get('ok') else 'not ready'} ({resolved})")
+    next_action = str(payload.get("recommended_next_action", "") or "")
+    if next_action:
+        print(f"  Next: {next_action}")
+    print("")
+
+
+def _print_first_use_status_smoke_section(payload: object) -> None:
+    if not isinstance(payload, dict):
+        return
+    print("First-use status")
+    print(f"  Mode: {payload.get('mode')}; observed: {'yes' if payload.get('observed') else 'no'}")
+    print(f"  Status: {'ok' if payload.get('ok') else 'failed'}")
+    example = str(payload.get("example_message", "") or "")
+    if example:
+        print(f"  Example: {example}")
+    boundary = str(payload.get("proof_boundary", "") or "")
+    if boundary:
+        print(f"  Boundary: {boundary}")
+    print("")
+
+
+def _hermes_smoke_summary_next(payload: dict[str, object]) -> str:
+    next_action = str(payload.get("recommended_next_action", "") or "")
+    if next_action:
+        return next_action
+    command = payload.get("live_command")
+    if isinstance(command, list) and command:
+        return f"Run `{_join_command(command)}` against the target Hermes profile when you are ready to observe it."
+    command_smoke = payload.get("installed_command_smoke")
+    if isinstance(command_smoke, dict):
+        nested = str(command_smoke.get("recommended_next_action", "") or "")
+        if nested:
+            return nested
+    return "Run the planned smoke steps, then record the observed evidence before treating Hermes visibility as ready."
+
+
+def _join_command(command: list[object]) -> str:
+    return " ".join(str(part) for part in command)
+
+
+def _one_line(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _print_install_smoke_summary(payload: dict[str, object]) -> None:
