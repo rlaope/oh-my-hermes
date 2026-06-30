@@ -130,6 +130,16 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)
         self.assertIn("missed interventions: 0", stdout)
+        self.assertIn(
+            "Repo file lookup stays direct: ok; "
+            "route=fallback -> answering as a file or text lookup (`answer_file_lookup`)",
+            stdout,
+        )
+        self.assertIn(
+            "Korean short status slang opens agent ops review: ok; "
+            "agent-ops-review -> refreshing agent operations status (`refresh_agent_ops_status`)",
+            stdout,
+        )
 
         status, stdout, stderr = run_cli(["demo", "routing-precision", "--json"], output_json=False)
 

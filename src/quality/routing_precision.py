@@ -5,6 +5,7 @@ import hashlib
 from typing import Mapping, Sequence
 
 from ..ingress import CHAT_SOURCES
+from ..routing.action_copy import next_action_label_with_id
 from ..wrapper.contract import build_chat_interaction_payload
 
 
@@ -585,18 +586,20 @@ def format_routing_precision_summary(payload: Mapping[str, object]) -> str:
     for row in rows:
         observed = _nested(row, "observed")
         status = "ok" if row.get("passed") else "needs attention"
+        next_action = next_action_label_with_id(str(observed.get("next_action", "unknown")))
         lines.append(
             f"- {row.get('title', 'Untitled precision case')}: {status}; "
-            f"{observed.get('route_action', 'unknown')} -> {observed.get('next_action', 'unknown')}"
+            f"route={observed.get('route_action', 'unknown')} -> {next_action}"
         )
     if intervention_rows:
         lines.extend(["", "Intervention rollup:"])
         for row in intervention_rows:
             observed = _nested(row, "observed")
             status = "ok" if row.get("passed") else "needs attention"
+            next_action = next_action_label_with_id(str(observed.get("next_action", "unknown")))
             lines.append(
                 f"- {row.get('title', 'Untitled intervention case')}: {status}; "
-                f"{observed.get('route_workflow', 'unknown')} -> {observed.get('next_action', 'unknown')}"
+                f"{observed.get('route_workflow', 'unknown')} -> {next_action}"
             )
     failed = [row for row in rows + intervention_rows if not row.get("passed")]
     if failed:
