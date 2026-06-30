@@ -204,12 +204,14 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh img-summary prompt-card --kind report --aspect-ratio long_scroll --section summary:Executive_summary:Weekly_metrics_changed\n"
             "  omh worktree prepare --repo . --task \"risky refactor\" --dry-run\n"
             "  omh worktree bind --path .worktrees/risky-refactor --executor codex --session <session-id>\n"
-            "  omh runtime status\n\n"
+            "  omh runtime status\n"
             "  omh runtime team-readiness\n\n"
             "Human-facing maintenance, catalog, and operator checklist commands print summaries by default;\n"
             "pass --json or set OMH_OUTPUT=json when a wrapper needs full payloads.\n"
-            "Backend/control-plane commands such as chat, coding, runtime, goal, loop,\n"
-            "learning, memory, ops, materials, state, harness, release smoke, and demo print JSON by design."
+            "Plain chat preview commands such as chat route, route-hint, and interact are summary-first;\n"
+            "pass --json for adapter envelopes.\n"
+            "Ledger/control-plane commands such as chat session, coding, runtime, goal, loop,\n"
+            "learning, memory, state, harness, release smoke, and demo print JSON by design."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

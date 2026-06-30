@@ -920,7 +920,7 @@ def _add_chat_commands(sub) -> None:
     chat = sub.add_parser("chat", help="Turn wrapper chat events into OMH routing, handoff, and status envelopes.")
     chat_sub = chat.add_subparsers(dest="chat_command", required=True)
 
-    route = chat_sub.add_parser("route")
+    route = chat_sub.add_parser("route", help="Route a plain chat message to the most relevant OMH workflow.")
     route.add_argument("message", nargs="*", help="Chat message to route before dispatching to Hermes.")
     route.add_argument(
         "--source",
@@ -1000,7 +1000,7 @@ def _add_chat_commands(sub) -> None:
     )
     route_hint.set_defaults(func=cmd_chat_route_hint)
 
-    interact = chat_sub.add_parser("interact")
+    interact = chat_sub.add_parser("interact", help="Build the wrapper/Hermes interaction card for a chat message.")
     interact.add_argument("message", nargs="*", help="Chat message to turn into a wrapper-native interaction envelope.")
     interact.add_argument(
         "--source",
