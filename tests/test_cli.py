@@ -60,6 +60,26 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("==SUPPRESS==", help_text)
         self.assertNotIn("visual               ==", help_text)
 
+    def test_demo_help_explains_quality_lanes_and_boundary(self) -> None:
+        stdout_buffer = io.StringIO()
+
+        with patch("sys.stdout", stdout_buffer), self.assertRaises(SystemExit) as exit_context:
+            build_parser().parse_args(["demo", "--help"])
+
+        self.assertEqual(exit_context.exception.code, 0)
+        stdout = stdout_buffer.getvalue()
+        self.assertIn("Run local OMH demo artifacts", stdout)
+        self.assertIn("Demo lanes:", stdout)
+        self.assertIn("orchestration           Shows recommend -> chat -> plan -> handoff -> status", stdout)
+        self.assertIn("grounded-score          Scores representative real-world prompts", stdout)
+        self.assertIn("routing-precision       Guards against over-routing simple requests", stdout)
+        self.assertIn("hermes-ux-quality       Runs the combined user-feel gate", stdout)
+        self.assertIn("Recommended operator checks:", stdout)
+        self.assertIn("omh demo hermes-ux-quality --summary", stdout)
+        self.assertIn("Boundary:", stdout)
+        self.assertIn("They do not call Hermes", stdout)
+        self.assertIn("dispatch a coding agent", stdout)
+
     def test_context_brief_exposes_omh_mental_model_and_route_hint(self) -> None:
         status, stdout, stderr = run_cli(
             ["context", "brief", "--source", "discord", "make an image card for this PR"],
