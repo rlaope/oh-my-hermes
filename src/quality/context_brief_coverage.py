@@ -6,6 +6,7 @@ from typing import Any
 
 from ..context import build_context_brief
 from ..ingress import CHAT_SOURCES
+from ..routing.action_copy import next_action_label_with_id
 
 
 CONTEXT_BRIEF_COVERAGE_SCHEMA_VERSION = "context_brief_coverage/v1"
@@ -145,7 +146,10 @@ def format_context_brief_coverage_summary(payload: dict[str, object]) -> str:
         status = "ok" if row.get("passed") else "needs attention"
         workflow = observed.get("primary_workflow") or "catalog"
         action = observed.get("primary_next_action") or observed.get("catalog_next_action") or "unknown"
-        lines.append(f"- {row.get('title', 'Untitled context')}: {status}; {workflow} -> {action}")
+        lines.append(
+            f"- {row.get('title', 'Untitled context')}: "
+            f"{status}; {workflow} -> {next_action_label_with_id(str(action))}"
+        )
     failed = [row for row in rows if not row.get("passed")]
     if failed:
         lines.extend(["", "Failures:"])

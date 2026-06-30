@@ -41,6 +41,16 @@ class ContextBriefCoverageTests(unittest.TestCase):
         self.assertIn("OMH context brief coverage", stdout)
         self.assertIn("8/8 context brief cases passing", stdout)
         self.assertIn("catalog picker hints: 1", stdout)
+        self.assertIn(
+            "Visual summary before generic image tools: ok; "
+            "img-summary -> preparing an image prompt card (`prepare_visual_prompt_card`)",
+            stdout,
+        )
+        self.assertIn(
+            "Catalog picker without shell approval: ok; "
+            "catalog -> opening the workflow picker (`show_workflow_picker`)",
+            stdout,
+        )
 
         status, stdout, stderr = run_cli(["demo", "context-brief-coverage", "--json"], output_json=False)
 
