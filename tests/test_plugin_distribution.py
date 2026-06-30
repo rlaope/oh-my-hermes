@@ -4,6 +4,8 @@ import hashlib
 import importlib.resources as resources
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tomllib
 import unittest
@@ -82,6 +84,50 @@ class PluginDistributionTests(unittest.TestCase):
             )
         for hook in PROVIDED_HOOKS:
             self.assertIn(f"  - {hook}", text)
+
+    def test_source_layout_plugin_awareness_uses_package_loopability_helpers(self) -> None:
+        script = r"""
+import json
+from omh.plugin_bundle.omh.awareness import awareness_route_hint
+
+cases = [
+    ("run a loop to improve first-run experience", "choose_permission_profile", "choosing the loop permission profile"),
+    ("Make this a 100k-star OSS", "reframe_north_star", "reframing the north-star goal"),
+    ("./loop change the button color", "route_direct_task", "routing the direct task"),
+]
+observed = []
+for message, expected_action, expected_label in cases:
+    payload = awareness_route_hint(message)
+    observed.append(
+        {
+            "message": message,
+            "workflow": payload.get("primary_workflow"),
+            "action": payload.get("primary_next_action"),
+            "label": payload.get("primary_next_action_label"),
+        }
+    )
+    assert payload.get("primary_workflow") == "loop", observed[-1]
+    assert payload.get("primary_next_action") == expected_action, observed[-1]
+    assert payload.get("primary_next_action_label") == expected_label, observed[-1]
+print(json.dumps(observed, ensure_ascii=False))
+"""
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(Path.cwd() / "src")
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path.cwd(),
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        observed = json.loads(result.stdout)
+        self.assertEqual(
+            [item["action"] for item in observed],
+            ["choose_permission_profile", "reframe_north_star", "route_direct_task"],
+        )
 
     def test_probe_tool_falls_back_only_when_package_is_absent(self) -> None:
         from omh.plugin_bundle.omh.tools import probe_tool
