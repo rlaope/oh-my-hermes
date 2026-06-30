@@ -158,14 +158,17 @@ def _add_visual_commands(sub) -> None:
         sub,
         "visual",
         help=argparse.SUPPRESS,
+        hidden=True,
     )
 
 
-def _add_visual_parser(sub, name: str, *, help: str) -> None:
+def _add_visual_parser(sub, name: str, *, help: str, hidden: bool = False) -> None:
     visual = sub.add_parser(
         name,
         help=help,
     )
+    if hidden:
+        sub._choices_actions = [action for action in sub._choices_actions if action.dest != name]
     visual_sub = visual.add_subparsers(dest=f"{name.replace('-', '_')}_command", required=True)
 
     prompt_card = visual_sub.add_parser(

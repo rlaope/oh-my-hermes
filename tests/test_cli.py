@@ -56,6 +56,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("Backend/control-plane commands", help_text)
         self.assertIn("release smoke", help_text)
         self.assertIn("memory, ops, materials, state", help_text)
+        self.assertIn("img-summary", help_text)
+        self.assertNotIn("==SUPPRESS==", help_text)
+        self.assertNotIn("visual               ==", help_text)
 
     def test_context_brief_exposes_omh_mental_model_and_route_hint(self) -> None:
         status, stdout, stderr = run_cli(
