@@ -170,6 +170,30 @@ _OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
         "code-review",
         "prepare_review_or_followup_handoff",
     ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "loop-direct-task-korean",
+        "Korean direct task loopability check",
+        "웹사이트 버튼 색 바꾸는 것도 loop로 해야해?",
+        "loop",
+        "route_direct_task",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "loop-north-star-english",
+        "English north-star loop reframe",
+        "Make this a 100k-star OSS",
+        "loop",
+        "reframe_north_star",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "loop-first-run-project",
+        "First-run loopable project",
+        "run a loop to improve first-run experience",
+        "loop",
+        "choose_permission_profile",
+    ),
 )
 
 

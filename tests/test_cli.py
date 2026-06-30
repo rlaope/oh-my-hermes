@@ -2263,7 +2263,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
             self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
             self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
-            self.assertIn("90/90 route hints aligned", gates["route_hint_alignment"]["summary"])
+            self.assertIn("93/93 route hints aligned", gates["route_hint_alignment"]["summary"])
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
@@ -2334,7 +2334,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
             self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
-            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 90)
+            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 93)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
@@ -4617,8 +4617,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Status: hinted", stdout)
         self.assertIn("Workflow: loop", stdout)
-        self.assertIn("Next action: checking whether the goal is loopable", stdout)
-        self.assertIn("- loop: checking whether the goal is loopable (intent_to_plan)", stdout)
+        self.assertIn("Next action: choosing the loop permission profile", stdout)
+        self.assertIn("- loop: choosing the loop permission profile (intent_to_plan)", stdout)
         self.assertNotIn("(`assess_loopability`)", stdout)
 
         status, stdout, stderr = run_cli(
@@ -6141,9 +6141,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(payload["summary"]["case_count"], 90)
-        self.assertEqual(payload["summary"]["hinted_count"], 90)
-        self.assertEqual(payload["summary"]["aligned_count"], 90)
+        self.assertEqual(payload["summary"]["case_count"], 93)
+        self.assertEqual(payload["summary"]["hinted_count"], 93)
+        self.assertEqual(payload["summary"]["aligned_count"], 93)
         self.assertEqual(payload["summary"]["missing_hint_count"], 0)
         self.assertEqual(payload["summary"]["mismatch_count"], 0)
         self.assertTrue(payload["summary"]["all_aligned"])
@@ -6174,7 +6174,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         explicit_payload = json.loads(stdout)
         self.assertEqual(explicit_payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(explicit_payload["summary"]["case_count"], 90)
+        self.assertEqual(explicit_payload["summary"]["case_count"], 93)
 
     def test_demo_route_hint_alignment_summary_is_human_readable(self) -> None:
         status, stdout, stderr = run_cli(["demo", "route-hint-alignment", "--summary"])
@@ -6184,8 +6184,8 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH route hint alignment", stdout)
-        self.assertIn("Result: 90/90 route hints aligned (all passing)", stdout)
-        self.assertIn("Hints present: 90/90; missing hints: 0; mismatches: 0", stdout)
+        self.assertIn("Result: 93/93 route hints aligned (all passing)", stdout)
+        self.assertIn("Hints present: 93/93; missing hints: 0; mismatches: 0", stdout)
         self.assertIn(
             "AI agent product QA: ok; "
             "route=ultraqa hint=ultraqa next=opening the selected workflow",
