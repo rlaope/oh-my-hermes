@@ -67,6 +67,7 @@ python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli cases replay --json
 python3 -m omh.cli cases readiness --json
 python3 -m omh.cli demo routing-precision --json
+python3 -m omh.cli demo router-fast-path --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
@@ -214,8 +215,22 @@ local copy-contract evidence only: it does not prove live Hermes chat rendering,
 translation quality, platform delivery, source retrieval, executor dispatch,
 review, CI, merge, or plugin loading.
 
+The router fast-path gate checks common chat turns where perceived latency is
+most visible:
+
+```sh
+omh demo router-fast-path --json
+```
+
+It should report picker, status, direct-answer, file-lookup, setup health,
+product issue, coding progress, image-card, scheduled-ops, paper-learning, and
+source-finder prompts as staying on explicit fast-path route markers. This is a
+deterministic route-contract guard, not a wall-clock benchmark. It catches
+regressions where frequent chat turns accidentally fall back to slower full
+workflow scoring or drift into the wrong next action.
+
 The Hermes UX quality rollup checks the chat-first user experience across the
-routing, card, hint, context, precision, and localized-copy rails:
+routing, card, hint, context, precision, localized-copy, and fast-path rails:
 
 ```sh
 omh demo hermes-ux-quality --json
@@ -226,8 +241,9 @@ dedicated wrapper cards with generic acknowledgements at zero, route hints
 aligned with the router, first-turn context briefs with catalog picker coverage,
 negative-control prompts that stay out of OMH workflows, expected intervention
 prompts that still enter the right workflow surface, and common non-English
-operator prompts that keep local card framing. It is local UX-contract evidence
-only: it does not prove live Hermes chat rendering, plugin load, platform
+operator prompts that keep local card framing, and frequent requests that stay
+on deterministic fast paths. It is local UX-contract evidence only: it does not
+prove live Hermes chat rendering, plugin load, platform
 delivery, generic tool invocation, executor dispatch, review, CI, merge, or
 delivery.
 
@@ -239,9 +255,9 @@ omh release product-readiness --version 1.0.1 --json
 
 It checks the generated skill content, G1-G10 readiness, grounded routing score,
 wrapper chat-card coverage, route-hint alignment, context-brief coverage,
-routing precision, Hermes UX quality, parity matrix, and release checklist
-shape in one operator-readable card. It is useful for release notes and
-maintainer handoff, but it is still local deterministic evidence only: it does
+routing precision, router fast-path quality, Hermes UX quality, parity matrix,
+and release checklist shape in one operator-readable card. It is useful for
+release notes and maintainer handoff, but it is still local deterministic evidence only: it does
 not run the checklist, mutate Hermes, dispatch executors, review code, pass CI,
 merge, deliver messages, or spend provider budget.
 

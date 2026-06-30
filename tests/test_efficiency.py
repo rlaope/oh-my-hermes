@@ -65,6 +65,7 @@ from omh.quality import grounded_score as grounded_score_module
 from omh.quality import context_brief_coverage as context_brief_coverage_module
 from omh.quality import hermes_ux_quality as hermes_ux_quality_module
 from omh.quality import localized_chat_copy as localized_chat_copy_module
+from omh.quality import router_fast_path as router_fast_path_module
 from omh.quality import routing_precision as routing_precision_module
 from omh.quality import route_hint_alignment as route_hint_alignment_module
 from omh.quality.grounded_score import GroundedScenario
@@ -621,6 +622,19 @@ class EfficiencyContractTests(unittest.TestCase):
             "cases": [],
             "claim_boundary": "localized boundary",
         }
+        router_fast_path_payload = {
+            "schema_version": router_fast_path_module.ROUTER_FAST_PATH_SCHEMA_VERSION,
+            "summary": {
+                "all_passing": True,
+                "case_count": 1,
+                "passing_count": 1,
+                "missing_marker_count": 0,
+                "route_mismatch_count": 0,
+                "next_action_mismatch_count": 0,
+            },
+            "cases": [],
+            "claim_boundary": "router fast-path boundary",
+        }
 
         with (
             patch.object(
@@ -653,6 +667,11 @@ class EfficiencyContractTests(unittest.TestCase):
                 "build_localized_chat_copy_demo",
                 side_effect=AssertionError("precomputed localized payload should be reused"),
             ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_router_fast_path_demo",
+                side_effect=AssertionError("precomputed router fast-path payload should be reused"),
+            ),
         ):
             payload = hermes_ux_quality_module.build_hermes_ux_quality_demo(
                 source="discord",
@@ -662,11 +681,13 @@ class EfficiencyContractTests(unittest.TestCase):
                 context_brief_coverage=context_payload,
                 routing_precision=precision_payload,
                 localized_chat_copy=localized_payload,
+                router_fast_path=router_fast_path_payload,
             )
 
         self.assertEqual(payload["status"], "passed")
-        self.assertEqual(payload["summary"]["passing_gate_count"], 6)
+        self.assertEqual(payload["summary"]["passing_gate_count"], 7)
         self.assertEqual(payload["summary"]["localized_chat_copy_passing_count"], 1)
+        self.assertEqual(payload["summary"]["router_fast_path_passing_count"], 1)
 
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()

@@ -2164,6 +2164,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("demo context-brief-coverage --json", items["context_brief_coverage"]["command"])
         self.assertIn("demo routing-precision --json", items["routing_precision"]["command"])
         self.assertIn("demo localized-chat-copy --json", items["localized_chat_copy"]["command"])
+        self.assertIn("demo router-fast-path --json", items["router_fast_path"]["command"])
         self.assertIn("demo hermes-ux-quality --json", items["hermes_ux_quality"]["command"])
         self.assertIn("release product-readiness --version 1.0.0 --json", items["product_readiness"]["command"])
         self.assertIn("release evidence-bundle --version 1.0.0 --write --json", items["release_evidence_bundle"]["command"])
@@ -2253,6 +2254,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("context_brief_coverage: passed", stdout)
             self.assertIn("routing_precision: passed", stdout)
             self.assertIn("localized_chat_copy: passed", stdout)
+            self.assertIn("router_fast_path: passed", stdout)
             self.assertIn("hermes_ux_quality: passed", stdout)
             self.assertIn("parity_contracts: passed", stdout)
             self.assertIn("release_checklist: passed", stdout)
@@ -2286,6 +2288,7 @@ class CliTests(unittest.TestCase):
                     "context_brief_coverage",
                     "routing_precision",
                     "localized_chat_copy",
+                    "router_fast_path",
                     "hermes_ux_quality",
                     "parity_contracts",
                     "release_checklist",
@@ -2310,8 +2313,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["localized_chat_copy"]["status"], "passed")
             self.assertIn("8/8 localized card cases", gates["localized_chat_copy"]["summary"])
             self.assertIn("locales 6", gates["localized_chat_copy"]["summary"])
+            self.assertEqual(gates["router_fast_path"]["status"], "passed")
+            self.assertIn("11/11 fast-path cases", gates["router_fast_path"]["summary"])
+            self.assertIn("missing markers 0", gates["router_fast_path"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
-            self.assertIn("6/6 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("7/7 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("fast paths 11/11", gates["hermes_ux_quality"]["summary"])
             self.assertEqual(gates["parity_contracts"]["status"], "passed")
             self.assertIn("not run the release checklist", payload["boundary"])
 
@@ -2354,7 +2361,7 @@ class CliTests(unittest.TestCase):
                 stdout,
             )
             self.assertIn("Localized chat copy: 8/8 (locales 6)", stdout)
-            self.assertIn("Hermes UX quality: 100/100 (6/6 gates)", stdout)
+            self.assertIn("Hermes UX quality: 100/100 (7/7 gates)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
 
@@ -2387,9 +2394,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_total"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_locale_count"], 6)
+            self.assertEqual(payload["summary"]["router_fast_path_passing"], 11)
+            self.assertEqual(payload["summary"]["router_fast_path_total"], 11)
+            self.assertEqual(payload["summary"]["router_fast_path_missing_marker_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
-            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 6)
-            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 6)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 7)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 7)
             self.assertIn("local_artifact_store: not_written", payload["warnings"])
             self.assertTrue(Path(payload["artifact_path"]).exists())
             self.assertTrue((omh_home / "runtime" / "release-evidence" / "index.json").exists())

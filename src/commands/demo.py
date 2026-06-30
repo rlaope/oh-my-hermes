@@ -16,6 +16,7 @@ from ..quality.localized_chat_copy import (
     format_localized_chat_copy_summary,
 )
 from ..quality.route_hint_alignment import build_route_hint_alignment_demo, format_route_hint_alignment_summary
+from ..quality.router_fast_path import build_router_fast_path_demo, format_router_fast_path_summary
 from ..quality.routing_precision import build_routing_precision_demo, format_routing_precision_summary
 from ..ingress import CHAT_SOURCES
 from ..installer import OmhError
@@ -29,12 +30,14 @@ DEMO_EPILOG = """Demo lanes:
   route-hint-alignment    Checks plugin/router route hints agree before Hermes speaks.
   context-brief-coverage  Checks compact OMH context briefs keep the right workflow visible.
   routing-precision       Guards against over-routing simple requests and missing OMH interventions.
+  router-fast-path        Checks common chat turns stay on deterministic fast-path routes.
   localized-chat-copy     Verifies common non-English prompts keep local Hermes card framing.
   hermes-ux-quality       Runs the combined user-feel gate across routing, cards, hints, and context.
 
 Recommended operator checks:
   omh demo hermes-ux-quality --summary
   omh demo localized-chat-copy --summary
+  omh demo router-fast-path --summary
   omh demo routing-precision --summary
   omh demo orchestration "I want to safely add a feature to this repo"
 
@@ -127,6 +130,18 @@ def cmd_demo_localized_chat_copy(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if args.summary:
         print(format_localized_chat_copy_summary(payload))
+    else:
+        _print_json(payload)
+    return 0
+
+
+def cmd_demo_router_fast_path(args: argparse.Namespace) -> int:
+    try:
+        payload = build_router_fast_path_demo(source=args.source)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if args.summary:
+        print(format_router_fast_path_summary(payload))
     else:
         _print_json(payload)
     return 0
@@ -245,6 +260,20 @@ def _add_demo_commands(sub) -> None:
     localized_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
     localized_output.add_argument("--summary", action="store_true", help="Print a compact human-readable localized copy summary.")
     localized_chat_copy.set_defaults(func=cmd_demo_localized_chat_copy)
+
+    router_fast_path = demo_sub.add_parser(
+        "router-fast-path",
+        help="Check common chat turns stay on fast-path routes.",
+        description=(
+            "Verify high-frequency picker, status, direct-answer, file lookup, setup health, "
+            "and workflow requests keep explicit fast-path markers instead of drifting to full scoring."
+        ),
+    )
+    router_fast_path.add_argument("--source", choices=CHAT_SOURCES, default="discord")
+    fast_path_output = router_fast_path.add_mutually_exclusive_group()
+    fast_path_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
+    fast_path_output.add_argument("--summary", action="store_true", help="Print a compact human-readable fast-path summary.")
+    router_fast_path.set_defaults(func=cmd_demo_router_fast_path)
 
     hermes_ux_quality = demo_sub.add_parser(
         "hermes-ux-quality",

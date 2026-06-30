@@ -515,6 +515,12 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
             f"{summary.get('localized_chat_copy_passing')}/{summary.get('localized_chat_copy_total')} "
             f"(locales {summary.get('localized_chat_copy_locale_count')})"
         )
+    if "router_fast_path_passing" in summary or "router_fast_path_total" in summary:
+        print(
+            "  Router fast paths: "
+            f"{summary.get('router_fast_path_passing')}/{summary.get('router_fast_path_total')} "
+            f"(missing markers {summary.get('router_fast_path_missing_marker_count')})"
+        )
     if "hermes_ux_quality_score" in summary:
         print(
             "  Hermes UX quality: "

@@ -118,9 +118,13 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("non-English operator prompts", items["localized_chat_copy"]["evidence_required"])
         self.assertIn("deterministic local copy framing", items["localized_chat_copy"]["proof_boundary"])
         self.assertIn("does not prove live Hermes chat rendering", items["localized_chat_copy"]["proof_boundary"])
+        self.assertEqual(items["router_fast_path"]["command"], "uv run python -m omh.cli demo router-fast-path --json")
+        self.assertIn("fast-path markers", items["router_fast_path"]["evidence_required"])
+        self.assertIn("deterministic local fast-path route markers", items["router_fast_path"]["proof_boundary"])
+        self.assertIn("does not prove wall-clock latency", items["router_fast_path"]["proof_boundary"])
         self.assertEqual(items["hermes_ux_quality"]["command"], "uv run python -m omh.cli demo hermes-ux-quality --json")
         self.assertIn("routing score", items["hermes_ux_quality"]["evidence_required"])
-        self.assertIn("deterministic local routing, card, hint, context, precision, and localized-copy contracts", items["hermes_ux_quality"]["proof_boundary"])
+        self.assertIn("deterministic local routing, card, hint, context, precision, localized-copy, and fast-path contracts", items["hermes_ux_quality"]["proof_boundary"])
         self.assertIn("does not prove live Hermes chat rendering", items["hermes_ux_quality"]["proof_boundary"])
         self.assertEqual(items["product_readiness"]["command"], "/tmp/omh release product-readiness --version 1.0.0 --json")
         self.assertIn("skill-content", items["product_readiness"]["evidence_required"])
@@ -291,6 +295,7 @@ class ReleaseSmokeTests(unittest.TestCase):
                     "context_brief_coverage",
                     "routing_precision",
                     "localized_chat_copy",
+                    "router_fast_path",
                     "hermes_ux_quality",
                     "parity_contracts",
                     "release_checklist",
@@ -335,8 +340,14 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertIn("locales 6", gates["localized_chat_copy"]["summary"])
             self.assertEqual(gates["localized_chat_copy"]["command"], "omh demo localized-chat-copy --json")
             self.assertIn("deterministic local localized-chat-copy", gates["localized_chat_copy"]["proof_boundary"])
+            self.assertEqual(gates["router_fast_path"]["status"], "passed")
+            self.assertIn("11/11 fast-path cases", gates["router_fast_path"]["summary"])
+            self.assertIn("missing markers 0", gates["router_fast_path"]["summary"])
+            self.assertEqual(gates["router_fast_path"]["command"], "omh demo router-fast-path --json")
+            self.assertIn("deterministic local fast-path", gates["router_fast_path"]["proof_boundary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
-            self.assertIn("6/6 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("7/7 UX gates passing", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("fast paths 11/11", gates["hermes_ux_quality"]["summary"])
             self.assertIn("routing avg 10.0", gates["hermes_ux_quality"]["summary"])
             self.assertIn("generic ack 0", gates["hermes_ux_quality"]["summary"])
             self.assertIn("context 10/10", gates["hermes_ux_quality"]["summary"])
@@ -390,9 +401,12 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_total"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_locale_count"], 6)
+            self.assertEqual(payload["summary"]["router_fast_path_passing"], 11)
+            self.assertEqual(payload["summary"]["router_fast_path_total"], 11)
+            self.assertEqual(payload["summary"]["router_fast_path_missing_marker_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
-            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 6)
-            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 6)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 7)
+            self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 7)
             self.assertEqual(payload["evidence"]["product_readiness"]["schema_version"], "omh_product_readiness/v1")
             self.assertEqual(payload["evidence"]["release_checklist"]["schema_version"], "release_readiness_checklist/v1")
             self.assertEqual(payload["evidence"]["grounded_score"]["schema_version"], "grounded_score_evaluation/v1")
@@ -401,6 +415,7 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(payload["evidence"]["context_brief_coverage"]["schema_version"], "context_brief_coverage/v1")
             self.assertEqual(payload["evidence"]["routing_precision"]["schema_version"], "routing_precision/v1")
             self.assertEqual(payload["evidence"]["localized_chat_copy"]["schema_version"], "localized_chat_copy/v1")
+            self.assertEqual(payload["evidence"]["router_fast_path"]["schema_version"], "router_fast_path/v1")
             self.assertEqual(payload["evidence"]["hermes_ux_quality"]["schema_version"], "hermes_ux_quality/v1")
             self.assertIn("grounded_score_ready", payload["claims"])
             self.assertIn("chat_card_coverage_ready", payload["claims"])
@@ -408,6 +423,7 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertIn("context_brief_coverage_ready", payload["claims"])
             self.assertIn("routing_precision_ready", payload["claims"])
             self.assertIn("localized_chat_copy_ready", payload["claims"])
+            self.assertIn("router_fast_path_ready", payload["claims"])
             self.assertIn("hermes_ux_quality_ready", payload["claims"])
             self.assertIn("executor_dispatch", payload["not_evidence_for"])
 
@@ -434,6 +450,7 @@ class ReleaseSmokeTests(unittest.TestCase):
             "build_context_brief_coverage_demo",
             "build_routing_precision_demo",
             "build_localized_chat_copy_demo",
+            "build_router_fast_path_demo",
             "build_hermes_ux_quality_demo",
             "release_readiness_checklist",
         )
