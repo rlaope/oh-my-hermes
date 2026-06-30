@@ -5082,6 +5082,7 @@ class CliTests(unittest.TestCase):
             ("what coding agents can OMH use?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("what can OMH do for research department?", "research-department", "research_department", "prepare_research_department_plan"),
             ("what can OMH do for research brief?", "research-brief", "web_research", "run_hermes_research"),
+            ("Use OMH web-research for: research loop engineering", "web-research", "web_research", "run_hermes_research"),
             ("what can OMH do for GitHub event ops?", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
             ("what can OMH do for coding agents?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("what can OMH do for reliability review?", "reliability-review", "reliability_review", "prepare_reliability_review"),
