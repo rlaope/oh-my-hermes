@@ -295,7 +295,7 @@ class CliTests(unittest.TestCase):
 
     def test_chat_interact_routes_workflow_learning_to_audit_actions(self) -> None:
         status, stdout, stderr = run_cli(
-            ["chat", "interact", "--source", "discord", "learn from this workflow run"],
+            ["chat", "interact", "--source", "discord", "--json", "learn from this workflow run"],
             output_json=False,
         )
 
@@ -328,7 +328,7 @@ class CliTests(unittest.TestCase):
             "Hermes did not use OMH for my image request; record this as workflow learning",
             "이미지 생성 요청에서 OMH 안 썼어. workflow-learning으로 기록해줘",
         ):
-            status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message], output_json=False)
+            status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "--json", message], output_json=False)
 
             self.assertEqual(status, 0, stderr)
             self.assertEqual(stderr, "")
@@ -347,7 +347,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
             status, stdout, stderr = run_cli(
-                base + ["chat", "interact", "--source", "discord", "omh 상태랑 다음 액션 알려줘"],
+                base + ["chat", "interact", "--source", "discord", "--json", "omh 상태랑 다음 액션 알려줘"],
                 output_json=False,
             )
 
@@ -376,7 +376,7 @@ class CliTests(unittest.TestCase):
             root = Path(tmp)
             base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
             status, stdout, stderr = run_cli(
-                base + ["chat", "interact", "--source", "discord", "show OMH status"],
+                base + ["chat", "interact", "--source", "discord", "--json", "show OMH status"],
                 output_json=False,
             )
 
@@ -4445,6 +4445,25 @@ class CliTests(unittest.TestCase):
         self.assertEqual(route["route_explanation"]["primary_action_label"], "Open ralplan")
         self.assertIn("preparing a reviewed plan", route["route_explanation"]["recommended_reply"])
 
+    def test_chat_route_defaults_to_operator_summary_for_terminal_users(self) -> None:
+        message = "I want to safely add a feature to this repo"
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH chat route", stdout)
+        self.assertIn("Workflow: ralplan", stdout)
+        self.assertIn("Next action: preparing a reviewed plan", stdout)
+        self.assertIn("Use --json for the full machine-readable route payload.", stdout)
+
+        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", message])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(stdout)["route"]["selected_skill"], "ralplan")
+
     def test_chat_route_summary_shows_recorded_runtime_metadata_only(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -4675,7 +4694,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["chat_response"]["actions"][0]["submit_text"], "./omh")
         self.assertEqual(
             payload["wrapper_contract"]["next_backend_commands"][0]["command"],
-            "omh chat interact --source <source> ./omh",
+            "omh chat interact --source <source> --json ./omh",
         )
         self.assertEqual(
             [command["id"] for command in payload["wrapper_contract"]["next_backend_commands"]],
@@ -4895,6 +4914,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
         status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "--json", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "chat_interaction/v1")
+        self.assertEqual(payload["route"]["selected_skill"], "ralplan")
+
+    def test_chat_interact_defaults_to_operator_summary_for_terminal_users(self) -> None:
+        message = "I want to safely add a feature to this repo"
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(stdout)
+        self.assertIn("OMH chat interaction", stdout)
+        self.assertIn("Workflow: ralplan", stdout)
+        self.assertIn("Next action: preparing a reviewed plan", stdout)
+        self.assertIn("Use --json for the full machine-readable payload.", stdout)
+
+        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
 
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)

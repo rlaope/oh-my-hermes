@@ -151,7 +151,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(actions[0]["submit_text"], "./omh")
         backend_commands = payload["wrapper_contract"]["next_backend_commands"]
         self.assertEqual([command["id"] for command in backend_commands], ["open_workflow", "route_for_me"])
-        self.assertEqual(backend_commands[0]["command"], "omh chat interact --source <source> ./omh")
+        self.assertEqual(backend_commands[0]["command"], "omh chat interact --source <source> --json ./omh")
         self.assertNotIn(message, json.dumps(payload))
 
     def test_chat_interaction_renders_task_abstraction_card_without_cli_copy(self) -> None:

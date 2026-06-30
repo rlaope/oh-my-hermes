@@ -675,17 +675,16 @@ Then restart the bot process so Hermes reloads its config and skill directory.
 Minimal wrapper calls:
 
 ```sh
-omh chat interact --source discord --event-json event.json
-omh chat interact --source slack "risky refactor"
-printf '%s' "$SLACK_TEXT" | omh chat interact --source slack --stdin
-omh chat interact --source discord --summary "risky refactor"
+omh chat interact --source discord --json --event-json event.json
+omh chat interact --source slack --json "risky refactor"
+printf '%s' "$SLACK_TEXT" | omh chat interact --source slack --json --stdin
+omh chat interact --source discord "risky refactor"
 ```
 
-The default output is the machine-readable `chat_interaction/v1` JSON envelope
-that wrappers should render. Use `--summary` only when an operator wants to
-inspect the same response contract quickly in a terminal. The summary keeps the
-usual chat actions visible for operator QA; use JSON only when an adapter needs
-the complete machine-readable payload.
+The default terminal output is a compact operator summary. Wrappers and adapters
+should pass `--json` when they need the machine-readable
+`chat_interaction/v1` envelope. The summary keeps the usual chat actions visible
+for operator QA; JSON remains the complete backend contract.
 
 If the wrapper can identify the current Hermes agent target, include that as
 metadata rather than asking the user to choose a command:
@@ -766,8 +765,8 @@ verification, review, CI, or merge-readiness evidence is missing.
 Lower-level debug surfaces remain available when an adapter needs them:
 
 ```sh
-omh chat route --source discord --record "risky refactor"
-omh chat route --source discord --summary "risky refactor"
+omh chat route --source discord --record --json "risky refactor"
+omh chat route --source discord "risky refactor"
 omh hermes plan --source discord --record "risky refactor with review"
 omh hermes plan-accept .hermes/plans/<accepted-plan.md>
 omh coding delegate --executor codex --source discord --record --from-plan .hermes/plans/<accepted-plan.md>
@@ -775,9 +774,9 @@ omh coding delegate --executor claude-code --source discord --record "risky refa
 omh runtime delegation-status --run <run-id>
 ```
 
-`omh chat route --summary` is for operator inspection of the lower-level route
-decision. It does not replace the default JSON payload that adapters should
-consume.
+`omh chat route` prints an operator-readable lower-level route decision by
+default. Adapters should pass `--json` when they need the complete
+machine-readable payload.
 
 `omh hermes plan --record` writes a draft `hermes_plan/v1` Markdown artifact
 under `.hermes/plans/`. Each plan includes a deterministic `quality_gate` and
