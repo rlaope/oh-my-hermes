@@ -1746,10 +1746,10 @@ class WrapperContractTests(unittest.TestCase):
             ),
             (
                 "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
-                "send_to_executor",
+                "show_coding_handoff_status",
                 False,
-                "send_to_executor",
-                "Open in Codex",
+                "show_coding_handoff_status",
+                "Show coding status",
             ),
         )
 
@@ -1785,13 +1785,14 @@ class WrapperContractTests(unittest.TestCase):
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         state = payload["chat_response"]["state"]
         self.assertEqual(payload["route"]["selected_skill"], "ultraprocess")
-        self.assertEqual(payload["next_action"], "send_to_executor")
+        self.assertEqual(payload["next_action"], "show_coding_handoff_status")
         self.assertEqual(payload["executor_resolution"]["source"], "message_mention")
         self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "codex")
         self.assertEqual(state["selected_executor_profile"], "codex")
         self.assertTrue(state["coding_status_request"])
         self.assertTrue(state["route_context"]["coding_status_request"])
         self.assertIn("session evidence is not attached yet", payload["chat_response"]["headline"])
+        self.assertEqual(actions["show_coding_handoff_status"]["label"], "Show coding status")
         self.assertEqual(actions["send_to_executor"]["label"], "Open in Codex")
         self.assertEqual(actions["send_to_codex"]["label"], "Open in Codex")
         self.assertFalse(actions["attach_executor_session"]["enabled"])
@@ -1803,12 +1804,13 @@ class WrapperContractTests(unittest.TestCase):
         actions = {action["id"]: action for action in payload["chat_response"]["actions"]}
         state = payload["chat_response"]["state"]
         self.assertEqual(payload["route"]["selected_skill"], "ultraprocess")
-        self.assertEqual(payload["next_action"], "show_prompt_handoff")
+        self.assertEqual(payload["next_action"], "show_coding_handoff_status")
         self.assertEqual(payload["executor_resolution"]["source"], "message_mention")
         self.assertEqual(payload["executor_resolution"]["resolved_executor_target"], "claude-code")
         self.assertEqual(state["selected_executor_profile"], "claude-code")
         self.assertTrue(state["coding_status_request"])
         self.assertIn("session evidence is not attached yet", payload["chat_response"]["headline"])
+        self.assertEqual(actions["show_coding_handoff_status"]["label"], "Show coding status")
         self.assertEqual(actions["show_prompt_handoff"]["label"], "Show Claude Code prompt")
         self.assertEqual(actions["copy_prompt_handoff"]["label"], "Copy Claude Code prompt")
         self.assertEqual(actions["choose_executor"]["label"], "Change coding agent")
@@ -2004,7 +2006,7 @@ class WrapperContractTests(unittest.TestCase):
             (
                 "Codex 작업이 어디까지 진행됐는지 알려줘",
                 "ultraprocess",
-                "send_to_executor",
+                "show_coding_handoff_status",
                 "handoff",
             ),
             (

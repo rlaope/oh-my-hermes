@@ -48,7 +48,7 @@ CONTEXT_BRIEF_COVERAGE_CASES: tuple[ContextBriefCoverageCase, ...] = (
         "Customer feedback before coding",
         "결제 실패 이슈가 자주 나와",
         "feedback-triage",
-        "classify_signal_and_prepare_investigation",
+        "triage_feedback",
     ),
     ContextBriefCoverageCase(
         "github-issue-to-pr",
@@ -83,7 +83,7 @@ CONTEXT_BRIEF_COVERAGE_CASES: tuple[ContextBriefCoverageCase, ...] = (
         "Source-backed web research",
         "web research with citations about current AI agent market trends",
         "web-research",
-        "gather_source_backed_evidence",
+        "run_hermes_research",
     ),
 )
 

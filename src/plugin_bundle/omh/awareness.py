@@ -1484,7 +1484,7 @@ _ROUTE_HINT_RULES = (
         "id": "customer_signal",
         "workflow": "feedback-triage",
         "lane": "research_and_ops",
-        "next_action": "classify_signal_and_prepare_investigation",
+        "next_action": "triage_feedback",
         "reason": "The user is describing customer feedback, bugs, issues, or product signals that need triage before implementation.",
         "fallback_action": "ask_for_examples_or_prepare_repro_plan",
         "phrases": (
@@ -1642,7 +1642,7 @@ _ROUTE_HINT_RULES = (
         "id": "source_research",
         "workflow": "web-research",
         "lane": "research_and_ops",
-        "next_action": "gather_source_backed_evidence",
+        "next_action": "run_hermes_research",
         "reason": "The user is asking for current, source-backed, market, competitor, paper, or news research.",
         "fallback_action": "ask_for_scope_or_source_constraints",
         "phrases": (
@@ -2308,8 +2308,8 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "plan": "present_plan",
     "ralplan": "present_plan",
     "ultragoal": "start_goal",
-    "loop": "assess_loopability",
-    "ultraprocess": "prepare_one_cycle_delivery",
+    "loop": "start_loop_cycle",
+    "ultraprocess": "choose_executor",
     "workflow-learning": "audit_learning_readiness",
     "code-review": "prepare_review_or_followup_handoff",
     "team": "prepare_team_handoff",
