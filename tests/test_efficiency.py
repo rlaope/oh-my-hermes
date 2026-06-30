@@ -921,6 +921,9 @@ class EfficiencyContractTests(unittest.TestCase):
     def test_operator_surface_fast_paths_skip_full_recommendation_scan(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         cases = (
+            ("how can I safely add a feature to this repo?", "ralplan"),
+            ("risky refactor", "ralplan"),
+            ("위험한 리팩터링 같아", "ralplan"),
             ("릴리즈 노트 썸네일로 만들어줘", "img-summary"),
             ("arxiv 링크 찾아서 쉽게 설명해줘", "source-finder"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
@@ -934,7 +937,12 @@ class EfficiencyContractTests(unittest.TestCase):
                     self.assertEqual(decision["selected_skill"], expected_skill)
                     self.assertEqual(decision["action"], "dispatch")
                     self.assertEqual(decision["confidence"], "high")
-                    self.assertIn("operator_surface_fast_path", decision["recommendations"][0]["matched"][0])
+                    self.assertTrue(
+                        any(
+                            str(marker).startswith("operator_surface_fast_path")
+                            for marker in decision["recommendations"][0]["matched"]
+                        )
+                    )
 
     def test_public_chat_route_payload_cache_is_reused_without_payload_poisoning(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
