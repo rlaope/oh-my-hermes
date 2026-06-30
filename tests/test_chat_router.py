@@ -444,6 +444,7 @@ class ChatRouterTests(unittest.TestCase):
             "작업상황 브리핑해줘",
             "작업상황 보고해줘",
             "현재 작업상황 보고해줘",
+            "지금 진행중인 작업 알려줘",
             "지금 뭐함",
             "뭐하고있어",
             "현재 작업 뭐야",
@@ -1051,6 +1052,16 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "codex로 지금 작업 열어줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "코덱스로 현재 작업 이어서 해줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "claude code로 지금 작업 열어줘",
                 "executor-runtime-readiness",
                 "guard:executor_runtime_readiness",
             ),
