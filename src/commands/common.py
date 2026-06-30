@@ -9,7 +9,7 @@ from pathlib import Path
 from ..ingress import extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from ..paths import resolve_paths
-from ..routing.action_copy import next_action_label
+from ..routing.action_copy import next_action_label_with_id
 from ..setup_profiles import read_setup_profile
 from ..targets import TARGET_METADATA_KEYS
 
@@ -28,13 +28,7 @@ def _wants_json(args: argparse.Namespace) -> bool:
 
 
 def _action_label_with_id(action: str, label: str = "") -> str:
-    normalized = action.strip()
-    if not normalized:
-        return ""
-    resolved_label = label.strip() or next_action_label(normalized)
-    if not resolved_label or resolved_label == normalized:
-        return normalized
-    return f"{resolved_label} (`{normalized}`)"
+    return next_action_label_with_id(action, label)
 
 
 def _explicit_source_metadata(args: argparse.Namespace) -> dict[str, str]:

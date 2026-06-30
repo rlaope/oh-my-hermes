@@ -59,6 +59,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "show_agent_ops_review": "showing agent-ops status",
     "show_coding_handoff_status": "showing coding-agent progress",
     "show_workflow_guidance": "showing workflow guidance",
+    "show_workflow_picker": "opening the workflow picker",
     "start_loop_cycle": "starting the loopability-gated cycle",
     "start_ultraprocess": "preparing the one-cycle delivery process",
     "triage_feedback": "triaging the feedback signal",
@@ -70,3 +71,13 @@ def next_action_label(next_action: str) -> str:
     if not normalized:
         return ""
     return NEXT_ACTION_LABELS.get(normalized, normalized.replace("_", " "))
+
+
+def next_action_label_with_id(next_action: str, label: str = "") -> str:
+    normalized = next_action.strip()
+    if not normalized:
+        return ""
+    resolved_label = label.strip() or next_action_label(normalized)
+    if not resolved_label or resolved_label == normalized:
+        return normalized
+    return f"{resolved_label} (`{normalized}`)"

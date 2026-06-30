@@ -69,7 +69,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         self.assertIn("OMH context brief", stdout)
-        self.assertIn("Route hint: img-summary -> prepare_visual_prompt_card", stdout)
+        self.assertIn(
+            "Route hint: img-summary -> preparing an image prompt card (`prepare_visual_prompt_card`)",
+            stdout,
+        )
         self.assertIn("Workflow lanes", stdout)
         self.assertIn("Generic tool checkpoint", stdout)
         self.assertIn("Do not skip OMH merely because a generic tool", stdout)
@@ -81,7 +84,10 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
-        self.assertIn("Catalog question: show_workflow_picker via omh_capabilities", stdout)
+        self.assertIn(
+            "Catalog question: opening the workflow picker (`show_workflow_picker`) via omh_capabilities",
+            stdout,
+        )
 
         status, stdout, stderr = run_cli(
             [
