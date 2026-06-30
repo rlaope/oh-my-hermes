@@ -88,6 +88,7 @@ _GUARDED_OPERATOR_FAST_PATH_IDS = frozenset(
         "executor_runtime_readiness_before_generic_advice",
         "img_summary_before_materials_or_delivery",
         "memory_curation_before_generic_clarification",
+        "ops_observability_before_generic_loop",
         "toolbelt_readiness_before_generic_or_visual_fallback",
     }
 )
@@ -95,6 +96,7 @@ _GUARDED_OPERATOR_FAST_PATH_PRIORITY = (
     "executor_runtime_readiness_before_generic_advice",
     "coding_handoff_status_before_clarify",
     "coding_progress_status_before_clarify",
+    "ops_observability_before_generic_loop",
     "doctor_health_before_skill_catalog",
     "toolbelt_readiness_before_generic_or_visual_fallback",
     "img_summary_before_materials_or_delivery",
@@ -210,6 +212,12 @@ _WORKFLOW_LEARNING_FAST_PATH_TERMS = (
     "workflow went wrong",
     "improve a workflow",
     "workflow learning",
+    "omh 기능",
+    "omh context",
+    "omh 컨텍스트",
+    "generic answer",
+    "general answer",
+    "일반 답변",
     "워크플로우",
     "워크플로",
     "스킬",
@@ -236,6 +244,12 @@ _WORKFLOW_LEARNING_FAST_PATH_ACTION_TERMS = (
     "틀렸",
     "안 썼",
     "안쓴",
+    "모르",
+    "못 보",
+    "빠져",
+    "빠짐",
+    "잘못 고른",
+    "잘못 골",
 )
 _BOUNDARY_MARKER_LABELS: tuple[tuple[str, str], ...] = (
     ("meeting happened", "meeting occurrence"),

@@ -1267,6 +1267,19 @@ _WORKFLOW_LEARNING_PHRASES = (
     "omh를 안 썼는지 학습",
     "워크플로 누락",
     "라우팅 누락",
+    "일반 답변으로 빠져",
+    "일반 답변으로 빠짐",
+    "omh가 자꾸 일반 답변",
+    "omh 기능을 모르는",
+    "omh 기능 모르",
+    "omh context를 못 보는",
+    "omh context 못 보는",
+    "omh 컨텍스트를 못 보는",
+    "omh 컨텍스트 못 보는",
+    "라우터가 잘못 고른",
+    "라우터가 잘못 골",
+    "지금 omh가 안 쓰여",
+    "omh가 안 쓰여",
 )
 _WORKFLOW_LEARNING_ACTION_TOKENS = _normalized_token_set(
     {
@@ -2147,6 +2160,30 @@ _OPS_OBSERVABILITY_PHRASES = (
     "비용 지연시간",
     "토큰 비용",
     "실행 기록",
+    "omh가 너무 느려",
+    "omh 너무 느려",
+    "omh가 느려",
+    "omh 느려",
+    "omh feels slow",
+    "omh is slow",
+    "omh routing is slow",
+    "slow omh routing",
+    "hermes omh response takes too long",
+    "hermes에서 omh 답변이 오래",
+    "omh 답변이 오래",
+    "omh 라우팅이 느려",
+    "라우팅이 느려",
+    "라우터가 느려",
+    "응답 지연시간",
+    "답변 지연시간",
+    "토큰을 너무 많이",
+    "토큰 너무 많이",
+    "too many tokens",
+    "using too many tokens",
+    "cost too high",
+    "비용이 많이",
+    "비용 많이",
+    "비용 확인",
 )
 _OPS_OBSERVABILITY_TOKENS = _normalized_token_set(
     {
@@ -2160,12 +2197,81 @@ _OPS_OBSERVABILITY_TOKENS = _normalized_token_set(
         "usage",
         "queue",
         "failure",
+        "slow",
+        "slowness",
         "비용",
         "지연시간",
+        "레이턴시",
         "토큰",
         "기록",
         "관측성",
+        "느려",
+        "느림",
     }
+)
+_OPS_OBSERVABILITY_EXTERNAL_BLOCKERS = (
+    "aws cost",
+    "aws bill",
+    "gcp cost",
+    "gcp bill",
+    "azure cost",
+    "azure bill",
+    "cloud bill",
+    "cloud cost",
+    "hosting cost",
+    "server cost",
+    "network routing",
+    "router hardware",
+    "aws 비용",
+    "gcp 비용",
+    "azure 비용",
+    "클라우드 비용",
+    "호스팅 비용",
+    "서버 비용",
+    "네트워크 라우팅",
+    "공유기",
+)
+_OPS_OBSERVABILITY_OPERATOR_CONTEXT = (
+    "omh",
+    "oh-my-hermes",
+    "hermes",
+    "agent",
+    "runtime",
+    "executor",
+    "gateway",
+    "loop",
+    "automation",
+    "router",
+    "routing",
+    "latency",
+    "런타임",
+    "실행",
+    "게이트웨이",
+    "루프",
+    "자동화",
+    "라우터",
+    "라우팅",
+    "지연시간",
+    "레이턴시",
+)
+_OPS_OBSERVABILITY_BLOCKER_OVERRIDE_CONTEXT = (
+    "omh",
+    "oh-my-hermes",
+    "hermes",
+    "agent",
+    "runtime",
+    "executor",
+    "gateway",
+    "loop",
+    "automation",
+    "latency",
+    "런타임",
+    "실행",
+    "게이트웨이",
+    "루프",
+    "자동화",
+    "지연시간",
+    "레이턴시",
 )
 _VOICE_OPERATOR_PHRASES = (
     "voice operator",
@@ -3603,13 +3709,14 @@ def _adversarial_qa_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    operator_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT)
+    blocker_override_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_BLOCKER_OVERRIDE_CONTEXT)
+    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS) and not blocker_override_context:
+        return False
     if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_PHRASES):
         return True
     telemetry = bool(_OPS_OBSERVABILITY_TOKENS & query_tokens)
-    runtime_context = _contains_phrase(
-        normalized_query,
-        ("loop", "automation", "runtime", "executor", "gateway", "루프", "자동화", "런타임", "실행", "게이트웨이"),
-    )
+    runtime_context = operator_context
     status_intent = _contains_phrase(
         normalized_query,
         ("status", "show", "report", "summary", "보여줘", "알려줘", "상태", "요약"),
@@ -4578,6 +4685,11 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "setup is next",
             "skills still look stale",
             "skills look stale",
+            "update version unchanged",
+            "update version stayed",
+            "version unchanged after update",
+            "version stayed the same after update",
+            "same version after update",
             "hermes skills still",
             "hermes skills list does not show",
             "hermes skills list does not show omh",
@@ -4604,6 +4716,11 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "셋업이 이상",
             "스킬이 안 보여",
             "스킬이 stale",
+            "update 했는데 버전이 그대로",
+            "업데이트 했는데 버전이 그대로",
+            "업데이트했는데 버전이 그대로",
+            "버전이 그대로야",
+            "버전 그대로야",
         ),
     ):
         return True
@@ -4689,6 +4806,9 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "update 잘 됐",
             "update 잘됐",
             "update 했는데 잘",
+            "update 했는데 버전이 그대로",
+            "업데이트 했는데 버전이 그대로",
+            "업데이트했는데 버전이 그대로",
             "업데이트 잘 됐",
             "업데이트 잘됐",
             "업데이트 했는데 잘",
@@ -4722,6 +4842,10 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "setup arrow key",
             "setup arrow keys",
             "setup keyboard",
+            "setup에서 화살표",
+            "setup 화살표",
+            "셋업에서 화살표",
+            "화살표 누르면 느려",
             "setup에서 위아래키",
             "setup 위아래키",
             "셋업에서 위아래키",

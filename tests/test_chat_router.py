@@ -1531,6 +1531,36 @@ class ChatRouterTests(unittest.TestCase):
                 "prepare_memory_curation_review",
                 "guard:memory_curation",
             ),
+            (
+                "OMH가 너무 느려",
+                "ops-observability-card",
+                "prepare_ops_observability_card",
+                "guard:ops_observability",
+            ),
+            (
+                "토큰을 너무 많이 쓰는 것 같아",
+                "ops-observability-card",
+                "prepare_ops_observability_card",
+                "guard:ops_observability",
+            ),
+            (
+                "비용이 많이 나오는지 확인해줘",
+                "ops-observability-card",
+                "prepare_ops_observability_card",
+                "guard:ops_observability",
+            ),
+            (
+                "setup에서 화살표 누르면 느려",
+                "doctor",
+                "run_local_operator_check",
+                "guard:doctor_health",
+            ),
+            (
+                "update 했는데 버전이 그대로야",
+                "doctor",
+                "run_local_operator_check",
+                "guard:doctor_health",
+            ),
             ("업데이트 됐는지 확인해줘", "doctor", "run_local_operator_check", "guard:doctor_health"),
         )
 
@@ -1556,6 +1586,20 @@ class ChatRouterTests(unittest.TestCase):
             )
             public = public_route_payload(decision)
             self.assertNotIn("workflow_route_plan", public)
+
+    def test_external_cost_and_network_routing_questions_do_not_open_ops_observability(self) -> None:
+        cases = (
+            "AWS 비용이 많이 나오는지 확인해줘",
+            "네트워크 라우팅이 느려",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertNotEqual(decision["selected_skill"], "ops-observability-card")
+            self.assertNotIn("guard:ops_observability", decision["recommendations"][0]["matched"])
+            self.assertNotEqual(decision["action"], "dispatch")
 
     def test_natural_single_workflow_requests_use_fast_path_without_full_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()
@@ -1830,6 +1874,9 @@ class ChatRouterTests(unittest.TestCase):
             "방금 코딩 위임에 OMH 안 쓴 것 같아. 다음엔 ultraprocess로 보내줘",
             "OMH 안 썼어",
             "missed route: Hermes skipped OMH for my image request",
+            "디스코드에서 OMH가 자꾸 일반 답변으로 빠져",
+            "프리렌이 omh 기능을 모르는 것 같아",
+            "agent가 omh context를 못 보는 것 같아",
             "Can OMH help me improve a workflow that went wrong?",
         )
 
