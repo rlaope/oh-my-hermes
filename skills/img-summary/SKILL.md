@@ -1,6 +1,6 @@
 ---
 name: img-summary
-description: [omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific, domain-aware, poster-archetype-aware image-generation-ready visual prompt cards.
+description: [omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, materials]
@@ -16,7 +16,7 @@ This is a Hermes-native `img-summary` workflow skill.
 
 ## Why This Exists
 
-`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind, adapting visual mood, premium background plate, texture, lighting, and camera treatment to the domain, choosing a poster archetype for visual grammar, and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
+`img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format, domain mood, background, texture, lighting, camera, and poster grammar, and keeping generation, QA, and delivery as observed-only evidence.
 
 ## Do Not Use When
 
@@ -63,9 +63,9 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, premium background plate, material texture, camera treatment, lighting, motifs, and poster design grammar adapt without claiming image generation.
+Use when Hermes should shape supplied notes, PRs, issues, research/news, reports, or releases into a source-specific visual prompt without claiming image generation.
 
-    Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image generation`, `image generation features`, `image generation support`, `image tool support`, `image feature`, `image features`, `visual generation`, `visual generation support`, `visual card support`, `image summary card`, `summary image`, `summary card`, `explainer image`, `feature explainer image`, `feature explanation image`, `product explainer image`, `product explainer card`, `infographic`, `one-page infographic`, `workflow image`, `workflow card`, `shareable image`, `explain this as an image`, `make an image explaining`, `image explaining the cron feature`, `make an image explaining the cron feature`, `make a visual summary of this PR`, `visual summary`, `picture card`, `meeting notes picture card`, `vertical card`, `vertical summary image`, `vertical image card`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `회의록을 보기 좋은 세로 이미지로 요약`, `회의록을 보기 좋은 세로 이미지로 요약해줘`, `세로 이미지로 요약`, `세로 이미지로 요약해줘`, `보기 좋은 세로 이미지`, `PR 요약 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `업데이트 발표 이미지`, `세로 이미지 카드`, `이미지 카드`, `회의록 이미지 카드`, `회의록을 세로 이미지 카드`, `설명 이미지`, `설명하는 인포그래픽`, `기능 설명 이미지`, `기능 소개 이미지`, `인포그래픽`, `인포그래픽 만들어줘`, `이미지 요약 카드`, `요약 이미지`, `요약 카드`, `카드 이미지`, `이미지로 요약`, `이미지로 요약해줘`, `이미지 생성`, `이미지 생성해줘`, `이미지 만들어줘`, `크론 기능 설명 이미지`, `크론 기능 설명 사진`, `크론 기능 설명 사진 하나 만들어줘`, `사진 카드`, `사진처럼 만들어줘`, `PR 요약 사진`, `공유용 이미지`, `안내 이미지`, `워크플로우 이미지`, `이미지로 설명`, `이미지 하나 만들어줘`
+    Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image generation`, `image generation features`, `image generation support`, `image tool support`, `image feature`, `image features`, `visual generation`, `visual generation support`, `visual card support`, `image summary card`, `summary image`, `summary card`, `explainer image`, `feature explainer image`, `feature explanation image`, `product explainer image`, `product explainer card`, `infographic`, `one-page infographic`, `workflow image`, `workflow card`, `shareable image`, `explain this as an image`, `make an image explaining`, `image explaining the cron feature`, `make an image explaining the cron feature`, `make a visual summary of this PR`, `visual summary`, `picture card`, `meeting notes picture card`, `vertical card`, `vertical summary image`, `vertical image card`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `release notes thumbnail`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `회의록을 보기 좋은 세로 이미지로 요약`, `회의록을 보기 좋은 세로 이미지로 요약해줘`, `세로 이미지로 요약`, `세로 이미지로 요약해줘`, `보기 좋은 세로 이미지`, `PR 요약 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `릴리즈 노트 썸네일`, `업데이트 발표 이미지`, `세로 이미지 카드`, `이미지 카드`, `회의록 이미지 카드`, `회의록을 세로 이미지 카드`, `설명 이미지`, `설명하는 인포그래픽`, `기능 설명 이미지`, `기능 소개 이미지`, `인포그래픽`, `인포그래픽 만들어줘`, `이미지 요약 카드`, `요약 이미지`, `요약 카드`, `썸네일`, `썸네일 만들어줘`, `썸네일로 만들어줘`, `카드 이미지`, `이미지로 요약`, `이미지로 요약해줘`, `이미지 생성`, `이미지 생성해줘`, `이미지 만들어줘`, `크론 기능 설명 이미지`, `크론 기능 설명 사진`, `크론 기능 설명 사진 하나 만들어줘`, `사진 카드`, `사진처럼 만들어줘`, `PR 요약 사진`, `공유용 이미지`, `안내 이미지`, `워크플로우 이미지`, `이미지로 설명`, `이미지 하나 만들어줘`
 
 ## Catalog Metadata
 
@@ -79,8 +79,8 @@ Quality bar:
 - Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.
 - Use the source-specific format profile instead of forcing every visual into the same grid.
 - Expose the detected `domain_key` so wrappers and users can explain why a domain-specific scene and poster archetype were selected.
-- Adapt the high-fidelity background plate, scene, material texture, depth, lighting, camera treatment, motifs, palette, and composition to the detected domain such as security, commerce, sports, fashion, finance, developer work, or research.
-- Resolve a poster archetype such as Swiss grid, cinematic key-art, editorial magazine, constructivist photomontage, data infographic, product ad, technical brutalist, museum exhibition, sports event, or luxury lookbook, and keep it separate from source kind and domain.
+- Adapt scene, texture, depth, lighting, camera, motifs, palette, and composition to domains such as security, commerce, sports, fashion, finance, developer work, or research.
+- Resolve a poster archetype such as Swiss grid, cinematic key-art, editorial magazine, constructivist photomontage, data infographic, product ad, technical brutalist, museum exhibition, sports event, or luxury lookbook.
 - Ask image tools to render the domain-specific environment first, then place readable card modules on top; reject flat vector clipart, plain gradients, generic glass cards, color-swapped templates, and low-detail wallpaper.
 - Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark.
 - Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.
@@ -113,7 +113,7 @@ Expected outputs:
 - domain-aware visual theme
 - poster_archetype/v1
 - poster archetype visual grammar
-- premium background plate, texture, camera, and lighting direction
+- background, texture, camera, and lighting direction
 - image-safe card copy
 - generation prompt
 - negative prompt

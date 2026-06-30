@@ -556,7 +556,7 @@ class RouterContentTests(unittest.TestCase):
                 "show_visual_status",
             }.issubset(set(VISIBLE_ACTIONS))
         )
-        self.assertIn("image-generation-ready visual prompt cards", templates["img-summary"].content)
+        self.assertIn("domain-aware image prompt cards", templates["img-summary"].content)
         self.assertIn("poster_archetype/v1", templates["img-summary"].content)
         self.assertIn("Do not call image providers", templates["img-summary"].content)
         self.assertIn("image_generation_setup/v1", templates["img-summary"].content)

@@ -49,7 +49,7 @@ _CANONICAL_WEB_RESEARCH = (
 )
 _CANONICAL_VISUAL_SUMMARY = (
     "img-summary visual summary image card summary image explainer image visual prompt card "
-    "image generation prompt explain feature cron workflow poster infographic"
+    "image generation prompt explain feature cron workflow poster infographic thumbnail"
 )
 _CANONICAL_PAPER_LEARNING = (
     "paper-learning paper pdf research paper explain summarize easy moderate expert "
@@ -57,7 +57,7 @@ _CANONICAL_PAPER_LEARNING = (
 )
 _CANONICAL_SOURCE_FINDER = (
     "source-finder find source candidates papers datasets github repository public pdf links "
-    "presentation materials acquisition status downstream workflow"
+    "presentation materials arxiv doi acquisition status downstream workflow"
 )
 
 

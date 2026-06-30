@@ -42,8 +42,11 @@ def _normalized_token_set(values: set[str]) -> frozenset[str]:
 _SCHEDULED_OPS_STRONG_TOKENS = _normalized_token_set(
     {
         "cron",
+        "automate",
+        "automation",
         "recurring",
         "repeat",
+        "자동화",
         "정기",
         "반복",
     }
@@ -451,6 +454,8 @@ _SOURCE_FINDER_PHRASES = (
     "find papers",
     "find paper pdf",
     "find paper pdf link",
+    "find arxiv link",
+    "find arxiv paper",
     "find datasets",
     "find dataset links",
     "find dataset link",
@@ -475,6 +480,7 @@ _SOURCE_FINDER_PHRASES = (
     "presentation materials",
     "downloadable sources",
     "paper pdf link",
+    "arxiv link",
     "pdf link",
     "dataset link",
     "dataset links",
@@ -482,6 +488,9 @@ _SOURCE_FINDER_PHRASES = (
     "자료 후보",
     "출처 후보",
     "논문 pdf 링크",
+    "arxiv 링크",
+    "arxiv 링크 찾아",
+    "arxiv 링크 찾아서",
     "pdf 링크",
     "데이터셋 링크",
     "공개 데이터셋",
@@ -542,6 +551,7 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
         "one-pager",
         "onepager",
         "graphic",
+        "thumbnail",
         "이미지",
         "이미지로",
         "이미지를",
@@ -550,6 +560,7 @@ _VISUAL_SUMMARY_MODALITY_TOKENS = _normalized_token_set(
         "그림",
         "그림으로",
         "세로",
+        "썸네일",
         "인포그래픽",
         "포스터",
         "画像",
@@ -594,12 +605,18 @@ _VISUAL_SUMMARY_SHORT_REQUEST_PHRASES = frozenset(
         "make an image",
         "create an image",
         "generate an image",
+        "make a thumbnail",
+        "create a thumbnail",
+        "generate a thumbnail",
         "이미지 만들어줘",
         "이미지 생성해줘",
         "이미지 생성해 줘",
         "예쁜 이미지 만들어줘",
         "이미지를 만들어줘",
         "이미지를 생성해줘",
+        "썸네일 만들어줘",
+        "썸네일 생성해줘",
+        "썸네일로 만들어줘",
         "사진 만들어줘",
         "사진 생성해줘",
         "사진을 만들어줘",
@@ -701,6 +718,9 @@ _VISUAL_SUMMARY_PHRASES = (
     "image summary card",
     "summary image",
     "summary card",
+    "thumbnail",
+    "release thumbnail",
+    "thumbnail card",
     "explainer image",
     "feature explainer image",
     "feature explanation image",
@@ -742,6 +762,10 @@ _VISUAL_SUMMARY_PHRASES = (
     "이미지 카드",
     "요약 이미지",
     "요약 카드",
+    "썸네일",
+    "썸네일 만들어",
+    "썸네일 생성",
+    "썸네일로 만들어",
     "세로 카드",
     "회의록 이미지",
     "회의록 세로 카드",
@@ -761,8 +785,10 @@ _VISUAL_SUMMARY_PHRASES = (
     "release announcement image",
     "release notes image",
     "release notes card",
+    "release notes thumbnail",
     "release note image",
     "release note card",
+    "release note thumbnail",
     "release update card",
     "release update announcement card",
     "announcement card",
@@ -790,6 +816,9 @@ _VISUAL_SUMMARY_PHRASES = (
     "릴리즈 노트 이미지로 만들어",
     "릴리즈 노트 이미지로 만들어줘",
     "릴리즈 노트 카드",
+    "릴리즈 노트 썸네일",
+    "릴리즈 노트 썸네일로",
+    "릴리즈 노트 썸네일로 만들어",
     "릴리즈 노트 포스터",
     "릴리즈 노트를 announcement 카드",
     "릴리즈 노트 announcement 카드",
@@ -2394,6 +2423,8 @@ _SCHEDULED_OPS_PHRASES = (
     "schedule blueprint",
     "hermes cron spec",
     "cron spec",
+    "automate this",
+    "automate workflow",
     "every morning",
     "every day",
     "every monday",
@@ -2408,6 +2439,9 @@ _SCHEDULED_OPS_PHRASES = (
     "아침마다",
     "매주",
     "매월",
+    "자동화해줘",
+    "자동화 해줘",
+    "자동화하는 흐름",
     "변화 있으면",
     "변화 없으면",
     "바뀐 게 없으면",
@@ -3656,6 +3690,12 @@ def _scheduled_ops_blueprint_guard_applies(normalized_query: str, query_tokens: 
 def _explicit_scheduled_ops_blueprint_requested(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _EXPLICIT_SCHEDULED_OPS_BLUEPRINT_PHRASES):
         return True
+    if _contains_phrase(normalized_query, ("automate this", "automate workflow", "자동화해줘", "자동화 해줘")):
+        return True
+    if _SCHEDULED_OPS_STRONG_TOKENS & query_tokens and (
+        _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens or _SCHEDULED_OPS_CONTEXT_TOKENS & query_tokens
+    ):
+        return True
     blueprint = "blueprint" in query_tokens
     scheduled_context = bool(_SCHEDULED_OPS_STRONG_TOKENS & query_tokens) or bool(
         _SCHEDULED_OPS_CADENCE_TOKENS & query_tokens
@@ -3674,6 +3714,8 @@ def _paper_learning_guard_applies(
     if _explicit_material_export_requested(normalized_query, query_tokens):
         return False
     if _paper_validation_or_citation_requested(normalized_query, query_tokens):
+        return False
+    if _source_finder_explicit_acquisition_requested(normalized_query, query_tokens):
         return False
     if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
         recurring_paper_ops = bool(_PAPER_LEARNING_PAPER_TOKENS & query_tokens) or _contains_phrase(
@@ -3875,6 +3917,10 @@ def _source_finder_guard_applies(
         return False
     if _explicit_material_export_requested(normalized_query, query_tokens):
         return False
+    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
+        return False
+    if _source_finder_explicit_acquisition_requested(normalized_query, query_tokens):
+        return True
     if _paper_learning_guard_applies(
         normalized_query,
         query_tokens,
@@ -3884,8 +3930,6 @@ def _source_finder_guard_applies(
     if _research_department_guard_applies(normalized_query, query_tokens):
         return False
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
-        return False
-    if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
         return False
     if _contains_phrase(normalized_query, _SOURCE_FINDER_EXCLUSION_PHRASES):
         return False
@@ -3916,6 +3960,16 @@ def _source_finder_guard_applies(
     ):
         return True
     return action and (source_kind or acquisition_noun or multiple_source_kinds)
+
+
+def _source_finder_explicit_acquisition_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _SOURCE_FINDER_EXCLUSION_PHRASES):
+        return False
+    if _contains_phrase(normalized_query, _SOURCE_FINDER_PHRASES):
+        return True
+    action = bool(_SOURCE_FINDER_ACTION_TOKENS & query_tokens)
+    source_kind = bool(_SOURCE_FINDER_KIND_TOKENS & query_tokens)
+    return action and source_kind
 
 
 def _omh_capability_question(normalized_query: str) -> bool:
