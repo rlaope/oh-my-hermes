@@ -1068,15 +1068,31 @@ class CliTests(unittest.TestCase):
         self.assertEqual(demo["goal"], "G1")
         self.assertEqual(demo["route"]["primary_skill"], "automation-blueprint")
         self.assertEqual(demo["route"]["next_action"], "prepare_scheduled_ops_blueprint")
+        self.assertEqual(demo["route"]["next_action_label"], "preparing a scheduled-ops blueprint")
         self.assertEqual(demo["wrapper_card"]["component"], "omh_use_case_card")
         self.assertEqual(demo["wrapper_card"]["status"], "prepared_not_observed")
         self.assertIn("prepared_not_observed", demo["chat_surface"]["status_line"])
+        self.assertIn(
+            "Route: automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`).",
+            demo["chat_surface"]["body_lines"],
+        )
         self.assertEqual(demo["actions"][0]["id"], "prepare_scheduled_ops_blueprint")
+        self.assertEqual(demo["actions"][0]["label"], "Prepare a scheduled-ops blueprint")
         self.assertEqual(demo["actions"][0]["kind"], "hermes_prompt")
         self.assertIn("omh playbook inspect scheduled-ops-blueprint", demo["operator_commands"][1])
         self.assertIn("connector_invocation", demo["evidence"]["not_evidence_until_observed"])
         self.assertIn("executor_dispatch", demo["evidence"]["not_evidence_until_observed"])
         self.assertIn("not host cron creation", demo["evidence"]["claim_boundary"])
+
+        status, stdout, stderr = run_cli(["cases", "demo", "G1"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn(
+            "automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`)",
+            stdout,
+        )
+        self.assertNotIn("automation-blueprint -> prepare_scheduled_ops_blueprint (", stdout)
 
         status, stdout, stderr = run_cli(["cases", "demo", "--all", "--json"], output_json=False)
 
