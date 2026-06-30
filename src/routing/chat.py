@@ -9,6 +9,7 @@ from typing import Any
 
 from ..goal_loop import explicit_loop_invocation_signal
 from ..ingress import CHAT_SOURCES, extract_message_text
+from ..loopability import assess_loopability
 from .catalog_questions import is_file_or_text_lookup_question, is_skill_catalog_question
 from .action_copy import next_action_label as _route_next_action_label
 from .intent import scrub_diagnostic_status_text
@@ -729,9 +730,10 @@ class ChatRouteDecision:
     workflow_route_plan: dict[str, object] | None
     learning_candidate_card: dict[str, object] | None
     recommendations: tuple[dict[str, object], ...]
+    route_next_action: str = ""
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "source": self.source,
             "action": self.action,
@@ -754,6 +756,9 @@ class ChatRouteDecision:
             ),
             "recommendations": [dict(recommendation) for recommendation in self.recommendations],
         }
+        if self.route_next_action:
+            payload["route_next_action"] = self.route_next_action
+        return payload
 
 
 @dataclass(frozen=True)
@@ -998,6 +1003,11 @@ def _route_chat_message_cached(
         action=action,
     )
     clarification = _clarification(action, candidate_skill, candidate_confidence, min_confidence, reason)
+    route_next_action = _route_specific_next_action(
+        routing_message,
+        selected_skill=selected_skill,
+        explicit_loop=explicit_loop_signal or explicit_loop_invocation_signal(routing_message),
+    )
     decision = ChatRouteDecision(
         schema_version=1,
         source=source,
@@ -1018,6 +1028,7 @@ def _route_chat_message_cached(
         workflow_route_plan=workflow_route_plan,
         learning_candidate_card=learning_candidate_card,
         recommendations=recommendations,
+        route_next_action=route_next_action,
     )
     return decision.to_dict()
 
@@ -1543,6 +1554,30 @@ def _explicit_loop_signal(message: str, recommendations: list[dict[str, object]]
     return explicit_loop_invocation_signal(message)
 
 
+def _route_specific_next_action(message: str, *, selected_skill: str, explicit_loop: bool) -> str:
+    if selected_skill != "loop":
+        return ""
+    return _loop_route_next_action(message, explicit_loop=explicit_loop)
+
+
+def _loop_route_next_action(message: str, *, explicit_loop: bool) -> str:
+    try:
+        assessment = assess_loopability(message, expose_goal=False)
+    except ValueError:
+        return "ask_goal_boundary" if explicit_loop else ""
+    loopability = str(assessment.get("loopability", ""))
+    recommended_next_action = str(assessment.get("recommended_next_action", "")).strip()
+    if explicit_loop:
+        if loopability == "needs_clarification":
+            return recommended_next_action or "ask_goal_boundary"
+        if loopability == "direct_task":
+            return "route_direct_task"
+        if loopability == "external_wait_only":
+            return "record_external_wait"
+        return "start_loop_cycle"
+    return recommended_next_action
+
+
 def routing_record_payload(
     decision: dict[str, object],
     message: str,
@@ -2013,6 +2048,9 @@ def _selected_recommendation(route: dict[str, object]) -> dict[str, object]:
 
 
 def _route_next_action(route: dict[str, object], recommendation: dict[str, object]) -> str:
+    route_next_action = str(route.get("route_next_action", "")).strip()
+    if route_next_action:
+        return route_next_action
     action = str(route.get("action", "fallback"))
     if action == "dispatch":
         if str(route.get("selected_skill", "")) == "ultraprocess" and _route_is_coding_status_request(route):

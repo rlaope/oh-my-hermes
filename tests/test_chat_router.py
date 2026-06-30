@@ -2175,16 +2175,46 @@ selected_workflow=ultraprocess
         self.assertIn("why / next / not-yet-evidence", explanation["rendering_hint"])
         self.assertNotIn(message, json.dumps(explanation, ensure_ascii=False))
 
-    def test_loop_route_explanation_uses_human_action_copy(self) -> None:
-        decision = route_chat_message("run a loop to improve first-run experience", source="discord")
-        public = public_route_payload(decision)
-        explanation = public["route_explanation"]
+    def test_loop_route_explanation_uses_loopability_specific_action_copy(self) -> None:
+        cases = (
+            (
+                "run a loop to improve first-run experience",
+                "choose_permission_profile",
+                "choosing the loop permission profile",
+            ),
+            (
+                "Make this a 100k-star OSS",
+                "reframe_north_star",
+                "reframing the north-star goal",
+            ),
+            (
+                "./loop make this project a 10k star OSS",
+                "start_loop_cycle",
+                "starting the loopability-gated cycle",
+            ),
+            (
+                "./loop change the button color",
+                "route_direct_task",
+                "routing the direct task",
+            ),
+            (
+                "./loop",
+                "ask_goal_boundary",
+                "asking for the loop boundary",
+            ),
+        )
 
-        self.assertEqual(decision["selected_skill"], "loop")
-        self.assertEqual(explanation["next_action"], "assess_loopability")
-        self.assertEqual(explanation["next_action_label"], "checking whether the goal is loopable")
-        self.assertIn("start by checking whether the goal is loopable", explanation["recommended_reply"])
-        self.assertNotIn("start by assess loopability", explanation["recommended_reply"])
+        for message, next_action, next_action_label in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                public = public_route_payload(decision)
+                explanation = public["route_explanation"]
+
+                self.assertEqual(decision["selected_skill"], "loop")
+                self.assertEqual(explanation["next_action"], next_action)
+                self.assertEqual(explanation["next_action_label"], next_action_label)
+                self.assertIn(next_action_label, explanation["recommended_reply"])
+                self.assertNotIn("start by assess loopability", explanation["recommended_reply"])
 
 
 if __name__ == "__main__":
