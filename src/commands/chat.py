@@ -15,6 +15,7 @@ from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..ingress import CHAT_SOURCES, extract_message_text
 from ..installer import OmhError
 from ..memory import read_handoff_context_pack_file
+from ..routing.action_copy import next_action_label
 from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_message, routing_record_payload
 from ..runtime.artifacts import create_run, summarize_delegated_coding_status, write_routing_decision
 from ..targets import TARGET_METADATA_KEYS, build_target_change_notice, inspect_target_observation, record_target_observation
@@ -238,6 +239,16 @@ def _text(value: object, default: str = "") -> str:
     return text or default
 
 
+def _action_label_with_id(action: str, label: str = "") -> str:
+    normalized = action.strip()
+    if not normalized:
+        return ""
+    resolved_label = label.strip() or next_action_label(normalized)
+    if not resolved_label or resolved_label == normalized:
+        return normalized
+    return f"{resolved_label} (`{normalized}`)"
+
+
 def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
     response = _as_mapping(payload.get("chat_response"))
     route = _as_mapping(payload.get("route"))
@@ -409,7 +420,13 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
         route_hint.get("primary_next_action")
         or state_route_hint.get("primary_next_action")
         or state.get("next_action"),
-        "unknown",
+        "open_picker_or_clarify" if status == "no_hint" else "unknown",
+    )
+    next_action_label_text = _text(
+        route_hint.get("primary_next_action_label")
+        or state_route_hint.get("primary_next_action_label")
+        or primary_hint.get("next_action_label"),
+        next_action_label(next_action) if next_action != "unknown" else "",
     )
     source = _text(payload.get("source"), "generic")
     hint_count = len(hints)
@@ -418,7 +435,7 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
     print(f"Source: {source}")
     print(f"Status: {status}")
     print(f"Workflow: {selected_workflow}")
-    print(f"Next action: {next_action}")
+    print(f"Next action: {_action_label_with_id(next_action, next_action_label_text)}")
     print(f"Hints: {hint_count}")
 
     matched_cues = _text_items(_as_list(primary_hint.get("matched_cues")))
@@ -446,8 +463,9 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
             workflow = _text(hint.get("workflow"), "unknown")
             lane = _text(hint.get("lane"), "unknown")
             action = _text(hint.get("next_action"), "unknown")
+            action_label = _text(hint.get("next_action_label"), next_action_label(action))
             reason = _text(hint.get("reason"))
-            print(f"- {workflow}: {action} ({lane})")
+            print(f"- {workflow}: {_action_label_with_id(action, action_label)} ({lane})")
             hint_cues = _text_items(_as_list(hint.get("matched_cues")))
             if hint_cues:
                 print(f"  matched: {_join_text_items(hint_cues)}")

@@ -4382,15 +4382,19 @@ class CliTests(unittest.TestCase):
         self.assertIn("Source: discord", stdout)
         self.assertIn("Status: hinted", stdout)
         self.assertIn("Workflow: img-summary", stdout)
-        self.assertIn("Next action: prepare_visual_prompt_card", stdout)
+        self.assertIn("Next action: preparing an image prompt card (`prepare_visual_prompt_card`)", stdout)
         self.assertIn("Hints: 2", stdout)
         self.assertIn("Matched cues: image", stdout)
         self.assertIn("Adjacent workflows: materials-package, report-package, research-department", stdout)
         self.assertIn("[omh] img-summary looks relevant.", stdout)
         self.assertIn("Hint details:", stdout)
-        self.assertIn("- img-summary: prepare_visual_prompt_card (materials_and_visuals)", stdout)
+        self.assertIn("- img-summary: preparing an image prompt card (`prepare_visual_prompt_card`) (materials_and_visuals)", stdout)
         self.assertIn("  matched: image", stdout)
-        self.assertIn("- automation-blueprint: prepare_scheduled_ops_blueprint (automation_and_status)", stdout)
+        self.assertIn(
+            "- automation-blueprint: preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`) "
+            "(automation_and_status)",
+            stdout,
+        )
         self.assertIn("  matched: cron", stdout)
         self.assertIn("Actions:", stdout)
         self.assertIn("- open_workflow: Open img-summary (enabled)", stdout)
@@ -4409,6 +4413,52 @@ class CliTests(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "chat_route_hint/v1")
         self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "prepare_visual_prompt_card")
+        self.assertEqual(payload["route_hint"]["primary_next_action_label"], "preparing an image prompt card")
+        self.assertEqual(
+            payload["route_hint"]["hints"][0]["next_action_label"],
+            "preparing an image prompt card",
+        )
+
+    def test_chat_route_hint_summary_covers_loop_and_picker_language(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--summary", "run a loop to improve first-run experience"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Status: hinted", stdout)
+        self.assertIn("Workflow: loop", stdout)
+        self.assertIn("Next action: checking whether the goal is loopable (`assess_loopability`)", stdout)
+        self.assertIn("- loop: checking whether the goal is loopable (`assess_loopability`) (intent_to_plan)", stdout)
+
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--summary", "open the OMH picker"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Status: hinted", stdout)
+        self.assertIn("Workflow: oh-my-hermes", stdout)
+        self.assertIn("Next action: opening the workflow picker (`choose_skill`)", stdout)
+        self.assertIn("- oh-my-hermes: opening the workflow picker (`choose_skill`) (intent_to_plan)", stdout)
+        self.assertIn("- open_workflow: Open omh (enabled)", stdout)
+
+        status, stdout, stderr = run_cli(
+            ["chat", "route-hint", "--source", "discord", "--json", "open the OMH picker"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["chat_response"]["actions"][0]["submit_text"], "./omh")
+        self.assertEqual(
+            payload["wrapper_contract"]["next_backend_commands"][0]["command"],
+            "omh chat interact --source <source> ./omh",
+        )
 
     def test_chat_route_hint_summary_renders_no_hint_without_unknown_workflow(self) -> None:
         status, stdout, stderr = run_cli(["chat", "route-hint", "--source", "slack", "--summary", "zzzzzz"], output_json=False)
@@ -4419,7 +4469,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Source: slack", stdout)
         self.assertIn("Status: no_hint", stdout)
         self.assertIn("Workflow: none", stdout)
-        self.assertIn("Next action: open_picker_or_clarify", stdout)
+        self.assertIn("Next action: opening the picker or asking one clarification (`open_picker_or_clarify`)", stdout)
         self.assertIn("Hints: 0", stdout)
         self.assertNotIn("Workflow: unknown", stdout)
         self.assertIn("[omh] no strong workflow hint yet.", stdout)
@@ -4447,7 +4497,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertEqual(status, 0)
         self.assertIn("Workflow: workflow-learning", stdout)
-        self.assertIn("Next action: record_missed_route", stdout)
+        self.assertIn(
+            "Next action: recording a missed-route improvement candidate (`record_missed_route`)",
+            stdout,
+        )
         self.assertIn("Prompt context: included", stdout)
 
     def test_chat_route_hint_rejects_conflicting_output_modes(self) -> None:
