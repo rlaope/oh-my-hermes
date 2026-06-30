@@ -1909,9 +1909,11 @@ def workflow_context_card_for_workflow(workflow: str) -> dict[str, object]:
 
 def awareness_context_matches_message(message: str) -> bool:
     """Return true when a non-first-turn message should refresh OMH context."""
-    text = unicodedata.normalize("NFKC", message).casefold()
-    if not text.strip():
+    raw_text = unicodedata.normalize("NFKC", message).casefold()
+    if not raw_text.strip():
         return False
+    localized_text = unicodedata.normalize("NFKC", _localized_routing_text(message)).casefold()
+    text = f"{raw_text} {localized_text}"
     tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", text))
     return bool(tokens & _AWARENESS_TOKEN_MARKERS) or any(
         marker in text for marker in _AWARENESS_MESSAGE_MARKERS
