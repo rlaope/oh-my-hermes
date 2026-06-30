@@ -141,8 +141,8 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "이 이슈 PR로 만들 수 있게 정리해줘",
-                "ralplan",
-                "present_plan",
+                "github-event-ops",
+                "prepare_github_event_ops_card",
                 None,
             ),
             (

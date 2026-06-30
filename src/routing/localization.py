@@ -253,6 +253,22 @@ _ALIASES: tuple[LocaleAlias, ...] = (
         _CANONICAL_ISSUE_TO_PR,
     ),
     LocaleAlias(
+        "ko",
+        "issue_to_pr",
+        (
+            "이 이슈 pr로",
+            "이 이슈 pr로 만들",
+            "이 이슈 pr로 만들 수 있게",
+            "이슈 pr로 만들",
+            "이슈를 pr로",
+            "이슈를 pr로 만들",
+            "이슈를 pr로 만들 수 있게",
+            "pr로 만들 수 있게 정리",
+            "pr 만들 수 있게 정리",
+        ),
+        _CANONICAL_ISSUE_TO_PR,
+    ),
+    LocaleAlias(
         "es",
         "issue_to_pr",
         ("convertir este issue en un pr", "convertir este issue a pr", "preparar este issue para un pr"),

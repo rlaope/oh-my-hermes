@@ -1840,9 +1840,9 @@ _ROUTE_HINT_RULES = (
     },
     {
         "id": "issue_to_pr_plan",
-        "workflow": "ralplan",
-        "lane": "intent_to_plan",
-        "next_action": "present_plan",
+        "workflow": "github-event-ops",
+        "lane": "coding_handoff",
+        "next_action": "prepare_github_event_ops_card",
         "reason": "The user wants an issue shaped into PR-ready scope, acceptance criteria, and verification before implementation.",
         "fallback_action": "ask_for_issue_link_or_observed_issue_text",
         "phrases": (
@@ -1859,7 +1859,7 @@ _ROUTE_HINT_RULES = (
             "pr로 만들 수 있게",
         ),
         "tokens": (),
-        "adjacent_workflows": ("github-event-ops", "ultraprocess", "code-review"),
+        "adjacent_workflows": ("ralplan", "ultraprocess", "code-review"),
     },
     {
         "id": "loopability_goal",
