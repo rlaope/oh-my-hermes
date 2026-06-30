@@ -994,6 +994,8 @@ class EfficiencyContractTests(unittest.TestCase):
             "what skills are available?",
             "show workflows",
             "omh 뭐 할 수 있어?",
+            "omh 스킬 뭐있어?",
+            "스킬들은 뭐있어?",
         )
 
         with patch.object(
@@ -1011,6 +1013,43 @@ class EfficiencyContractTests(unittest.TestCase):
                     self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
                     self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
 
+    def test_guarded_operator_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            ("setup 잘 됐어?", "doctor", "guard:doctor_health"),
+            ("update 잘 됐어?", "doctor", "guard:doctor_health"),
+            ("codex 연결돼 있어?", "executor-runtime-readiness", "guard:executor_runtime_readiness"),
+            ("내 코딩 에이전트 연결 상태 확인해줘", "executor-runtime-readiness", "guard:executor_runtime_readiness"),
+            ("codex 작업 어디까지 됐어?", "ultraprocess", "guard:coding_progress_status"),
+            ("이미지 생성 툴 연결 안됐으면 뭐 써?", "toolbelt-readiness", "guard:toolbelt_readiness"),
+            ("메모리 점검해줘", "memory-curation-review", "guard:memory_curation"),
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("guarded operator fast paths should skip scoring"),
+        ), patch.object(
+            chat_module,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("guarded operator fast paths should not build route plans"),
+        ):
+            for message, expected_skill, expected_marker in cases:
+                chat_module._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], expected_skill)
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertIn(expected_marker, decision["recommendations"][0]["matched"])
+                    self.assertTrue(
+                        any(
+                            str(marker).startswith("guard_fast_path:")
+                            for marker in decision["recommendations"][0]["matched"]
+                        )
+                    )
+
     def test_specific_capability_catalog_fast_paths_skip_full_recommendation_scan(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         cases = (
@@ -1019,6 +1058,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("what can OMH do for workflow learning?", "workflow-learning"),
             ("what can OMH do for Discord gateway routing?", "gateway-intent-card"),
             ("what can OMH do for coding agents?", "executor-runtime-readiness"),
+            ("what can OMH do for image generation?", "img-summary"),
         )
 
         with patch.object(
