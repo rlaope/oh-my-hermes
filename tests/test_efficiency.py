@@ -1031,6 +1031,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary"),
             ("PPT 만들어줘", "materials-package"),
             ("codex로 열어줘", "executor-runtime-readiness"),
+            ("codex로 지금 작업 열어줘", "executor-runtime-readiness"),
             ("github oss repo 찾아서 비교해줘", "source-finder"),
             ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
@@ -1126,6 +1127,34 @@ class EfficiencyContractTests(unittest.TestCase):
                             for marker in decision["recommendations"][0]["matched"]
                         )
                     )
+
+    def test_agent_ops_status_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            "현재 작업상황 보고해줘",
+            "작업상황 보고해줘",
+            "what are you working on?",
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("agent-ops status fast path should skip scoring"),
+        ), patch.object(
+            chat_module,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("agent-ops status fast path should not build route plans"),
+        ):
+            for message in cases:
+                chat_module._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], "agent-ops-review")
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertEqual(decision["recommendations"][0]["matched"][0], "agent_ops_status_fast_path")
+                    self.assertIsNone(decision["workflow_route_plan"])
 
     def test_natural_single_workflow_operator_fast_paths_skip_full_recommendation_scan(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
