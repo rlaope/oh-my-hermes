@@ -292,7 +292,7 @@ Useful operator commands:
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
-  omh menubar status     Show the menu bar app status view model
+  omh menubar status     Show the OMH menu bar status summary
   omh mcp manifest       Print the optional stdio MCP bridge manifest
   omh release evidence-bundle --version 1.0.1 --write
                           Write local deterministic release evidence

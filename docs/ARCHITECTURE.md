@@ -224,9 +224,9 @@ context is prompt guidance only; it is not proof
 that a separate role, worker, or executor ran.
 
 `menubar_status.py` owns the platform-neutral macOS menu bar view model exposed
-by `omh menubar status`. Its `menubar_status/v1` payload is a UI projection over
-the same local HUD, target registry, and runtime evidence. It is intentionally
-not the source of truth. The payload separates `hermes_agents` from
+by `omh menubar status --json`. Its `menubar_status/v1` payload is a UI
+projection over the same local HUD, target registry, and runtime evidence. It is
+intentionally not the source of truth. The payload separates `hermes_agents` from
 `external_coding_executors` so Codex, Claude Code, OMX, OMO, OMC, or generic
 coding tools cannot be rendered as Hermes agents by accident. Compact surfaces
 receive source and model `icon_id` values plus tooltip text rather than Markdown
@@ -235,6 +235,11 @@ for the native menu bar helper, grouping the same contract into Agent Status,
 Coding Agent, and Evidence sections so compact UI surfaces do not need to render
 raw JSON-like text. The Agent Status section uses an explicit `Agent | PID |
 Status` row shape.
+
+Plain `omh menubar status` renders a short terminal summary from the same
+payload so operators see Summary, Agent Status, Coding Agent, Evidence, and
+Observation sections without reading raw JSON. Machine consumers should request
+`--json` or set `OMH_OUTPUT=json`.
 
 `current_external_coding_executor` names the selected row explicitly, preferring
 `runtime/state.json` `last_run_id` when it matches the recent executor list, so
@@ -251,11 +256,12 @@ internal-memory evidence.
 The menu bar status contract reports configured Hermes targets and prepared
 handoffs without inventing process state. PID, `running`, and `restarting`
 values are applied only from a caller-provided `menubar_process_overlay/v1`
-payload or an explicit `omh menubar status --observe-local-processes` request
-from the native macOS helper. That observation is app-local, expires after a
-short TTL, and applies restarting state only inside its restart window. OMH does
-not turn prepared handoffs into observed execution, review, CI, or merge
-evidence. Plain `omh menubar status` remains metadata-only.
+payload or an explicit `omh menubar status --observe-local-processes --json`
+request from the native macOS helper. That observation is app-local, expires
+after a short TTL, and applies restarting state only inside its restart window.
+OMH does not turn prepared handoffs into observed execution, review, CI, or merge
+evidence. Plain `omh menubar status` remains metadata-only, even though its
+default terminal output is human-readable.
 
 `cli.py` is a compatibility adapter. `commands/main.py` owns parser assembly,
 top-level error handling, and the public command handler re-export surface.

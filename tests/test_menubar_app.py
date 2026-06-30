@@ -10,6 +10,7 @@ from _cli_harness import run_cli
 from _local_package import load_local_package
 
 load_local_package()
+import omh.menubar_app as menubar_app_module
 from omh.menubar_app import MENUBAR_APP_SCHEMA_VERSION, setup_menubar_app
 from omh.paths import resolve_paths
 
@@ -75,6 +76,12 @@ class MenubarAppTests(unittest.TestCase):
             self.assertEqual(payload["status"], "dry_run")
             self.assertEqual(payload["omh_command"], "/usr/local/bin/omh")
             self.assertFalse((root / ".omh" / "menubar").exists())
+
+    def test_native_helper_requests_json_status_payload(self) -> None:
+        self.assertIn(
+            '["menubar", "status", "--observe-local-processes", "--json"]',
+            menubar_app_module._SWIFT_SOURCE,
+        )
 
     def test_custom_path_uninstall_does_not_touch_user_launch_agent(self) -> None:
         with TemporaryDirectory() as tmp:

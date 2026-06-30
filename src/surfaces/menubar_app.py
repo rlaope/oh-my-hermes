@@ -455,7 +455,7 @@ final class OMHMenuBarDelegate: NSObject, NSApplicationDelegate {
         if !hermesHome.isEmpty {
             args.append(contentsOf: ["--hermes-home", hermesHome])
         }
-        args.append(contentsOf: ["menubar", "status", "--observe-local-processes"])
+        args.append(contentsOf: ["menubar", "status", "--observe-local-processes", "--json"])
         process.arguments = args
         let pipe = Pipe()
         process.standardOutput = pipe
