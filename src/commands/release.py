@@ -509,6 +509,12 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
             f"generic ack {summary.get('routing_precision_generic_ack_count')}, "
             f"missed interventions {summary.get('routing_precision_missed_intervention_count')})"
         )
+    if "localized_chat_copy_passing" in summary or "localized_chat_copy_total" in summary:
+        print(
+            "  Localized chat copy: "
+            f"{summary.get('localized_chat_copy_passing')}/{summary.get('localized_chat_copy_total')} "
+            f"(locales {summary.get('localized_chat_copy_locale_count')})"
+        )
     if "hermes_ux_quality_score" in summary:
         print(
             "  Hermes UX quality: "

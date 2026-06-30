@@ -15,8 +15,8 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["source"], "discord")
         self.assertEqual(payload["status"], "passed")
         self.assertEqual(payload["score"], 100)
-        self.assertEqual(payload["summary"]["gate_count"], 5)
-        self.assertEqual(payload["summary"]["passing_gate_count"], 5)
+        self.assertEqual(payload["summary"]["gate_count"], 6)
+        self.assertEqual(payload["summary"]["passing_gate_count"], 6)
         self.assertEqual(payload["summary"]["grounded_score_scenarios"], 50)
         self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
         self.assertEqual(payload["summary"]["chat_card_cases"], 25)
@@ -35,6 +35,9 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["routing_precision_intervention_cases"], 92)
         self.assertEqual(payload["summary"]["routing_precision_intervention_passing_count"], 92)
         self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
+        self.assertEqual(payload["summary"]["localized_chat_copy_cases"], 7)
+        self.assertEqual(payload["summary"]["localized_chat_copy_passing_count"], 7)
+        self.assertEqual(payload["summary"]["localized_chat_copy_locale_count"], 6)
         self.assertEqual(hermes_ux_quality_errors(payload), [])
 
         gates = {gate["id"]: gate for gate in payload["gates"]}
@@ -46,12 +49,14 @@ class HermesUxQualityTests(unittest.TestCase):
                 "route_hint_alignment",
                 "context_brief_coverage",
                 "routing_precision",
+                "localized_chat_copy",
             },
         )
         self.assertIn("generic acknowledgement", gates["chat_card_coverage"]["user_value"])
         self.assertIn("before generic tools", gates["route_hint_alignment"]["user_value"])
         self.assertIn("raw prompt leakage", gates["context_brief_coverage"]["user_value"])
         self.assertIn("Ordinary questions", gates["routing_precision"]["user_value"])
+        self.assertIn("non-English", gates["localized_chat_copy"]["user_value"])
         self.assertIn("does not prove live Hermes chat rendering", payload["claim_boundary"])
 
     def test_hermes_ux_quality_cli_outputs_summary_and_json(self) -> None:
@@ -61,11 +66,12 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH Hermes UX quality", stdout)
         self.assertIn("Status: passed (100/100)", stdout)
-        self.assertIn("Gates: 5/5", stdout)
+        self.assertIn("Gates: 6/6", stdout)
         self.assertIn("generic ack 0", stdout)
         self.assertIn("route mismatches 0", stdout)
         self.assertIn("precision overroutes 0", stdout)
         self.assertIn("missed interventions 0", stdout)
+        self.assertIn("localized 7/7", stdout)
 
         status, stdout, stderr = run_cli(["demo", "hermes-ux-quality", "--json"], output_json=False)
 

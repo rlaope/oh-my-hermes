@@ -35,6 +35,7 @@ from ..quality.chat_card_coverage import build_chat_card_coverage_demo
 from ..quality.context_brief_coverage import build_context_brief_coverage_demo
 from ..quality.grounded_score import build_grounded_score_demo
 from ..quality.hermes_ux_quality import build_hermes_ux_quality_demo, hermes_ux_quality_errors
+from ..quality.localized_chat_copy import build_localized_chat_copy_demo, localized_chat_copy_errors
 from ..quality.route_hint_alignment import build_route_hint_alignment_demo
 from ..quality.routing_precision import build_routing_precision_demo, routing_precision_errors
 from ..release_smoke_core import CommandResult, Runner, bounded_text, expand_home, subprocess_runner
@@ -158,6 +159,7 @@ class ReleaseQualityEvidence:
     route_hints: dict[str, object]
     context_briefs: dict[str, object]
     routing_precision: dict[str, object]
+    localized_chat_copy: dict[str, object]
     hermes_ux: dict[str, object]
     checklist: dict[str, object]
 
@@ -313,14 +315,24 @@ def release_readiness_checklist(
             "Routing precision proves deterministic local over-intervention and missed-intervention guards only; it does not prove live Hermes chat rendering, platform delivery, source retrieval, file inspection, executor work, review, CI, merge, or plugin-load evidence.",
         ),
         ReleaseChecklistItem(
+            "localized_chat_copy",
+            "Check localized chat-card framing",
+            "uv run python -m omh.cli demo localized-chat-copy --json",
+            "contract-quality",
+            True,
+            False,
+            "Localized chat copy reports common non-English operator prompts with expected locale, card kind, next action, and no English catalog fallback.",
+            "Localized chat copy proves deterministic local copy framing only; it does not prove live Hermes chat rendering, translation service quality, platform delivery, source retrieval, executor work, review, CI, merge, or plugin-load evidence.",
+        ),
+        ReleaseChecklistItem(
             "hermes_ux_quality",
             "Check Hermes-facing UX quality rollup",
             "uv run python -m omh.cli demo hermes-ux-quality --json",
             "contract-quality",
             True,
             False,
-            "Hermes UX quality reports routing score, dedicated chat-card coverage, route-hint alignment, context-brief coverage, and routing precision as passing in one user-facing rollup.",
-            "Hermes UX quality proves deterministic local routing, card, hint, and context contracts only; it does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, executor work, review, CI, merge, or delivery.",
+            "Hermes UX quality reports routing score, dedicated chat-card coverage, route-hint alignment, context-brief coverage, routing precision, and localized chat copy as passing in one user-facing rollup.",
+            "Hermes UX quality proves deterministic local routing, card, hint, context, precision, and localized-copy contracts only; it does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, executor work, review, CI, merge, or delivery.",
         ),
         ReleaseChecklistItem(
             "product_readiness",
@@ -329,7 +341,7 @@ def release_readiness_checklist(
             "contract-quality",
             True,
             False,
-            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, context brief coverage, routing precision, Hermes UX quality, parity, and release checklist gates as passing.",
+            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, context brief coverage, routing precision, localized chat copy, Hermes UX quality, parity, and release checklist gates as passing.",
             "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
@@ -562,12 +574,14 @@ def _build_release_quality_evidence(*, release_version: str, omh_command: str) -
     )
     context_briefs = build_context_brief_coverage_demo()
     routing_precision = build_routing_precision_demo()
+    localized_chat_copy = build_localized_chat_copy_demo()
     hermes_ux = build_hermes_ux_quality_demo(
         grounded_score=grounded_score,
         chat_card_coverage=chat_cards,
         route_hint_alignment=route_hints,
         context_brief_coverage=context_briefs,
         routing_precision=routing_precision,
+        localized_chat_copy=localized_chat_copy,
     )
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
     return ReleaseQualityEvidence(
@@ -578,6 +592,7 @@ def _build_release_quality_evidence(*, release_version: str, omh_command: str) -
         route_hints=route_hints,
         context_briefs=context_briefs,
         routing_precision=routing_precision,
+        localized_chat_copy=localized_chat_copy,
         hermes_ux=hermes_ux,
         checklist=checklist,
     )
@@ -598,6 +613,7 @@ def _product_readiness_report_from_evidence(
     route_hints = evidence.route_hints
     context_briefs = evidence.context_briefs
     routing_precision = evidence.routing_precision
+    localized_chat_copy = evidence.localized_chat_copy
     hermes_ux = evidence.hermes_ux
     checklist = evidence.checklist
     use_case_readiness_payload = use_case_readiness(paths)
@@ -622,6 +638,7 @@ def _product_readiness_report_from_evidence(
         "route_hint_alignment",
         "context_brief_coverage",
         "routing_precision",
+        "localized_chat_copy",
         "hermes_ux_quality",
         "product_readiness",
         "release_evidence_bundle",
@@ -651,6 +668,10 @@ def _product_readiness_report_from_evidence(
         routing_precision.get("summary", {}) if isinstance(routing_precision.get("summary"), Mapping) else {}
     )
     routing_precision_gate_errors = routing_precision_errors(routing_precision)
+    localized_chat_copy_summary = (
+        localized_chat_copy.get("summary", {}) if isinstance(localized_chat_copy.get("summary"), Mapping) else {}
+    )
+    localized_chat_copy_gate_errors = localized_chat_copy_errors(localized_chat_copy)
     hermes_ux_summary = hermes_ux.get("summary", {}) if isinstance(hermes_ux.get("summary"), Mapping) else {}
     hermes_ux_errors = hermes_ux_quality_errors(hermes_ux)
     gates = [
@@ -761,6 +782,21 @@ def _product_readiness_report_from_evidence(
             str(routing_precision.get("claim_boundary", "")),
         ),
         _product_readiness_gate(
+            "localized_chat_copy",
+            "Localized chat-card framing",
+            "passed" if not localized_chat_copy_gate_errors else "failed",
+            True,
+            (
+                f"{localized_chat_copy_summary.get('passing_count', 0)}/"
+                f"{localized_chat_copy_summary.get('case_count', 0)} localized card cases; "
+                f"locales {localized_chat_copy_summary.get('locale_count', 0)}"
+            ),
+            "omh demo localized-chat-copy --json",
+            localized_chat_copy_gate_errors,
+            [],
+            str(localized_chat_copy.get("claim_boundary", "")),
+        ),
+        _product_readiness_gate(
             "hermes_ux_quality",
             "Hermes-facing UX quality",
             "passed" if not hermes_ux_errors else "failed",
@@ -771,7 +807,9 @@ def _product_readiness_report_from_evidence(
                 f"generic ack {hermes_ux_summary.get('chat_card_generic_ack_count', 0)}; "
                 f"route mismatches {hermes_ux_summary.get('route_hint_mismatch_count', 0)}; "
                 f"context {hermes_ux_summary.get('context_brief_passing_count', 0)}/"
-                f"{hermes_ux_summary.get('context_brief_cases', 0)}"
+                f"{hermes_ux_summary.get('context_brief_cases', 0)}; "
+                f"localized {hermes_ux_summary.get('localized_chat_copy_passing_count', 0)}/"
+                f"{hermes_ux_summary.get('localized_chat_copy_cases', 0)}"
             ),
             "omh demo hermes-ux-quality --json",
             hermes_ux_errors,
@@ -1664,6 +1702,7 @@ def release_evidence_bundle(
     route_hints = quality_evidence.route_hints
     context_briefs = quality_evidence.context_briefs
     routing_precision = quality_evidence.routing_precision
+    localized_chat_copy = quality_evidence.localized_chat_copy
     hermes_ux = quality_evidence.hermes_ux
     parity = quality_evidence.parity
     local_store_status = _release_local_store_status(use_cases)
@@ -1677,6 +1716,7 @@ def release_evidence_bundle(
         "route_hint_alignment": "passed" if _route_hint_alignment_ready(route_hints) else "failed",
         "context_brief_coverage": "passed" if _context_brief_coverage_ready(context_briefs) else "failed",
         "routing_precision": "passed" if not routing_precision_errors(routing_precision) else "failed",
+        "localized_chat_copy": "passed" if not localized_chat_copy_errors(localized_chat_copy) else "failed",
         "hermes_ux_quality": "passed" if not hermes_ux_quality_errors(hermes_ux) else "failed",
         "parity_contracts": "passed" if _parity_contracts_ready(parity) else "failed",
     }
@@ -1696,6 +1736,9 @@ def release_evidence_bundle(
     )
     routing_precision_summary = (
         routing_precision.get("summary", {}) if isinstance(routing_precision.get("summary"), Mapping) else {}
+    )
+    localized_chat_copy_summary = (
+        localized_chat_copy.get("summary", {}) if isinstance(localized_chat_copy.get("summary"), Mapping) else {}
     )
     hermes_ux_summary = hermes_ux.get("summary", {}) if isinstance(hermes_ux.get("summary"), Mapping) else {}
     payload: dict[str, object] = {
@@ -1742,6 +1785,9 @@ def release_evidence_bundle(
             "routing_precision_intervention_passing": routing_precision_summary.get("intervention_passing_count"),
             "routing_precision_intervention_total": routing_precision_summary.get("intervention_case_count"),
             "routing_precision_missed_intervention_count": routing_precision_summary.get("missed_intervention_count"),
+            "localized_chat_copy_passing": localized_chat_copy_summary.get("passing_count"),
+            "localized_chat_copy_total": localized_chat_copy_summary.get("case_count"),
+            "localized_chat_copy_locale_count": localized_chat_copy_summary.get("locale_count"),
             "hermes_ux_quality_score": hermes_ux.get("score"),
             "hermes_ux_quality_passing_gates": hermes_ux_summary.get("passing_gate_count"),
             "hermes_ux_quality_total_gates": hermes_ux_summary.get("gate_count"),
@@ -1763,6 +1809,7 @@ def release_evidence_bundle(
             "route_hint_alignment": route_hints,
             "context_brief_coverage": context_briefs,
             "routing_precision": routing_precision,
+            "localized_chat_copy": localized_chat_copy,
             "hermes_ux_quality": hermes_ux,
             "parity_contracts": parity,
         },
@@ -1777,6 +1824,7 @@ def release_evidence_bundle(
             "route_hint_alignment_ready",
             "context_brief_coverage_ready",
             "routing_precision_ready",
+            "localized_chat_copy_ready",
             "hermes_ux_quality_ready",
             "parity_contract_matrix_ready",
         ],
