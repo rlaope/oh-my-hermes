@@ -2076,11 +2076,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("local artifact store not_written", gates["use_cases"]["summary"])
             self.assertEqual(gates["use_cases"]["warnings"], ["local_artifact_store: not_written"])
             self.assertEqual(gates["grounded_score"]["status"], "passed")
-            self.assertIn("36/36 scenarios at 10/10", gates["grounded_score"]["summary"])
+            self.assertIn("47/47 scenarios at 10/10", gates["grounded_score"]["summary"])
             self.assertEqual(gates["chat_card_coverage"]["status"], "passed")
             self.assertIn("generic ack 0", gates["chat_card_coverage"]["summary"])
             self.assertEqual(gates["route_hint_alignment"]["status"], "passed")
-            self.assertIn("61/61 route hints aligned", gates["route_hint_alignment"]["summary"])
+            self.assertIn("72/72 route hints aligned", gates["route_hint_alignment"]["summary"])
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("8/8 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
@@ -2123,7 +2123,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("OMH release evidence bundle for 1.0.1", stdout)
             self.assertIn("Status: ready", stdout)
             self.assertIn("Written: no", stdout)
-            self.assertIn("Grounded score: 36/36 (avg 10.0)", stdout)
+            self.assertIn("Grounded score: 47/47 (avg 10.0)", stdout)
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 8/8 (route hints 7, catalog hints 1)", stdout)
             self.assertIn(
@@ -2147,11 +2147,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["status"], "ready")
             self.assertTrue(payload["written"])
             self.assertEqual(payload["summary"]["product_readiness_status"], "ready")
-            self.assertEqual(payload["summary"]["grounded_score_perfect"], 36)
+            self.assertEqual(payload["summary"]["grounded_score_perfect"], 47)
             self.assertEqual(payload["summary"]["grounded_score_average"], 10.0)
             self.assertEqual(payload["summary"]["chat_card_coverage_passing"], 25)
             self.assertEqual(payload["summary"]["chat_card_generic_ack_count"], 0)
-            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 61)
+            self.assertEqual(payload["summary"]["route_hint_alignment_aligned"], 72)
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 8)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 8)
@@ -4687,13 +4687,17 @@ class CliTests(unittest.TestCase):
             ("./loop make this project a 10k star OSS", "loop", "loop", "start_loop_cycle"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "handoff", "choose_executor"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
+            ("Hermes가 기억하는 내용 한번 점검하자", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
+            ("새 이슈 들어오면 라벨링하고 PR 준비해줘", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
             ("리서치 요청했는데 OMH를 안 썼어", "web-research", "web_research", "run_hermes_research"),
             ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "operating_rhythm", "prepare_operating_record"),
             ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
             ("PPT 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
+            ("이 회의록을 발표자료로 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "materials_package", "prepare_material_package"),
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "send_to_executor"),
+            ("지금 PR 머지 준비 됐는지 알려줘", "ultraprocess", "process", "start_ultraprocess"),
             ("今何してる？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("现在在做什么？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("qué está pasando?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
@@ -4701,11 +4705,17 @@ class CliTests(unittest.TestCase):
             ("지금 뭐 하고 있어?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("Claude Code로 넘길지 Codex로 넘길지 정해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("codex로 열어줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("codex 세션 켜서 작업 시작하게 해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("claude code로 이어서 작업해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("Claude Code로 바로 열어줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
+            ("Hermes가 직접 코딩하게 해줘", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("claude code 연결돼 있어?", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("I want to use codex as my coding agent", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("코딩 에이전트 codex로 바꾸고 싶어", "executor-runtime-readiness", "executor_runtime_readiness", "prepare_executor_runtime_readiness"),
             ("how do I see the current Codex session?", "ultraprocess", "handoff", "send_to_executor"),
+            ("릴리즈 준비 상태 점검해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
+            ("실제 사용자처럼 QA 시나리오 돌려줘", "ultraqa", "qa_review", "dispatch_to_workflow"),
+            ("루프 비용이랑 지연시간 상태 보여줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
             ("설치 잘 됐어?", "doctor", "ack", "run_local_operator_check"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "agent_board", "prepare_agent_board_card"),
             ("릴리즈 전에 README 주장과 실제 기능이 맞는지 검토해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
@@ -5657,7 +5667,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(payload["summary"]["scenario_count"], 36)
+        self.assertEqual(payload["summary"]["scenario_count"], 47)
         self.assertTrue(payload["summary"]["all_10"])
         self.assertEqual(payload["summary"]["minimum_score"], 10)
         self.assertEqual(payload["summary"]["maximum_score"], 10)
@@ -5677,12 +5687,14 @@ class CliTests(unittest.TestCase):
                 "ai-coding-safety-audit",
                 "product-feature-shaping",
                 "release-gate-review",
+                "korean-release-readiness-status",
                 "repeated-refactor-workflow",
                 "personal-multi-agent-hub",
                 "agency-template",
                 "operating-rhythm-history",
                 "leadership-report-package",
                 "materials-processing-package",
+                "korean-meeting-to-slides",
                 "reliability-incident-review",
                 "idea-to-deploy-loop",
                 "cto-loop",
@@ -5691,6 +5703,7 @@ class CliTests(unittest.TestCase):
                 "workflow-learning-improvement",
                 "korean-workflow-learning-improvement",
                 "korean-task-learning-memory",
+                "korean-answer-skill-improve",
                 "visual-summary-poster",
                 "korean-meeting-image-summary",
                 "korean-release-note-image-summary",
@@ -5699,10 +5712,18 @@ class CliTests(unittest.TestCase):
                 "research-department-ops",
                 "korean-research-to-strategy-report",
                 "github-event-ops-delivery",
+                "korean-github-issue-label-pr",
                 "executor-runtime-selection",
+                "korean-codex-open-session",
+                "korean-claude-open-direct",
+                "korean-hermes-coding-owner",
                 "coding-agent-progress-status",
+                "korean-pr-merge-readiness-status",
                 "korean-codex-progress-status",
                 "korean-claude-code-open-session",
+                "korean-hermes-memory-review",
+                "korean-user-qa-scenario",
+                "korean-loop-cost-latency",
                 "direct-goal-loop",
                 "direct-ultraprocess-cycle",
             ],
@@ -5713,6 +5734,8 @@ class CliTests(unittest.TestCase):
             "workflow-learning",
         )
         self.assertEqual(direct["korean-task-learning-memory"]["observed"]["playbook"]["id"], "workflow-learning")
+        self.assertEqual(direct["korean-answer-skill-improve"]["observed"]["playbook"]["id"], "workflow-learning")
+        self.assertEqual(direct["korean-meeting-to-slides"]["observed"]["playbook"]["id"], "materials-processing")
         self.assertEqual(direct["visual-summary-poster"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["korean-meeting-image-summary"]["observed"]["playbook"]["id"], "img-summary")
         self.assertEqual(direct["korean-release-note-image-summary"]["observed"]["playbook"]["id"], "img-summary")
@@ -5722,12 +5745,20 @@ class CliTests(unittest.TestCase):
             direct["korean-research-to-strategy-report"]["observed"]["playbook"]["id"],
             "research-to-strategy-brief",
         )
+        self.assertEqual(direct["korean-github-issue-label-pr"]["observed"]["playbook"]["id"], "github-event-ops")
         self.assertEqual(direct["coding-agent-progress-status"]["observed"]["playbook"]["id"], "ultraprocess")
+        self.assertEqual(direct["korean-pr-merge-readiness-status"]["observed"]["playbook"]["id"], "ultraprocess")
         self.assertEqual(direct["korean-codex-progress-status"]["observed"]["playbook"]["id"], "ultraprocess")
         self.assertEqual(
             direct["korean-claude-code-open-session"]["observed"]["playbook"]["id"],
             "executor-runtime-readiness",
         )
+        self.assertEqual(
+            direct["korean-hermes-memory-review"]["observed"]["playbook"]["id"],
+            "memory-curation-review",
+        )
+        self.assertEqual(direct["korean-user-qa-scenario"]["observed"]["playbook"]["id"], "release-readiness-review")
+        self.assertEqual(direct["korean-loop-cost-latency"]["observed"]["playbook"]["id"], "ops-observability-card")
         self.assertEqual(
             direct["executor-runtime-selection"]["observed"]["handoff_status"],
             "prepared_not_observed",
@@ -5743,7 +5774,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         explicit_payload = json.loads(stdout)
         self.assertEqual(explicit_payload["schema_version"], "grounded_score_evaluation/v1")
-        self.assertEqual(explicit_payload["summary"]["scenario_count"], 36)
+        self.assertEqual(explicit_payload["summary"]["scenario_count"], 47)
 
     def test_demo_grounded_score_summary_is_human_readable(self) -> None:
         status, stdout, stderr = run_cli(["demo", "grounded-score", "--summary"])
@@ -5753,7 +5784,7 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH grounded score", stdout)
-        self.assertIn("Result: 36/36 scenarios at 10/10 (all passing)", stdout)
+        self.assertIn("Result: 47/47 scenarios at 10/10 (all passing)", stdout)
         self.assertIn(
             "Startup SaaS product triage: 10/10 ok; feedback-triage -> triage_feedback; handoff_absent",
             stdout,
@@ -5809,9 +5840,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         payload = json.loads(stdout)
         self.assertEqual(payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(payload["summary"]["case_count"], 61)
-        self.assertEqual(payload["summary"]["hinted_count"], 61)
-        self.assertEqual(payload["summary"]["aligned_count"], 61)
+        self.assertEqual(payload["summary"]["case_count"], 72)
+        self.assertEqual(payload["summary"]["hinted_count"], 72)
+        self.assertEqual(payload["summary"]["aligned_count"], 72)
         self.assertEqual(payload["summary"]["missing_hint_count"], 0)
         self.assertEqual(payload["summary"]["mismatch_count"], 0)
         self.assertTrue(payload["summary"]["all_aligned"])
@@ -5842,7 +5873,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         explicit_payload = json.loads(stdout)
         self.assertEqual(explicit_payload["schema_version"], "route_hint_alignment/v1")
-        self.assertEqual(explicit_payload["summary"]["case_count"], 61)
+        self.assertEqual(explicit_payload["summary"]["case_count"], 72)
 
     def test_demo_route_hint_alignment_summary_is_human_readable(self) -> None:
         status, stdout, stderr = run_cli(["demo", "route-hint-alignment", "--summary"])
@@ -5852,8 +5883,8 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
         self.assertIn("OMH route hint alignment", stdout)
-        self.assertIn("Result: 61/61 route hints aligned (all passing)", stdout)
-        self.assertIn("Hints present: 61/61; missing hints: 0; mismatches: 0", stdout)
+        self.assertIn("Result: 72/72 route hints aligned (all passing)", stdout)
+        self.assertIn("Hints present: 72/72; missing hints: 0; mismatches: 0", stdout)
         self.assertIn(
             "AI agent product QA: ok; route=ultraqa hint=ultraqa hint_action=dispatch_to_workflow",
             stdout,

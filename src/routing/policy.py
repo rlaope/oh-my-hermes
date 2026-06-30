@@ -1083,6 +1083,9 @@ _WORKFLOW_LEARNING_PHRASES = (
     "remember this for next time",
     "remember to do this better next time",
     "make this task better next time",
+    "answer better next time",
+    "improve this answer next time",
+    "fix the skill next time",
     "next time do this task better",
     "workflow should learn",
     "workflow went wrong",
@@ -1111,6 +1114,13 @@ _WORKFLOW_LEARNING_PHRASES = (
     "다음부터 더 잘하게 기억",
     "다음부터 이런 작업 더 잘하게",
     "이 작업 더 잘하게 기억",
+    "답변 다음엔 더 잘하게",
+    "답변 다음에는 더 잘하게",
+    "다음엔 더 잘하게 스킬",
+    "다음에는 더 잘하게 스킬",
+    "스킬 고쳐줘",
+    "스킬 고쳐",
+    "스킬 수정해줘",
     "다음에 스킬 개선",
     "라우팅 회귀",
     "회귀 케이스",
@@ -1229,6 +1239,10 @@ _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "open codex session",
     "open a claude code session",
     "open claude code session",
+    "open directly in claude code",
+    "open directly in codex",
+    "codex session",
+    "claude code session",
     "open a coding agent session",
     "open a codex work session",
     "open a claude code work session",
@@ -1302,13 +1316,24 @@ _EXECUTOR_RUNTIME_READINESS_PHRASES = (
     "codex 세션 연결",
     "코덱스 세션 연결",
     "codex 세션 열어",
+    "codex 세션 켜",
+    "codex 세션 켜서",
     "코덱스 세션 열어",
+    "코덱스 세션 켜",
+    "코덱스 세션 켜서",
     "codex 작업 세션 열어",
     "코덱스 작업 세션 열어",
     "claude code 세션 열어",
     "클로드 코드 세션 열어",
     "claude code 작업 세션 열어",
     "클로드 코드 작업 세션 열어",
+    "claude code로 바로 열어",
+    "claude code 바로 열어",
+    "클로드 코드로 바로 열어",
+    "클로드 코드 바로 열어",
+    "hermes가 직접 코딩",
+    "헤르메스가 직접 코딩",
+    "hermes 직접 코딩",
     "claude code로 이어서",
     "클로드 코드로 이어서",
     "codex로 이어서",
@@ -1462,6 +1487,8 @@ _MATERIALS_PACKAGE_PHRASES = (
     "pdf랑 ppt로",
     "make a ppt",
     "make a deck",
+    "presentation deck",
+    "meeting notes to slides",
     "create a ppt",
     "create a deck",
     "as a deck",
@@ -1478,6 +1505,14 @@ _MATERIALS_PACKAGE_PHRASES = (
     "피피티 만들어줘",
     "슬라이드 만들",
     "슬라이드 만들어",
+    "발표자료",
+    "발표 자료",
+    "발표자료로",
+    "발표 자료로",
+    "회의록을 발표자료",
+    "회의록을 발표 자료",
+    "발표자료로 만들어",
+    "발표자료로 만들어줘",
 )
 _MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
     {
@@ -1495,6 +1530,8 @@ _MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
         "피디에프",
         "피피티",
         "슬라이드",
+        "발표자료",
+        "발표",
         "덱",
         "엑셀",
         "문서",
@@ -1546,6 +1583,7 @@ _MEMORY_CURATION_PHRASES = (
     "stale project context",
     "old project context",
     "hermes remembers",
+    "hermes remembered context",
     "기억하고 있는",
     "기억하고 있는 프로젝트 맥락",
     "기억하는 맥락",
@@ -1553,6 +1591,11 @@ _MEMORY_CURATION_PHRASES = (
     "현재 hermes가 기억하는 맥락",
     "현재 헤르메스가 기억하는 맥락",
     "헤르메스가 기억하는 맥락",
+    "hermes가 기억하는 내용",
+    "헤르메스가 기억하는 내용",
+    "기억하는 내용 점검",
+    "기억 내용 점검",
+    "기억하는 내용 한번 점검",
     "프로젝트 맥락이 오래된",
     "오래된 맥락",
     "오래된 기억",
@@ -1695,6 +1738,10 @@ _CODING_PROGRESS_STATUS_PHRASES = (
     "코딩 작업 지금 어디까지",
     "코딩 작업 진행상황",
     "코딩 작업 상태",
+    "pr 머지 준비",
+    "머지 준비 됐는지",
+    "머지 준비 상태",
+    "pr 머지 상태",
     "진행됐는지",
     "진행되었는지",
 )
@@ -1721,6 +1768,10 @@ _CODING_SESSION_STATUS_ONLY_PHRASES = (
     "what evidence is still missing",
     "evidence is still missing",
     "still missing",
+    "merge ready",
+    "merge readiness",
+    "pr merge ready",
+    "pr merge readiness",
     "is codex done",
     "is claude code done",
     "coding handoff status",
@@ -1728,6 +1779,10 @@ _CODING_SESSION_STATUS_ONLY_PHRASES = (
     "coding work status",
     "코딩 작업 어디까지",
     "코딩 작업 지금 어디까지",
+    "pr 머지 준비",
+    "머지 준비 됐는지",
+    "머지 준비 상태",
+    "pr 머지 상태",
 )
 _CODING_PROGRESS_STATUS_TOKENS = _normalized_token_set(
     {
@@ -1772,6 +1827,16 @@ _GITHUB_EVENT_OPS_PHRASES = (
     "github issue",
     "github pr",
     "github issue 들어온",
+    "issue labeling",
+    "label this issue",
+    "label issue and prepare pr",
+    "이슈 들어오면",
+    "새 이슈 들어오면",
+    "이슈 라벨링",
+    "라벨링하고 pr 준비",
+    "pr 준비",
+    "pr 준비해줘",
+    "라벨링",
     "issue para un pr",
     "preparar este issue para un pr",
     "preparar issue para pr",
@@ -1820,6 +1885,10 @@ _RELEASE_CLAIM_REVIEW_PHRASES = (
     "readme 주장과 실제",
     "실제 기능이 맞는지",
     "doctor/harness",
+    "release readiness status",
+    "release readiness check",
+    "릴리즈 준비 상태",
+    "릴리즈 준비 상태 점검",
 )
 _RELEASE_CLAIM_REVIEW_TOKENS = _normalized_token_set(
     {
@@ -1839,6 +1908,43 @@ _RELEASE_CLAIM_REVIEW_TOKENS = _normalized_token_set(
         "기능",
         "맞는지",
         "통과",
+    }
+)
+_OPS_OBSERVABILITY_PHRASES = (
+    "ops observability",
+    "runtime observability",
+    "token cost latency run history",
+    "cost latency run history",
+    "loop cost",
+    "latency status",
+    "cost and latency",
+    "cost latency",
+    "token cost",
+    "run history",
+    "루프 비용",
+    "지연시간 상태",
+    "비용이랑 지연시간",
+    "비용 지연시간",
+    "토큰 비용",
+    "실행 기록",
+)
+_OPS_OBSERVABILITY_TOKENS = _normalized_token_set(
+    {
+        "observability",
+        "telemetry",
+        "token",
+        "tokens",
+        "cost",
+        "latency",
+        "history",
+        "usage",
+        "queue",
+        "failure",
+        "비용",
+        "지연시간",
+        "토큰",
+        "기록",
+        "관측성",
     }
 )
 _VOICE_OPERATOR_PHRASES = (
@@ -2340,6 +2446,15 @@ LOOP_GOAL_GUARD = RoutingGuardRule(
     why="Matched loopable goal language; assess the goal shape and start a bounded loop instead of a passive clarification.",
     activation_status="active",
 )
+OPS_OBSERVABILITY_GUARD = RoutingGuardRule(
+    id="ops_observability_before_generic_loop",
+    rule="Runtime, loop, token, cost, latency, or run-history status requests should route to ops-observability-card before generic loop handling.",
+    matched_label="guard:ops_observability",
+    preferred_skills=("ops-observability-card",),
+    score_boost=46,
+    why="Matched operational telemetry language; prepare an observed-only status card instead of starting or advancing a loop.",
+    activation_status="active",
+)
 WEB_RESEARCH_BEFORE_PROCESS_GUARD = RoutingGuardRule(
     id="web_research_before_process",
     rule="Plain web/source/current-evidence requests should route to web research before one-cycle delivery.",
@@ -2571,6 +2686,7 @@ ROUTING_GUARD_RULES = (
     CLEANUP_REFACTOR_GUARD,
     DURABLE_RESEARCH_GUARD,
     LOOP_GOAL_GUARD,
+    OPS_OBSERVABILITY_GUARD,
     WORKFLOW_LEARNING_GUARD,
     OMH_QUALITY_IMPROVEMENT_GUARD,
     PAPER_LEARNING_GUARD,
@@ -2696,6 +2812,8 @@ def _active_routing_guard_rules_cached(
         rules.append(CLEANUP_REFACTOR_GUARD)
     if _durable_research_goal_guard_applies(normalized_query, query_tokens):
         rules.append(DURABLE_RESEARCH_GUARD)
+    if _ops_observability_guard_applies(normalized_query, query_tokens):
+        rules.append(OPS_OBSERVABILITY_GUARD)
     loop_goal_applies = _loop_goal_guard_applies(normalized_query, query_tokens)
     if loop_goal_applies:
         rules.append(LOOP_GOAL_GUARD)
@@ -3210,9 +3328,33 @@ def _adversarial_qa_guard_applies(normalized_query: str, query_tokens: set[str])
             "missing PATH",
             "adversarial qa",
             "hostile cases",
+            "qa scenario",
+            "user qa scenario",
+            "actual user qa",
+            "실제 사용자처럼 qa",
+            "qa 시나리오",
+            "사용자처럼 qa",
+            "실제 사용자처럼 테스트",
         ),
     )
-    return qa_context and (adversarial or scenario_phrase)
+    if scenario_phrase:
+        return True
+    return qa_context and adversarial
+
+
+def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_PHRASES):
+        return True
+    telemetry = bool(_OPS_OBSERVABILITY_TOKENS & query_tokens)
+    runtime_context = _contains_phrase(
+        normalized_query,
+        ("loop", "automation", "runtime", "executor", "gateway", "루프", "자동화", "런타임", "실행", "게이트웨이"),
+    )
+    status_intent = _contains_phrase(
+        normalized_query,
+        ("status", "show", "report", "summary", "보여줘", "알려줘", "상태", "요약"),
+    )
+    return telemetry and (runtime_context or status_intent)
 
 
 def _cleanup_refactor_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
@@ -3261,8 +3403,25 @@ def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> b
         ("star worthy", "star-worthy", "first-run friction", "10k star", "10k-star", "100k star", "100k-star"),
     )
     observability_context = bool(
-        {"token", "tokens", "cost", "latency", "history", "telemetry", "observability", "usage"} & query_tokens
-    ) or _contains_phrase(normalized_query, ("run history", "token cost", "cost latency"))
+        {
+            "token",
+            "tokens",
+            "cost",
+            "latency",
+            "history",
+            "telemetry",
+            "observability",
+            "usage",
+            "비용",
+            "지연시간",
+            "토큰",
+            "관측성",
+        }
+        & query_tokens
+    ) or _contains_phrase(
+        normalized_query,
+        ("run history", "token cost", "cost latency", "루프 비용", "지연시간 상태", "비용이랑 지연시간"),
+    )
     if explicit_loop and observability_context and not (north_star or repeated_improvement):
         return False
     if is_explicit_one_off_request(normalized_query, query_tokens) and not (explicit_loop or repeated_improvement or north_star):
@@ -3822,12 +3981,17 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
             "pr comments",
             "latest push",
             "label",
+            "labeling",
             "review",
             "to pr",
             "into a pr",
             "pr 만들",
             "pr로",
+            "pr 준비",
             "들어온",
+            "들어오면",
+            "라벨",
+            "라벨링",
         ),
     )
     event_context = _contains_phrase(
@@ -3845,8 +4009,12 @@ def _github_event_ops_guard_applies(normalized_query: str, query_tokens: set[str
             "build failed",
             "test job failed",
             "label",
+            "labeling",
             "latest push",
             "들어온",
+            "들어오면",
+            "라벨",
+            "라벨링",
         ),
     )
     return (issue_or_pr or ci_event) and event_or_pr_prep and (github_context or event_context or ci_event)
