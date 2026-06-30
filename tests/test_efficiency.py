@@ -1027,15 +1027,19 @@ class EfficiencyContractTests(unittest.TestCase):
         cases = (
             ("risky refactor", "ralplan"),
             ("논문 요약해줘", "paper-learning"),
+            ("이 PDF 논문 초보자도 이해하게 풀어줘", "paper-learning"),
             ("웹서치해서 최신 자료 정리해줘", "web-research"),
             ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary"),
             ("PPT 만들어줘", "materials-package"),
             ("codex로 열어줘", "executor-runtime-readiness"),
             ("codex로 지금 작업 열어줘", "executor-runtime-readiness"),
             ("claude code로 지금 작업 열어줘", "executor-runtime-readiness"),
+            ("claude code 세션 연결해서 이어서 보게 해줘", "executor-runtime-readiness"),
+            ("codex 세션 열고 방금 핸드오프 이어서 진행해줘", "executor-runtime-readiness"),
             ("github oss repo 찾아서 비교해줘", "source-finder"),
             ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
+            ("매일 아침 리서치 요약을 보내게 준비해줘", "automation-blueprint"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning"),
         )
 
@@ -1164,6 +1168,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("이미지 요약 카드 만들어줘", "img-summary", "operator_surface_fast_path:visual"),
             ("릴리즈 노트 이미지 만들어줘", "img-summary", "operator_surface_fast_path:visual"),
             ("이 PDF 쉽게 요약해줘", "paper-learning", "operator_surface_fast_path:paper"),
+            ("이 PDF 논문 초보자도 이해하게 풀어줘", "paper-learning", "operator_surface_fast_path:paper"),
             ("paper pdf expert explanation please", "paper-learning", "operator_surface_fast_path:paper"),
             ("회의록 정리해줘", "operating-rhythm", "operator_surface_fast_path:operating"),
             ("논문 링크 찾아줘", "source-finder", "operator_surface_fast_path:source"),

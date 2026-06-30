@@ -1031,6 +1031,11 @@ class ChatRouterTests(unittest.TestCase):
                 "guard:paper_learning",
             ),
             (
+                "이 PDF 논문 초보자도 이해하게 풀어줘",
+                "paper-learning",
+                "guard:paper_learning",
+            ),
+            (
                 "open this in codex",
                 "executor-runtime-readiness",
                 "guard:executor_runtime_readiness",
@@ -1062,6 +1067,16 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "claude code로 지금 작업 열어줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "claude code 세션 연결해서 이어서 보게 해줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "codex 세션 열고 방금 핸드오프 이어서 진행해줘",
                 "executor-runtime-readiness",
                 "guard:executor_runtime_readiness",
             ),
@@ -1501,6 +1516,7 @@ class ChatRouterTests(unittest.TestCase):
             ("이미지 요약 카드 만들어줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
             ("릴리즈 노트 이미지 만들어줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
             ("이 PDF 쉽게 요약해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
+            ("이 PDF 논문 초보자도 이해하게 풀어줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
             (
                 "paper pdf expert explanation please",
                 "paper-learning",
