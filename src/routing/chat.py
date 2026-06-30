@@ -895,6 +895,14 @@ def _route_chat_message_cached(
     )
     if fast_agent_ops_status_decision is not None:
         return fast_agent_ops_status_decision.to_dict()
+    fast_operator_surface_decision = _operator_surface_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_operator_surface_decision is not None:
+        return fast_operator_surface_decision.to_dict()
     fast_direct_answer_decision = _direct_answer_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1384,6 +1392,125 @@ def _agent_ops_status_fast_path_match(message: str) -> str | None:
     if compact in _AGENT_OPS_STATUS_FAST_PATH_COMPACT_PHRASES:
         return compact
     return None
+
+
+_OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
+    (
+        "img-summary",
+        (
+            "make a thumbnail",
+            "create a thumbnail",
+            "generate a thumbnail",
+            "thumbnail card",
+            "release thumbnail",
+            "썸네일 만들어줘",
+            "썸네일 생성해줘",
+            "썸네일로 만들어줘",
+            "릴리즈 노트 썸네일",
+        ),
+        "operator_surface_fast_path:visual",
+        "Clear thumbnail or release-thumbnail request; prepare the image prompt-card workflow without scoring every workflow.",
+    ),
+    (
+        "source-finder",
+        (
+            "find arxiv link",
+            "find arxiv paper",
+            "arxiv link",
+            "arxiv 링크 찾아",
+            "arxiv 링크 찾아서",
+        ),
+        "operator_surface_fast_path:source",
+        "Clear source-acquisition request; scope source candidates before explanation or downstream work.",
+    ),
+    (
+        "automation-blueprint",
+        (
+            "automate this",
+            "automate workflow",
+            "자동화해줘",
+            "자동화 해줘",
+            "자동화하는 흐름",
+        ),
+        "operator_surface_fast_path:automation",
+        "Clear automation request; prepare the scheduled-ops blueprint without scoring every workflow.",
+    ),
+)
+
+
+def _operator_surface_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if explicit_skill_invocation(routing_message):
+        return None
+    match = _operator_surface_fast_path_match(routing_message)
+    if match is None:
+        return None
+    selected_skill, phrase, marker, reason = match
+    selected_harness = primary_harness_for_skill(selected_skill)
+    definition = _skill_definition_by_name(selected_skill)
+    recommendation = recommendation_for_definition(
+        definition,
+        message,
+        matched=(marker, f"phrase:{phrase}"),
+        score=13,
+        why=reason,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=13,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _operator_surface_fast_path_match(message: str) -> tuple[str, str, str, str] | None:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    for skill, phrase, normalized_phrase, normalized_compact, marker, reason in _operator_surface_fast_path_patterns():
+        if normalized_phrase in text or (normalized_compact and normalized_compact in compact):
+            return skill, phrase, marker, reason
+    return None
+
+
+@lru_cache(maxsize=1)
+def _operator_surface_fast_path_patterns() -> tuple[tuple[str, str, str, str, str, str], ...]:
+    patterns: list[tuple[str, str, str, str, str, str]] = []
+    for skill, phrases, marker, reason in _OPERATOR_SURFACE_FAST_PATH_RULES:
+        for phrase in phrases:
+            normalized_phrase = _fast_path_text(phrase)
+            if normalized_phrase:
+                patterns.append((skill, phrase, normalized_phrase, _fast_path_compact(normalized_phrase), marker, reason))
+    return tuple(patterns)
+
+
+def _fast_path_text(value: str) -> str:
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", value).strip().lower().strip(" \t\r\n.!?,;:~…？"))
+
+
+def _fast_path_compact(value: str) -> str:
+    return re.sub(r"[\s\?\!\.,;:~…？]+", "", value)
 
 
 def _direct_answer_fast_path_decision(
