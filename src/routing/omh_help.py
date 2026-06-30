@@ -146,6 +146,31 @@ def is_omh_quickstart_question(message: str) -> bool:
     )
     if any(marker in text for marker in troubleshooting_markers):
         return False
+    update_health_markers = (
+        "update",
+        "업데이트",
+    )
+    update_health_questions = (
+        "did update work",
+        "update worked",
+        "update ok",
+        "version unchanged",
+        "same version",
+        "잘 된",
+        "잘된",
+        "잘 됐",
+        "잘됐",
+        "됐는지",
+        "되었는지",
+        "제대로",
+        "반영",
+        "버전",
+        "확인",
+    )
+    if any(marker in text for marker in update_health_markers) and any(
+        marker in text for marker in update_health_questions
+    ):
+        return False
     quickstart_markers = (
         "quickstart",
         "getting started",
