@@ -2296,7 +2296,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
             self.assertIn("41/41 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("70/70 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("73/73 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2338,7 +2338,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 41/41 negative controls, 70/70 interventions "
+                "Routing precision: 41/41 negative controls, 73/73 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2369,8 +2369,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_passing"], 41)
             self.assertEqual(payload["summary"]["routing_precision_total"], 41)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 70)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 70)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 73)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 73)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
@@ -5095,9 +5095,11 @@ class CliTests(unittest.TestCase):
             ("run a CTO loop for roadmap architecture tradeoffs delivery risk and release readiness", "cto-loop", "cto_loop", "run_cto_loop"),
             ("deploy and monitor this release with rollback and health checks", "deploy-and-monitor", "deploy_monitor_plan", "prepare_deploy_monitor_plan"),
             ("./loop make this project a 10k star OSS", "loop", "loop", "start_loop_cycle"),
+            ("현재 repo 설치 후 10분 안에 가치 못 느끼는 이유를 줄여가며 개선해줘", "loop", "loop", "choose_permission_profile"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "handoff", "choose_executor"),
             ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
             ("Hermes가 기억하는 내용 한번 점검하자", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
+            ("내가 말한 memory가 잘못 저장된 것 같아 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
             ("새 이슈 들어오면 라벨링하고 PR 준비해줘", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
             ("리서치 요청했는데 OMH를 안 썼어", "web-research", "web_research", "run_hermes_research"),
@@ -5108,6 +5110,7 @@ class CliTests(unittest.TestCase):
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "materials_package", "prepare_material_package"),
             ("Codex 작업이 어디까지 진행됐는지 알려줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("지금 PR 머지 준비 됐는지 알려줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
+            ("이 PR 리뷰어 코멘트 반영됐는지 보고 머지 준비해줘", "ultraprocess", "handoff", "show_coding_handoff_status"),
             ("今何してる？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("现在在做什么？", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
             ("qué está pasando?", "agent-ops-review", "agent_ops_review", "refresh_agent_ops_status"),
