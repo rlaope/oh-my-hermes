@@ -443,6 +443,7 @@ class ChatRouterTests(unittest.TestCase):
             "무슨 일이야?",
             "작업상황 브리핑해줘",
             "작업상황 보고해줘",
+            "현재 작업상황 보고해줘",
             "지금 뭐함",
             "뭐하고있어",
             "현재 작업 뭐야",
@@ -1045,6 +1046,11 @@ class ChatRouterTests(unittest.TestCase):
             ),
             (
                 "코덱스로 이 작업 시작해줘",
+                "executor-runtime-readiness",
+                "guard:executor_runtime_readiness",
+            ),
+            (
+                "codex로 지금 작업 열어줘",
                 "executor-runtime-readiness",
                 "guard:executor_runtime_readiness",
             ),
