@@ -61,12 +61,32 @@ class CliTests(unittest.TestCase):
         self.assertIn("omh ops list", help_text)
         self.assertIn("omh materials list", help_text)
         self.assertIn("Human-facing maintenance, catalog, and operator checklist commands print summaries", help_text)
-        self.assertIn("Backend/control-plane commands", help_text)
+        self.assertIn("Plain chat preview commands such as chat route, route-hint, and interact are summary-first", help_text)
+        self.assertIn("Ledger/control-plane commands", help_text)
         self.assertIn("release smoke", help_text)
-        self.assertIn("memory, ops, materials, state", help_text)
+        self.assertIn("learning, memory, state", help_text)
         self.assertIn("img-summary", help_text)
+        self.assertNotIn("commands such as chat, coding", help_text)
+        self.assertNotIn("chat, coding, runtime", help_text)
         self.assertNotIn("==SUPPRESS==", help_text)
         self.assertNotIn("visual               ==", help_text)
+
+    def test_chat_help_names_summary_first_preview_commands(self) -> None:
+        stdout_buffer = io.StringIO()
+
+        with patch("sys.stdout", stdout_buffer), self.assertRaises(SystemExit) as exit_context:
+            build_parser().parse_args(["chat", "--help"])
+
+        self.assertEqual(exit_context.exception.code, 0)
+        stdout = stdout_buffer.getvalue()
+        normalized = " ".join(stdout.split())
+        self.assertIn("route", stdout)
+        self.assertIn("Route a plain chat message to the most relevant OMH workflow.", normalized)
+        self.assertIn("route-hint", stdout)
+        self.assertIn("Print a lightweight OMH workflow hint card", normalized)
+        self.assertIn("interact", stdout)
+        self.assertIn("Build the wrapper/Hermes interaction card for a chat message.", normalized)
+        self.assertIn("session", stdout)
 
     def test_demo_help_explains_quality_lanes_and_boundary(self) -> None:
         stdout_buffer = io.StringIO()
