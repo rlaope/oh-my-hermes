@@ -523,6 +523,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "automation_blueprint",
     ),
     RoutingInterventionCase(
+        "korean-morning-market-research",
+        "Korean recurring market research opens research department",
+        "아침마다 시장 리서치 요약해줘",
+        "dispatch",
+        "research-department",
+        "prepare_research_department_plan",
+        "research_department",
+    ),
+    RoutingInterventionCase(
         "workflow-learning",
         "Workflow improvement requests open workflow learning",
         "turn this failed workflow into a skill improvement proposal",
