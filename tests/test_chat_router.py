@@ -602,6 +602,34 @@ class ChatRouterTests(unittest.TestCase):
             public = public_route_payload(decision)
             self.assertNotIn("workflow_route_plan", public)
 
+    def test_common_single_workflow_requests_skip_full_recommendation_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        cases = (
+            ("논문 요약해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
+            ("이 PDF 쉽게 설명해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
+            ("웹서치해서 최신 자료 정리해줘", "web-research", "run_hermes_research", "operator_surface_fast_path:research"),
+            ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
+            ("PPT 만들어줘", "materials-package", "prepare_material_package", "operator_surface_fast_path:materials"),
+            ("codex로 열어줘", "executor-runtime-readiness", "prepare_executor_runtime_readiness", "operator_surface_fast_path:executor"),
+        )
+
+        for message, selected_skill, next_action, marker in cases:
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("common single-workflow requests should skip full recommendation scoring"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], selected_skill)
+            self.assertEqual(decision["selected_harness"], primary_harness_for_skill(selected_skill))
+            self.assertIn(marker, decision["recommendations"][0]["matched"])
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], next_action)
+
     def test_direct_picker_alias_uses_fast_catalog_route(self) -> None:
         for message in ("./omh", "/omh", "./skills", "/skills"):
             with self.subTest(message=message):
