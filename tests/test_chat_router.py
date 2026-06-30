@@ -457,7 +457,10 @@ class ChatRouterTests(unittest.TestCase):
             "show session status",
             "what is going on rn",
             "what is the current PR status?",
+            "current PR review status",
             "PR 상태 알려줘",
+            "이번 작업 끝났는지 확인해줘",
+            "현재 PR 리뷰 통과했어?",
             "status update please",
             "今何してる？",
             "现在在做什么？",
@@ -613,10 +616,29 @@ class ChatRouterTests(unittest.TestCase):
         cases = (
             ("논문 요약해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
             ("이 PDF 쉽게 설명해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
+            ("첨부한 paper를 쉬운 난이도로 설명해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
             ("웹서치해서 최신 자료 정리해줘", "web-research", "run_hermes_research", "operator_surface_fast_path:research"),
             ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
             ("PPT 만들어줘", "materials-package", "prepare_material_package", "operator_surface_fast_path:materials"),
             ("codex로 열어줘", "executor-runtime-readiness", "prepare_executor_runtime_readiness", "operator_surface_fast_path:executor"),
+            (
+                "codex로 새 세션 만들어서 열어줘",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "operator_surface_fast_path:executor",
+            ),
+            (
+                "claude code로 새 세션 시작하게 해줘",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "operator_surface_fast_path:executor",
+            ),
+            (
+                "코딩 에이전트 뭘로 설정돼있어?",
+                "executor-runtime-readiness",
+                "prepare_executor_runtime_readiness",
+                "operator_surface_fast_path:executor",
+            ),
             (
                 "workflow trace 보고 다음에 스킬 고칠점 알려줘",
                 "workflow-learning",
@@ -1517,6 +1539,7 @@ class ChatRouterTests(unittest.TestCase):
             ("릴리즈 노트 이미지 만들어줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
             ("이 PDF 쉽게 요약해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
             ("이 PDF 논문 초보자도 이해하게 풀어줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
+            ("첨부한 paper를 쉬운 난이도로 설명해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
             (
                 "paper pdf expert explanation please",
                 "paper-learning",
