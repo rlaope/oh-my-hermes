@@ -316,6 +316,8 @@ class ChatRouterTests(unittest.TestCase):
             "what is a research brief?",
             "research brief가 뭐야?",
             "what is an image summary?",
+            "what is workflow learning?",
+            "workflow trace가 뭐야?",
             "what is a memory leak?",
             "memory leak 설명해줘",
             "what is source control?",
@@ -613,6 +615,12 @@ class ChatRouterTests(unittest.TestCase):
             ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
             ("PPT 만들어줘", "materials-package", "prepare_material_package", "operator_surface_fast_path:materials"),
             ("codex로 열어줘", "executor-runtime-readiness", "prepare_executor_runtime_readiness", "operator_surface_fast_path:executor"),
+            (
+                "workflow trace 보고 다음에 스킬 고칠점 알려줘",
+                "workflow-learning",
+                "audit_learning_readiness",
+                "workflow_learning_fast_path",
+            ),
         )
 
         for message, selected_skill, next_action, marker in cases:

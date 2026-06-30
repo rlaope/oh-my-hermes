@@ -125,6 +125,45 @@ _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS = (
     "기억해:",
     "기억해",
 )
+_WORKFLOW_LEARNING_FAST_PATH_TERMS = (
+    "workflow trace",
+    "workflow traces",
+    "learning trace",
+    "skill improvement",
+    "skill patch",
+    "routing regression",
+    "regression case",
+    "route regression",
+    "workflow went wrong",
+    "improve a workflow",
+    "workflow learning",
+    "워크플로우",
+    "워크플로",
+    "스킬",
+    "라우팅",
+    "라우터",
+)
+_WORKFLOW_LEARNING_FAST_PATH_ACTION_TERMS = (
+    "improve",
+    "improvement",
+    "fix next time",
+    "next time",
+    "learn from",
+    "add regression",
+    "record",
+    "audit",
+    "patch",
+    "고칠",
+    "개선",
+    "다음엔",
+    "다음에는",
+    "학습",
+    "기록",
+    "회귀",
+    "틀렸",
+    "안 썼",
+    "안쓴",
+)
 _BOUNDARY_MARKER_LABELS: tuple[tuple[str, str], ...] = (
     ("meeting happened", "meeting occurrence"),
     ("meeting, scrum, sprint, retro", "meeting/scrum/sprint/retro occurrence"),
@@ -1088,6 +1127,14 @@ def _route_chat_message_cached(
     )
     if fast_operator_surface_decision is not None:
         return fast_operator_surface_decision.to_dict()
+    fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_workflow_learning_decision is not None:
+        return fast_workflow_learning_decision.to_dict()
     fast_guarded_operator_decision = _guarded_operator_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -2425,6 +2472,103 @@ def _guarded_operator_fast_path_decision(
         recommendations=(recommendation,),
     )
     return None
+
+
+def _workflow_learning_feedback_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if is_skill_catalog_question(routing_message):
+        return None
+    if _is_fast_plain_direct_answer_question(routing_message):
+        return None
+    fast_text = _fast_path_text(routing_message)
+    if any(blocker in fast_text for blocker in _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS):
+        return None
+    if not _workflow_learning_fast_path_signal(fast_text):
+        return None
+
+    selected_skill = "workflow-learning"
+    selected_harness = primary_harness_for_skill(selected_skill)
+    route_next_action = _workflow_learning_fast_path_next_action(routing_message)
+    task_card = classify_task(routing_message)
+    short_feedback = len(fast_text) <= 240
+    if (
+        isinstance(task_card, dict)
+        and task_card.get("selected_workflow_rail") == selected_skill
+    ):
+        if not short_feedback:
+            return None
+        recommendation = _task_card_fast_path_recommendation(task_card, message)
+        reason = str(task_card.get("routing_reason", recommendation.get("why", "")))
+        score = _int_value(task_card.get("score", recommendation.get("score", 12)))
+        confidence = str(task_card.get("confidence", recommendation.get("confidence", "high")))
+        route_next_action = str(task_card.get("recommended_next_action", route_next_action))
+    else:
+        if not short_feedback:
+            return None
+        reason = (
+            "Matched workflow-learning feedback language; prepare a learning trace, review candidate, "
+            "or regression case without scanning every workflow definition."
+        )
+        score = 34
+        confidence = "high"
+        recommendation = recommendation_for_definition(
+            _skill_definition_by_name(selected_skill),
+            message,
+            matched=("guard:workflow_learning", "workflow_learning_fast_path"),
+            score=score,
+            why=reason,
+        )
+        if route_next_action and route_next_action != str(recommendation.get("next_action", "")):
+            recommendation = {**recommendation, "next_action": route_next_action}
+        task_card = None
+
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence=confidence,
+        score=score,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=task_card,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+        route_next_action=route_next_action,
+    )
+
+
+def _workflow_learning_fast_path_signal(text: str) -> bool:
+    compact = _fast_path_compact(text)
+    if not text:
+        return False
+    has_learning_subject = any(
+        term in text or _fast_path_compact(term) in compact for term in _WORKFLOW_LEARNING_FAST_PATH_TERMS
+    )
+    if not has_learning_subject:
+        return False
+    return any(
+        term in text or _fast_path_compact(term) in compact for term in _WORKFLOW_LEARNING_FAST_PATH_ACTION_TERMS
+    )
+
+
+def _workflow_learning_fast_path_next_action(message: str) -> str:
+    return "record_missed_route" if is_missed_route_feedback(message) else "audit_learning_readiness"
 
 
 def _preferred_guarded_operator_fast_path_guard(guards: tuple[Any, ...], message: str) -> Any | None:
