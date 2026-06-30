@@ -605,7 +605,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user asks for recurring monitoring, source inbox, or Scout/Analyst/Briefer operations; use `research-department`.
   - The user asks to export, convert, render, package, or attach a file; use `materials-package` or `deliverable-package`.
   - The user asks for an image card or visual summary; use `img-summary`.
-- Strong routing signals: `source-finder`, `source finder`, `source acquisition`, `source intake`, `find papers and datasets`, `find datasets and repos`, `find papers`, `find datasets`, `find github repos`, `find oss repos`, `find presentations`, `find public slides`, `find docs and specs`, `find source candidates`, `download candidate`, `source candidate`, `acquisition status`, `자료 후보`, `출처 후보`, `논문 데이터셋 찾아`, `깃허브 저장소 찾아`, `공개 발표자료 찾아`, `문서 스펙 찾아`
+- Strong routing signals: `source-finder`, `source finder`, `source acquisition`, `source intake`, `find papers and datasets`, `find datasets and repos`, `find papers`, `find arxiv link`, `find arxiv paper`, `find datasets`, `find github repos`, `find oss repos`, `find presentations`, `find public slides`, `find docs and specs`, `find source candidates`, `download candidate`, `source candidate`, `acquisition status`, `자료 후보`, `출처 후보`, `arxiv 링크`, `arxiv 링크 찾아`, `논문 데이터셋 찾아`, `깃허브 저장소 찾아`, `공개 발표자료 찾아`, `문서 스펙 찾아`
 - Good example:
   - Prompt: source-finder find papers, datasets, and GitHub repos for evaluating browser agent benchmarks.
   - Expected behavior: Prepare source_finder_plan/v1 with typed candidates, acquisition states, missing observed evidence, and downstream choices.
@@ -1231,7 +1231,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### img-summary
 
-[omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and release notes into source-specific, domain-aware, poster-archetype-aware image-generation-ready visual prompt cards.
+[omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.
 
 - Category: `materials`
 - Phase: `visual-prompt-card`
@@ -1243,13 +1243,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Compatibility alias: `false`
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Keep card copy shaping, source-kind selection, language mode, prompt assembly, and evidence narration in Hermes. Use wrapper-reported image generation only as an optional action; record generated image, visual QA, and delivery claims only from visual_observation/v1 evidence.
-- Why this exists: `img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format to the source kind, adapting visual mood, premium background plate, texture, lighting, and camera treatment to the domain, choosing a poster archetype for visual grammar, and keeping generation, QA, and delivery as observed-only wrapper or user evidence.
-- Use when: Use when Hermes should shape supplied notes, report material, PR context, issue feedback, research/news, or release notes into a source-specific visual prompt whose mood, premium background plate, material texture, camera treatment, lighting, motifs, and poster design grammar adapt without claiming image generation.
+- Why this exists: `img-summary` exists so Hermes can turn common communication work into provider-neutral image-card prompts while adapting format, domain mood, background, texture, lighting, camera, and poster grammar, and keeping generation, QA, and delivery as observed-only evidence.
+- Use when: Use when Hermes should shape supplied notes, PRs, issues, research/news, reports, or releases into a source-specific visual prompt without claiming image generation.
 - Do not use when:
   - The user needs a deck, PDF, spreadsheet, HWP, Markdown package, or binary file export plan; use `materials-package`.
   - The user wants a text-only report, leadership brief, or PPT-ready outline; use `report-package`.
   - The user asks OMH to directly generate, inspect, upload, or post an image without a wrapper-supplied observed evidence path.
-- Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image generation`, `image generation features`, `image generation support`, `image tool support`, `image feature`, `image features`, `visual generation`, `visual generation support`, `visual card support`, `image summary card`, `summary image`, `summary card`, `explainer image`, `feature explainer image`, `feature explanation image`, `product explainer image`, `product explainer card`, `infographic`, `one-page infographic`, `workflow image`, `workflow card`, `shareable image`, `explain this as an image`, `make an image explaining`, `image explaining the cron feature`, `make an image explaining the cron feature`, `make a visual summary of this PR`, `visual summary`, `picture card`, `meeting notes picture card`, `vertical card`, `vertical summary image`, `vertical image card`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `회의록을 보기 좋은 세로 이미지로 요약`, `회의록을 보기 좋은 세로 이미지로 요약해줘`, `세로 이미지로 요약`, `세로 이미지로 요약해줘`, `보기 좋은 세로 이미지`, `PR 요약 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `업데이트 발표 이미지`, `세로 이미지 카드`, `이미지 카드`, `회의록 이미지 카드`, `회의록을 세로 이미지 카드`, `설명 이미지`, `설명하는 인포그래픽`, `기능 설명 이미지`, `기능 소개 이미지`, `인포그래픽`, `인포그래픽 만들어줘`, `이미지 요약 카드`, `요약 이미지`, `요약 카드`, `카드 이미지`, `이미지로 요약`, `이미지로 요약해줘`, `이미지 생성`, `이미지 생성해줘`, `이미지 만들어줘`, `크론 기능 설명 이미지`, `크론 기능 설명 사진`, `크론 기능 설명 사진 하나 만들어줘`, `사진 카드`, `사진처럼 만들어줘`, `PR 요약 사진`, `공유용 이미지`, `안내 이미지`, `워크플로우 이미지`, `이미지로 설명`, `이미지 하나 만들어줘`
+- Strong routing signals: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image generation`, `image generation features`, `image generation support`, `image tool support`, `image feature`, `image features`, `visual generation`, `visual generation support`, `visual card support`, `image summary card`, `summary image`, `summary card`, `explainer image`, `feature explainer image`, `feature explanation image`, `product explainer image`, `product explainer card`, `infographic`, `one-page infographic`, `workflow image`, `workflow card`, `shareable image`, `explain this as an image`, `make an image explaining`, `image explaining the cron feature`, `make an image explaining the cron feature`, `make a visual summary of this PR`, `visual summary`, `picture card`, `meeting notes picture card`, `vertical card`, `vertical summary image`, `vertical image card`, `meeting image`, `meeting summary image`, `conversation summary image`, `meeting notes image`, `pr card`, `pr summary card`, `pull request card`, `review card`, `issue card`, `bug triage card`, `feedback card`, `triage card`, `research card`, `report card`, `report summary card`, `report digest card`, `news briefing card`, `competitor-news briefing card`, `briefing card`, `release announcement image`, `release notes image`, `release notes thumbnail`, `announcement card`, `multilingual img-summary`, `회의록 세로 요약 이미지`, `회의 요약 이미지`, `회의록을 보기 좋은 세로 이미지로 요약`, `회의록을 보기 좋은 세로 이미지로 요약해줘`, `세로 이미지로 요약`, `세로 이미지로 요약해줘`, `보기 좋은 세로 이미지`, `PR 요약 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드`, `PR 내용을 리뷰어에게 공유할 이미지 카드로 만들어줘`, `이슈 트리아지 카드`, `버그 트리아지 카드`, `피드백 카드`, `리포트 요약 카드`, `보고서 요약 카드`, `경쟁사 뉴스 브리핑 카드`, `리서치 브리핑 카드`, `릴리즈 노트 발표 이미지`, `릴리즈 노트 썸네일`, `업데이트 발표 이미지`, `세로 이미지 카드`, `이미지 카드`, `회의록 이미지 카드`, `회의록을 세로 이미지 카드`, `설명 이미지`, `설명하는 인포그래픽`, `기능 설명 이미지`, `기능 소개 이미지`, `인포그래픽`, `인포그래픽 만들어줘`, `이미지 요약 카드`, `요약 이미지`, `요약 카드`, `썸네일`, `썸네일 만들어줘`, `썸네일로 만들어줘`, `카드 이미지`, `이미지로 요약`, `이미지로 요약해줘`, `이미지 생성`, `이미지 생성해줘`, `이미지 만들어줘`, `크론 기능 설명 이미지`, `크론 기능 설명 사진`, `크론 기능 설명 사진 하나 만들어줘`, `사진 카드`, `사진처럼 만들어줘`, `PR 요약 사진`, `공유용 이미지`, `안내 이미지`, `워크플로우 이미지`, `이미지로 설명`, `이미지 하나 만들어줘`
 - Good example:
   - Prompt: img-summary make a PR summary card for reviewers.
   - Expected behavior: Prepare visual_prompt_card/v1 with the PR review infographic format, copy mode, generation prompt, negative prompt, and not-evidence boundaries.
@@ -1262,8 +1262,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Pick one canonical source kind: meeting, github_pr, issue_feedback, research_briefing, report_summary, or release_announcement.
   - Use the source-specific format profile instead of forcing every visual into the same grid.
   - Expose the detected `domain_key` so wrappers and users can explain why a domain-specific scene and poster archetype were selected.
-  - Adapt the high-fidelity background plate, scene, material texture, depth, lighting, camera treatment, motifs, palette, and composition to the detected domain such as security, commerce, sports, fashion, finance, developer work, or research.
-  - Resolve a poster archetype such as Swiss grid, cinematic key-art, editorial magazine, constructivist photomontage, data infographic, product ad, technical brutalist, museum exhibition, sports event, or luxury lookbook, and keep it separate from source kind and domain.
+  - Adapt scene, texture, depth, lighting, camera, motifs, palette, and composition to domains such as security, commerce, sports, fashion, finance, developer work, or research.
+  - Resolve a poster archetype such as Swiss grid, cinematic key-art, editorial magazine, constructivist photomontage, data infographic, product ad, technical brutalist, museum exhibition, sports event, or luxury lookbook.
   - Ask image tools to render the domain-specific environment first, then place readable card modules on top; reject flat vector clipart, plain gradients, generic glass cards, color-swapped templates, and low-detail wallpaper.
   - Preserve a stable OMH img-summary format contract: source badge, headline, source-kind subtitle, content modules, evidence footer, and small `OMH generated` mark.
   - Use long_scroll or extended rows when the card needs a document-style vertical canvas with more sections or denser text.
@@ -1295,7 +1295,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - domain-aware visual theme
   - poster_archetype/v1
   - poster archetype visual grammar
-  - premium background plate, texture, camera, and lighting direction
+  - background, texture, camera, and lighting direction
   - image-safe card copy
   - generation prompt
   - negative prompt
@@ -1333,7 +1333,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs a one-off report or deck; use `report-package` or `materials-package`.
   - The user asks to review incident metrics once; use `reliability-review`.
   - The user needs actual code changes; prepare a selected executor/runtime handoff after the blueprint or plan is accepted.
-- Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `every morning`, `every day`, `daily digest`, `weekly digest`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `매일`, `매주`, `정기`, `예약`, `반복`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`
+- Strong routing signals: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`, `recurring ops`, `recurring workflow`, `every morning`, `every day`, `daily digest`, `weekly digest`, `automate this`, `automate workflow`, `send to slack`, `send to discord`, `post to telegram`, `only if changed`, `silent if nothing changed`, `schedule this`, `매일`, `매주`, `정기`, `예약`, `반복`, `자동화`, `자동화해줘`, `스케줄`, `슬랙`, `디스코드`, `텔레그램`, `보내`, `공유`, `변화 없으면`, `조용히`
 - Good example:
   - Prompt: automation-blueprint every weekday run an uptime check and send a Slack digest only if status changes.
   - Expected behavior: Prepare hermes_ops_blueprint/v1 with schedule intent, Slack delivery policy, silence rule, research/report skills, missing evidence, and next confirmation.
