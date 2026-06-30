@@ -3450,15 +3450,37 @@ def _durable_research_goal_guard_applies(normalized_query: str, query_tokens: se
 def _loop_goal_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     explicit_loop = "loop" in query_tokens or _contains_phrase(
         normalized_query,
-        ("loopable", "loop engineering", "goal loop", "루프", "반복해서"),
+        ("loopable", "loop engineering", "goal loop", "루프", "반복해서", "계속 개선", "계속해서 개선"),
     )
     repeated_improvement = bool({"repeatedly", "iteratively", "iterate", "until"} & query_tokens) or _contains_phrase(
         normalized_query,
-        ("keep improving", "reduce friction", "reducing friction", "반복 개선"),
+        (
+            "keep improving",
+            "reduce friction",
+            "reducing friction",
+            "until first success",
+            "until first value",
+            "반복 개선",
+            "계속 개선",
+            "계속해서 개선",
+            "막히는 부분을 계속 개선",
+        ),
     )
     product_or_oss_goal = bool({"oss", "repo", "repository", "install", "first-run", "friction", "product"} & query_tokens) or _contains_phrase(
         normalized_query,
-        ("first run", "first-run", "first run experience", "스타급 oss", "star-worthy oss"),
+        (
+            "first run",
+            "first-run",
+            "first run experience",
+            "first successful value",
+            "install to first value",
+            "스타급 oss",
+            "star-worthy oss",
+            "설치 후",
+            "설치부터 첫 성공",
+            "첫 성공",
+            "첫 성공까지",
+        ),
     )
     north_star = bool({"star", "stars", "star-worthy", "starworthy", "10k-star", "100k-star", "adoption"} & query_tokens) or _contains_phrase(
         normalized_query,

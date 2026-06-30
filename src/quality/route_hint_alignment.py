@@ -194,6 +194,14 @@ _OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
         "loop",
         "choose_permission_profile",
     ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "loop-first-success-project-korean",
+        "Korean first-success loopable project",
+        "설치 후 첫 성공까지 막히는 부분을 계속 개선해줘",
+        "loop",
+        "choose_permission_profile",
+    ),
 )
 
 
