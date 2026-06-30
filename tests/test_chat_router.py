@@ -1033,6 +1033,7 @@ class ChatRouterTests(unittest.TestCase):
             "Can you generate an image with GPT from this meeting summary?",
             "사진 생성해줘",
             "사진 만들어줘",
+            "사진 생성해줘. 회의록을 보기 좋은 세로 이미지로 정리해줘",
         )
 
         for message in cases:
