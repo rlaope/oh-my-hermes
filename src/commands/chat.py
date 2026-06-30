@@ -261,6 +261,15 @@ def _route_action_label_with_id(action: str) -> str:
     return _action_label_with_id(normalized, _ROUTE_ACTION_LABELS.get(normalized, ""))
 
 
+def _format_summary_action(action: dict[str, object]) -> str:
+    action_id = _text(action.get("id"), "action")
+    label = _text(action.get("label"), action_id)
+    enabled = bool(action.get("enabled", True))
+    state_label = "enabled" if enabled else "disabled"
+    label_with_id = _action_label_with_id(action_id, label)
+    return f"- {label_with_id} - {state_label}"
+
+
 def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
     response = _as_mapping(payload.get("chat_response"))
     route = _as_mapping(payload.get("route"))
@@ -302,11 +311,7 @@ def _print_chat_interaction_summary(payload: dict[str, object]) -> None:
         print("Actions:")
         action_limit = 12
         for action in actions[:action_limit]:
-            action_id = _text(action.get("id"), "action")
-            label = _text(action.get("label"), action_id)
-            enabled = bool(action.get("enabled", True))
-            state_label = "enabled" if enabled else "disabled"
-            print(f"- {action_id}: {label} ({state_label})")
+            print(_format_summary_action(action))
         if len(actions) > action_limit:
             print(f"- ... {len(actions) - action_limit} more action(s) in --json")
 
@@ -501,11 +506,7 @@ def _print_chat_route_hint_summary(payload: dict[str, object]) -> None:
         print()
         print("Actions:")
         for action in actions[:6]:
-            action_id = _text(action.get("id"), "action")
-            label = _text(action.get("label"), action_id)
-            enabled = bool(action.get("enabled", True))
-            state_label = "enabled" if enabled else "disabled"
-            print(f"- {action_id}: {label} ({state_label})")
+            print(_format_summary_action(action))
 
     checkpoint = _as_mapping(payload.get("generic_tool_checkpoint"))
     checkpoint_body = _text(checkpoint.get("body"))

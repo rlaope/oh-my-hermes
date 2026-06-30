@@ -4397,7 +4397,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("  matched: cron", stdout)
         self.assertIn("Actions:", stdout)
-        self.assertIn("- open_workflow: Open img-summary (enabled)", stdout)
+        self.assertIn("- Open img-summary (`open_workflow`) - enabled", stdout)
         self.assertIn("Checkpoint:", stdout)
         self.assertIn("Before generic tools, check OMH prep/status/learning", stdout)
         self.assertIn("Not evidence yet:", stdout)
@@ -4444,7 +4444,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Workflow: oh-my-hermes", stdout)
         self.assertIn("Next action: opening the workflow picker (`choose_skill`)", stdout)
         self.assertIn("- oh-my-hermes: opening the workflow picker (`choose_skill`) (intent_to_plan)", stdout)
-        self.assertIn("- open_workflow: Open omh (enabled)", stdout)
+        self.assertIn("- Open omh (`open_workflow`) - enabled", stdout)
 
         status, stdout, stderr = run_cli(
             ["chat", "route-hint", "--source", "discord", "--json", "open the OMH picker"],
@@ -4473,8 +4473,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("Hints: 0", stdout)
         self.assertNotIn("Workflow: unknown", stdout)
         self.assertIn("[omh] no strong workflow hint yet.", stdout)
-        self.assertIn("- open_picker: Open omh (enabled)", stdout)
-        self.assertIn("- clarify: Clarify (enabled)", stdout)
+        self.assertIn("- Open omh (`open_picker`) - enabled", stdout)
+        self.assertIn("- Clarify (`clarify`) - enabled", stdout)
 
     def test_chat_route_hint_can_emit_manual_prompt_context(self) -> None:
         status, stdout, stderr = run_cli(
@@ -4625,8 +4625,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("Next action: preparing a reviewed plan (`present_plan`)", stdout)
         self.assertIn("[omh] ralplan - I routed this to `ralplan`", stdout)
         self.assertIn("Actions:", stdout)
-        self.assertIn("- accept_plan: Accept plan (enabled)", stdout)
-        self.assertIn("- prepare_handoff: Prepare handoff (disabled)", stdout)
+        self.assertIn("- Accept plan (`accept_plan`) - enabled", stdout)
+        self.assertIn("- Prepare handoff (`prepare_handoff`) - disabled", stdout)
         self.assertIn("Boundary:", stdout)
         self.assertIn("A draft plan is not execution evidence.", stdout)
         self.assertIn("Use --json for the full machine-readable payload.", stdout)
@@ -4649,10 +4649,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Workflow: img-summary", stdout)
         self.assertIn("Actions:", stdout)
-        self.assertIn("- show_visual_prompt_card: Show card (enabled)", stdout)
-        self.assertIn("- choose_image_generator: Choose image tool (enabled)", stdout)
-        self.assertIn("- record_visual_delivery: Record delivery (enabled)", stdout)
-        self.assertIn("- show_visual_status: Show visual status (enabled)", stdout)
+        self.assertIn("- Show card (`show_visual_prompt_card`) - enabled", stdout)
+        self.assertIn("- Choose image tool (`choose_image_generator`) - enabled", stdout)
+        self.assertIn("- Record delivery (`record_visual_delivery`) - enabled", stdout)
+        self.assertIn("- Show visual status (`show_visual_status`) - enabled", stdout)
         self.assertNotIn("more action(s) in --json", stdout)
         self.assertIn("Not evidence yet:", stdout)
         self.assertIn("- image generation", stdout)
@@ -4666,8 +4666,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Workflow: img-summary", stdout)
         self.assertIn("Next action: preparing an image prompt card (`prepare_visual_prompt_card`)", stdout)
-        self.assertIn("- choose_image_generator: Choose image tool (enabled)", stdout)
-        self.assertIn("- record_visual_delivery: Record delivery (enabled)", stdout)
+        self.assertIn("- Choose image tool (`choose_image_generator`) - enabled", stdout)
+        self.assertIn("- Record delivery (`record_visual_delivery`) - enabled", stdout)
         self.assertNotIn("more action(s) in --json", stdout)
 
     def test_chat_interact_summary_renders_catalog_picker_without_shell_json(self) -> None:
@@ -4688,8 +4688,8 @@ class CliTests(unittest.TestCase):
                 self.assertIn("Workflow: oh-my-hermes", stdout)
                 self.assertIn("Next action: opening the workflow picker (`choose_skill`)", stdout)
                 self.assertIn("[omh] oh-my-hermes - Here are the OMH workflows.", stdout)
-                self.assertIn("- choose_skill: Choose workflow (enabled)", stdout)
-                self.assertIn("- search_skills: Search workflows (enabled)", stdout)
+                self.assertIn("- Choose workflow (`choose_skill`) - enabled", stdout)
+                self.assertIn("- Search workflows (`search_skills`) - enabled", stdout)
                 self.assertIn("Use --json for the full machine-readable payload.", stdout)
 
     def test_chat_interact_rejects_conflicting_output_modes(self) -> None:
