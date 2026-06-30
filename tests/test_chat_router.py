@@ -1450,6 +1450,8 @@ class ChatRouterTests(unittest.TestCase):
             "논문 데이터셋 찾아서 후보로 정리해줘",
             "공개 프레젠테이션 자료를 찾아서 요약해줘",
             "github oss repo 찾아서 비교해줘",
+            "깃허브 repo 소스 찾아줘",
+            "github repo 소스 찾아줘",
             "이 주제 관련 소스 후보 찾아줘",
         )
         for message in acquisition_cases:
@@ -2086,6 +2088,7 @@ selected_workflow=ultraprocess
             "codex로 이 기능 구현 맡겨줘",
             "이 이슈를 Codex로 구현하게 맡기고 진행상태 추적해줘",
             "코덱스로 이 이슈 PR 만들 수 있게 작업 시작해줘",
+            "코덱스로 이 이슈 PR 만들어줘",
             "$ultraprocess로 이 repo 변경을 PR-ready까지 준비해줘",
             "Can OMH do one full research plan implementation review cycle?",
         )

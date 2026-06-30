@@ -1409,6 +1409,8 @@ def _file_lookup_fast_path_decision(
         return None
     if explicit_skill_invocation(routing_message):
         return None
+    if _operator_surface_fast_path_match(routing_message) is not None:
+        return None
     if not is_file_or_text_lookup_question(routing_message):
         return None
     selected_harness = primary_harness_for_skill(_ROUTER_SKILL)
@@ -1573,9 +1575,27 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "논문 pdf 링크 찾아",
             "arxiv 링크 찾아",
             "arxiv 링크 찾아서",
+            "깃허브 repo 소스 찾아",
+            "깃허브 리포 소스 찾아",
+            "깃허브 저장소 찾아",
+            "github repo 소스 찾아",
+            "github repository 소스 찾아",
         ),
         "operator_surface_fast_path:source",
         "Clear source-acquisition request; scope source candidates before explanation or downstream work.",
+    ),
+    (
+        "ultraprocess",
+        (
+            "codex issue pr",
+            "codex로 이 이슈 pr",
+            "codex로 이슈 pr",
+            "코덱스로 이 이슈 pr",
+            "코덱스로 이슈 pr",
+            "코덱스로 이 이슈 pr 만들어",
+        ),
+        "operator_surface_fast_path:delivery",
+        "Clear executor-backed issue-to-PR request; prepare the one-cycle delivery path.",
     ),
     (
         "automation-blueprint",
@@ -1678,9 +1698,11 @@ def _operator_surface_fast_path_patterns() -> tuple[tuple[str, str, str, str, st
 
 
 def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
+    normalized = _fast_path_text(phrase)
+    if skill == "ultraprocess" and any(marker in normalized for marker in ("codex", "코덱스")):
+        return ("guard:coding_handoff_status",)
     if skill != "ralplan":
         return ()
-    normalized = _fast_path_text(phrase)
     if any(marker in normalized for marker in ("safe", "safely", "안전")):
         markers = ["guard:safe_feature_change"]
         if "안전" in normalized:
@@ -1701,6 +1723,8 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:visual_request"
     if marker == "operator_surface_fast_path:source":
         return "phrase:source_request"
+    if marker == "operator_surface_fast_path:delivery":
+        return "phrase:delivery_request"
     if marker == "operator_surface_fast_path:automation":
         return "phrase:automation_request"
     return "phrase:operator_surface"
