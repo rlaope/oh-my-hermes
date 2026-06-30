@@ -977,6 +977,51 @@ class EfficiencyContractTests(unittest.TestCase):
                     self.assertIn("feedback_triage_fast_path", decision["recommendations"][0]["matched"])
                     self.assertIsNone(decision["workflow_route_plan"])
 
+    def test_product_shaping_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            "make onboarding feel smoother",
+            "make the user experience smoother",
+            "온보딩을 더 부드럽게 만들고 싶어",
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("product-shaping fast path should skip scoring"),
+        ), patch.object(
+            chat_module,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("product-shaping fast path should not build route plans"),
+        ):
+            for message in cases:
+                chat_module._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], "deep-interview")
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertIn("product_shaping_fast_path", decision["recommendations"][0]["matched"])
+                    self.assertIsNone(decision["workflow_route_plan"])
+
+    def test_product_shaping_fast_path_does_not_steal_compound_requests(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            ("make onboarding feel smoother and implement it", "oh-my-hermes", "start_ultraprocess"),
+            ("improve onboarding conversion with a plan and implementation", "plan", "present_plan"),
+            ("fix onboarding bug", "ultraprocess", "start_ultraprocess"),
+        )
+
+        for message, expected_skill, expected_action in cases:
+            chat_module._route_chat_message_cached.cache_clear()
+            with self.subTest(message=message):
+                decision = chat_module.route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], expected_skill)
+                self.assertEqual(decision["recommendations"][0]["next_action"], expected_action)
+                self.assertNotIn("product_shaping_fast_path", decision["recommendations"][0]["matched"])
+
     def test_single_workflow_operator_fast_paths_skip_route_plan_build(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         cases = (

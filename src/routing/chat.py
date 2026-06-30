@@ -165,6 +165,32 @@ _FEEDBACK_TRIAGE_FAST_PATH_TERMS = (
     "로그인하고 크래시",
     "대시보드 500",
 )
+_PRODUCT_SHAPING_FAST_PATH_BLOCKERS = _FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS + (
+    "bug",
+    "issue",
+    "broken",
+    "create a pr",
+    "open a pr",
+    "pull request",
+    "버그",
+    "이슈",
+    "pr 만들어",
+    "pr 열어",
+)
+_PRODUCT_SHAPING_FAST_PATH_TERMS = (
+    "improve our onboarding",
+    "improve onboarding",
+    "make onboarding smoother",
+    "make onboarding feel smoother",
+    "make the user experience smoother",
+    "make the product experience better",
+    "not sure where to start",
+    "where to start",
+    "온보딩을 더 부드럽게",
+    "온보딩 개선",
+    "어디서 시작",
+    "어디부터 시작",
+)
 _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS = (
     "learn this",
     "make a skill from this",
@@ -1182,6 +1208,14 @@ def _route_chat_message_cached(
     )
     if fast_feedback_triage_decision is not None:
         return fast_feedback_triage_decision.to_dict()
+    fast_product_shaping_decision = _product_shaping_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_product_shaping_decision is not None:
+        return fast_product_shaping_decision.to_dict()
     fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -2591,6 +2625,64 @@ def _feedback_triage_fast_path_signal(text: str) -> bool:
     return any(term in text or _fast_path_compact(term) in compact for term in _FEEDBACK_TRIAGE_FAST_PATH_TERMS)
 
 
+def _product_shaping_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if is_skill_catalog_question(routing_message):
+        return None
+    if _is_fast_plain_direct_answer_question(routing_message):
+        return None
+    fast_text = _fast_path_text(routing_message)
+    if _product_shaping_fast_path_blocked(fast_text):
+        return None
+    if not _product_shaping_fast_path_signal(fast_text):
+        return None
+
+    selected_skill = "deep-interview"
+    selected_harness = primary_harness_for_skill(selected_skill)
+    reason = "Matched fuzzy product-shaping language; ask one clarifying question before planning or execution."
+    score = 30
+    recommendation = recommendation_for_definition(
+        _skill_definition_by_name(selected_skill),
+        message,
+        matched=("guard:product_shaping", "product_shaping_fast_path"),
+        score=score,
+        why=reason,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=score,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _product_shaping_fast_path_signal(text: str) -> bool:
+    compact = _fast_path_compact(text)
+    return any(term in text or _fast_path_compact(term) in compact for term in _PRODUCT_SHAPING_FAST_PATH_TERMS)
+
+
 def _workflow_learning_feedback_fast_path_decision(
     message: str,
     *,
@@ -2737,6 +2829,12 @@ def _feedback_triage_fast_path_blocked(message: str) -> bool:
     text = _fast_path_text(message)
     compact = _fast_path_compact(text)
     return any(blocker in text or _fast_path_compact(blocker) in compact for blocker in _FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS)
+
+
+def _product_shaping_fast_path_blocked(message: str) -> bool:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    return any(blocker in text or _fast_path_compact(blocker) in compact for blocker in _PRODUCT_SHAPING_FAST_PATH_BLOCKERS)
 
 
 def _first_guarded_operator_fast_path_index(guards: tuple[Any, ...]) -> int | None:
