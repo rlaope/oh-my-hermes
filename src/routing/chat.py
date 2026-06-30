@@ -1823,11 +1823,23 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
     (
         "img-summary",
         (
+            "meeting image card",
+            "meeting summary image",
+            "pr summary image",
+            "issue summary card",
+            "release announcement card",
+            "image card",
             "make a thumbnail",
             "create a thumbnail",
             "generate a thumbnail",
             "thumbnail card",
             "release thumbnail",
+            "이미지 생성해줘",
+            "이미지로 만들어줘",
+            "회의록을 세로 카드",
+            "회의록 요약 이미지",
+            "pr 요약 이미지",
+            "이슈 요약 카드",
             "썸네일 만들어줘",
             "썸네일 생성해줘",
             "썸네일로 만들어줘",
@@ -1835,6 +1847,44 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         ),
         "operator_surface_fast_path:visual",
         "Clear thumbnail or release-thumbnail request; prepare the image prompt-card workflow without scoring every workflow.",
+    ),
+    (
+        "paper-learning",
+        (
+            "paper summary",
+            "explain this paper",
+            "explain this pdf",
+            "paper pdf explanation",
+            "paper at beginner level",
+            "논문 요약",
+            "논문 pdf 이해",
+            "논문 pdf 설명",
+            "논문 쉽게 설명",
+            "pdf 쉽게 설명",
+            "이 pdf 쉽게 설명",
+        ),
+        "operator_surface_fast_path:paper",
+        "Clear paper or paper-PDF explanation request; prepare paper-learning without scoring every workflow.",
+    ),
+    (
+        "web-research",
+        (
+            "web search",
+            "web research",
+            "latest sources",
+            "latest evidence",
+            "current sources",
+            "source backed research",
+            "웹서치",
+            "웹 리서치",
+            "최신 자료",
+            "최신 근거",
+            "최신 정보",
+            "근거 찾아",
+            "자료 조사",
+        ),
+        "operator_surface_fast_path:research",
+        "Clear web/current-source research request; start Hermes-owned source-backed research without scoring every workflow.",
     ),
     (
         "source-finder",
@@ -1876,6 +1926,47 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear executor-backed issue-to-PR request; prepare the one-cycle delivery path.",
     ),
     (
+        "executor-runtime-readiness",
+        (
+            "open in codex",
+            "open codex",
+            "start codex session",
+            "open in claude code",
+            "claude code connected",
+            "codex로 열어줘",
+            "codex 세션 열어",
+            "codex 세션 켜",
+            "codex 세션 시작",
+            "코덱스 세션 열어",
+            "코덱스 세션 켜",
+            "코덱스 세션 시작",
+            "코덱스로 열어줘",
+            "claude code로 이어서",
+            "claude code 연결",
+            "클로드 코드 연결",
+            "클로드 코드로 이어서",
+        ),
+        "operator_surface_fast_path:executor",
+        "Clear coding-agent readiness request; show the selected executor/runtime path without scoring every workflow.",
+    ),
+    (
+        "materials-package",
+        (
+            "make a ppt",
+            "make slides",
+            "turn into slides",
+            "make a deck",
+            "export to pdf and ppt",
+            "ppt 만들어줘",
+            "발표자료로 만들어줘",
+            "발표 자료로 만들어줘",
+            "엑셀을 월간 보고서",
+            "pdf랑 ppt",
+        ),
+        "operator_surface_fast_path:materials",
+        "Clear materials or document-package request; prepare the file/package workflow without scoring every workflow.",
+    ),
+    (
         "automation-blueprint",
         (
             "automate this",
@@ -1906,6 +1997,11 @@ def _operator_surface_fast_path_decision(
         return None
     selected_skill, phrase, marker, reason = match
     if selected_skill == "ralplan" and _is_fast_plain_direct_answer_question(routing_message):
+        return None
+    if selected_skill == "paper-learning" and (
+        _is_paper_learning_citation_research_request(routing_message)
+        or _is_paper_learning_materials_request(routing_message)
+    ):
         return None
     selected_harness = primary_harness_for_skill(selected_skill)
     definition = _skill_definition_by_name(selected_skill)
@@ -1979,6 +2075,12 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
     normalized = _fast_path_text(phrase)
     if skill == "ultraprocess" and any(marker in normalized for marker in ("codex", "코덱스")):
         return ("guard:coding_handoff_status",)
+    if skill == "img-summary":
+        return ("guard:img_summary",)
+    if skill == "paper-learning":
+        return ("guard:paper_learning",)
+    if skill == "executor-runtime-readiness":
+        return ("guard:executor_runtime_readiness",)
     if skill != "ralplan":
         return ()
     if any(marker in normalized for marker in ("safe", "safely", "안전")):
@@ -1991,6 +2093,33 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
     return ()
 
 
+def _is_paper_learning_citation_research_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    return (
+        "citation" in normalized
+        and any(marker in normalized for marker in ("verify", "validate", "check", "검증", "확인"))
+    )
+
+
+def _is_paper_learning_materials_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    return any(
+        marker in normalized
+        for marker in (
+            "make a ppt",
+            "make a deck",
+            "as a deck",
+            "export a pdf",
+            "export to pdf",
+            "package it as a pdf",
+            "ppt",
+            "deck",
+            "발표자료",
+            "발표 자료",
+        )
+    )
+
+
 def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
     if marker == "operator_surface_fast_path:planning":
         normalized = _fast_path_text(phrase)
@@ -1999,10 +2128,18 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:planning_safe_change"
     if marker == "operator_surface_fast_path:visual":
         return "phrase:visual_request"
+    if marker == "operator_surface_fast_path:paper":
+        return "phrase:paper_learning_request"
+    if marker == "operator_surface_fast_path:research":
+        return "phrase:web_research_request"
     if marker == "operator_surface_fast_path:source":
         return "phrase:source_request"
     if marker == "operator_surface_fast_path:delivery":
         return "phrase:delivery_request"
+    if marker == "operator_surface_fast_path:executor":
+        return "phrase:executor_request"
+    if marker == "operator_surface_fast_path:materials":
+        return "phrase:materials_request"
     if marker == "operator_surface_fast_path:automation":
         return "phrase:automation_request"
     return "phrase:operator_surface"
