@@ -55,6 +55,26 @@ _EXPLICIT_CATALOG_PHRASES = (
     "workflow menu",
     "skill picker",
     "workflow picker",
+    "open omh picker",
+    "open the omh picker",
+    "open oh-my-hermes picker",
+    "open the oh-my-hermes picker",
+    "open omh menu",
+    "open the omh menu",
+    "open oh-my-hermes menu",
+    "open the oh-my-hermes menu",
+    "open omh workflow picker",
+    "open the omh workflow picker",
+    "open omh skill picker",
+    "open the omh skill picker",
+    "show omh picker",
+    "show the omh picker",
+    "show oh-my-hermes picker",
+    "show the oh-my-hermes picker",
+    "show omh menu",
+    "show the omh menu",
+    "show oh-my-hermes menu",
+    "show the oh-my-hermes menu",
     "what can omh do",
     "what can oh-my-hermes do",
     "catalog",
@@ -509,12 +529,12 @@ def is_skill_catalog_question(message: str) -> bool:
         return True
     if _is_context_capability_question(search_texts):
         return True
+    if _contains_catalog_token(search_texts, _EXPLICIT_CATALOG_PHRASES):
+        return True
     has_context = _contains_catalog_token(search_texts, _CONTEXT_MARKERS)
     has_catalog_word = _contains_catalog_token(search_texts, _CATALOG_WORDS)
     if not has_catalog_word:
         return False
-    if _contains_catalog_token(search_texts, _EXPLICIT_CATALOG_PHRASES):
-        return True
     has_catalog_collection_word = _contains_catalog_token(search_texts, _CATALOG_COLLECTION_WORDS)
     if not has_context and has_catalog_collection_word and _contains_catalog_token(search_texts, _AVAILABILITY_MARKERS):
         return True
