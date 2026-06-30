@@ -162,6 +162,9 @@ _GENERIC_CATALOG_COLLECTION_MARKERS = (
     "워크플로",
     "워크플로우",
 )
+_GENERIC_PICKER_COLLECTION_MARKERS = tuple(
+    marker for marker in _GENERIC_CATALOG_COLLECTION_MARKERS if marker != "기능"
+)
 _GENERIC_CATALOG_LISTING_MARKERS = (
     "available",
     "installed",
@@ -179,6 +182,21 @@ _GENERIC_CATALOG_LISTING_MARKERS = (
     "목록",
     "리스트",
     "할 수 있는",
+)
+_GENERIC_OMH_CAPABILITY_LISTING_MARKERS = (
+    "what can omh do",
+    "what can oh-my-hermes do",
+    "what does omh do",
+    "what does oh-my-hermes do",
+    "how can omh help",
+    "how can oh-my-hermes help",
+    "omh 뭐 할 수",
+    "omh 무엇을 할 수",
+    "omh가 뭐 해",
+    "omh가 무엇을 해",
+    "omh는 뭐 해",
+    "omh는 무엇을 해",
+    "omh 기능 뭐",
 )
 _SPECIFIC_CAPABILITY_ALIAS_PHRASES = (
     "workflow learning",
@@ -1711,8 +1729,9 @@ def _generic_omh_catalog_question(message: str) -> bool:
     text = message.strip().lower()
     if _is_broad_capability_catalog_question(text):
         return True
-    if not any(marker in text for marker in ("omh", "oh-my-hermes", "oh my hermes")):
-        return False
+    has_omh_context = any(marker in text for marker in ("omh", "oh-my-hermes", "oh my hermes"))
+    if not has_omh_context:
+        return _generic_catalog_listing_question(text)
     if any(marker in text for marker in ("picker", "menu", "workflow picker", "skill picker")):
         return True
     named_hits = len(_specific_capability_named_hits(text))
@@ -1720,9 +1739,29 @@ def _generic_omh_catalog_question(message: str) -> bool:
         return False
     if any(phrase in text for phrase in _SPECIFIC_CAPABILITY_ALIAS_PHRASES):
         return False
-    has_collection = any(marker in text for marker in _GENERIC_CATALOG_COLLECTION_MARKERS)
+    if _is_specific_capability_question_shape(text):
+        return False
+    if any(marker in text for marker in _GENERIC_OMH_CAPABILITY_LISTING_MARKERS):
+        return True
+    return _generic_catalog_listing_question(text)
+
+
+def _generic_catalog_listing_question(text: str) -> bool:
+    has_collection = any(marker in text for marker in _GENERIC_PICKER_COLLECTION_MARKERS)
     has_listing_intent = any(marker in text for marker in _GENERIC_CATALOG_LISTING_MARKERS)
     return has_collection and has_listing_intent
+
+
+def _is_specific_capability_question_shape(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in (
+            "what can omh do for ",
+            "what can oh-my-hermes do for ",
+            "can omh help with ",
+            "can oh-my-hermes help with ",
+        )
+    )
 
 
 def _router_picker_recommendation(query: str, *, matched: tuple[str, ...], score: int) -> dict[str, object]:

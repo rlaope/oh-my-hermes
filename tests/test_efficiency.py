@@ -947,6 +947,30 @@ class EfficiencyContractTests(unittest.TestCase):
                         )
                     )
 
+    def test_generic_catalog_fast_paths_skip_full_recommendation_scan(self) -> None:
+        chat_module._route_chat_message_cached.cache_clear()
+        cases = (
+            "what workflows are available?",
+            "what skills are available?",
+            "show workflows",
+            "omh 뭐 할 수 있어?",
+        )
+
+        with patch.object(
+            chat_module,
+            "recommend_skills",
+            side_effect=AssertionError("catalog fast path should skip scoring"),
+        ):
+            for message in cases:
+                with self.subTest(message=message):
+                    decision = chat_module.route_chat_message(message, source="discord")
+
+                    self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                    self.assertEqual(decision["action"], "dispatch")
+                    self.assertEqual(decision["confidence"], "high")
+                    self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
+                    self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+
     def test_public_chat_route_payload_cache_is_reused_without_payload_poisoning(self) -> None:
         chat_module._route_chat_message_cached.cache_clear()
         chat_module._public_chat_route_payload_cached.cache_clear()
