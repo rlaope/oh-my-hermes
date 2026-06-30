@@ -118,6 +118,53 @@ _GUARDED_OPERATOR_META_BLOCKERS = (
     "테스트",
     "요구사항은 없어",
 )
+_FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS = (
+    "codex",
+    "claude code",
+    "handoff",
+    "implementation",
+    "implement",
+    "fix",
+    "review",
+    "track",
+    "repro",
+    "reproduction",
+    "plan",
+    "pr",
+    "코덱스",
+    "클로드 코드",
+    "핸드오프",
+    "구현",
+    "고쳐",
+    "고치",
+    "수정",
+    "리뷰",
+    "추적",
+    "재현",
+    "계획",
+    "pr",
+)
+_FEEDBACK_TRIAGE_FAST_PATH_TERMS = (
+    "payment failure",
+    "payment failures",
+    "checkout is broken",
+    "checkout broken",
+    "checkout timeout",
+    "checkout timeouts",
+    "refunds after checkout",
+    "app keeps crashing",
+    "crashing after login",
+    "dashboard 500",
+    "dashboard 500s",
+    "login 500",
+    "결제 실패",
+    "결제실패",
+    "체크아웃 실패",
+    "체크아웃 오류",
+    "로그인 후 크래시",
+    "로그인하고 크래시",
+    "대시보드 500",
+)
 _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS = (
     "learn this",
     "make a skill from this",
@@ -1127,6 +1174,14 @@ def _route_chat_message_cached(
     )
     if fast_operator_surface_decision is not None:
         return fast_operator_surface_decision.to_dict()
+    fast_feedback_triage_decision = _feedback_triage_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_feedback_triage_decision is not None:
+        return fast_feedback_triage_decision.to_dict()
     fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -2439,6 +2494,8 @@ def _guarded_operator_fast_path_decision(
     if guard is None or not guard.preferred_skills:
         return None
     selected_skill = guard.preferred_skills[0]
+    if selected_skill == "feedback-triage" and _feedback_triage_fast_path_blocked(routing_message):
+        return None
     definition = _skill_definition_by_name(selected_skill)
     selected_harness = primary_harness_for_skill(selected_skill)
     matched = (guard.matched_label, f"guard_fast_path:{guard.id}")
@@ -2472,6 +2529,66 @@ def _guarded_operator_fast_path_decision(
         recommendations=(recommendation,),
     )
     return None
+
+
+def _feedback_triage_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    if _has_explicit_invocation_prefix(routing_message):
+        return None
+    if is_skill_catalog_question(routing_message):
+        return None
+    if _is_fast_plain_direct_answer_question(routing_message):
+        return None
+    fast_text = _fast_path_text(routing_message)
+    if _feedback_triage_fast_path_blocked(fast_text):
+        return None
+    if not _feedback_triage_fast_path_signal(fast_text):
+        return None
+
+    selected_skill = "feedback-triage"
+    selected_harness = primary_harness_for_skill(selected_skill)
+    reason = (
+        "Matched a concrete customer or product issue signal; triage the feedback before planning fixes."
+    )
+    score = 34
+    recommendation = recommendation_for_definition(
+        _skill_definition_by_name(selected_skill),
+        message,
+        matched=("guard:feedback_before_coding", "feedback_triage_fast_path"),
+        score=score,
+        why=reason,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=score,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
+def _feedback_triage_fast_path_signal(text: str) -> bool:
+    compact = _fast_path_compact(text)
+    return any(term in text or _fast_path_compact(term) in compact for term in _FEEDBACK_TRIAGE_FAST_PATH_TERMS)
 
 
 def _workflow_learning_feedback_fast_path_decision(
@@ -2614,6 +2731,12 @@ def _guarded_operator_fast_path_blocked(message: str) -> bool:
     if any(blocker in text for blocker in _GUARDED_OPERATOR_META_BLOCKERS):
         return True
     return any(blocker in text for blocker in _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS)
+
+
+def _feedback_triage_fast_path_blocked(message: str) -> bool:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    return any(blocker in text or _fast_path_compact(blocker) in compact for blocker in _FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS)
 
 
 def _first_guarded_operator_fast_path_index(guards: tuple[Any, ...]) -> int | None:
