@@ -262,6 +262,17 @@ class EfficiencyContractTests(unittest.TestCase):
                 self.assertEqual(route_hint["primary_workflow"], workflow)
                 self.assertEqual(route_hint["primary_next_action"], next_action)
 
+    def test_mid_session_awareness_detector_cache_reuses_locale_scan(self) -> None:
+        awareness_module._awareness_context_matches_message_cached.cache_clear()
+
+        message = "trouve le dépôt GitHub et le PDF public"
+        self.assertTrue(awareness_context_matches_message(message))
+        self.assertTrue(awareness_context_matches_message(message))
+        cache_info = awareness_module._awareness_context_matches_message_cached.cache_info()
+
+        self.assertEqual(cache_info.misses, 1)
+        self.assertGreaterEqual(cache_info.hits, 1)
+
     def test_awareness_route_hint_cache_is_reused_without_payload_poisoning(self) -> None:
         awareness_module._awareness_route_hint_cached.cache_clear()
 
