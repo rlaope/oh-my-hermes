@@ -188,6 +188,22 @@ _OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
     ),
     RouteHintAlignmentCase(
         "operator_regression",
+        "korean-meeting-vertical-image-card",
+        "Korean meeting notes vertical image card",
+        "이미지 생성해줘. 회의록을 세로 카드로 요약해줘",
+        "img-summary",
+        "prepare_visual_prompt_card",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
+        "korean-hermes-coding-team-only",
+        "Korean Hermes-only coding team path",
+        "Hermes만으로 코딩팀처럼 작업하고 싶어",
+        "team",
+        "show_runtime_handoff",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
         "execution-trace-skill-improvement-korean",
         "Korean execution trace skill improvement",
         "이번 실행 trace로 skill 개선 제안 만들어줘",

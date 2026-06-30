@@ -468,6 +468,24 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("record_runtime_observation", team_path["wrapper_actions"])
         self.assertIn("prepared only", payload["chat_response"]["claim_boundary"].lower())
 
+    def test_auto_mode_korean_hermes_coding_team_prepares_runtime_handoff(self) -> None:
+        payload = build_chat_interaction_payload("Hermes만으로 코딩팀처럼 작업하고 싶어", source="discord")
+
+        actions = {action["id"] for action in payload["chat_response"]["actions"]}
+        runtime = payload["delegation"]["runtime_handoff"]
+        team_path = runtime["hermes_coding_team_path"]
+
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "show_runtime_handoff")
+        self.assertEqual(payload["route"]["selected_skill"], "team")
+        self.assertEqual(payload["executor_resolution"]["source"], "message_mention")
+        self.assertEqual(payload["delegation"]["selected_executor_profile"], "hermes")
+        self.assertEqual(payload["chat_response"]["kind"], "handoff")
+        self.assertEqual(payload["chat_response"]["state"]["selected_workflow"], "team")
+        self.assertEqual(team_path["schema_version"], "hermes_coding_team_path/v1")
+        self.assertIn("show_runtime_handoff", actions)
+        self.assertIn("start_hermes_coding", actions)
+
     def test_route_mode_surfaces_recommendation_policy_actions(self) -> None:
         payload = build_chat_interaction_payload(
             "prepare weekly ops review from customer feedback and release risks",

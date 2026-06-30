@@ -226,10 +226,14 @@ _MESSAGE_EXECUTOR_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "hermes runtime",
             "hermes itself",
             "with hermes",
+            "hermes만으로",
+            "hermes 만으로",
             "헤르메스가 코딩",
             "헤르메스로 구현",
             "헤르메스 자체",
             "헤르메스 런타임",
+            "헤르메스만으로",
+            "헤르메스 만으로",
         ),
     ),
 )
@@ -304,6 +308,7 @@ _CODING_OWNER_WORKFLOWS = frozenset(
         "ultragoal",
         "ralph",
         "ai-slop-cleaner",
+        "team",
     }
 )
 _CODING_OWNER_WHEN_CODE_SHAPED = frozenset({"code-review"})
@@ -2143,6 +2148,36 @@ def _route_is_coding_status_request(route_payload: dict[str, object]) -> bool:
         if {"guard:coding_progress_status", "guard:coding_handoff_status"} & matched:
             return True
     return False
+
+
+def _route_is_explicit_hermes_coding_team_request(route_payload: dict[str, object], message: str) -> bool:
+    selected = str(route_payload.get("selected_skill", ""))
+    if selected != "team":
+        return False
+    for recommendation in route_payload.get("recommendations", []):
+        if not isinstance(recommendation, dict) or str(recommendation.get("skill", "")) != "team":
+            continue
+        matched = {str(item) for item in recommendation.get("matched", []) if str(item)}
+        if "guard:hermes_coding_team" in matched:
+            return True
+
+    lowered = f" {message.lower()} "
+    team_terms = (
+        "coding team",
+        "team mode",
+        "team runtime",
+        "코딩팀",
+        "코딩 팀",
+        "팀처럼",
+        "팀으로",
+        "팀 모드",
+    )
+    coding_terms = ("coding", "code", "refactor", "implementation", "코딩", "구현", "개발", "리팩터링")
+    return (
+        _executor_target_from_message(message) == "hermes"
+        and any(term in lowered for term in team_terms)
+        and any(term in lowered for term in coding_terms)
+    )
 
 
 def _delegation_is_coding_status_request(delegation_payload: dict[str, object]) -> bool:
@@ -4306,6 +4341,8 @@ def _resolve_mode(mode: str, route: dict[str, object], *, message: str = "") -> 
         return "route"
     if selected in _CLARIFICATION_SKILLS:
         return "clarify"
+    if _route_is_explicit_hermes_coding_team_request(route, message):
+        return "route"
     if selected in _DIRECT_WORKFLOW_SKILLS:
         return "route"
     return _ROUTE_TO_MODE.get(action, "plan")
