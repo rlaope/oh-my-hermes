@@ -7,7 +7,7 @@ from .awareness import (
     awareness_primer_context,
     awareness_primer_payload,
     awareness_route_hint,
-    awareness_route_hint_context,
+    awareness_route_hint_context_from_payload,
 )
 
 OMH_CONTEXT_BRIEF_SCHEMA_VERSION = "omh_context_brief/v1"
@@ -74,7 +74,7 @@ def build_context_brief(
     }
     if include_prompt_context:
         prompt_context_parts = [awareness_primer_context()]
-        route_hint_context = awareness_route_hint_context(text, max_hints=limit) if text.strip() else ""
+        route_hint_context = awareness_route_hint_context_from_payload(route_hint) if text.strip() else ""
         if route_hint_context:
             prompt_context_parts.append(route_hint_context)
         payload["prompt_context"] = "\n".join(prompt_context_parts)

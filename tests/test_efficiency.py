@@ -38,6 +38,7 @@ from omh.capabilities import families as families_module
 from omh.capabilities.skills import skill_capabilities
 from omh.coding import executor_readiness as executor_readiness_module
 from omh.coding import executors as executors_module
+from omh.context import build_context_brief
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.awareness import (
@@ -277,6 +278,22 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertNotEqual(second["privacy"]["stored_fields"][0], "mutated")
         self.assertEqual(cache_info.misses, 1)
         self.assertGreaterEqual(cache_info.hits, 1)
+
+    def test_context_brief_prompt_context_reuses_route_hint_payload(self) -> None:
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
+        payload = build_context_brief(
+            "Codex 작업이 어디까지 진행됐는지 알려줘",
+            source="discord",
+            include_prompt_context=True,
+        )
+        cache_info = awareness_module._awareness_route_hint_cached.cache_info()
+
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "ultraprocess")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "show_coding_handoff_status")
+        self.assertIn("next_action=show_coding_handoff_status", payload["prompt_context"])
+        self.assertEqual(cache_info.misses, 1)
+        self.assertEqual(cache_info.hits, 0)
 
     def test_quality_demos_reuse_interaction_route(self) -> None:
         alignment_case = RouteHintAlignmentCase(
