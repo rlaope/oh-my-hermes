@@ -565,6 +565,43 @@ class ChatRouterTests(unittest.TestCase):
         self.assertTrue(decision["explicit"])
         self.assertEqual(decision["confidence"], "high")
 
+    def test_explicit_skill_invocations_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        cases = (
+            ("$ralplan risky refactor", "ralplan"),
+            ("./loop improve first-run experience", "loop"),
+            ("Use OMH web-research for: research loop engineering", "web-research"),
+            ("Use OMH paper-learning for: explain this PDF at beginner level", "paper-learning"),
+            ("deep-interview onboarding feels vague", "deep-interview"),
+            ("paper-learning: explain this arxiv paper", "paper-learning"),
+            ("/paper-learning explain this paper", "paper-learning"),
+            ("@paper-learning explain this paper", "paper-learning"),
+            ("$ultraprocess make setup easier", "ultraprocess"),
+        )
+
+        for message, selected_skill in cases:
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("explicit skill invocations should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("explicit skill invocations should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], selected_skill)
+            self.assertEqual(decision["selected_harness"], primary_harness_for_skill(selected_skill))
+            self.assertTrue(decision["explicit"])
+            self.assertEqual(decision["recommendations"][0]["matched"], ["explicit_invocation", f"name:{selected_skill}"])
+            self.assertIsNone(decision["workflow_route_plan"])
+            public = public_route_payload(decision)
+            self.assertNotIn("workflow_route_plan", public)
+
     def test_direct_picker_alias_uses_fast_catalog_route(self) -> None:
         for message in ("./omh", "/omh", "./skills", "/skills"):
             with self.subTest(message=message):

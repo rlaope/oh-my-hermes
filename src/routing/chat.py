@@ -982,6 +982,14 @@ def _route_chat_message_cached(
     )
     if fast_maintenance_task_decision is not None:
         return fast_maintenance_task_decision.to_dict()
+    fast_explicit_skill_decision = _explicit_skill_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_explicit_skill_decision is not None:
+        return fast_explicit_skill_decision.to_dict()
     fast_catalog_decision = _catalog_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1466,6 +1474,66 @@ def _task_card_fast_path_recommendation(task_card: dict[str, object], query: str
         **recommendation,
         "suggested_prompt": query,
     }
+
+
+def _explicit_skill_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    definitions = routable_definitions()
+    selected_skill = explicit_skill_invocation(routing_message, definitions)
+    if not selected_skill or selected_skill == _ROUTER_SKILL:
+        return None
+    if not _has_explicit_invocation_prefix(routing_message) and is_missed_route_feedback(routing_message):
+        return None
+    task_card = classify_task(routing_message)
+    if _task_card_overrides_explicit_invocation(
+        task_card,
+        explicit_prefix=_has_explicit_invocation_prefix(routing_message),
+    ):
+        return None
+
+    definition = _skill_definition_by_name(selected_skill)
+    selected_harness = primary_harness_for_skill(selected_skill)
+    reason = "Explicit workflow invocation wins over heuristic routing."
+    recommendation = recommendation_for_definition(
+        definition,
+        message,
+        matched=("explicit_invocation", f"name:{selected_skill}"),
+        score=12,
+        why=reason,
+    )
+    explicit_loop = selected_skill == "loop" and explicit_loop_invocation_signal(routing_message)
+    route_next_action = _route_specific_next_action(
+        routing_message,
+        selected_skill=selected_skill,
+        explicit_loop=explicit_loop,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=12,
+        threshold=min_confidence,
+        explicit=True,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+        route_next_action=route_next_action,
+    )
 
 
 def _has_explicit_invocation_prefix(message: str) -> bool:
