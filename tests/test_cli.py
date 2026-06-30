@@ -4880,27 +4880,29 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("choose the right workflow", response["body"])
 
     def test_chat_route_and_interact_guard_short_omh_maintenance_command(self) -> None:
-        status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", "omh update"])
+        for command in ("update", "uninstall"):
+            with self.subTest(command=command):
+                status, stdout, stderr = run_cli(["chat", "route", "--source", "discord", f"omh {command}"])
 
-        self.assertEqual(stderr, "")
-        self.assertEqual(status, 0)
-        route = json.loads(stdout)["route"]
-        self.assertEqual(route["selected_skill"], "oh-my-hermes")
-        self.assertEqual(route["task_card"]["task_type"], "omh_cli_maintenance")
-        self.assertEqual(route["task_card"]["route_level"], "operator_maintenance_command")
-        self.assertEqual(route["task_card"]["recommended_next_action"], "run_omh_update")
-        self.assertIn("avoid_repo_mutation", route["task_card"]["operation_primitives"])
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                route = json.loads(stdout)["route"]
+                self.assertEqual(route["selected_skill"], "oh-my-hermes")
+                self.assertEqual(route["task_card"]["task_type"], "omh_cli_maintenance")
+                self.assertEqual(route["task_card"]["route_level"], "operator_maintenance_command")
+                self.assertEqual(route["task_card"]["recommended_next_action"], f"run_omh_{command}")
+                self.assertIn("avoid_repo_mutation", route["task_card"]["operation_primitives"])
 
-        status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", "omh update"])
+                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", f"omh {command}"])
 
-        self.assertEqual(stderr, "")
-        self.assertEqual(status, 0)
-        payload = json.loads(stdout)
-        self.assertEqual(payload["next_action"], "run_omh_update")
-        self.assertEqual(payload["chat_response"]["kind"], "task_card")
-        self.assertIn("maintenance update path", payload["chat_response"]["body"])
-        self.assertIn("code changes require a separate request", payload["chat_response"]["body"])
-        self.assertIn("Hermes reload", payload["chat_response"]["claim_boundary"])
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                payload = json.loads(stdout)
+                self.assertEqual(payload["next_action"], f"run_omh_{command}")
+                self.assertEqual(payload["chat_response"]["kind"], "task_card")
+                self.assertIn(f"maintenance {command} path", payload["chat_response"]["body"])
+                self.assertIn("code changes require a separate request", payload["chat_response"]["body"])
+                self.assertIn("Hermes reload", payload["chat_response"]["claim_boundary"])
 
     def test_chat_interact_safe_feature_presents_plan_and_disabled_handoff(self) -> None:
         message = "I want to safely add a feature to this repo"

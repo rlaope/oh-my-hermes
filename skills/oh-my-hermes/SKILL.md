@@ -68,7 +68,7 @@ Compact lane map:
 
 ## Priority Rules
 
-1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh install`, `omh list`, and Korean equivalents such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless the user separately asks for code changes.
+1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, and Korean equivalents such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless the user separately asks for code changes.
 2. Explicit slash skill invocation wins when it is not one of those maintenance commands.
 3. Explicit workflow keywords route to the matching adapted skill when installed.
 4. Broad planning requests route to `ralplan` or `plan` before implementation.
@@ -92,7 +92,7 @@ Hermes-native install paths should converge on the same skill-visible state:
 - `hermes skills tap add rlaope/oh-my-hermes`, then `hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes` installs this tap-compatible skill pack directly when Hermes supports taps.
 - `omh setup` installs generated managed skills and registers their directory through `skills.external_dirs` when a local bootstrap or repair path is preferred.
 
-Use compact human summaries for normal `omh setup`, `omh doctor`, `omh update`, `omh install`, and `omh list` operator flows. Full `--json` output is for wrappers, automation, and tests.
+Use compact human summaries for normal `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh install`, and `omh list` operator flows. Full `--json` output is for wrappers, automation, and tests.
 
 ## Wrapper Backend Summary
 
