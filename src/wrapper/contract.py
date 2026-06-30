@@ -1867,7 +1867,10 @@ def _build_chat_interaction_payload_uncached(
     )
     resolved_mode = _resolve_mode(mode, route_payload, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)
-    if _is_generic_skill_catalog_route(message, route_payload):
+    if (
+        _is_generic_skill_catalog_route(message, route_payload)
+        and _route_recommendation_next_action(route_payload) != "show_command_preview"
+    ):
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
     if isinstance(route_payload.get("task_card"), dict):
@@ -2413,6 +2416,11 @@ def build_chat_response_from_route(
 ) -> dict[str, object]:
     action = str(decision.get("action", "fallback"))
     if _is_command_preview_invocation(message):
+        return _command_preview_response(decision, thread_key=thread_key, message=message)
+    if (
+        str(decision.get("selected_skill", "")) == _ROUTER_SKILL
+        and _route_recommendation_next_action(decision) == "show_command_preview"
+    ):
         return _command_preview_response(decision, thread_key=thread_key, message=message)
     if _is_generic_skill_catalog_route(message, decision):
         return _skill_picker_response(decision, thread_key=thread_key, message=message)
@@ -4439,9 +4447,21 @@ def _workflow_explanation_reason_for_route(
 
 
 def _is_generic_skill_catalog_route(message: str, decision: dict[str, object]) -> bool:
+    if _is_skill_picker_invocation(message) or _is_command_preview_invocation(message):
+        return False
     if not _is_skill_catalog_question(message):
         return False
     return str(decision.get("selected_skill", "")) == _ROUTER_SKILL
+
+
+def _route_recommendation_next_action(decision: dict[str, object]) -> str:
+    recommendations = decision.get("recommendations")
+    if not isinstance(recommendations, list) or not recommendations:
+        return ""
+    first = recommendations[0]
+    if not isinstance(first, dict):
+        return ""
+    return str(first.get("next_action", ""))
 
 
 def _catalog_question_route_payload(route_payload: dict[str, object]) -> dict[str, object]:
@@ -4722,7 +4742,8 @@ def _command_preview_response(decision: dict[str, object], *, thread_key: str = 
 def _command_preview_state(message: str, *, source: str) -> dict[str, object]:
     token = _first_token(message)
     prefix = _command_preview_prefix(token)
-    insert_text = f"{prefix}{_COMMAND_PREVIEW_ALIAS}" if prefix else "./omh"
+    default_insert_text = "/omh" if source in {"slack", "telegram"} else "./omh"
+    insert_text = f"{prefix}{_COMMAND_PREVIEW_ALIAS}" if prefix else default_insert_text
     return {
         "schema_version": COMMAND_PREVIEW_SCHEMA_VERSION,
         "trigger": token,
@@ -4759,7 +4780,7 @@ def _command_preview_prefix(token: str) -> str:
 
 def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
-    catalog_question = _is_skill_catalog_question(message)
+    catalog_question = _is_skill_catalog_question(message) and not _is_skill_picker_invocation(message)
     primer = _context_primer_state()
     extra_state = {
         "route_action": decision.get("action", "dispatch"),

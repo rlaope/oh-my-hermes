@@ -2296,7 +2296,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
             self.assertIn("41/41 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("73/73 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("75/75 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
@@ -2338,7 +2338,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 41/41 negative controls, 73/73 interventions "
+                "Routing precision: 41/41 negative controls, 75/75 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2369,8 +2369,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["routing_precision_passing"], 41)
             self.assertEqual(payload["summary"]["routing_precision_total"], 41)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 73)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 73)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 75)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 75)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 5)
@@ -5341,6 +5341,32 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(preview["suggestions"][0]["insert_text"], insert_text)
                 self.assertTrue(preview["top_level_aliases_only"])
                 self.assertNotIn("loop", json.dumps(preview))
+
+    def test_chat_interact_native_entrypoint_questions_render_picker_or_preview(self) -> None:
+        picker_status, picker_stdout, picker_stderr = run_cli(
+            ["chat", "interact", "--source", "slack", "슬랙에서 /omh 치면 뭐가 떠야해?"]
+        )
+
+        self.assertEqual(picker_stderr, "")
+        self.assertEqual(picker_status, 0)
+        picker_payload = json.loads(picker_stdout)
+        self.assertEqual(picker_payload["next_action"], "choose_skill")
+        self.assertEqual(picker_payload["chat_response"]["kind"], "skill_picker")
+        self.assertEqual(picker_payload["chat_response"]["state"]["selected_workflow"], "oh-my-hermes")
+
+        preview_status, preview_stdout, preview_stderr = run_cli(
+            ["chat", "interact", "--source", "slack", "./ 쳤는데 omh가 안 떠"]
+        )
+
+        self.assertEqual(preview_stderr, "")
+        self.assertEqual(preview_status, 0)
+        preview_payload = json.loads(preview_stdout)
+        self.assertEqual(preview_payload["next_action"], "show_command_preview")
+        self.assertEqual(preview_payload["chat_response"]["kind"], "command_preview")
+        preview = preview_payload["chat_response"]["state"]["command_preview"]
+        self.assertEqual(preview["schema_version"], "omh_command_preview/v1")
+        self.assertEqual(preview["suggestions"][0]["insert_text"], "./omh")
+        self.assertTrue(preview["top_level_aliases_only"])
 
     def test_chat_native_command_exports_platform_registration_contracts(self) -> None:
         cases = {
