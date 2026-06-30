@@ -1115,6 +1115,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("codex 연결돼 있어?", "executor-runtime-readiness", "guard:executor_runtime_readiness"),
             ("내 코딩 에이전트 연결 상태 확인해줘", "executor-runtime-readiness", "guard:executor_runtime_readiness"),
             ("codex 작업 어디까지 됐어?", "ultraprocess", "guard:coding_progress_status"),
+            ("코덱스가 지금 뭐하고있는지 알려줘", "ultraprocess", "guard:coding_progress_status"),
             ("codex 세션이 살아있는지 확인해줘", "ultraprocess", "guard:coding_progress_status"),
             ("이미지 생성 툴 연결 안됐으면 뭐 써?", "toolbelt-readiness", "guard:toolbelt_readiness"),
             ("메모리 점검해줘", "memory-curation-review", "guard:memory_curation"),

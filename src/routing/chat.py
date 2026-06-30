@@ -1402,7 +1402,7 @@ def _route_chat_message_cached(
         action = "fallback"
         reason = DIRECT_ANSWER_REASON
         ambiguous = False
-    elif explicit_loop_signal:
+    elif explicit_loop_signal and candidate_skill != "img-summary":
         selected_skill = "loop"
         candidate_skill = selected_skill
         candidate_harness = primary_harness_for_skill(candidate_skill)
@@ -2829,6 +2829,10 @@ def _guarded_operator_fast_path_decision(
         score=score,
         why=guard.why,
     )
+    route_next_action = ""
+    if guard.id in {"coding_handoff_status_before_clarify", "coding_progress_status_before_clarify"}:
+        route_next_action = "show_coding_handoff_status"
+        recommendation = {**recommendation, "next_action": route_next_action}
     return ChatRouteDecision(
         schema_version=1,
         source=source,
@@ -2849,6 +2853,7 @@ def _guarded_operator_fast_path_decision(
         workflow_route_plan=None,
         learning_candidate_card=None,
         recommendations=(recommendation,),
+        route_next_action=route_next_action,
     )
     return None
 

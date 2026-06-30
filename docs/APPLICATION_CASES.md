@@ -553,7 +553,7 @@ chat correctly but the plugin hint nudges the wrapper toward the wrong workflow
 or returns `no_hint`.
 
 `omh demo grounded-score` is a deterministic contract-compliance demo over the
-current 47-scenario operator corpus. The score is 10/10 only when the expected
+current 49-scenario operator corpus. The score is 10/10 only when the expected
 chat route, response kind, next action, playbook confidence, and
 coding-delegation evidence boundary all match. It does not award points for
 unobserved execution, review, CI, or merge work. The matrix below is a snapshot
@@ -590,6 +590,7 @@ table should change with them.
 | Visual summary poster | `make a poster explaining cron automation` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean meeting image summary | `회의록을 보기 좋은 세로 이미지로 요약해줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean release-note image summary | `릴리즈 노트 이미지로 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
+| Korean OMH loop feature image summary | `OMH 루프 기능 소개 이미지 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean release update announcement card | `릴리즈 업데이트를 발표 카드로 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean Instagram card-news summary | `요약을 인스타 카드뉴스처럼 만들어줘` | `img-summary` / `img_summary` | `img-summary` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Research department ops | `I need a weekly leadership brief from support tickets, competitor news, and release risks` | `research-department` / `research_department` | `weekly-ops-review` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
@@ -601,8 +602,9 @@ table should change with them.
 | Korean Claude Code open direct | `Claude Code로 바로 열어줘` | `executor-runtime-readiness` / `executor_runtime_readiness` | `executor-runtime-readiness` | Prepared handoff only; execution, verification, review, CI, and merge stay unobserved until runtime evidence exists. | `10/10` |
 | Korean Hermes coding owner | `Hermes가 직접 코딩하게 해줘` | `executor-runtime-readiness` / `executor_runtime_readiness` | `executor-runtime-readiness` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Coding-agent progress status | `Codex 작업이 진행중인지 확인하고 지금 어떤 상태인지 알려줘` | `ultraprocess` / `handoff` | `ultraprocess` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
-| Korean PR merge readiness status | `지금 PR 머지 준비 됐는지 알려줘` | `ultraprocess` / `process` | `ultraprocess` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
+| Korean PR merge readiness status | `지금 PR 머지 준비 됐는지 알려줘` | `ultraprocess` / `handoff` | `ultraprocess` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean Codex progress status | `코덱스가 지금 어디까지 했는지 알려줘` | `ultraprocess` / `handoff` | `ultraprocess` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
+| Korean Codex current-activity status | `코덱스가 지금 뭐하고있는지 알려줘` | `ultraprocess` / `handoff` | `ultraprocess` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean Claude Code open session | `claude code 작업 세션 열어줘` | `executor-runtime-readiness` / `executor_runtime_readiness` | `executor-runtime-readiness` | Prepared handoff only; execution, verification, review, CI, and merge stay unobserved until runtime evidence exists. | `10/10` |
 | Korean Hermes memory review | `Hermes가 기억하는 내용 한번 점검하자` | `memory-curation-review` / `memory_curation` | `memory-curation-review` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |
 | Korean user-like QA scenario | `실제 사용자처럼 QA 시나리오 돌려줘` | `ultraqa` / `qa_review` | `release-readiness-review` | No executor handoff by default; Hermes keeps the workflow retained until observed evidence changes. | `10/10` |

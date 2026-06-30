@@ -1751,12 +1751,20 @@ _ROUTE_HINT_RULES = (
             "the coding agent was dispatched",
             "coding agent was dispatched",
             "what happened next",
+            "what is codex doing",
+            "what is codex doing now",
+            "what is claude code doing",
+            "what is claude code doing now",
             "코딩 작업 어디까지",
             "코딩 작업 지금 어디까지",
             "코딩 작업 진행상황",
             "코딩 작업 상태",
             "codex 작업 어디까지",
             "codex 작업이 어디까지",
+            "codex가 지금 뭐",
+            "codex 지금 뭐",
+            "codex가 뭐하고",
+            "codex 뭐하고",
             "codex 세션 실행 중",
             "codex 세션 지금 실행 중",
             "codex 세션 살아있는지",
@@ -1766,6 +1774,12 @@ _ROUTE_HINT_RULES = (
             "코덱스 작업이 어디까지",
             "코덱스가 지금 어디까지",
             "코덱스 지금 어디까지",
+            "코덱스가 지금 뭐",
+            "코덱스 지금 뭐",
+            "코덱스가 뭐하고",
+            "코덱스가 뭐 하고",
+            "코덱스 뭐하고",
+            "코덱스 뭐 하고",
             "코덱스 세션 실행 중",
             "코덱스 세션 지금 실행 중",
             "코덱스 세션 살아있는지",
@@ -1774,6 +1788,9 @@ _ROUTE_HINT_RULES = (
             "코덱스 진행상황",
             "코덱스 상태",
             "claude code가 지금 어디까지",
+            "claude code가 지금 뭐",
+            "claude code 지금 뭐",
+            "claude code가 뭐하고",
             "claude code 작업 어디까지",
             "claude code 작업이 어디까지",
             "claude code 작업 완료",
@@ -1781,6 +1798,12 @@ _ROUTE_HINT_RULES = (
             "claude code 진행상황",
             "claude code 상태",
             "클로드 코드가 지금 어디까지",
+            "클로드 코드가 지금 뭐",
+            "클로드 코드 지금 뭐",
+            "클로드 코드가 뭐하고",
+            "클로드 코드가 뭐 하고",
+            "클로드 코드 뭐하고",
+            "클로드 코드 뭐 하고",
             "클로드 코드 작업 어디까지",
             "클로드 코드 작업이 어디까지",
             "클로드 코드 작업 완료",
@@ -1951,6 +1974,11 @@ _ROUTE_HINT_RULES = (
             "썸네일",
             "릴리즈 노트 썸네일",
             "크론 기능 설명 사진",
+            "기능 소개 이미지",
+            "기능 설명 이미지",
+            "OMH 루프 기능 소개 이미지",
+            "omh 루프 기능 소개 이미지",
+            "루프 기능 소개 이미지",
             "pr 요약 사진",
             "pr 리뷰어용 이미지 카드",
             "github pr 리뷰어용 이미지 카드",
@@ -3136,19 +3164,21 @@ def _rule_suppressed_by_omh_quality_intent(rule: dict[str, object], intent: obje
 
 def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
     rule_id = str(rule.get("id", ""))
+    visual_markers = (
+        "image card",
+        "summary card",
+        "announcement card",
+        "poster",
+        "visual",
+        "이미지",
+        "사진",
+        "카드",
+        "포스터",
+    )
+    if rule_id == "loopability_goal" and any(phrase in text for phrase in visual_markers):
+        return True
     if rule_id == "github_event_ops_delivery" and any(
-        phrase in text
-        for phrase in (
-            "image card",
-            "summary card",
-            "announcement card",
-            "poster",
-            "visual",
-            "이미지",
-            "사진",
-            "카드",
-            "포스터",
-        )
+        phrase in text for phrase in visual_markers
     ):
         return True
     if rule_id == "executor_runtime_choice" and any(
