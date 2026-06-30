@@ -1188,8 +1188,16 @@ class EfficiencyContractTests(unittest.TestCase):
             ("paper pdf expert explanation please", "paper-learning", "operator_surface_fast_path:paper"),
             ("회의록 정리해줘", "operating-rhythm", "operator_surface_fast_path:operating"),
             ("논문 링크 찾아줘", "source-finder", "operator_surface_fast_path:source"),
+            ("paper pdf를 찾아서 쉽게 설명해줘", "source-finder", "operator_surface_fast_path:source"),
             ("자료 찾아줘", "web-research", "operator_surface_fast_path:research"),
             ("성능 최적화해줘", "performance-goal", "operator_surface_fast_path:performance"),
+            ("omh update 했는데 잘 된건지 모르겠어", "doctor", "operator_surface_fast_path:doctor"),
+            ("PR 열렸는데 CI 실패했어 정리해줘", "github-event-ops", "operator_surface_fast_path:github_event"),
+            (
+                "Hermes가 내 기억을 잘못 기억하는 것 같아",
+                "memory-curation-review",
+                "operator_surface_fast_path:memory",
+            ),
             ("리드미 개선해줘", "ultraprocess", "operator_surface_fast_path:delivery"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning", "workflow_learning_fast_path"),
         )
