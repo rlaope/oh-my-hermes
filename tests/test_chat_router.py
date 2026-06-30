@@ -176,13 +176,67 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "source-finder 말고 이 논문 쉽게 설명해줘",
+                "paper-learning",
+                "prepare_paper_learning",
+                None,
+            ),
+            (
+                "source-finder는 말고 첨부한 PDF 논문 설명해줘",
+                "paper-learning",
+                "prepare_paper_learning",
+                None,
+            ),
+            (
+                "첨부한 논문을 초보자 수준으로 풀어줘",
+                "paper-learning",
+                "prepare_paper_learning",
+                None,
+            ),
+            (
+                "초보자용으로 볼 수 있는 논문 링크를 찾아줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
+                "데이터셋 찾아서 요약 리포트로 정리해줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
+                "깃허브 오픈소스 저장소 찾아서 구조 분석해줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
                 "공개 발표자료 찾아서 요약해줘",
                 "source-finder",
                 "prepare_source_finder_plan",
                 None,
             ),
             (
+                "공개 슬라이드 자료 찾아서 핵심 요약해줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
                 "PR 요약 이미지 만들고 싶어 근데 GPT image 연결 안 됐어",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                None,
+            ),
+            (
+                "회의록 이미지 카드 만들고 싶은데 FAL_KEY가 없어",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                None,
+            ),
+            (
+                "이미지 만들고 싶은데 도구가 안 붙어있어",
                 "toolbelt-readiness",
                 "prepare_toolbelt_readiness",
                 None,
@@ -432,6 +486,8 @@ class ChatRouterTests(unittest.TestCase):
             "summarize this in Korean",
             "이 문장 영어로 번역해줘",
             "이 문단 요약해줘",
+            "image라는 단어 한국어로 번역해줘",
+            "이 사진 설명해줘",
             "thanks",
             "ok",
             "what happened?",
@@ -1909,7 +1965,11 @@ class ChatRouterTests(unittest.TestCase):
             "dataset 링크 찾아줘",
             "공개 데이터셋 찾아줘",
             "논문 데이터셋 찾아서 후보로 정리해줘",
+            "초보자용으로 볼 수 있는 논문 링크를 찾아줘",
+            "데이터셋 찾아서 요약 리포트로 정리해줘",
+            "깃허브 오픈소스 저장소 찾아서 구조 분석해줘",
             "공개 프레젠테이션 자료를 찾아서 요약해줘",
+            "공개 슬라이드 자료 찾아서 핵심 요약해줘",
             "github oss repo 찾아서 비교해줘",
             "깃허브 repo 소스 찾아줘",
             "github repo 소스 찾아줘",
@@ -1931,6 +1991,14 @@ class ChatRouterTests(unittest.TestCase):
         paper_explanation = route_chat_message("explain this paper at expert level", source="discord")
         self.assertEqual(paper_explanation["selected_skill"], "paper-learning")
         self.assertEqual(paper_explanation["selected_harness"], "paper-learning")
+
+        negated_source_finder = route_chat_message("source-finder 말고 이 논문 쉽게 설명해줘", source="discord")
+        self.assertEqual(negated_source_finder["selected_skill"], "paper-learning")
+        self.assertEqual(negated_source_finder["selected_harness"], "paper-learning")
+
+        attached_paper = route_chat_message("첨부한 논문을 초보자 수준으로 풀어줘", source="discord")
+        self.assertEqual(attached_paper["selected_skill"], "paper-learning")
+        self.assertEqual(attached_paper["selected_harness"], "paper-learning")
 
         recurring = route_chat_message("weekly paper review", source="discord")
         self.assertEqual(recurring["selected_skill"], "research-department")
