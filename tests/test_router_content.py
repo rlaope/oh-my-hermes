@@ -11,6 +11,7 @@ from _local_package import load_local_package
 load_local_package()
 from omh.routing import recommend as recommend_module
 from omh.routing import chat as chat_module
+from omh.routing.action_copy import next_action_label
 from omh.capabilities.orchestration import orchestration_patterns
 from omh.wrapper.contract import VISIBLE_ACTIONS
 from omh.roles import role_definitions, role_file_markdown, roles_reference_markdown
@@ -368,7 +369,7 @@ class RouterContentTests(unittest.TestCase):
         missing = [
             action
             for action in actions
-            if chat_module._route_next_action_label(action) == action.replace("_", " ")
+            if next_action_label(action) == action.replace("_", " ")
         ]
 
         self.assertEqual(missing, [])

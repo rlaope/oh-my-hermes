@@ -357,6 +357,13 @@ try:  # Keep route hints aligned with router locale phrase packs when available.
 except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
     _prepare_routing_text = None
 
+try:  # Prefer the package copy table, but keep copied plugin bundles standalone.
+    from ...routing.action_copy import next_action_label as _next_action_label
+except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+
+    def _next_action_label(action: str) -> str:
+        return action.strip().replace("_", " ")
+
 OMH_AWARENESS_SCHEMA_VERSION = "omh_awareness/v1"
 OMH_ROUTE_HINT_SCHEMA_VERSION = "omh_route_hint/v1"
 OMH_GENERIC_TOOL_CHECKPOINT_SCHEMA_VERSION = "omh_generic_tool_checkpoint/v1"
@@ -1254,6 +1261,28 @@ _ROUTE_HINT_RULES = (
         "adjacent_workflows": ("agent-ops-review", "toolbelt-readiness"),
     },
     {
+        "id": "omh_workflow_picker",
+        "workflow": "oh-my-hermes",
+        "lane": "intent_to_plan",
+        "next_action": "choose_skill",
+        "reason": "The user is asking to open the OMH workflow picker or menu instead of selecting a specific workflow yet.",
+        "fallback_action": "show_workflow_picker_or_open_command_preview",
+        "phrases": (
+            "open the omh picker",
+            "open omh picker",
+            "open the omh workflow picker",
+            "open omh workflow picker",
+            "show the omh menu",
+            "show omh menu",
+            "open the oh-my-hermes picker",
+            "open oh-my-hermes picker",
+            "show the oh-my-hermes menu",
+            "show oh-my-hermes menu",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("deep-interview", "ralplan", "loop", "ultraprocess"),
+    },
+    {
         "id": "coding_progress_status",
         "workflow": "ultraprocess",
         "lane": "coding_handoff",
@@ -1362,6 +1391,13 @@ _ROUTE_HINT_RULES = (
         "phrases": (
             "./loop",
             "/loop",
+            "run a loop",
+            "run loop",
+            "start a loop",
+            "start loop",
+            "goal loop",
+            "loop to improve",
+            "keep looping",
             "loop engineering",
             "loopable",
             "loopability",
@@ -1766,6 +1802,17 @@ def _copy_workflow_context_card(card: dict[str, object]) -> dict[str, object]:
     return copied
 
 
+def _route_hint_with_action_labels(hint: dict[str, object]) -> dict[str, object]:
+    copied = dict(hint)
+    next_action = str(copied.get("next_action") or copied.get("primary_next_action") or "").strip()
+    if next_action:
+        copied.setdefault("next_action_label", _next_action_label(next_action))
+    fallback_action = str(copied.get("fallback_action") or "").strip()
+    if fallback_action:
+        copied.setdefault("fallback_action_label", _next_action_label(fallback_action))
+    return copied
+
+
 @lru_cache(maxsize=512)
 def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, object]:
     normalized = unicodedata.normalize("NFKC", message).casefold()
@@ -1832,7 +1879,9 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             )
             if len(hints) >= hint_limit:
                 break
+    hints = [_route_hint_with_action_labels(hint) for hint in hints]
     primary_workflow = str(hints[0]["workflow"]) if hints else ""
+    primary_next_action = str(hints[0]["next_action"]) if hints else ""
     adjacent_workflows = _unique_strings(
         str(item)
         for hint in hints
@@ -1851,7 +1900,8 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
         "adjacent_workflows": adjacent_workflows,
         "not_executed": list(intent.not_executed),
         "primary_workflow": primary_workflow,
-        "primary_next_action": str(hints[0]["next_action"]) if hints else "",
+        "primary_next_action": primary_next_action,
+        "primary_next_action_label": _next_action_label(primary_next_action) if primary_next_action else "",
         "hints": hints,
         "privacy": {
             "mode": "metadata_only",
@@ -1900,9 +1950,11 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
         if not isinstance(hint, dict):
             continue
         adjacent = ", ".join(str(item) for item in hint.get("adjacent_workflows", []))
+        next_action = str(hint.get("next_action") or "").strip()
+        next_action_label = str(hint.get("next_action_label") or _next_action_label(next_action)).strip()
         lines.append(
             f"- selected={hint.get('workflow')}; lane={hint.get('lane')}; "
-            f"next_action={hint.get('next_action')}; reason={hint.get('reason')}"
+            f"next_action_label={next_action_label}; next_action={next_action}; reason={hint.get('reason')}"
         )
         context_card = hint.get("workflow_context_card")
         if isinstance(context_card, dict):
@@ -1911,7 +1963,8 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
                 lines.append(f"  first_response_shape={first_response_shape}")
         fallback_action = str(hint.get("fallback_action") or "").strip()
         if fallback_action:
-            lines.append(f"  fallback_action={fallback_action}.")
+            fallback_action_label = str(hint.get("fallback_action_label") or _next_action_label(fallback_action)).strip()
+            lines.append(f"  fallback_action_label={fallback_action_label}; fallback_action={fallback_action}.")
         if adjacent:
             lines.append(f"  adjacent_workflows={adjacent}.")
         not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", [])[:4])
@@ -2127,7 +2180,9 @@ def generic_tool_checkpoint_routes() -> list[dict[str, object]]:
             "primary_workflow": str(route["primary_workflow"]),
             "preferred_workflows": list(route["preferred_workflows"]),
             "primary_next_action": str(route["primary_next_action"]),
+            "primary_next_action_label": _next_action_label(str(route["primary_next_action"])),
             "fallback_action": str(route["fallback_action"]),
+            "fallback_action_label": _next_action_label(str(route["fallback_action"])),
             "not_evidence_yet": list(route["not_evidence_yet"]),
         }
         for route in GENERIC_TOOL_CHECKPOINT_ROUTES

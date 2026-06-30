@@ -5,6 +5,7 @@ from ..plugin_bundle.omh.awareness import (
     awareness_route_hint,
     awareness_route_hint_context,
 )
+from ..routing.action_copy import next_action_label
 
 CHAT_ROUTE_HINT_SCHEMA_VERSION = "chat_route_hint/v1"
 CHAT_ROUTE_HINT_RESPONSE_SCHEMA_VERSION = "chat_route_hint_response/v1"
@@ -75,6 +76,16 @@ def _checkpoint_body_text(generic_tool_checkpoint: dict[str, object]) -> str:
     return f"Checkpoint: {body}"
 
 
+def _action_label_with_id(action: str, label: str = "") -> str:
+    normalized = action.strip()
+    if not normalized:
+        return ""
+    resolved_label = label.strip() or next_action_label(normalized)
+    if not resolved_label or resolved_label == normalized:
+        return normalized
+    return f"{resolved_label} (`{normalized}`)"
+
+
 def _response_for_hint(
     primary_hint: dict[str, object],
     hints: list[dict[str, object]],
@@ -87,22 +98,26 @@ def _response_for_hint(
     if primary_hint:
         workflow = str(primary_hint.get("workflow") or "")
         next_action = str(primary_hint.get("next_action") or "")
+        next_action_label_text = str(primary_hint.get("next_action_label") or next_action_label(next_action)).strip()
+        workflow_submit_text = "./omh" if workflow == "oh-my-hermes" and next_action == "choose_skill" else f"./{workflow}"
+        workflow_action_label = "Open omh" if workflow_submit_text == "./omh" else f"Open {workflow}"
         lane = str(primary_hint.get("lane") or "")
         headline = f"[omh] {workflow} looks relevant."
         body = (
             f"I can open `{workflow}` first because this request matches the {lane.replace('_', ' ')} lane. "
-            f"Next action: `{next_action}`. This is only a route hint until a workflow is selected and observed."
+            f"Next action: {_action_label_with_id(next_action, next_action_label_text)}. "
+            "This is only a route hint until a workflow is selected and observed."
         )
         if checkpoint_body:
             body = f"{body} {checkpoint_body}"
         actions = [
             {
                 "id": "open_workflow",
-                "label": f"Open {workflow}",
+                "label": workflow_action_label,
                 "enabled": True,
                 "workflow": workflow,
                 "next_action": next_action,
-                "submit_text": f"./{workflow}",
+                "submit_text": workflow_submit_text,
             },
             {
                 "id": "route_for_me",
@@ -121,6 +136,7 @@ def _response_for_hint(
     else:
         workflow = ""
         next_action = "open_picker_or_clarify"
+        next_action_label_text = next_action_label(next_action)
         headline = "[omh] no strong workflow hint yet."
         body = (
             "I do not have a strong OMH workflow hint from this message alone. "
@@ -164,11 +180,13 @@ def _response_for_hint(
             "schema_version": "omh_route_hint_state/v1",
             "selected_workflow": workflow,
             "next_action": next_action,
+            "next_action_label": next_action_label_text,
             "route_hint_count": len(hints),
             "route_hint": {
                 "schema_version": "omh_route_hint/v1",
                 "primary_workflow": workflow,
                 "primary_next_action": next_action,
+                "primary_next_action_label": next_action_label_text,
                 "intent_class": str(route_hint.get("intent_class") or ""),
                 "selected_workflow": str(route_hint.get("selected_workflow") or workflow),
                 "mentioned_workflows": list(route_hint.get("mentioned_workflows", [])),
@@ -200,11 +218,16 @@ def _next_backend_commands(primary_hint: dict[str, object]) -> list[dict[str, ob
         },
     ]
     if workflow:
+        workflow_command = (
+            "omh chat interact --source <source> ./omh"
+            if workflow == "oh-my-hermes"
+            else f"omh chat interact --source <source> ./{workflow} <message>"
+        )
         commands.insert(
             0,
             {
                 "id": "open_workflow",
-                "command": f"omh chat interact --source <source> ./{workflow} <message>",
+                "command": workflow_command,
                 "purpose": "Open the hinted workflow explicitly when the user chooses it.",
             },
         )
