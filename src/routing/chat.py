@@ -11,6 +11,7 @@ from ..goal_loop import explicit_loop_invocation_signal
 from ..ingress import CHAT_SOURCES, extract_message_text
 from ..loopability import assess_loopability
 from .catalog_questions import (
+    is_catalog_without_shell_question,
     is_file_or_text_lookup_question,
     is_native_entrypoint_question,
     is_skill_catalog_question,
@@ -84,6 +85,21 @@ _BROAD_CAPABILITY_TOPIC_TOKENS = frozenset(
     }
 )
 _DIRECT_PICKER_ALIASES = frozenset(("./", "./o", "./om", "./omh", "/o", "/om", "/omh", "./skills", "/skills"))
+_DIRECT_MAINTENANCE_LIST_COMMANDS = frozenset(
+    (
+        "omh list",
+        "./omh list",
+        "/omh list",
+        "oh my hermes list",
+        "oh-my-hermes list",
+        "omh 목록",
+        "./omh 목록",
+        "/omh 목록",
+        "omh 리스트",
+        "./omh 리스트",
+        "/omh 리스트",
+    )
+)
 _GUARDED_OPERATOR_FAST_PATH_IDS = frozenset(
     {
         "coding_handoff_status_before_clarify",
@@ -1696,6 +1712,8 @@ def _maintenance_task_fast_path_decision(
     task_card = classify_task(routing_message)
     if not task_card or task_card.get("task_type") != "omh_cli_maintenance":
         return None
+    if _maintenance_task_should_yield_to_catalog(routing_message, task_card):
+        return None
     selected_skill = str(task_card.get("selected_workflow_rail", _ROUTER_SKILL))
     selected_harness = primary_harness_for_skill(selected_skill)
     recommendation = _task_card_fast_path_recommendation(task_card, message)
@@ -1728,6 +1746,15 @@ def _maintenance_task_fast_path_decision(
         learning_candidate_card=None,
         recommendations=(recommendation,),
     )
+
+
+def _maintenance_task_should_yield_to_catalog(message: str, task_card: dict[str, object]) -> bool:
+    if str(task_card.get("command", "")) != "list":
+        return False
+    compact = message.strip().lower().strip(" \t\r\n!?,;:。！？")
+    if compact in _DIRECT_MAINTENANCE_LIST_COMMANDS:
+        return False
+    return is_catalog_without_shell_question(message) or is_skill_catalog_question(message)
 
 
 def _task_card_fast_path_recommendation(task_card: dict[str, object], query: str) -> dict[str, object]:
@@ -1851,7 +1878,10 @@ def _catalog_fast_path_decision(
     catalog_picker = (
         not direct_picker
         and catalog_question
-        and _generic_omh_catalog_question(routing_message)
+        and (
+            is_catalog_without_shell_question(routing_message)
+            or _generic_omh_catalog_question(routing_message)
+        )
     )
     if not direct_picker and not catalog_picker:
         return _CatalogFastPathResult(decision=None, catalog_question=catalog_question)

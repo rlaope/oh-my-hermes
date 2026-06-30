@@ -120,6 +120,33 @@ _EXPLICIT_CATALOG_PHRASES = (
     "목록",
     "리스트",
 )
+_CATALOG_NO_SHELL_MARKERS = (
+    "command approval",
+    "shell approval",
+    "without shell",
+    "without running",
+    "without command",
+    "without approval",
+    "asked for command approval",
+    "asked to run omh list",
+    "approve omh list",
+    "run omh list",
+    "running omh list",
+    "omh list approval",
+    "승인",
+    "승인 없이",
+    "명령 승인",
+    "명령어 승인",
+    "커맨드 승인",
+    "쉘 승인",
+    "셸 승인",
+    "실행하지",
+    "실행 안",
+    "치지 않고",
+    "안 치고",
+    "굳이 쳐",
+    "굳이 실행",
+)
 _NATIVE_ENTRYPOINT_QUESTION_MARKERS = (
     "/omh",
     "./omh",
@@ -612,6 +639,8 @@ def is_skill_catalog_question(message: str) -> bool:
     search_texts = _catalog_search_texts(lowered)
     if _contains_catalog_token(search_texts, _COMMAND_ERROR_MARKERS):
         return False
+    if is_catalog_without_shell_question(message):
+        return True
     if _is_operator_command_question(search_texts):
         return False
     if _is_operator_action_question(search_texts):
@@ -651,6 +680,23 @@ def is_file_or_text_lookup_question(message: str) -> bool:
     if not lowered:
         return False
     return _is_file_or_text_search_question(_catalog_search_texts(lowered))
+
+
+@lru_cache(maxsize=4096)
+def is_catalog_without_shell_question(message: str) -> bool:
+    lowered = message.strip().lower()
+    if not lowered:
+        return False
+    search_texts = _catalog_search_texts(lowered)
+    if not _contains_catalog_token(search_texts, _OMH_CONTEXT_MARKERS):
+        return False
+    if not _contains_catalog_token(search_texts, _CATALOG_NO_SHELL_MARKERS):
+        return False
+    return (
+        _contains_catalog_token(search_texts, _CATALOG_WORDS)
+        or _contains_catalog_token(search_texts, _EXPLICIT_CATALOG_PHRASES)
+        or _contains_catalog_token(search_texts, ("omh list", "list"))
+    )
 
 
 @lru_cache(maxsize=4096)

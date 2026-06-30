@@ -2127,6 +2127,35 @@ class ChatRouterTests(unittest.TestCase):
             self.assertEqual(public["route_explanation"]["next_action"], next_action)
             self.assertNotIn("workflow_route_plan", public)
 
+    def test_catalog_questions_with_omh_list_mentions_do_not_request_shell_approval(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        chat_router_impl._public_chat_route_payload_cached.cache_clear()
+
+        for message in (
+            "Hermes가 omh list 승인하라고 하는데 굳이 쳐야해?",
+            "what OMH workflows are available without running omh list?",
+            "OMH 워크플로우 목록 보여줘",
+        ):
+            with self.subTest(message=message), mock.patch.object(
+                chat_router_impl,
+                "recommend_skills",
+                side_effect=AssertionError("catalog no-shell questions should skip full recommendation scoring"),
+            ), mock.patch.object(
+                chat_router_impl,
+                "build_workflow_route_plan",
+                side_effect=AssertionError("catalog no-shell questions should not build workflow route plans"),
+            ):
+                decision = route_chat_message(message, source="discord")
+
+            self.assertEqual(decision["action"], "dispatch")
+            self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+            self.assertIsNone(decision["task_card"])
+            self.assertEqual(decision["recommendations"][0]["matched"], ["catalog_question"])
+            self.assertEqual(decision["recommendations"][0]["next_action"], "choose_skill")
+            public = public_route_payload(decision)
+            self.assertEqual(public["route_explanation"]["next_action"], "choose_skill")
+            self.assertNotIn("workflow_route_plan", public)
+
     def test_omh_maintenance_guard_does_not_swallow_code_change_request(self) -> None:
         decision = route_chat_message("fix the omh update router implementation", source="discord")
 
