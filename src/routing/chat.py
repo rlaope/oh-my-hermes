@@ -2530,6 +2530,12 @@ def _operator_surface_fast_path_decision(
         or _is_paper_learning_materials_request(routing_message)
     ):
         return None
+    if _operator_surface_guard_preempts(
+        selected_skill,
+        routing_message,
+        preempting_skills=("source-finder", "toolbelt-readiness"),
+    ):
+        return None
     selected_harness = primary_harness_for_skill(selected_skill)
     definition = _skill_definition_by_name(selected_skill)
     extra_markers = _operator_surface_extra_markers(selected_skill, phrase)
@@ -2592,6 +2598,26 @@ def _operator_surface_fast_path_match(message: str) -> tuple[str, str, str, str]
         if normalized_phrase in text or (normalized_compact and normalized_compact in compact):
             return skill, phrase, marker, reason
     return None
+
+
+def _operator_surface_guard_preempts(
+    selected_skill: str,
+    message: str,
+    *,
+    preempting_skills: tuple[str, ...],
+) -> bool:
+    routing_text = prepare_routing_text(message)
+    normalized_query = normalized_phrase(routing_text.scoring_text)
+    query_tokens = routing_tokens(normalized_query)
+    for guard in active_routing_guard_rules(normalized_query, query_tokens):
+        if not guard.preferred_skills:
+            continue
+        preferred_skill = guard.preferred_skills[0]
+        if preferred_skill == selected_skill:
+            return False
+        if preferred_skill in preempting_skills:
+            return True
+    return False
 
 
 @lru_cache(maxsize=1)

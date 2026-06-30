@@ -164,6 +164,30 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "논문 pdf 찾아서 쉽게 설명해줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
+                "paper-learning 말고 논문 pdf 어디서 찾아?",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
+                "공개 발표자료 찾아서 요약해줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                None,
+            ),
+            (
+                "PR 요약 이미지 만들고 싶어 근데 GPT image 연결 안 됐어",
+                "toolbelt-readiness",
+                "prepare_toolbelt_readiness",
+                None,
+            ),
+            (
                 "100k star OSS 만들기 위해 first-run friction 줄여줘",
                 "loop",
                 "choose_permission_profile",
