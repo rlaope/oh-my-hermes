@@ -352,6 +352,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "img_summary",
     ),
     RoutingInterventionCase(
+        "korean-photo-meeting-vertical-image-card",
+        "Korean photo requests for meeting image cards route to img-summary",
+        "사진 생성해줘. 회의록을 보기 좋은 세로 이미지로 정리해줘",
+        "dispatch",
+        "img-summary",
+        "prepare_visual_prompt_card",
+        "img_summary",
+    ),
+    RoutingInterventionCase(
         "korean-hermes-coding-team-only",
         "Korean Hermes-only coding team requests prepare runtime handoff",
         "Hermes만으로 코딩팀처럼 작업하고 싶어",
