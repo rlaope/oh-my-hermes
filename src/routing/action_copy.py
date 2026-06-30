@@ -57,6 +57,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "record_missed_route": "recording a missed-route improvement candidate",
     "record_verification_evidence": "recording verification evidence",
     "refresh_agent_ops_status": "refreshing agent operations status",
+    "recommend": "recommending the playbook",
     "run_cto_loop": "preparing the CTO loop",
     "run_hermes_research": "starting source-backed Hermes research",
     "run_local_operator_check": "running the local operator check",

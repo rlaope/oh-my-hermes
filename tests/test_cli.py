@@ -1027,6 +1027,18 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 self.assertIn(expected, stdout)
 
+    def test_playbook_recommendation_summary_uses_human_action_labels(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["playbook", "recommend", "turn", "this", "issue", "into", "a", "PR"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        self.assertIn("Next action: scope event (`scope_event`)", stdout)
+        self.assertIn("Next action: recommending the playbook (`recommend`)", stdout)
+        self.assertNotIn("Next action: recommend\n", stdout)
+
     def test_recommendation_reasons_avoid_internal_metadata_copy(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"], output_json=False)
 
