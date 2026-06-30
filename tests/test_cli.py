@@ -4230,9 +4230,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("Why:", stdout)
         self.assertIn("Matched safe feature-change language", stdout)
         self.assertIn("Reply:", stdout)
-        self.assertIn("I will use `ralplan` first and start with present plan.", stdout)
+        self.assertIn("I will use `ralplan` first and start by preparing a reviewed plan.", stdout)
         self.assertIn("Action hint:", stdout)
-        self.assertIn("Route to `ralplan` and run `present plan`", stdout)
+        self.assertIn("Route to `ralplan` and start by preparing a reviewed plan", stdout)
         self.assertIn("Top recommendations:", stdout)
         self.assertIn("- ralplan: present_plan (high, score 32)", stdout)
         self.assertIn("Route plan:", stdout)
@@ -4248,8 +4248,9 @@ class CliTests(unittest.TestCase):
         route = json.loads(stdout)["route"]
         self.assertEqual(route["selected_skill"], "ralplan")
         self.assertEqual(route["route_explanation"]["next_action"], "present_plan")
+        self.assertEqual(route["route_explanation"]["next_action_label"], "preparing a reviewed plan")
         self.assertEqual(route["route_explanation"]["primary_action_label"], "Open ralplan")
-        self.assertIn("present plan", route["route_explanation"]["recommended_reply"])
+        self.assertIn("preparing a reviewed plan", route["route_explanation"]["recommended_reply"])
 
     def test_chat_route_summary_shows_recorded_runtime_metadata_only(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -4548,7 +4549,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("safe feature-change language", explanation["why_this_workflow"])
         self.assertEqual(explanation["next_action"], "accept_or_revise_plan")
         self.assertEqual(explanation["route_next_action"], "present_plan")
-        self.assertIn("present plan", explanation["route_recommended_reply"])
+        self.assertIn("preparing a reviewed plan", explanation["route_recommended_reply"])
         self.assertIn("accept or revise plan", explanation["recommended_reply"])
         actions = {action["id"]: action for action in response["actions"]}
         self.assertTrue(actions["accept_plan"]["enabled"])

@@ -1499,8 +1499,8 @@ def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
     why = _route_explanation_reason(route)
     not_evidence_yet = _not_evidence_from_boundary(claim_boundary)
     headline = _route_explanation_headline(action, selected, next_action)
-    summary = _route_explanation_summary(action, selected, next_action, why)
-    next_action_label = next_action.replace("_", " ") if next_action else ""
+    next_action_label = _route_next_action_label(next_action)
+    summary = _route_explanation_summary(action, selected, next_action, next_action_label, why)
     return {
         "schema_version": ROUTE_EXPLANATION_SCHEMA_VERSION,
         "selected_workflow": selected,
@@ -1511,9 +1511,15 @@ def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
         "why_this_workflow": why,
         "next_action": next_action,
         "next_action_label": next_action_label,
-        "recommended_reply": _route_recommended_reply(action, selected, next_action_label, not_evidence_yet),
-        "primary_action_label": _route_primary_action_label(action, selected, next_action_label),
-        "primary_action_hint": _route_primary_action_hint(action, selected, next_action_label, not_evidence_yet),
+        "recommended_reply": _route_recommended_reply(action, selected, next_action, next_action_label, not_evidence_yet),
+        "primary_action_label": _route_primary_action_label(action, selected, next_action),
+        "primary_action_hint": _route_primary_action_hint(
+            action,
+            selected,
+            next_action,
+            next_action_label,
+            not_evidence_yet,
+        ),
         "not_evidence_yet": not_evidence_yet,
         "claim_boundary": claim_boundary,
         "headline": headline,
@@ -2016,6 +2022,56 @@ def _route_next_action(route: dict[str, object], recommendation: dict[str, objec
     return "ask_one_clarification"
 
 
+_ROUTE_NEXT_ACTION_LABELS: dict[str, str] = {
+    "answer_clarification": "asking the needed clarification",
+    "answer_directly": "answering directly in chat",
+    "answer_file_lookup": "answering as a file or text lookup",
+    "ask_one_clarification": "asking one clarification",
+    "audit_learning_readiness": "reviewing workflow learning readiness",
+    "choose_executor": "choosing the coding agent",
+    "choose_skill": "opening the workflow picker",
+    "classify_signal_and_prepare_investigation": "classifying the signal and preparing investigation steps",
+    "dispatch_to_workflow": "opening the selected workflow",
+    "gather_source_backed_evidence": "gathering source-backed evidence",
+    "open_picker_or_clarify": "opening the picker or asking one clarification",
+    "prepare_agent_board_card": "preparing an agent board card",
+    "prepare_deliverable_package": "preparing a deliverable package",
+    "prepare_executor_runtime_readiness": "checking coding-agent readiness",
+    "prepare_gateway_intent_card": "preparing a gateway intent card",
+    "prepare_github_event_ops_card": "preparing a GitHub event operations card",
+    "prepare_material_package": "preparing a materials package",
+    "prepare_memory_curation_review": "preparing a memory curation review",
+    "prepare_one_cycle_delivery": "preparing a one-cycle delivery path",
+    "prepare_ops_observability_card": "preparing an ops observability card",
+    "prepare_paper_learning": "preparing a paper-learning explainer",
+    "prepare_report_package": "preparing a report package",
+    "prepare_research_department_plan": "preparing a research department plan",
+    "prepare_review_or_followup_handoff": "preparing a review or follow-up handoff",
+    "prepare_scheduled_ops_blueprint": "preparing a scheduled-ops blueprint",
+    "prepare_source_finder_plan": "scoping source candidates",
+    "prepare_strategy_brief": "preparing a strategy brief",
+    "prepare_toolbelt_readiness": "checking toolbelt readiness",
+    "prepare_visual_prompt_card": "preparing an image prompt card",
+    "prepare_voice_operator_card": "preparing a voice-operator card",
+    "present_app_delivery_loop": "preparing the app delivery loop",
+    "present_plan": "preparing a reviewed plan",
+    "record_missed_route": "recording a missed-route improvement candidate",
+    "run_cto_loop": "preparing the CTO loop",
+    "show_agent_ops_review": "showing agent-ops status",
+    "show_coding_handoff_status": "showing coding-agent progress",
+    "start_loop_cycle": "starting the loopability-gated cycle",
+    "start_ultraprocess": "preparing the one-cycle delivery process",
+    "triage_feedback": "triaging the feedback signal",
+}
+
+
+def _route_next_action_label(next_action: str) -> str:
+    normalized = next_action.strip()
+    if not normalized:
+        return ""
+    return _ROUTE_NEXT_ACTION_LABELS.get(normalized, normalized.replace("_", " "))
+
+
 def _route_claim_boundary(route: dict[str, object], recommendation: dict[str, object]) -> str:
     if _is_file_lookup_reason(str(route.get("reason", ""))):
         return "No OMH workflow, execution, or file inspection has started."
@@ -2068,9 +2124,15 @@ def _route_explanation_headline(action: str, selected: str, next_action: str) ->
     return "Keep this in the router until the target is clear."
 
 
-def _route_explanation_summary(action: str, selected: str, next_action: str, why: str) -> str:
+def _route_explanation_summary(
+    action: str,
+    selected: str,
+    next_action: str,
+    next_action_label: str,
+    why: str,
+) -> str:
     if action == "dispatch":
-        return f"`{selected}` is selected because {why} Next action: `{next_action}`."
+        return f"`{selected}` is selected because {why} Next action: {next_action_label} (`{next_action}`)."
     if action == "clarify":
         return f"The router needs one clarification before dispatch. Best candidate: `{selected}`."
     if next_action == "answer_file_lookup":
@@ -2083,6 +2145,7 @@ def _route_explanation_summary(action: str, selected: str, next_action: str, why
 def _route_recommended_reply(
     action: str,
     selected: str,
+    next_action: str,
     next_action_label: str,
     not_evidence_yet: list[str],
 ) -> str:
@@ -2091,24 +2154,24 @@ def _route_recommended_reply(
             not_evidence_yet,
             fallback=" This is routing guidance, not execution evidence.",
         )
-        return f"I will use `{selected}` first and start with {next_action_label}.{suffix}"
+        return f"I will use `{selected}` first and start by {next_action_label}.{suffix}"
     if action == "clarify":
         return "I need one clarification before choosing a workflow; no plan or execution has started."
-    if next_action_label == "answer file lookup":
+    if next_action == "answer_file_lookup":
         return "I will answer this as a file or text lookup; no file inspection or workflow execution has started."
-    if next_action_label == "answer directly":
+    if next_action == "answer_directly":
         return "I will answer directly in chat; no OMH workflow, handoff, or execution has started."
     return "I will keep this in the router until the target is clear; no workflow or execution has started."
 
 
-def _route_primary_action_label(action: str, selected: str, next_action_label: str) -> str:
+def _route_primary_action_label(action: str, selected: str, next_action: str) -> str:
     if action == "dispatch":
         return f"Open {selected}"
     if action == "clarify":
         return "Answer clarification"
-    if next_action_label == "answer file lookup":
+    if next_action == "answer_file_lookup":
         return "Answer file lookup"
-    if next_action_label == "answer directly":
+    if next_action == "answer_directly":
         return "Answer directly"
     return "Clarify request"
 
@@ -2116,15 +2179,16 @@ def _route_primary_action_label(action: str, selected: str, next_action_label: s
 def _route_primary_action_hint(
     action: str,
     selected: str,
+    next_action: str,
     next_action_label: str,
     not_evidence_yet: list[str],
 ) -> str:
     if action == "dispatch":
         suffix = not_evidence_action_suffix(not_evidence_yet)
-        return f"Route to `{selected}` and run `{next_action_label}`{suffix}."
+        return f"Route to `{selected}` and start by {next_action_label}{suffix}."
     if action == "clarify":
         return "Ask one blocking question, then reroute with the answer."
-    if next_action_label == "answer directly":
+    if next_action == "answer_directly":
         return "Answer in the current chat without opening a workflow, picker, or handoff."
     return "Answer directly or ask for the missing target before dispatching a workflow."
 

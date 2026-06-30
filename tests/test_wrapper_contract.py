@@ -960,7 +960,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(explanation["route_next_action"], "present_plan")
         self.assertIn("accept or revise plan", explanation["recommended_reply"])
         self.assertIn("not evidence of plan acceptance", explanation["recommended_reply"])
-        self.assertIn("present plan", explanation["route_recommended_reply"])
+        self.assertIn("preparing a reviewed plan", explanation["route_recommended_reply"])
         self.assertIn("not evidence of execution", explanation["route_recommended_reply"])
         self.assertIn("do not claim plan acceptance", explanation["primary_action_hint"])
         self.assertIn("do not claim execution", explanation["route_primary_action_hint"])
