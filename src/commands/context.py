@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from ..context import build_context_brief
-from .common import _action_label_with_id, _print_json, _wants_json
+from .common import _action_label, _print_json, _wants_json
 
 
 def cmd_context_brief(args: argparse.Namespace) -> int:
@@ -32,14 +32,14 @@ def _print_context_brief_summary(payload: dict[str, object]) -> None:
         action = str(route_hint.get("primary_next_action") or "")
         action_label = str(route_hint.get("primary_next_action_label") or "")
         if primary:
-            print(f"  Route hint: {primary} -> {_action_label_with_id(action, action_label)}")
+            print(f"  Route hint: {primary} -> {_action_label(action, action_label)}")
         else:
             print("  Route hint: no strong message-specific hint")
     catalog_question = payload.get("catalog_question")
     if isinstance(catalog_question, dict) and catalog_question.get("status") == "matched":
         print(
             "  Catalog question: "
-            f"{_action_label_with_id(str(catalog_question.get('next_action', '')))} "
+            f"{_action_label(str(catalog_question.get('next_action', '')))} "
             f"via {catalog_question.get('recommended_tool')}"
         )
     print("Workflow lanes")

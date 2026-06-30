@@ -6,7 +6,7 @@ import hashlib
 from ..catalogs.playbooks import recommend_playbooks
 from ..coding_delegation import build_coding_delegation_payload
 from ..ingress import CHAT_SOURCES
-from ..routing.action_copy import next_action_label_with_id
+from ..routing.action_copy import next_action_label
 from ..wrapper.contract import build_chat_interaction_payload
 
 
@@ -604,7 +604,7 @@ def format_grounded_score_summary(payload: dict[str, object]) -> str:
     for scenario in scenario_rows:
         observed = _nested(scenario, "observed")
         skill = observed.get("skill", "unknown")
-        next_action = next_action_label_with_id(str(observed.get("next_action", "unknown")))
+        next_action = next_action_label(str(observed.get("next_action", "unknown")))
         handoff = observed.get("handoff_status", "unknown")
         score = scenario.get("score", 0)
         status = "ok" if int(score) == 10 else "needs attention"

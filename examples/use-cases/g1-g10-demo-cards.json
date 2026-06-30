@@ -84,13 +84,13 @@
       "chat_surface": {
         "body_lines": [
           "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
-          "Route: automation-blueprint -> preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`).",
+          "Route: automation-blueprint -> preparing a scheduled-ops blueprint.",
           "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened."
         ],
         "direct_skill_invocation": "$automation-blueprint Every morning, research competitor updates and send a digest only if something changed.",
         "headline": "[omh] Natural-language scheduled automation",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | automation-blueprint | preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`)",
+        "status_line": "prepared_not_observed | automation-blueprint | preparing a scheduled-ops blueprint",
         "suggested_user_prompt": "Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed."
       },
       "evidence": {
@@ -241,13 +241,13 @@
       "chat_surface": {
         "body_lines": [
           "Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards.",
-          "Route: github-event-ops -> preparing a GitHub event operations card (`prepare_github_event_ops_card`).",
+          "Route: github-event-ops -> preparing a GitHub event operations card.",
           "Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub."
         ],
         "direct_skill_invocation": "$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
         "headline": "[omh] GitHub PR/Issue event operations",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | github-event-ops | preparing a GitHub event operations card (`prepare_github_event_ops_card`)",
+        "status_line": "prepared_not_observed | github-event-ops | preparing a GitHub event operations card",
         "suggested_user_prompt": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff."
       },
       "evidence": {
@@ -397,13 +397,13 @@
       "chat_surface": {
         "body_lines": [
           "Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states.",
-          "Route: agent-board -> preparing an agent board card (`prepare_agent_board_card`).",
+          "Route: agent-board -> preparing an agent board card.",
           "Teams see who owns each lane and which states are only prepared versus observed."
         ],
         "direct_skill_invocation": "$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
         "headline": "[omh] Multi-agent Kanban board",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | agent-board | preparing an agent board card (`prepare_agent_board_card`)",
+        "status_line": "prepared_not_observed | agent-board | preparing an agent board card",
         "suggested_user_prompt": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist."
       },
       "evidence": {
@@ -555,13 +555,13 @@
       "chat_surface": {
         "body_lines": [
           "Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions.",
-          "Route: memory-curation-review -> preparing a memory curation review (`prepare_memory_curation_review`).",
+          "Route: memory-curation-review -> preparing a memory curation review.",
           "Users can clean memory and skill drift without a silent destructive edit."
         ],
         "direct_skill_invocation": "$memory-curation-review Inspect stale project memories and ask me what to keep.",
         "headline": "[omh] Memory and skill curation review",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | memory-curation-review | preparing a memory curation review (`prepare_memory_curation_review`)",
+        "status_line": "prepared_not_observed | memory-curation-review | preparing a memory curation review",
         "suggested_user_prompt": "Use OMH memory-curation-review for: Inspect stale project memories and ask me what to keep."
       },
       "evidence": {
@@ -713,13 +713,13 @@
       "chat_surface": {
         "body_lines": [
           "Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy.",
-          "Route: gateway-intent-card -> preparing a gateway intent card (`prepare_gateway_intent_card`).",
+          "Route: gateway-intent-card -> preparing a gateway intent card.",
           "Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH."
         ],
         "direct_skill_invocation": "$gateway-intent-card Route this Discord thread update silently unless action is needed.",
         "headline": "[omh] Gateway-native intent card",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | gateway-intent-card | preparing a gateway intent card (`prepare_gateway_intent_card`)",
+        "status_line": "prepared_not_observed | gateway-intent-card | preparing a gateway intent card",
         "suggested_user_prompt": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed."
       },
       "evidence": {
@@ -871,13 +871,13 @@
       "chat_surface": {
         "body_lines": [
           "Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed.",
-          "Route: executor-runtime-readiness -> checking coding-agent readiness (`prepare_executor_runtime_readiness`).",
+          "Route: executor-runtime-readiness -> checking coding-agent readiness.",
           "Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities."
         ],
         "direct_skill_invocation": "$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
         "headline": "[omh] Executor runtime readiness",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | executor-runtime-readiness | checking coding-agent readiness (`prepare_executor_runtime_readiness`)",
+        "status_line": "prepared_not_observed | executor-runtime-readiness | checking coding-agent readiness",
         "suggested_user_prompt": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?"
       },
       "evidence": {
@@ -1031,13 +1031,13 @@
       "chat_surface": {
         "body_lines": [
           "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states.",
-          "Route: deliverable-package -> preparing a deliverable package (`prepare_deliverable_package`).",
+          "Route: deliverable-package -> preparing a deliverable package.",
           "Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached."
         ],
         "direct_skill_invocation": "$deliverable-package Turn this research into PPT and PDF with attachment status.",
         "headline": "[omh] Deliverable file package",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | deliverable-package | preparing a deliverable package (`prepare_deliverable_package`)",
+        "status_line": "prepared_not_observed | deliverable-package | preparing a deliverable package",
         "suggested_user_prompt": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status."
       },
       "evidence": {
@@ -1186,13 +1186,13 @@
       "chat_surface": {
         "body_lines": [
           "Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions.",
-          "Route: voice-operator -> preparing a voice-operator card (`prepare_voice_operator_card`).",
+          "Route: voice-operator -> preparing a voice-operator card.",
           "Voice and mobile users get concise, safe routing instead of long CLI-like responses."
         ],
         "direct_skill_invocation": "$voice-operator 'release before lunch, check risky parts' from mobile.",
         "headline": "[omh] Voice and mobile operator",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | voice-operator | preparing a voice-operator card (`prepare_voice_operator_card`)",
+        "status_line": "prepared_not_observed | voice-operator | preparing a voice-operator card",
         "suggested_user_prompt": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile."
       },
       "evidence": {
@@ -1343,13 +1343,13 @@
       "chat_surface": {
         "body_lines": [
           "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
-          "Route: toolbelt-readiness -> checking toolbelt readiness (`prepare_toolbelt_readiness`).",
+          "Route: toolbelt-readiness -> checking toolbelt readiness.",
           "Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness."
         ],
         "direct_skill_invocation": "$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
         "headline": "[omh] MCP and external toolbelt readiness",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | toolbelt-readiness | checking toolbelt readiness (`prepare_toolbelt_readiness`)",
+        "status_line": "prepared_not_observed | toolbelt-readiness | checking toolbelt readiness",
         "suggested_user_prompt": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?"
       },
       "evidence": {
@@ -1500,13 +1500,13 @@
       "chat_surface": {
         "body_lines": [
           "Keep automation and loop work from failing silently by showing token/cost/latency/run-history/failure-mode telemetry boundaries.",
-          "Route: ops-observability-card -> preparing an ops observability card (`prepare_ops_observability_card`).",
+          "Route: ops-observability-card -> preparing an ops observability card.",
           "Operators can see health/cost signals without confusing estimates with provider truth or completion evidence."
         ],
         "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, and last run status for this loop.",
         "headline": "[omh] Ops observability and cost card",
         "source": "hermes_agent_chat",
-        "status_line": "prepared_not_observed | ops-observability-card | preparing an ops observability card (`prepare_ops_observability_card`)",
+        "status_line": "prepared_not_observed | ops-observability-card | preparing an ops observability card",
         "suggested_user_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, and last run status for this loop."
       },
       "evidence": {

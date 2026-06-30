@@ -18,7 +18,7 @@ from ..use_cases import (
     write_all_use_case_artifacts,
     write_use_case_artifact,
 )
-from .common import _action_label, _action_label_with_id, _paths, _print_json, _wants_json
+from .common import _action_label, _paths, _print_json, _wants_json
 
 
 def cmd_cases_list(args: argparse.Namespace) -> int:
@@ -177,7 +177,7 @@ def _print_case_summary(case: dict[str, object]) -> None:
     print(f"  Compatibility alias: {case.get('compatibility_alias')}")
     print(f"  Playbook: {case.get('playbook')}")
     print(f"  Harness: {case.get('harness')}")
-    print(f"  Next action: {_action_label_with_id(str(case.get('next_action', '')))}")
+    print(f"  Next action: {_action_label(str(case.get('next_action', '')))}")
     print("Use it")
     print(f"  Hermes chat: {case.get('hermes_chat_prompt')}")
     print(f"  Compatibility alias: {case.get('direct_skill_invocation')}")
@@ -456,7 +456,7 @@ def _route_summary(route: dict[str, object]) -> str:
         return ""
     if not next_action:
         return primary_skill
-    return f"{primary_skill} -> {_action_label_with_id(next_action, str(route.get('next_action_label', '')))}"
+    return f"{primary_skill} -> {_action_label(next_action, str(route.get('next_action_label', '')))}"
 
 
 def _add_cases_commands(sub) -> None:

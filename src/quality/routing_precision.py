@@ -5,7 +5,7 @@ import hashlib
 from typing import Mapping, Sequence
 
 from ..ingress import CHAT_SOURCES
-from ..routing.action_copy import next_action_label_with_id
+from ..routing.action_copy import next_action_label
 from ..wrapper.contract import build_chat_interaction_payload
 
 
@@ -586,7 +586,7 @@ def format_routing_precision_summary(payload: Mapping[str, object]) -> str:
     for row in rows:
         observed = _nested(row, "observed")
         status = "ok" if row.get("passed") else "needs attention"
-        next_action = next_action_label_with_id(str(observed.get("next_action", "unknown")))
+        next_action = next_action_label(str(observed.get("next_action", "unknown")))
         lines.append(
             f"- {row.get('title', 'Untitled precision case')}: {status}; "
             f"route={observed.get('route_action', 'unknown')} -> {next_action}"
@@ -596,7 +596,7 @@ def format_routing_precision_summary(payload: Mapping[str, object]) -> str:
         for row in intervention_rows:
             observed = _nested(row, "observed")
             status = "ok" if row.get("passed") else "needs attention"
-            next_action = next_action_label_with_id(str(observed.get("next_action", "unknown")))
+            next_action = next_action_label(str(observed.get("next_action", "unknown")))
             lines.append(
                 f"- {row.get('title', 'Untitled intervention case')}: {status}; "
                 f"{observed.get('route_workflow', 'unknown')} -> {next_action}"

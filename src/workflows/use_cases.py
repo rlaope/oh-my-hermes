@@ -999,10 +999,10 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
             "headline": f"[omh] {case.title}",
             "body_lines": [
                 case.hermes_use_case,
-                f"Route: {case.primary_skill} -> {_action_label_with_id(case.next_action)}.",
+                f"Route: {case.primary_skill} -> {_action_label(case.next_action)}.",
                 case.user_value,
             ],
-            "status_line": f"prepared_not_observed | {case.primary_skill} | {_action_label_with_id(case.next_action)}",
+            "status_line": f"prepared_not_observed | {case.primary_skill} | {_action_label(case.next_action)}",
         },
         "wrapper_card": {
             "component": "omh_use_case_card",
@@ -1087,16 +1087,6 @@ def _demo_card(case: UseCase) -> dict[str, Any]:
 
 def _action_label(action: str) -> str:
     return next_action_label(action)
-
-
-def _action_label_with_id(action: str) -> str:
-    normalized = action.strip()
-    if not normalized:
-        return ""
-    label = _action_label(normalized)
-    if not label or label == normalized:
-        return normalized
-    return f"{label} (`{normalized}`)"
 
 
 def _action_button_label(action: str) -> str:
