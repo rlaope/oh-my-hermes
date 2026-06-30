@@ -973,6 +973,34 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 self.assertIn(json_key, json.loads(stdout))
 
+    def test_recommendation_summaries_use_human_action_labels(self) -> None:
+        cases = (
+            (
+                ["recommend", "I", "want", "to", "safely", "add", "a", "feature", "to", "this", "repo"],
+                "Next action: preparing a reviewed plan (`present_plan`)",
+            ),
+            (
+                ["recommend", "make", "an", "image", "explaining", "the", "cron", "feature"],
+                "Next action: preparing an image prompt card (`prepare_visual_prompt_card`)",
+            ),
+            (
+                ["playbook", "recommend", "turn", "this", "issue", "into", "a", "PR"],
+                "Next action: scope event (`scope_event`)",
+            ),
+            (
+                ["cases", "recommend", "daily", "competitor", "digest"],
+                "Next action: preparing a scheduled-ops blueprint (`prepare_scheduled_ops_blueprint`)",
+            ),
+        )
+
+        for args, expected in cases:
+            with self.subTest(args=args):
+                status, stdout, stderr = run_cli(args, output_json=False)
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                self.assertIn(expected, stdout)
+
     def test_cases_catalog_exposes_g1_to_g10_and_recommends_real_situations(self) -> None:
         status, stdout, stderr = run_cli(["cases", "list", "--json"], output_json=False)
 

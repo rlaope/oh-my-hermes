@@ -4,7 +4,7 @@ import argparse
 
 from ..installer import OmhError
 from ..playbooks import inspect_playbook, list_playbooks, recommend_playbooks
-from .common import _print_json, _wants_json
+from .common import _action_label_with_id, _print_json, _wants_json
 
 
 def cmd_playbook_list(args: argparse.Namespace) -> int:
@@ -120,7 +120,7 @@ def _print_playbook_recommend_summary(payload: dict[str, object]) -> None:
         print(f"   {title}")
         next_action = str(recommendation.get("next_action", "")).strip()
         if next_action:
-            print(f"   Next action: {next_action}")
+            print(f"   Next action: {_action_label_with_id(next_action)}")
         boundary = _short_summary(str(recommendation.get("evidence_boundary", "")), limit=120)
         if boundary:
             print(f"   Boundary: {boundary}")

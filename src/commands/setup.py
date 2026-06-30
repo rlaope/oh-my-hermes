@@ -51,7 +51,7 @@ from ..team_profiles import (
     list_team_profile_packs,
     operating_model_ids,
 )
-from .common import _paths, _print_json, _wants_json
+from .common import _action_label_with_id, _paths, _print_json, _wants_json
 from .language import LANGUAGE_CODES, language_from_env, language_options, normalize_language, tr
 
 INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh"
@@ -1979,7 +1979,7 @@ def _print_recommend_summary(payload: dict[str, object]) -> None:
             print(f"   {description}")
         next_action = str(recommendation.get("next_action", "")).strip()
         if next_action:
-            print(f"   Next action: {next_action}")
+            print(f"   Next action: {_action_label_with_id(next_action)}")
         why = _short_summary(str(recommendation.get("why", "")), limit=120)
         if why:
             print(f"   Why: {why}")
