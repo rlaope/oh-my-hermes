@@ -133,6 +133,27 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("clarify", actions)
         self.assertNotIn("zzzzzz", json.dumps(payload))
 
+    def test_route_hint_payload_opens_picker_for_catalog_questions(self) -> None:
+        message = "what OMH workflows are available?"
+
+        payload = build_chat_route_hint_payload(message, source="discord")
+
+        self.assertEqual(payload["route_hint"]["status"], "hinted")
+        self.assertTrue(payload["route_hint"]["catalog_question"])
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "oh-my-hermes")
+        self.assertEqual(payload["route_hint"]["primary_next_action"], "choose_skill")
+        self.assertEqual(payload["chat_response"]["kind"], "workflow_route_hint")
+        self.assertEqual(payload["chat_response"]["headline"], "[omh] workflow picker is ready.")
+        self.assertTrue(payload["chat_response"]["state"]["route_hint"]["catalog_question"])
+        self.assertIn("instead of asking for shell approval", payload["chat_response"]["body"])
+        actions = payload["chat_response"]["actions"]
+        self.assertEqual([action["id"] for action in actions], ["open_workflow", "route_for_me"])
+        self.assertEqual(actions[0]["submit_text"], "./omh")
+        backend_commands = payload["wrapper_contract"]["next_backend_commands"]
+        self.assertEqual([command["id"] for command in backend_commands], ["open_workflow", "route_for_me"])
+        self.assertEqual(backend_commands[0]["command"], "omh chat interact --source <source> ./omh")
+        self.assertNotIn(message, json.dumps(payload))
+
     def test_chat_interaction_renders_task_abstraction_card_without_cli_copy(self) -> None:
         message = (
             "Reproduce this Hermes and Friren setup on another MacBook, backup the state to private GitHub, "

@@ -5,6 +5,7 @@ from ..plugin_bundle.omh.awareness import (
     awareness_route_hint,
     awareness_route_hint_context_from_payload,
 )
+from ..routing.catalog_questions import is_skill_catalog_question
 from ..routing.action_copy import next_action_label
 
 CHAT_ROUTE_HINT_SCHEMA_VERSION = "chat_route_hint/v1"
@@ -21,6 +22,7 @@ def build_chat_route_hint_payload(
 ) -> dict[str, object]:
     """Return a wrapper-facing route hint without storing or echoing raw prompt text."""
     route_hint = awareness_route_hint(message, max_hints=max_hints)
+    route_hint = _route_hint_with_catalog_picker(route_hint, message)
     generic_tool_checkpoint = _generic_tool_checkpoint()
     hints = [hint for hint in route_hint.get("hints", []) if isinstance(hint, dict)]
     primary_hint = hints[0] if hints else {}
@@ -69,6 +71,50 @@ def _generic_tool_checkpoint() -> dict[str, object]:
     return awareness_generic_tool_checkpoint_payload()
 
 
+def _route_hint_with_catalog_picker(route_hint: dict[str, object], message: str) -> dict[str, object]:
+    hints = [hint for hint in route_hint.get("hints", []) if isinstance(hint, dict)]
+    if hints or not is_skill_catalog_question(message):
+        return route_hint
+    hint = {
+        "id": "catalog_question_picker",
+        "workflow": "oh-my-hermes",
+        "lane": "intent_to_plan",
+        "next_action": "choose_skill",
+        "next_action_label": next_action_label("choose_skill"),
+        "reason": "The user is asking which OMH workflows are available; show the workflow picker without shell approval.",
+        "fallback_action": "show_workflow_picker_or_capability_summary",
+        "fallback_action_label": next_action_label("show_workflow_picker"),
+        "matched_cues": ["catalog_question"],
+        "adjacent_workflows": ["deep-interview", "ralplan", "loop", "ultraprocess"],
+        "workflow_context_card": {
+            "id": "intent_to_plan",
+            "label": "Intent to plan",
+            "first_response_shape": "Open the OMH workflow picker, then let the user pick a lane or route the original request.",
+            "not_evidence_until_observed": [
+                "workflow selection",
+                "plan acceptance",
+                "executor dispatch",
+                "verification",
+            ],
+        },
+        "not_evidence_yet": ["workflow selection", "plan acceptance", "executor dispatch", "verification"],
+    }
+    updated = dict(route_hint)
+    updated.update(
+        {
+            "status": "hinted",
+            "selected_workflow": "oh-my-hermes",
+            "primary_workflow": "oh-my-hermes",
+            "primary_next_action": "choose_skill",
+            "primary_next_action_label": next_action_label("choose_skill"),
+            "adjacent_workflows": list(hint["adjacent_workflows"]),
+            "hints": [hint],
+            "catalog_question": True,
+        }
+    )
+    return updated
+
+
 def _checkpoint_body_text(generic_tool_checkpoint: dict[str, object]) -> str:
     body = str(generic_tool_checkpoint.get("body") or "").strip()
     if not body:
@@ -102,12 +148,21 @@ def _response_for_hint(
         workflow_submit_text = "./omh" if workflow == "oh-my-hermes" and next_action == "choose_skill" else f"./{workflow}"
         workflow_action_label = "Open omh" if workflow_submit_text == "./omh" else f"Open {workflow}"
         lane = str(primary_hint.get("lane") or "")
-        headline = f"[omh] {workflow} looks relevant."
-        body = (
-            f"I can open `{workflow}` first because this request matches the {lane.replace('_', ' ')} lane. "
-            f"Next action: {_action_label_with_id(next_action, next_action_label_text)}. "
-            "This is only a route hint until a workflow is selected and observed."
-        )
+        if workflow == "oh-my-hermes" and next_action == "choose_skill":
+            headline = "[omh] workflow picker is ready."
+            body = (
+                "This looks like an OMH catalog question, so I can open the workflow picker instead of asking "
+                "for shell approval. "
+                f"Next action: {_action_label_with_id(next_action, next_action_label_text)}. "
+                "This is only a route hint until a workflow is selected and observed."
+            )
+        else:
+            headline = f"[omh] {workflow} looks relevant."
+            body = (
+                f"I can open `{workflow}` first because this request matches the {lane.replace('_', ' ')} lane. "
+                f"Next action: {_action_label_with_id(next_action, next_action_label_text)}. "
+                "This is only a route hint until a workflow is selected and observed."
+            )
         if checkpoint_body:
             body = f"{body} {checkpoint_body}"
         actions = [
@@ -125,13 +180,16 @@ def _response_for_hint(
                 "enabled": True,
                 "backend_command": "omh chat interact",
             },
-            {
-                "id": "open_picker",
-                "label": "Open omh",
-                "enabled": True,
-                "submit_text": "./omh",
-            },
         ]
+        if workflow_submit_text != "./omh":
+            actions.append(
+                {
+                    "id": "open_picker",
+                    "label": "Open omh",
+                    "enabled": True,
+                    "submit_text": "./omh",
+                }
+            )
         render_kind = "workflow_route_hint"
     else:
         workflow = ""
@@ -194,6 +252,7 @@ def _response_for_hint(
                 "adjacent_workflows": list(route_hint.get("adjacent_workflows", [])),
                 "not_executed": list(route_hint.get("not_executed", [])),
                 "hints": hints,
+                "catalog_question": bool(route_hint.get("catalog_question", False)),
             },
         },
         "claim_boundary": (
@@ -211,12 +270,15 @@ def _next_backend_commands(primary_hint: dict[str, object]) -> list[dict[str, ob
             "command": "omh chat interact --source <source> <message>",
             "purpose": "Build the full wrapper interaction envelope from the same event.",
         },
-        {
-            "id": "open_picker",
-            "command": "omh chat interact --source <source> ./omh",
-            "purpose": "Open the compact OMH workflow picker.",
-        },
     ]
+    if workflow != "oh-my-hermes":
+        commands.append(
+            {
+                "id": "open_picker",
+                "command": "omh chat interact --source <source> ./omh",
+                "purpose": "Open the compact OMH workflow picker.",
+            }
+        )
     if workflow:
         workflow_command = (
             "omh chat interact --source <source> ./omh"
