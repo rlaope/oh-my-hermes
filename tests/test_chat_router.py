@@ -1385,6 +1385,8 @@ class ChatRouterTests(unittest.TestCase):
             "what skills are available?",
             "show workflows",
             "omh 뭐 할 수 있어?",
+            "omh에서 쓸 수 있는 워크플로 알려줘",
+            "omh에서 쓸 수 있는 기능 알려줘",
             "omh 스킬 뭐있어?",
             "스킬들은 뭐있어?",
         ):
@@ -1442,6 +1444,7 @@ class ChatRouterTests(unittest.TestCase):
                 "prepare_memory_curation_review",
                 "guard:memory_curation",
             ),
+            ("업데이트 됐는지 확인해줘", "doctor", "run_local_operator_check", "guard:doctor_health"),
         )
 
         for message, expected_skill, expected_action, expected_marker in cases:
@@ -1466,6 +1469,67 @@ class ChatRouterTests(unittest.TestCase):
             )
             public = public_route_payload(decision)
             self.assertNotIn("workflow_route_plan", public)
+
+    def test_natural_single_workflow_requests_use_fast_path_without_full_scoring(self) -> None:
+        chat_router_impl._route_chat_message_cached.cache_clear()
+        cases = (
+            ("이미지 요약 카드 만들어줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
+            ("릴리즈 노트 이미지 만들어줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
+            ("이 PDF 쉽게 요약해줘", "paper-learning", "prepare_paper_learning", "operator_surface_fast_path:paper"),
+            (
+                "paper pdf expert explanation please",
+                "paper-learning",
+                "prepare_paper_learning",
+                "operator_surface_fast_path:paper",
+            ),
+            (
+                "회의록 정리해줘",
+                "operating-rhythm",
+                "prepare_operating_record",
+                "operator_surface_fast_path:operating",
+            ),
+            (
+                "논문 링크 찾아줘",
+                "source-finder",
+                "prepare_source_finder_plan",
+                "operator_surface_fast_path:source",
+            ),
+            (
+                "자료 찾아줘",
+                "web-research",
+                "run_hermes_research",
+                "operator_surface_fast_path:research",
+            ),
+            (
+                "성능 최적화해줘",
+                "performance-goal",
+                "prepare_quality_performance_and_usability_review",
+                "operator_surface_fast_path:performance",
+            ),
+            ("리드미 개선해줘", "ultraprocess", "start_ultraprocess", "operator_surface_fast_path:delivery"),
+        )
+
+        with mock.patch.object(
+            chat_router_impl,
+            "recommend_skills",
+            side_effect=AssertionError("clear single-workflow requests should skip full recommendation scoring"),
+        ), mock.patch.object(
+            chat_router_impl,
+            "build_workflow_route_plan",
+            side_effect=AssertionError("clear single-workflow requests should not build route plans"),
+        ):
+            for message, expected_skill, expected_action, expected_marker in cases:
+                chat_router_impl._route_chat_message_cached.cache_clear()
+                with self.subTest(message=message):
+                    decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], expected_skill)
+                self.assertEqual(decision["confidence"], "high")
+                self.assertEqual(decision["recommendations"][0]["next_action"], expected_action)
+                self.assertIn(expected_marker, decision["recommendations"][0]["matched"])
+                public = public_route_payload(decision)
+                self.assertNotIn("workflow_route_plan", public)
 
     def test_exact_capability_cards_use_concrete_not_evidence_labels(self) -> None:
         cases = {

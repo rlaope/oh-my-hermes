@@ -204,6 +204,18 @@ _SKILL_POLICIES = {
             "and not-observed extraction/validation boundaries before presenting the explanation as complete."
         ),
     ),
+    "performance-goal": RecommendationPolicy(
+        next_action="prepare_quality_performance_and_usability_review",
+        evidence_boundary=(
+            "A performance goal card is not proof that a runtime, tool, MCP server, CI job, or platform action ran; "
+            "it is not performance proof, benchmark execution, latency proof, throughput proof, profiling evidence, "
+            "code change, regression-test completion, review, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Scope the metric, baseline, suspected hot path, safe optimization boundary, and verification commands before "
+            "claiming any runtime or AI-token efficiency improvement."
+        ),
+    ),
     "source-finder": RecommendationPolicy(
         next_action="prepare_source_finder_plan",
         evidence_boundary=(
