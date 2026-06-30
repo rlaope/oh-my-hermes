@@ -925,6 +925,9 @@ class EfficiencyContractTests(unittest.TestCase):
             ("risky refactor", "ralplan"),
             ("위험한 리팩터링 같아", "ralplan"),
             ("릴리즈 노트 썸네일로 만들어줘", "img-summary"),
+            ("github oss repo 찾아서 비교해줘", "source-finder"),
+            ("자료 출처 찾아줘 데이터셋이랑 깃허브까지", "source-finder"),
+            ("find papers datasets github repos and public presentations about agent memory", "source-finder"),
             ("arxiv 링크 찾아서 쉽게 설명해줘", "source-finder"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
         )

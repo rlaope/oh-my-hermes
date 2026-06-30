@@ -51,6 +51,13 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "file_or_text",
     ),
     RoutingPrecisionCase(
+        "readme-contents",
+        "README contents question stays file lookup",
+        "what is in README?",
+        "answer_file_lookup",
+        "file_or_text",
+    ),
+    RoutingPrecisionCase(
         "general-python-help",
         "Plain Python concept stays direct",
         "what Python list comprehension means?",
@@ -278,6 +285,13 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "source-control-concept",
         "Source control concept stays direct",
         "what is source control?",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "github-repo-concept",
+        "GitHub repo concept stays direct",
+        "what is GitHub repo?",
         "answer_directly",
         "direct_answer",
     ),

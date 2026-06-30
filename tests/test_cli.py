@@ -2295,7 +2295,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
-            self.assertIn("39/39 negative-control cases", gates["routing_precision"]["summary"])
+            self.assertIn("41/41 negative-control cases", gates["routing_precision"]["summary"])
             self.assertIn("52/52 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
@@ -2338,7 +2338,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 39/39 negative controls, 52/52 interventions "
+                "Routing precision: 41/41 negative controls, 52/52 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2366,8 +2366,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
-            self.assertEqual(payload["summary"]["routing_precision_passing"], 39)
-            self.assertEqual(payload["summary"]["routing_precision_total"], 39)
+            self.assertEqual(payload["summary"]["routing_precision_passing"], 41)
+            self.assertEqual(payload["summary"]["routing_precision_total"], 41)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
             self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 52)
             self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 52)
