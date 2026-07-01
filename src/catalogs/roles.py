@@ -156,6 +156,21 @@ _ROLES = (
         legacy_ids=("coding-handoff", "runtime-handoff-guidance", "codex-handoff-guidance"),
     ),
     RoleDefinition(
+        id="builder",
+        title="Builder",
+        purpose="Name the implementation responsibility inside a prepared Hermes-facing playbook while the selected executor/runtime remains the actual work owner.",
+        owns=(
+            "Presentation-layer implementation step in the prepared playbook",
+            "selected executor/runtime ownership narration",
+            "Expected implementation artifact boundary before observed evidence exists",
+        ),
+        primary_skills=("ultragoal", "ultrawork", "ralph"),
+        primary_harnesses=("goal-execution", "coding-handling"),
+        wrapper_actions=("choose_executor", "show_prompt_handoff", "show_runtime_handoff", "send_to_executor", "show_status"),
+        evidence_boundary="A builder role label is not hidden coding execution, executor/runtime dispatch, worker start, implementation result, verification, review, CI, merge readiness, or merge evidence. The selected executor/runtime owns implementation only after observed evidence exists.",
+        legacy_ids=("implementation-owner",),
+    ),
+    RoleDefinition(
         id="tracker",
         title="Tracker",
         purpose="Own runtime status, target topology, executor session, measurement, tool readiness, and observability narration.",

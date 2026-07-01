@@ -23,6 +23,7 @@ from test_plugin_distribution import FakeHermesContext, load_installed_plugin
 
 LEGACY_ROLE_ALIASES = {
     "coding-handoff": "handoff-guide",
+    "implementation-owner": "builder",
     "planning-lead": "planner",
     "research-lead": "researcher",
     "review-gate": "reviewer",
@@ -68,12 +69,20 @@ class PluginCapabilitiesTests(unittest.TestCase):
             self.assertIn("img-summary", summary_cards["materials_and_visuals"]["representative_workflows"])
 
             inspected = json.loads(handler({"action": "inspect", "id": "handoff-guide"}))
+            builder = json.loads(handler({"action": "inspect", "id": "builder", "section": "agent_roles"}))
+            builder_alias = json.loads(handler({"action": "inspect", "id": "implementation-owner", "section": "agent_roles"}))
             inspected_by_alias_section = json.loads(handler({"action": "inspect", "id": "handoff-guide", "section": "roles"}))
             legacy_inspected = json.loads(handler({"action": "inspect", "id": "coding-handoff"}))
             self.assertEqual(inspected["section"], "agent_roles")
             self.assertEqual(inspected_by_alias_section["section"], "agent_roles")
             self.assertEqual(inspected_by_alias_section["resolved_id"], "handoff-guide")
             self.assertEqual(inspected["capability"]["runtime_claim"], "descriptor_not_runtime_agent")
+            self.assertEqual(builder["resolved_id"], "builder")
+            self.assertEqual(builder["capability"]["runtime_claim"], "descriptor_not_runtime_agent")
+            self.assertIn("selected executor/runtime", " ".join(builder["capability"]["owns"]))
+            self.assertIn("hidden runtime execution", builder["capability"]["does_not_own"])
+            self.assertIn("unobserved worker dispatch", builder["capability"]["does_not_own"])
+            self.assertEqual(builder_alias["resolved_id"], "builder")
             self.assertEqual(legacy_inspected["section"], "agent_roles")
             self.assertEqual(legacy_inspected["requested_id"], "coding-handoff")
             self.assertEqual(legacy_inspected["resolved_id"], "handoff-guide")

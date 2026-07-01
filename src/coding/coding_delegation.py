@@ -27,6 +27,7 @@ from ..executor_readiness import (
     executor_readiness_for_selection,
     with_executor_readiness_options,
 )
+from .agentic_playbook import maybe_build_agentic_playbook
 from ..harness_quality import with_wrapper_actions
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..isolation import build_isolation_plan
@@ -341,6 +342,9 @@ def build_coding_delegation_payload(
         runtime_handoff = payload.get("runtime_handoff")
         if isinstance(runtime_handoff, dict) and "prompt_template" in runtime_handoff:
             payload["runtime_handoff_prompt"] = str(runtime_handoff["prompt_template"]).replace("{message}", message)
+    agentic_playbook = maybe_build_agentic_playbook(message, delegation_payload=payload)
+    if agentic_playbook:
+        payload["agentic_playbook"] = agentic_playbook
     return payload
 
 
