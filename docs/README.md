@@ -152,8 +152,8 @@ with these 10 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
   harness examples should stay backed by conformance tests.
 - Release checks should include `omh release checklist --json`,
   `omh release skill-content-smoke --json`,
-  `omh release product-readiness --version 1.0.1 --json`,
-  `omh release evidence-bundle --version 1.0.1 --write --json`,
+  `omh release product-readiness --version 1.0.2 --json`,
+  `omh release evidence-bundle --version 1.0.2 --write --json`,
   `omh release hermes-smoke`, `omh release install-smoke`, and installed command
   smoke (`omh --help`). Use `release install-smoke --live` for an isolated
   first-time downloader check, and use `hermes-smoke --live` only from the

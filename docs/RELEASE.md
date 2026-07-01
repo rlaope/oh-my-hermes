@@ -60,8 +60,8 @@ python3 -m omh.cli docs workflows --check
 python3 -m omh.cli harness validate
 python3 -m omh.cli release checklist --json
 python3 -m omh.cli release skill-content-smoke --json
-python3 -m omh.cli release product-readiness --version 1.0.1 --json
-python3 -m omh.cli release evidence-bundle --version 1.0.1 --write --json
+python3 -m omh.cli release product-readiness --version 1.0.2 --json
+python3 -m omh.cli release evidence-bundle --version 1.0.2 --write --json
 python3 -m omh.cli cases demo --all --json
 python3 -m omh.cli cases artifact --all --json
 python3 -m omh.cli cases replay --json
@@ -69,8 +69,8 @@ python3 -m omh.cli cases readiness --json
 python3 -m omh.cli demo routing-precision --json
 python3 -m omh.cli demo router-fast-path --json
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke learning review --all
-python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.1
-python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.1
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke install --dry-run --channel stable --version 1.0.2
+python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke setup --dry-run --channel stable --version 1.0.2
 python3 -m omh.cli --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke probe
 python3 -m omh.cli release hermes-smoke
 python3 -m omh.cli release install-smoke
@@ -79,12 +79,12 @@ omh --help
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 uv build
 python3 -m venv /tmp/omh-wheel-smoke
-/tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes-1.0.1-py3-none-any.whl
+/tmp/omh-wheel-smoke/bin/python -m pip install --upgrade dist/oh_my_hermes-1.0.2-py3-none-any.whl
 /tmp/omh-wheel-smoke/bin/omh --help
 /tmp/omh-wheel-smoke/bin/omh release skill-content-smoke --json
 /tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home release hermes-smoke --install-path setup --omh-command /tmp/omh-wheel-smoke/bin/omh --include-command-smoke
-/tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.1
-OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.1-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin sh install.sh
+/tmp/omh-wheel-smoke/bin/omh --omh-home /tmp/omh-wheel-home --hermes-home /tmp/hermes-wheel-home setup --dry-run --channel stable --version 1.0.2
+OMH_PYTHON=/tmp/omh-wheel-smoke/bin/python OMH_PACKAGE_URL=file://$PWD/dist/oh_my_hermes-1.0.2-py3-none-any.whl OMH_VENV_DIR=/tmp/omh-installer-venv OMH_BIN_DIR=/tmp/omh-installer-bin sh install.sh
 /tmp/omh-installer-bin/omh --omh-home /tmp/omh-installer-home --hermes-home /tmp/omh-installer-hermes setup --dry-run
 ```
 
@@ -92,8 +92,8 @@ The checklist command renders the same release gates as a deterministic
 `release_readiness_checklist/v1` contract:
 
 ```sh
-omh release checklist --version 1.0.1
-omh release checklist --version 1.0.1 --json
+omh release checklist --version 1.0.2
+omh release checklist --version 1.0.2 --json
 ```
 
 It is plan-only: it does not run checks, mutate Hermes, create tags, or publish
@@ -250,7 +250,7 @@ delivery.
 The product readiness rollup sits one level above use cases:
 
 ```sh
-omh release product-readiness --version 1.0.1 --json
+omh release product-readiness --version 1.0.2 --json
 ```
 
 It checks the generated skill content, G1-G10 readiness, grounded routing score,
@@ -264,7 +264,7 @@ merge, deliver messages, or spend provider budget.
 When the local release story is ready, write an attachable evidence bundle:
 
 ```sh
-omh release evidence-bundle --version 1.0.1 --write --json
+omh release evidence-bundle --version 1.0.2 --write --json
 ```
 
 The bundle writes `omh_release_evidence_bundle/v1` under
@@ -318,8 +318,8 @@ Run the installed command smoke in CI or a release shell after installing OMH:
 command -v omh
 omh --help
 omh release skill-content-smoke --json
-omh release product-readiness --version 1.0.1 --json
-omh release evidence-bundle --version 1.0.1 --write --json
+omh release product-readiness --version 1.0.2 --json
+omh release evidence-bundle --version 1.0.2 --write --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 
