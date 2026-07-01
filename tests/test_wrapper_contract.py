@@ -385,6 +385,71 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("send_to_executor", actions)
         self.assertIn("send_to_codex", actions)
 
+    def test_delegate_mode_attaches_prepared_agentic_playbook_projection(self) -> None:
+        payload = build_chat_interaction_payload("risky refactor", mode="delegate", source="discord", executor_target="codex")
+
+        playbook = payload["agentic_playbook"]
+        response = payload["chat_response"]
+        response_playbook = response["state"]["agentic_playbook"]
+        delegation_playbook = payload["delegation"]["agentic_playbook"]
+
+        self.assertEqual(playbook["schema_version"], "agentic_playbook/v1")
+        self.assertEqual(playbook["status"], "prepared_not_observed")
+        self.assertEqual([step["id"] for step in playbook["steps"]], ["interviewer", "pre_build_reviewer", "builder", "post_build_reviewer"])
+        self.assertEqual(playbook["builder"]["owner"], "codex")
+        self.assertEqual(playbook["builder"]["owner_kind"], "selected_executor_runtime")
+        self.assertEqual(response_playbook["schema_version"], "agentic_playbook/v1")
+        self.assertEqual(delegation_playbook["schema_version"], "agentic_playbook/v1")
+        self.assertIn("Interviewer", response["body"])
+        self.assertIn("Builder", response["body"])
+        self.assertIn("prepared_not_observed", response["claim_boundary"])
+        self.assertNotIn("omh ", json.dumps(response).lower())
+
+    def test_plan_mode_attaches_playbook_without_executor_choice_overclaiming(self) -> None:
+        payload = build_chat_interaction_payload("risky refactor with tests", source="discord", mode="plan")
+
+        playbook = payload["agentic_playbook"]
+        response = payload["chat_response"]
+
+        self.assertEqual(playbook["classification"]["decision"], "attach_playbook")
+        self.assertEqual(playbook["builder"]["owner"], "executor_choice_required")
+        self.assertEqual(playbook["builder"]["owner_kind"], "selected_executor_runtime")
+        self.assertEqual(response["state"]["agentic_playbook"]["status"], "prepared_not_observed")
+        self.assertIn("staged workflow", response["body"])
+        self.assertIn("not execution", response["claim_boundary"])
+
+    def test_plan_mode_attaches_playbook_for_executor_neutral_owners(self) -> None:
+        for executor_target in ("claude-code", "hermes", "omx-runtime"):
+            with self.subTest(executor_target=executor_target):
+                payload = build_chat_interaction_payload(
+                    "risky refactor with tests",
+                    source="discord",
+                    mode="plan",
+                    executor_target=executor_target,
+                )
+
+                playbook = payload["agentic_playbook"]
+                coding_delegate = payload["plan"]["wrapper_contract"]["coding_delegate"]
+
+                self.assertTrue(coding_delegate["available"])
+                self.assertEqual(playbook["classification"]["decision"], "attach_playbook")
+                self.assertEqual(playbook["builder"]["owner"], executor_target)
+                self.assertEqual(playbook["builder"]["owner_kind"], "selected_executor_runtime")
+                self.assertEqual(payload["chat_response"]["state"]["agentic_playbook"]["status"], "prepared_not_observed")
+
+    def test_light_path_trackpad_question_does_not_attach_agentic_playbook(self) -> None:
+        payload = build_chat_interaction_payload("why does my trackpad scroll feel reversed?", source="discord")
+
+        self.assertNotIn("agentic_playbook", payload)
+        self.assertNotIn("agentic_playbook", payload["chat_response"]["state"])
+
+    def test_explicit_delegate_trackpad_question_does_not_attach_agentic_playbook(self) -> None:
+        payload = build_chat_interaction_payload("why does my trackpad scroll feel reversed?", mode="delegate", source="discord")
+
+        self.assertNotIn("agentic_playbook", payload)
+        self.assertNotIn("agentic_playbook", payload["delegation"])
+        self.assertNotIn("agentic_playbook", payload["chat_response"]["state"])
+
     def test_delegate_mode_defaults_to_executor_choice(self) -> None:
         payload = build_chat_interaction_payload("risky refactor", mode="delegate", source="discord")
 

@@ -544,6 +544,15 @@ def _standalone_sections() -> dict[str, object]:
             },
             {
                 "schema_version": "agent_role_capability/v1",
+                "id": "builder",
+                "display_name": "Builder",
+                "legacy_ids": ["implementation-owner"],
+                "runtime_claim": "descriptor_not_runtime_agent",
+                "owns": ["prepared playbook implementation step", "selected executor/runtime ownership narration"],
+                "does_not_own": ["hidden runtime execution", "unobserved worker dispatch", "review", "CI", "merge"],
+            },
+            {
+                "schema_version": "agent_role_capability/v1",
                 "id": "tracker",
                 "display_name": "Tracker",
                 "legacy_ids": ["hybrid-measurement"],

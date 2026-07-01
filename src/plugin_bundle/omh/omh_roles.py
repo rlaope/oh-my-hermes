@@ -14,6 +14,7 @@ _ROLE_ALIASES = {
     "hybrid-measurement": "tracker",
     "hybrid-review": "reviewer",
     "hybrid-verification": "reviewer",
+    "implementation-owner": "builder",
     "planning-lead": "planner",
     "research-lead": "researcher",
     "retained-knowledge": "memory-keeper",

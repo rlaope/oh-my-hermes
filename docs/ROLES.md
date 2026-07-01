@@ -132,6 +132,21 @@ prepared handoffs, and observed evidence:
 - Wrapper actions: `choose_executor`, `show_prompt_handoff`, `show_runtime_handoff`, `start_team`, `start_swarm`, `prepare_worktree`, `send_to_executor`, `show_status`
 - Evidence boundary: A prepared coding handoff is not executor/runtime dispatch, worker start, worktree creation, result, verification, review, CI, merge readiness, or merge evidence. Hermes/OMX/OMO/OMC runtime handoffs must record separate `runtime_observation/v1` events before the status can move from prepared to observed.
 
+### Builder
+
+- ID: `builder`
+- Display name: Builder
+- Legacy aliases: `implementation-owner`
+- Purpose: Name the implementation responsibility inside a prepared Hermes-facing playbook while the selected executor/runtime remains the actual work owner.
+- Owns:
+  - Presentation-layer implementation step in the prepared playbook
+  - selected executor/runtime ownership narration
+  - Expected implementation artifact boundary before observed evidence exists
+- Primary skills: `ultragoal`, `ultrawork`, `ralph`
+- Primary harnesses: `goal-execution`, `coding-handling`
+- Wrapper actions: `choose_executor`, `show_prompt_handoff`, `show_runtime_handoff`, `send_to_executor`, `show_status`
+- Evidence boundary: A builder role label is not hidden coding execution, executor/runtime dispatch, worker start, implementation result, verification, review, CI, merge readiness, or merge evidence. The selected executor/runtime owns implementation only after observed evidence exists.
+
 ### Tracker
 
 - ID: `tracker`

@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from ..context_safety import compact_progress_events
+from ..coding.agentic_playbook import maybe_build_agentic_playbook
+from ..coding.agentic_playbook_contract import chat_response_with_agentic_playbook
 from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_text, extract_source_metadata
 from ..routing.catalog_questions import is_skill_catalog_question as _is_skill_catalog_question
 from ..routing.chat import public_chat_route_payload, route_explanation_payload
@@ -1967,6 +1969,9 @@ def _build_chat_interaction_payload_uncached(
         delegation["executor_resolution"] = executor_resolution
         base["delegation"] = delegation
         base["executor_resolution"] = executor_resolution
+        agentic_playbook = delegation.get("agentic_playbook")
+        if isinstance(agentic_playbook, dict):
+            base["agentic_playbook"] = agentic_playbook
         base["next_action"] = _delegation_next_action(delegation)
         base["chat_response"] = build_chat_response_from_delegation(delegation, thread_key=str(base["thread_key"]))
         return _finish_interaction(base, target_notice)
@@ -1978,6 +1983,9 @@ def _build_chat_interaction_payload_uncached(
             message=message,
             include_message=include_message,
         )
+        agentic_playbook = maybe_build_agentic_playbook(message, route_payload=route_payload)
+        if agentic_playbook:
+            base["agentic_playbook"] = agentic_playbook
         base["next_action"] = str(_nested(base["chat_response"], "state").get("next_action", "answer_clarification"))
         return _finish_interaction(base, target_notice)
 
@@ -2024,6 +2032,14 @@ def _build_chat_interaction_payload_uncached(
         base["executor_resolution"] = executor_resolution
     base["plan"] = _public_plan_payload(plan, include_message=include_message)
     contract = _nested(plan, "wrapper_contract")
+    coding_delegate = _nested(contract, "coding_delegate")
+    agentic_playbook = maybe_build_agentic_playbook(
+        message,
+        route_payload=route_payload,
+        delegation_payload=coding_delegate if coding_delegate else None,
+    )
+    if agentic_playbook:
+        base["agentic_playbook"] = agentic_playbook
     next_action = str(contract.get("next_action", "present_plan"))
     base["next_action"] = "present_plan" if next_action == "prepare_coding_delegation_after_plan_acceptance" else next_action
     base["chat_response"] = build_chat_response_from_plan(plan, thread_key=str(base["thread_key"]))
@@ -2119,6 +2135,9 @@ def _attach_coding_owner_handoff(
         "coding_status_request": _route_is_coding_status_request(route_payload),
         "claim_boundary": "Route context explains why the wrapper shaped this handoff; it is not dispatch or runtime evidence.",
     }
+    agentic_playbook = delegation.get("agentic_playbook")
+    if isinstance(agentic_playbook, dict):
+        base["agentic_playbook"] = agentic_playbook
     base["delegation"] = delegation
     base["executor_resolution"] = executor_resolution
     base["next_action"] = _delegation_next_action(delegation)
@@ -4253,6 +4272,9 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
         response = _chat_response_with_route_explanation(response, _nested(payload, "route"))
         if target_notice:
             response = _chat_response_with_target_notice(response, target_notice)
+        agentic_playbook = payload.get("agentic_playbook")
+        if isinstance(agentic_playbook, dict):
+            response = chat_response_with_agentic_playbook(response, agentic_playbook)
         payload["chat_response"] = _chat_response_with_render_profile(
             response,
             source=str(payload.get("source", "generic")),

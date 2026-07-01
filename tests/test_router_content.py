@@ -196,8 +196,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("roles are responsibility descriptors, not runtime agents", roles_doc.lower())
         for role in role_definitions():
             role_file = Path("roles") / f"{role.id}.md"
+            plugin_role_file = Path("src/plugin_bundle/omh/references") / f"role-{role.id}.md"
             text = role_file.read_text(encoding="utf-8")
             self.assertEqual(text, role_file_markdown(role))
+            if plugin_role_file.exists():
+                self.assertEqual(plugin_role_file.read_text(encoding="utf-8"), role_file_markdown(role))
             self.assertIn("responsibility descriptor, not a runtime agent", text)
             self.assertIn("OMH Role Context", text)
             self.assertIn("prepared guidance only", text)
@@ -1075,6 +1078,7 @@ class RouterContentTests(unittest.TestCase):
             Path("roles/operator.md"),
             Path("roles/memory-keeper.md"),
             Path("roles/handoff-guide.md"),
+            Path("roles/builder.md"),
             Path("roles/tracker.md"),
             Path("roles/reviewer.md"),
             Path("docs/RELEASE.md"),

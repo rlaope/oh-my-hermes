@@ -165,6 +165,7 @@ class ArchitectureLayoutTests(unittest.TestCase):
             "src/omh/isolation.py": "from .coding.isolation import *  # noqa: F401,F403",
             "src/omh/team_readiness.py": "from .coding.team_readiness import *  # noqa: F401,F403",
             "src/omh/work_reporting.py": "from .coding.work_reporting import *  # noqa: F401,F403",
+            "src/omh/agentic_playbook.py": "from .coding.agentic_playbook import *  # noqa: F401,F403",
             "src/omh/worktree_creator.py": "from .coding.worktree_creator import *  # noqa: F401,F403",
             "src/omh/installer.py": "from .install.installer import *  # noqa: F401,F403",
             "src/omh/manifest.py": "from .install.manifest import *  # noqa: F401,F403",
