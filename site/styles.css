@@ -6052,8 +6052,9 @@ body.docs-page {
 .home-hero {
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.78fr);
-  gap: clamp(20px, 3vw, 34px) clamp(32px, 6vw, 84px);
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.86fr);
+  gap: clamp(14px, 1.8vw, 20px) clamp(28px, 4vw, 56px);
+  align-content: center;
   align-items: center;
   min-height: min(900px, 96dvh);
   padding: 120px 6vw 76px;
@@ -6121,7 +6122,7 @@ body.docs-page {
   position: relative;
   z-index: 2;
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 1 / span 2;
   max-width: 680px;
   align-self: center;
 }
@@ -6156,6 +6157,68 @@ body.docs-page {
 
 .home-actions {
   margin-top: 26px;
+}
+
+.hero-install {
+  position: relative;
+  z-index: 2;
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  overflow: hidden;
+  width: min(100%, 780px);
+  max-width: none;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(5, 5, 5, 0.82);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+.hero-install__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.hero-install__bar span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.hero-install__bar span:first-child {
+  background: var(--home-teal);
+}
+
+.hero-install__bar strong {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hero-install code {
+  display: block;
+  padding: 15px 16px 16px;
+  color: #ffffff;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: clamp(0.74rem, 0.95vw, 0.9rem);
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .install-terminal code {
@@ -6330,7 +6393,8 @@ body.docs-page {
 
 @media (max-width: 1180px) {
   .home-hero__content,
-  .home-hero__visual {
+  .home-hero__visual,
+  .hero-install {
     grid-column: 1;
   }
 
@@ -6341,6 +6405,11 @@ body.docs-page {
 
   .home-hero__visual {
     grid-row: 2;
+    width: min(100%, 760px);
+  }
+
+  .hero-install {
+    grid-row: 3;
     width: min(100%, 760px);
   }
 }
@@ -6384,6 +6453,10 @@ body.docs-page {
   }
 
   .install-terminal {
+    padding: 14px;
+  }
+
+  .hero-install code {
     padding: 14px;
   }
 

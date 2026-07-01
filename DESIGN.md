@@ -45,7 +45,7 @@
 
 ## Components
 - Existing components to reuse: `topbar`, `nav`, `button`, `footer`, command blocks, poster frames, state pills, route/evidence cards.
-- New/changed components: homepage README-image hero, compact install terminal, core-value ledger, natural-message routing board, situation lane strip, truth boundary stack, docs decision map, docs value rail.
+- New/changed components: homepage README-image hero, top hero installer terminal, full install terminal, core-value ledger, natural-message routing board, situation lane strip, truth boundary stack, docs decision map, docs value rail.
 - Variants and states: hover, focus-visible, disabled/gated, ready/pending, mobile stacked layouts, reduced motion.
 - Token/component ownership: `site/styles.css` owns static site tokens and components; HTML pages should not inline style decisions.
 
@@ -72,7 +72,7 @@
 ## Content voice
 - Tone: direct, confident, evidence-backed, product-operator language.
 - Terminology: prefer "Hermes chat", "wrapper contract", "prepared versus observed", "selected executor", "local artifacts", "capability manifest".
-- Microcopy rules: avoid unexplained command lists in primary copy; keep install command blocks short enough for a human to scan (`curl | sh`, `omh setup`, then Hermes tap/install when needed); pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed; keep default public copy in English.
+- Microcopy rules: avoid unexplained command lists in primary copy; keep the hero install block to `curl | sh` and `omh setup`; keep the full install block readable with Hermes tap/install commands preserved below the local installer; pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed; keep default public copy in English.
 
 ## Implementation constraints
 - Framework/styling system: static HTML and CSS under `site/`; no frontend build step.
