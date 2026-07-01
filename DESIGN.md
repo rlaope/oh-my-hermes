@@ -14,7 +14,7 @@
 ## Product goals
 - Goals: make OMH understandable from the first viewport, show that Hermes remains the user-facing surface, make wrapper contracts and evidence boundaries feel tangible, keep installation and docs paths obvious, and turn the README core values into the primary site structure.
 - Non-goals: do not reposition OMH as a standalone bot, LLM router, Hermes core patch, network service, or hidden coding executor.
-- Success signals: a new visitor can explain "Install once, keep Hermes, make the next step safe"; the site highlights capabilities, plugin/wrapper status, handoff, and evidence without command memorization; screenshots remain readable on mobile and desktop.
+- Success signals: a new visitor first sees "Oh My Hermes", then understands "Install once, keep Hermes, make the next step safe"; the site highlights capabilities, plugin/wrapper status, handoff, and evidence without command memorization; screenshots remain readable on mobile and desktop.
 
 ## Personas and jobs
 - Primary personas: Hermes users, wrapper or adapter builders, maintainers evaluating delegation-first coding flows, operators responsible for release trust.
@@ -24,7 +24,7 @@
 ## Information architecture
 - Primary navigation: Home, Docs, Hermes Deepdive, GitHub.
 - Core routes/screens: homepage, docs index, workflow detail pages, architecture guide.
-- Content hierarchy: thesis first, README core values second, live-feeling contract example third, situation lanes fourth, evidence and architecture boundaries fifth, install path last.
+- Content hierarchy: brand first, README hero image and install path second, README core values third, live-feeling contract example fourth, situation lanes fifth, evidence and architecture boundaries sixth.
 - Core value spine: install once; keep Hermes chat-first; pick the smallest safe next step; keep contracts local and deterministic; never blur prepared state with observed proof.
 - Docs hierarchy: start by decision, not by command. The docs index answers "install", "choose a lane", "wire a wrapper", "verify evidence", and sends detailed reference work to deeper pages.
 
@@ -41,11 +41,11 @@
 - Spacing/layout rhythm: full-width bands with constrained inner grids; no nested decorative cards; compact repeated items.
 - Shape/radius/elevation: 8px radius maximum for cards and tools, hairline borders, restrained shadows, glow only where it reinforces route/status states.
 - Motion: subtle hover lift, route shimmer, console scan, and focus transitions; respect reduced motion.
-- Imagery/iconography: use existing poster assets as real product artifacts; avoid decorative-only art.
+- Imagery/iconography: use the README `assets/hermes-agent-hero.png` artwork as the homepage hero source, copied into `site/assets/` for GitHub Pages; avoid legacy hero variants and decorative-only art.
 
 ## Components
 - Existing components to reuse: `topbar`, `nav`, `button`, `footer`, command blocks, poster frames, state pills, route/evidence cards.
-- New/changed components: homepage proof hero, core-value ledger, natural-message routing board, situation lane strip, truth boundary stack, docs decision map, docs value rail.
+- New/changed components: homepage README-image hero, compact install terminal, core-value ledger, natural-message routing board, situation lane strip, truth boundary stack, docs decision map, docs value rail.
 - Variants and states: hover, focus-visible, disabled/gated, ready/pending, mobile stacked layouts, reduced motion.
 - Token/component ownership: `site/styles.css` owns static site tokens and components; HTML pages should not inline style decisions.
 
@@ -72,7 +72,7 @@
 ## Content voice
 - Tone: direct, confident, evidence-backed, product-operator language.
 - Terminology: prefer "Hermes chat", "wrapper contract", "prepared versus observed", "selected executor", "local artifacts", "capability manifest".
-- Microcopy rules: avoid unexplained command lists in primary copy; pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed; keep default public copy in English.
+- Microcopy rules: avoid unexplained command lists in primary copy; keep install command blocks short enough for a human to scan (`curl | sh`, `omh setup`, then Hermes tap/install when needed); pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed; keep default public copy in English.
 
 ## Implementation constraints
 - Framework/styling system: static HTML and CSS under `site/`; no frontend build step.

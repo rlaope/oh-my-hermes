@@ -185,7 +185,7 @@ a {
   perspective: 1400px;
   background:
     linear-gradient(90deg, rgba(12, 23, 32, 0.96), rgba(13, 31, 38, 0.78) 46%, rgba(18, 32, 38, 0.36)),
-    url("assets/hermes-agent-hero.png") center right / cover no-repeat;
+    url("assets/omh-readme-hero.png") center right / cover no-repeat;
 }
 
 .hero::before,
@@ -2907,7 +2907,7 @@ h1 {
   color: #ffffff;
   background:
     linear-gradient(135deg, rgba(14, 24, 34, 0.92), rgba(14, 24, 34, 0.68)),
-    url("assets/hermes-agent-hero.png") center / cover no-repeat;
+    url("assets/omh-readme-hero.png") center / cover no-repeat;
   box-shadow: var(--shadow-strong);
 }
 
@@ -3750,7 +3750,7 @@ h1 {
     padding-top: 140px;
     background:
       linear-gradient(180deg, rgba(14, 25, 37, 0.94), rgba(14, 25, 37, 0.62)),
-      url("assets/hermes-agent-hero.png") center top / cover no-repeat;
+      url("assets/omh-readme-hero.png") center top / cover no-repeat;
   }
 
   .hero-stage {
@@ -4174,7 +4174,7 @@ body.home-page {
   inset: 90px 0 0 auto;
   width: min(50vw, 760px);
   opacity: 0.18;
-  background: url("assets/hermes-agent-hero.png") right top / contain no-repeat;
+  background: url("assets/omh-readme-hero.png") right top / contain no-repeat;
   mix-blend-mode: screen;
 }
 
@@ -5384,39 +5384,6 @@ body.home-page {
   font-weight: 800;
 }
 
-.metric-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-bottom: 1px solid var(--home-line);
-  background: #ffffff;
-}
-
-.metric-strip div {
-  display: grid;
-  gap: 4px;
-  min-height: 130px;
-  padding: 24px 6vw;
-  border-right: 1px solid var(--home-line);
-}
-
-.metric-strip div:last-child {
-  border-right: 0;
-}
-
-.metric-strip span {
-  color: var(--home-black);
-  font-size: clamp(2.4rem, 4vw, 4.8rem);
-  font-weight: 950;
-  line-height: 0.95;
-  text-transform: uppercase;
-}
-
-.metric-strip strong {
-  color: var(--home-muted);
-  font-size: 0.9rem;
-  text-transform: uppercase;
-}
-
 .home-section {
   padding: 88px 6vw;
 }
@@ -6055,6 +6022,219 @@ body.docs-page {
   line-height: 1.2;
 }
 
+.home-page .topbar {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(5, 5, 5, 0.72);
+  color: #ffffff;
+  backdrop-filter: blur(18px);
+}
+
+.home-page .brand--link,
+.home-page .nav a {
+  color: #ffffff;
+}
+
+.home-page .nav a {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.home-page .nav a:hover,
+.home-page .nav a:focus-visible {
+  background: #ffffff;
+  color: #050505;
+}
+
+.home-page .nav__icon svg {
+  fill: currentColor;
+}
+
+.home-hero {
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.78fr);
+  gap: clamp(20px, 3vw, 34px) clamp(32px, 6vw, 84px);
+  align-items: center;
+  min-height: min(900px, 96dvh);
+  padding: 120px 6vw 76px;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.96), transparent 31%),
+    radial-gradient(circle at 45% 50%, rgba(22, 214, 182, 0.18), transparent 24%),
+    linear-gradient(105deg, #fbfbf7 0%, #eeeeea 30%, #2b2b29 52%, #050505 76%);
+  color: #ffffff;
+}
+
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0 34%, rgba(5, 5, 5, 0.34) 51%, #050505 72%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0) 0 74%, rgba(5, 5, 5, 0.92) 100%);
+}
+
+.home-hero::after {
+  inset: auto 6vw 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(22, 214, 182, 0.86), rgba(255, 255, 255, 0.64), transparent);
+}
+
+.home-hero__visual {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  overflow: hidden;
+  width: min(100%, 780px);
+  margin: 0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow:
+    0 46px 120px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.home-hero__visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(5, 5, 5, 0) 0%, rgba(5, 5, 5, 0.08) 42%, rgba(5, 5, 5, 0.58) 76%, rgba(5, 5, 5, 0.96) 100%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0) 58%, rgba(5, 5, 5, 0.42) 100%);
+}
+
+.home-hero__visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  object-position: center;
+  filter: contrast(1.04) saturate(0.9);
+}
+
+.home-hero__content {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  grid-row: 1;
+  max-width: 680px;
+  align-self: center;
+}
+
+.home-hero .home-kicker {
+  color: var(--home-teal);
+}
+
+.home-hero h1 {
+  max-width: 680px;
+  color: #ffffff;
+  font-size: clamp(4.6rem, 8.2vw, 8.8rem);
+  line-height: 0.82;
+}
+
+.home-tagline {
+  max-width: 620px;
+  margin: 22px 0 0;
+  color: #ffffff;
+  font-size: clamp(1.55rem, 2.9vw, 3.05rem);
+  font-weight: 900;
+  line-height: 1;
+  text-wrap: balance;
+}
+
+.home-lead {
+  max-width: 600px;
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: clamp(1rem, 1.2vw, 1.14rem);
+}
+
+.home-actions {
+  margin-top: 26px;
+}
+
+.install-terminal code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.9rem;
+  line-height: 1.58;
+}
+
+.install-section {
+  background: #ffffff;
+}
+
+.install-panel {
+  grid-template-columns: 1fr;
+  align-items: center;
+  padding: clamp(20px, 3vw, 28px);
+  border: 1px solid var(--home-black);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.install-panel h2 {
+  font-size: clamp(2rem, 4.2vw, 3.8rem);
+}
+
+.install-panel p {
+  max-width: 520px;
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 1rem;
+}
+
+.install-terminal {
+  background: var(--home-black);
+}
+
+.home-section {
+  padding-top: clamp(96px, 11vw, 154px);
+  padding-bottom: clamp(104px, 12vw, 166px);
+}
+
+.section-heading {
+  margin-bottom: clamp(34px, 5vw, 68px);
+}
+
+.section-heading h2,
+.message-board__copy h2 {
+  max-width: 880px;
+}
+
+.value-card,
+.lane-card,
+.truth-grid article {
+  min-height: clamp(220px, 24vw, 310px);
+}
+
+.message-board,
+.truth-section,
+.wrapper-section,
+.artifact-section,
+.install-section {
+  border-top: 12px solid #ffffff;
+}
+
+.lane-section {
+  border-top: 12px solid var(--home-paper);
+}
+
+.install-section .home-kicker {
+  color: var(--home-teal-deep);
+}
+
 @media (max-width: 1180px) {
   .home-hero,
   .message-board,
@@ -6073,7 +6253,6 @@ body.docs-page {
   }
 
   .truth-grid,
-  .metric-strip,
   .docs-start-grid,
   .docs-grid--tight {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6108,7 +6287,6 @@ body.docs-page {
     padding: 62px 22px;
   }
 
-  .metric-strip,
   .value-grid,
   .lane-grid,
   .truth-grid,
@@ -6119,17 +6297,6 @@ body.docs-page {
   .docs-two-column,
   .docs-grid--tight {
     grid-template-columns: 1fr;
-  }
-
-  .metric-strip div {
-    min-height: auto;
-    padding: 20px 22px;
-    border-right: 0;
-    border-bottom: 1px solid var(--home-line);
-  }
-
-  .metric-strip div:last-child {
-    border-bottom: 0;
   }
 
   .value-card,
@@ -6158,5 +6325,70 @@ body.docs-page {
 
   .home-page .footer {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 1180px) {
+  .home-hero__content,
+  .home-hero__visual {
+    grid-column: 1;
+  }
+
+  .home-hero__content {
+    grid-row: 1;
+    max-width: 760px;
+  }
+
+  .home-hero__visual {
+    grid-row: 2;
+    width: min(100%, 760px);
+  }
+}
+
+@media (max-width: 760px) {
+  .home-hero {
+    grid-template-columns: 1fr;
+    padding: 118px 20px 58px;
+    background:
+      radial-gradient(circle at 0% 28%, rgba(22, 214, 182, 0.12), transparent 36%),
+      #050505;
+  }
+
+  .home-hero::before {
+    background:
+      linear-gradient(90deg, rgba(5, 5, 5, 0.12), rgba(5, 5, 5, 0.58) 100%),
+      linear-gradient(180deg, rgba(5, 5, 5, 0) 0 74%, rgba(5, 5, 5, 0.92) 100%);
+  }
+
+  .home-hero h1 {
+    font-size: clamp(3.4rem, 18vw, 5rem);
+  }
+
+  .home-tagline {
+    font-size: clamp(1.4rem, 8vw, 2.2rem);
+  }
+
+  .home-hero__visual {
+    display: block;
+    width: 100%;
+    min-height: 250px;
+  }
+
+  .home-hero__visual img {
+    width: 100%;
+    min-height: 250px;
+  }
+
+  .home-section {
+    padding: 82px 20px 92px;
+  }
+
+  .install-terminal {
+    padding: 14px;
+  }
+
+  .install-terminal code {
+    font-size: 0.78rem;
+    line-height: 1.54;
   }
 }

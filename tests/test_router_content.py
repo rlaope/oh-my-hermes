@@ -1101,7 +1101,7 @@ class RouterContentTests(unittest.TestCase):
             Path("site/docs/product-ops/index.html"),
             Path("site/docs/executor-handoff/index.html"),
             Path("site/styles.css"),
-            Path("site/assets/hermes-agent-hero.png"),
+            Path("site/assets/omh-readme-hero.png"),
             Path("site/assets/omh-img-summary-card.png"),
         ]
 
@@ -1352,9 +1352,16 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("## Compatibility / Rollout", pr_template)
         self.assertIn("## Follow-Up", pr_template)
         self.assertIn("OMH", site)
+        self.assertIn("Oh My Hermes", site)
+        self.assertIn('src="assets/omh-readme-hero.png"', site)
         self.assertIn('href="docs/">Read the docs</a>', site)
         self.assertIn("Hermes-native workflow contracts", site)
         self.assertIn("Install once. Keep Hermes. Make the next step safe.", site)
+        self.assertIn("hermes skills tap add rlaope/oh-my-hermes", site)
+        self.assertIn("hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes", site)
+        self.assertNotIn("omh doctor", site)
+        self.assertNotIn("omh capabilities summary --json", site)
+        self.assertNotIn("Bootstrap local operators when Hermes needs them.", site)
         self.assertIn("English is the default public surface.", site)
         self.assertIn("The README values, made visible.", site)
         self.assertIn("Modern OMH is a contract system, not a command catalog.", site)
@@ -1571,10 +1578,12 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn('class="nav__icon"', docs_topbar)
         self.assertIn('href="https://github.com/rlaope/oh-my-hermes"', docs_topbar)
         self.assertNotIn(">GitHub<", docs_topbar)
-        hero_command = site.split('aria-label="OMH quick start commands"', 1)[1].split("</code>", 1)[0]
-        self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", hero_command)
-        self.assertIn("omh setup", hero_command)
-        self.assertIn("omh doctor", hero_command)
+        install_command = site.split('aria-label="Install commands"', 1)[1].split("</code>", 1)[0]
+        self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", install_command)
+        self.assertIn("omh setup", install_command)
+        self.assertIn("hermes skills tap add rlaope/oh-my-hermes", install_command)
+        self.assertIn("hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes", install_command)
+        self.assertNotIn("omh doctor", install_command)
         self.assertIn("assets/omh-loop-engineering.png", site)
         self.assertTrue(Path("site/assets/omh-loop-engineering.png").is_file())
         self.assertTrue(Path("site/assets/omh-img-summary-card.png").is_file())
@@ -1591,7 +1600,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn(".value-grid", site_css)
         self.assertIn(".docs-start-grid", site_css)
         self.assertIn(".docs-lane-map", site_css)
-        self.assertIn("assets/hermes-agent-hero.png", site_css)
+        self.assertIn("assets/omh-readme-hero.png", site_css)
         self.assertIn(".loop-spotlight", site_css)
         self.assertIn(".imagegen-spotlight", site_css)
         self.assertIn(".image-format-grid", site_css)

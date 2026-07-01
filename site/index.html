@@ -31,9 +31,19 @@
 
     <main>
       <section class="home-hero" aria-labelledby="home-title">
+        <figure class="home-hero__visual" aria-hidden="true">
+          <img
+            src="assets/omh-readme-hero.png"
+            alt=""
+            width="1448"
+            height="1086"
+            fetchpriority="high"
+          >
+        </figure>
         <div class="home-hero__content">
           <p class="home-kicker">Hermes-native workflow contracts</p>
-          <h1 id="home-title">Install once. Keep Hermes. Make the next step safe.</h1>
+          <h1 id="home-title">Oh My Hermes</h1>
+          <p class="home-tagline">Install once. Keep Hermes. Make the next step safe.</p>
           <p class="home-lead">
             OMH turns a plain Hermes message into a visible route, role,
             contract, and evidence boundary. No new dashboard. No hidden
@@ -43,41 +53,6 @@
             <a class="button button--primary" href="docs/">Read the docs</a>
             <a class="button" href="#install">Install OMH</a>
           </div>
-        </div>
-        <div class="hero-command" role="region" aria-label="OMH quick start commands" tabindex="0">
-          <div class="hero-command__bar">
-            <span></span>
-            <span></span>
-            <span></span>
-            <strong>omh setup</strong>
-          </div>
-          <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
-omh setup
-omh doctor</code>
-          <div class="hero-proof">
-            <span>local contracts</span>
-            <span>Hermes chat-first</span>
-            <span>prepared is not observed</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="metric-strip" aria-label="OMH core proof points">
-        <div>
-          <span>1</span>
-          <strong>install path</strong>
-        </div>
-        <div>
-          <span>5</span>
-          <strong>core values</strong>
-        </div>
-        <div>
-          <span>0</span>
-          <strong>hidden executors</strong>
-        </div>
-        <div>
-          <span>local</span>
-          <strong>evidence boundary</strong>
         </div>
       </section>
 
@@ -312,24 +287,18 @@ omh doctor</code>
         <div class="install-panel">
           <div>
             <p class="home-kicker">Install</p>
-            <h2>Bootstrap local operators when Hermes needs them.</h2>
+            <h2>Install</h2>
             <p>
-              Use the tap path when Hermes supports it, or run the local
-              installer for managed skills, doctor checks, capability exports,
-              plugin smoke, and wrapper/backend support.
+              Run the local installer, then add the Hermes tap when that
+              surface is available.
             </p>
-            <div class="home-actions">
-              <a class="button button--primary" href="docs/#install">Install docs</a>
-              <a class="button" href="docs/#contracts">Contract docs</a>
-            </div>
           </div>
           <div class="install-terminal" role="region" aria-label="Install commands" tabindex="0">
-            <code>hermes skills tap add rlaope/oh-my-hermes
-hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
-
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
-omh capabilities summary --json</code>
+
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code>
           </div>
         </div>
       </section>
