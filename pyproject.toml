@@ -38,6 +38,7 @@ packages = [
   "omh.codegraph",
   "omh.coding",
   "omh.commands",
+  "omh.conformance",
   "omh.core",
   "omh.install",
   "omh.maintenance",
@@ -65,6 +66,7 @@ packages = [
 "omh.codegraph" = "src/codegraph"
 "omh.coding" = "src/coding"
 "omh.commands" = "src/commands"
+"omh.conformance" = "src/conformance"
 "omh.core" = "src/core"
 "omh.install" = "src/install"
 "omh.maintenance" = "src/maintenance"

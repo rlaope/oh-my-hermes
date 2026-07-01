@@ -54,6 +54,7 @@ class ArchitectureLayoutTests(unittest.TestCase):
             "codegraph",
             "coding",
             "commands",
+            "conformance",
             "core",
             "install",
             "maintenance",

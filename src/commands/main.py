@@ -36,6 +36,7 @@ from .coding import (
 )
 from .codegraph import _add_codegraph_commands, cmd_codegraph_build, cmd_codegraph_handoff, cmd_codegraph_summary
 from .context import _add_context_commands, cmd_context_brief
+from .conformance import _add_conformance_commands, cmd_conformance_check
 from .demo import _add_demo_commands, cmd_demo_orchestration
 from .docs import (
     _add_docs_commands,
@@ -235,6 +236,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_demo_commands(sub)
     _add_chat_commands(sub)
     _add_capabilities_commands(sub)
+    _add_conformance_commands(sub)
     _add_context_commands(sub)
     _add_coding_commands(sub)
     _add_codegraph_commands(sub)
