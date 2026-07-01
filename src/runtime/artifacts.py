@@ -1568,13 +1568,13 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
 
 def _validate_run_status_gate_consistency(run_dir: Path) -> list[str]:
     errors: list[str] = []
-    run = _object_or_empty(read_json_object(run_dir / "run.json"))
-    coding = _object_or_empty(read_json_object(run_dir / "coding_delegation.json"))
-    delegation = _object_or_empty(read_json_object(run_dir / "delegation.json"))
-    wrapper = _object_or_empty(read_json_object(run_dir / "wrapper.json"))
-    review_record = _object_or_empty(read_json_object(run_dir / "review.json"))
-    ci_record = _object_or_empty(read_json_object(run_dir / "ci.json"))
-    merge_record = _object_or_empty(read_json_object(run_dir / "merge.json"))
+    run = _read_json_object_or_empty(run_dir / "run.json")
+    coding = _read_json_object_or_empty(run_dir / "coding_delegation.json")
+    delegation = _read_json_object_or_empty(run_dir / "delegation.json")
+    wrapper = _read_json_object_or_empty(run_dir / "wrapper.json")
+    review_record = _read_json_object_or_empty(run_dir / "review.json")
+    ci_record = _read_json_object_or_empty(run_dir / "ci.json")
+    merge_record = _read_json_object_or_empty(run_dir / "merge.json")
     if not run:
         return errors
 
@@ -1615,6 +1615,13 @@ def _validate_run_status_gate_consistency(run_dir: Path) -> list[str]:
     return errors
 
 
+def _read_json_object_or_empty(path: Path) -> dict[str, Any]:
+    record, error = read_json_object_result(path)
+    if error or not record:
+        return {}
+    return record
+
+
 def validate_runtime(paths: OmhPaths, run_id: str | None = None) -> dict[str, Any]:
     if run_id:
         run_dirs = [paths.runtime_runs_dir / run_id]
@@ -1645,7 +1652,10 @@ def _wrapper_session_dirs_for_run(paths: OmhPaths, run_id: str) -> list[Path]:
         return []
     session_dirs: list[Path] = []
     for session_json in sorted(paths.runtime_wrapper_sessions_dir.glob("*/session.json")):
-        session = read_json_object(session_json)
+        session, error = read_json_object_result(session_json)
+        if error:
+            session_dirs.append(session_json.parent)
+            continue
         if session and session.get("current_run_id") == run_id:
             session_dirs.append(session_json.parent)
     return session_dirs
@@ -1654,7 +1664,9 @@ def _wrapper_session_dirs_for_run(paths: OmhPaths, run_id: str) -> list[Path]:
 def _add_duplicate_wrapper_run_link_errors(session_results: list[dict[str, Any]], session_dirs: list[Path]) -> None:
     owners_by_run_id: dict[str, list[str]] = {}
     for session_dir in session_dirs:
-        session = read_json_object(session_dir / "session.json")
+        session, error = read_json_object_result(session_dir / "session.json")
+        if error:
+            continue
         if not session:
             continue
         run_id = str(session.get("current_run_id", ""))
@@ -1669,7 +1681,9 @@ def _add_duplicate_wrapper_run_link_errors(session_results: list[dict[str, Any]]
         return
     results_by_session_id = {str(result.get("session_id")): result for result in session_results}
     for session_dir in session_dirs:
-        session = read_json_object(session_dir / "session.json")
+        session, error = read_json_object_result(session_dir / "session.json")
+        if error:
+            continue
         if not session:
             continue
         run_id = str(session.get("current_run_id", ""))
@@ -1787,7 +1801,9 @@ def export_runtime(
 def _wrapper_session_records_for_run(paths: OmhPaths, run_id: str, *, limit: int | None = None) -> list[dict[str, Any]]:
     sessions: list[dict[str, Any]] = []
     for session_dir in _wrapper_session_dirs_for_run(paths, run_id):
-        session = read_json_object(session_dir / "session.json")
+        session, error = read_json_object_result(session_dir / "session.json")
+        if error:
+            continue
         if isinstance(session, dict):
             sessions.append(session)
     return _apply_limit(sessions, limit)
@@ -1805,12 +1821,10 @@ def validate_wrapper_session_dir(session_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     session_path = session_dir / "session.json"
     events: list[dict[str, Any]] = []
-    try:
-        session = read_json_object(session_path)
-    except (OSError, JSONDecodeError, ValueError) as exc:
-        session = None
-        errors.append(f"{session_path}: {exc}")
-    if not session:
+    session, read_error = read_json_object_result(session_path)
+    if read_error:
+        errors.append(f"{session_path}: {read_error}")
+    elif not session:
         errors.append(f"{session_path}: missing session.json")
     else:
         errors.extend(f"{session_path}: {error}" for error in validate_wrapper_session_record(session))
