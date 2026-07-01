@@ -4,17 +4,17 @@
 - Status: Active
 - Last refreshed: 2026-06-25
 - Primary product surfaces: GitHub Pages marketing site, documentation index, workflow detail pages, README-linked public assets.
-- Evidence reviewed: `site/index.html`, `site/styles.css`, `site/docs/index.html`, `site/docs/hermes-agent-architecture/index.html`, `README.md`, `docs/DIRECTION.md`, `docs/ROADMAP.md`, `docs/CAPABILITIES.md`, `site/assets/*`.
+- Evidence reviewed: `site/index.html`, `site/styles.css`, `site/docs/index.html`, `site/docs/hermes-agent-architecture/index.html`, `README.md`, `docs/DIRECTION.md`, `docs/ROADMAP.md`, `docs/CAPABILITIES.md`, `site/assets/*`, `https://omo.dev/ko`.
 
 ## Brand
 - Personality: precise, capable, chat-native, operator-grade, calm under pressure.
 - Trust signals: deterministic contracts, local artifacts, visible evidence boundaries, Hermes-owned chat continuity, selected executor handoff.
-- Avoid: generic CLI-product language, hidden-agent claims, oversized white card stacks, decorative gradients without product meaning, implying OMH runs code or platform bots by itself.
+- Avoid: generic CLI-product language, hidden-agent claims, oversized white card stacks, decorative gradients without product meaning, command-catalog sprawl, implying OMH runs code or platform bots by itself.
 
 ## Product goals
-- Goals: make OMH understandable from the first viewport, show that Hermes remains the user-facing surface, make wrapper contracts and evidence boundaries feel tangible, keep installation and docs paths obvious.
+- Goals: make OMH understandable from the first viewport, show that Hermes remains the user-facing surface, make wrapper contracts and evidence boundaries feel tangible, keep installation and docs paths obvious, and turn the README core values into the primary site structure.
 - Non-goals: do not reposition OMH as a standalone bot, LLM router, Hermes core patch, network service, or hidden coding executor.
-- Success signals: a new visitor can explain "Hermes chat in, renderable contract out"; the site highlights capabilities, plugin/wrapper status, handoff, and evidence without command memorization; screenshots remain readable on mobile and desktop.
+- Success signals: a new visitor can explain "Install once, keep Hermes, make the next step safe"; the site highlights capabilities, plugin/wrapper status, handoff, and evidence without command memorization; screenshots remain readable on mobile and desktop.
 
 ## Personas and jobs
 - Primary personas: Hermes users, wrapper or adapter builders, maintainers evaluating delegation-first coding flows, operators responsible for release trust.
@@ -24,17 +24,20 @@
 ## Information architecture
 - Primary navigation: Home, Docs, Hermes Deepdive, GitHub.
 - Core routes/screens: homepage, docs index, workflow detail pages, architecture guide.
-- Content hierarchy: thesis first, live-feeling contract example second, capability lanes third, evidence and architecture boundaries fourth, install path last.
+- Content hierarchy: thesis first, README core values second, live-feeling contract example third, situation lanes fourth, evidence and architecture boundaries fifth, install path last.
+- Core value spine: install once; keep Hermes chat-first; pick the smallest safe next step; keep contracts local and deterministic; never blur prepared state with observed proof.
+- Docs hierarchy: start by decision, not by command. The docs index answers "install", "choose a lane", "wire a wrapper", "verify evidence", and sends detailed reference work to deeper pages.
 
 ## Design principles
 - Principle 1: Show the product boundary as an interface, not as prose.
 - Principle 2: Lead with natural-language Hermes usage before commands.
-- Principle 3: Use dense but legible operator UI patterns instead of marketing fluff.
+- Principle 3: Use short, high-contrast modules before any long reference copy.
+- Principle 4: Treat workflow names as proof labels, not as the main story.
 - Tradeoffs: keep enough narrative for trust, but compress repeated workflow lists into scannable modules and links.
 
 ## Visual language
-- Color: preserve the existing teal, cyan, blue, and gold family; use deep ink backgrounds with warm off-white sections instead of plain white dominance.
-- Typography: large confident headings, compact labels, generous line height for explanatory copy, tabular/mono styling only for contracts and commands.
+- Color: preserve the existing teal, cyan, blue, and gold family, but bias the public site toward crisp black/white contrast with accent color used as evidence and routing signals.
+- Typography: large confident headings, compact labels, generous line height for explanatory copy, tabular/mono styling only for contracts and commands. Use a local humanist system stack; do not depend on external fonts.
 - Spacing/layout rhythm: full-width bands with constrained inner grids; no nested decorative cards; compact repeated items.
 - Shape/radius/elevation: 8px radius maximum for cards and tools, hairline borders, restrained shadows, glow only where it reinforces route/status states.
 - Motion: subtle hover lift, route shimmer, console scan, and focus transitions; respect reduced motion.
@@ -42,14 +45,14 @@
 
 ## Components
 - Existing components to reuse: `topbar`, `nav`, `button`, `footer`, command blocks, poster frames, state pills, route/evidence cards.
-- New/changed components: homepage hero console, signal strip, contract pipeline, workflow matrix, proof cards, install terminal.
+- New/changed components: homepage proof hero, core-value ledger, natural-message routing board, situation lane strip, truth boundary stack, docs decision map, docs value rail.
 - Variants and states: hover, focus-visible, disabled/gated, ready/pending, mobile stacked layouts, reduced motion.
 - Token/component ownership: `site/styles.css` owns static site tokens and components; HTML pages should not inline style decisions.
 
 ## Accessibility
 - Target standard: WCAG 2.1 AA for contrast, focus, structure, and reduced motion.
 - Keyboard/focus behavior: all links and command regions receive visible focus outlines; interactive-looking disabled controls must use real disabled semantics or non-button spans.
-- Contrast/readability: avoid low-contrast cyan on white; dark hero overlays must keep text readable.
+- Contrast/readability: avoid low-contrast cyan on white; dark hero overlays must keep text readable; every key statement must be understandable when skimmed without adjacent paragraphs.
 - Screen-reader semantics: keep landmark header/main/footer, aria labels for visual boards, real headings in order.
 - Reduced motion and sensory considerations: animations must pause or flatten under `prefers-reduced-motion`.
 
@@ -69,7 +72,7 @@
 ## Content voice
 - Tone: direct, confident, evidence-backed, product-operator language.
 - Terminology: prefer "Hermes chat", "wrapper contract", "prepared versus observed", "selected executor", "local artifacts", "capability manifest".
-- Microcopy rules: avoid unexplained command lists in primary copy; pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed.
+- Microcopy rules: avoid unexplained command lists in primary copy; pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed; keep default public copy in English.
 
 ## Implementation constraints
 - Framework/styling system: static HTML and CSS under `site/`; no frontend build step.

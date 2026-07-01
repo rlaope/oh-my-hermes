@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OMH - Hermes-native workflow contracts</title>
+    <title>OMH - Keep Hermes chat-first</title>
     <meta
       name="description"
-      content="OMH turns natural Hermes chat into renderable workflow contracts, local evidence boundaries, and selected-executor handoffs without replacing Hermes."
+      content="OMH keeps Hermes chat-first while turning natural requests into safe next steps, local contracts, and evidence-aware executor handoffs."
     >
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -31,285 +31,168 @@
 
     <main>
       <section class="home-hero" aria-labelledby="home-title">
-        <div class="home-hero__media" aria-hidden="true"></div>
-        <div class="home-hero__grid" aria-hidden="true"></div>
         <div class="home-hero__content">
           <p class="home-kicker">Hermes-native workflow contracts</p>
-          <h1 id="home-title">OMH</h1>
-          <p class="home-statement">Hermes chat in. Renderable workflow contract out.</p>
+          <h1 id="home-title">Install once. Keep Hermes. Make the next step safe.</h1>
           <p class="home-lead">
-            oh-my-hermes makes the safe next step visible inside the Hermes
-            workflow you already use: route a natural request, prepare the
-            right plan or handoff, and keep every execution claim tied to local
-            evidence.
+            OMH turns a plain Hermes message into a visible route, role,
+            contract, and evidence boundary. No new dashboard. No hidden
+            executor claim. English is the default public surface.
           </p>
           <div class="home-actions" role="group" aria-label="Primary actions">
             <a class="button button--primary" href="docs/">Read the docs</a>
             <a class="button" href="#install">Install OMH</a>
           </div>
-          <div class="home-command" role="region" aria-label="OMH quick start commands" tabindex="0">
-            <span>Quick start</span>
-            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+        </div>
+        <div class="hero-command" role="region" aria-label="OMH quick start commands" tabindex="0">
+          <div class="hero-command__bar">
+            <span></span>
+            <span></span>
+            <span></span>
+            <strong>omh setup</strong>
+          </div>
+          <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
 omh doctor</code>
+          <div class="hero-proof">
+            <span>local contracts</span>
+            <span>Hermes chat-first</span>
+            <span>prepared is not observed</span>
           </div>
         </div>
+      </section>
 
-        <div class="contract-console" role="region" aria-label="OMH chat contract preview">
-          <div class="contract-console__bar">
-            <span></span>
-            <span></span>
-            <span></span>
-            <strong>chat_interaction/v1</strong>
-          </div>
-          <div class="chat-card chat-card--user">
+      <section class="metric-strip" aria-label="OMH core proof points">
+        <div>
+          <span>1</span>
+          <strong>install path</strong>
+        </div>
+        <div>
+          <span>5</span>
+          <strong>core values</strong>
+        </div>
+        <div>
+          <span>0</span>
+          <strong>hidden executors</strong>
+        </div>
+        <div>
+          <span>local</span>
+          <strong>evidence boundary</strong>
+        </div>
+      </section>
+
+      <section class="home-section value-ledger" id="product" aria-labelledby="values-title">
+        <div class="section-heading">
+          <p class="home-kicker">What OMH protects</p>
+          <h2 id="values-title">The README values, made visible.</h2>
+          <p>
+            OMH is the fit layer between plain Hermes requests and trustworthy
+            work. Modern OMH is a contract system, not a command catalog.
+            Wrapper surfaces can render <code>omh_interact</code>,
+            <code>chat_response/v1</code>, and
+            <code>coding_runtime_handoff/v1</code> without overclaiming.
+          </p>
+        </div>
+        <div class="value-grid">
+          <article class="value-card value-card--primary">
+            <span>01</span>
+            <h3>Install once.</h3>
+            <p>Bootstrap managed skills, local checks, and wrapper contracts from one path.</p>
+          </article>
+          <article class="value-card">
+            <span>02</span>
+            <h3>Keep Hermes.</h3>
+            <p>Hermes remains the chat surface for intake, clarification, planning, and status narration.</p>
+          </article>
+          <article class="value-card">
+            <span>03</span>
+            <h3>Choose the smallest safe move.</h3>
+            <p>Natural requests become a lane, role, and next action before execution starts.</p>
+          </article>
+          <article class="value-card">
+            <span>04</span>
+            <h3>Stay local and deterministic.</h3>
+            <p>Contracts, capabilities, status, and fixtures are inspectable local artifacts.</p>
+          </article>
+          <article class="value-card value-card--dark">
+            <span>05</span>
+            <h3>Do not blur proof.</h3>
+            <p>Prepared handoff is useful. Observed work still needs runtime evidence.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="home-section message-board" id="playbooks">
+        <div class="message-board__copy">
+          <p class="home-kicker">Situation playbooks</p>
+          <h2>Messy requests still get a clear first move.</h2>
+          <p>
+            Users ask in normal language. OMH returns the responsible lane,
+            visible next action, and the gates that remain before coding,
+            delivery, review, or CI can be claimed. Grounded operator cases
+            keep examples like "Payment failures keep showing up" out of the
+            coding path until the product signal is understood.
+          </p>
+        </div>
+        <div class="message-demo" role="region" aria-label="Hermes request routing example">
+          <div class="message-demo__bubble">
             <span>Hermes message</span>
-            <p>I want to safely add a feature to this repo.</p>
+            <strong>I want to safely add a feature to this repo.</strong>
           </div>
           <div class="route-stack" role="group" aria-label="Route result">
-            <div>
-              <span>route</span>
-              <strong>request-to-handoff</strong>
-            </div>
-            <div>
-              <span>owner</span>
-              <strong>planner</strong>
-            </div>
-            <div>
-              <span>next action</span>
-              <strong>present safe plan</strong>
-            </div>
+            <div><span>playbook</span><strong>request-to-handoff</strong></div>
+            <div><span>owner</span><strong>planner</strong></div>
+            <div><span>next</span><strong>present safe plan</strong></div>
           </div>
-          <div class="contract-ladder" role="group" aria-label="Evidence boundary">
-            <div class="contract-ladder__row contract-ladder__row--ready">
-              <span>ready</span>
-              <strong>route and role</strong>
-            </div>
-            <div class="contract-ladder__row">
-              <span>gated</span>
-              <strong>executor choice</strong>
-            </div>
-            <div class="contract-ladder__row">
-              <span>gated</span>
-              <strong>execution evidence</strong>
-            </div>
-          </div>
-          <p class="contract-console__note">Prepared is not observed.</p>
+          <p class="claim-boundary">Prepared is not observed.</p>
         </div>
       </section>
 
-      <section class="signal-strip" aria-label="OMH trust signals">
-        <div>
-          <span>Surface</span>
-          <strong>Hermes stays chat-first</strong>
-        </div>
-        <div>
-          <span>Contracts</span>
-          <strong>Wrappers render state</strong>
-        </div>
-        <div>
-          <span>Evidence</span>
-          <strong>Local and inspectable</strong>
-        </div>
-        <div>
-          <span>Execution</span>
-          <strong>Selected executor owns code</strong>
-        </div>
-      </section>
-
-      <section class="home-section home-section--light" id="product">
-        <div class="section-heading">
-          <p class="home-kicker">Why OMH exists</p>
-          <h2>The fit layer between plain Hermes requests and trustworthy work.</h2>
-          <p>
-            OMH is not another dashboard to learn. It gives Hermes deterministic
-            local contracts for routing, status, planning, capabilities,
-            plugin observations, and coding handoffs while the user keeps
-            speaking in normal chat.
-          </p>
-          <p>
-            Modern OMH is a contract system, not a command catalog. Wrapper
-            surfaces can render <code>omh_interact</code>,
-            <code>chat_response/v1</code>, and
-            <code>coding_runtime_handoff/v1</code> without turning a prepared
-            next step into observed work.
-          </p>
-        </div>
-        <div class="product-grid">
-          <article class="product-card">
-            <span>01</span>
-            <h3>Classify the request</h3>
-            <p>
-              Natural messages become responsible roles, workflow lanes, and
-              first safe actions without asking users to memorize command names.
-            </p>
-          </article>
-          <article class="product-card product-card--accent">
-            <span>02</span>
-            <h3>Prepare the contract</h3>
-            <p>
-              Plans, status cards, capability manifests, and handoff payloads
-              are explicit artifacts that wrappers can render.
-            </p>
-          </article>
-          <article class="product-card">
-            <span>03</span>
-            <h3>Observe before claiming</h3>
-            <p>
-              Execution, review, CI, delivery, plugin load, and merge readiness
-              stay gated until a local record proves them.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section class="home-section home-section--light" id="playbooks">
-        <div class="section-heading">
-          <p class="home-kicker">Situation playbooks</p>
-          <h2>Messy requests still get a visible first move.</h2>
-          <p>
-            Playbooks keep wrapper UX practical: classify the situation, name
-            the responsible lane, and show what evidence is still missing
-            before coding or delivery claims begin.
-          </p>
-        </div>
-        <div class="product-grid" role="group" aria-label="Situation playbooks and grounded operator cases">
-          <article class="product-card">
-            <span>request-to-handoff</span>
-            <h3>I want to safely add a feature to this repo.</h3>
-            <p>
-              Hermes presents the safe plan first, then gates executor choice
-              and prepared handoff until the plan is accepted.
-            </p>
-          </article>
-          <article class="product-card product-card--accent">
-            <span>Grounded operator cases</span>
-            <h3>Payment failures keep showing up.</h3>
-            <p>
-              Product signals route to feedback triage, strategy brief, or
-              product ops before implementation becomes the answer.
-            </p>
-            <a class="text-link" href="docs/product-ops/">Open product ops</a>
-          </article>
-          <article class="product-card">
-            <span>Executor-ready handoff</span>
-            <h3>Turn this issue into a reviewable PR plan.</h3>
-            <p>
-              Scope, acceptance criteria, verification, review, and worktree
-              guidance travel together when coding work is selected.
-            </p>
-            <a class="text-link" href="docs/executor-handoff/">Open handoff docs</a>
-          </article>
-        </div>
-      </section>
-
-      <section class="home-section home-section--ink" id="capabilities">
+      <section class="home-section lane-section" id="capabilities">
         <div class="section-heading section-heading--split">
           <div>
-            <p class="home-kicker">Representative modes</p>
-            <h2>Start with the 10 workflows that explain OMH.</h2>
+            <p class="home-kicker">Choose by situation</p>
+            <h2>Five lanes beat forty commands.</h2>
           </div>
           <p>
-            The catalog is larger, but these are the modes people should see
-            first. Each card names the mode, the right moment to use it, and
-            the direct skill call when the user wants manual control.
+            The full catalog stays in docs. The public story starts with the
+            situation the user is in, then names the workflow only after the
+            job is clear.
           </p>
         </div>
-        <div class="mode-note" aria-label="Representative OMH workflow modes">
-          <span>Mode-first, not catalog-first</span>
-          <p>
-            Start here for the public story. The full reference stays in docs
-            for operators who want every workflow, contract, and playbook.
-          </p>
-        </div>
-        <div class="mode-grid">
-          <article class="mode-card mode-card--featured">
-            <span class="mode-card__label">Intent clarity</span>
-            <h3>Deep Interview</h3>
-            <p>Clarify the missing decision before planning.</p>
-            <strong>Best for vague product, research, or coding requests.</strong>
-            <code>deep-interview</code>
+        <div class="lane-grid" aria-label="OMH workflow family lanes">
+          <article class="lane-card">
+            <span>Plan and decide</span>
+            <h3>Clarify before action.</h3>
+            <p><code>deep-interview</code> <code>ralplan</code> <code>ultragoal</code></p>
           </article>
-          <article class="mode-card mode-card--featured">
-            <span class="mode-card__label">Reviewed plan</span>
-            <h3>Ralplan</h3>
-            <p>Plan from facts, sources, risks, and verification.</p>
-            <strong>Best for architecture, risk, and serious implementation plans.</strong>
-            <code>ralplan</code>
+          <article class="lane-card">
+            <span>Learn and gather</span>
+            <h3>Find source-backed context.</h3>
+            <p><code>web-research</code> <code>paper-learning</code> <code>source-finder</code></p>
           </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Durable goal</span>
-            <h3>Ultragoal</h3>
-            <p>Give ambitious work checkpoints and completion gates.</p>
-            <strong>Best when progress needs a durable trail.</strong>
-            <code>ultragoal</code>
+          <article class="lane-card">
+            <span>Create materials and visuals</span>
+            <h3>Package the work.</h3>
+            <p><code>img-summary</code> <code>materials-package</code> <code>report-package</code></p>
           </article>
-          <article class="mode-card mode-card--featured">
-            <span class="mode-card__label">One-cycle delivery</span>
-            <h3>Ultra Process</h3>
-            <p>Research -> plan -> implementation path -> review -> sync.</p>
-            <strong>Best for one PR-ready delivery cycle.</strong>
-            <code>ultraprocess</code>
+          <article class="lane-card">
+            <span>Delegate coding and ship</span>
+            <h3>Prepare executor-ready handoff.</h3>
+            <p><code>idea-to-deploy</code> <code>ultraprocess</code> <code>code-review</code></p>
           </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Loop</span>
-            <h3>Loop</h3>
-            <p>Research, plan, handoff, feedback, repeat.</p>
-            <strong>Best when the next right move must be discovered.</strong>
-            <code>loop</code>
+          <article class="lane-card">
+            <span>Operate and observe</span>
+            <h3>Track what is actually proven.</h3>
+            <p><code>loop</code> <code>workflow-learning</code> <code>harness_progress/v1</code></p>
           </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Live evidence</span>
-            <h3>Web Research</h3>
-            <p>Current research with source-backed evidence.</p>
-            <strong>Best for market, docs, competitor, and best-practice questions.</strong>
-            <code>web-research</code>
-          </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Paper study</span>
-            <h3>Paper Learning</h3>
-            <p>Explain a paper by level without dropping sections.</p>
-            <strong>Best for very easy, moderate, or expert study.</strong>
-            <code>paper-learning</code>
-          </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Source intake</span>
-            <h3>Source Finder</h3>
-            <p>Find papers, datasets, repos, docs, and public decks.</p>
-            <strong>Best before research or synthesis starts.</strong>
-            <code>source-finder</code>
-          </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Coding handoff</span>
-            <h3>Idea To Deploy</h3>
-            <p>Scoped coding handoff with verification shape.</p>
-            <strong>Best for Codex, Claude Code, Hermes, or another runtime.</strong>
-            <code>idea-to-deploy</code>
-          </article>
-          <article class="mode-card">
-            <span class="mode-card__label">Improve the workflow</span>
-            <h3>Workflow Learning</h3>
-            <p>Trace weak routes into evals and patch proposals.</p>
-            <strong>Best after a missed or weak workflow.</strong>
-            <code>workflow-learning</code>
-          </article>
-        </div>
-        <div class="mode-grid__footer">
-          <span>Full catalog: 40+ OMH workflows, contracts, roles, and playbooks.</span>
-          <a class="text-link" href="docs/#flagship">Open workflow docs</a>
-          <a class="text-link" href="docs/#contracts">Open contracts</a>
         </div>
       </section>
 
-      <section class="home-section home-section--showcase" id="workflows">
+      <section class="home-section artifact-section" id="workflows">
         <div class="section-heading">
-          <p class="home-kicker">Flagship lanes</p>
-          <h2>Workflow surfaces that look like the work they support.</h2>
-          <p>
-            OMH keeps representative lanes visible for demos and docs while
-            preserving the same boundary: a prepared workflow is useful, but it
-            is not observed execution.
-          </p>
+          <p class="home-kicker">Workflow surfaces</p>
+          <h2>Reference pages when the lane needs detail.</h2>
         </div>
         <div class="artifact-showcase">
           <a class="artifact-card artifact-card--wide" href="docs/loop/" aria-label="Open Loop workflow docs">
@@ -322,10 +205,6 @@ omh doctor</code>
             <div>
               <span>Loop</span>
               <h3>Goal-driven iteration with visible stop and resume states.</h3>
-              <p>
-                Loop gives Hermes a north star, then keeps each cycle grounded
-                in research, plan, handoff, feedback, and status evidence.
-              </p>
             </div>
           </a>
           <a class="artifact-card" href="docs/image-gen/" aria-label="Open Image gen workflow docs">
@@ -337,8 +216,7 @@ omh doctor</code>
             </figure>
             <div>
               <span>Image gen</span>
-              <h3>Prompt cards with source structure and domain scene separated.</h3>
-              <p>Meetings, PRs, issues, releases, and research become source-specific prompt cards.</p>
+              <h3>Source-specific prompt cards for meetings, PRs, issues, releases, and research.</h3>
             </div>
           </a>
           <a class="artifact-card" href="docs/intent-to-plan/" aria-label="Open intent to plan docs">
@@ -349,14 +227,14 @@ omh doctor</code>
               >
             </figure>
             <div>
-              <span>Intent to handoff</span>
-              <h3>Interview, plan, product ops, and executor paths in one frame.</h3>
+              <span>Intent to plan</span>
+              <h3>Interview, plan, product ops, and handoff paths in one frame.</h3>
             </div>
           </a>
         </div>
       </section>
 
-      <section class="home-section home-section--light" id="architecture">
+      <section class="home-section truth-section" id="architecture">
         <div class="section-heading section-heading--split">
           <div>
             <p class="home-kicker">Evidence boundary</p>
@@ -368,48 +246,46 @@ omh doctor</code>
             executors and runtime artifacts own observed proof.
           </p>
         </div>
-        <div class="evidence-pipeline" role="group" data-map="architecture-map" aria-label="Prepared versus observed lifecycle">
+        <div class="truth-grid" role="group" data-map="architecture-map" aria-label="Prepared versus observed lifecycle">
           <article>
-            <span>01</span>
+            <span>ready</span>
             <h3>Message classified</h3>
             <p>Route, role, language, and first action are available.</p>
           </article>
           <article>
-            <span>02</span>
+            <span>ready</span>
             <h3>Plan accepted</h3>
             <p>Scope, non-goals, acceptance criteria, and verification shape are known.</p>
           </article>
           <article>
-            <span>03</span>
+            <span>prepared</span>
             <h3>Handoff prepared</h3>
             <p>The selected executor can receive the work, but no work is claimed yet.</p>
           </article>
           <article>
-            <span>04</span>
-            <h3>Run observed</h3>
-            <p>Runtime records carry implementation, verification, review, and CI evidence.</p>
-          </article>
-          <article>
-            <span>05</span>
-            <h3>Status rendered</h3>
-            <p>Wrappers show the strongest true state and the remaining gates.</p>
+            <span>observed</span>
+            <h3>Run evidence</h3>
+            <p>Runtime records carry implementation, verification, review, and CI proof.</p>
           </article>
         </div>
       </section>
 
-      <section class="home-section home-section--ink" id="flow">
+      <section class="home-section wrapper-section" id="flow">
         <div class="wrapper-layout">
           <div class="section-heading">
             <p class="home-kicker">Wrapper-ready by design</p>
             <h2>Contracts that adapters can render without scraping prose.</h2>
             <p>
               Discord, Slack, hosted chat, and Hermes-native plugin surfaces
-              can consume local envelopes instead of guessing what a workflow
-              means. The UI can show actions, disabled gates, and evidence
-              labels from the same state. Adapter metadata can still carry
+              can render actions, disabled gates, and evidence labels from the
+              same local state. Adapter metadata can carry
               <code>harness_progress/v1</code> when a wrapper needs the raw
               contract.
             </p>
+            <div class="home-actions">
+              <a class="text-link" href="docs/product-ops/">Open product ops</a>
+              <a class="text-link" href="docs/executor-handoff/">Open handoff docs</a>
+            </div>
           </div>
           <div class="wrapper-card" role="region" aria-label="Wrapper response example">
             <div class="wrapper-card__header">
@@ -420,13 +296,9 @@ omh doctor</code>
               <span>playbook: request-to-handoff</span>
               <span>next: show safe plan</span>
               <span>state: prepared, not run</span>
-              <span>progress: tracked</span>
             </div>
             <h3>Present the safe plan first.</h3>
-            <p>
-              Executor choice and handoff preparation stay unavailable until
-              the plan is accepted.
-            </p>
+            <p>Executor choice and handoff stay unavailable until the plan is accepted.</p>
             <div class="button-row" role="group" aria-label="Wrapper actions">
               <button type="button">Accept plan</button>
               <button type="button">Revise plan</button>
@@ -436,7 +308,7 @@ omh doctor</code>
         </div>
       </section>
 
-      <section class="home-section home-section--install" id="install">
+      <section class="home-section install-section" id="install">
         <div class="install-panel">
           <div>
             <p class="home-kicker">Install</p>
