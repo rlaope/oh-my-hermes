@@ -130,7 +130,7 @@ readiness, target topology, current or default coding agent, and evidence
 state. Skill counts, setup inventory, token metadata, and deep diagnostics are
 left to `omh doctor`, `omh_status`, and machine-readable HUD JSON. A quiet idle
 line looks like
-`[omh] v1.0.1 | plugin:ready | target:single | coding-agent:idle(ask)`.
+`[omh] v1.0.2 | plugin:ready | target:single | coding-agent:idle(ask)`.
 The plugin also exposes `omh_context` for a compact OMH mental model plus
 generic-tool checkpoint, `omh_interact` for shell-free chat responses and
 metadata-only wrapper session records, `omh_recommend` for route hints without
@@ -329,8 +329,8 @@ After installing OMH into the target runtime, verify the command path too:
 command -v omh
 omh --help
 omh release skill-content-smoke --json
-omh release product-readiness --version 1.0.1 --json
-omh release evidence-bundle --version 1.0.1 --write --json
+omh release product-readiness --version 1.0.2 --json
+omh release evidence-bundle --version 1.0.2 --write --json
 omh --omh-home /tmp/omh-smoke --hermes-home /tmp/hermes-smoke release hermes-smoke --install-path setup --omh-command omh --include-command-smoke
 ```
 
@@ -345,12 +345,12 @@ OMH workflow context to route well.
 It is not Hermes chat-load evidence. When an operator explicitly wants live
 evidence from the target Hermes profile, run one of these:
 
-Use `omh release product-readiness --version 1.0.1 --json` when you want a
+Use `omh release product-readiness --version 1.0.2 --json` when you want a
 single release-candidate card that combines skill content, G1-G10 use-case
 readiness, parity contracts, and release checklist shape. It is still local
 contract evidence, not live Hermes chat or executor evidence.
 
-Use `omh release evidence-bundle --version 1.0.1 --write --json` when you want
+Use `omh release evidence-bundle --version 1.0.2 --write --json` when you want
 that local release-candidate evidence written under
 `.omh/runtime/release-evidence/` for a release PR or release note. The bundle is
 not CI, live Hermes smoke, executor, delivery, merge, or GitHub release evidence.
@@ -972,7 +972,7 @@ pip, pipx, distro, or custom Python install that OMH cannot safely mutate, the
 update still refreshes workflows but prints
 `OMH command: not updated (workflows only)` plus the installer command needed to
 update the CLI itself. Successful command package updates print a compact line
-such as `OMH command: 1.0.0 -> 1.0.1 (updated)` or
+such as `OMH command: 1.0.1 -> 1.0.2 (updated)` or
 `OMH command: main@old -> main@new (updated)` before the workflow summary.
 
 Advanced operators can still pin or test a different source with
@@ -986,7 +986,7 @@ Hermes registration needs repair, then restart Hermes Agent. Rerun the installer
 manually only when `omh update` says the command package was not updated, or
 when you intentionally want a one-shot reinstall from a specific source ref. The
 installer passes command-package update evidence into OMH so the state log can
-show version/ref movement such as `1.0.0 -> 1.0.1` or `main@old -> main@new`
+show version/ref movement such as `1.0.1 -> 1.0.2` or `main@old -> main@new`
 when `OMH_SOURCE_REF` is provided:
 
 ```sh

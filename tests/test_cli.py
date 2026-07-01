@@ -5175,19 +5175,22 @@ class CliTests(unittest.TestCase):
             ),
         )
 
-        for message, selected_skill, response_kind, next_action in cases:
-            with self.subTest(message=message):
-                status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            for message, selected_skill, response_kind, next_action in cases:
+                with self.subTest(message=message):
+                    status, stdout, stderr = run_cli(base + ["chat", "interact", "--source", "discord", message])
 
-                self.assertEqual(stderr, "")
-                self.assertEqual(status, 0)
-                payload = json.loads(stdout)
-                self.assertEqual(payload["route"]["action"], "dispatch")
-                self.assertEqual(payload["route"]["selected_skill"], selected_skill)
-                self.assertEqual(payload["chat_response"]["kind"], response_kind)
-                self.assertEqual(payload["next_action"], next_action)
-                self.assertNotEqual(payload["route"]["selected_skill"], "oh-my-hermes")
-                self.assertNotIn(message, json.dumps(payload))
+                    self.assertEqual(stderr, "")
+                    self.assertEqual(status, 0)
+                    payload = json.loads(stdout)
+                    self.assertEqual(payload["route"]["action"], "dispatch")
+                    self.assertEqual(payload["route"]["selected_skill"], selected_skill)
+                    self.assertEqual(payload["chat_response"]["kind"], response_kind)
+                    self.assertEqual(payload["next_action"], next_action)
+                    self.assertNotEqual(payload["route"]["selected_skill"], "oh-my-hermes")
+                    self.assertNotIn(message, json.dumps(payload))
 
     def test_chat_interact_direct_picker_aliases(self) -> None:
         for message in ("./omh", "/omh", "./skills", "/skills"):

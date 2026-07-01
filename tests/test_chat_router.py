@@ -2495,7 +2495,7 @@ class ChatRouterTests(unittest.TestCase):
     def test_domain_work_with_pasted_status_does_not_become_omh_quality_loop(self) -> None:
         message = """Sionic 위키 페이지 사용성 평가하고 더 보기 좋게 만들어줘.
 
-[omh] v1.0.1 | plugin:ready | target:single | coding-agent:runtime(codex)
+[omh] v1.0.2 | plugin:ready | target:single | coding-agent:runtime(codex)
 [OMH] Native bridge status context.
 Evidence boundary: prepared handoffs are not execution evidence.
 Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
@@ -2511,7 +2511,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertNotIn(intent.intent_class, {"feedback_signal", "meta_discussion"})
 
     def test_status_context_before_user_instruction_is_not_discarded(self) -> None:
-        message = """[omh] v1.0.1 | plugin:ready | target:single | coding-agent:runtime(codex)
+        message = """[omh] v1.0.2 | plugin:ready | target:single | coding-agent:runtime(codex)
 [OMH] Native bridge status context.
 Evidence boundary: prepared handoffs are not execution evidence.
 Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
