@@ -13,6 +13,7 @@ from ..hermes_planning import (
     write_hermes_plan,
     write_plan_handoff_context_pack,
 )
+from ..hermes_readiness import build_hermes_agent_readiness
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from .common import _explicit_source_metadata, _paths, _print_json
@@ -104,9 +105,24 @@ def cmd_hermes_plan_cancel(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hermes_readiness(args: argparse.Namespace) -> int:
+    try:
+        payload = build_hermes_agent_readiness(_paths(args))
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
 def _add_hermes_commands(sub) -> None:
-    hermes = sub.add_parser("hermes", help="Build Hermes-facing plan scaffolds for natural-language work.")
+    hermes = sub.add_parser("hermes", help="Build Hermes-facing plan and readiness scaffolds for natural-language work.")
     hermes_sub = hermes.add_subparsers(dest="hermes_command", required=True)
+
+    readiness = hermes_sub.add_parser(
+        "readiness",
+        help="Inspect Hermes Agent runtime surfaces and OMH reinforcement coverage.",
+    )
+    readiness.set_defaults(func=cmd_hermes_readiness)
 
     plan = hermes_sub.add_parser("plan")
     plan.add_argument("message", nargs="*", help="Task description to turn into a Hermes-facing planning scaffold.")

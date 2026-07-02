@@ -156,6 +156,7 @@ class ArchitectureLayoutTests(unittest.TestCase):
             "src/omh/use_cases.py": "from .workflows.use_cases import *  # noqa: F401,F403",
             "src/omh/observation_journal.py": "from .workflows.observation_journal import *  # noqa: F401,F403",
             "src/omh/hermes_planning.py": "from .workflows.hermes_planning import *  # noqa: F401,F403",
+            "src/omh/hermes_readiness.py": "from .workflows.hermes_readiness import *  # noqa: F401,F403",
             "src/omh/coding_contracts.py": "from .coding.coding_contracts import *  # noqa: F401,F403",
             "src/omh/coding_delegation.py": "from .coding.coding_delegation import *  # noqa: F401,F403",
             "src/omh/codex_progress.py": "from .coding.codex_progress import *  # noqa: F401,F403",
