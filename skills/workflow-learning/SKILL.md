@@ -1,6 +1,6 @@
 ---
 name: workflow-learning
-description: [omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, human review queue, non-applying patch proposal, regression case, readiness audit, repairable learning index, and redacted review export.
+description: [omh] Hermes workflow learning workflow: classify self-improvement signals before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, optimization]
@@ -28,7 +28,7 @@ This is a Hermes-native `workflow-learning` workflow skill.
 
 Good example:
 
-- Prompt: workflow-learning record that Hermes did not use OMH here and create a missed-route review bundle.
+- Prompt: workflow-learning route this self-improvement note before deciding whether it is memory, skill, wiki, failure-retrospective, or automation material.
 - Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
@@ -63,9 +63,9 @@ Bad example:
 
 ## Use When
 
-Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, visible in a human review queue, auditable for learning readiness, reusable as a future regression, convertible into a human-reviewed patch handoff, exportable for review, repairable after local index drift, or captured as a missed-route signal without storing raw prompts.
+Use after a Hermes/OMH workflow attempt should become inspectable, evaluable, routed to memory/skill/wiki/failure-retrospective/automation review, queued for review, audited, replayable as a regression, converted to a patch handoff, exported, repaired after index drift, or captured as a missed-route signal without raw prompts.
 
-    Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning audit`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
+    Strong routing signals: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `memory skill wiki routing`, `learning trace`, `learning audit`, `self improvement store routing`, `store routing`, `where should this learning go`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
 
 ## Catalog Metadata
 
@@ -103,7 +103,7 @@ Artifact expectations:
 
 Safety rules:
 
-- A workflow learning trace, patch proposal, or export is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
+- A workflow learning trace, self-improvement store route, patch proposal, or export is process evidence for review. It is not automatic model training, memory mutation, skill mutation, wiki write, automation creation, execution, verification, CI, or merge evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline

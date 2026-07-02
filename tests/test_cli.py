@@ -683,6 +683,28 @@ class CliTests(unittest.TestCase):
             self.assertEqual(stderr, "")
             self.assertEqual(json.loads(stdout)["status"], "passed")
 
+    def test_learning_route_signal_cli_is_metadata_only(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "According to the Hermes Agent docs, the LLM wiki keeps source-backed SCHEMA.md pages."
+
+            status, stdout, stderr = run_cli(base + ["learning", "route-signal", message])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            routing = payload["routing"]
+            self.assertEqual(payload["schema_version"], "learning_store_route_result/v1")
+            self.assertFalse(payload["recorded"])
+            self.assertEqual(routing["schema_version"], "self_improvement_store_routing/v1")
+            self.assertEqual(routing["classification"]["destination"], "wiki_candidate")
+            self.assertEqual(routing["classification"]["target_workflow"], "wiki")
+            self.assertEqual(routing["next_action"], "prepare_wiki_guidance")
+            self.assertFalse(routing["signal"]["raw_text_stored"])
+            self.assertFalse(routing["writes_observed"])
+            self.assertNotIn(message, stdout)
+
     def test_learning_missed_route_records_review_bundle_without_echoing_prompt(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

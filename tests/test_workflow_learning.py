@@ -15,6 +15,7 @@ from omh.workflow_learning import (
     build_improvement_candidate,
     build_improvement_candidate_review_card,
     build_improvement_patch_proposal,
+    build_self_improvement_store_routing,
     build_workflow_learning_review_queue,
     build_learning_export_bundle,
     build_regression_case_from_trace,
@@ -30,6 +31,7 @@ from omh.workflow_learning import (
     review_improvement_candidate,
     validate_improvement_candidate_review_card,
     validate_improvement_patch_proposal,
+    validate_self_improvement_store_routing,
     validate_workflow_learning_review_queue,
     validate_learning_audit_card,
     validate_workflow_learning_trace,
@@ -295,6 +297,100 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertEqual(queue["primary_action"], "record_workflow_learning_trace")
             self.assertIn("record_workflow_learning_trace", queue["wrapper_actions"])
             validate_workflow_learning_review_queue(queue)
+
+    def test_self_improvement_store_routing_separates_learning_destinations(self) -> None:
+        cases = (
+            (
+                "Please remember I prefer Korean polite replies.",
+                "memory_candidate",
+                "memory-curation-review",
+                "prepare_memory_curation_review",
+                "user_preference",
+            ),
+            (
+                "When the workflow is ambiguous, the skill should ask one concise question instead of asking every time.",
+                "skill_update_candidate",
+                "workflow-learning",
+                "review_improvement",
+                "workflow_behavior",
+            ),
+            (
+                "According to the Hermes Agent docs, the LLM wiki uses SCHEMA.md, index.md, and source-backed pages.",
+                "wiki_candidate",
+                "wiki",
+                "prepare_wiki_guidance",
+                "source_backed_knowledge",
+            ),
+            (
+                "CI failed twice because the release smoke missed a generated docs check; capture the root cause.",
+                "failure_retrospective_candidate",
+                "workflow-learning",
+                "record_workflow_learning_trace",
+                "failure_or_regression",
+            ),
+            (
+                "Suggest a daily background self-improvement review, but do not create cron automatically.",
+                "automation_suggestion_candidate",
+                "automation-blueprint",
+                "prepare_automation_blueprint",
+                "recurring_automation",
+            ),
+            (
+                "Temporary shell PATH was wrong in this local session only.",
+                "discard_transient",
+                "none",
+                "do_not_store",
+                "transient_local_state",
+            ),
+        )
+
+        for text, destination, workflow, next_action, reason in cases:
+            with self.subTest(destination=destination):
+                routing = build_self_improvement_store_routing(text, source_kind="operator_feedback")
+                serialized = json.dumps(routing)
+
+                self.assertEqual(routing["schema_version"], "self_improvement_store_routing/v1")
+                self.assertEqual(routing["status"], "prepared")
+                self.assertEqual(routing["classification"]["destination"], destination)
+                self.assertEqual(routing["classification"]["target_workflow"], workflow)
+                self.assertEqual(routing["next_action"], next_action)
+                self.assertIn(reason, routing["classification"]["routing_reasons"])
+                self.assertTrue(routing["review_gate"]["required"])
+                self.assertFalse(routing["signal"]["raw_text_stored"])
+                self.assertFalse(routing["writes_observed"])
+                self.assertIn("memory write", routing["not_evidence_yet"])
+                self.assertNotIn(text, serialized)
+                validate_self_improvement_store_routing(routing)
+
+        protected = build_self_improvement_store_routing(
+            "Remember my API token secret-token-123 for future deployments.",
+            source_kind="operator_feedback",
+        )
+        self.assertEqual(protected["classification"]["destination"], "discard_transient")
+        self.assertIn("private_or_raw_content", protected["classification"]["routing_reasons"])
+        self.assertNotIn("secret-token-123", json.dumps(protected))
+
+        broken = json.loads(json.dumps(protected))
+        broken["debug"] = {"raw_text": "private raw text should fail"}
+        with self.assertRaises(WorkflowLearningError):
+            validate_self_improvement_store_routing(broken)
+
+        for forbidden_key in ("transcript", "conversation", "stdout", "stderr"):
+            with self.subTest(forbidden_key=forbidden_key):
+                broken = json.loads(json.dumps(protected))
+                broken["debug"] = {forbidden_key: "private raw text should fail"}
+                with self.assertRaises(WorkflowLearningError):
+                    validate_self_improvement_store_routing(broken)
+
+        nested_raw_flag = json.loads(json.dumps(protected))
+        nested_raw_flag["debug"] = {"raw_text_stored": "private raw text should fail"}
+        with self.assertRaises(WorkflowLearningError):
+            validate_self_improvement_store_routing(nested_raw_flag)
+
+        invalid_signal_flag = json.loads(json.dumps(protected))
+        invalid_signal_flag["signal"]["raw_text_stored"] = "private raw text should fail"
+        with self.assertRaises(WorkflowLearningError):
+            validate_self_improvement_store_routing(invalid_signal_flag)
 
     def test_learning_review_queue_tracks_candidate_decisions_without_raw_review_note(self) -> None:
         with TemporaryDirectory() as tmp:
