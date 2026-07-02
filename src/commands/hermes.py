@@ -14,6 +14,7 @@ from ..hermes_planning import (
     write_plan_handoff_context_pack,
 )
 from ..hermes_readiness import build_hermes_agent_readiness
+from ..workflows.hermes_retained_context import build_hermes_retained_context
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
 from .common import _explicit_source_metadata, _paths, _print_json
@@ -114,6 +115,15 @@ def cmd_hermes_readiness(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hermes_retained_context(args: argparse.Namespace) -> int:
+    try:
+        payload = build_hermes_retained_context(_paths(args))
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
 def _add_hermes_commands(sub) -> None:
     hermes = sub.add_parser("hermes", help="Build Hermes-facing plan and readiness scaffolds for natural-language work.")
     hermes_sub = hermes.add_subparsers(dest="hermes_command", required=True)
@@ -123,6 +133,12 @@ def _add_hermes_commands(sub) -> None:
         help="Inspect Hermes Agent runtime surfaces and OMH reinforcement coverage.",
     )
     readiness.set_defaults(func=cmd_hermes_readiness)
+
+    retained_context = hermes_sub.add_parser(
+        "retained-context",
+        help="Inspect Hermes and OMH retained-context channels for memory, learning, loop, and wiki readiness.",
+    )
+    retained_context.set_defaults(func=cmd_hermes_retained_context)
 
     plan = hermes_sub.add_parser("plan")
     plan.add_argument("message", nargs="*", help="Task description to turn into a Hermes-facing planning scaffold.")
