@@ -16,6 +16,7 @@ from omh.workflow_learning import (
     build_improvement_candidate_review_card,
     build_improvement_patch_proposal,
     build_self_improvement_store_routing,
+    build_self_improvement_store_route_record,
     build_workflow_learning_review_queue,
     build_learning_export_bundle,
     build_regression_case_from_trace,
@@ -29,8 +30,11 @@ from omh.workflow_learning import (
     record_missed_route,
     replay_regression_cases,
     review_improvement_candidate,
+    review_self_improvement_store_route,
+    self_improvement_store_route_ref,
     validate_improvement_candidate_review_card,
     validate_improvement_patch_proposal,
+    validate_self_improvement_store_route_record,
     validate_self_improvement_store_routing,
     validate_workflow_learning_review_queue,
     validate_learning_audit_card,
@@ -42,6 +46,7 @@ from omh.workflow_learning import (
     write_learning_export,
     write_workflow_eval,
     write_regression_case,
+    write_self_improvement_store_route,
 )
 from omh.wrapper.contract import build_chat_interaction_payload
 
@@ -391,6 +396,68 @@ class WorkflowLearningTests(unittest.TestCase):
         invalid_signal_flag["signal"]["raw_text_stored"] = "private raw text should fail"
         with self.assertRaises(WorkflowLearningError):
             validate_self_improvement_store_routing(invalid_signal_flag)
+
+    def test_self_improvement_store_route_review_queue_records_metadata_only_decisions(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "According to the Hermes Agent docs, the LLM wiki uses SCHEMA.md and source-backed pages."
+            routing = build_self_improvement_store_routing(message, source_kind="operator_feedback")
+            route = write_self_improvement_store_route(
+                paths,
+                build_self_improvement_store_route_record(
+                    routing,
+                    source_ref="chat:msg-1",
+                    title="Route wiki learning",
+                ),
+            )
+
+            pending_queue = build_workflow_learning_review_queue(paths, limit=None)
+
+            self.assertEqual(route["schema_version"], "self_improvement_store_route_record/v1")
+            self.assertEqual(route["status"], "pending_review")
+            self.assertEqual(route["destination_review"]["current_destination"], "wiki_candidate")
+            self.assertEqual(route["destination_review"]["next_action"], "prepare_wiki_guidance")
+            self.assertEqual(route["review_gate"]["decision"], "pending")
+            self.assertEqual(pending_queue["status"], "needs_review")
+            self.assertEqual(pending_queue["summary"]["pending_store_routes"], 1)
+            self.assertEqual(pending_queue["entries"][0]["kind"], "self_improvement_store_route")
+            self.assertEqual(pending_queue["entries"][0]["status"], "needs_store_route_review")
+            self.assertEqual(pending_queue["entries"][0]["primary_action"], "review_self_improvement_store_route")
+            self.assertIn(self_improvement_store_route_ref(str(route["route_id"])), pending_queue["entries"][0]["refs"])
+            self.assertIn("review_self_improvement_store_route", pending_queue["wrapper_actions"])
+            self.assertNotIn(message, json.dumps(route))
+            validate_self_improvement_store_route_record(route)
+            validate_workflow_learning_review_queue(pending_queue)
+
+            reviewed = review_self_improvement_store_route(
+                paths,
+                str(route["route_id"]),
+                decision="change_destination",
+                destination="memory_candidate",
+                reviewer_ref="operator:test",
+                review_note="private operator note should not be stored",
+            )
+            serialized_reviewed = json.dumps(reviewed)
+
+            self.assertEqual(reviewed["status"], "changed")
+            self.assertEqual(reviewed["destination_review"]["current_destination"], "memory_candidate")
+            self.assertEqual(reviewed["destination_review"]["target_workflow"], "memory-curation-review")
+            self.assertEqual(reviewed["destination_review"]["next_action"], "prepare_memory_curation_review")
+            self.assertEqual(reviewed["review_gate"]["decision"], "change_destination")
+            self.assertIn("review_note_sha256", reviewed["review_gate"])
+            self.assertIn("review_note_length", reviewed["review_gate"])
+            self.assertFalse(reviewed["review_gate"]["review_note_stored"])
+            self.assertFalse(reviewed["writes_observed"])
+            self.assertNotIn("private operator note", serialized_reviewed)
+            validate_self_improvement_store_route_record(reviewed)
+
+            approved_queue = build_workflow_learning_review_queue(paths, limit=None)
+
+            self.assertEqual(approved_queue["status"], "empty")
+            self.assertEqual(approved_queue["summary"]["pending_store_routes"], 0)
+            export = build_learning_export_bundle(paths)
+            self.assertNotIn("store_routes", export["records"])
+            self.assertEqual(export["provenance"]["source_trace_count"], 0)
 
     def test_learning_review_queue_tracks_candidate_decisions_without_raw_review_note(self) -> None:
         with TemporaryDirectory() as tmp:

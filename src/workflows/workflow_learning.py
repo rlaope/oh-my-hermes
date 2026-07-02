@@ -9,6 +9,14 @@ from typing import Any, Callable, Iterable
 from ..local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
 from ..paths import OmhPaths
 from ..runtime.artifacts import show_run
+from .self_improvement_store_contract import (
+    SELF_IMPROVEMENT_DESTINATION_DETAILS,
+    SELF_IMPROVEMENT_DESTINATION_PRIORITY,
+    SELF_IMPROVEMENT_STORE_ROUTING_SCHEMA_VERSION,
+    self_improvement_store_destination_details,
+    self_improvement_store_destinations,
+)
+from .workflow_learning_errors import WorkflowLearningError
 
 
 WORKFLOW_LEARNING_TRACE_SCHEMA_VERSION = "workflow_learning_trace/v1"
@@ -23,7 +31,6 @@ WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
 WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION = "workflow_learning_audit/v1"
 LEARNING_AUDIT_CARD_SCHEMA_VERSION = "learning_audit_card/v1"
 MISSED_ROUTE_RESULT_SCHEMA_VERSION = "learning_missed_route_result/v1"
-SELF_IMPROVEMENT_STORE_ROUTING_SCHEMA_VERSION = "self_improvement_store_routing/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
@@ -68,58 +75,6 @@ _SELF_IMPROVEMENT_FORBIDDEN_NORMALIZED_PAYLOAD_KEYS = {
 } | {"rawtextstored"}
 _OBSERVED_STATES = {"observed", "verified", "complete", "completed", "ready", "merged"}
 _LEARNING_OUTCOMES = {"unknown", "useful", "not_useful", "blocked", "failed"}
-_SELF_IMPROVEMENT_DESTINATION_DETAILS = {
-    "memory_candidate": {
-        "target_workflow": "memory-curation-review",
-        "target_record_type": "project_memory_candidate",
-        "next_action": "prepare_memory_curation_review",
-        "confidence": "high",
-    },
-    "skill_update_candidate": {
-        "target_workflow": "workflow-learning",
-        "target_record_type": "improvement_candidate",
-        "next_action": "review_improvement",
-        "confidence": "high",
-    },
-    "wiki_candidate": {
-        "target_workflow": "wiki",
-        "target_record_type": "retained_knowledge_note",
-        "next_action": "prepare_wiki_guidance",
-        "confidence": "high",
-    },
-    "failure_retrospective_candidate": {
-        "target_workflow": "workflow-learning",
-        "target_record_type": "workflow_learning_trace",
-        "next_action": "record_workflow_learning_trace",
-        "confidence": "high",
-    },
-    "automation_suggestion_candidate": {
-        "target_workflow": "automation-blueprint",
-        "target_record_type": "automation_suggestion",
-        "next_action": "prepare_automation_blueprint",
-        "confidence": "high",
-    },
-    "discard_transient": {
-        "target_workflow": "none",
-        "target_record_type": "none",
-        "next_action": "do_not_store",
-        "confidence": "high",
-    },
-    "manual_review_candidate": {
-        "target_workflow": "memory-curation-review",
-        "target_record_type": "store_review_question",
-        "next_action": "review_self_improvement_store_route",
-        "confidence": "needs_review",
-    },
-}
-_SELF_IMPROVEMENT_DESTINATION_PRIORITY = (
-    "discard_transient",
-    "automation_suggestion_candidate",
-    "failure_retrospective_candidate",
-    "wiki_candidate",
-    "skill_update_candidate",
-    "memory_candidate",
-)
 _PRIVATE_OR_RAW_SIGNAL_TERMS = (
     "secret-token",
     "api token",
@@ -245,10 +200,6 @@ _MEMORY_SIGNAL_TERMS = (
     "내 취향",
     "기억해",
 )
-
-
-class WorkflowLearningError(ValueError):
-    pass
 
 
 def learning_trace_ref(trace_id: str) -> str:
@@ -1381,6 +1332,8 @@ def build_workflow_learning_audit(paths: OmhPaths, *, limit: int | None = 20) ->
 
 
 def build_workflow_learning_review_queue(paths: OmhPaths, *, limit: int | None = 20) -> dict[str, Any]:
+    from .self_improvement_routes import store_route_review_queue_entries
+
     scanned = _scan_learning_records(paths)
     candidates = _read_valid_learning_records(paths.learning_candidates_dir, validate_improvement_candidate)
     patch_proposals = _read_valid_learning_records(paths.learning_patch_proposals_dir, validate_improvement_patch_proposal)
@@ -1435,6 +1388,8 @@ def build_workflow_learning_review_queue(paths: OmhPaths, *, limit: int | None =
                 )
             )
 
+    entries.extend(store_route_review_queue_entries(paths))
+
     entries = sorted(entries, key=lambda item: (int(item.get("priority", 99)), str(item.get("created_at", "")), str(item.get("entry_id", ""))))
     limited_entries = entries if limit is None else entries[: max(limit, 0)]
     payload = {
@@ -1449,6 +1404,7 @@ def build_workflow_learning_review_queue(paths: OmhPaths, *, limit: int | None =
             "open_items": len(entries),
             "returned_items": len(limited_entries),
             "pending_candidates": sum(1 for item in entries if item.get("status") == "needs_candidate_review"),
+            "pending_store_routes": sum(1 for item in entries if item.get("status") == "needs_store_route_review"),
             "approved_without_proposal": sum(1 for item in entries if item.get("status") == "needs_patch_proposal"),
             "ready_patch_proposals": sum(1 for item in entries if item.get("status") == "ready_for_human_patch"),
             "blocked_items": sum(1 for item in entries if item.get("severity") == "blocking"),
@@ -1463,6 +1419,10 @@ def build_workflow_learning_review_queue(paths: OmhPaths, *, limit: int | None =
         "wrapper_actions": [
             "record_workflow_learning_trace",
             "show_learning_review_queue",
+            "review_self_improvement_store_route",
+            "approve_store_route",
+            "change_store_route_destination",
+            "discard_store_route",
             "review_improvement",
             "approve_improvement",
             "revise_improvement",
@@ -1485,11 +1445,12 @@ def build_workflow_learning_review_queue(paths: OmhPaths, *, limit: int | None =
             "model training",
             "workflow execution",
             "review approval beyond recorded human gate",
+            "destination artifact write after store-route approval",
             "CI",
             "merge",
         ],
         "claim_boundary": (
-            "Workflow learning review queues summarize local candidates and patch proposals. "
+            "Workflow learning review queues summarize local candidates, patch proposals, and store-route review records. "
             "They do not apply source edits, execute workflows, train models, pass CI, or prove future behavior changed."
         ),
     }
@@ -1640,10 +1601,12 @@ def validate_workflow_learning_review_queue(queue: dict[str, Any]) -> None:
         "candidate_patch_gap",
         "patch_proposal",
         "orphan_patch_proposal",
+        "self_improvement_store_route",
     }
     allowed_statuses = {
         "blocked",
         "needs_candidate_review",
+        "needs_store_route_review",
         "needs_revision",
         "needs_patch_proposal",
         "needs_regression_case",
@@ -1709,9 +1672,9 @@ def validate_self_improvement_store_routing(payload: dict[str, Any]) -> None:
         raise WorkflowLearningError("self-improvement store routing signal.length must be a non-negative integer")
     classification = _object(payload.get("classification"))
     destination = str(classification.get("destination", ""))
-    if destination not in _SELF_IMPROVEMENT_DESTINATION_DETAILS:
+    if destination not in SELF_IMPROVEMENT_DESTINATION_DETAILS:
         raise WorkflowLearningError("self-improvement store routing destination is invalid")
-    expected = _SELF_IMPROVEMENT_DESTINATION_DETAILS[destination]
+    expected = SELF_IMPROVEMENT_DESTINATION_DETAILS[destination]
     for key in ("confidence", "target_workflow", "target_record_type", "next_action"):
         _require_string(classification, key)
     for key in ("target_workflow", "target_record_type", "next_action"):
@@ -1721,7 +1684,7 @@ def validate_self_improvement_store_routing(payload: dict[str, Any]) -> None:
     if not reasons:
         raise WorkflowLearningError("self-improvement store routing requires routing reasons")
     alternatives = _strings(classification.get("alternative_destinations"))
-    if any(destination == item or item not in _SELF_IMPROVEMENT_DESTINATION_DETAILS for item in alternatives):
+    if any(destination == item or item not in SELF_IMPROVEMENT_DESTINATION_DETAILS for item in alternatives):
         raise WorkflowLearningError("self-improvement store routing alternatives are invalid")
     gate = _object(payload.get("review_gate"))
     if gate.get("required") is not True or gate.get("decision") != "pending":
@@ -3688,7 +3651,7 @@ def _self_improvement_classification(
     reasons: list[str],
     alternatives: list[str],
 ) -> dict[str, Any]:
-    details = _SELF_IMPROVEMENT_DESTINATION_DETAILS[destination]
+    details = SELF_IMPROVEMENT_DESTINATION_DETAILS[destination]
     return {
         "destination": destination,
         "confidence": str(details["confidence"]),
@@ -3702,7 +3665,7 @@ def _self_improvement_classification(
 
 def _prioritized_store_destination(matches: list[tuple[str, str]]) -> str:
     destinations = {destination for destination, _reason in matches}
-    for destination in _SELF_IMPROVEMENT_DESTINATION_PRIORITY:
+    for destination in SELF_IMPROVEMENT_DESTINATION_PRIORITY:
         if destination in destinations:
             return destination
     return matches[0][0]
@@ -3909,3 +3872,15 @@ def _is_export_raw_payload_key(key: str) -> bool:
     if normalized in allowed:
         return False
     return normalized in forbidden or normalized.startswith("raw")
+
+
+from .self_improvement_routes import (  # noqa: E402
+    build_self_improvement_store_route_record,
+    list_self_improvement_store_routes,
+    review_self_improvement_store_route,
+    self_improvement_store_route_path,
+    self_improvement_store_route_ref,
+    show_self_improvement_store_route,
+    validate_self_improvement_store_route_record,
+    write_self_improvement_store_route,
+)

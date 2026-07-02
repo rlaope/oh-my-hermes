@@ -61,6 +61,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "gateway-intent-card": ("router_only", False),
     "executor-runtime-readiness": ("harness_only", False),
     "deliverable-package": ("workflow_skill", True),
+    "design-quality-gate": ("workflow_skill", True),
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
     "ops-observability-card": ("harness_only", False),
@@ -103,15 +104,15 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(f"`{skill_name}`", WORKSPACE_SNIPPET)
         self.assertIn(
             "`workflow-learning`: `workflow-learning`, `workflow learning`, `route-signal`, "
-            "`self-improvement store routing`, `memory skill wiki routing`, `learning trace`, `learning audit`",
+            "`self-improvement store routing`, `store route review`, `memory skill wiki routing`, `learning trace`",
             workflow_registry,
         )
         self.assertIn("OMH Awareness Primer", router.content)
         self.assertIn("Retained knowledge", router.content)
         self.assertIn("`wiki`", router.content)
         self.assertIn("Materials and visual summaries", router.content)
-        self.assertIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
-        self.assertNotIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
+        self.assertIn("`design-quality-gate`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
+        self.assertNotIn("`design-quality-gate`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
         self.assertIn("Coding handoff", router.content)
         self.assertIn("omh chat route", router.content)
         self.assertIn("omh coding delegate", wrapper_routing)
@@ -282,7 +283,7 @@ class RouterContentTests(unittest.TestCase):
             for definition in builtin_definitions()
             if definition.quality_tier == "workflow-surface-gated"
         }
-        generated_surface_exposures = set(FEATURE_SURFACE_EXPOSURES) - {"automation-blueprint"}
+        generated_surface_exposures = set(FEATURE_SURFACE_EXPOSURES) - {"automation-blueprint", "design-quality-gate"}
 
         self.assertEqual(feature_surface_names, generated_surface_exposures)
         for name in feature_surface_names:
@@ -464,6 +465,7 @@ class RouterContentTests(unittest.TestCase):
                 "report-package",
                 "materials-package",
                 "img-summary",
+                "design-quality-gate",
                 "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
@@ -611,6 +613,38 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Do not call image providers", templates["img-summary"].content)
         self.assertIn("image_generation_setup/v1", templates["img-summary"].content)
         self.assertIn("Preferred harness for this skill: `img-summary`", templates["img-summary"].content)
+
+    def test_design_quality_gate_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("design-quality-gate", definitions)
+        self.assertIn("design-quality-gate", harnesses)
+        self.assertIn("design-quality-gate", templates)
+        self.assertEqual(primary_harness_for_skill("design-quality-gate"), "design-quality-gate")
+        self.assertEqual(definitions["design-quality-gate"].category, "materials")
+        self.assertEqual(definitions["design-quality-gate"].phase, "design-quality-gate")
+        self.assertEqual(definitions["design-quality-gate"].quality_tier, "design-pro-gated")
+        self.assertIn("design_quality_gate/v1", definitions["design-quality-gate"].expected_outputs)
+        self.assertIn("visual_qa_evidence/v1 when observed", definitions["design-quality-gate"].expected_outputs)
+        self.assertIn("CJK", " ".join(definitions["design-quality-gate"].safety_rules))
+        self.assertIn("design_quality_gate/v1", harnesses["design-quality-gate"].expected_outputs)
+        self.assertIn("reference_packet_selected", harnesses["design-quality-gate"].evidence_ladder)
+        self.assertIn("visual_qa_observed_when_available", harnesses["design-quality-gate"].evidence_ladder)
+        self.assertTrue(
+            {
+                "prepare_design_quality_gate",
+                "show_design_quality_gate",
+                "record_design_reference",
+                "record_content_qa",
+                "record_layout_qa",
+                "prepare_frontend_handoff",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("superior design", templates["design-quality-gate"].content)
+        self.assertIn("visual_qa_evidence/v1", templates["design-quality-gate"].content)
+        self.assertIn("Preferred harness for this skill: `design-quality-gate`", templates["design-quality-gate"].content)
 
     def test_paper_learning_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -898,7 +932,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("self-improvement store routing", skills["workflow-learning"].content)
         workflow_docs = workflow_reference_markdown()
         self.assertIn("self_improvement_store_routing/v1", workflow_docs)
+        self.assertIn("self_improvement_store_route_record/v1", workflow_docs)
+        self.assertIn("store_destination_reviewed", workflow_docs)
         self.assertIn("review_self_improvement_store_route", workflow_docs)
+        self.assertIn("change_store_route_destination", workflow_docs)
         self.assertIn("single-cycle-plan-to-pr", skills["ultraprocess"].content)
         self.assertIn("Do not continue into a repeated feedback loop", skills["ultraprocess"].content)
         self.assertIn("code-review gate", skills["ultraprocess"].content)

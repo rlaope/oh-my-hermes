@@ -1313,6 +1313,74 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Show `generate_visual_image` only when wrapper context reports image_generation_capability/v1 as connected, and still treat it as wrapper-owned action rather than evidence.
   - When image_generation_capability/v1 is unknown or prompt_only, ask which image tool to use and route to image_generation_setup/v1 instead of pretending generation can start.
 
+### design-quality-gate
+
+[omh] Hermes Design Quality Gate workflow: enforce superior content, design, layout, publishing, and visual QA gates.
+
+- Category: `materials`
+- Phase: `design-quality-gate`
+- Hermes role: `operator`
+- Quality tier: `design-pro-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when a visual, web, frontend, deck, PDF, poster, or publishing deliverable must meet a superior design/content/layout QA bar.
+- Handoff policy: Keep the quality brief, reference selection, design rubric, content-structure review, and QA checklist in Hermes; delegate implementation or binary generation only after the surface, owner, references, and observed QA path are explicit.
+- Why this exists: `design-quality-gate` makes high-stakes visual deliverables premium and trustworthy by treating taste, content, layout, accessibility, and render QA as first-class evidence.
+- Use when: Use when web UI, decks, PDFs, posters, or visual packages must beat ordinary output on content, taste, layout, accessibility, and render QA.
+- Do not use when:
+  - Basic image prompt card only; use `img-summary`.
+  - Ordinary file packaging/export plan only; use `materials-package` or `deliverable-package`.
+  - Pure backend, CLI, data, or text-only research with no visual surface.
+  - The user asks to claim deployment, export, publication, or visual QA without evidence.
+- Strong routing signals: `design-quality-gate`, `design quality gate`, `ui ux pro max`, `design pro max`, `frontend pro max`, `visual qa pro`, `premium design`, `high quality design`, `beautiful website`, `frontend publishing`, `publishing quality`, `layout validation`, `ppt design quality`, `pdf design quality`, `웹사이트 디자인`, `프론트엔드 퍼블리싱`, `레이아웃 검증`, `더 뛰어나게`, `고퀄`
+- Good example:
+  - Prompt: design-quality-gate make this landing page and deck premium and verified.
+  - Expected behavior: Prepare design_quality_gate/v1 with references, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
+  - Why: The request asks for superior visual quality and publishing readiness.
+- Bad example:
+  - Prompt: design-quality-gate say the PDF and website look amazing because the plan says so.
+  - Expected behavior: Require rendered PDF/page screenshots or mark visual QA as not_observed.
+  - Why: A quality brief is not render, visual QA, export, deployment, or delivery evidence.
+- Quality bar:
+  - Define superior design quality with references, audience, hierarchy, style, and measurable QA gates.
+  - Review content accuracy and hierarchy before visual polish.
+  - Use design-system/reference rules for web, deck, PDF, and poster surfaces.
+  - Reject generic AI slop: weak hierarchy, cramped copy, flat templates, one-note palettes, and unverified exports.
+  - Require fresh visual QA for pages, slides, states, viewports, and CJK-heavy regions before PASS.
+- Completion checklist:
+  - The material source, target format, audience, structure, and QA expectation are named.
+  - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
+  - The next action identifies whether the package is planned, generated, QA-ready, or blocked.
+- Recovery notes:
+  - If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
+  - If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+- Required inputs:
+  - surface/channel
+  - audience and purpose
+  - source content or gaps
+  - style references
+  - viewport/page/export constraints
+  - observed render QA for completion claims
+- Expected outputs:
+  - design_quality_gate/v1
+  - content_quality_review/v1
+  - layout_validation_plan/v1
+  - visual_qa_evidence/v1 when observed
+  - publishing_readiness/v1
+  - downstream route: frontend, materials-package, img-summary, or deliverable-package
+- Artifact expectations:
+  - design_quality_gate/v1 when prepared
+  - visual_qa_evidence/v1 only from fresh screenshots/renders/observations
+  - export/publish evidence only when observed
+- Safety rules:
+  - Require references/rubric plus fresh render QA before PASS.
+  - Never claim PPTX, PDF, deployment, poster export, image generation, or publication without observed evidence.
+  - Separate content, taste, layout, accessibility, render fidelity, and delivery checks.
+  - Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.
+  - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
+
 ### automation-blueprint
 
 [omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
@@ -2865,7 +2933,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### workflow-learning
 
-[omh] Hermes workflow learning workflow: classify self-improvement signals before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
+[omh] Hermes workflow learning workflow: classify and review self-improvement store routes as an auxiliary review lane before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
 
 - Category: `optimization`
 - Phase: `workflow-learning`
@@ -2878,12 +2946,12 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Preferred usage: Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, create a regression case, or export a redacted review bundle.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use after a Hermes/OMH workflow attempt should become inspectable, evaluable, routed to memory/skill/wiki/failure-retrospective/automation review, queued for review, audited, replayable as a regression, converted to a patch handoff, exported, repaired after index drift, or captured as a missed-route signal without raw prompts.
+- Use when: Use after a Hermes/OMH workflow attempt should become inspectable, evaluable, routed to memory/skill/wiki/failure-retrospective/automation review, persisted as a metadata-only store-route decision, queued for review, audited, replayable as a regression, converted to a patch handoff, exported, repaired after index drift, or captured as a missed-route signal without raw prompts. Store-route records are an auxiliary review lane surfaced by `learning review` and `learning store-routes`; they are not canonical learning index/export records until a reviewed destination produces its own artifact.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `memory skill wiki routing`, `learning trace`, `learning audit`, `self improvement store routing`, `store routing`, `where should this learning go`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
+- Strong routing signals: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `store route review`, `memory skill wiki routing`, `learning trace`, `learning audit`, `self improvement store routing`, `store routing`, `where should this learning go`, `audit learning`, `learning review`, `review queue`, `review-route`, `store-routes`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
 - Good example:
   - Prompt: workflow-learning route this self-improvement note before deciding whether it is memory, skill, wiki, failure-retrospective, or automation material.
   - Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
@@ -3635,6 +3703,77 @@ Prepare source-specific, premium domain-aware, and poster-archetype-aware visual
   - A connected image-generation capability changes available actions only; it is not execution evidence.
   - A generated image observation does not prove visual QA or delivery.
 - Fallback: If image capability is unavailable, show choose/setup image tool fallback actions plus copy/revise/status actions, and keep generation prompt-only until capability is connected.
+
+### design-quality-gate
+
+Prepare superior visual quality gates for web, deck, PDF, poster, and publishing surfaces.
+
+- Use when: Use when design direction, content hierarchy, layout validation, accessibility, render QA, or publishing readiness must be explicit.
+- Quality tier: `design-pro-gated`
+- Quality bar:
+  - Define superior design quality with references, audience, hierarchy, constraints, and channel.
+  - Review content correctness before polish.
+  - Require design-system or page/slide/poster layout rules.
+  - Validate pages, viewports, states, and CJK-heavy regions with fresh render evidence before PASS.
+  - Keep gates separate from implementation, export, QA, approval, deployment, attachment, and delivery.
+- Inputs:
+  - target surface/channel
+  - audience and purpose
+  - source content or gaps
+  - style references
+  - viewport/page/export constraints
+  - fresh render QA for completion claims
+- Outputs:
+  - design_quality_gate/v1
+  - content_quality_review/v1
+  - layout_validation_plan/v1
+  - visual_qa_evidence/v1 when observed
+  - publishing_readiness/v1
+  - downstream route
+- Stop conditions:
+  - quality brief is prepared
+  - content gaps are explicit
+  - layout plan covers target pages/states/viewports
+  - visual QA evidence remains observed-only
+- Verification:
+  - validate design_quality_gate/v1
+  - check references, hierarchy, layout, and route
+  - record visual QA only after render evidence
+  - record export/deployment/approval/delivery only when observed
+- Evidence ladder:
+  - `design_quality_scope_recorded`
+  - `reference_packet_selected`
+  - `content_hierarchy_reviewed`
+  - `layout_validation_plan_prepared`
+  - `downstream_generation_route_selected`
+  - `visual_qa_observed_when_available`
+  - `publishing_readiness_observed_when_available`
+- Wrapper actions:
+  - `prepare_design_quality_gate`
+  - `show_design_quality_gate`
+  - `record_design_reference`
+  - `record_content_qa`
+  - `record_layout_qa`
+  - `record_visual_qa`
+  - `prepare_frontend_handoff`
+  - `prepare_material_package`
+  - `prepare_visual_prompt_card`
+  - `show_status`
+- Artifact events:
+  - `design_quality_scope_recorded`
+  - `reference_packet_selected`
+  - `content_hierarchy_reviewed`
+  - `layout_validation_plan_prepared`
+  - `downstream_generation_route_selected`
+  - `visual_qa_observed_when_available`
+  - `publishing_readiness_observed_when_available`
+- Delegation expectation: Record Design Quality Gate as Hermes-retained quality orchestration; implementation/export/QA/delivery need evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A design_quality_gate/v1 brief is not implementation, export, deployment, image generation, or publishing evidence.
+  - A layout plan is not visual QA until fresh render/screenshot/deck/PDF/operator evidence exists.
+  - A generated/exported artifact does not prove content quality, accessibility, visual QA, approval, or delivery.
+- Fallback: If references, content, surface, or render evidence are missing, prepare the gate and expose the blocker.
 
 ### source-finder
 
@@ -4812,7 +4951,7 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 
 Route self-improvement signals to memory, skill, wiki, failure-retrospective, automation, or discard review before recording workflow attempts as metadata-only traces, evals, missed-route bundles, candidates, patch proposals, regression cases, audits, indexes, and exports.
 
-- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future behavior without hidden self-modification; also use when a signal needs a store decision before any memory/skill/wiki/automation write, Hermes missed the expected OMH workflow, learning readiness needs audit, a reviewer needs the queue, an approved candidate needs a patch handoff, the index needs check/rebuild, or a metadata-only bundle is needed.
+- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future behavior without hidden self-modification; also use when a signal needs a recorded store-route review decision before any memory/skill/wiki/automation write, Hermes missed the expected OMH workflow, learning readiness needs audit, a reviewer needs the queue, an approved candidate needs a patch handoff, the index needs check/rebuild, or a metadata-only bundle is needed.
 - Quality tier: `learning-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
@@ -4832,6 +4971,8 @@ Route self-improvement signals to memory, skill, wiki, failure-retrospective, au
   - improvement_candidate/v1
   - improvement_candidate_review_card/v1
   - workflow_learning_review_queue/v1
+  - self_improvement_store_route_record/v1
+  - self_improvement_store_route_list/v1
   - improvement_patch_proposal/v1
   - regression_case/v1
   - workflow_learning_audit/v1
@@ -4846,6 +4987,8 @@ Route self-improvement signals to memory, skill, wiki, failure-retrospective, au
   - record only observed external actions
 - Evidence ladder:
   - `store_destination_classified`
+  - `store_destination_recorded`
+  - `store_destination_reviewed`
   - `trace_recorded`
   - `eval_recorded`
   - `improvement_candidate_reviewed`
@@ -4855,7 +4998,11 @@ Route self-improvement signals to memory, skill, wiki, failure-retrospective, au
   - `learning_export_recorded`
   - `future_replay_passed_when_available`
 - Wrapper actions:
+  - `route_self_improvement_signal`
   - `review_self_improvement_store_route`
+  - `approve_store_route`
+  - `change_store_route_destination`
+  - `discard_store_route`
   - `record_workflow_learning_trace`
   - `record_missed_route`
   - `show_learning_review_queue`

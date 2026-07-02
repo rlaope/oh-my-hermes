@@ -1,42 +1,43 @@
 ---
-name: materials-package
-description: [omh] Hermes Materials Package workflow: decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary export handoffs.
+name: design-quality-gate
+description: [omh] Hermes Design Quality Gate workflow: enforce superior content, design, layout, publishing, and visual QA gates.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, materials]
     category: materials
-    phase: material-plan
+    phase: design-quality-gate
     role: operator
-    quality_tier: material-gated
+    quality_tier: design-pro-gated
 ---
 
-# Materials Package
+# Design Quality Gate
 
-This is a Hermes-native `materials-package` workflow skill.
+This is a Hermes-native `design-quality-gate` workflow skill.
 
 ## Why This Exists
 
-`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Keynote, HWP, and Markdown work as a first-class material-processing workflow without becoming a hidden file generator.
+`design-quality-gate` makes high-stakes visual deliverables premium and trustworthy by treating taste, content, layout, accessibility, and render QA as first-class evidence.
 
 ## Do Not Use When
 
-- The user only needs a weekly/monthly report outline; use `report-package`.
-- The user asks for recurring meeting minutes or scrum history; use `operating-rhythm`.
-- The request is code documentation, README, or project wiki maintenance; use the docs/wiki workflow.
+- Basic image prompt card only; use `img-summary`.
+- Ordinary file packaging/export plan only; use `materials-package` or `deliverable-package`.
+- Pure backend, CLI, data, or text-only research with no visual surface.
+- The user asks to claim deployment, export, publication, or visual QA without evidence.
 
 ## Examples
 
 Good example:
 
-- Prompt: materials-package 엑셀 매출 리포트를 PDF로 공유할 수 있게 준비해줘.
-- Expected behavior: Create a material plan with xlsx/pdf target formats, source inputs, missing metrics, QA checks, and a generation handoff boundary.
-- Why: The request is about material processing and binary export evidence, not just a text report outline.
+- Prompt: design-quality-gate make this landing page and deck premium and verified.
+- Expected behavior: Prepare design_quality_gate/v1 with references, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
+- Why: The request asks for superior visual quality and publishing readiness.
 
 Bad example:
 
-- Prompt: materials-package prove the PDF was sent to leadership.
-- Expected behavior: Ask for observed delivery evidence or record the delivery as not_observed instead of claiming it happened.
-- Why: A prepared material artifact cannot prove export, approval, or delivery.
+- Prompt: design-quality-gate say the PDF and website look amazing because the plan says so.
+- Expected behavior: Require rendered PDF/page screenshots or mark visual QA as not_observed.
+- Why: A quality brief is not render, visual QA, export, deployment, or delivery evidence.
 
 ## Completion Checklist
 
@@ -63,51 +64,60 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should turn source inputs into a material plan for decks, PDFs, spreadsheets, documents, HWP, Markdown, or binary export handoff without claiming file generation.
+Use when web UI, decks, PDFs, posters, or visual packages must beat ordinary output on content, taste, layout, accessibility, and render QA.
 
-    Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `ppt and pdf`, `pdf and ppt`, `ppt/pdf`, `pdf/ppt`, `spreadsheet to pdf`, `excel to pdf`, `monthly report pdf`, `attached spreadsheet`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `PDF`, `한글 문서`, `HWP`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`, `첨부한 엑셀`, `엑셀을 월간 보고서`, `PDF랑 PPT`, `PPT랑 PDF`, `PDF와 PPT`, `PPT와 PDF`, `PDF랑 PPT로`
+    Strong routing signals: `design-quality-gate`, `design quality gate`, `ui ux pro max`, `design pro max`, `frontend pro max`, `visual qa pro`, `premium design`, `high quality design`, `beautiful website`, `frontend publishing`, `publishing quality`, `layout validation`, `ppt design quality`, `pdf design quality`, `웹사이트 디자인`, `프론트엔드 퍼블리싱`, `레이아웃 검증`, `더 뛰어나게`, `고퀄`
 
 ## Catalog Metadata
 
 Category: `materials`
-Phase: `material-plan`
+Phase: `design-quality-gate`
 Hermes role: `operator`
-Quality tier: `material-gated`
+Quality tier: `design-pro-gated`
 
 Quality bar:
 
-- Name audience, source inputs, target formats, outline sections, assumptions, missing inputs, and output owner.
-- Attach format-specific QA expectations before preparing a binary-generation handoff.
-- Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.
+- Define superior design quality with references, audience, hierarchy, style, and measurable QA gates.
+- Review content accuracy and hierarchy before visual polish.
+- Use design-system/reference rules for web, deck, PDF, and poster surfaces.
+- Reject generic AI slop: weak hierarchy, cramped copy, flat templates, one-note palettes, and unverified exports.
+- Require fresh visual QA for pages, slides, states, viewports, and CJK-heavy regions before PASS.
 
 Handoff policy:
 
-Keep source organization, outline planning, target-format selection, QA ladder, and missing-input review in Hermes; prepare an executor-neutral document-generation handoff only when a binary file is needed.
+Keep the quality brief, reference selection, design rubric, content-structure review, and QA checklist in Hermes; delegate implementation or binary generation only after the surface, owner, references, and observed QA path are explicit.
 
 Required inputs:
 
-- audience or recipient
-- source inputs
-- target format(s)
-- deadline or delivery context
-- missing data or assumptions
+- surface/channel
+- audience and purpose
+- source content or gaps
+- style references
+- viewport/page/export constraints
+- observed render QA for completion claims
 
 Expected outputs:
 
-- material_artifact/v1 plan
-- format-specific QA ladder
-- executor-neutral generation handoff when needed
-- observed export boundary
+- design_quality_gate/v1
+- content_quality_review/v1
+- layout_validation_plan/v1
+- visual_qa_evidence/v1 when observed
+- publishing_readiness/v1
+- downstream route: frontend, materials-package, img-summary, or deliverable-package
 
 Artifact expectations:
 
-- material_artifact/v1 under .omh/materials when a wrapper or CLI records it
+- design_quality_gate/v1 when prepared
+- visual_qa_evidence/v1 only from fresh screenshots/renders/observations
+- export/publish evidence only when observed
 
 Safety rules:
 
-- Do not claim PPTX, PDF, Keynote, DOCX, XLSX, HWP, or upload output without observed file evidence.
-- Do not claim render QA, formula recalculation, approval, or delivery from a prepared material plan.
-- Keep source facts, assumptions, missing inputs, and generated output evidence separate.
+- Require references/rubric plus fresh render QA before PASS.
+- Never claim PPTX, PDF, deployment, poster export, image generation, or publication without observed evidence.
+- Separate content, taste, layout, accessibility, render fidelity, and delivery checks.
+- Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.
+- For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
 
 ## Harness Discipline
 
@@ -117,12 +127,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `materials-package`.
+Preferred harness for this skill: `design-quality-gate`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill materials-package --harness materials-package --status started
+omh runtime record --skill design-quality-gate --harness design-quality-gate --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

@@ -154,6 +154,12 @@ VISIBLE_ACTIONS = (
     "record_visual_qa",
     "record_visual_delivery",
     "show_visual_status",
+    "prepare_design_quality_gate",
+    "show_design_quality_gate",
+    "record_design_reference",
+    "record_content_qa",
+    "record_layout_qa",
+    "prepare_frontend_handoff",
     "dispatch_to_workflow",
     "run_hermes_research",
     "prepare_strategy_brief",
@@ -268,6 +274,7 @@ _SKILL_PICKER_ENTRIES = (
     ("code-review", "Code Review", "Review completed work without overclaiming evidence.", "./code-review <scope>"),
     ("materials-package", "Materials Package", "Shape PPT, PDF, spreadsheet, document, or Markdown deliverables.", "./materials-package <brief>"),
     ("img-summary", "Img Summary", "Prepare image-generation-ready summary cards.", "./img-summary <source>"),
+    ("design-quality-gate", "Design Quality Gate", "Raise visual, content, layout, and publishing quality.", "./design-quality-gate <brief>"),
     ("automation-blueprint", "Automation Blueprint", "Prepare recurring Hermes scheduled-ops workflows.", "./automation-blueprint <intent>"),
     ("doctor", "Doctor", "Check OMH install and Hermes registration health.", "./doctor"),
 )
@@ -287,8 +294,8 @@ _CONTEXT_PRIMER_GROUPS = (
     {
         "id": "deliverables_and_visuals",
         "label": "Deliverables and visuals",
-        "workflows": ("materials-package", "deliverable-package", "img-summary", "report-package"),
-        "use_when": "The user wants files, decks, PDFs, reports, image-summary cards, or attachment-ready delivery states.",
+        "workflows": ("design-quality-gate", "materials-package", "deliverable-package", "img-summary", "report-package"),
+        "use_when": "The user wants files, decks, PDFs, websites, posters, reports, image-summary cards, premium design QA, or attachment-ready delivery states.",
     },
     {
         "id": "coding_and_runtime",
@@ -1757,16 +1764,42 @@ def _copy_workflow_groups(value: object) -> list[dict[str, object]]:
 def _copy_workflow_context_cards(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
-    return [_copy_workflow_context_card(item) for item in value if isinstance(item, dict)]
+    return [_copy_compact_workflow_context_card(item) for item in value if isinstance(item, dict)]
 
 
 def _copy_workflow_context_card(value: dict[str, object]) -> dict[str, object]:
     copied = dict(value)
     for key in ("representative_workflows", "user_examples", "not_evidence_until_observed"):
-        items = value.get(key)
-        if isinstance(items, list):
-            copied[key] = list(items)
+        copied[key] = _copy_string_items(value.get(key))
     return copied
+
+
+def _copy_compact_workflow_context_card(value: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": str(value.get("id", "")),
+        "label": str(value.get("label", "")),
+        "user_signal": _trim_catalog_text(value.get("user_signal"), 96),
+        "omh_pattern": _trim_catalog_text(value.get("omh_pattern"), 112),
+        "representative_workflows": _copy_string_items(value.get("representative_workflows")),
+        "user_examples": _copy_string_items(value.get("user_examples"), limit=1),
+        "first_response_shape": _trim_catalog_text(value.get("first_response_shape"), 140),
+        "not_evidence_until_observed": _copy_string_items(value.get("not_evidence_until_observed")),
+    }
+
+
+def _copy_string_items(value: object, *, limit: int | None = None) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    items = [item for item in value if isinstance(item, str) and item]
+    return items if limit is None else items[:limit]
+
+
+def _trim_catalog_text(value: object, max_chars: int) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_chars:
+        return text
+    trimmed = text[:max_chars].rsplit(" ", 1)[0].strip()
+    return trimmed or text[:max_chars].strip()
 
 
 def _copy_capability_lanes(value: object) -> list[dict[str, object]]:
@@ -4943,7 +4976,7 @@ def _skill_picker_groups(options: list[dict[str, object]]) -> list[dict[str, obj
     groups = []
     for group in _CONTEXT_PRIMER_GROUPS:
         group_options = [
-            _compact_picker_option(by_id[workflow_id])
+            _compact_group_picker_option(by_id[workflow_id])
             for workflow_id in group["workflows"]
             if workflow_id in by_id and workflow_id != _ROUTER_SKILL
         ]
@@ -4969,6 +5002,14 @@ def _compact_picker_option(option: dict[str, object]) -> dict[str, object]:
         "description": str(option.get("description", "")),
         "direct_invocation": str(option.get("direct_invocation", "")),
         "harness": str(option.get("harness", "")),
+        "action_id": str(option.get("action_id", "choose_skill")),
+    }
+
+
+def _compact_group_picker_option(option: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": str(option.get("id", "")),
+        "label": str(option.get("label", "")),
         "action_id": str(option.get("action_id", "choose_skill")),
     }
 
