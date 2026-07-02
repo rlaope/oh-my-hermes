@@ -120,6 +120,18 @@ class WrapperContractTests(unittest.TestCase):
         self.assertNotIn(message, json.dumps(payload))
         self.assertNotIn("secret-token-123", json.dumps(payload))
 
+    def test_design_quality_gate_chat_uses_design_gate_action(self) -> None:
+        payload = build_chat_interaction_payload("ui ux pro max website design and layout validation", source="discord")
+
+        response = payload["chat_response"]
+        actions = {action["id"]: action for action in response["actions"]}
+        self.assertEqual(response["state"]["selected_workflow"], "design-quality-gate")
+        self.assertEqual(response["state"]["next_action"], "prepare_design_quality_gate")
+        self.assertIn("prepare_design_quality_gate", actions)
+        self.assertEqual(actions["prepare_design_quality_gate"]["label"], "Prepare design gate")
+        self.assertIn("design-quality-gate", response["state"]["workflow_explanation"]["primary_action_hint"])
+        self.assertNotIn("prepare_material_package", actions)
+
     def test_route_hint_payload_has_picker_fallback_when_no_hint_matches(self) -> None:
         payload = build_chat_route_hint_payload("zzzzzz", source="slack")
 
