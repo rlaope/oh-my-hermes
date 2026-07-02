@@ -411,6 +411,28 @@ class RouterContentTests(unittest.TestCase):
         for name in hidden:
             self.assertFalse((Path("skills") / name / "SKILL.md").exists(), f"{name} should stay routable only")
 
+    def test_all_tap_skills_include_subagent_fallback_contract(self) -> None:
+        required_fragments = (
+            "subagent/delegation features when available",
+            "native subagents -> Hermes delegation when available, otherwise sequential lanes",
+            "Record observed delegation results",
+            "not_observed",
+        )
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+        rendered_files = {
+            path.parent.name: path.read_text(encoding="utf-8")
+            for path in Path("skills").glob("*/SKILL.md")
+        }
+
+        for source, contents in (("template", templates), ("tap", rendered_files)):
+            with self.subTest(source=source):
+                missing = {
+                    name: [fragment for fragment in required_fragments if fragment not in content]
+                    for name, content in sorted(contents.items())
+                }
+                missing = {name: fragments for name, fragments in missing.items() if fragments}
+                self.assertEqual(missing, {})
+
     def test_router_renders_representative_harness_registry(self) -> None:
         references = {
             str(Path(template.skill_name) / template.relative_path): template.content

@@ -592,6 +592,17 @@ When a wrapper prepares coding work, check `executor_readiness/v1` for Codex, Cl
 
 Record only what is observed. A task card, route, plan, `coding_delegation.json`, or `prepared_coding_delegation` run envelope proves preparation, not execution. Executor-choice, prompt-only, and runtime handoffs do not create lifecycle runtime runs.
 
+## Hermes Compatibility Contract
+
+- Use Hermes-native tools, file operations, and subagent/delegation features when available.
+- Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
+- Translate runtime-specific mechanisms to Hermes-native artifacts:
+  - goal tools -> `.omh/goals/` ledgers, goal status cards, or explicit checklists with named next actions,
+  - question renderers -> one concise question in the current Hermes interface,
+  - native subagents -> Hermes delegation when available, otherwise sequential lanes,
+  - shell bridge commands -> optional bridge mode only.
+- Record observed delegation results when Hermes or the wrapper exposes them. If delegation is unavailable, keep the result explicit as `not_available` or `not_observed`.
+
 ## Progressive Disclosure References
 
 Load these only when exact detail matters:
