@@ -463,6 +463,10 @@ LANE_CROSS_LANE_EXAMPLES = {
         "supplied paper -> paper-learning -> level choice -> coverage ledger -> section walkthrough",
         "market topic -> web-research -> research-brief -> strategy-brief -> operating-rhythm",
     ],
+    "retained_knowledge": [
+        "decision -> wiki -> write boundary",
+        "external store -> wiki -> retrieval hints",
+    ],
     "materials_and_visuals": [
         "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
         "source spreadsheet -> materials-package -> report-package -> observed export evidence",
@@ -501,6 +505,16 @@ WORKFLOW_CONTEXT_CARDS = (
         ),
         "first_response_shape": "Name the source/synthesis split, including source acquisition when relevant, pick the research or ops workflow, then ask for missing source evidence or cadence only when needed.",
         "not_evidence_until_observed": ("source retrieval", "decision approval", "delivery"),
+    },
+    {
+        "id": "retained_knowledge",
+        "label": "Retained knowledge",
+        "user_signal": "wiki, durable notes, Obsidian, Notion, Drive, or external store",
+        "omh_pattern": "prepare source-backed notes and destination hints; writes need evidence",
+        "representative_workflows": ("wiki",),
+        "user_examples": ("Wiki",),
+        "first_response_shape": "Name target, source evidence, retrieval hints, missing write/query proof.",
+        "not_evidence_until_observed": ("external write", "connector I/O", "memory mutation", "source verification"),
     },
     {
         "id": "materials_and_visuals",
@@ -562,6 +576,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "meeting-brief": "research_and_ops",
     "strategy-brief": "research_and_ops",
     "operating-rhythm": "research_and_ops",
+    "wiki": "retained_knowledge",
     "materials-package": "materials_and_visuals",
     "report-package": "materials_and_visuals",
     "deliverable-package": "materials_and_visuals",
@@ -578,7 +593,6 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "skill": "automation_and_status",
     "toolbelt-readiness": "automation_and_status",
     "voice-operator": "automation_and_status",
-    "wiki": "automation_and_status",
     "workflow-learning": "automation_and_status",
     "ai-slop-cleaner": "coding_handoff",
     "ask": "coding_handoff",
@@ -2728,9 +2742,15 @@ def awareness_primer_payload() -> dict[str, object]:
             "use_for": "source-backed research, customer signals, product operations, and briefing workflows",
         },
         {
+            "id": "retained_knowledge",
+            "label": "Retained knowledge",
+            "skills": ["wiki"],
+            "use_for": "project wiki notes, external connections, retrieval hints, and staleness warnings",
+        },
+        {
             "id": "materials_and_visuals",
             "label": "Materials and visual summaries",
-            "skills": ["materials-package", "img-summary", "report-package", "deliverable-package", "wiki"],
+            "skills": ["materials-package", "img-summary", "report-package", "deliverable-package"],
             "use_for": "decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages",
         },
         {
@@ -2783,12 +2803,12 @@ def awareness_primer_payload() -> dict[str, object]:
             "show status, and hand off with observed evidence boundaries."
         ),
         "first_turn_rule": (
-            "For planning, research, ops records, materials, visual summaries, automation, coding delegation, "
-            "review, status, or long loops, consider OMH before generic chat or generic tools."
+            "For planning, research, retained knowledge, ops records, materials, visual summaries, automation, "
+            "coding delegation, review, status, or long loops, consider OMH before generic chat or generic tools."
         ),
         "all_skill_context_rule": (
-            "Across every OMH skill: match intent to a lane, name adjacent workflows, "
-            "and do not dismiss OMH because a generic tool can render or execute."
+            "For every OMH skill: match intent to a lane; name adjacent workflows; "
+            "generic tool can render or execute is not a dismissal."
         ),
         "generic_tool_checkpoint": GENERIC_TOOL_CHECKPOINT_TEXT,
         "skill_coverage": "Every generated workflow skill carries this rail.",
@@ -2955,11 +2975,6 @@ def awareness_primer_markdown() -> str:
             "",
             "Generic tool map:",
             _compact_generic_tool_checkpoint_line() + ".",
-            "",
-            "Tools:",
-            "- Tools: `omh_interact`; `omh_context`; `omh_recommend`; `omh_capabilities`; `omh_probe`; `omh_status`/`omh_hud`; `omh_role`.",
-            "",
-            str(payload["fallback_rule"]),
             "",
             f"Boundary: {payload['evidence_boundary']}",
         ]

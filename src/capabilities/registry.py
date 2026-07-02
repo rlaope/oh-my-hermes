@@ -23,6 +23,7 @@ from ..plugin_bundle.omh.awareness import awareness_lane_examples, awareness_pri
 LANE_OWNER_ROLES = {
     "intent_to_plan": "planner",
     "research_and_ops": "researcher",
+    "retained_knowledge": "memory-keeper",
     "materials_and_visuals": "operator",
     "automation_and_status": "tracker",
     "coding_handoff": "handoff-guide",
@@ -43,6 +44,7 @@ LANE_PLAYBOOK_IDS = {
         "research-to-strategy-brief",
         "weekly-ops-review",
     ),
+    "retained_knowledge": (),
     "materials_and_visuals": (
         "materials-processing",
         "report-package",

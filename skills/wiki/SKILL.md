@@ -1,6 +1,6 @@
 ---
 name: wiki
-description: [omh] Hermes adaptation for maintaining a project-local markdown wiki.
+description: [omh] Hermes adaptation for retained knowledge capture and destination-aware external knowledge connection guidance.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, knowledge]
@@ -27,9 +27,9 @@ This is a Hermes-native `wiki` workflow skill.
 
 Good example:
 
-- Prompt: wiki: capture the final router architecture decisions and retrieval hints in the project knowledge base.
-- Expected behavior: Write durable project knowledge with source context, staleness notes, and follow-up links.
-- Why: The request is knowledge capture rather than planning or execution.
+- Prompt: wiki: capture the router decisions and prepare Obsidian vault retrieval hints without claiming a write happened.
+- Expected behavior: Prepare retained knowledge guidance with source context, destination-aware structure, staleness notes, and observed-write boundaries.
+- Why: The request is knowledge capture with an external destination preference, not connector execution.
 
 Bad example:
 
@@ -39,22 +39,24 @@ Bad example:
 
 ## Completion Checklist
 
-- The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
-- Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
-- Separate coding or docs tasks are extracted instead of buried in notes.
+- The durable fact, source evidence, destination preference, retrieval hint, and staleness risk are recorded.
+- Destination-specific guidance is prepared for the named store or the unknown destination gap is explicit.
+- No output claims an external write, query, connector invocation, or memory mutation without observed evidence.
+- Separate coding or connector tasks are extracted instead of buried in notes.
 
 ## Recovery Notes
 
 - If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
+- If the destination is unknown, record the missing destination facts and keep the guidance vendor-neutral.
 - If the fact may be stale, record the staleness warning and next refresh action.
 
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.
 - Product context: OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off with observed evidence boundaries.
-- Current lane: **Materials and visual summaries** (`materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`) - decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages.
+- Current lane: **Retained knowledge** (`wiki`) - project wiki notes, external connections, retrieval hints, and staleness warnings.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
-- Cross-skill context: Across every OMH skill: match intent to a lane, name adjacent workflows, and do not dismiss OMH because a generic tool can render or execute.
+- Cross-skill context: For every OMH skill: match intent to a lane; name adjacent workflows; generic tool can render or execute is not a dismissal.
 - Generic-tool checkpoint: image->img-summary; supplied paper->paper-learning; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
 - Coverage: Every generated workflow skill carries this rail.
 - Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
@@ -62,9 +64,9 @@ Bad example:
 
 ## Use When
 
-Use to capture durable project knowledge in markdown artifacts.
+Use to capture durable project knowledge and prepare destination-aware wiki guidance for markdown vaults, Obsidian, Notion, Google Drive/Docs, databases, local folders, or unknown external knowledge targets.
 
-    Strong routing signals: `wiki`, `project wiki`, `memory`, `notes`
+    Strong routing signals: `wiki`, `project wiki`, `memory`, `notes`, `external knowledge store`, `knowledge base`, `Obsidian`, `markdown vault`, `Notion knowledge base`, `Google Drive wiki`, `옵시디언`, `마크다운 볼트`, `노션 지식베이스`
 
 ## Catalog Metadata
 
@@ -75,29 +77,33 @@ Quality tier: `knowledge-gated`
 
 Quality bar:
 
-- Capture durable facts with source evidence and retrieval hints.
+- Capture durable facts with source evidence and destination-aware retrieval hints.
+- Treat Obsidian as one vendor hint under a broader external knowledge connection model.
+- Never present prepared wiki guidance as an observed external write, query, connector, or memory mutation.
 - Mark stale or uncertain knowledge instead of presenting it as permanent truth.
 - Extract separate coding tasks instead of burying them in notes.
 
 Handoff policy:
 
-Run directly in Hermes as knowledge capture unless the note reveals a separate coding task.
+Run directly in Hermes as retained knowledge capture; prepare connector/runtime handoff only when a separate observed external write or coding task is explicitly required.
 
 Required inputs:
 
 - project fact
 - source evidence
 - target topic
+- destination preference when supplied
 
 Expected outputs:
 
-- markdown note
-- retrieval hint
+- retained knowledge note guidance
+- destination-aware organization and retrieval hint
 - staleness warning when needed
+- prepared-versus-observed external write boundary
 
 Artifact expectations:
 
-- repo-local markdown knowledge artifact
+- repo-local markdown knowledge artifact or metadata-only destination guidance
 
 Safety rules:
 

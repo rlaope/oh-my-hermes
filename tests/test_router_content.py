@@ -102,8 +102,11 @@ class RouterContentTests(unittest.TestCase):
             self.assertIn(f"`{skill_name}`", workflow_registry)
             self.assertIn(f"`{skill_name}`", WORKSPACE_SNIPPET)
         self.assertIn("OMH Awareness Primer", router.content)
+        self.assertIn("Retained knowledge", router.content)
+        self.assertIn("`wiki`", router.content)
         self.assertIn("Materials and visual summaries", router.content)
         self.assertIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
+        self.assertNotIn("`materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
         self.assertIn("Coding handoff", router.content)
         self.assertIn("omh chat route", router.content)
         self.assertIn("omh coding delegate", wrapper_routing)
@@ -518,6 +521,23 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("briefing_status/v1", inspect_playbook("research-department")["playbook"]["stages"][-1]["contract"])
         self.assertIn("research-department", templates)
         self.assertIn("Scout", templates["research-department"].content)
+
+    def test_wiki_contract_surfaces_external_knowledge_connection(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+        wiki = definitions["wiki"]
+        content = templates["wiki"].content
+
+        self.assertEqual(wiki.category, "knowledge")
+        self.assertEqual(wiki.hermes_role, "memory-keeper")
+        self.assertIn("external knowledge store", wiki.triggers)
+        self.assertIn("Obsidian", wiki.triggers)
+        self.assertTrue(any("destination preference" in item for item in wiki.required_inputs))
+        self.assertIn("destination-aware", " ".join(wiki.expected_outputs))
+        self.assertIn("Current lane: **Retained knowledge** (`wiki`)", content)
+        self.assertIn("observed external write", content)
+        self.assertNotIn("Current lane: **Materials and visual summaries** (`wiki`)", content)
+        self.assertNotEqual(wiki.category, "materials")
 
     def test_visual_summary_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

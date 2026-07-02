@@ -1937,7 +1937,7 @@ def _print_list_summary(payload: dict[str, object], *, manifest_path: Path, skil
         lanes = catalog.get("lanes", [])
         if isinstance(lanes, list) and lanes:
             print(_color("Workflow lanes", "1;32", use_color))
-            for lane in lanes[:5]:
+            for lane in lanes[:6]:
                 if not isinstance(lane, dict):
                     continue
                 lane_skills = lane.get("primary_skills", [])

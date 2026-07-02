@@ -7,6 +7,7 @@ from typing import Any
 
 from ..local_store import atomic_write_json, ensure_dir, read_json_object, read_json_object_result, utc_now
 from ..paths import OmhPaths
+from .knowledge_connections import KnowledgeConnectionOptions, build_knowledge_store_intent
 
 
 RESEARCH_DEPARTMENT_PLAN_SCHEMA_VERSION = "research_department_plan/v1"
@@ -137,11 +138,13 @@ def build_research_department_plan(
     briefing_status = build_briefing_status(plan_id=record_id, source_inbox=source_inbox, created_at=created)
     roles = _role_lanes()
     skill_chain = _skill_chain(source_policy)
-    knowledge_store_intent = _knowledge_store_intent(
+    knowledge_store_intent = build_knowledge_store_intent(
         clean_request,
-        storage=storage,
-        knowledge_store=knowledge_store,
-        obsidian=obsidian,
+        options=KnowledgeConnectionOptions(
+            storage=storage,
+            knowledge_store=knowledge_store,
+            obsidian=obsidian,
+        ),
     )
     synthesis_tool_intent = _synthesis_tool_intent(
         clean_request,
@@ -642,52 +645,6 @@ def _delivery_intent(text: str, *, delivery: str = "") -> dict[str, object]:
         "surfaces": surfaces,
         "explicit_delivery": delivery.strip(),
         "requires_observed_gateway_evidence": any(surface not in {"current-hermes-thread", "report"} for surface in surfaces),
-    }
-
-
-def _knowledge_store_intent(
-    text: str,
-    *,
-    storage: str = "",
-    knowledge_store: str = "",
-    obsidian: str = "unknown",
-) -> dict[str, object]:
-    explicit = knowledge_store.strip() or storage.strip()
-    explicit_source = explicit.casefold()
-    concept_source = f"{text} {explicit}".casefold()
-    store_type = "local_markdown_folder"
-    vendor_hint = ""
-    readiness_mode = _readiness_mode(obsidian)
-    if any(term in explicit_source for term in ("obsidian", "vault", "옵시디언", "볼트")):
-        store_type = "obsidian_vault"
-        vendor_hint = "obsidian"
-    elif readiness_mode in {"available", "preferred"} and not explicit:
-        store_type = "obsidian_vault"
-        vendor_hint = "obsidian"
-    elif any(term in concept_source for term in ("notion", "노션")):
-        store_type = "notion_workspace"
-        vendor_hint = "notion"
-    elif any(term in concept_source for term in ("google drive", "gdrive", "google docs", "구글 드라이브")):
-        store_type = "google_drive"
-        vendor_hint = "google"
-    elif any(term in concept_source for term in ("database", "db", "데이터베이스")):
-        store_type = "database"
-    elif any(term in concept_source for term in ("markdown", "md", "folder", "폴더", "마크다운")):
-        store_type = "markdown_folder"
-    if explicit and readiness_mode == "unknown":
-        readiness_mode = "preferred"
-    return {
-        "schema_version": "knowledge_store_intent/v1",
-        "status": "prepared",
-        "type": store_type,
-        "explicit_target": explicit,
-        "vendor_hint": vendor_hint,
-        "mode": readiness_mode,
-        "readiness": _readiness_label(readiness_mode),
-        "requested_capability": "persist source inboxes, notes, briefs, and unresolved verification gaps",
-        "write_observed": False,
-        "requires_observed_write_evidence": True,
-        "boundary": "A knowledge-store preference is not write evidence or proof that the store is configured.",
     }
 
 
