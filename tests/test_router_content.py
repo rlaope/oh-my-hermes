@@ -101,6 +101,11 @@ class RouterContentTests(unittest.TestCase):
         for skill_name in ROUTER_KEYWORD_SKILLS:
             self.assertIn(f"`{skill_name}`", workflow_registry)
             self.assertIn(f"`{skill_name}`", WORKSPACE_SNIPPET)
+        self.assertIn(
+            "`workflow-learning`: `workflow-learning`, `workflow learning`, `route-signal`, "
+            "`self-improvement store routing`, `memory skill wiki routing`, `learning trace`, `learning audit`",
+            workflow_registry,
+        )
         self.assertIn("OMH Awareness Primer", router.content)
         self.assertIn("Retained knowledge", router.content)
         self.assertIn("`wiki`", router.content)
@@ -889,6 +894,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("failure_mode_summary", skills["loop"].content)
         self.assertIn("direct `loop`, `./loop`, `$loop`", skills["loop"].content)
         self.assertIn("interviewer, planner, researcher, builder, reviewer, and loop controller", skills["loop"].content)
+        self.assertIn("memory/skill/wiki/failure-retrospective/automation", skills["workflow-learning"].content)
+        self.assertIn("self-improvement store routing", skills["workflow-learning"].content)
+        workflow_docs = workflow_reference_markdown()
+        self.assertIn("self_improvement_store_routing/v1", workflow_docs)
+        self.assertIn("review_self_improvement_store_route", workflow_docs)
         self.assertIn("single-cycle-plan-to-pr", skills["ultraprocess"].content)
         self.assertIn("Do not continue into a repeated feedback loop", skills["ultraprocess"].content)
         self.assertIn("code-review gate", skills["ultraprocess"].content)

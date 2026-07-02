@@ -2865,7 +2865,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### workflow-learning
 
-[omh] Hermes workflow learning workflow: turn a completed or attempted workflow into a metadata-only trace, eval, improvement candidate, human review queue, non-applying patch proposal, regression case, readiness audit, repairable learning index, and redacted review export.
+[omh] Hermes workflow learning workflow: classify self-improvement signals before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
 
 - Category: `optimization`
 - Phase: `workflow-learning`
@@ -2878,14 +2878,14 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Preferred usage: Use as an installed Hermes workflow skill when the user wants to learn from a workflow run, review an improvement candidate, create a regression case, or export a redacted review bundle.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use after a Hermes/OMH workflow attempt when the user wants the process to become inspectable, evaluable, visible in a human review queue, auditable for learning readiness, reusable as a future regression, convertible into a human-reviewed patch handoff, exportable for review, repairable after local index drift, or captured as a missed-route signal without storing raw prompts.
+- Use when: Use after a Hermes/OMH workflow attempt should become inspectable, evaluable, routed to memory/skill/wiki/failure-retrospective/automation review, queued for review, audited, replayable as a regression, converted to a patch handoff, exported, repaired after index drift, or captured as a missed-route signal without raw prompts.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `workflow-learning`, `workflow learning`, `learning trace`, `learning audit`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
+- Strong routing signals: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `memory skill wiki routing`, `learning trace`, `learning audit`, `self improvement store routing`, `store routing`, `where should this learning go`, `audit learning`, `learning review`, `review queue`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
 - Good example:
-  - Prompt: workflow-learning record that Hermes did not use OMH here and create a missed-route review bundle.
+  - Prompt: workflow-learning route this self-improvement note before deciding whether it is memory, skill, wiki, failure-retrospective, or automation material.
   - Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
@@ -2915,7 +2915,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Artifact expectations:
   - workflow-learning/v1 metadata-only runtime or wrapper card when recorded
 - Safety rules:
-  - A workflow learning trace, patch proposal, or export is process evidence for review. It is not automatic model training, skill mutation, execution, verification, CI, or merge evidence.
+  - A workflow learning trace, self-improvement store route, patch proposal, or export is process evidence for review. It is not automatic model training, memory mutation, skill mutation, wiki write, automation creation, execution, verification, CI, or merge evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Representative Harnesses
@@ -4810,9 +4810,9 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 
 ### workflow-learning
 
-Record workflow attempts as metadata-only learning traces, deterministic evals, missed-route review bundles, review-only improvement candidates, non-applying patch proposals, regression cases, readiness audits, a repairable learning index, and redacted review exports.
+Route self-improvement signals to memory, skill, wiki, failure-retrospective, automation, or discard review before recording workflow attempts as metadata-only traces, evals, missed-route bundles, candidates, patch proposals, regression cases, audits, indexes, and exports.
 
-- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future workflow behavior without hidden self-modification, when Hermes did not use the expected OMH workflow, when local learning readiness needs audit, when a reviewer needs the candidate/proposal queue, when an approved candidate needs a patch handoff proposal, when the local learning index needs check/rebuild, or when a reviewer needs a metadata-only learning bundle.
+- Use when: Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future behavior without hidden self-modification; also use when a signal needs a store decision before any memory/skill/wiki/automation write, Hermes missed the expected OMH workflow, learning readiness needs audit, a reviewer needs the queue, an approved candidate needs a patch handoff, the index needs check/rebuild, or a metadata-only bundle is needed.
 - Quality tier: `learning-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
@@ -4821,9 +4821,11 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
 - Inputs:
   - source trace or run id
   - selected workflow
+  - self-improvement signal when available
   - observed evidence refs when available
   - feedback or failure summary
 - Outputs:
+  - self_improvement_store_routing/v1
   - workflow_learning_trace/v1
   - workflow_eval_result/v1
   - learning_missed_route_result/v1
@@ -4843,6 +4845,7 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - check not-evidence boundaries
   - record only observed external actions
 - Evidence ladder:
+  - `store_destination_classified`
   - `trace_recorded`
   - `eval_recorded`
   - `improvement_candidate_reviewed`
@@ -4852,6 +4855,7 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
   - `learning_export_recorded`
   - `future_replay_passed_when_available`
 - Wrapper actions:
+  - `review_self_improvement_store_route`
   - `record_workflow_learning_trace`
   - `record_missed_route`
   - `show_learning_review_queue`
@@ -4878,5 +4882,5 @@ Record workflow attempts as metadata-only learning traces, deterministic evals, 
 - Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - A workflow learning artifact or export bundle is not automatic model training, skill mutation, execution, verification, review, CI, merge, or proof that future behavior is fixed.
+  - A workflow learning artifact, store route, or export bundle is not automatic model training, memory mutation, skill mutation, wiki write, automation creation, execution, verification, review, CI, merge, or proof that future behavior is fixed.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
