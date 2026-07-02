@@ -160,6 +160,17 @@ _SKILL_POLICIES = {
             "a GPT image tool, existing Hermes connector, generic image tool, or prompt-only path."
         ),
     ),
+    "design-quality-gate": RecommendationPolicy(
+        next_action="prepare_design_quality_gate",
+        evidence_boundary=(
+            "A design quality gate is not implementation, export, publication, visual QA, or proof that the rendered result "
+            "beats the comparison baseline until observed render evidence exists."
+        ),
+        wrapper_guidance=(
+            "Prepare design_quality_gate/v1 with references, comparative_quality_rubric/v1, surface_quality_matrix/v1, "
+            "content and layout QA, downstream generation route, and observed-only visual QA requirements."
+        ),
+    ),
     "workflow-learning": RecommendationPolicy(
         next_action="audit_learning_readiness",
         evidence_boundary=(

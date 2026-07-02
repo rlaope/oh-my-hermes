@@ -1337,7 +1337,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Strong routing signals: `design-quality-gate`, `design quality gate`, `ui ux pro max`, `design pro max`, `frontend pro max`, `visual qa pro`, `premium design`, `high quality design`, `beautiful website`, `frontend publishing`, `publishing quality`, `layout validation`, `ppt design quality`, `pdf design quality`, `웹사이트 디자인`, `프론트엔드 퍼블리싱`, `레이아웃 검증`, `더 뛰어나게`, `고퀄`
 - Good example:
   - Prompt: design-quality-gate make this landing page and deck premium and verified.
-  - Expected behavior: Prepare design_quality_gate/v1 with references, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
+  - Expected behavior: Prepare design_quality_gate/v1 with references, comparative_quality_rubric/v1, surface_quality_matrix/v1, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
   - Why: The request asks for superior visual quality and publishing readiness.
 - Bad example:
   - Prompt: design-quality-gate say the PDF and website look amazing because the plan says so.
@@ -1345,33 +1345,41 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Why: A quality brief is not render, visual QA, export, deployment, or delivery evidence.
 - Quality bar:
   - Define superior design quality with references, audience, hierarchy, style, and measurable QA gates.
+  - State why the result should be better than ordinary output, including content depth, visual hierarchy, spacing, typography, and interaction or export polish.
   - Review content accuracy and hierarchy before visual polish.
   - Use design-system/reference rules for web, deck, PDF, and poster surfaces.
   - Reject generic AI slop: weak hierarchy, cramped copy, flat templates, one-note palettes, and unverified exports.
   - Require fresh visual QA for pages, slides, states, viewports, and CJK-heavy regions before PASS.
 - Completion checklist:
-  - The material source, target format, audience, structure, and QA expectation are named.
-  - Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
-  - The next action identifies whether the package is planned, generated, QA-ready, or blocked.
+  - The surface, audience, source content, baseline/reference bar, and artifact type are named.
+  - The comparative_quality_rubric/v1 explains how the result must beat ordinary output.
+  - The surface_quality_matrix/v1 covers web, deck/PPT, PDF/poster, accessibility, and CJK-relevant checks as applicable.
+  - Prepared quality gates, generated artifacts, visual QA, export, publication, approval, and delivery remain separate states.
+  - The next action names whether to revise content, prepare implementation/export handoff, gather render evidence, or report blocked QA.
 - Recovery notes:
-  - If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
-  - If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+  - If the baseline or references are missing, prepare the gate with an explicit comparative-quality gap instead of calling the result premium.
+  - If render QA is unavailable, keep PASS unavailable and ask for the smallest screenshot, deck/PDF render, or operator observation that proves the target surface.
 - Required inputs:
   - surface/channel
   - audience and purpose
   - source content or gaps
   - style references
+  - ordinary-output baseline or competitor/reference quality bar
   - viewport/page/export constraints
   - observed render QA for completion claims
 - Expected outputs:
   - design_quality_gate/v1
   - content_quality_review/v1
+  - surface_quality_matrix/v1
+  - comparative_quality_rubric/v1
   - layout_validation_plan/v1
   - visual_qa_evidence/v1 when observed
   - publishing_readiness/v1
   - downstream route: frontend, materials-package, img-summary, or deliverable-package
 - Artifact expectations:
   - design_quality_gate/v1 when prepared
+  - surface_quality_matrix/v1 with web: responsive viewport, deck/PPT: slide rhythm, PDF/poster: print-safe, and accessibility/CJK checks
+  - comparative_quality_rubric/v1 that names how this should be better than ordinary output
   - visual_qa_evidence/v1 only from fresh screenshots/renders/observations
   - export/publish evidence only when observed
 - Safety rules:
@@ -1380,6 +1388,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Separate content, taste, layout, accessibility, render fidelity, and delivery checks.
   - Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.
   - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
+  - Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.
 
 ### automation-blueprint
 
@@ -3712,6 +3721,7 @@ Prepare superior visual quality gates for web, deck, PDF, poster, and publishing
 - Quality tier: `design-pro-gated`
 - Quality bar:
   - Define superior design quality with references, audience, hierarchy, constraints, and channel.
+  - Require comparative evidence for why the result is better than ordinary output.
   - Review content correctness before polish.
   - Require design-system or page/slide/poster layout rules.
   - Validate pages, viewports, states, and CJK-heavy regions with fresh render evidence before PASS.
@@ -3721,11 +3731,14 @@ Prepare superior visual quality gates for web, deck, PDF, poster, and publishing
   - audience and purpose
   - source content or gaps
   - style references
+  - ordinary-output baseline or competitor/reference quality bar
   - viewport/page/export constraints
   - fresh render QA for completion claims
 - Outputs:
   - design_quality_gate/v1
   - content_quality_review/v1
+  - surface_quality_matrix/v1
+  - comparative_quality_rubric/v1
   - layout_validation_plan/v1
   - visual_qa_evidence/v1 when observed
   - publishing_readiness/v1
@@ -3733,17 +3746,22 @@ Prepare superior visual quality gates for web, deck, PDF, poster, and publishing
 - Stop conditions:
   - quality brief is prepared
   - content gaps are explicit
+  - comparative quality bar is explicit
+  - surface quality matrix covers the target artifact type
   - layout plan covers target pages/states/viewports
   - visual QA evidence remains observed-only
 - Verification:
   - validate design_quality_gate/v1
-  - check references, hierarchy, layout, and route
+  - check references, comparative quality bar, hierarchy, layout, and route
+  - check the surface quality matrix for web, deck/PPT, PDF, poster, accessibility, and CJK requirements
   - record visual QA only after render evidence
   - record export/deployment/approval/delivery only when observed
 - Evidence ladder:
   - `design_quality_scope_recorded`
   - `reference_packet_selected`
+  - `comparative_quality_rubric_prepared`
   - `content_hierarchy_reviewed`
+  - `surface_quality_matrix_prepared`
   - `layout_validation_plan_prepared`
   - `downstream_generation_route_selected`
   - `visual_qa_observed_when_available`
@@ -3754,6 +3772,7 @@ Prepare superior visual quality gates for web, deck, PDF, poster, and publishing
   - `record_design_reference`
   - `record_content_qa`
   - `record_layout_qa`
+  - `record_surface_quality_matrix`
   - `record_visual_qa`
   - `prepare_frontend_handoff`
   - `prepare_material_package`
@@ -3771,6 +3790,8 @@ Prepare superior visual quality gates for web, deck, PDF, poster, and publishing
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A design_quality_gate/v1 brief is not implementation, export, deployment, image generation, or publishing evidence.
+  - A comparative_quality_rubric/v1 artifact is not proof the rendered artifact beats the baseline until visual QA evidence is observed.
+  - A surface_quality_matrix/v1 artifact is a prepared checklist, not proof that viewports, slides, pages, posters, accessibility, or CJK rendering passed.
   - A layout plan is not visual QA until fresh render/screenshot/deck/PDF/operator evidence exists.
   - A generated/exported artifact does not prove content quality, accessibility, visual QA, approval, or delivery.
 - Fallback: If references, content, surface, or render evidence are missing, prepare the gate and expose the blocker.

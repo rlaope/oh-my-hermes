@@ -30,7 +30,7 @@ This is a Hermes-native `design-quality-gate` workflow skill.
 Good example:
 
 - Prompt: design-quality-gate make this landing page and deck premium and verified.
-- Expected behavior: Prepare design_quality_gate/v1 with references, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
+- Expected behavior: Prepare design_quality_gate/v1 with references, comparative_quality_rubric/v1, surface_quality_matrix/v1, hierarchy, layout plan, visual QA checklist, route, and evidence boundaries.
 - Why: The request asks for superior visual quality and publishing readiness.
 
 Bad example:
@@ -41,14 +41,16 @@ Bad example:
 
 ## Completion Checklist
 
-- The material source, target format, audience, structure, and QA expectation are named.
-- Binary export, rendering, formula recalculation, attachment, and delivery stay observed-only.
-- The next action identifies whether the package is planned, generated, QA-ready, or blocked.
+- The surface, audience, source content, baseline/reference bar, and artifact type are named.
+- The comparative_quality_rubric/v1 explains how the result must beat ordinary output.
+- The surface_quality_matrix/v1 covers web, deck/PPT, PDF/poster, accessibility, and CJK-relevant checks as applicable.
+- Prepared quality gates, generated artifacts, visual QA, export, publication, approval, and delivery remain separate states.
+- The next action names whether to revise content, prepare implementation/export handoff, gather render evidence, or report blocked QA.
 
 ## Recovery Notes
 
-- If a renderer or file tool is missing, keep the package prepared and expose the generation handoff.
-- If render QA is unavailable, mark the artifact unverified and request the smallest visual/file check.
+- If the baseline or references are missing, prepare the gate with an explicit comparative-quality gap instead of calling the result premium.
+- If render QA is unavailable, keep PASS unavailable and ask for the smallest screenshot, deck/PDF render, or operator observation that proves the target surface.
 
 ## OMH Context Rail
 
@@ -78,6 +80,7 @@ Quality tier: `design-pro-gated`
 Quality bar:
 
 - Define superior design quality with references, audience, hierarchy, style, and measurable QA gates.
+- State why the result should be better than ordinary output, including content depth, visual hierarchy, spacing, typography, and interaction or export polish.
 - Review content accuracy and hierarchy before visual polish.
 - Use design-system/reference rules for web, deck, PDF, and poster surfaces.
 - Reject generic AI slop: weak hierarchy, cramped copy, flat templates, one-note palettes, and unverified exports.
@@ -93,6 +96,7 @@ Required inputs:
 - audience and purpose
 - source content or gaps
 - style references
+- ordinary-output baseline or competitor/reference quality bar
 - viewport/page/export constraints
 - observed render QA for completion claims
 
@@ -100,6 +104,8 @@ Expected outputs:
 
 - design_quality_gate/v1
 - content_quality_review/v1
+- surface_quality_matrix/v1
+- comparative_quality_rubric/v1
 - layout_validation_plan/v1
 - visual_qa_evidence/v1 when observed
 - publishing_readiness/v1
@@ -108,6 +114,8 @@ Expected outputs:
 Artifact expectations:
 
 - design_quality_gate/v1 when prepared
+- surface_quality_matrix/v1 with web: responsive viewport, deck/PPT: slide rhythm, PDF/poster: print-safe, and accessibility/CJK checks
+- comparative_quality_rubric/v1 that names how this should be better than ordinary output
 - visual_qa_evidence/v1 only from fresh screenshots/renders/observations
 - export/publish evidence only when observed
 
@@ -118,6 +126,7 @@ Safety rules:
 - Separate content, taste, layout, accessibility, render fidelity, and delivery checks.
 - Route web to frontend, binary files to materials/deliverable package, and image cards to img-summary.
 - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
+- Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.
 
 ## Harness Discipline
 

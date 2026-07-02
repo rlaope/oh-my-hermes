@@ -497,6 +497,12 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Ladder:", harness_registry)
         self.assertIn("Actions:", harness_registry)
         self.assertIn("Privacy `metadata_only`", harness_registry)
+        design_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `design-quality-gate`:")
+        )
+        self.assertIn("visual_qa_observed_when_available", design_line)
+        self.assertIn("record_visual_qa", design_line)
+        self.assertIn("prepare_frontend_handoff", design_line)
         self.assertNotIn("Inputs:", harness_registry)
         self.assertNotIn("Quality Bar:", harness_registry)
 
@@ -628,9 +634,18 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["design-quality-gate"].quality_tier, "design-pro-gated")
         self.assertIn("design_quality_gate/v1", definitions["design-quality-gate"].expected_outputs)
         self.assertIn("visual_qa_evidence/v1 when observed", definitions["design-quality-gate"].expected_outputs)
+        self.assertIn("surface_quality_matrix/v1", definitions["design-quality-gate"].expected_outputs)
+        self.assertIn("comparative_quality_rubric/v1", definitions["design-quality-gate"].expected_outputs)
         self.assertIn("CJK", " ".join(definitions["design-quality-gate"].safety_rules))
+        self.assertIn("web: responsive viewport", " ".join(definitions["design-quality-gate"].artifact_expectations))
+        self.assertIn("deck/PPT: slide rhythm", " ".join(definitions["design-quality-gate"].artifact_expectations))
+        self.assertIn("PDF/poster: print-safe", " ".join(definitions["design-quality-gate"].artifact_expectations))
+        self.assertIn("better than ordinary output", " ".join(definitions["design-quality-gate"].quality_bar))
         self.assertIn("design_quality_gate/v1", harnesses["design-quality-gate"].expected_outputs)
+        self.assertIn("surface_quality_matrix/v1", harnesses["design-quality-gate"].expected_outputs)
         self.assertIn("reference_packet_selected", harnesses["design-quality-gate"].evidence_ladder)
+        self.assertIn("surface_quality_matrix_prepared", harnesses["design-quality-gate"].evidence_ladder)
+        self.assertIn("comparative_quality_rubric_prepared", harnesses["design-quality-gate"].evidence_ladder)
         self.assertIn("visual_qa_observed_when_available", harnesses["design-quality-gate"].evidence_ladder)
         self.assertTrue(
             {
@@ -639,10 +654,14 @@ class RouterContentTests(unittest.TestCase):
                 "record_design_reference",
                 "record_content_qa",
                 "record_layout_qa",
+                "record_surface_quality_matrix",
                 "prepare_frontend_handoff",
             }.issubset(set(VISIBLE_ACTIONS))
         )
         self.assertIn("superior design", templates["design-quality-gate"].content)
+        self.assertIn("surface_quality_matrix/v1", templates["design-quality-gate"].content)
+        self.assertIn("comparative_quality_rubric/v1", templates["design-quality-gate"].content)
+        self.assertIn("better than ordinary output", templates["design-quality-gate"].content)
         self.assertIn("visual_qa_evidence/v1", templates["design-quality-gate"].content)
         self.assertIn("Preferred harness for this skill: `design-quality-gate`", templates["design-quality-gate"].content)
 
